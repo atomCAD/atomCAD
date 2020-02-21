@@ -1,0 +1,13 @@
+[package]
+name = "atomcad-common"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { workspace = true }
+ultraviolet = { workspace = true }
