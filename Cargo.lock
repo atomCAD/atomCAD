@@ -279,6 +279,7 @@ name = "atomcad"
 version = "0.1.0"
 dependencies = [
  "atomcad-common",
+ "atomcad-periodic-table",
  "bevy",
  "bevy_asset_loader",
  "embed-resource",
@@ -294,6 +295,16 @@ name = "atomcad-common"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "ultraviolet",
+]
+
+[[package]]
+name = "atomcad-periodic-table"
+version = "0.1.0"
+dependencies = [
+ "atomcad-common",
+ "serde",
+ "static_assertions",
  "ultraviolet",
 ]
 
