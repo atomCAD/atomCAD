@@ -10,12 +10,15 @@ exclude = ["dist", "build", "assets", "credits"]
 [workspace]
 members = [
     "crates/common",
+    "crates/periodic-table",
     "mobile"
 ]
 
 [workspace.dependencies]
 common = { package = "atomcad-common", path = "crates/common" }
+periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 serde = { version =  "1.0" }
+static_assertions = { version = "1" }
 ultraviolet = { version = "0.9" }
 
 # Enable a small amount of optimization for our code in debug mode:
@@ -70,6 +73,7 @@ bevy_egui = { version = "0.21", default-features = false, features = [
 bevy_infinite_grid = { version = "0.8" }
 bevy_kira_audio = { version = "0.16" }
 common = { workspace = true }
+periodic-table = { workspace = true }
 rand = { version = "0.8.3" }
 
 # keep the following in sync with Bevy's dependencies
