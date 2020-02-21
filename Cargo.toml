@@ -20,6 +20,8 @@ members = ["crates/*"]
 # atomCAD
 app = { package = "atomcad-app", path = "crates/app" }
 common = { package = "atomcad-common", path = "crates/common" }
+# Chemistry
+periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 # Entity Component System
 bevy_ecs = "0.18"
 ecs = { package = "atomcad-ecs", path = "crates/ecs" }
@@ -32,6 +34,9 @@ logging = { package = "atomcad-logging", path = "crates/logging" }
 ultraviolet = { version = "0.10" }
 # Rust
 anyhow = "1"
+static_assertions = "1"
+# Serialization
+serde = { version = "1", features = ["derive"] }
 # Windowing
 gui = { package = "atomcad-gui", path = "crates/gui" }
 menu = { package = "atomcad-menu", path = "crates/menu" }
