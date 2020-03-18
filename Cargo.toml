@@ -7,3 +7,18 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# errors
+thiserror = "1.0"
+anyhow = "1.0"
+
+# log
+log = "0.4"
+env_logger = "0.7"
+
+# For event loop
+winit = "0.22.0"
+
+async-std = "1.5"
+nalgebra = "0.20.0"
+nalgebra-glm = "0.6.0"
+wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "82c8f343fe0df84d6aed1acbb8b65c466fa1e05f" }

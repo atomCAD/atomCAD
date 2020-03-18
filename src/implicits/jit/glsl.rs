@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use crate::{jit, implicit::Implicit};
+use crate::{jit};
 
 pub struct GlslJit {
 
@@ -23,6 +23,10 @@ impl jit::Jit for GlslJit {
     }
 
     fn make_vec3(&mut self, var0: Self::Variable, var1: Self::Variable, var2: Self::Variable) -> Result<Self::Variable, Self::Error> {
+        unimplemented!()
+    }
+
+    fn swizzle(&mut self, vec: Self::Variable, swizzles: &[jit::Swizzle]) -> Result<Self::Variable, Self::Error> {
         unimplemented!()
     }
 
@@ -95,11 +99,6 @@ impl jit::Jit for GlslJit {
 
 
     fn clamp(&mut self, variable: Self::Variable, left_bound: Self::Variable, right_bound: Self::Variable) -> Result<Self::Variable, Self::Error> {
-        unimplemented!()
-    }
-
-
-    fn compute(&mut self, implicit: &dyn Implicit) -> Result<Self::Variable, Self::Error> {
         unimplemented!()
     }
 
