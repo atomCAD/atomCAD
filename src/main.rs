@@ -2,6 +2,8 @@ extern crate nalgebra as na;
 extern crate nalgebra_glm as glm;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate anyhow;
 
 mod arcball;
 mod settings;
@@ -24,34 +26,57 @@ fn run() -> Result<Infallible> {
     let (event_loop, window, surface) = init::initialize_display()
         .context("Failed to initialize display")?;
     
-    let mut renderer_events = gpu::RendererEvents::Empty;
-    let gpu_handle = gpu::Gpu::spawn(&window, &surface)?;
+    let mut renderer_events = gpu::RendererEvents::default();
+
+    let mut gpu_handle = gpu::Gpu::spawn(&window, surface)?;
 
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
+        let original_control_flow = *control_flow;
+        *control_flow = ControlFlow::Wait;
 
-        match event {
-            Event::MainEventsCleared => window.request_redraw(),
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(size) => {
-                    renderer_events.resize(size);
+        if let Err(err) = || -> Result<()> {
+            match event {
+                Event::MainEventsCleared => window.request_redraw(),
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(size) => {
+                        renderer_events.resize = Some(size);
+                    }
+                    WindowEvent::CloseRequested => {
+                        info!("Window close requested");
+
+                        gpu_handle.shutdown()?;
+                        
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    _ => {}
                 }
-                WindowEvent::CloseRequested => {
-                    renderer_events.shutdown();
-                    *control_flow = ControlFlow::Exit;
+                Event::RedrawRequested(_) => {
+                    if original_control_flow != ControlFlow::Exit {
+                        // Let's send the renderer events to the renderer and clear our copy.
+                        gpu_handle.send(renderer_events.take())?;
+                    }
                 }
-                _ => {}
+                _ => {},
             }
-            Event::RedrawRequested(_) => {
-                // Let's send the renderer events to the renderer and clear our copy.
-                gpu_handle.send(renderer_events.take());
-            }
-            _ => {},
+
+            Ok(())
+        }() {
+            handle_fatal_error(err)
         }
     })
 }
-fn main() -> Result<()> {
+
+fn handle_fatal_error(err: anyhow::Error) -> ! {
+    eprintln!("Error: {}", err);
+    for cause in err.chain().skip(1) {
+        eprintln!("because: {}", cause);
+    }
+    std::process::exit(1);
+}
+fn main() {
     logging::setup();
 
-    run().map(|_| ())
+    if let Err(err) = run() {
+        handle_fatal_error(err)
+    }
 }

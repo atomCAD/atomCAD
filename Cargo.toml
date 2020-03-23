@@ -18,7 +18,10 @@ env_logger = "0.7"
 # For event loop
 winit = "0.22.0"
 
-async-std = "1.5"
 nalgebra = "0.20.0"
 nalgebra-glm = "0.6.0"
-wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "82c8f343fe0df84d6aed1acbb8b65c466fa1e05f" }
+wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "04db8c973c6c7bfbb5f89d3d18ef365d19d9af82" }
+
+[dependencies.tokio]
+version = "0.2"
+features = ["rt-core", "rt-util", "stream", "time", "sync"]
