@@ -25,8 +25,8 @@ winit = "0.22"
 wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "04db8c973c6c7bfbb5f89d3d18ef365d19d9af82" }
 
 # For UI
-# iced_winit = { git = "https://github.com/hecrj/iced.git", rev = "fd7d9622e333a0a2cd5c2e8e6cc38cc09d7981e4" }
-# iced_wgpu = { git = "https://github.com/hecrj/iced.git", rev = "fd7d9622e333a0a2cd5c2e8e6cc38cc09d7981e4" }
+iced_winit = { git = "https://github.com/lachlansneff/iced.git" }
+iced_wgpu = { git = "https://github.com/lachlansneff/iced.git" }
 
 # For matrix math
 nalgebra = "0.20.0"

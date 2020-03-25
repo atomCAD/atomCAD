@@ -13,6 +13,7 @@ mod logging;
 mod hub;
 use self::hub::Hub;
 
+mod ui;
 mod scene;
 
 use anyhow::Result;
