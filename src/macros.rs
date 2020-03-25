@@ -1,7 +1,7 @@
 
 /// This includes a file as a slice of `u32`s.
 /// Useful for including compiled shaders.
-macro_rules! include_u32_slice {
+macro_rules! include_shader_binary {
     ($path:literal) => {{
         struct AlignedAsU32<Bytes: ?Sized> {
             _align: [u32; 0],
@@ -10,7 +10,7 @@ macro_rules! include_u32_slice {
 
         static ALIGNED: &AlignedAsU32<[u8]> = &AlignedAsU32 {
             _align: [],
-            bytes: *include_bytes!($path),
+            bytes: *include_bytes!(concat!(env!("OUT_DIR"), "/shaders/", $path)),
         };
 
         unsafe {

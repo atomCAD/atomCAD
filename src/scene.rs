@@ -33,8 +33,8 @@ impl Scene {
 }
 
 fn build_pipeline(device: &wgpu::Device) -> (wgpu::RenderPipeline, wgpu::BindGroup) {
-    let vert_shader = include_u32_slice!("shaders/shader.vert.spv");
-    let frag_shader = include_u32_slice!("shaders/shader.frag.spv");
+    let vert_shader = include_shader_binary!("shader.vert");
+    let frag_shader = include_shader_binary!("shader.frag");
 
     let vert_module = device.create_shader_module(vert_shader);
     let frag_module = device.create_shader_module(frag_shader);

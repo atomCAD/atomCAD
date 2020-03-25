@@ -33,3 +33,6 @@ nalgebra = "0.20.0"
 nalgebra-glm = "0.6.0"
 
 futures = "0.3"
+
+[build-dependencies]
+shaderc = "0.6"
