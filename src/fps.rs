@@ -12,7 +12,7 @@ impl Fps {
         }
     }
 
-    pub fn tick(&mut self) -> usize {
+    pub fn tick(&mut self) {
         let now = Instant::now();
         let a_second_ago = now - Duration::from_secs(1);
 
@@ -25,6 +25,9 @@ impl Fps {
         }
 
         self.last_second_frames.push_back(now);
+    }
+
+    pub fn get(&self) -> usize {
         self.last_second_frames.len()
     }
 }

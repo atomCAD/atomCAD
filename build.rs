@@ -52,5 +52,12 @@ fn main() -> io::Result<()> {
         fs::write(&new_path, binary.as_binary_u8())?;
 
         Ok(())
-    })
+    })?;
+
+    // Set debug cfg
+    if let Ok(profile) = env::var("PROFILE") {
+        println!("cargo:rustc-cfg=build={:?}", profile);
+    }
+
+    Ok(())
 }

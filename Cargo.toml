@@ -7,6 +7,19 @@ authors = [
 ]
 edition = "2018"
 
+# Custom debug profile so it runs with
+# reasonable performance.
+[profile.dev]
+opt-level = 2
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 16
+rpath = false
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

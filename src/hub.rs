@@ -9,9 +9,12 @@ use winit::{
 
 use anyhow::{Result, Context};
 
+use std::time::Instant;
+
 use crate::fps::Fps;
 use crate::scene::Scene;
 use crate::ui::Ui;
+use crate::debug_metrics::DebugMetrics;
 
 /// TODO: Think about whether `Iced` and `Ui` can be combined in some way.
 struct Iced {
@@ -44,6 +47,8 @@ pub struct Hub {
 
     ui: Ui,
     scene: Scene,
+
+    debug_metrics: DebugMetrics,
 }
 
 impl Hub {
@@ -91,6 +96,8 @@ impl Hub {
 
             ui,
             scene,
+
+            debug_metrics: Default::default(),
         })
     }
 
@@ -112,35 +119,47 @@ impl Hub {
                         self.rebuild_swapchain();
                     }
 
-                    let current_fps = self.fps.tick();
+                    // Tick the FPS counter.
+                    self.fps.tick();
 
-                    info!("current fps: {}", current_fps);
+                    let mut metrics = DebugMetrics::default();
 
-                    // This blocks until ~16ms have passed since the last time it returned.
+                    let now = Instant::now();
                     let frame = self.swapchain.get_next_texture()
                         .expect("timeout when acquiring next swapchain texture");
+                    metrics.frame = Some(now.elapsed());
 
                     let mut encoder = self.device.create_command_encoder(&Default::default());
 
+                    let now = Instant::now();
                     // Draw the scene first.
                     self.scene.draw(&mut encoder, &frame.view);
+                    metrics.frame = Some(now.elapsed());
+
+                    let now = Instant::now();
                     // Then draw the ui.
                     let mouse_cursor = self.iced.renderer.draw(
                         &self.device,
                         &mut encoder,
                         Target {
+                            
                             texture: &frame.view,
                             viewport: &self.iced.viewport,
                         },
                         &self.iced.draw_output,
                         self.window.scale_factor(),
-                        &["debug info"],
+                        &self.debug_output(),
                     );
+                    metrics.ui_draw = Some(now.elapsed());
 
+                    let now = Instant::now();
                     // Finally, submit everything to the GPU to draw!
                     self.queue.submit(&[encoder.finish()]);
+                    metrics.queue = Some(now.elapsed());
 
                     self.window.set_cursor_icon(iced_winit::conversion::mouse_cursor(mouse_cursor));
+
+                    self.debug_metrics = metrics;
                 }
                 _ => {}
             }
@@ -178,6 +197,24 @@ impl Hub {
         }
         
         self.window.request_redraw()
+    }
+
+    #[cfg(build = "debug")]
+    fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
+        let mut list = vec![
+            concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), " ", env!("CARGO_PKG_REPOSITORY")).into(),
+            format!("fps: {}", self.fps.get()).into(),
+            "metrics:".into(),
+        ];
+        
+        list.extend(self.debug_metrics.output().map(|s| s.into()));
+
+        list
+    }
+
+    #[cfg(not(build = "debug"))]
+    fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
+        vec![]
     }
 }
 

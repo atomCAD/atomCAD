@@ -1,8 +1,5 @@
-extern crate nalgebra as na;
-extern crate nalgebra_glm as glm;
-#[macro_use]
-extern crate log;
-extern crate anyhow;
+pub use nalgebra as na;
+pub use nalgebra_glm as glm;
 
 #[macro_use]
 mod macros;
@@ -15,6 +12,7 @@ use self::hub::Hub;
 
 mod ui;
 mod scene;
+mod debug_metrics;
 
 use anyhow::Result;
 use std::{
