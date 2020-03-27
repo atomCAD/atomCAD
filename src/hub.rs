@@ -134,7 +134,7 @@ impl Hub {
                     let now = Instant::now();
                     // Draw the scene first.
                     self.scene.draw(&mut encoder, &frame.view);
-                    metrics.frame = Some(now.elapsed());
+                    metrics.scene_draw = Some(now.elapsed());
 
                     let now = Instant::now();
                     // Then draw the ui.
@@ -199,7 +199,7 @@ impl Hub {
         self.window.request_redraw()
     }
 
-    #[cfg(build = "debug")]
+    #[cfg(feature = "dev-output")]
     fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
         let mut list = vec![
             concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), " ", env!("CARGO_PKG_REPOSITORY")).into(),
@@ -212,7 +212,7 @@ impl Hub {
         list
     }
 
-    #[cfg(not(build = "debug"))]
+    #[cfg(not(feature = "dev-output"))]
     fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
         vec![]
     }

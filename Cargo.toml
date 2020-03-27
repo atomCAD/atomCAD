@@ -7,6 +7,9 @@ authors = [
 ]
 edition = "2018"
 
+[features]
+dev-output = []
+
 # Custom debug profile so it runs with
 # reasonable performance.
 [profile.dev]
