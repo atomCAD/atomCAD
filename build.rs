@@ -39,6 +39,7 @@ fn main() -> io::Result<()> {
             match path.extension().and_then(|s| s.to_str()).unwrap() {
                 "vert" => shaderc::ShaderKind::Vertex,
                 "frag" => shaderc::ShaderKind::Fragment,
+                "comp" => shaderc::ShaderKind::Compute,
                 _ => panic!("unknown shader kind: {}", path.display()),
             },
             path.file_name().and_then(|s| s.to_str()).unwrap(),

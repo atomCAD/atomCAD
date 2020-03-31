@@ -1,0 +1,9 @@
+#version 450
+
+layout(set = 0, binding = 0, rgba32f) readonly uniform image2D inputTexture;
+layout(set = 0, binding = 1, rgba32f) writeonly uniform image2D outputFrame;
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID);
+    imageStore(outputFrame, pos, vec4(1.0, 0.0, 0.0, 0.0));
+}

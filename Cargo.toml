@@ -45,8 +45,7 @@ iced_winit = { git = "https://github.com/lachlansneff/iced.git" }
 iced_wgpu = { git = "https://github.com/lachlansneff/iced.git" }
 
 # For matrix math
-nalgebra = "0.20.0"
-nalgebra-glm = "0.6.0"
+ultraviolet = "0.4"
 
 futures = "0.3"
 

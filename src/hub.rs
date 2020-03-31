@@ -75,7 +75,7 @@ impl Hub {
             modifiers: ModifiersState::default(),
         };
 
-        let scene = Scene::new(&device);
+        let scene = Scene::new(&device, &swapchain_desc);
         
         let iced = Iced::new(&device, &window);
         let ui = Ui::new();
@@ -199,22 +199,20 @@ impl Hub {
         self.window.request_redraw()
     }
 
-    #[cfg(feature = "dev-output")]
     fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
-        let mut list = vec![
-            concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), " ", env!("CARGO_PKG_REPOSITORY")).into(),
-            format!("fps: {}", self.fps.get()).into(),
-            "metrics:".into(),
-        ];
-        
-        list.extend(self.debug_metrics.output().map(|s| s.into()));
+        if cfg!(feature = "dev-output") {
+            let mut list = vec![
+                concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), " ", env!("CARGO_PKG_REPOSITORY")).into(),
+                format!("fps: {}", self.fps.get()).into(),
+                "metrics:".into(),
+            ];
+            
+            list.extend(self.debug_metrics.output().map(|s| s.into()));
 
-        list
-    }
-
-    #[cfg(not(feature = "dev-output"))]
-    fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
-        vec![]
+            list
+        } else {
+            vec![]
+        }
     }
 }
 

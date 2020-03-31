@@ -1,6 +1,3 @@
-pub use nalgebra as na;
-pub use nalgebra_glm as glm;
-
 #[macro_use]
 mod macros;
 // mod arcball;
