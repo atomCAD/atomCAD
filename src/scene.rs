@@ -95,6 +95,7 @@ impl Scene {
                         ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                     }
                 ],
+                label: None,
             });
 
         let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -107,7 +108,8 @@ impl Scene {
                         range: 0 .. mem::size_of::<Mat4>() as u64,
                     },
                 }
-            ]
+            ],
+            label: None,
         });
 
         let icosphere = create_unit_icosphere_entity(device, &global_bind_group_layout);
@@ -124,6 +126,7 @@ impl Scene {
             dimension: wgpu::TextureDimension::D2,
             format: SOBEL_FILTER_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: None,
         });
 
         // let sobel_bind_group = {
@@ -171,6 +174,38 @@ impl Scene {
 
             icosphere,
         }
+    }
+
+    pub fn resize(&mut self, device: &wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor, encoder: &mut wgpu::CommandEncoder) {
+        let mx_total = generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+
+        let matrix_src = device.create_buffer_with_data(
+            mx_total.as_byte_slice(),
+            wgpu::BufferUsage::COPY_SRC,
+        );
+
+        encoder.copy_buffer_to_buffer(
+            &matrix_src,
+            0,
+            &self.uniform_buffer,
+            0,
+            mem::size_of_val(&mx_total) as u64,
+        );
+
+        self.normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: sc_desc.width,
+                height: sc_desc.height,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: SOBEL_FILTER_FORMAT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: None,
+        });
     }
 
     pub fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, attachment: &wgpu::TextureView) {
@@ -226,11 +261,13 @@ fn create_unit_icosphere_entity(device: &wgpu::Device, global_bind_group_layout:
     
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[],
+        label: None,
     });
     
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
         bindings: &[],
+        label: None,
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -270,23 +307,25 @@ fn create_unit_icosphere_entity(device: &wgpu::Device, global_bind_group_layout:
             },
         ],
         depth_stencil_state: None,
-        index_format: wgpu::IndexFormat::Uint16,
-        vertex_buffers: &[wgpu::VertexBufferDescriptor {
-            stride: mem::size_of::<Vertex>() as u64,
-            step_mode: wgpu::InputStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttributeDescriptor {
-                    format: wgpu::VertexFormat::Float3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttributeDescriptor {
-                    format: wgpu::VertexFormat::Float3,
-                    offset: 4 * 3,
-                    shader_location: 1,
-                },
-            ],
-        }],
+        vertex_state: wgpu::VertexStateDescriptor {
+            index_format: wgpu::IndexFormat::Uint16,
+            vertex_buffers: &[wgpu::VertexBufferDescriptor {
+                stride: mem::size_of::<Vertex>() as u64,
+                step_mode: wgpu::InputStepMode::Vertex,
+                attributes: &[
+                    wgpu::VertexAttributeDescriptor {
+                        format: wgpu::VertexFormat::Float3,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    wgpu::VertexAttributeDescriptor {
+                        format: wgpu::VertexFormat::Float3,
+                        offset: 4 * 3,
+                        shader_location: 1,
+                    },
+                ],
+            }],
+        },
         sample_count: 1,
         sample_mask: !0,
         alpha_to_coverage_enabled: false,

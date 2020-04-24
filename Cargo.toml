@@ -8,6 +8,7 @@ authors = [
 edition = "2018"
 
 [features]
+default = ["dev-output"]
 dev-output = []
 
 # Custom debug profile so it runs with
@@ -38,11 +39,16 @@ env_logger = "0.7"
 winit = "0.22"
 
 # For GPU
-wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "04db8c973c6c7bfbb5f89d3d18ef365d19d9af82" }
+# wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "04db8c973c6c7bfbb5f89d3d18ef365d19d9af82" }
+wgpu = "0.5.0"
 
 # For UI
-iced_winit = { git = "https://github.com/lachlansneff/iced.git" }
-iced_wgpu = { git = "https://github.com/lachlansneff/iced.git" }
+# The iced crate is still very much a WIP, so we're pulling
+# from a known commit in the github repo for the near future.
+iced_winit = { git = "https://github.com/hecrj/iced.git", rev =  "70081c96496ec58563150fe32ee2c4e2a0d46e6a" }
+iced_wgpu = { git = "https://github.com/hecrj/iced.git", rev = "70081c96496ec58563150fe32ee2c4e2a0d46e6a" }
+# iced_winit = "0.1.0"
+# iced_wgpu = "0.2.1"
 
 # For matrix math
 ultraviolet = "0.4"

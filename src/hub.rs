@@ -58,7 +58,7 @@ impl Hub {
         let size = window.inner_size();
         let surface = wgpu::Surface::create(&window);
 
-        let (device, queue) = futures::executor::block_on(get_device_and_queue())?;
+        let (device, queue) = futures::executor::block_on(get_device_and_queue(&surface))?;
 
         let swapchain_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -114,22 +114,24 @@ impl Hub {
                 Event::WindowEvent { event, .. } => self.on_window_event(event, control_flow, &mut resized),
                 Event::MainEventsCleared => self.on_events_cleared(),
                 Event::RedrawRequested(_) => {
-                    if resized {
-                        resized = false;
-                        self.rebuild_swapchain();
-                    }
-
                     // Tick the FPS counter.
                     self.fps.tick();
 
                     let mut metrics = DebugMetrics::default();
 
+                    let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: None,
+                    });
+
+                    if resized {
+                        resized = false;
+                        self.rebuild_swapchain(&mut encoder);
+                    }
+
                     let now = Instant::now();
                     let frame = self.swapchain.get_next_texture()
                         .expect("timeout when acquiring next swapchain texture");
                     metrics.frame = Some(now.elapsed());
-
-                    let mut encoder = self.device.create_command_encoder(&Default::default());
 
                     let now = Instant::now();
                     // Draw the scene first.
@@ -142,7 +144,6 @@ impl Hub {
                         &self.device,
                         &mut encoder,
                         Target {
-                            
                             texture: &frame.view,
                             viewport: &self.iced.viewport,
                         },
@@ -166,13 +167,14 @@ impl Hub {
         });
     }
 
-    fn rebuild_swapchain(&mut self) {
+    fn rebuild_swapchain(&mut self, encoder: &mut wgpu::CommandEncoder) {
         let new_size = self.window.inner_size();
         self.swapchain_desc.width = new_size.width;
         self.swapchain_desc.height = new_size.height;
 
         self.iced.viewport = Viewport::new(new_size.width, new_size.height);
-        self.swapchain = self.device.create_swap_chain(&self.surface, &self.swapchain_desc)
+        self.swapchain = self.device.create_swap_chain(&self.surface, &self.swapchain_desc);
+        self.scene.resize(&self.device, &self.swapchain_desc, encoder);
     }
 
     fn on_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow, resized: &mut bool) {
@@ -186,7 +188,7 @@ impl Hub {
             _ => {},
         }
 
-        if let Some(event) = iced_winit::conversion::window_event(event, self.window.scale_factor(), self.state.modifiers) {
+        if let Some(event) = iced_winit::conversion::window_event(&event, self.window.scale_factor(), self.state.modifiers) {
             self.iced.events.push(event);
         }
     }
@@ -270,10 +272,11 @@ impl Iced {
     }
 }
 
-async fn get_device_and_queue() -> Result<(wgpu::Device, wgpu::Queue)> {
+async fn get_device_and_queue(surface: &wgpu::Surface) -> Result<(wgpu::Device, wgpu::Queue)> {
     let adapter = wgpu::Adapter::request(
         &wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
+            compatible_surface: Some(surface),
         },
         wgpu::BackendBit::PRIMARY,
     ).await.context("Unable to request a webgpu adapter")?;
