@@ -117,21 +117,27 @@ impl Hub {
                     // Tick the FPS counter.
                     self.fps.tick();
 
-                    let mut metrics = DebugMetrics::default();
-
-                    let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: None,
-                    });
-
                     if resized {
-                        resized = false;
-                        self.rebuild_swapchain(&mut encoder);
+                        self.rebuild_swapchain();
                     }
+
+                    let mut metrics = DebugMetrics::default();
 
                     let now = Instant::now();
                     let frame = self.swapchain.get_next_texture()
                         .expect("timeout when acquiring next swapchain texture");
                     metrics.frame = Some(now.elapsed());
+
+                    let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: None,
+                    });
+
+                    let total_render = Instant::now();
+
+                    // Resize the scene if necessary.
+                    if resized {
+                        self.scene.resize(&self.device, &self.swapchain_desc, &mut encoder);
+                    }
 
                     let now = Instant::now();
                     // Draw the scene first.
@@ -160,21 +166,22 @@ impl Hub {
 
                     self.window.set_cursor_icon(iced_winit::conversion::mouse_cursor(mouse_cursor));
 
+                    metrics.total_render = Some(total_render.elapsed());
                     self.debug_metrics = metrics;
+                    resized = false;
                 }
                 _ => {}
             }
         });
     }
 
-    fn rebuild_swapchain(&mut self, encoder: &mut wgpu::CommandEncoder) {
+    fn rebuild_swapchain(&mut self) {
         let new_size = self.window.inner_size();
         self.swapchain_desc.width = new_size.width;
         self.swapchain_desc.height = new_size.height;
 
         self.iced.viewport = Viewport::new(new_size.width, new_size.height);
         self.swapchain = self.device.create_swap_chain(&self.surface, &self.swapchain_desc);
-        self.scene.resize(&self.device, &self.swapchain_desc, encoder);
     }
 
     fn on_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow, resized: &mut bool) {

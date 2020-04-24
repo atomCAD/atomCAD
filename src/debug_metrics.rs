@@ -14,14 +14,15 @@ mod implementation {
         pub ui_draw: Option<Duration>,
         pub frame: Option<Duration>,
         pub queue: Option<Duration>,
+        pub total_render: Option<Duration>,
     }
 
     impl DebugMetrics {
         pub fn output(&self) -> impl Iterator<Item = String> {
-            let names: &[&'static str] = &["scene draw", "ui draw", "frame", "queue"];
-            let durations = [self.scene_draw, self.ui_draw, self.frame, self.queue];
+            let names: &[&'static str] = &["scene draw", "ui draw", "frame", "queue", "total render"];
+            let durations = [self.scene_draw, self.ui_draw, self.frame, self.queue, self.total_render];
             
-            (0..4).into_iter()
+            (0..5).into_iter()
                 .map(move |i| (names[i], durations[i].clone()))
                 .filter_map(|(name, duration)| {
                     duration
@@ -60,6 +61,7 @@ mod stub {
         pub ui_draw: Option<Duration>,
         pub frame: Option<Duration>,
         pub queue: Option<Duration>,
+        pub total_render: Option<Duration>,
     }
 
     impl DebugMetrics {
