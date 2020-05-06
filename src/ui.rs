@@ -10,9 +10,9 @@ use iced_winit::{
 
 type Message = ();
 
-pub struct Ui;
+pub struct Root;
 
-impl Ui {
+impl Root {
     pub fn new() -> Self {
         Self
     }
