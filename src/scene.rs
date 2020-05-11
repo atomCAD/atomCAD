@@ -1,14 +1,19 @@
 use std::{
+    sync::Arc,
+    thread,
     slice,
     mem,
 };
 use ultraviolet::{Mat4, Vec3, projection::perspective_gl};
 
+use crate::most_recent::{self, Receiver, Sender};
+
 mod isosphere;
 use isosphere::IsoSphere;
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
-const SOBEL_FILTER_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
+/// Normal as in perpendicular, not usual.
+const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
 pub unsafe trait Pod: Sized {
     fn bytes(&self) -> &[u8] {
@@ -50,11 +55,32 @@ pub struct Entity {
     vertex_num: usize,
 }
 
-pub struct Scene {
+#[derive(Debug)]
+pub enum Event {
+    Resize {
+        width: u32,
+        height: u32,
+    },
+}
+
+#[derive(Debug)]
+struct Output {
+    cmd_buf: wgpu::CommandBuffer,
+    new_texture_view: Option<wgpu::TextureView>,
+}
+
+pub struct SceneHandle {
+    input_tx: Sender<Vec<Event>>,
+    output_rx: Receiver<Output>,
+    scene_thread: thread::JoinHandle<()>,
+}
+
+struct Scene {
     global_bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
     normals_fbo: wgpu::Texture,
     // sobel_bind_group: wgpu::BindGroup,
+    render_texture: wgpu::Texture,
 
     icosphere: Entity,
 }
@@ -73,13 +99,66 @@ fn generate_matrix(aspect_ratio: f32) -> Mat4 {
         Vec3::zero(),
         Vec3::unit_z(),
     );
-    let mx_correction = opengl_to_wgpu_matrix;
-    mx_correction * mx_projection * mx_view
+
+    opengl_to_wgpu_matrix * mx_projection * mx_view
+}
+
+impl SceneHandle {
+    pub fn create_scene(device: Arc<wgpu::Device>, (width, height): (u32, u32)) -> SceneHandle {
+        let mut scene = Scene::new(&device, (width, height));
+
+        let (input_tx, input_rx) = most_recent::channel();
+        let (output_tx, output_rx) = most_recent::channel();
+
+        let scene_thread = thread::spawn(move || {
+            'main_loop: loop {
+                let events: Vec<Event> = match input_rx.recv() {
+                    Ok(events) => events,
+                    Err(RecvError) => {
+                        // The sending side has disconnected, time to shut down.
+                        break
+                    },
+                };
+
+                let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    // TODO: Make all wgpu types has labels in dev build mode.
+                    #[cfg(dev)]
+                    label: Some("scene command encoder"),
+                    #[cfg(not(dev))]
+                    label: None,
+                });
+
+                let new_texture_view = scene.process_events(&device, &mut command_encoder, events);
+
+                scene.draw(&mut command_encoder);
+
+                output_tx.send(Output {
+                    cmd_buf: command_encoder.finish(),
+                    new_texture_view,
+                }).expect("unable to send output");
+            }
+        });
+
+        let scene_handle = SceneHandle {
+            input_tx,
+            output_rx,
+            scene_thread,
+        };
+
+        scene_handle
+    }
+
+    /// Send a collection of events to the scene thread.
+    ///
+    /// The return type is temporary.
+    pub fn apply_events(&mut self, events: Vec<Event>) -> Result<(), String> {
+        self.input_tx.send(events).map_err(|_| "failed to send item to scene thread".to_string())
+    }
 }
 
 impl Scene {
-    pub fn new(device: &wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
-        let mx_total = generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+    fn new(device: &wgpu::Device, (width, height): (u32, u32)) -> Scene {
+        let mx_total = generate_matrix(width as f32 / height as f32);
 
         let uniform_buffer = device.create_buffer_with_data(
             mx_total.as_byte_slice(),
@@ -112,73 +191,79 @@ impl Scene {
             label: None,
         });
 
-        let icosphere = create_unit_icosphere_entity(device, &global_bind_group_layout);
+        let icosphere = create_unit_icosphere_entity(&device, &global_bind_group_layout);
 
+        // Create the texture that normals are stored in.
+        // This is used for filters.
         let normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: sc_desc.width,
-                height: sc_desc.height,
+                width,
+                height,
                 depth: 1,
             },
             array_layer_count: 1,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: SOBEL_FILTER_FORMAT,
+            format: NORMAL_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             label: None,
         });
 
-        // let sobel_bind_group = {
-        //     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        //         bindings: &[
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 0,
-        //                 visibility: wgpu::ShaderStage::COMPUTE,
-        //                 ty: wgpu::BindingType::StorageTexture {
-        //                     dimension: wgpu::TextureViewDimension::D2,
-        //                     format: SOBEL_FILTER_FORMAT,
-        //                     readonly: true,
-        //                 },
-        //             },
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 1,
-        //                 visibility: wgpu::ShaderStage::COMPUTE,
-        //                 ty: wgpu::BindingType::StorageTexture {
-        //                     dimension: wgpu::TextureViewDimension::D2,
-        //                     format: DEFAULT_FORMAT,
-        //                     readonly: false,
-        //                 },
-        //             },
-        //         ]
-        //     });
-
-        //     device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //         layout: &bind_group_layout,
-        //         bindings: &[
-        //             wgpu::Binding {
-        //                 binding: 0,
-        //                 resource: wgpu::BindingResource::TextureView(&normals_fbo.create_default_view()),
-        //             },
-        //             wgpu::Binding {
-                        
-        //             },
-        //         ],
-        //     })
-        // };
+        // The scene renders to this texture.
+        // The main (UI) thread has a view of this texture and copies
+        // from it at 60fps.
+        let render_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEFAULT_FORMAT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: None,
+        });
 
         Self {
             global_bind_group,
             uniform_buffer,
             normals_fbo,
+            render_texture,
 
             icosphere,
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor, encoder: &mut wgpu::CommandEncoder) {
-        let mx_total = generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+    fn process_events<I>(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, events: I) -> Option<wgpu::TextureView>
+    where
+        I: IntoIterator<Item = Event>,
+    {
+        let mut new_texture_view = None;
+        
+        for event in events.into_iter() {
+            match event {
+                Event::Resize {
+                    width,
+                    height,
+                } => {
+                    self.resize(&device, (width, height), encoder);
+                    new_texture_view = Some(self.render_texture.create_default_view());
+                },
+                // TODO: Add more events: mouse, etc.
+            }
+        }
 
+        new_texture_view
+    }
+
+    fn resize(&mut self, device: &wgpu::Device, (width, height): (u32, u32), encoder: &mut wgpu::CommandEncoder) {
+        let mx_total = generate_matrix(width as f32 / height as f32);
+
+        // TODO: Replace this with queue.writeBuffer when it gets merged.
         let matrix_src = device.create_buffer_with_data(
             mx_total.as_byte_slice(),
             wgpu::BufferUsage::COPY_SRC,
@@ -194,28 +279,44 @@ impl Scene {
 
         self.normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: sc_desc.width,
-                height: sc_desc.height,
+                width,
+                height,
                 depth: 1,
             },
             array_layer_count: 1,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: SOBEL_FILTER_FORMAT,
+            format: NORMAL_FORMAT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: None,
+        });
+
+        self.render_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEFAULT_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             label: None,
         });
     }
 
-    pub fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, attachment: &wgpu::TextureView) {
+    fn draw(&mut self, encoder: &mut wgpu::CommandEncoder) {
+        let render_view = self.render_texture.create_default_view();
         let normals_view = self.normals_fbo.create_default_view();
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[
                     wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment,
+                        attachment: &render_view,
                         resolve_target: None,
                         load_op: wgpu::LoadOp::Clear,
                         store_op: wgpu::StoreOp::Store,
@@ -241,7 +342,7 @@ impl Scene {
         }
 
         {
-            let mut compute_pass = encoder.begin_compute_pass();
+            // let mut compute_pass = encoder.begin_compute_pass();
 
         }
     }
@@ -300,7 +401,7 @@ fn create_unit_icosphere_entity(device: &wgpu::Device, global_bind_group_layout:
                 write_mask: wgpu::ColorWrite::ALL,
             },
             wgpu::ColorStateDescriptor {
-                format: SOBEL_FILTER_FORMAT,
+                format: NORMAL_FORMAT,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 alpha_blend: wgpu::BlendDescriptor::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,

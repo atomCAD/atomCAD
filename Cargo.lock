@@ -80,6 +80,7 @@ dependencies = [
  "iced_wgpu 0.2.1 (git+https://github.com/hecrj/iced.git?rev=70081c96496ec58563150fe32ee2c4e2a0d46e6a)",
  "iced_winit 0.1.1 (git+https://github.com/hecrj/iced.git?rev=70081c96496ec58563150fe32ee2c4e2a0d46e6a)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "shaderc 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "ultraviolet 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",

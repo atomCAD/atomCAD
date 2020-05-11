@@ -9,10 +9,14 @@ use winit::{
 
 use anyhow::{Result, Context};
 
-use std::time::Instant;
+use std::{
+    time::Instant,
+    sync::Arc,
+    mem,
+};
 
 use crate::fps::Fps;
-use crate::scene::Scene;
+use crate::scene::{SceneHandle, Event as SceneEvent};
 use crate::ui;
 use crate::debug_metrics::DebugMetrics;
 
@@ -34,7 +38,7 @@ pub struct Hub {
     window: Window,
     surface: wgpu::Surface,
 
-    device: wgpu::Device,
+    device: Arc<wgpu::Device>,
     queue: wgpu::Queue,
 
     swapchain_desc: wgpu::SwapChainDescriptor,
@@ -46,7 +50,7 @@ pub struct Hub {
     iced_events: Vec<IcedEvent>,
 
     ui: ui::Root,
-    scene: Scene,
+    scene: SceneHandle,
 
     debug_metrics: DebugMetrics,
 }
@@ -59,6 +63,7 @@ impl Hub {
         let surface = wgpu::Surface::create(&window);
 
         let (device, queue) = futures::executor::block_on(get_device_and_queue(&surface))?;
+        let device  = Arc::new(device);
 
         let swapchain_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -75,7 +80,7 @@ impl Hub {
             modifiers: ModifiersState::default(),
         };
 
-        let scene = Scene::new(&device, &swapchain_desc);
+        let scene = SceneHandle::create_scene(Arc::clone(&device), (size.width, size.height));
         
         let iced = Iced::new(&device, &window);
         let ui = ui::Root::new();
@@ -104,16 +109,18 @@ impl Hub {
 
     pub fn run(mut self, event_loop: EventLoop<()>) -> ! {
         let mut resized = false;
+        let mut scene_events = Vec::new();
 
         // Spin up the UI before we get any events.
-        self.iced.update(&mut self.ui, &mut self.scene, None.into_iter(), &self.state);
+        self.iced.update(&mut self.ui, &mut Vec::new(), &self.state, None);
 
+        // Be careful here, only items moved into this closure will be dropped at the end of program execution.
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll; // TODO: change this to `Poll`.
 
             match event {
-                Event::WindowEvent { event, .. } => self.on_window_event(event, control_flow, &mut resized),
-                Event::MainEventsCleared => self.on_events_cleared(),
+                Event::WindowEvent { event, .. } => self.on_window_event(event, control_flow, &mut resized, &mut scene_events),
+                Event::MainEventsCleared => self.on_events_cleared(&mut scene_events),
                 Event::RedrawRequested(_) => {
                     // Tick the FPS counter.
                     self.fps.tick();
@@ -135,15 +142,25 @@ impl Hub {
 
                     let total_render = Instant::now();
 
-                    // Resize the scene if necessary.
-                    if resized {
-                        self.scene.resize(&self.device, &self.swapchain_desc, &mut encoder);
-                    }
+                    // NOTE:
+                    // Send all the current scene events to the scene thread.
+                    // This doesn't queue batches of events, it
+                    // replaces the next batch.
+                    // When the scene thread pulls new events, it'll
+                    // get the most recent ones.
+                    //
+                    // This is an attempt at allowing the scene and UI
+                    // to render at different framerates.
+                    //
+                    // However, when we resize, we have to 
+                    // fake it by adding empty (black most likely) space
+                    // if larger or cropping if smaller. (The other option
+                    // is blocking the frame until the scene renders, but
+                    // that would be a bad user experience.)
+                    self.scene.apply_events(
+                        mem::replace(&mut scene_events, Vec::new())
+                    ).unwrap();
 
-                    let now = Instant::now();
-                    // Draw the scene first.
-                    self.scene.draw(&mut encoder, &frame.view);
-                    metrics.scene_draw = Some(now.elapsed());
 
                     let now = Instant::now();
                     // Then draw the ui.
@@ -161,14 +178,28 @@ impl Hub {
                     metrics.ui_draw = Some(now.elapsed());
 
                     let now = Instant::now();
+
+                    // Set up a command buffer that copies from the scene texture
+                    // to the swapchain output, and then writes the ui on top of that.
+                    let mut copy_command_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: None,
+                    });
+
+                    copy_command_encoder.
+
                     // Finally, submit everything to the GPU to draw!
                     self.queue.submit(&[encoder.finish()]);
+
+
+
                     metrics.queue = Some(now.elapsed());
 
                     self.window.set_cursor_icon(iced_winit::conversion::mouse_cursor(mouse_cursor));
 
                     metrics.total_render = Some(total_render.elapsed());
                     self.debug_metrics = metrics;
+
+                    // IMPORTANT: reset the resized flag at the end of the frame.
                     resized = false;
                 }
                 _ => {}
@@ -185,11 +216,16 @@ impl Hub {
         self.swapchain = self.device.create_swap_chain(&self.surface, &self.swapchain_desc);
     }
 
-    fn on_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow, resized: &mut bool) {
+    fn on_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow, resized: &mut bool, scene_events: &mut Vec<SceneEvent>) {
         match event {
             WindowEvent::Resized(new_size) => {
                 self.state.logical_size = new_size.to_logical(self.window.scale_factor());
-                *resized = true
+                *resized = true;
+
+                scene_events.push(SceneEvent::Resize {
+                    width: new_size.width,
+                    height: new_size.height,
+                });
             }
             WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = new_modifiers,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -201,16 +237,16 @@ impl Hub {
         }
     }
 
-    fn on_events_cleared(&mut self) {
+    fn on_events_cleared(&mut self, scene_events: &mut Vec<SceneEvent>) {
         if !self.iced_events.is_empty() {
-            self.iced.update(&mut self.ui, &mut self.scene, self.iced_events.drain(..), &self.state);
+            self.iced.update(&mut self.ui, scene_events, &self.state, self.iced_events.drain(..));
         }
         
         self.window.request_redraw()
     }
 
     fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
-        if cfg!(feature = "dev-output") {
+        if cfg!(dev) {
             let mut list = vec![
                 concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), " ", env!("CARGO_PKG_REPOSITORY")).into(),
                 format!("fps: {}", self.fps.get()).into(),
@@ -238,9 +274,12 @@ impl Iced {
         }
     }
 
-    pub fn update(&mut self, ui: &mut ui::Root, scene: &mut Scene, events: impl Iterator<Item = IcedEvent>, state: &State) {
+    pub fn update<I>(&mut self, ui: &mut ui::Root, scene_events: &mut Vec<SceneEvent>, state: &State, events: I)
+    where
+        I: IntoIterator<Item = IcedEvent>
+    {
         let mut user_interface = UserInterface::build(
-            ui.view(scene),
+            ui.view(),
             Size::new(state.logical_size.width, state.logical_size.height),
             self.cache.take().unwrap(),
             &mut self.renderer,
@@ -260,11 +299,11 @@ impl Iced {
 
             // Send all the messages to the Ui.
             for msg in messages {
-                ui.update(msg, scene);
+                ui.update(msg, scene_events);
             }
 
             UserInterface::build(
-                ui.view(&scene),
+                ui.view(),
                 Size::new(state.logical_size.width, state.logical_size.height),
                 self.cache.take().unwrap(),
                 &mut self.renderer,

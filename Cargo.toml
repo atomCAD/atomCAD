@@ -58,6 +58,7 @@ iced_wgpu = { git = "https://github.com/hecrj/iced.git", rev = "70081c96496ec585
 ultraviolet = "0.4"
 
 futures = "0.3"
+parking_lot = "0.10"
 
 [build-dependencies]
 shaderc = "0.6"

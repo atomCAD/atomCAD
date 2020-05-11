@@ -10,6 +10,7 @@ use self::hub::Hub;
 mod ui;
 mod scene;
 mod debug_metrics;
+mod most_recent;
 
 use anyhow::Result;
 use std::{

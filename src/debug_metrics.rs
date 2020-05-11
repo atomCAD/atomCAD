@@ -1,9 +1,9 @@
-#[cfg(feature = "dev-output")]
+#[cfg(dev)]
 pub use self::implementation::*;
-#[cfg(not(feature = "dev-output"))]
+#[cfg(not(dev))]
 pub use self::stub::*;
 
-#[cfg(feature = "dev-output")]
+#[cfg(dev)]
 mod implementation {
     use std::time::Duration;
     use std::fmt;
@@ -51,7 +51,7 @@ mod implementation {
     }
 }
 
-#[cfg(not(feature = "dev-output"))]
+#[cfg(not(dev))]
 mod stub {
     use std::time::Duration;
 
