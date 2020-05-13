@@ -104,11 +104,14 @@ fn generate_matrix(aspect_ratio: f32) -> Mat4 {
 }
 
 impl SceneHandle {
-    pub fn create_scene(device: Arc<wgpu::Device>, (width, height): (u32, u32)) -> SceneHandle {
+    /// Spawn the scene thread and return a handle to it, as well as the first texture view.
+    pub fn create_scene(device: Arc<wgpu::Device>, (width, height): (u32, u32)) -> (SceneHandle, wgpu::TextureView) {
         let mut scene = Scene::new(&device, (width, height));
 
         let (input_tx, input_rx) = most_recent::channel();
         let (output_tx, output_rx) = most_recent::channel();
+
+        let texture_view = scene.render_texture.create_default_view();
 
         let scene_thread = thread::spawn(move || {
             'main_loop: loop {
@@ -121,11 +124,12 @@ impl SceneHandle {
                 };
 
                 let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    // TODO: Make all wgpu types has labels in dev build mode.
-                    #[cfg(dev)]
-                    label: Some("scene command encoder"),
-                    #[cfg(not(dev))]
-                    label: None,
+                    // TODO: Make all wgpu types have labels in dev build mode.
+                    label: if cfg!(dev) {
+                        Some("scene command encoder")
+                    } else {
+                        None
+                    }
                 });
 
                 let new_texture_view = scene.process_events(&device, &mut command_encoder, events);
@@ -145,7 +149,7 @@ impl SceneHandle {
             scene_thread,
         };
 
-        scene_handle
+        (scene_handle, texture_view)
     }
 
     /// Send a collection of events to the scene thread.

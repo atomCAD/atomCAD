@@ -51,6 +51,7 @@ pub struct Hub {
 
     ui: ui::Root,
     scene: SceneHandle,
+    scene_render_view: wgpu::TextureView,
 
     debug_metrics: DebugMetrics,
 }
@@ -80,7 +81,7 @@ impl Hub {
             modifiers: ModifiersState::default(),
         };
 
-        let scene = SceneHandle::create_scene(Arc::clone(&device), (size.width, size.height));
+        let (scene, scene_render_view) = SceneHandle::create_scene(Arc::clone(&device), (size.width, size.height));
         
         let iced = Iced::new(&device, &window);
         let ui = ui::Root::new();
@@ -102,6 +103,7 @@ impl Hub {
 
             ui,
             scene,
+            scene_render_view,
 
             debug_metrics: Default::default(),
         })
@@ -116,7 +118,9 @@ impl Hub {
 
         // Be careful here, only items moved into this closure will be dropped at the end of program execution.
         event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Poll; // TODO: change this to `Poll`.
+            // This may be able to be `Wait` because the scene rendering
+            // is independent from the UI rendering.
+            *control_flow = ControlFlow::Poll;
 
             match event {
                 Event::WindowEvent { event, .. } => self.on_window_event(event, control_flow, &mut resized, &mut scene_events),
@@ -185,7 +189,7 @@ impl Hub {
                         label: None,
                     });
 
-                    copy_command_encoder.
+                    
 
                     // Finally, submit everything to the GPU to draw!
                     self.queue.submit(&[encoder.finish()]);
