@@ -11,6 +11,7 @@ mod ui;
 mod scene;
 mod debug_metrics;
 mod most_recent;
+mod compositor;
 
 use anyhow::Result;
 use std::{
