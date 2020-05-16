@@ -1,5 +1,3 @@
-
-
 /// Used to layer UI and scene on top of each other.
 pub struct Compositor {
     bind_group_layout: wgpu::BindGroupLayout,
@@ -22,7 +20,7 @@ impl Compositor {
                         dimension: wgpu::TextureViewDimension::D2,
                         component_type: wgpu::TextureComponentType::Float,
                         multisampled: false,
-                    }
+                    },
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
@@ -31,15 +29,13 @@ impl Compositor {
                         dimension: wgpu::TextureViewDimension::D2,
                         component_type: wgpu::TextureComponentType::Float,
                         multisampled: false,
-                    }
+                    },
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler {
-                        comparison: false,
-                    }
-                }
+                    ty: wgpu::BindingType::Sampler { comparison: false },
+                },
             ],
         });
 
@@ -56,7 +52,13 @@ impl Compositor {
         });
 
         let ui_texture = Self::generate_ui_texture(device, size);
-        let bind_group = Self::generate_bind_group(device, &ui_texture.create_default_view(), &scene_target, &bind_group_layout, &sampler);
+        let bind_group = Self::generate_bind_group(
+            device,
+            &ui_texture.create_default_view(),
+            &scene_target,
+            &bind_group_layout,
+            &sampler,
+        );
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&bind_group_layout],
@@ -102,7 +104,6 @@ impl Compositor {
             alpha_to_coverage_enabled: false,
         });
 
-
         Self {
             bind_group_layout,
             bind_group,
@@ -130,7 +131,13 @@ impl Compositor {
         })
     }
 
-    fn generate_bind_group(device: &wgpu::Device, ui_texture_view: &wgpu::TextureView, scene_target: &wgpu::TextureView, bind_group_layout: &wgpu::BindGroupLayout, sampler: &wgpu::Sampler) -> wgpu::BindGroup {
+    fn generate_bind_group(
+        device: &wgpu::Device,
+        ui_texture_view: &wgpu::TextureView,
+        scene_target: &wgpu::TextureView,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+    ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
             bindings: &[
@@ -154,9 +161,20 @@ impl Compositor {
     /// Resize the compositor.
     // TODO: Generate new textures for the scene and everything in the main thread so we can resize this
     // when we're supposed to.
-    pub fn resize(&mut self, device: &wgpu::Device, scene_target: wgpu::TextureView, size: (u32, u32)) {
+    pub fn resize(
+        &mut self,
+        device: &wgpu::Device,
+        scene_target: wgpu::TextureView,
+        size: (u32, u32),
+    ) {
         self.ui_texture = Self::generate_ui_texture(device, size);
-        self.bind_group = Self::generate_bind_group(device, &self.ui_texture.create_default_view(), &scene_target, &self.bind_group_layout, &self.sampler);
+        self.bind_group = Self::generate_bind_group(
+            device,
+            &self.ui_texture.create_default_view(),
+            &scene_target,
+            &self.bind_group_layout,
+            &self.sampler,
+        );
         self.scene_target = scene_target;
     }
 
@@ -164,7 +182,11 @@ impl Compositor {
         self.ui_texture.create_default_view()
     }
 
-    pub fn blit(&mut self, swapchain_output: &wgpu::TextureView, command_encoder: &mut wgpu::CommandEncoder) {
+    pub fn blit(
+        &mut self,
+        swapchain_output: &wgpu::TextureView,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: swapchain_output,

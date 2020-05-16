@@ -1,12 +1,7 @@
-use std::{
-    sync::Arc,
-    thread,
-    slice,
-    mem,
-};
-use ultraviolet::{Mat4, Vec3, projection::perspective_gl};
+use std::{mem, slice, sync::Arc, thread};
+use ultraviolet::{projection::perspective_gl, Mat4, Vec3};
 
-use crate::most_recent::{self, Receiver, Sender, TryRecvError, RecvError};
+use crate::most_recent::{self, Receiver, RecvError, Sender, TryRecvError};
 
 mod isosphere;
 use isosphere::IsoSphere;
@@ -17,21 +12,13 @@ const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
 pub unsafe trait Pod: Sized {
     fn bytes(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(
-                self as *const Self as *const u8,
-                mem::size_of::<Self>(),
-            )
-        }
+        unsafe { slice::from_raw_parts(self as *const Self as *const u8, mem::size_of::<Self>()) }
     }
 }
 unsafe impl<T: Pod> Pod for &[T] {
     fn bytes(&self) -> &[u8] {
         unsafe {
-            slice::from_raw_parts(
-                self.as_ptr() as *const u8,
-                mem::size_of::<T>() * self.len(),
-            )
+            slice::from_raw_parts(self.as_ptr() as *const u8, mem::size_of::<T>() * self.len())
         }
     }
 }
@@ -87,25 +74,22 @@ struct Scene {
 
 fn generate_matrix(aspect_ratio: f32) -> Mat4 {
     let opengl_to_wgpu_matrix: Mat4 = [
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.5, 0.0,
-        0.0, 0.0, 0.5, 1.0,
-    ].into();
+        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
+    ]
+    .into();
 
     let mx_projection = perspective_gl(45_f32.to_radians(), aspect_ratio, 1.0, 10.0);
-    let mx_view = Mat4::look_at(
-        Vec3::new(1.5, -5.0, 3.0),
-        Vec3::zero(),
-        Vec3::unit_z(),
-    );
+    let mx_view = Mat4::look_at(Vec3::new(1.5, -5.0, 3.0), Vec3::zero(), Vec3::unit_z());
 
     opengl_to_wgpu_matrix * mx_projection * mx_view
 }
 
 impl SceneHandle {
     /// Spawn the scene thread and return a handle to it, as well as the first texture view.
-    pub fn create_scene(device: Arc<wgpu::Device>, (width, height): (u32, u32)) -> (SceneHandle, wgpu::TextureView) {
+    pub fn create_scene(
+        device: Arc<wgpu::Device>,
+        (width, height): (u32, u32),
+    ) -> (SceneHandle, wgpu::TextureView) {
         let mut scene = Scene::new(&device, (width, height));
 
         let (input_tx, input_rx) = most_recent::channel();
@@ -119,24 +103,27 @@ impl SceneHandle {
                     Ok(events) => dbg!(events),
                     Err(RecvError) => {
                         // The sending side has disconnected, time to shut down.
-                        break
-                    },
+                        break;
+                    }
                 };
 
-                let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    // TODO: Make all wgpu types have labels in dev build mode.
-                    label: if cfg!(dev) {
-                        Some("scene command encoder")
-                    } else {
-                        None
-                    }
-                });
+                let mut command_encoder =
+                    device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        // TODO: Make all wgpu types have labels in dev build mode.
+                        label: if cfg!(dev) {
+                            Some("scene command encoder")
+                        } else {
+                            None
+                        },
+                    });
 
                 scene.process_events(&device, &mut command_encoder, events);
 
                 scene.draw(&mut command_encoder);
 
-                output_tx.send(command_encoder.finish()).expect("unable to send output");
+                output_tx
+                    .send(command_encoder.finish())
+                    .expect("unable to send output");
             }
         });
 
@@ -153,7 +140,9 @@ impl SceneHandle {
     ///
     /// The return type is temporary.
     pub fn apply_events(&mut self, events: Vec<Event>) -> Result<(), String> {
-        self.input_tx.send(events).map_err(|_| "failed to send item to scene thread".to_string())
+        self.input_tx
+            .send(events)
+            .map_err(|_| "failed to send item to scene thread".to_string())
     }
 
     pub fn recv_cmd_buffer(&mut self) -> Result<wgpu::CommandBuffer, String> {
@@ -162,10 +151,16 @@ impl SceneHandle {
         //     Err(TryRecvError::Empty) => Ok(None),
         //     Err(TryRecvError::Disconnected) => Err("disconnected".to_string()),
         // }
-        self.output_rx.recv().map_err(|_| "failed to receive from scene thread".to_string())
+        self.output_rx
+            .recv()
+            .map_err(|_| "failed to receive from scene thread".to_string())
     }
 
-    pub fn build_render_texture(&self, device: &wgpu::Device, (width, height): (u32, u32)) -> wgpu::Texture {
+    pub fn build_render_texture(
+        &self,
+        device: &wgpu::Device,
+        (width, height): (u32, u32),
+    ) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width,
@@ -194,27 +189,23 @@ impl Scene {
 
         let global_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::VERTEX,
-                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                    }
-                ],
+                bindings: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX,
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                }],
                 label: None,
             });
 
         let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &global_bind_group_layout,
-            bindings: &[
-                wgpu::Binding {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &uniform_buffer,
-                        range: 0 .. mem::size_of::<Mat4>() as u64,
-                    },
-                }
-            ],
+            bindings: &[wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &uniform_buffer,
+                    range: 0..mem::size_of::<Mat4>() as u64,
+                },
+            }],
             label: None,
         });
 
@@ -265,10 +256,14 @@ impl Scene {
         }
     }
 
-    fn process_events<I>(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, events: I)
-    where
+    fn process_events<I>(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        events: I,
+    ) where
         I: IntoIterator<Item = Event>,
-    {   
+    {
         for event in events.into_iter() {
             match event {
                 Event::Resize {
@@ -277,20 +272,24 @@ impl Scene {
                     height,
                 } => {
                     self.resize(&device, encoder, new_texture, (width, height));
-                },
+                }
                 // TODO: Add more events: mouse, etc.
             }
         }
     }
 
-    fn resize(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, render_texture: wgpu::Texture, (width, height): (u32, u32)) {
+    fn resize(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        render_texture: wgpu::Texture,
+        (width, height): (u32, u32),
+    ) {
         let mx_total = generate_matrix(width as f32 / height as f32);
 
         // TODO: Replace this with queue.writeBuffer when it gets merged.
-        let matrix_src = device.create_buffer_with_data(
-            mx_total.as_byte_slice(),
-            wgpu::BufferUsage::COPY_SRC,
-        );
+        let matrix_src =
+            device.create_buffer_with_data(mx_total.as_byte_slice(), wgpu::BufferUsage::COPY_SRC);
 
         encoder.copy_buffer_to_buffer(
             &matrix_src,
@@ -362,17 +361,19 @@ impl Scene {
             // render_pass.set_bind_group(1, &self.icosphere.bind_group, &[]);
             render_pass.set_vertex_buffer(0, &self.icosphere.vertex_buffer, 0, 0);
             // render_pass.set_bind_group(index, bind_group, offsets)
-            render_pass.draw(0 .. self.icosphere.vertex_num as u32, 0..1);
+            render_pass.draw(0..self.icosphere.vertex_num as u32, 0..1);
         }
 
         {
             // let mut compute_pass = encoder.begin_compute_pass();
-
         }
     }
 }
 
-fn create_unit_icosphere_entity(device: &wgpu::Device, global_bind_group_layout: &wgpu::BindGroupLayout) -> Entity {
+fn create_unit_icosphere_entity(
+    device: &wgpu::Device,
+    global_bind_group_layout: &wgpu::BindGroupLayout,
+) -> Entity {
     let vert_shader = include_shader_binary!("icosphere.vert");
     let frag_shader = include_shader_binary!("icosphere.frag");
 
@@ -381,14 +382,14 @@ fn create_unit_icosphere_entity(device: &wgpu::Device, global_bind_group_layout:
 
     let icosphere = IsoSphere::new();
 
-    let vertex_buffer = device
-        .create_buffer_with_data(icosphere.vertices().bytes(), wgpu::BufferUsage::VERTEX);
-    
+    let vertex_buffer =
+        device.create_buffer_with_data(icosphere.vertices().bytes(), wgpu::BufferUsage::VERTEX);
+
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[],
         label: None,
     });
-    
+
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
         bindings: &[],
@@ -468,13 +469,12 @@ fn create_unit_icosphere_entity(device: &wgpu::Device, global_bind_group_layout:
 }
 
 // fn create_cube_entity(device: &wgpu::Device) -> Entity {
-    
 
 //     let vertex_buffer = device
 //         .create_buffer_with_data(vertex_data.as_slice().bytes(), wgpu::BufferUsage::VERTEX);
 //     let index_buffer = device
 //         .create_buffer_with_data(index_data.as_slice().bytes(), wgpu::BufferUsage::INDEX);
-    
+
 //     let bind_group_layout =
 //         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 //             bindings: &[wgpu::BindGroupLayoutEntry {
@@ -483,12 +483,10 @@ fn create_unit_icosphere_entity(device: &wgpu::Device, global_bind_group_layout:
 //                 ty: wgpu::BindingType::UniformBuffer { dynamic: false },
 //             }],
 //         });
-    
 
 //     Entity {
 //         vertex_buffer,
 //         index_buffer,
-
 
 //     }
 // }

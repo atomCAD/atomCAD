@@ -5,8 +5,8 @@ pub use self::stub::*;
 
 #[cfg(dev)]
 mod implementation {
-    use std::time::Duration;
     use std::fmt;
+    use std::time::Duration;
 
     #[derive(Default)]
     pub struct DebugMetrics {
@@ -19,10 +19,18 @@ mod implementation {
 
     impl DebugMetrics {
         pub fn output(&self) -> impl Iterator<Item = String> {
-            let names: &[&'static str] = &["scene draw", "ui draw", "frame", "queue", "total render"];
-            let durations = [self.scene_draw, self.ui_draw, self.frame, self.queue, self.total_render];
-            
-            (0..5).into_iter()
+            let names: &[&'static str] =
+                &["scene draw", "ui draw", "frame", "queue", "total render"];
+            let durations = [
+                self.scene_draw,
+                self.ui_draw,
+                self.frame,
+                self.queue,
+                self.total_render,
+            ];
+
+            (0..5)
+                .into_iter()
                 .map(move |i| (names[i], durations[i].clone()))
                 .filter_map(|(name, duration)| {
                     duration
@@ -43,10 +51,22 @@ mod implementation {
         }
 
         match duration.as_nanos() {
-            n @ 0 ..= 999 => Display { n: n as usize, suffix: "ns" },
-            1000 ..= 999_999 => Display { n: duration.as_micros() as usize, suffix: "μs" },
-            1_000_000 ..= 999_999_999 => Display { n: duration.as_millis() as usize, suffix: "ms" },
-            _ => Display { n: duration.as_secs() as usize, suffix: "s" },
+            n @ 0..=999 => Display {
+                n: n as usize,
+                suffix: "ns",
+            },
+            1000..=999_999 => Display {
+                n: duration.as_micros() as usize,
+                suffix: "μs",
+            },
+            1_000_000..=999_999_999 => Display {
+                n: duration.as_millis() as usize,
+                suffix: "ms",
+            },
+            _ => Display {
+                n: duration.as_secs() as usize,
+                suffix: "s",
+            },
         }
     }
 }

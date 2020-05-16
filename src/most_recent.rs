@@ -1,5 +1,5 @@
+use parking_lot::{Condvar, Mutex};
 use std::sync::Arc;
-use parking_lot::{Mutex, Condvar};
 
 pub struct Sender<T> {
     most_recent: Arc<MostRecent<T>>,
@@ -36,7 +36,9 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
         condvar: Condvar::new(),
     });
 
-    let sender = Sender { most_recent: Arc::clone(&most_recent) };
+    let sender = Sender {
+        most_recent: Arc::clone(&most_recent),
+    };
     let receiver = Receiver { most_recent };
 
     (sender, receiver)

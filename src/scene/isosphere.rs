@@ -45,10 +45,7 @@ const FACES: [[usize; 3]; 20] = [
 ];
 
 const fn vertex(position: [f32; 3], normal: [f32; 3]) -> Vertex {
-    Vertex {
-        position,
-        normal,
-    }
+    Vertex { position, normal }
 }
 
 pub struct IsoSphere {
@@ -57,14 +54,15 @@ pub struct IsoSphere {
 
 impl IsoSphere {
     pub fn new() -> Self {
-        let vertices = FACES.into_iter()
-            .fold(Vec::with_capacity(FACES.len() * 3), |mut vec, &[i0, i1, i2]| {
+        let vertices = FACES.into_iter().fold(
+            Vec::with_capacity(FACES.len() * 3),
+            |mut vec, &[i0, i1, i2]| {
                 let v0 = VERTICES[i0];
                 let v1 = VERTICES[i1];
                 let v2 = VERTICES[i2];
 
                 let face_normal = Vec3::cross(&v0.into(), v1.into());
-                
+
                 vec.extend_from_slice(&[
                     vertex(v0, face_normal.into()),
                     vertex(v1, face_normal.into()),
@@ -72,11 +70,10 @@ impl IsoSphere {
                 ]);
 
                 vec
-            });
+            },
+        );
 
-        Self {
-            vertices,
-        }
+        Self { vertices }
     }
 
     pub fn vertices(&self) -> &[Vertex] {

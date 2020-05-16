@@ -1,10 +1,8 @@
+use shaderc;
 use std::{
-    io,
-    fs,
-    env,
+    env, fs, io,
     path::{Path, PathBuf},
 };
-use shaderc;
 
 fn visit_files(dir: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
     if dir.is_dir() {
@@ -24,8 +22,7 @@ fn visit_files(dir: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Re
 }
 
 fn main() -> io::Result<()> {
-    let mut compiler = shaderc::Compiler::new()
-        .expect("failed to initialize glsl compiler");
+    let mut compiler = shaderc::Compiler::new().expect("failed to initialize glsl compiler");
 
     let out_dir: PathBuf = [&env::var("OUT_DIR").unwrap(), "shaders"].iter().collect();
 
@@ -34,18 +31,20 @@ fn main() -> io::Result<()> {
     }
 
     visit_files(Path::new("src/shaders"), &mut |path| {
-        let binary = compiler.compile_into_spirv(
-            &fs::read_to_string(path)?,
-            match path.extension().and_then(|s| s.to_str()).unwrap() {
-                "vert" => shaderc::ShaderKind::Vertex,
-                "frag" => shaderc::ShaderKind::Fragment,
-                "comp" => shaderc::ShaderKind::Compute,
-                _ => panic!("unknown shader kind: {}", path.display()),
-            },
-            path.file_name().and_then(|s| s.to_str()).unwrap(),
-            "main",
-            None,
-        ).unwrap();
+        let binary = compiler
+            .compile_into_spirv(
+                &fs::read_to_string(path)?,
+                match path.extension().and_then(|s| s.to_str()).unwrap() {
+                    "vert" => shaderc::ShaderKind::Vertex,
+                    "frag" => shaderc::ShaderKind::Fragment,
+                    "comp" => shaderc::ShaderKind::Compute,
+                    _ => panic!("unknown shader kind: {}", path.display()),
+                },
+                path.file_name().and_then(|s| s.to_str()).unwrap(),
+                "main",
+                None,
+            )
+            .unwrap();
 
         let mut new_path = PathBuf::from(env::var("OUT_DIR").unwrap());
         new_path.push(path.strip_prefix("src").unwrap());

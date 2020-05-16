@@ -7,16 +7,14 @@ mod logging;
 mod hub;
 use self::hub::Hub;
 
-mod ui;
-mod scene;
+mod compositor;
 mod debug_metrics;
 mod most_recent;
-mod compositor;
+mod scene;
+mod ui;
 
 use anyhow::Result;
-use std::{
-    convert::Infallible,
-};
+use std::convert::Infallible;
 use winit::event_loop::EventLoop;
 
 fn run() -> Result<Infallible> {

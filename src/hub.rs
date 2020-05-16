@@ -1,25 +1,21 @@
 use iced_wgpu::{Primitive, Renderer, Settings, Target, Viewport};
-use iced_winit::{Cache, Clipboard, MouseCursor, Size, UserInterface, Event as IcedEvent};
+use iced_winit::{Cache, Clipboard, Event as IcedEvent, MouseCursor, Size, UserInterface};
 use winit::{
-    event::{Event, WindowEvent, ModifiersState},
+    dpi::LogicalSize,
+    event::{Event, ModifiersState, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
-    dpi::LogicalSize,
 };
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 
-use std::{
-    time::Instant,
-    sync::Arc,
-    mem,
-};
+use std::{mem, sync::Arc, time::Instant};
 
-use crate::fps::Fps;
-use crate::scene::{SceneHandle, Event as SceneEvent};
-use crate::ui;
 use crate::compositor::Compositor;
 use crate::debug_metrics::DebugMetrics;
+use crate::fps::Fps;
+use crate::scene::{Event as SceneEvent, SceneHandle};
+use crate::ui;
 
 struct Iced {
     cache: Option<Cache>,
@@ -64,7 +60,7 @@ impl Hub {
         let surface = wgpu::Surface::create(&window);
 
         let (device, queue) = futures::executor::block_on(get_device_and_queue(&surface))?;
-        let device  = Arc::new(device);
+        let device = Arc::new(device);
 
         let swapchain_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -81,7 +77,8 @@ impl Hub {
             modifiers: ModifiersState::default(),
         };
 
-        let (scene, scene_render_view) = SceneHandle::create_scene(Arc::clone(&device), (size.width, size.height));
+        let (scene, scene_render_view) =
+            SceneHandle::create_scene(Arc::clone(&device), (size.width, size.height));
         let compositor = Compositor::new(&device, scene_render_view, (size.width, size.height));
 
         let iced = Iced::new(&device, &window);
@@ -115,7 +112,8 @@ impl Hub {
         let mut scene_events = Vec::new();
 
         // Spin up the UI before we get any events.
-        self.iced.update(&mut self.ui, &mut Vec::new(), &self.state, None);
+        self.iced
+            .update(&mut self.ui, &mut Vec::new(), &self.state, None);
 
         // Be careful here, only items moved into this closure will be dropped at the end of program execution.
         event_loop.run(move |event, _, control_flow| {
@@ -124,7 +122,9 @@ impl Hub {
             *control_flow = ControlFlow::Poll;
 
             match event {
-                Event::WindowEvent { event, .. } => self.on_window_event(event, control_flow, &mut resized, &mut scene_events),
+                Event::WindowEvent { event, .. } => {
+                    self.on_window_event(event, control_flow, &mut resized, &mut scene_events)
+                }
                 Event::MainEventsCleared => self.on_events_cleared(&mut scene_events),
                 Event::RedrawRequested(_) => {
                     // Tick the FPS counter.
@@ -140,28 +140,28 @@ impl Hub {
                     // This is an attempt at allowing the scene and UI
                     // to render at different framerates.
                     //
-                    // However, when we resize, we have to 
+                    // However, when we resize, we have to
                     // fake it by adding empty (black most likely) space
                     // if larger or cropping if smaller. (The other option
                     // is blocking the frame until the scene renders, but
                     // that would be a bad user experience.)
-                    self.scene.apply_events(
-                        mem::replace(&mut scene_events, Vec::new())
-                    ).unwrap();
+                    self.scene
+                        .apply_events(mem::replace(&mut scene_events, Vec::new()))
+                        .unwrap();
 
-                    if resized {
+                    if mem::replace(&mut resized, false) {
                         self.rebuild_swapchain();
                     }
 
                     let mut metrics = DebugMetrics::default();
 
-                    let mut command_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: None,
-                    });
+                    let mut command_encoder = self
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
                     let mouse_cursor = {
                         let ui_texture = self.compositor.get_ui_texture();
-                        
+
                         let now = Instant::now();
                         // Then draw the ui.
                         let mouse_cursor = self.iced.renderer.draw(
@@ -181,7 +181,9 @@ impl Hub {
                     };
 
                     let now = Instant::now();
-                    let frame = self.swapchain.get_next_texture()
+                    let frame = self
+                        .swapchain
+                        .get_next_texture()
                         .expect("timeout when acquiring next swapchain texture");
                     metrics.frame = Some(now.elapsed());
 
@@ -189,24 +191,22 @@ impl Hub {
 
                     let scene_wait = Instant::now();
                     // TODO(important): Implement buffer swap/belt to present previous render until new render arrives.
-                    let scene_command_buffer = self.scene.recv_cmd_buffer()
-                        .unwrap();
-                        // .expect("didn't recieve scene command buffer in time");
+                    let scene_command_buffer = self.scene.recv_cmd_buffer().unwrap();
+                    // .expect("didn't recieve scene command buffer in time");
                     dbg!(scene_wait.elapsed());
 
                     self.compositor.blit(&frame.view, &mut command_encoder);
-                    
+
                     let now = Instant::now();
                     // Finally, submit everything to the GPU to draw!
-                    self.queue.submit(&[scene_command_buffer, command_encoder.finish()]);
+                    self.queue
+                        .submit(&[scene_command_buffer, command_encoder.finish()]);
                     metrics.queue = Some(now.elapsed());
 
-                    self.window.set_cursor_icon(iced_winit::conversion::mouse_cursor(mouse_cursor));
+                    self.window
+                        .set_cursor_icon(iced_winit::conversion::mouse_cursor(mouse_cursor));
 
                     self.debug_metrics = metrics;
-
-                    // IMPORTANT: reset the resized flag at the end of the frame.
-                    resized = false;
                 }
                 _ => {}
             }
@@ -219,18 +219,32 @@ impl Hub {
         self.swapchain_desc.height = new_size.height;
 
         self.iced.viewport = Viewport::new(new_size.width, new_size.height);
-        self.swapchain = self.device.create_swap_chain(&self.surface, &self.swapchain_desc);
+        self.swapchain = self
+            .device
+            .create_swap_chain(&self.surface, &self.swapchain_desc);
     }
 
-    fn on_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow, resized: &mut bool, scene_events: &mut Vec<SceneEvent>) {
+    fn on_window_event(
+        &mut self,
+        event: WindowEvent,
+        control_flow: &mut ControlFlow,
+        resized: &mut bool,
+        scene_events: &mut Vec<SceneEvent>,
+    ) {
         match event {
             WindowEvent::Resized(new_size) => {
                 self.state.logical_size = new_size.to_logical(self.window.scale_factor());
                 *resized = true;
 
-                let new_scene_texture = self.scene.build_render_texture(&self.device, (new_size.width, new_size.height));
+                let new_scene_texture = self
+                    .scene
+                    .build_render_texture(&self.device, (new_size.width, new_size.height));
 
-                self.compositor.resize(&self.device, new_scene_texture.create_default_view(), (new_size.width, new_size.height));
+                self.compositor.resize(
+                    &self.device,
+                    new_scene_texture.create_default_view(),
+                    (new_size.width, new_size.height),
+                );
 
                 scene_events.push(SceneEvent::Resize {
                     new_texture: new_scene_texture,
@@ -240,30 +254,46 @@ impl Hub {
             }
             WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = new_modifiers,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-            _ => {},
+            _ => {}
         }
 
-        if let Some(event) = iced_winit::conversion::window_event(&event, self.window.scale_factor(), self.state.modifiers) {
+        if let Some(event) = iced_winit::conversion::window_event(
+            &event,
+            self.window.scale_factor(),
+            self.state.modifiers,
+        ) {
             self.iced_events.push(event);
         }
     }
 
     fn on_events_cleared(&mut self, scene_events: &mut Vec<SceneEvent>) {
         if !self.iced_events.is_empty() {
-            self.iced.update(&mut self.ui, scene_events, &self.state, self.iced_events.drain(..));
+            self.iced.update(
+                &mut self.ui,
+                scene_events,
+                &self.state,
+                self.iced_events.drain(..),
+            );
         }
-        
+
         self.window.request_redraw()
     }
 
     fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
         if cfg!(dev) {
             let mut list = vec![
-                concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), " ", env!("CARGO_PKG_REPOSITORY")).into(),
+                concat!(
+                    env!("CARGO_PKG_NAME"),
+                    " ",
+                    env!("CARGO_PKG_VERSION"),
+                    " ",
+                    env!("CARGO_PKG_REPOSITORY")
+                )
+                .into(),
                 format!("fps: {}", self.fps.get()).into(),
                 "metrics:".into(),
             ];
-            
+
             list.extend(self.debug_metrics.output().map(|s| s.into()));
 
             list
@@ -285,9 +315,14 @@ impl Iced {
         }
     }
 
-    pub fn update<I>(&mut self, ui: &mut ui::Root, scene_events: &mut Vec<SceneEvent>, state: &State, events: I)
-    where
-        I: IntoIterator<Item = IcedEvent>
+    pub fn update<I>(
+        &mut self,
+        ui: &mut ui::Root,
+        scene_events: &mut Vec<SceneEvent>,
+        state: &State,
+        events: I,
+    ) where
+        I: IntoIterator<Item = IcedEvent>,
     {
         let mut user_interface = UserInterface::build(
             ui.view(),
@@ -336,12 +371,16 @@ async fn get_device_and_queue(surface: &wgpu::Surface) -> Result<(wgpu::Device, 
             compatible_surface: Some(surface),
         },
         wgpu::BackendBit::PRIMARY,
-    ).await.context("Unable to request a webgpu adapter")?;
+    )
+    .await
+    .context("Unable to request a webgpu adapter")?;
 
-    Ok(adapter.request_device(&wgpu::DeviceDescriptor {
-        extensions: wgpu::Extensions {
-            anisotropic_filtering: false,
-        },
-        limits: wgpu::Limits::default(),
-    }).await)
+    Ok(adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            extensions: wgpu::Extensions {
+                anisotropic_filtering: false,
+            },
+            limits: wgpu::Limits::default(),
+        })
+        .await)
 }

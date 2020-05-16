@@ -1,5 +1,5 @@
+use env_logger::fmt::{Color, Style, StyledValue};
 use log::{Level, LevelFilter};
-use env_logger::{fmt::{Style, StyledValue, Color}};
 
 pub fn setup() {
     let mut builder = env_logger::Builder::new();
@@ -18,14 +18,7 @@ pub fn setup() {
 
             let time = f.timestamp_millis();
 
-            writeln!(
-                f,
-                " {}[{}] {} > {}",
-                level,
-                time,
-                target,
-                record.args(),
-            )
+            writeln!(f, " {}[{}] {} > {}", level, time, target, record.args(),)
         })
         .filter(None, LevelFilter::Info);
 
