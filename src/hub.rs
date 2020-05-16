@@ -18,9 +18,9 @@ use std::{
 use crate::fps::Fps;
 use crate::scene::{SceneHandle, Event as SceneEvent};
 use crate::ui;
+use crate::compositor::Compositor;
 use crate::debug_metrics::DebugMetrics;
 
-/// TODO: Think about whether `Iced` and `Ui` can be combined in some way.
 struct Iced {
     cache: Option<Cache>,
     clipboard: Option<Clipboard>,
@@ -51,7 +51,7 @@ pub struct Hub {
 
     ui: ui::Root,
     scene: SceneHandle,
-    scene_render_view: wgpu::TextureView,
+    compositor: Compositor,
 
     debug_metrics: DebugMetrics,
 }
@@ -82,7 +82,8 @@ impl Hub {
         };
 
         let (scene, scene_render_view) = SceneHandle::create_scene(Arc::clone(&device), (size.width, size.height));
-        
+        let compositor = Compositor::new(&device, scene_render_view, (size.width, size.height));
+
         let iced = Iced::new(&device, &window);
         let ui = ui::Root::new();
 
@@ -103,7 +104,7 @@ impl Hub {
 
             ui,
             scene,
-            scene_render_view,
+            compositor,
 
             debug_metrics: Default::default(),
         })
@@ -129,23 +130,6 @@ impl Hub {
                     // Tick the FPS counter.
                     self.fps.tick();
 
-                    if resized {
-                        self.rebuild_swapchain();
-                    }
-
-                    let mut metrics = DebugMetrics::default();
-
-                    let now = Instant::now();
-                    let frame = self.swapchain.get_next_texture()
-                        .expect("timeout when acquiring next swapchain texture");
-                    metrics.frame = Some(now.elapsed());
-
-                    let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: None,
-                    });
-
-                    let total_render = Instant::now();
-
                     // NOTE:
                     // Send all the current scene events to the scene thread.
                     // This doesn't queue batches of events, it
@@ -165,42 +149,60 @@ impl Hub {
                         mem::replace(&mut scene_events, Vec::new())
                     ).unwrap();
 
+                    if resized {
+                        self.rebuild_swapchain();
+                    }
 
-                    let now = Instant::now();
-                    // Then draw the ui.
-                    let mouse_cursor = self.iced.renderer.draw(
-                        &self.device,
-                        &mut encoder,
-                        Target {
-                            texture: &frame.view,
-                            viewport: &self.iced.viewport,
-                        },
-                        &self.iced.draw_output,
-                        self.window.scale_factor(),
-                        &self.debug_output(),
-                    );
-                    metrics.ui_draw = Some(now.elapsed());
+                    let mut metrics = DebugMetrics::default();
 
-                    let now = Instant::now();
-
-                    // Set up a command buffer that copies from the scene texture
-                    // to the swapchain output, and then writes the ui on top of that.
-                    let mut copy_command_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    let mut command_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                         label: None,
                     });
 
+                    let mouse_cursor = {
+                        let ui_texture = self.compositor.get_ui_texture();
+                        
+                        let now = Instant::now();
+                        // Then draw the ui.
+                        let mouse_cursor = self.iced.renderer.draw(
+                            &self.device,
+                            &mut command_encoder,
+                            Target {
+                                texture: &ui_texture,
+                                viewport: &self.iced.viewport,
+                            },
+                            &self.iced.draw_output,
+                            self.window.scale_factor(),
+                            &self.debug_output(),
+                        );
+                        metrics.ui_draw = Some(now.elapsed());
+
+                        mouse_cursor
+                    };
+
+                    let now = Instant::now();
+                    let frame = self.swapchain.get_next_texture()
+                        .expect("timeout when acquiring next swapchain texture");
+                    metrics.frame = Some(now.elapsed());
+
+                    dbg!(metrics.frame);
+
+                    let scene_wait = Instant::now();
+                    // TODO(important): Implement buffer swap/belt to present previous render until new render arrives.
+                    let scene_command_buffer = self.scene.recv_cmd_buffer()
+                        .unwrap();
+                        // .expect("didn't recieve scene command buffer in time");
+                    dbg!(scene_wait.elapsed());
+
+                    self.compositor.blit(&frame.view, &mut command_encoder);
                     
-
+                    let now = Instant::now();
                     // Finally, submit everything to the GPU to draw!
-                    self.queue.submit(&[encoder.finish()]);
-
-
-
+                    self.queue.submit(&[scene_command_buffer, command_encoder.finish()]);
                     metrics.queue = Some(now.elapsed());
 
                     self.window.set_cursor_icon(iced_winit::conversion::mouse_cursor(mouse_cursor));
 
-                    metrics.total_render = Some(total_render.elapsed());
                     self.debug_metrics = metrics;
 
                     // IMPORTANT: reset the resized flag at the end of the frame.
@@ -226,7 +228,12 @@ impl Hub {
                 self.state.logical_size = new_size.to_logical(self.window.scale_factor());
                 *resized = true;
 
+                let new_scene_texture = self.scene.build_render_texture(&self.device, (new_size.width, new_size.height));
+
+                self.compositor.resize(&self.device, new_scene_texture.create_default_view(), (new_size.width, new_size.height));
+
                 scene_events.push(SceneEvent::Resize {
+                    new_texture: new_scene_texture,
                     width: new_size.width,
                     height: new_size.height,
                 });

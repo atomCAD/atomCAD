@@ -6,7 +6,7 @@ use std::{
 };
 use ultraviolet::{Mat4, Vec3, projection::perspective_gl};
 
-use crate::most_recent::{self, Receiver, Sender};
+use crate::most_recent::{self, Receiver, Sender, TryRecvError, RecvError};
 
 mod isosphere;
 use isosphere::IsoSphere;
@@ -58,6 +58,7 @@ pub struct Entity {
 #[derive(Debug)]
 pub enum Event {
     Resize {
+        new_texture: wgpu::Texture,
         width: u32,
         height: u32,
     },
@@ -66,12 +67,11 @@ pub enum Event {
 #[derive(Debug)]
 struct Output {
     cmd_buf: wgpu::CommandBuffer,
-    new_texture_view: Option<wgpu::TextureView>,
 }
 
 pub struct SceneHandle {
     input_tx: Sender<Vec<Event>>,
-    output_rx: Receiver<Output>,
+    output_rx: Receiver<wgpu::CommandBuffer>,
     scene_thread: thread::JoinHandle<()>,
 }
 
@@ -116,7 +116,7 @@ impl SceneHandle {
         let scene_thread = thread::spawn(move || {
             'main_loop: loop {
                 let events: Vec<Event> = match input_rx.recv() {
-                    Ok(events) => events,
+                    Ok(events) => dbg!(events),
                     Err(RecvError) => {
                         // The sending side has disconnected, time to shut down.
                         break
@@ -132,14 +132,11 @@ impl SceneHandle {
                     }
                 });
 
-                let new_texture_view = scene.process_events(&device, &mut command_encoder, events);
+                scene.process_events(&device, &mut command_encoder, events);
 
                 scene.draw(&mut command_encoder);
 
-                output_tx.send(Output {
-                    cmd_buf: command_encoder.finish(),
-                    new_texture_view,
-                }).expect("unable to send output");
+                output_tx.send(command_encoder.finish()).expect("unable to send output");
             }
         });
 
@@ -157,6 +154,32 @@ impl SceneHandle {
     /// The return type is temporary.
     pub fn apply_events(&mut self, events: Vec<Event>) -> Result<(), String> {
         self.input_tx.send(events).map_err(|_| "failed to send item to scene thread".to_string())
+    }
+
+    pub fn recv_cmd_buffer(&mut self) -> Result<wgpu::CommandBuffer, String> {
+        // match self.output_rx.try_recv() {
+        //     Ok(value) => Ok(Some(value)),
+        //     Err(TryRecvError::Empty) => Ok(None),
+        //     Err(TryRecvError::Disconnected) => Err("disconnected".to_string()),
+        // }
+        self.output_rx.recv().map_err(|_| "failed to receive from scene thread".to_string())
+    }
+
+    pub fn build_render_texture(&self, device: &wgpu::Device, (width, height): (u32, u32)) -> wgpu::Texture {
+        device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEFAULT_FORMAT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+            label: None,
+        })
     }
 }
 
@@ -228,7 +251,7 @@ impl Scene {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: DEFAULT_FORMAT,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
             label: None,
         });
 
@@ -242,29 +265,25 @@ impl Scene {
         }
     }
 
-    fn process_events<I>(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, events: I) -> Option<wgpu::TextureView>
+    fn process_events<I>(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, events: I)
     where
         I: IntoIterator<Item = Event>,
-    {
-        let mut new_texture_view = None;
-        
+    {   
         for event in events.into_iter() {
             match event {
                 Event::Resize {
+                    new_texture,
                     width,
                     height,
                 } => {
-                    self.resize(&device, (width, height), encoder);
-                    new_texture_view = Some(self.render_texture.create_default_view());
+                    self.resize(&device, encoder, new_texture, (width, height));
                 },
                 // TODO: Add more events: mouse, etc.
             }
         }
-
-        new_texture_view
     }
 
-    fn resize(&mut self, device: &wgpu::Device, (width, height): (u32, u32), encoder: &mut wgpu::CommandEncoder) {
+    fn resize(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, render_texture: wgpu::Texture, (width, height): (u32, u32)) {
         let mx_total = generate_matrix(width as f32 / height as f32);
 
         // TODO: Replace this with queue.writeBuffer when it gets merged.
@@ -296,20 +315,21 @@ impl Scene {
             label: None,
         });
 
-        self.render_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth: 1,
-            },
-            array_layer_count: 1,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: DEFAULT_FORMAT,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            label: None,
-        });
+        self.render_texture = render_texture;
+        // self.render_texture = device.create_texture(&wgpu::TextureDescriptor {
+        //     size: wgpu::Extent3d {
+        //         width,
+        //         height,
+        //         depth: 1,
+        //     },
+        //     array_layer_count: 1,
+        //     mip_level_count: 1,
+        //     sample_count: 1,
+        //     dimension: wgpu::TextureDimension::D2,
+        //     format: DEFAULT_FORMAT,
+        //     usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        //     label: None,
+        // });
     }
 
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder) {
