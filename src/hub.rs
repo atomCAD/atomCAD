@@ -226,17 +226,6 @@ impl Hub {
         });
     }
 
-    // fn rebuild_swapchain(&mut self) {
-    //     let new_size = self.window.inner_size();
-    //     self.swapchain_desc.width = new_size.width;
-    //     self.swapchain_desc.height = new_size.height;
-
-    //     self.iced.viewport = Viewport::new(new_size.width, new_size.height);
-    //     self.swapchain = self
-    //         .device
-    //         .create_swap_chain(&self.surface, &self.swapchain_desc);
-    // }
-
     fn total_resize(&mut self) -> SceneEvent {
         let new_size = self.window.inner_size();
         self.swapchain_desc.width = new_size.width;

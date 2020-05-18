@@ -339,20 +339,6 @@ impl Scene {
         });
 
         self.render_texture = render_texture;
-        // self.render_texture = device.create_texture(&wgpu::TextureDescriptor {
-        //     size: wgpu::Extent3d {
-        //         width,
-        //         height,
-        //         depth: 1,
-        //     },
-        //     array_layer_count: 1,
-        //     mip_level_count: 1,
-        //     sample_count: 1,
-        //     dimension: wgpu::TextureDimension::D2,
-        //     format: DEFAULT_FORMAT,
-        //     usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-        //     label: None,
-        // });
     }
 
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder) {
@@ -477,26 +463,3 @@ fn create_unit_icosphere_entity(
         vertex_num: icosphere.vertices().len(),
     }
 }
-
-// fn create_cube_entity(device: &wgpu::Device) -> Entity {
-
-//     let vertex_buffer = device
-//         .create_buffer_with_data(vertex_data.as_slice().bytes(), wgpu::BufferUsage::VERTEX);
-//     let index_buffer = device
-//         .create_buffer_with_data(index_data.as_slice().bytes(), wgpu::BufferUsage::INDEX);
-
-//     let bind_group_layout =
-//         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-//             bindings: &[wgpu::BindGroupLayoutEntry {
-//                 binding: 0,
-//                 visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-//                 ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-//             }],
-//         });
-
-//     Entity {
-//         vertex_buffer,
-//         index_buffer,
-
-//     }
-// }
