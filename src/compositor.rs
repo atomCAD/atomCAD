@@ -1,3 +1,5 @@
+use winit::dpi::PhysicalSize;
+
 /// Used to layer UI and scene on top of each other.
 pub struct Compositor {
     bind_group_layout: wgpu::BindGroupLayout,
@@ -9,9 +11,17 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new(device: &wgpu::Device, scene_target: wgpu::TextureView, size: (u32, u32)) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        scene_target: wgpu::TextureView,
+        size: PhysicalSize<u32>,
+    ) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
+            label: if cfg!(build = "debug") {
+                Some("compositor bind group layout")
+            } else {
+                None
+            },
             bindings: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -114,12 +124,11 @@ impl Compositor {
         }
     }
 
-    fn generate_ui_texture(device: &wgpu::Device, (width, height): (u32, u32)) -> wgpu::Texture {
+    fn generate_ui_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
             size: wgpu::Extent3d {
-                width,
-                height,
+                width: size.width,
+                height: size.height,
                 depth: 1,
             },
             array_layer_count: 1,
@@ -128,6 +137,11 @@ impl Compositor {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+            label: if cfg!(build = "debug") {
+                Some("ui texture")
+            } else {
+                None
+            },
         })
     }
 
@@ -154,7 +168,11 @@ impl Compositor {
                     resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
-            label: None,
+            label: if cfg!(build = "debug") {
+                Some("compositor bind group")
+            } else {
+                None
+            },
         })
     }
 
@@ -165,7 +183,7 @@ impl Compositor {
         &mut self,
         device: &wgpu::Device,
         scene_target: wgpu::TextureView,
-        size: (u32, u32),
+        size: PhysicalSize<u32>,
     ) {
         self.ui_texture = Self::generate_ui_texture(device, size);
         self.bind_group = Self::generate_bind_group(

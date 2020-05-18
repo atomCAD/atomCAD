@@ -21,7 +21,7 @@ impl Root {
             .align_items(Align::End)
             .push(
                 Text::new("This is renderering through Iced!")
-                    .color([0.0, 0.0, 0.0])
+                    .color([0.0, 0.0, 1.0])
                     .size(40),
             )
             .into()

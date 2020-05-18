@@ -54,7 +54,7 @@ pub struct IsoSphere {
 
 impl IsoSphere {
     pub fn new() -> Self {
-        let vertices = FACES.into_iter().fold(
+        let vertices = FACES.iter().fold(
             Vec::with_capacity(FACES.len() * 3),
             |mut vec, &[i0, i1, i2]| {
                 let v0 = VERTICES[i0];

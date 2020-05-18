@@ -20,7 +20,7 @@ pub fn setup() {
 
             writeln!(f, " {}[{}] {} > {}", level, time, target, record.args(),)
         })
-        .filter(None, LevelFilter::Info);
+        .filter(Some("atomcad"), LevelFilter::Info);
 
     builder.init();
 }

@@ -1,5 +1,6 @@
 use parking_lot::{Condvar, Mutex};
 use std::sync::Arc;
+use thiserror::Error;
 
 pub struct Sender<T> {
     most_recent: Arc<MostRecent<T>>,
@@ -9,19 +10,21 @@ pub struct Receiver<T> {
     most_recent: Arc<MostRecent<T>>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct SendError<T> {
-    pub value: T,
-}
+#[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
+#[error("the channel is disconnected, unable to send")]
+pub struct SendError;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
+#[error("the channel is disconnected, unable to receive")]
 pub struct RecvError;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum TryRecvError {
-    Disconnected,
-    Empty,
-}
+// #[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
+// pub enum TryRecvError {
+//     #[error("the channel is disconnected, unable to try receiving")]
+//     Disconnected,
+//     #[error("the channel is empty, unable to try receiving")]
+//     Empty,
+// }
 
 struct MostRecent<T> {
     condvar: Condvar,
@@ -46,14 +49,14 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
 
 impl<T> Sender<T> {
     /// Replace the current item in the channel.
-    pub fn send(&self, value: T) -> Result<(), SendError<T>> {
+    pub fn send(&self, value: T) -> Result<(), SendError> {
         if Arc::strong_count(&self.most_recent) == 2 {
             *self.most_recent.mutex.lock() = Some(value);
             self.most_recent.condvar.notify_one();
 
             Ok(())
         } else {
-            Err(SendError { value })
+            Err(SendError)
         }
     }
 }
@@ -73,16 +76,16 @@ impl<T> Receiver<T> {
         }
     }
 
-    pub fn try_recv(&self) -> Result<T, TryRecvError> {
-        if Arc::strong_count(&self.most_recent) == 2 {
-            let mut guard = self.most_recent.mutex.lock();
-            if let Some(value) = guard.take() {
-                Ok(value)
-            } else {
-                Err(TryRecvError::Empty)
-            }
-        } else {
-            Err(TryRecvError::Disconnected)
-        }
-    }
+    // pub fn try_recv(&self) -> Result<T, TryRecvError> {
+    //     if Arc::strong_count(&self.most_recent) == 2 {
+    //         let mut guard = self.most_recent.mutex.lock();
+    //         if let Some(value) = guard.take() {
+    //             Ok(value)
+    //         } else {
+    //             Err(TryRecvError::Empty)
+    //         }
+    //     } else {
+    //         Err(TryRecvError::Disconnected)
+    //     }
+    // }
 }

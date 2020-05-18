@@ -1,5 +1,5 @@
 use iced_wgpu::{Primitive, Renderer, Settings, Target, Viewport};
-use iced_winit::{Cache, Clipboard, Event as IcedEvent, MouseCursor, Size, UserInterface};
+use iced_winit::{mouse, Cache, Clipboard, Event as IcedEvent, Size, UserInterface};
 use winit::{
     dpi::LogicalSize,
     event::{Event, ModifiersState, WindowEvent},
@@ -20,7 +20,7 @@ use crate::ui;
 struct Iced {
     cache: Option<Cache>,
     clipboard: Option<Clipboard>,
-    draw_output: (Primitive, MouseCursor),
+    draw_output: (Primitive, mouse::Interaction),
     renderer: Renderer,
     viewport: Viewport,
 }
@@ -77,9 +77,8 @@ impl Hub {
             modifiers: ModifiersState::default(),
         };
 
-        let (scene, scene_render_view) =
-            SceneHandle::create_scene(Arc::clone(&device), (size.width, size.height));
-        let compositor = Compositor::new(&device, scene_render_view, (size.width, size.height));
+        let (scene, scene_render_view) = SceneHandle::create_scene(Arc::clone(&device), size);
+        let compositor = Compositor::new(&device, scene_render_view, size);
 
         let iced = Iced::new(&device, &window);
         let ui = ui::Root::new();
@@ -119,7 +118,7 @@ impl Hub {
         event_loop.run(move |event, _, control_flow| {
             // This may be able to be `Wait` because the scene rendering
             // is independent from the UI rendering.
-            *control_flow = ControlFlow::Poll;
+            *control_flow = ControlFlow::Wait;
 
             match event {
                 Event::WindowEvent { event, .. } => {
@@ -129,6 +128,11 @@ impl Hub {
                 Event::RedrawRequested(_) => {
                     // Tick the FPS counter.
                     self.fps.tick();
+
+                    if mem::replace(&mut resized, false) {
+                        // self.rebuild_swapchain();
+                        scene_events.push(self.total_resize());
+                    }
 
                     // NOTE:
                     // Send all the current scene events to the scene thread.
@@ -149,18 +153,32 @@ impl Hub {
                         .apply_events(mem::replace(&mut scene_events, Vec::new()))
                         .unwrap();
 
-                    if mem::replace(&mut resized, false) {
-                        self.rebuild_swapchain();
-                    }
-
                     let mut metrics = DebugMetrics::default();
 
-                    let mut command_encoder = self
-                        .device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                    let mut command_encoder =
+                        self.device
+                            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                label: if cfg!(build = "debug") {
+                                    Some("main command encoder")
+                                } else {
+                                    None
+                                },
+                            });
 
                     let mouse_cursor = {
                         let ui_texture = self.compositor.get_ui_texture();
+
+                        // Clear the ui texture.
+                        command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                                attachment: &ui_texture,
+                                resolve_target: None,
+                                load_op: wgpu::LoadOp::Clear,
+                                store_op: wgpu::StoreOp::Store,
+                                clear_color: wgpu::Color::TRANSPARENT,
+                            }],
+                            depth_stencil_attachment: None,
+                        });
 
                         let now = Instant::now();
                         // Then draw the ui.
@@ -187,13 +205,8 @@ impl Hub {
                         .expect("timeout when acquiring next swapchain texture");
                     metrics.frame = Some(now.elapsed());
 
-                    dbg!(metrics.frame);
-
-                    let scene_wait = Instant::now();
                     // TODO(important): Implement buffer swap/belt to present previous render until new render arrives.
                     let scene_command_buffer = self.scene.recv_cmd_buffer().unwrap();
-                    // .expect("didn't recieve scene command buffer in time");
-                    dbg!(scene_wait.elapsed());
 
                     self.compositor.blit(&frame.view, &mut command_encoder);
 
@@ -204,7 +217,7 @@ impl Hub {
                     metrics.queue = Some(now.elapsed());
 
                     self.window
-                        .set_cursor_icon(iced_winit::conversion::mouse_cursor(mouse_cursor));
+                        .set_cursor_icon(iced_winit::conversion::mouse_interaction(mouse_cursor));
 
                     self.debug_metrics = metrics;
                 }
@@ -213,7 +226,18 @@ impl Hub {
         });
     }
 
-    fn rebuild_swapchain(&mut self) {
+    // fn rebuild_swapchain(&mut self) {
+    //     let new_size = self.window.inner_size();
+    //     self.swapchain_desc.width = new_size.width;
+    //     self.swapchain_desc.height = new_size.height;
+
+    //     self.iced.viewport = Viewport::new(new_size.width, new_size.height);
+    //     self.swapchain = self
+    //         .device
+    //         .create_swap_chain(&self.surface, &self.swapchain_desc);
+    // }
+
+    fn total_resize(&mut self) -> SceneEvent {
         let new_size = self.window.inner_size();
         self.swapchain_desc.width = new_size.width;
         self.swapchain_desc.height = new_size.height;
@@ -222,6 +246,19 @@ impl Hub {
         self.swapchain = self
             .device
             .create_swap_chain(&self.surface, &self.swapchain_desc);
+
+        let new_scene_texture = self.scene.build_render_texture(&self.device, new_size);
+
+        self.compositor.resize(
+            &self.device,
+            new_scene_texture.create_default_view(),
+            new_size,
+        );
+
+        SceneEvent::Resize {
+            new_texture: new_scene_texture,
+            size: new_size,
+        }
     }
 
     fn on_window_event(
@@ -229,28 +266,12 @@ impl Hub {
         event: WindowEvent,
         control_flow: &mut ControlFlow,
         resized: &mut bool,
-        scene_events: &mut Vec<SceneEvent>,
+        _scene_events: &mut Vec<SceneEvent>,
     ) {
         match event {
             WindowEvent::Resized(new_size) => {
                 self.state.logical_size = new_size.to_logical(self.window.scale_factor());
                 *resized = true;
-
-                let new_scene_texture = self
-                    .scene
-                    .build_render_texture(&self.device, (new_size.width, new_size.height));
-
-                self.compositor.resize(
-                    &self.device,
-                    new_scene_texture.create_default_view(),
-                    (new_size.width, new_size.height),
-                );
-
-                scene_events.push(SceneEvent::Resize {
-                    new_texture: new_scene_texture,
-                    width: new_size.width,
-                    height: new_size.height,
-                });
             }
             WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = new_modifiers,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -280,7 +301,7 @@ impl Hub {
     }
 
     fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
-        if cfg!(dev) {
+        if cfg!(feature = "metrics") {
             let mut list = vec![
                 concat!(
                     env!("CARGO_PKG_NAME"),
@@ -309,7 +330,7 @@ impl Iced {
         Self {
             cache: Some(Cache::default()),
             clipboard: Clipboard::new(window),
-            draw_output: (Primitive::None, MouseCursor::OutOfBounds),
+            draw_output: (Primitive::None, mouse::Interaction::Idle),
             renderer: Renderer::new(device, Settings::default()),
             viewport: Viewport::new(size.width, size.height),
         }

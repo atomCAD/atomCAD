@@ -1,7 +1,9 @@
+use anyhow::{Context, Result};
 use std::{mem, slice, sync::Arc, thread};
 use ultraviolet::{projection::perspective_gl, Mat4, Vec3};
+use winit::dpi::PhysicalSize;
 
-use crate::most_recent::{self, Receiver, RecvError, Sender, TryRecvError};
+use crate::most_recent::{self, Receiver, RecvError, Sender};
 
 mod isosphere;
 use isosphere::IsoSphere;
@@ -34,9 +36,6 @@ unsafe impl Pod for Vertex {}
 
 pub struct Entity {
     vertex_buffer: wgpu::Buffer,
-    index_buffer: Option<wgpu::Buffer>,
-
-    bind_group: wgpu::BindGroup,
     render_pipeline: wgpu::RenderPipeline,
 
     vertex_num: usize,
@@ -46,20 +45,19 @@ pub struct Entity {
 pub enum Event {
     Resize {
         new_texture: wgpu::Texture,
-        width: u32,
-        height: u32,
+        size: PhysicalSize<u32>,
     },
 }
 
-#[derive(Debug)]
-struct Output {
-    cmd_buf: wgpu::CommandBuffer,
+enum Msg {
+    Events(Vec<Event>),
+    Exit,
 }
 
 pub struct SceneHandle {
-    input_tx: Sender<Vec<Event>>,
-    output_rx: Receiver<wgpu::CommandBuffer>,
-    scene_thread: thread::JoinHandle<()>,
+    input_tx: Sender<Msg>,
+    output_rx: Receiver<Result<wgpu::CommandBuffer>>,
+    scene_thread: Option<thread::JoinHandle<()>>,
 }
 
 struct Scene {
@@ -88,9 +86,9 @@ impl SceneHandle {
     /// Spawn the scene thread and return a handle to it, as well as the first texture view.
     pub fn create_scene(
         device: Arc<wgpu::Device>,
-        (width, height): (u32, u32),
+        size: PhysicalSize<u32>,
     ) -> (SceneHandle, wgpu::TextureView) {
-        let mut scene = Scene::new(&device, (width, height));
+        let mut scene = Scene::new(&device, size);
 
         let (input_tx, input_rx) = most_recent::channel();
         let (output_tx, output_rx) = most_recent::channel();
@@ -98,19 +96,18 @@ impl SceneHandle {
         let texture_view = scene.render_texture.create_default_view();
 
         let scene_thread = thread::spawn(move || {
-            'main_loop: loop {
+            loop {
                 let events: Vec<Event> = match input_rx.recv() {
-                    Ok(events) => dbg!(events),
-                    Err(RecvError) => {
-                        // The sending side has disconnected, time to shut down.
-                        break;
-                    }
+                    Ok(Msg::Events(events)) => events,
+                    Ok(Msg::Exit) // the sending side has requested the scene thread to shut down.
+                    | Err(RecvError) // The sending side has disconnected, time to shut down.
+                        => break,
                 };
 
                 let mut command_encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                         // TODO: Make all wgpu types have labels in dev build mode.
-                        label: if cfg!(dev) {
+                        label: if cfg!(build = "debug") {
                             Some("scene command encoder")
                         } else {
                             None
@@ -122,15 +119,17 @@ impl SceneHandle {
                 scene.draw(&mut command_encoder);
 
                 output_tx
-                    .send(command_encoder.finish())
+                    .send(Ok(command_encoder.finish()))
                     .expect("unable to send output");
             }
+
+            log::info!("scene thread is shutting down");
         });
 
         let scene_handle = SceneHandle {
             input_tx,
             output_rx,
-            scene_thread,
+            scene_thread: Some(scene_thread),
         };
 
         (scene_handle, texture_view)
@@ -139,32 +138,31 @@ impl SceneHandle {
     /// Send a collection of events to the scene thread.
     ///
     /// The return type is temporary.
-    pub fn apply_events(&mut self, events: Vec<Event>) -> Result<(), String> {
+    pub fn apply_events(&mut self, events: Vec<Event>) -> Result<()> {
         self.input_tx
-            .send(events)
-            .map_err(|_| "failed to send item to scene thread".to_string())
+            .send(Msg::Events(events))
+            .context("failed to send item to scene thread")
     }
 
-    pub fn recv_cmd_buffer(&mut self) -> Result<wgpu::CommandBuffer, String> {
-        // match self.output_rx.try_recv() {
-        //     Ok(value) => Ok(Some(value)),
-        //     Err(TryRecvError::Empty) => Ok(None),
-        //     Err(TryRecvError::Disconnected) => Err("disconnected".to_string()),
-        // }
+    pub fn recv_cmd_buffer(&mut self) -> Result<wgpu::CommandBuffer> {
+        // self.output_rx.try_recv()
+        //     .context("didn't retrieve the command buffer from the scene thread in time")?
+        //     .context("the scene thread reported an error")
         self.output_rx
             .recv()
-            .map_err(|_| "failed to receive from scene thread".to_string())
+            .context("unable to retrieve a command buffer from the scene thread")?
+            .context("the scene thread reported an error")
     }
 
     pub fn build_render_texture(
         &self,
         device: &wgpu::Device,
-        (width, height): (u32, u32),
+        size: PhysicalSize<u32>,
     ) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width,
-                height,
+                width: size.width,
+                height: size.height,
                 depth: 1,
             },
             array_layer_count: 1,
@@ -173,14 +171,25 @@ impl SceneHandle {
             dimension: wgpu::TextureDimension::D2,
             format: DEFAULT_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
-            label: None,
+            label: if cfg!(build = "debug") {
+                Some("scene render texture")
+            } else {
+                None
+            },
         })
     }
 }
 
+impl Drop for SceneHandle {
+    fn drop(&mut self) {
+        self.input_tx.send(Msg::Exit).unwrap();
+        self.scene_thread.take().unwrap().join().unwrap();
+    }
+}
+
 impl Scene {
-    fn new(device: &wgpu::Device, (width, height): (u32, u32)) -> Scene {
-        let mx_total = generate_matrix(width as f32 / height as f32);
+    fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
+        let mx_total = generate_matrix(size.width as f32 / size.height as f32);
 
         let uniform_buffer = device.create_buffer_with_data(
             mx_total.as_byte_slice(),
@@ -194,7 +203,11 @@ impl Scene {
                     visibility: wgpu::ShaderStage::VERTEX,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 }],
-                label: None,
+                label: if cfg!(build = "debug") {
+                    Some("scene global bind group layout")
+                } else {
+                    None
+                },
             });
 
         let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -206,7 +219,11 @@ impl Scene {
                     range: 0..mem::size_of::<Mat4>() as u64,
                 },
             }],
-            label: None,
+            label: if cfg!(build = "debug") {
+                Some("scene global bind group")
+            } else {
+                None
+            },
         });
 
         let icosphere = create_unit_icosphere_entity(&device, &global_bind_group_layout);
@@ -215,8 +232,8 @@ impl Scene {
         // This is used for filters.
         let normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width,
-                height,
+                width: size.width,
+                height: size.height,
                 depth: 1,
             },
             array_layer_count: 1,
@@ -225,7 +242,11 @@ impl Scene {
             dimension: wgpu::TextureDimension::D2,
             format: NORMAL_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            label: None,
+            label: if cfg!(build = "debug") {
+                Some("scene normal texture")
+            } else {
+                None
+            },
         });
 
         // The scene renders to this texture.
@@ -233,8 +254,8 @@ impl Scene {
         // from it at 60fps.
         let render_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width,
-                height,
+                width: size.width,
+                height: size.height,
                 depth: 1,
             },
             array_layer_count: 1,
@@ -243,7 +264,11 @@ impl Scene {
             dimension: wgpu::TextureDimension::D2,
             format: DEFAULT_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
-            label: None,
+            label: if cfg!(build = "debug") {
+                Some("scene render texture")
+            } else {
+                None
+            },
         });
 
         Self {
@@ -266,14 +291,9 @@ impl Scene {
     {
         for event in events.into_iter() {
             match event {
-                Event::Resize {
-                    new_texture,
-                    width,
-                    height,
-                } => {
-                    self.resize(&device, encoder, new_texture, (width, height));
-                }
-                // TODO: Add more events: mouse, etc.
+                Event::Resize { new_texture, size } => {
+                    self.resize(&device, encoder, new_texture, size);
+                } // TODO: Add more events: mouse, etc.
             }
         }
     }
@@ -283,9 +303,9 @@ impl Scene {
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         render_texture: wgpu::Texture,
-        (width, height): (u32, u32),
+        size: PhysicalSize<u32>,
     ) {
-        let mx_total = generate_matrix(width as f32 / height as f32);
+        let mx_total = generate_matrix(size.width as f32 / size.height as f32);
 
         // TODO: Replace this with queue.writeBuffer when it gets merged.
         let matrix_src =
@@ -301,8 +321,8 @@ impl Scene {
 
         self.normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width,
-                height,
+                width: size.width,
+                height: size.height,
                 depth: 1,
             },
             array_layer_count: 1,
@@ -311,7 +331,11 @@ impl Scene {
             dimension: wgpu::TextureDimension::D2,
             format: NORMAL_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            label: None,
+            label: if cfg!(build = "debug") {
+                Some("scene normal texture")
+            } else {
+                None
+            },
         });
 
         self.render_texture = render_texture;
@@ -385,17 +409,6 @@ fn create_unit_icosphere_entity(
     let vertex_buffer =
         device.create_buffer_with_data(icosphere.vertices().bytes(), wgpu::BufferUsage::VERTEX);
 
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        bindings: &[],
-        label: None,
-    });
-
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &bind_group_layout,
-        bindings: &[],
-        label: None,
-    });
-
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[global_bind_group_layout],
     });
@@ -459,9 +472,6 @@ fn create_unit_icosphere_entity(
 
     Entity {
         vertex_buffer,
-        index_buffer: None,
-
-        bind_group,
         render_pipeline,
 
         vertex_num: icosphere.vertices().len(),
