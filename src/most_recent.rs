@@ -76,6 +76,9 @@ impl<T> Receiver<T> {
         }
     }
 
+    /// It's possible we'll use this function in the future, when
+    /// the main and scene thread are more independent and not in
+    /// lockstep, so I'm saving it.
     // pub fn try_recv(&self) -> Result<T, TryRecvError> {
     //     if Arc::strong_count(&self.most_recent) == 2 {
     //         let mut guard = self.most_recent.mutex.lock();
