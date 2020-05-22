@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 /// This includes a file as a slice of `u32`s.
 /// Useful for including compiled shaders.
 macro_rules! include_shader_binary {
@@ -20,3 +23,5 @@ macro_rules! include_shader_binary {
         }
     }};
 }
+
+// End of File

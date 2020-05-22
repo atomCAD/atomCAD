@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use anyhow::{Context, Result};
 use std::{mem, slice, sync::Arc, thread};
 use ultraviolet::{projection::perspective_gl, Mat4, Vec3};
@@ -463,3 +466,5 @@ fn create_unit_icosphere_entity(
         vertex_num: icosphere.vertices().len(),
     }
 }
+
+// End of File

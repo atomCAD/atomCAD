@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 #[macro_use]
 mod macros;
 // mod arcball;
@@ -37,3 +40,5 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+// End of File

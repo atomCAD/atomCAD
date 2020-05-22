@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use iced_wgpu::{Primitive, Renderer, Settings, Target, Viewport};
 use iced_winit::{mouse, Cache, Clipboard, Event as IcedEvent, Size, UserInterface};
 use winit::{
@@ -394,3 +397,5 @@ async fn get_device_and_queue(surface: &wgpu::Surface) -> Result<(wgpu::Device, 
         })
         .await)
 }
+
+// End of File

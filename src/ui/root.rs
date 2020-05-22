@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use iced_wgpu::Renderer;
 use iced_winit::{widget::text::Text, Align, Element, Length, Row};
 
@@ -27,3 +30,5 @@ impl Root {
             .into()
     }
 }
+
+// End of File
