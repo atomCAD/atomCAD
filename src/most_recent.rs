@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use parking_lot::{Condvar, Mutex};
 use std::sync::Arc;
 use thiserror::Error;
@@ -92,3 +95,5 @@ impl<T> Receiver<T> {
     //     }
     // }
 }
+
+// End of File

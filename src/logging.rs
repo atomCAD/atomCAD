@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use env_logger::fmt::{Color, Style, StyledValue};
 use log::{Level, LevelFilter};
 
@@ -34,3 +37,5 @@ fn colored_level<'a>(style: &'a mut Style, level: Level) -> StyledValue<'a, &'st
         Level::Error => style.set_color(Color::Red).value("ERROR"),
     }
 }
+
+// End of File

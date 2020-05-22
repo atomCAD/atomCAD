@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -31,3 +34,5 @@ impl Fps {
         self.last_second_frames.len()
     }
 }
+
+// End of File

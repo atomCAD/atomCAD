@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use crate::Settings;
 use glm::{self, Vec2, Vec3, Vec4, Mat4x4, Quat};
 
@@ -71,3 +74,5 @@ impl Arcball {
         self.last_mouse = None;
     }
 }
+
+// End of File

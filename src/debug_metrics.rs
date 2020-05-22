@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 #[cfg(dev)]
 pub use self::implementation::*;
 #[cfg(not(dev))]
@@ -90,3 +93,5 @@ mod stub {
         }
     }
 }
+
+// End of File

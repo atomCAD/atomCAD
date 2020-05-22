@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use winit::dpi::PhysicalSize;
 
 /// Used to layer UI and scene on top of each other.
@@ -221,3 +224,5 @@ impl Compositor {
         render_pass.draw(0..3, 0..1);
     }
 }
+
+// End of File

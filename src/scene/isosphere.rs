@@ -1,3 +1,6 @@
+// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
+// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
+
 use ultraviolet::Vec3;
 
 use super::Vertex;
@@ -80,3 +83,5 @@ impl IsoSphere {
         &self.vertices
     }
 }
+
+// End of File
