@@ -3,6 +3,7 @@ mod macros;
 // mod arcball;
 mod fps;
 mod logging;
+use log::error;
 
 mod hub;
 use self::hub::Hub;
@@ -24,12 +25,14 @@ fn run() -> Result<Infallible> {
 }
 
 fn main() {
+    // Configure logging engine:
     logging::setup();
 
     if let Err(err) = run() {
-        eprintln!("Error: {}", err);
+        // We panic'd somewhere.  Report the error, and its causes, to the log.
+        error!("Unhandled error: {}", err);
         for cause in err.chain().skip(1) {
-            eprintln!("because: {}", cause);
+            error!("because: {}", cause);
         }
         std::process::exit(1);
     }
