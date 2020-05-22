@@ -1,4 +1,3 @@
-
 /// This includes a file as a slice of `u32`s.
 /// Useful for including compiled shaders.
 macro_rules! include_shader_binary {
@@ -14,7 +13,10 @@ macro_rules! include_shader_binary {
         };
 
         unsafe {
-            std::slice::from_raw_parts(ALIGNED.bytes.as_ptr() as *const u32, ALIGNED.bytes.len() / 4)
+            std::slice::from_raw_parts(
+                ALIGNED.bytes.as_ptr() as *const u32,
+                ALIGNED.bytes.len() / 4,
+            )
         }
     }};
 }
