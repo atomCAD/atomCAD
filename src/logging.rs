@@ -1,40 +1,113 @@
 // Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
 // Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
 
-use env_logger::fmt::{Color, Style, StyledValue};
-use log::{Level, LevelFilter};
+use log::{Log, Metadata, Record, LevelFilter};
+use parking_lot::Mutex;
+use anyhow::Result;
+use std::{
+    io::{self, Write},
+    fs::{OpenOptions, File},
+};
 
-pub fn setup() {
-    let mut builder = env_logger::Builder::new();
-
-    builder
-        .format(|f, record| {
-            use std::io::Write;
-
-            let target = record.target();
-
-            let mut style = f.style();
-            let level = colored_level(&mut style, record.level());
-
-            let mut style = f.style();
-            let target = style.set_bold(true).value(target);
-
-            let time = f.timestamp_millis();
-
-            writeln!(f, " {}[{}] {} > {}", level, time, target, record.args(),)
-        })
-        .filter(Some("atomcad"), LevelFilter::Info);
-
-    builder.init();
+pub struct Logger {
+    file: Mutex<File>,
+    stderr: io::Stderr,
 }
 
-fn colored_level<'a>(style: &'a mut Style, level: Level) -> StyledValue<'a, &'static str> {
-    match level {
-        Level::Trace => style.set_color(Color::Magenta).value("TRACE"),
-        Level::Debug => style.set_color(Color::Blue).value("DEBUG"),
-        Level::Info => style.set_color(Color::Green).value("INFO "),
-        Level::Warn => style.set_color(Color::Yellow).value("WARN "),
-        Level::Error => style.set_color(Color::Red).value("ERROR"),
+impl Logger {
+    pub fn init() -> Result<()> {
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open("atomcad.log")?;
+        
+        log::set_boxed_logger(Box::new(Logger {
+            file: Mutex::new(file),
+            stderr: io::stderr(),
+        }))?;
+
+        log::set_max_level(LevelFilter::Info);
+
+        Ok(())
+    }
+}
+
+impl Log for Logger {
+    fn enabled(&self, _: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        let mut logfile = self.file.lock();
+        let mut stderr = self.stderr.lock();
+
+        match (record.file(), record.line()) {
+            (Some(file), Some(line)) => {
+                writeln!(logfile,
+                    "{}|{}({}:{}): {}",
+                    record.level(),
+                    record.target(),
+                    file,
+                    line,
+                    record.args()
+                ).unwrap();
+
+                if record.target().starts_with("atomcad") {
+                    writeln!(stderr,
+                        "{}|{}({}:{}): {}",
+                        record.level(),
+                        record.target(),
+                        file,
+                        line,
+                        record.args()
+                    ).unwrap();
+                }
+            }
+            (Some(file), None) => {
+                writeln!(logfile,
+                    "{}|{}({}): {}",
+                    record.level(),
+                    record.target(),
+                    file,
+                    record.args()
+                ).unwrap();
+
+                if record.target().starts_with("atomcad") {
+                    writeln!(stderr,
+                        "{}|{}({}): {}",
+                        record.level(),
+                        record.target(),
+                        file,
+                        record.args()
+                    ).unwrap();
+                }
+            }
+            _ => {
+                writeln!(logfile,
+                    "{}|{}: {}",
+                    record.level(),
+                    record.target(),
+                    record.args()
+                ).unwrap();
+
+                if record.target().starts_with("atomcad") {
+                    writeln!(stderr,
+                        "{}|{}: {}",
+                        record.level(),
+                        record.target(),
+                        record.args()
+                    ).unwrap();
+                }
+            }
+        }
+
+        stderr.flush().unwrap();
+        logfile.flush().unwrap();
+    }
+
+    fn flush(&self) {
+
     }
 }
 

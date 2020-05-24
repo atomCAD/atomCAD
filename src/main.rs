@@ -29,7 +29,9 @@ fn run() -> Result<Infallible> {
 
 fn main() {
     // Configure logging engine:
-    logging::setup();
+    // logging::setup();
+    logging::Logger::init()
+        .expect("failed to initialize the logger");
 
     if let Err(err) = run() {
         // We panic'd somewhere.  Report the error, and its causes, to the log.

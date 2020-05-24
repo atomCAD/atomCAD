@@ -36,8 +36,7 @@ thiserror = "1.0"
 anyhow = "1.0"
 
 # log
-log = "0.4"
-env_logger = "0.7"
+log = { version = "0.4", features = ["std"] }
 
 # For event loop
 winit = "0.22"
