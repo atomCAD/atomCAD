@@ -3,12 +3,21 @@
 
 use anyhow::{Context, Result};
 use std::{mem, slice, sync::Arc, thread};
-use ultraviolet::{projection::perspective_gl, Mat4, Vec3};
-use winit::dpi::PhysicalSize;
+use ultraviolet::{projection::perspective_gl, Mat4, Vec2, Vec3};
+use winit::{
+    dpi::{PhysicalPosition, PhysicalSize},
+    event::{ElementState, MouseButton},
+};
 
-use crate::most_recent::{self, Receiver, RecvError, Sender};
+use crate::{
+    arcball::Arcball,
+    most_recent::{self, Receiver, RecvError, Sender},
+};
 
+mod event;
 mod isosphere;
+
+pub use event::{Event, Events, Resize};
 use isosphere::IsoSphere;
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
@@ -44,17 +53,14 @@ pub struct Entity {
     vertex_num: usize,
 }
 
-#[derive(Debug)]
-pub enum Event {
-    Resize {
-        new_texture: wgpu::Texture,
-        size: PhysicalSize<u32>,
-    },
+enum Msg {
+    Events(Events),
+    Exit,
 }
 
-enum Msg {
-    Events(Vec<Event>),
-    Exit,
+struct Mouse {
+    cursor: Option<PhysicalPosition<u32>>,
+    left_button: ElementState,
 }
 
 pub struct SceneHandle {
@@ -69,8 +75,13 @@ struct Scene {
     normals_fbo: wgpu::Texture,
     // sobel_bind_group: wgpu::BindGroup,
     render_texture: wgpu::Texture,
+    view_matrix: Mat4,
+    size: PhysicalSize<u32>,
 
     icosphere: Entity,
+
+    mouse_state: Mouse,
+    arcball: Arcball,
 }
 
 fn generate_matrix(aspect_ratio: f32) -> Mat4 {
@@ -100,7 +111,7 @@ impl SceneHandle {
 
         let scene_thread = thread::spawn(move || {
             loop {
-                let events: Vec<Event> = match input_rx.recv() {
+                let mut events: Events = match input_rx.recv() {
                     Ok(Msg::Events(events)) => events,
                     Ok(Msg::Exit) // the sending side has requested the scene thread to shut down.
                     | Err(RecvError) // The sending side has disconnected, time to shut down.
@@ -117,7 +128,34 @@ impl SceneHandle {
                         },
                     });
 
-                scene.process_events(&device, &mut command_encoder, events);
+                if let Some(Resize { new_texture, size }) = events.resize.take() {
+                    scene.resize(&device, &mut command_encoder, new_texture, size);
+                }
+
+                scene.process_events(&device, &mut command_encoder, events.events.drain(..));
+
+                // Do rotation with arcball.
+                if ElementState::Released == scene.mouse_state.left_button {
+                    scene.arcball.release();
+                } else if let Some(new_pos) = scene.mouse_state.cursor {
+                    scene
+                        .arcball
+                        .rotate(
+                            scene.view_matrix,
+                            Vec2::new(
+                                new_pos.x as f32 / scene.size.width as f32,
+                                new_pos.y as f32 / scene.size.height as f32,
+                            ),
+                        )
+                        .map(|rotor| rotor.into_matrix().into_homogeneous())
+                        .map(|rotation_matrix| {
+                            scene.set_view_matrix(
+                                &device,
+                                &mut command_encoder,
+                                scene.view_matrix * rotation_matrix,
+                            );
+                        });
+                }
 
                 scene.draw(&mut command_encoder);
 
@@ -141,7 +179,7 @@ impl SceneHandle {
     /// Send a collection of events to the scene thread.
     ///
     /// The return type is temporary.
-    pub fn apply_events(&mut self, events: Vec<Event>) -> Result<()> {
+    pub fn apply_events(&mut self, events: Events) -> Result<()> {
         self.input_tx
             .send(Msg::Events(events))
             .context("failed to send item to scene thread")
@@ -279,26 +317,61 @@ impl Scene {
             uniform_buffer,
             normals_fbo,
             render_texture,
+            view_matrix: mx_total,
+            size,
 
             icosphere,
+
+            mouse_state: Mouse {
+                cursor: None,
+                left_button: ElementState::Released,
+            },
+            arcball: Arcball::new(Vec3::zero(), Vec3::new(1.5, -5.0, 3.0)),
         }
     }
 
-    fn process_events<I>(
+    fn process_events(
+        &mut self,
+        _device: &wgpu::Device,
+        _encoder: &mut wgpu::CommandEncoder,
+        events: impl Iterator<Item = Event>,
+    ) {
+        for event in events {
+            match event {
+                Event::MouseInput { button, state } => match button {
+                    MouseButton::Left => self.mouse_state.left_button = state,
+                    _ => {}
+                },
+                Event::CursorMoved { new_pos } => {
+                    // This is temporary, expect a refactor down the line.
+                    self.mouse_state.cursor = Some(new_pos);
+                }
+            }
+        }
+    }
+
+    /// TODO: Replace this method with inline calls to queue.write_buffer when we move
+    /// to a newer version of wgpu.
+    fn set_view_matrix(
         &mut self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
-        events: I,
-    ) where
-        I: IntoIterator<Item = Event>,
-    {
-        for event in events.into_iter() {
-            match event {
-                Event::Resize { new_texture, size } => {
-                    self.resize(&device, encoder, new_texture, size);
-                } // TODO: Add more events: mouse, etc.
-            }
-        }
+        view_matrix: Mat4,
+    ) {
+        self.view_matrix = view_matrix;
+
+        let matrix_src = device.create_buffer_with_data(
+            self.view_matrix.as_byte_slice(),
+            wgpu::BufferUsage::COPY_SRC,
+        );
+
+        encoder.copy_buffer_to_buffer(
+            &matrix_src,
+            0,
+            &self.uniform_buffer,
+            0,
+            mem::size_of_val(&self.view_matrix) as u64,
+        );
     }
 
     fn resize(
@@ -308,18 +381,10 @@ impl Scene {
         render_texture: wgpu::Texture,
         size: PhysicalSize<u32>,
     ) {
-        let mx_total = generate_matrix(size.width as f32 / size.height as f32);
-
-        // TODO: Replace this with queue.writeBuffer when it gets merged.
-        let matrix_src =
-            device.create_buffer_with_data(mx_total.as_byte_slice(), wgpu::BufferUsage::COPY_SRC);
-
-        encoder.copy_buffer_to_buffer(
-            &matrix_src,
-            0,
-            &self.uniform_buffer,
-            0,
-            mem::size_of_val(&mx_total) as u64,
+        self.set_view_matrix(
+            device,
+            encoder,
+            generate_matrix(size.width as f32 / size.height as f32),
         );
 
         self.normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
@@ -342,6 +407,7 @@ impl Scene {
         });
 
         self.render_texture = render_texture;
+        self.size = size;
     }
 
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder) {

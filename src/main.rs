@@ -3,7 +3,7 @@
 
 #[macro_use]
 mod macros;
-// mod arcball;
+mod arcball;
 mod fps;
 mod logging;
 use log::error;

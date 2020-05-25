@@ -1,9 +1,9 @@
 // Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
 // Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
 
-use crate::Settings;
-use glm::{self, Vec2, Vec3, Vec4, Mat4x4, Quat};
+use ultraviolet::{self, Mat4, Rotor3, Vec2, Vec3, Vec4};
 
+#[derive(Debug)]
 pub struct Arcball {
     center_pos: Vec3,
     camera_pos: Vec3,
@@ -19,11 +19,7 @@ impl Arcball {
         }
     }
 
-    pub fn get_quat(
-        &mut self,
-        view_matrix: Mat4x4,
-        new_pos: Vec2,
-    ) -> Option<Quat> {
+    pub fn rotate(&mut self, view_matrix: Mat4, new_pos: Vec2) -> Option<Rotor3> {
         self.last_mouse.replace(new_pos).map(|last_pos| {
             let sphere_radius = self.camera_pos.z - self.center_pos.z;
 
@@ -37,19 +33,17 @@ impl Arcball {
                     ((sphere_radius * sphere_radius) - (pos.x * pos.x) - (pos.y * pos.y)).sqrt(),
                 );
 
-                on_sphere.normalize()
+                on_sphere.normalized()
             };
 
             let start_on_sphere = pos_on_sphere(last_pos);
             let end_on_sphere = pos_on_sphere(new_pos);
 
-            glm::quat_rotation(&start_on_sphere, &end_on_sphere)
+            Rotor3::from_rotation_between(start_on_sphere, end_on_sphere)
         })
 
         // self.last_mouse.replace(new_pos).map(|last_pos| {
         //     let sphere_radius = self.camera_pos.z - self.center_pos.z;
-
-            
 
         //     // do raytrace to find point
         //     let pos_on_sphere = |pos: Point2<f32>| {

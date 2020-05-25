@@ -4,7 +4,7 @@
 use iced_wgpu::{Primitive, Renderer, Settings, Target, Viewport};
 use iced_winit::{mouse, Cache, Clipboard, Event as IcedEvent, Size, UserInterface};
 use winit::{
-    dpi::LogicalSize,
+    dpi::{LogicalSize, PhysicalSize},
     event::{Event, ModifiersState, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
@@ -12,12 +12,12 @@ use winit::{
 
 use anyhow::{Context, Result};
 
-use std::{mem, sync::Arc, time::Instant};
+use std::{mem, sync::Arc, time::Instant, convert::TryInto};
 
 use crate::compositor::Compositor;
 use crate::debug_metrics::DebugMetrics;
 use crate::fps::Fps;
-use crate::scene::{Event as SceneEvent, SceneHandle};
+use crate::scene::{Event as SceneEvent, Events as SceneEvents, Resize, SceneHandle};
 use crate::ui;
 
 struct Iced {
@@ -110,8 +110,7 @@ impl Hub {
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) -> ! {
-        let mut resized = false;
-        let mut scene_events = Vec::new();
+        let mut scene_events = SceneEvents::default();
 
         // Spin up the UI before we get any events.
         self.iced
@@ -125,17 +124,12 @@ impl Hub {
 
             match event {
                 Event::WindowEvent { event, .. } => {
-                    self.on_window_event(event, control_flow, &mut resized, &mut scene_events)
+                    self.on_window_event(event, control_flow, &mut scene_events)
                 }
-                Event::MainEventsCleared => self.on_events_cleared(&mut scene_events),
+                Event::MainEventsCleared => self.on_events_cleared(&mut scene_events.events),
                 Event::RedrawRequested(_) => {
                     // Tick the FPS counter.
                     self.fps.tick();
-
-                    if mem::replace(&mut resized, false) {
-                        // self.rebuild_swapchain();
-                        scene_events.push(self.total_resize());
-                    }
 
                     // NOTE:
                     // Send all the current scene events to the scene thread.
@@ -153,7 +147,7 @@ impl Hub {
                     // is blocking the frame until the scene renders, but
                     // that would be a bad user experience.)
                     self.scene
-                        .apply_events(mem::replace(&mut scene_events, Vec::new()))
+                        .apply_events(mem::replace(&mut scene_events, Default::default()))
                         .unwrap();
 
                     let mut metrics = DebugMetrics::default();
@@ -229,7 +223,7 @@ impl Hub {
         });
     }
 
-    fn total_resize(&mut self) -> SceneEvent {
+    fn total_resize(&mut self) -> (wgpu::Texture, PhysicalSize<u32>) {
         let new_size = self.window.inner_size();
         self.swapchain_desc.width = new_size.width;
         self.swapchain_desc.height = new_size.height;
@@ -247,27 +241,31 @@ impl Hub {
             new_size,
         );
 
-        SceneEvent::Resize {
-            new_texture: new_scene_texture,
-            size: new_size,
-        }
+        (new_scene_texture, new_size)
     }
 
     fn on_window_event(
         &mut self,
         event: WindowEvent,
         control_flow: &mut ControlFlow,
-        resized: &mut bool,
-        _scene_events: &mut Vec<SceneEvent>,
+        scene_events: &mut SceneEvents,
     ) {
-        match event {
+        match &event {
             WindowEvent::Resized(new_size) => {
                 self.state.logical_size = new_size.to_logical(self.window.scale_factor());
-                *resized = true;
+
+                let (new_texture, size) = self.total_resize();
+
+                scene_events.resize = Some(Resize {
+                    new_texture,
+                    size,
+                });
             }
-            WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = new_modifiers,
+            WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = *new_modifiers,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-            _ => {}
+            event => if let Ok(scene_event) = event.try_into() {
+                scene_events.events.push(scene_event);
+            }
         }
 
         if let Some(event) = iced_winit::conversion::window_event(
