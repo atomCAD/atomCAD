@@ -1,8 +1,8 @@
-use winit::{
-    dpi::{PhysicalSize, PhysicalPosition},
-    event::{WindowEvent, ElementState, MouseButton},
-};
 use std::convert::TryFrom;
+use winit::{
+    dpi::{PhysicalPosition, PhysicalSize},
+    event::{ElementState, MouseButton, WindowEvent},
+};
 
 #[derive(Debug)]
 pub struct Resize {
@@ -24,7 +24,7 @@ pub enum Event {
     },
     CursorMoved {
         new_pos: PhysicalPosition<u32>,
-    }
+    },
 }
 
 pub struct NotApplicable;
@@ -35,13 +35,17 @@ impl TryFrom<&'_ WindowEvent<'_>> for Event {
     fn try_from(window_event: &WindowEvent) -> Result<Self, Self::Error> {
         Ok(match *window_event {
             WindowEvent::MouseInput { state, button, .. } => Event::MouseInput { state, button },
-            WindowEvent::CursorMoved { position, .. } => Event::CursorMoved { new_pos: position.cast() },
+            WindowEvent::CursorMoved { position, .. } => Event::CursorMoved {
+                new_pos: position.cast(),
+            },
             WindowEvent::Resized(_) => {
                 // This window event is special and should be handled by the
                 // the hub.
-                unreachable!("the WindowEvent::Resized event is special and should be handled by the hub")
+                unreachable!(
+                    "the WindowEvent::Resized event is special and should be handled by the hub"
+                )
             }
-            _ => return Err(NotApplicable)
+            _ => return Err(NotApplicable),
         })
     }
 }

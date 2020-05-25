@@ -12,7 +12,7 @@ use winit::{
 
 use anyhow::{Context, Result};
 
-use std::{mem, sync::Arc, time::Instant, convert::TryInto};
+use std::{convert::TryInto, mem, sync::Arc, time::Instant};
 
 use crate::compositor::Compositor;
 use crate::debug_metrics::DebugMetrics;
@@ -256,15 +256,14 @@ impl Hub {
 
                 let (new_texture, size) = self.total_resize();
 
-                scene_events.resize = Some(Resize {
-                    new_texture,
-                    size,
-                });
+                scene_events.resize = Some(Resize { new_texture, size });
             }
             WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = *new_modifiers,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-            event => if let Ok(scene_event) = event.try_into() {
-                scene_events.events.push(scene_event);
+            event => {
+                if let Ok(scene_event) = event.try_into() {
+                    scene_events.events.push(scene_event);
+                }
             }
         }
 
