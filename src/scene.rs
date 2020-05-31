@@ -13,7 +13,7 @@ use winit::{
 };
 
 use crate::{
-    arcball::Arcball,
+    arcball,
     most_recent::{self, Receiver, RecvError, Sender},
 };
 
@@ -84,7 +84,6 @@ struct Scene {
     icosphere: Entity,
 
     mouse_state: Mouse,
-    arcball: Arcball,
 }
 
 fn generate_matrix(aspect_ratio: f32) -> Mat4 {
