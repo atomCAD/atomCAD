@@ -368,6 +368,8 @@ impl Scene {
         _encoder: &mut wgpu::CommandEncoder,
         events: impl Iterator<Item = Event>,
     ) {
+        let mut cursor_left = false;
+
         self.state.mouse.old_cursor = self.state.mouse.cursor.take();
 
         for event in events {
@@ -381,7 +383,15 @@ impl Scene {
                 Event::CursorMoved { new_pos } => {
                     self.state.mouse.cursor = Some(new_pos);
                 }
+                Event::CursorLeft => {
+                    cursor_left = true;
+                }
             }
+        }
+
+        if cursor_left {
+            self.state.mouse.old_cursor = None;
+            self.state.mouse.cursor = None;
         }
     }
 

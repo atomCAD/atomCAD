@@ -25,6 +25,7 @@ pub enum Event {
     CursorMoved {
         new_pos: PhysicalPosition<u32>,
     },
+    CursorLeft,
 }
 
 pub struct NotApplicable;
@@ -38,6 +39,7 @@ impl TryFrom<&'_ WindowEvent<'_>> for Event {
             WindowEvent::CursorMoved { position, .. } => Event::CursorMoved {
                 new_pos: position.cast(),
             },
+            WindowEvent::CursorLeft { .. } => Event::CursorLeft,
             WindowEvent::Resized(_) => {
                 // This window event is special and should be handled by the
                 // the hub.
