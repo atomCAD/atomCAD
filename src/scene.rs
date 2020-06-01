@@ -135,7 +135,7 @@ impl SceneHandle {
 
         let scene_thread = thread::spawn(move || {
             loop {
-                let mut events: Events = match input_rx.recv() {
+                let events: Events = match input_rx.recv() {
                     Ok(Msg::Events(events)) => events,
                     Ok(Msg::Exit) // the sending side has requested the scene thread to shut down.
                     | Err(RecvError) // The sending side has disconnected, time to shut down.
@@ -152,49 +152,14 @@ impl SceneHandle {
                         },
                     });
 
-                if let Some(Resize { new_texture, size }) = events.resize.take() {
-                    scene.resize(&device, &mut command_encoder, new_texture, size);
+                match scene.run_frame(&device, &mut command_encoder, events) {
+                    Ok(_) => output_tx
+                        .send(Ok(command_encoder.finish()))
+                        .expect("unable to send command buffer to main thread"),
+                    Err(e) => output_tx
+                        .send(Err(e))
+                        .expect("unable to send error to main thread"),
                 }
-
-                scene.process_events(&device, &mut command_encoder, events.events.drain(..));
-
-                // Do rotation with arcball.
-                if let Mouse {
-                    old_cursor: Some(old_cursor),
-                    cursor: Some(new_cursor),
-                    left_button: ElementState::Pressed,
-                    ..
-                } = scene.state.mouse
-                {
-                    let scale = |cursor: PhysicalPosition<u32>| {
-                        Vec2::new(
-                            cursor.x as f32 / (scene.size.width as f32 / 2.0),
-                            cursor.y as f32 / (scene.size.height as f32 / 2.0),
-                        )
-                        .map(|i| i - 1.0)
-                            * Vec2::new(-1.0, 1.0)
-                    };
-
-                    let old_cursor = scale(old_cursor);
-                    let new_cursor = scale(new_cursor);
-
-                    let rotor = arcball::create_rotor(old_cursor, new_cursor);
-                    let rotation = Isometry3::new(Vec3::zero(), rotor).into_homogeneous_matrix();
-                    scene.world_mx = scene.world_mx * rotation;
-
-                    upload_matrix(
-                        &device,
-                        &mut command_encoder,
-                        &scene.uniform_buffer,
-                        scene.world_mx,
-                    );
-                }
-
-                scene.draw(&mut command_encoder);
-
-                output_tx
-                    .send(Ok(command_encoder.finish()))
-                    .expect("unable to send output");
             }
 
             log::info!("scene thread is shutting down");
@@ -360,6 +325,55 @@ impl Scene {
 
             state: State::new(),
         }
+    }
+
+    fn run_frame(
+        &mut self,
+        device: &wgpu::Device,
+        command_encoder: &mut wgpu::CommandEncoder,
+        mut events: Events,
+    ) -> Result<()> {
+        if let Some(Resize { new_texture, size }) = events.resize.take() {
+            self.resize(&device, command_encoder, new_texture, size);
+        }
+
+        self.process_events(&device, command_encoder, events.events.drain(..));
+
+        // Do rotation with arcball.
+        if let Mouse {
+            old_cursor: Some(old_cursor),
+            cursor: Some(new_cursor),
+            left_button: ElementState::Pressed,
+            ..
+        } = self.state.mouse
+        {
+            let scale = |cursor: PhysicalPosition<u32>| {
+                Vec2::new(
+                    cursor.x as f32 / (self.size.width as f32 / 2.0),
+                    cursor.y as f32 / (self.size.height as f32 / 2.0),
+                )
+                .map(|i| i - 1.0)
+                    * Vec2::new(-1.0, 1.0)
+            };
+
+            let old_cursor = scale(old_cursor);
+            let new_cursor = scale(new_cursor);
+
+            let rotor = arcball::create_rotor(old_cursor, new_cursor);
+            let rotation = Isometry3::new(Vec3::zero(), rotor).into_homogeneous_matrix();
+            self.world_mx = self.world_mx * rotation;
+
+            upload_matrix(
+                &device,
+                command_encoder,
+                &self.uniform_buffer,
+                self.world_mx,
+            );
+        }
+
+        self.draw(command_encoder);
+
+        Ok(())
     }
 
     fn process_events(
