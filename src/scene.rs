@@ -395,6 +395,7 @@ impl Scene {
                     _ => {}
                 },
                 Event::CursorMoved { new_pos } => {
+                    // This event can be fired several times during a single frame.
                     self.state.mouse.cursor = Some(new_pos);
                 }
                 Event::CursorLeft => {
