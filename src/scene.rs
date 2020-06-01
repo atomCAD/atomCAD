@@ -348,11 +348,11 @@ impl Scene {
         } = self.state.mouse
         {
             let scale = |cursor: PhysicalPosition<u32>| {
-                Vec2::new(
+                Vec2::new( // scale pixel coordinates to [0, 2]
                     cursor.x as f32 / (self.size.width as f32 / 2.0),
                     cursor.y as f32 / (self.size.height as f32 / 2.0),
                 )
-                .map(|i| i - 1.0)
+                .map(|i| i - 1.0) // scale from [0, 2] to [-1, 1]
                     * Vec2::new(-1.0, 1.0)
             };
 
