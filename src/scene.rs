@@ -5,8 +5,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use anyhow::{Context, Result};
-use std::{mem, slice, sync::Arc, thread};
-use ultraviolet::{projection::perspective_gl, Mat4, Vec2, Vec3};
+use bytemuck;
+use std::{mem, sync::Arc, thread};
+use ultraviolet::{projection::perspective_gl, Isometry3, Mat4, Vec2, Vec3};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton},
@@ -27,27 +28,15 @@ const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 /// Normal as in perpendicular, not usual.
 const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
-pub unsafe trait Pod: Sized {
-    fn bytes(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self as *const Self as *const u8, mem::size_of::<Self>()) }
-    }
-}
-unsafe impl<T: Pod> Pod for &[T] {
-    fn bytes(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(self.as_ptr() as *const u8, mem::size_of::<T>() * self.len())
-        }
-    }
-}
-unsafe impl Pod for u16 {}
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
 }
-unsafe impl Pod for Vertex {}
+
+unsafe impl bytemuck::Zeroable for Vertex {}
+unsafe impl bytemuck::Pod for Vertex {}
 
 pub struct Entity {
     vertex_buffer: wgpu::Buffer,
@@ -61,9 +50,28 @@ enum Msg {
     Exit,
 }
 
+#[derive(Debug)]
 struct Mouse {
-    cursor: Option<PhysicalPosition<u32>>,
-    left_button: ElementState,
+    pub old_cursor: Option<PhysicalPosition<u32>>,
+    pub cursor: Option<PhysicalPosition<u32>>,
+    pub left_button: ElementState,
+}
+
+#[derive(Debug)]
+struct State {
+    pub mouse: Mouse,
+}
+
+impl State {
+    pub fn new() -> Self {
+        State {
+            mouse: Mouse {
+                old_cursor: None,
+                cursor: None,
+                left_button: ElementState::Released,
+            },
+        }
+    }
 }
 
 pub struct SceneHandle {
@@ -75,27 +83,41 @@ pub struct SceneHandle {
 struct Scene {
     global_bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
-    normals_fbo: wgpu::Texture,
-    // sobel_bind_group: wgpu::BindGroup,
     render_texture: wgpu::Texture,
-    view_matrix: Mat4,
+    normals_fbo: wgpu::Texture,
+
     size: PhysicalSize<u32>,
+    world_mx: Mat4,
+    camera: Vec3,
 
     icosphere: Entity,
 
-    mouse_state: Mouse,
+    state: State,
 }
 
-fn generate_matrix(aspect_ratio: f32) -> Mat4 {
+fn generate_matrix(camera: Vec3, aspect_ratio: f32) -> Mat4 {
     let opengl_to_wgpu_matrix: Mat4 = [
         1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
     ]
     .into();
 
     let mx_projection = perspective_gl(45_f32.to_radians(), aspect_ratio, 1.0, 10.0);
-    let mx_view = Mat4::look_at(Vec3::new(1.5, -5.0, 3.0), Vec3::zero(), Vec3::unit_z());
+    let mx_view = Mat4::look_at(camera, Vec3::zero(), Vec3::unit_z());
 
     opengl_to_wgpu_matrix * mx_projection * mx_view
+}
+
+/// TODO: Replace with `queue.write_buffer`.
+fn upload_matrix(
+    device: &wgpu::Device,
+    encoder: &mut wgpu::CommandEncoder,
+    uniform: &wgpu::Buffer,
+    mx: Mat4,
+) {
+    let matrix_src =
+        device.create_buffer_with_data(mx.as_byte_slice(), wgpu::BufferUsage::COPY_SRC);
+
+    encoder.copy_buffer_to_buffer(&matrix_src, 0, &uniform, 0, mem::size_of_val(&mx) as u64);
 }
 
 impl SceneHandle {
@@ -137,26 +159,35 @@ impl SceneHandle {
                 scene.process_events(&device, &mut command_encoder, events.events.drain(..));
 
                 // Do rotation with arcball.
-                if ElementState::Released == scene.mouse_state.left_button {
-                    scene.arcball.release();
-                } else if let Some(new_pos) = scene.mouse_state.cursor {
-                    scene
-                        .arcball
-                        .rotate(
-                            scene.view_matrix,
-                            Vec2::new(
-                                new_pos.x as f32 / scene.size.width as f32,
-                                new_pos.y as f32 / scene.size.height as f32,
-                            ),
+                if let Mouse {
+                    old_cursor: Some(old_cursor),
+                    cursor: Some(new_cursor),
+                    left_button: ElementState::Pressed,
+                    ..
+                } = scene.state.mouse
+                {
+                    let scale = |cursor: PhysicalPosition<u32>| {
+                        Vec2::new(
+                            cursor.x as f32 / (scene.size.width as f32 / 2.0),
+                            cursor.y as f32 / (scene.size.height as f32 / 2.0),
                         )
-                        .map(|rotor| rotor.into_matrix().into_homogeneous())
-                        .map(|rotation_matrix| {
-                            scene.set_view_matrix(
-                                &device,
-                                &mut command_encoder,
-                                scene.view_matrix * rotation_matrix,
-                            );
-                        });
+                        .map(|i| i - 1.0)
+                            * Vec2::new(-1.0, 1.0)
+                    };
+
+                    let old_cursor = scale(old_cursor);
+                    let new_cursor = scale(new_cursor);
+
+                    let rotor = arcball::create_rotor(old_cursor, new_cursor);
+                    let rotation = Isometry3::new(Vec3::zero(), rotor).into_homogeneous_matrix();
+                    scene.world_mx = scene.world_mx * rotation;
+
+                    upload_matrix(
+                        &device,
+                        &mut command_encoder,
+                        &scene.uniform_buffer,
+                        scene.world_mx,
+                    );
                 }
 
                 scene.draw(&mut command_encoder);
@@ -232,7 +263,9 @@ impl Drop for SceneHandle {
 
 impl Scene {
     fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
-        let mx_total = generate_matrix(size.width as f32 / size.height as f32);
+        let camera = Vec3::new(1.5, -5.0, 3.0);
+
+        let mx_total = generate_matrix(camera, size.width as f32 / size.height as f32);
 
         let uniform_buffer = device.create_buffer_with_data(
             mx_total.as_byte_slice(),
@@ -319,16 +352,13 @@ impl Scene {
             uniform_buffer,
             normals_fbo,
             render_texture,
-            view_matrix: mx_total,
             size,
+            world_mx: mx_total,
+            camera,
 
             icosphere,
 
-            mouse_state: Mouse {
-                cursor: None,
-                left_button: ElementState::Released,
-            },
-            arcball: Arcball::new(Vec3::zero(), Vec3::new(1.5, -5.0, 3.0)),
+            state: State::new(),
         }
     }
 
@@ -338,42 +368,21 @@ impl Scene {
         _encoder: &mut wgpu::CommandEncoder,
         events: impl Iterator<Item = Event>,
     ) {
+        self.state.mouse.old_cursor = self.state.mouse.cursor.take();
+
         for event in events {
             match event {
                 Event::MouseInput { button, state } => match button {
-                    MouseButton::Left => self.mouse_state.left_button = state,
+                    MouseButton::Left => {
+                        self.state.mouse.left_button = state;
+                    }
                     _ => {}
                 },
                 Event::CursorMoved { new_pos } => {
-                    // This is temporary, expect a refactor down the line.
-                    self.mouse_state.cursor = Some(new_pos);
+                    self.state.mouse.cursor = Some(new_pos);
                 }
             }
         }
-    }
-
-    /// TODO: Replace this method with inline calls to queue.write_buffer when we move
-    /// to a newer version of wgpu.
-    fn set_view_matrix(
-        &mut self,
-        device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
-        view_matrix: Mat4,
-    ) {
-        self.view_matrix = view_matrix;
-
-        let matrix_src = device.create_buffer_with_data(
-            self.view_matrix.as_byte_slice(),
-            wgpu::BufferUsage::COPY_SRC,
-        );
-
-        encoder.copy_buffer_to_buffer(
-            &matrix_src,
-            0,
-            &self.uniform_buffer,
-            0,
-            mem::size_of_val(&self.view_matrix) as u64,
-        );
     }
 
     fn resize(
@@ -383,11 +392,9 @@ impl Scene {
         render_texture: wgpu::Texture,
         size: PhysicalSize<u32>,
     ) {
-        self.set_view_matrix(
-            device,
-            encoder,
-            generate_matrix(size.width as f32 / size.height as f32),
-        );
+        self.world_mx = generate_matrix(self.camera, size.width as f32 / size.height as f32);
+
+        upload_matrix(device, encoder, &self.uniform_buffer, self.world_mx);
 
         self.normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
@@ -463,8 +470,10 @@ fn create_unit_icosphere_entity(
 
     let icosphere = IsoSphere::new();
 
-    let vertex_buffer =
-        device.create_buffer_with_data(icosphere.vertices().bytes(), wgpu::BufferUsage::VERTEX);
+    let vertex_buffer = device.create_buffer_with_data(
+        bytemuck::cast_slice(icosphere.vertices()),
+        wgpu::BufferUsage::VERTEX,
+    );
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[global_bind_group_layout],

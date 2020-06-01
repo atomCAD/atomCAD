@@ -12,8 +12,8 @@ use ultraviolet::{self, Rotor3, Vec2, Vec3};
 /// `old_cursor` and `new_cursor` are scaled between -1 and 1 in each dimension.
 ///
 /// The content of this function is based on https://www.khronos.org/opengl/wiki/Object_Mouse_Trackball.
-pub fn create_rotor(old_cursor: Vec2, new_cursor: Vec2, camera_pos: Vec3) -> Rotor3 {
-    let r = camera_pos.mag(); // Recheck this.
+pub fn create_rotor(old_cursor: Vec2, new_cursor: Vec2) -> Rotor3 {
+    let r: f32 = 1.0; // Recheck this.
 
     // Cast the mouse position onto a piecewise function that is
     // either a sphere or a hyperbolic sheet depending on distance
