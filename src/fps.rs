@@ -37,5 +37,3 @@ impl Fps {
         self.last_second_frames.len()
     }
 }
-
-// End of File

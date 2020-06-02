@@ -43,5 +43,3 @@ fn main() {
         std::process::exit(1);
     }
 }
-
-// End of File

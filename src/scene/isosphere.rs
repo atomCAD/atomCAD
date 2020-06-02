@@ -86,5 +86,3 @@ impl IsoSphere {
         &self.vertices
     }
 }
-
-// End of File

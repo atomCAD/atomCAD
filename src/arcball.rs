@@ -30,5 +30,3 @@ pub fn create_rotor(old_cursor: Vec2, new_cursor: Vec2) -> Rotor3 {
 
     Rotor3::from_rotation_between(project(old_cursor), project(new_cursor))
 }
-
-// End of File

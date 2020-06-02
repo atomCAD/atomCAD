@@ -98,5 +98,3 @@ impl<T> Receiver<T> {
     //     }
     // }
 }
-
-// End of File

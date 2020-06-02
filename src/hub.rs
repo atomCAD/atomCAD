@@ -20,7 +20,7 @@ use std::{convert::TryInto, mem, sync::Arc, time::Instant};
 use crate::compositor::Compositor;
 use crate::debug_metrics::DebugMetrics;
 use crate::fps::Fps;
-use crate::scene::{Event as SceneEvent, Events as SceneEvents, Resize, SceneHandle};
+use crate::scene::{Event as SceneEvent, SceneHandle};
 use crate::ui;
 
 struct Iced {
@@ -113,7 +113,8 @@ impl Hub {
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) -> ! {
-        let mut scene_events = SceneEvents::default();
+        let mut scene_events = vec![];
+        let mut maybe_resize = None;
 
         // Spin up the UI before we get any events.
         self.iced
@@ -127,9 +128,9 @@ impl Hub {
 
             match event {
                 Event::WindowEvent { event, .. } => {
-                    self.on_window_event(event, control_flow, &mut scene_events)
+                    self.on_window_event(event, control_flow, &mut scene_events, &mut maybe_resize)
                 }
-                Event::MainEventsCleared => self.on_events_cleared(&mut scene_events.events),
+                Event::MainEventsCleared => self.on_events_cleared(&mut scene_events),
                 Event::RedrawRequested(_) => {
                     // Tick the FPS counter.
                     self.fps.tick();
@@ -149,9 +150,18 @@ impl Hub {
                     // if larger or cropping if smaller. (The other option
                     // is blocking the frame until the scene renders, but
                     // that would be a bad user experience.)
-                    self.scene
-                        .apply_events(mem::replace(&mut scene_events, Default::default()))
-                        .unwrap();
+                    if let Some((new_size, new_scene_target)) = self
+                        .scene
+                        .apply_events(
+                            &self.device,
+                            mem::replace(&mut scene_events, vec![]),
+                            maybe_resize.take(),
+                        )
+                        .unwrap()
+                    {
+                        self.compositor
+                            .resize(&self.device, new_scene_target, new_size);
+                    }
 
                     let mut metrics = DebugMetrics::default();
 
@@ -226,8 +236,7 @@ impl Hub {
         });
     }
 
-    fn total_resize(&mut self) -> (wgpu::Texture, PhysicalSize<u32>) {
-        let new_size = self.window.inner_size();
+    fn total_resize(&mut self, new_size: PhysicalSize<u32>) {
         self.swapchain_desc.width = new_size.width;
         self.swapchain_desc.height = new_size.height;
 
@@ -235,37 +244,28 @@ impl Hub {
         self.swapchain = self
             .device
             .create_swap_chain(&self.surface, &self.swapchain_desc);
-
-        let new_scene_texture = self.scene.build_render_texture(&self.device, new_size);
-
-        self.compositor.resize(
-            &self.device,
-            new_scene_texture.create_default_view(),
-            new_size,
-        );
-
-        (new_scene_texture, new_size)
     }
 
     fn on_window_event(
         &mut self,
         event: WindowEvent,
         control_flow: &mut ControlFlow,
-        scene_events: &mut SceneEvents,
+        scene_events: &mut Vec<SceneEvent>,
+        should_resize: &mut Option<PhysicalSize<u32>>,
     ) {
-        match &event {
+        match event {
             WindowEvent::Resized(new_size) => {
                 self.state.logical_size = new_size.to_logical(self.window.scale_factor());
 
-                let (new_texture, size) = self.total_resize();
+                self.total_resize(new_size);
 
-                scene_events.resize = Some(Resize { new_texture, size });
+                *should_resize = Some(new_size);
             }
-            WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = *new_modifiers,
+            WindowEvent::ModifiersChanged(new_modifiers) => self.state.modifiers = new_modifiers,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-            event => {
+            ref event => {
                 if let Ok(scene_event) = event.try_into() {
-                    scene_events.events.push(scene_event);
+                    scene_events.push(scene_event);
                 }
             }
         }
@@ -397,5 +397,3 @@ async fn get_device_and_queue(surface: &wgpu::Surface) -> Result<(wgpu::Device, 
         })
         .await)
 }
-
-// End of File
