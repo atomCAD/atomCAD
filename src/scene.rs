@@ -89,7 +89,7 @@ impl Scene {
             self.resize(&device, &mut cmd_encoder, new_texture, size);
         }
 
-        self.process_events(&device, &mut cmd_encoder, events.into_iter());
+        self.process_events(events.into_iter());
 
         self.rotate_with_arcball(device, &mut cmd_encoder);
 
@@ -130,12 +130,7 @@ impl Scene {
         }
     }
 
-    fn process_events(
-        &mut self,
-        _device: &wgpu::Device,
-        _encoder: &mut wgpu::CommandEncoder,
-        events: impl Iterator<Item = Event>,
-    ) {
+    fn process_events(&mut self, events: impl Iterator<Item = Event>) {
         let mut cursor_left = false;
 
         self.state.mouse.old_cursor = self.state.mouse.cursor.take();
