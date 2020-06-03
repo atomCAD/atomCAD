@@ -96,5 +96,3 @@ mod stub {
         }
     }
 }
-
-// End of File

@@ -26,5 +26,3 @@ macro_rules! include_shader_binary {
         }
     }};
 }
-
-// End of File

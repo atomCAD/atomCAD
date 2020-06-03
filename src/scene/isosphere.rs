@@ -4,9 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use ultraviolet::Vec3;
+// use ultraviolet::Vec3;
 
 use super::Vertex;
+use crate::math::Vec3;
 
 // https://schneide.blog/2016/07/15/generating-an-icosphere-in-c/
 const Z: f32 = 0.850650808352039932;
@@ -67,7 +68,7 @@ impl IsoSphere {
                 let v1 = VERTICES[i1];
                 let v2 = VERTICES[i2];
 
-                let face_normal = Vec3::cross(&v0.into(), v1.into());
+                let face_normal = Vec3::cross(v0.into(), v1.into());
 
                 vec.extend_from_slice(&[
                     vertex(v0, face_normal.into()),
@@ -86,5 +87,3 @@ impl IsoSphere {
         &self.vertices
     }
 }
-
-// End of File

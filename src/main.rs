@@ -16,6 +16,7 @@ use self::hub::Hub;
 
 mod compositor;
 mod debug_metrics;
+mod math;
 mod most_recent;
 mod scene;
 mod ui;
@@ -43,5 +44,3 @@ fn main() {
         std::process::exit(1);
     }
 }
-
-// End of File

@@ -227,5 +227,3 @@ impl Compositor {
         render_pass.draw(0..3, 0..1);
     }
 }
-
-// End of File

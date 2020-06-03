@@ -40,5 +40,3 @@ fn colored_level<'a>(style: &'a mut Style, level: Level) -> StyledValue<'a, &'st
         Level::Error => style.set_color(Color::Red).value("ERROR"),
     }
 }
-
-// End of File
