@@ -6,7 +6,7 @@
 
 #[macro_use]
 mod macros;
-mod arcball;
+// mod arcball;
 mod fps;
 mod logging;
 use log::error;
@@ -16,6 +16,7 @@ use self::hub::Hub;
 
 mod compositor;
 mod debug_metrics;
+mod math;
 mod most_recent;
 mod scene;
 mod ui;

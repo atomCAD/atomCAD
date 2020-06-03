@@ -57,7 +57,9 @@ iced_wgpu = { git = "https://github.com/hecrj/iced.git", rev = "33448508a524db64
 # iced_wgpu = "0.2.1"
 
 # For matrix math
-ultraviolet = "0.4"
+# ultraviolet = "0.4"
+cgmath = "0.17.0"
+arcball = "1.0.0"
 
 futures = "0.3"
 parking_lot = "0.10"

@@ -7,13 +7,15 @@
 use anyhow::Result;
 use bytemuck;
 use std::mem;
-use ultraviolet::{projection::perspective_gl, Isometry3, Mat4, Vec2, Vec3};
+// use ultraviolet::{projection::perspective_gl, Isometry3, Mat4, Vec2, Vec3};
+use arcball::ArcballCamera;
+use cgmath::{perspective, Deg};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton},
 };
 
-use crate::arcball;
+use crate::math::{Mat4, Vec2};
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 /// Normal as in perpendicular, not usual.
@@ -67,7 +69,7 @@ struct Scene {
 
     size: PhysicalSize<u32>,
     world_mx: Mat4,
-    camera: Vec3,
+    arcball_camera: ArcballCamera<f32>,
 
     icosphere: Entity,
 
@@ -110,21 +112,13 @@ impl Scene {
             ..
         } = self.state.mouse
         {
-            let scale = |cursor: PhysicalPosition<u32>| {
-                Vec2::new( // scale pixel coordinates to [0, 2]
-                    cursor.x as f32 / (self.size.width as f32 / 2.0),
-                    cursor.y as f32 / (self.size.height as f32 / 2.0),
-                )
-                .map(|i| i - 1.0) // scale from [0, 2] to [-1, 1]
-                    * Vec2::new(-1.0, 1.0)
-            };
+            let convert = |pos: PhysicalPosition<u32>| Vec2::new(pos.x as f32, pos.y as f32);
 
-            let old_cursor = scale(old_cursor);
-            let new_cursor = scale(new_cursor);
+            self.arcball_camera
+                .rotate(convert(old_cursor), convert(new_cursor));
 
-            let rotor = arcball::create_rotor(old_cursor, new_cursor);
-            let rotation = Isometry3::new(Vec3::zero(), rotor).into_homogeneous_matrix();
-            self.world_mx = self.world_mx * rotation;
+            self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
+                * self.arcball_camera.get_mat4();
 
             upload_matrix(&device, cmd_encoder, &self.uniform_buffer, self.world_mx);
         }
@@ -166,7 +160,13 @@ impl Scene {
         render_texture: wgpu::Texture,
         size: PhysicalSize<u32>,
     ) {
-        self.world_mx = generate_matrix(self.camera, size.width as f32 / size.height as f32);
+        self.arcball_camera
+            .update_screen(size.width as f32, size.height as f32);
+        // self.world_mx = generate_matrix(self.camera, size.width as f32 / size.height as f32);
+
+        // self.world_mx = self.arcball_camera.view_matrix();
+        self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
+            * self.arcball_camera.get_mat4();
 
         upload_matrix(device, encoder, &self.uniform_buffer, self.world_mx);
 
@@ -232,18 +232,18 @@ impl Scene {
     }
 }
 
-fn generate_matrix(camera: Vec3, aspect_ratio: f32) -> Mat4 {
-    let opengl_to_wgpu_matrix = Mat4::new(
-        [1.0, 0.0, 0.0, 0.0].into(),
-        [0.0, 1.0, 0.0, 0.0].into(),
-        [0.0, 0.0, 0.5, 0.0].into(),
-        [0.0, 0.0, 0.5, 1.0].into(),
-    );
+fn generate_matrix(aspect_ratio: f32) -> Mat4 {
+    let opengl_to_wgpu_matrix: Mat4 = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.5, 0.0],
+        [0.0, 0.0, 0.5, 1.0],
+    ]
+    .into();
 
-    let mx_projection = perspective_gl(45_f32.to_radians(), aspect_ratio, 1.0, 10.0);
-    let mx_view = Mat4::look_at(camera, Vec3::zero(), Vec3::unit_z());
+    let mx_projection = perspective(Deg(45.0), aspect_ratio, 1.0, 200.0);
 
-    opengl_to_wgpu_matrix * mx_projection * mx_view
+    opengl_to_wgpu_matrix * mx_projection
 }
 
 /// TODO: Replace with `queue.write_buffer`.
@@ -253,8 +253,10 @@ fn upload_matrix(
     uniform: &wgpu::Buffer,
     mx: Mat4,
 ) {
+    let mx_slice: &[f32; 16] = mx.as_ref();
+
     let matrix_src =
-        device.create_buffer_with_data(mx.as_byte_slice(), wgpu::BufferUsage::COPY_SRC);
+        device.create_buffer_with_data(bytemuck::cast_slice(mx_slice), wgpu::BufferUsage::COPY_SRC);
 
     encoder.copy_buffer_to_buffer(&matrix_src, 0, &uniform, 0, mem::size_of_val(&mx) as u64);
 }

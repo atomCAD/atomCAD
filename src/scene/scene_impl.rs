@@ -5,10 +5,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::mem;
-use ultraviolet::{Mat4, Vec3};
+// use ultraviolet::{projection::perspective_gl, Mat4, Vec3};
+use arcball::ArcballCamera;
 use winit::{dpi::PhysicalSize, event::ElementState};
 
 use super::{Mouse, Scene, State, DEFAULT_FORMAT, NORMAL_FORMAT};
+use crate::math::{Mat4, Vec3};
 
 impl State {
     pub fn new() -> Self {
@@ -24,12 +26,21 @@ impl State {
 
 impl Scene {
     pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
-        let camera = Vec3::new(1.5, -5.0, 3.0);
+        let mut arcball_camera = ArcballCamera::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            1.0,
+            [size.width as f32, size.height as f32],
+        );
 
-        let mx_total = super::generate_matrix(camera, size.width as f32 / size.height as f32);
+        arcball_camera.zoom(-10.0, 1.0);
+
+        let world_mx = super::generate_matrix(size.width as f32 / size.height as f32)
+            * arcball_camera.get_mat4();
+
+        let mx_slice: &[f32; 16] = world_mx.as_ref();
 
         let uniform_buffer = device.create_buffer_with_data(
-            mx_total.as_byte_slice(),
+            bytemuck::cast_slice(mx_slice),
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
 
@@ -113,9 +124,10 @@ impl Scene {
             uniform_buffer,
             normals_fbo,
             render_texture,
+
             size,
-            world_mx: mx_total,
-            camera,
+            world_mx,
+            arcball_camera,
 
             icosphere,
 
