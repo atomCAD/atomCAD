@@ -7,7 +7,7 @@
 use std::convert::TryFrom;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, MouseButton, WindowEvent},
+    event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
 };
 
 #[derive(Debug)]
@@ -26,6 +26,10 @@ pub enum Event {
         new_pos: PhysicalPosition<u32>,
     },
     CursorLeft,
+    Zoom {
+        delta: MouseScrollDelta,
+        phase: TouchPhase,
+    },
 }
 
 pub struct NotApplicable;
@@ -40,6 +44,7 @@ impl TryFrom<&'_ WindowEvent<'_>> for Event {
                 new_pos: position.cast(),
             },
             WindowEvent::CursorLeft { .. } => Event::CursorLeft,
+            WindowEvent::MouseWheel { delta, phase, .. } => Event::Zoom { delta, phase },
             WindowEvent::Resized(_) => {
                 // This window event is special and should be handled by the
                 // the hub.

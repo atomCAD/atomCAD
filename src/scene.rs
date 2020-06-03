@@ -10,9 +10,10 @@ use std::mem;
 // use ultraviolet::{projection::perspective_gl, Isometry3, Mat4, Vec2, Vec3};
 use arcball::ArcballCamera;
 use cgmath::{perspective, Deg};
+use parking_lot::Once;
 use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, MouseButton},
+    dpi::{LogicalPosition, PhysicalPosition, PhysicalSize},
+    event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
 use crate::math::{Mat4, Vec2};
@@ -93,18 +94,27 @@ impl Scene {
 
         self.process_events(events.into_iter());
 
-        self.rotate_with_arcball(device, &mut cmd_encoder);
+        self.rotate_with_arcball();
+
+        // Upload the world matrix in case it's changed.
+        {
+            self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
+                * self.arcball_camera.get_mat4();
+
+            upload_matrix(
+                &device,
+                &mut cmd_encoder,
+                &self.uniform_buffer,
+                self.world_mx,
+            );
+        }
 
         self.draw(&mut cmd_encoder);
 
         Ok(cmd_encoder.finish())
     }
 
-    fn rotate_with_arcball(
-        &mut self,
-        device: &wgpu::Device,
-        cmd_encoder: &mut wgpu::CommandEncoder,
-    ) {
+    fn rotate_with_arcball(&mut self) {
         if let Mouse {
             old_cursor: Some(old_cursor),
             cursor: Some(new_cursor),
@@ -116,11 +126,6 @@ impl Scene {
 
             self.arcball_camera
                 .rotate(convert(old_cursor), convert(new_cursor));
-
-            self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
-                * self.arcball_camera.get_mat4();
-
-            upload_matrix(&device, cmd_encoder, &self.uniform_buffer, self.world_mx);
         }
     }
 
@@ -143,6 +148,24 @@ impl Scene {
                 }
                 Event::CursorLeft => {
                     cursor_left = true;
+                }
+                Event::Zoom { delta, .. } => {
+                    if let MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) = delta {
+                        self.arcball_camera.zoom(y as f32 / 100.0, 1.0);
+                    }
+
+                    match delta {
+                        MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) => {
+                            self.arcball_camera.zoom(y as f32 / 100.0, 1.0)
+                        }
+                        MouseScrollDelta::LineDelta(_, _) => {
+                            static ONCE: Once = Once::new();
+
+                            ONCE.call_once(|| {
+                                log::info!("line delta zooming is not yet implemented");
+                            })
+                        }
+                    }
                 }
             }
         }
