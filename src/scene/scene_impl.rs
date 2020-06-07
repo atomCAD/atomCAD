@@ -1,5 +1,3 @@
-// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
-// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -9,7 +7,7 @@ use std::mem;
 use arcball::ArcballCamera;
 use winit::{dpi::PhysicalSize, event::ElementState};
 
-use super::{Mouse, Scene, State, DEFAULT_FORMAT, NORMAL_FORMAT};
+use super::{Billboards, Mouse, Scene, State, DEFAULT_FORMAT, NORMAL_FORMAT};
 use crate::math::{Mat4, Vec3};
 
 impl State {
@@ -19,6 +17,7 @@ impl State {
                 old_cursor: None,
                 cursor: None,
                 left_button: ElementState::Released,
+                right_button: ElementState::Released,
             },
         }
     }
@@ -76,6 +75,8 @@ impl Scene {
 
         let icosphere = super::create_unit_icosphere_entity(&device, &global_bind_group_layout);
 
+        let billboards = Billboards::new(device);
+
         // Create the texture that normals are stored in.
         // This is used for filters.
         let normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
@@ -130,6 +131,7 @@ impl Scene {
             arcball_camera,
 
             icosphere,
+            billboards,
 
             state: State::new(),
         }

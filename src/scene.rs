@@ -1,5 +1,3 @@
-// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
-// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -16,17 +14,20 @@ use winit::{
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
-use crate::math::{Mat4, Vec2};
+use crate::math::{Mat3, Mat4, Vec2};
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 /// Normal as in perpendicular, not usual.
 const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
+mod billboards;
 mod event;
 mod handle;
 mod isosphere;
 mod scene_impl;
+mod uniform;
 
+use billboards::Billboards;
 pub use event::{Event, Resize};
 pub use handle::SceneHandle;
 use isosphere::IsoSphere;
@@ -55,6 +56,7 @@ struct Mouse {
     pub old_cursor: Option<PhysicalPosition<u32>>,
     pub cursor: Option<PhysicalPosition<u32>>,
     pub left_button: ElementState,
+    pub right_button: ElementState,
 }
 
 #[derive(Debug)]
@@ -73,6 +75,7 @@ struct Scene {
     arcball_camera: ArcballCamera<f32>,
 
     icosphere: Entity,
+    billboards: Billboards,
 
     state: State,
 }
@@ -108,8 +111,23 @@ impl Scene {
                 self.world_mx,
             );
         }
+        {
+            let inv_camera = self.arcball_camera.get_inv_camera();
+            self.billboards.update(
+                device,
+                &mut cmd_encoder,
+                self.world_mx,
+                Mat3::from_cols(
+                    inv_camera.x.truncate(),
+                    inv_camera.y.truncate(),
+                    inv_camera.z.truncate(),
+                ),
+            );
+        }
 
-        self.draw(&mut cmd_encoder);
+        // self.draw(&mut cmd_encoder);
+        self.billboards
+            .draw(&mut cmd_encoder, self.render_texture.create_default_view());
 
         Ok(cmd_encoder.finish())
     }
@@ -118,7 +136,7 @@ impl Scene {
         if let Mouse {
             old_cursor: Some(old_cursor),
             cursor: Some(new_cursor),
-            left_button: ElementState::Pressed,
+            right_button: ElementState::Pressed,
             ..
         } = self.state.mouse
         {
@@ -139,6 +157,9 @@ impl Scene {
                 Event::MouseInput { button, state } => match button {
                     MouseButton::Left => {
                         self.state.mouse.left_button = state;
+                    }
+                    MouseButton::Right => {
+                        self.state.mouse.right_button = state;
                     }
                     _ => {}
                 },
@@ -162,7 +183,7 @@ impl Scene {
                             static ONCE: Once = Once::new();
 
                             ONCE.call_once(|| {
-                                log::info!("line delta zooming is not yet implemented");
+                                log::warn!("line delta zooming is not yet implemented");
                             })
                         }
                     }
@@ -283,6 +304,18 @@ fn upload_matrix(
 
     encoder.copy_buffer_to_buffer(&matrix_src, 0, &uniform, 0, mem::size_of_val(&mx) as u64);
 }
+
+// fn create_billboard(
+//     device: &wgpu::Device,
+//     global_bind_group_layout: &wgpu::BindGroupLayout,
+// ) -> Entity {
+//     let vert_shader = include_shader_binary!("billboard.vert");
+//     let frag_shader = include_shader_binary!("billboard.frag");
+
+//     let vert_module = device.create_shader_module(vert_shader);
+//     let frag_module = device.create_shader_module(frag_shader);
+
+// }
 
 /// TODO: This is temporary and will be removed when billboard rendering is implemented.
 fn create_unit_icosphere_entity(
