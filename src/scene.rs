@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use bytemuck;
-use std::mem;
 // use ultraviolet::{projection::perspective_gl, Isometry3, Mat4, Vec2, Vec3};
 use arcball::ArcballCamera;
 use cgmath::{perspective, Deg};
@@ -14,23 +13,19 @@ use winit::{
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
-use crate::math::{Mat3, Mat4, Vec2};
+use crate::math::{Mat3, Mat4, Vec2, Vec3};
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
-/// Normal as in perpendicular, not usual.
-const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
+const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 mod billboards;
 mod event;
 mod handle;
-mod isosphere;
-mod scene_impl;
 mod uniform;
 
 use billboards::Billboards;
 pub use event::{Event, Resize};
 pub use handle::SceneHandle;
-use isosphere::IsoSphere;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -41,15 +36,6 @@ pub struct Vertex {
 
 unsafe impl bytemuck::Zeroable for Vertex {}
 unsafe impl bytemuck::Pod for Vertex {}
-
-/// Temporary?
-#[derive(Debug)]
-struct Entity {
-    vertex_buffer: wgpu::Buffer,
-    render_pipeline: wgpu::RenderPipeline,
-
-    vertex_num: usize,
-}
 
 #[derive(Debug)]
 struct Mouse {
@@ -65,22 +51,22 @@ struct State {
 }
 
 struct Scene {
-    global_bind_group: wgpu::BindGroup,
-    uniform_buffer: wgpu::Buffer,
     render_texture: wgpu::Texture,
-    normals_fbo: wgpu::Texture,
 
     size: PhysicalSize<u32>,
     world_mx: Mat4,
     arcball_camera: ArcballCamera<f32>,
 
-    icosphere: Entity,
     billboards: Billboards,
 
     state: State,
 }
 
 impl Scene {
+    pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
+        create_scene(device, size)
+    }
+
     /// This is called for every frame.
     fn render_frame(
         &mut self,
@@ -92,25 +78,17 @@ impl Scene {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         if let Some(Resize { new_texture, size }) = resize {
-            self.resize(&device, &mut cmd_encoder, new_texture, size);
+            self.resize(&device, new_texture, size);
         }
 
         self.process_events(events.into_iter());
 
         self.rotate_with_arcball();
 
-        // Upload the world matrix in case it's changed.
-        {
-            self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
-                * self.arcball_camera.get_mat4();
+        // Update the world matrix in case it's changed.
+        self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
+            * self.arcball_camera.get_mat4();
 
-            upload_matrix(
-                &device,
-                &mut cmd_encoder,
-                &self.uniform_buffer,
-                self.world_mx,
-            );
-        }
         {
             let inv_camera = self.arcball_camera.get_inv_camera();
             self.billboards.update(
@@ -125,9 +103,7 @@ impl Scene {
             );
         }
 
-        // self.draw(&mut cmd_encoder);
-        self.billboards
-            .draw(&mut cmd_encoder, self.render_texture.create_default_view());
+        self.draw(&mut cmd_encoder);
 
         Ok(cmd_encoder.finish())
     }
@@ -200,78 +176,34 @@ impl Scene {
     fn resize(
         &mut self,
         device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
         render_texture: wgpu::Texture,
         size: PhysicalSize<u32>,
     ) {
-        self.arcball_camera
-            .update_screen(size.width as f32, size.height as f32);
-        // self.world_mx = generate_matrix(self.camera, size.width as f32 / size.height as f32);
-
-        // self.world_mx = self.arcball_camera.view_matrix();
-        self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
-            * self.arcball_camera.get_mat4();
-
-        upload_matrix(device, encoder, &self.uniform_buffer, self.world_mx);
-
-        self.normals_fbo = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: size.width,
-                height: size.height,
-                depth: 1,
-            },
-            array_layer_count: 1,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: NORMAL_FORMAT,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            label: if cfg!(build = "debug") {
-                Some("scene normal texture")
-            } else {
-                None
-            },
-        });
-
         self.render_texture = render_texture;
         self.size = size;
+
+        self.arcball_camera
+            .update_screen(size.width as f32, size.height as f32);
+
+        self.billboards.resize(device, size);
     }
 
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder) {
         let render_view = self.render_texture.create_default_view();
-        let normals_view = self.normals_fbo.create_default_view();
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[
-                    wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment: &render_view,
-                        resolve_target: None,
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_color: wgpu::Color::WHITE,
-                    },
-                    wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment: &normals_view,
-                        resolve_target: None,
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_color: wgpu::Color::TRANSPARENT,
-                    },
-                ],
-                depth_stencil_attachment: None,
-            });
+        self.billboards.draw(encoder, render_view);
+    }
+}
 
-            render_pass.set_pipeline(&self.icosphere.render_pipeline);
-            render_pass.set_bind_group(0, &self.global_bind_group, &[]);
-            // render_pass.set_bind_group(1, &self.icosphere.bind_group, &[]);
-            render_pass.set_vertex_buffer(0, &self.icosphere.vertex_buffer, 0, 0);
-            // render_pass.set_bind_group(index, bind_group, offsets)
-            render_pass.draw(0..self.icosphere.vertex_num as u32, 0..1);
-        }
-
-        {
-            // let mut compute_pass = encoder.begin_compute_pass();
+impl State {
+    pub fn new() -> Self {
+        State {
+            mouse: Mouse {
+                old_cursor: None,
+                cursor: None,
+                left_button: ElementState::Released,
+                right_button: ElementState::Released,
+            },
         }
     }
 }
@@ -290,116 +222,51 @@ fn generate_matrix(aspect_ratio: f32) -> Mat4 {
     opengl_to_wgpu_matrix * mx_projection
 }
 
-/// TODO: Replace with `queue.write_buffer`.
-fn upload_matrix(
-    device: &wgpu::Device,
-    encoder: &mut wgpu::CommandEncoder,
-    uniform: &wgpu::Buffer,
-    mx: Mat4,
-) {
-    let mx_slice: &[f32; 16] = mx.as_ref();
-
-    let matrix_src =
-        device.create_buffer_with_data(bytemuck::cast_slice(mx_slice), wgpu::BufferUsage::COPY_SRC);
-
-    encoder.copy_buffer_to_buffer(&matrix_src, 0, &uniform, 0, mem::size_of_val(&mx) as u64);
-}
-
-// fn create_billboard(
-//     device: &wgpu::Device,
-//     global_bind_group_layout: &wgpu::BindGroupLayout,
-// ) -> Entity {
-//     let vert_shader = include_shader_binary!("billboard.vert");
-//     let frag_shader = include_shader_binary!("billboard.frag");
-
-//     let vert_module = device.create_shader_module(vert_shader);
-//     let frag_module = device.create_shader_module(frag_shader);
-
-// }
-
-/// TODO: This is temporary and will be removed when billboard rendering is implemented.
-fn create_unit_icosphere_entity(
-    device: &wgpu::Device,
-    global_bind_group_layout: &wgpu::BindGroupLayout,
-) -> Entity {
-    let vert_shader = include_shader_binary!("icosphere.vert");
-    let frag_shader = include_shader_binary!("icosphere.frag");
-
-    let vert_module = device.create_shader_module(vert_shader);
-    let frag_module = device.create_shader_module(frag_shader);
-
-    let icosphere = IsoSphere::new();
-
-    let vertex_buffer = device.create_buffer_with_data(
-        bytemuck::cast_slice(icosphere.vertices()),
-        wgpu::BufferUsage::VERTEX,
+fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
+    let mut arcball_camera = ArcballCamera::new(
+        Vec3::new(0.0, 0.0, 0.0),
+        1.0,
+        [size.width as f32, size.height as f32],
     );
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        bind_group_layouts: &[global_bind_group_layout],
-    });
+    arcball_camera.zoom(-10.0, 1.0);
 
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        layout: &pipeline_layout,
-        vertex_stage: wgpu::ProgrammableStageDescriptor {
-            module: &vert_module,
-            entry_point: "main",
+    let world_mx =
+        generate_matrix(size.width as f32 / size.height as f32) * arcball_camera.get_mat4();
+
+    let billboards = Billboards::new(device, size);
+
+    // The scene renders to this texture.
+    // The main (UI) thread has a view of this texture and copies
+    // from it at 60fps.
+    let render_texture = device.create_texture(&wgpu::TextureDescriptor {
+        size: wgpu::Extent3d {
+            width: size.width,
+            height: size.height,
+            depth: 1,
         },
-        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-            module: &frag_module,
-            entry_point: "main",
-        }),
-        rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::None,
-            depth_bias: 0,
-            depth_bias_slope_scale: 0.0,
-            depth_bias_clamp: 0.0,
-        }),
-        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        color_states: &[
-            wgpu::ColorStateDescriptor {
-                format: DEFAULT_FORMAT,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            },
-            wgpu::ColorStateDescriptor {
-                format: NORMAL_FORMAT,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            },
-        ],
-        depth_stencil_state: None,
-        vertex_state: wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint16,
-            vertex_buffers: &[wgpu::VertexBufferDescriptor {
-                stride: mem::size_of::<Vertex>() as u64,
-                step_mode: wgpu::InputStepMode::Vertex,
-                attributes: &[
-                    wgpu::VertexAttributeDescriptor {
-                        format: wgpu::VertexFormat::Float3,
-                        offset: 0,
-                        shader_location: 0,
-                    },
-                    wgpu::VertexAttributeDescriptor {
-                        format: wgpu::VertexFormat::Float3,
-                        offset: 4 * 3,
-                        shader_location: 1,
-                    },
-                ],
-            }],
-        },
+        array_layer_count: 1,
+        mip_level_count: 1,
         sample_count: 1,
-        sample_mask: !0,
-        alpha_to_coverage_enabled: false,
+        dimension: wgpu::TextureDimension::D2,
+        format: DEFAULT_FORMAT,
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+        label: if cfg!(build = "debug") {
+            Some("scene render texture")
+        } else {
+            None
+        },
     });
 
-    Entity {
-        vertex_buffer,
-        render_pipeline,
+    Scene {
+        render_texture,
 
-        vertex_num: icosphere.vertices().len(),
+        size,
+        world_mx,
+        arcball_camera,
+
+        billboards,
+
+        state: State::new(),
     }
 }

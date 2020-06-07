@@ -3,7 +3,7 @@
 layout(location = 0) in vec2 quad_coordinates;
 
 layout(location = 0) out vec4 out_color;
-// layout(depth_greater) out float gl_FragDepth;
+layout(depth_greater) out float gl_FragDepth;
 
 void main() {
     float mag = length(quad_coordinates);
@@ -11,5 +11,5 @@ void main() {
         discard;
     
     out_color = vec4(0.96, 0.26, 0.82, 1.0);
-    // gl_FragDepth = 1 - mag;
+    gl_FragDepth = gl_FragCoord.z + (1 - mag);
 }
