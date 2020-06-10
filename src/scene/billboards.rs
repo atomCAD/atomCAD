@@ -14,17 +14,19 @@ use super::{DEFAULT_FORMAT, DEPTH_FORMAT};
 static POINTS: &[Point] = &[
     Point {
         pos: Vec3 {
-            x: 1.5,
+            x: 0.5,
             y: 0.0,
             z: 0.0,
         },
+        kind: 0,
     },
     Point {
         pos: Vec3 {
-            x: 0.0,
+            x: -0.5,
             y: 0.0,
             z: 0.0,
         },
+        kind: 1,
     },
 ];
 
@@ -32,25 +34,29 @@ static POINTS: &[Point] = &[
 #[repr(C)]
 pub struct Point {
     pub pos: Vec3,
+    pub kind: u32,
 }
 
 unsafe impl bytemuck::Zeroable for Point {}
 unsafe impl bytemuck::Pod for Point {}
 
 #[derive(Debug, Copy, Clone, PartialEq, AsStd140)]
-struct BillboardUniforms {
+struct VertUniforms {
     world_mx: glsl_layout::mat4,
     inv_view_mx: glsl_layout::mat3,
     sphere_radius: glsl_layout::float,
 }
 
-unsafe impl bytemuck::Zeroable for BillboardUniforms {}
-unsafe impl bytemuck::Pod for BillboardUniforms {}
+#[derive(Debug, Copy, Clone, PartialEq, AsStd140)]
+struct FragUniforms {
+    projection_mx: glsl_layout::mat4,
+}
 
 pub struct Billboards {
     render_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    uniform_buffer: Uniform<BillboardUniforms>,
+    vert_uniform_buffer: Uniform<VertUniforms>,
+    frag_uniform_buffer: Uniform<FragUniforms>,
 
     depth_texture: wgpu::Texture,
 
@@ -70,15 +76,21 @@ impl Billboards {
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         world_mx: Mat4,
+        projection_mx: Mat4,
         inv_view_mx: Mat3,
     ) {
-        let uniforms = BillboardUniforms {
+        let vert_uniforms = VertUniforms {
             world_mx: Into::<[[f32; 4]; 4]>::into(world_mx).into(),
             inv_view_mx: Into::<[[f32; 3]; 3]>::into(inv_view_mx).into(),
             sphere_radius: 1.0, // ?
         };
 
-        self.uniform_buffer.set(device, encoder, uniforms);
+        let frag_uniforms = FragUniforms {
+            projection_mx: Into::<[[f32; 4]; 4]>::into(projection_mx).into(),
+        };
+
+        self.vert_uniform_buffer.set(device, encoder, vert_uniforms);
+        self.frag_uniform_buffer.set(device, encoder, frag_uniforms);
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, size: PhysicalSize<u32>) {
@@ -130,7 +142,8 @@ fn create_billboards(device: &wgpu::Device, size: PhysicalSize<u32>) -> Billboar
         wgpu::BufferUsage::STORAGE_READ,
     );
 
-    let uniform_buffer: Uniform<BillboardUniforms> = Uniform::new(device);
+    let vert_uniform_buffer: Uniform<VertUniforms> = Uniform::new(device);
+    let frag_uniform_buffer: Uniform<FragUniforms> = Uniform::new(device);
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[
@@ -147,6 +160,11 @@ fn create_billboards(device: &wgpu::Device, size: PhysicalSize<u32>) -> Billboar
                     readonly: true,
                 },
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStage::FRAGMENT,
+                ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+            },
         ],
         label: None,
     });
@@ -157,8 +175,8 @@ fn create_billboards(device: &wgpu::Device, size: PhysicalSize<u32>) -> Billboar
             wgpu::Binding {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer {
-                    buffer: uniform_buffer.buffer(),
-                    range: 0..uniform_buffer.size() as u64,
+                    buffer: vert_uniform_buffer.buffer(),
+                    range: 0..vert_uniform_buffer.size() as u64,
                 },
             },
             wgpu::Binding {
@@ -166,6 +184,14 @@ fn create_billboards(device: &wgpu::Device, size: PhysicalSize<u32>) -> Billboar
                 resource: wgpu::BindingResource::Buffer {
                     buffer: &point_buffer,
                     range: 0..(POINTS.len() * mem::size_of::<Point>()) as u64,
+                },
+            },
+            wgpu::Binding {
+                binding: 2,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: frag_uniform_buffer.buffer(),
+                    // range: 0..uniform_buffer.size() as u64,
+                    range: 0..frag_uniform_buffer.size() as u64,
                 },
             },
         ],
@@ -224,7 +250,8 @@ fn create_billboards(device: &wgpu::Device, size: PhysicalSize<u32>) -> Billboar
     Billboards {
         render_pipeline,
         bind_group,
-        uniform_buffer,
+        vert_uniform_buffer,
+        frag_uniform_buffer,
 
         depth_texture,
 

@@ -10,7 +10,7 @@ pub struct Uniform<T> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: bytemuck::Pod + AsStd140> Uniform<T>
+impl<T: AsStd140> Uniform<T>
 where
     <T as AsStd140>::Std140: Sized,
 {

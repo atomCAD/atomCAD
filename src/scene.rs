@@ -13,10 +13,17 @@ use winit::{
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
-use crate::math::{Mat3, Mat4, Vec2, Vec3};
+use crate::math::{Mat3, Mat4, Vec2, Vec3, Vec4};
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+const VIEWPORT_MATRIX: Mat4 = Mat4::from_cols(
+    Vec4::new(1.0, 0.0, 0.0, 0.0),
+    Vec4::new(0.0, 1.0, 0.0, 0.0),
+    Vec4::new(0.0, 0.0, 0.5, 0.0),
+    Vec4::new(0.0, 0.0, 0.5, 1.0),
+);
 
 mod billboards;
 mod event;
@@ -86,8 +93,10 @@ impl Scene {
         self.rotate_with_arcball();
 
         // Update the world matrix in case it's changed.
-        self.world_mx = generate_matrix(self.size.width as f32 / self.size.height as f32)
-            * self.arcball_camera.get_mat4();
+        let projection_matrix =
+            generate_projection_matrix(self.size.width as f32 / self.size.height as f32);
+
+        self.world_mx = VIEWPORT_MATRIX * projection_matrix * self.arcball_camera.get_mat4();
 
         {
             let inv_camera = self.arcball_camera.get_inv_camera();
@@ -95,6 +104,7 @@ impl Scene {
                 device,
                 &mut cmd_encoder,
                 self.world_mx,
+                projection_matrix,
                 Mat3::from_cols(
                     inv_camera.x.truncate(),
                     inv_camera.y.truncate(),
@@ -208,18 +218,8 @@ impl State {
     }
 }
 
-fn generate_matrix(aspect_ratio: f32) -> Mat4 {
-    let opengl_to_wgpu_matrix: Mat4 = [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 0.5, 0.0],
-        [0.0, 0.0, 0.5, 1.0],
-    ]
-    .into();
-
-    let mx_projection = perspective(Deg(45.0), aspect_ratio, 1.0, 200.0);
-
-    opengl_to_wgpu_matrix * mx_projection
+fn generate_projection_matrix(aspect_ratio: f32) -> Mat4 {
+    perspective(Deg(45.0), aspect_ratio, 1.0, 200.0)
 }
 
 fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
@@ -231,8 +231,9 @@ fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
 
     arcball_camera.zoom(-10.0, 1.0);
 
-    let world_mx =
-        generate_matrix(size.width as f32 / size.height as f32) * arcball_camera.get_mat4();
+    let world_mx = VIEWPORT_MATRIX
+        * generate_projection_matrix(size.width as f32 / size.height as f32)
+        * arcball_camera.get_mat4();
 
     let billboards = Billboards::new(device, size);
 
