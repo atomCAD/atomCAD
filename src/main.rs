@@ -13,7 +13,6 @@ mod hub;
 use self::hub::Hub;
 
 mod compositor;
-mod debug_metrics;
 mod math;
 mod most_recent;
 mod scene;

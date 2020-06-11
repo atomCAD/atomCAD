@@ -13,10 +13,9 @@ use winit::{
 
 use anyhow::{Context, Result};
 
-use std::{convert::TryInto, mem, sync::Arc, time::Instant};
+use std::{convert::TryInto, mem, sync::Arc};
 
 use crate::compositor::Compositor;
-use crate::debug_metrics::DebugMetrics;
 use crate::fps::Fps;
 use crate::scene::{Event as SceneEvent, SceneHandle};
 use crate::ui;
@@ -52,8 +51,6 @@ pub struct Hub {
     ui: ui::Root,
     scene: SceneHandle,
     compositor: Compositor,
-
-    debug_metrics: DebugMetrics,
 }
 
 impl Hub {
@@ -105,8 +102,6 @@ impl Hub {
             ui,
             scene,
             compositor,
-
-            debug_metrics: Default::default(),
         })
     }
 
@@ -131,7 +126,7 @@ impl Hub {
                 Event::MainEventsCleared => self.on_events_cleared(&mut scene_events),
                 Event::RedrawRequested(_) => {
                     // Tick the FPS counter.
-                    self.fps.tick();
+                    self.ui.fps.set_fps(self.fps.tick());
 
                     // NOTE:
                     // Send all the current scene events to the scene thread.
@@ -161,8 +156,6 @@ impl Hub {
                             .resize(&self.device, new_scene_target, new_size);
                     }
 
-                    let mut metrics = DebugMetrics::default();
-
                     let mut command_encoder =
                         self.device
                             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -188,9 +181,8 @@ impl Hub {
                             depth_stencil_attachment: None,
                         });
 
-                        let now = Instant::now();
                         // Then draw the ui.
-                        let mouse_cursor = self.iced.renderer.draw(
+                        let mouse_cursor = self.iced.renderer.draw::<&str>(
                             &self.device,
                             &mut command_encoder,
                             Target {
@@ -199,35 +191,28 @@ impl Hub {
                             },
                             &self.iced.draw_output,
                             self.window.scale_factor(),
-                            &self.debug_output(),
+                            &[],
                         );
-                        metrics.ui_draw = Some(now.elapsed());
 
                         mouse_cursor
                     };
 
-                    let now = Instant::now();
                     let frame = self
                         .swapchain
                         .get_next_texture()
                         .expect("timeout when acquiring next swapchain texture");
-                    metrics.frame = Some(now.elapsed());
 
                     // TODO(important): Implement buffer swap/belt to present previous render until new render arrives.
                     let scene_command_buffer = self.scene.recv_cmd_buffer().unwrap();
 
                     self.compositor.blit(&frame.view, &mut command_encoder);
 
-                    let now = Instant::now();
                     // Finally, submit everything to the GPU to draw!
                     self.queue
                         .submit(&[scene_command_buffer, command_encoder.finish()]);
-                    metrics.queue = Some(now.elapsed());
 
                     self.window
                         .set_cursor_icon(iced_winit::conversion::mouse_interaction(mouse_cursor));
-
-                    self.debug_metrics = metrics;
                 }
                 _ => {}
             }
@@ -288,29 +273,6 @@ impl Hub {
         }
 
         self.window.request_redraw()
-    }
-
-    fn debug_output(&self) -> Vec<std::borrow::Cow<'static, str>> {
-        if cfg!(feature = "metrics") {
-            let mut list = vec![
-                concat!(
-                    env!("CARGO_PKG_NAME"),
-                    " ",
-                    env!("CARGO_PKG_VERSION"),
-                    " ",
-                    env!("CARGO_PKG_REPOSITORY")
-                )
-                .into(),
-                format!("fps: {}", self.fps.get()).into(),
-                "metrics:".into(),
-            ];
-
-            list.extend(self.debug_metrics.output().map(|s| s.into()));
-
-            list
-        } else {
-            vec![]
-        }
     }
 }
 

@@ -4,6 +4,7 @@
 
 use crate::math::{Mat3, Mat4, Vec3};
 use glsl_layout::AsStd140;
+use rand::distributions::{Distribution, Uniform as RandUniform};
 use std::{convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
@@ -68,7 +69,30 @@ pub struct Billboards {
 
 impl Billboards {
     pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
-        create_billboards(device, size)
+        let num_points = 4_000_000;
+
+        let point_buffer = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+            size: (mem::size_of::<Point>() * num_points) as u64,
+            usage: wgpu::BufferUsage::STORAGE_READ,
+            label: None,
+        });
+
+        let mut rng = rand::thread_rng();
+        let pos_die = RandUniform::from(-400.0..400.0);
+        let kind_die = RandUniform::from(0..=1);
+
+        for chunk in point_buffer.data.chunks_exact_mut(mem::size_of::<Point>()) {
+            chunk.copy_from_slice(bytemuck::bytes_of(&Point {
+                pos: Vec3::new(
+                    pos_die.sample(&mut rng),
+                    pos_die.sample(&mut rng),
+                    pos_die.sample(&mut rng),
+                ),
+                kind: kind_die.sample(&mut rng),
+            }))
+        }
+
+        create_billboards(device, size, point_buffer.finish(), num_points)
     }
 
     pub fn update(
@@ -130,17 +154,17 @@ impl Billboards {
     }
 }
 
-fn create_billboards(device: &wgpu::Device, size: PhysicalSize<u32>) -> Billboards {
+fn create_billboards(
+    device: &wgpu::Device,
+    size: PhysicalSize<u32>,
+    point_buffer: wgpu::Buffer,
+    num_points: usize,
+) -> Billboards {
     let vert_shader = include_shader_binary!("billboard.vert");
     let frag_shader = include_shader_binary!("billboard.frag");
 
     let vert_module = device.create_shader_module(vert_shader);
     let frag_module = device.create_shader_module(frag_shader);
-
-    let point_buffer = device.create_buffer_with_data(
-        bytemuck::cast_slice(POINTS),
-        wgpu::BufferUsage::STORAGE_READ,
-    );
 
     let vert_uniform_buffer: Uniform<VertUniforms> = Uniform::new(device);
     let frag_uniform_buffer: Uniform<FragUniforms> = Uniform::new(device);
@@ -256,7 +280,7 @@ fn create_billboards(device: &wgpu::Device, size: PhysicalSize<u32>) -> Billboar
         depth_texture,
 
         point_buffer,
-        num_points: POINTS.len(),
+        num_points,
     }
 }
 
