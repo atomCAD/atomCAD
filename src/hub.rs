@@ -109,10 +109,6 @@ impl Hub {
         let mut scene_events = vec![];
         let mut maybe_resize = None;
 
-        // Spin up the UI before we get any events.
-        self.iced
-            .update(&mut self.ui, &mut Vec::new(), &self.state, None);
-
         // Be careful here, only items moved into this closure will be dropped at the end of program execution.
         event_loop.run(move |event, _, control_flow| {
             // This may be able to be `Wait` because the scene rendering
@@ -263,14 +259,14 @@ impl Hub {
     }
 
     fn on_events_cleared(&mut self, scene_events: &mut Vec<SceneEvent>) {
-        if !self.iced_events.is_empty() {
-            self.iced.update(
-                &mut self.ui,
-                scene_events,
-                &self.state,
-                self.iced_events.drain(..),
-            );
-        }
+        // if !self.iced_events.is_empty() {
+        self.iced.update(
+            &mut self.ui,
+            scene_events,
+            &self.state,
+            self.iced_events.drain(..),
+        );
+        // }
 
         self.window.request_redraw()
     }
