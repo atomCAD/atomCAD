@@ -33,11 +33,14 @@ layout(set = 0, binding = 1, std430) buffer Points {
 layout(location = 0) out vec2 uv;
 layout(location = 1) out vec4 position_clip_space;
 layout(location = 2) flat out vec3 color;
+layout(location = 3) flat out uint id;
 
 void main(void) {
     // Look into whether using triangles instead of quads is more efficient with large numbers.
     uint particle_index = gl_VertexIndex / 6;
     uint vertex_in_tri = abs(3 - gl_VertexIndex % 6);
+
+    id = particle_index;
 
     uv = vec2(
         bool(vertex_in_tri & 1) ? -1.0 : 1.0,

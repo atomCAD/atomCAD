@@ -29,6 +29,7 @@ mod billboards;
 mod event;
 mod handle;
 mod uniform;
+// mod filter;
 
 use billboards::Billboards;
 pub use event::{Event, Resize};
