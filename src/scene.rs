@@ -166,7 +166,7 @@ impl Scene {
                             self.arcball_camera.zoom(y as f32 / 100.0, 1.0);
                         }
                         MouseScrollDelta::LineDelta(_, y) => {
-                            self.arcball_camera.zoom(y*20.0, 1.0);
+                            self.arcball_camera.zoom(y * 20.0, 1.0);
                         }
                     }
                 }

@@ -197,7 +197,7 @@ impl Hub {
 
                         mouse_cursor
                     };
-                    
+
                     let frame = match self.swapchain.get_next_frame() {
                         Ok(frame) => frame,
                         Err(_) => {
@@ -354,7 +354,10 @@ impl Iced {
     }
 }
 
-async fn get_wgpu_objects(instance: &wgpu::Instance, surface: &wgpu::Surface) -> Result<(wgpu::Device, wgpu::Queue)> {
+async fn get_wgpu_objects(
+    instance: &wgpu::Instance,
+    surface: &wgpu::Surface,
+) -> Result<(wgpu::Device, wgpu::Queue)> {
     let adapter = instance
         .request_adapter(
             &wgpu::RequestAdapterOptions {

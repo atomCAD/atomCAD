@@ -5,6 +5,7 @@
 use crate::math::{Mat3, Mat4, Vec3};
 use glsl_layout::AsStd140;
 use rand::distributions::{Distribution, Uniform as RandUniform};
+use rayon::prelude::*;
 use std::{convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
@@ -115,20 +116,24 @@ impl Billboards {
 
             let mut writable_view = buffer_slice.get_mapped_range_mut();
 
-            let mut rng = rand::thread_rng();
             let pos_die = RandUniform::from(-600.0..600.0);
             let kind_die = RandUniform::from(0..=1);
 
-            for chunk in writable_view.chunks_exact_mut(mem::size_of::<Point>()) {
-                chunk.copy_from_slice(bytemuck::bytes_of(&Point {
-                    pos: Vec3::new(
-                        pos_die.sample(&mut rng),
-                        pos_die.sample(&mut rng),
-                        pos_die.sample(&mut rng),
-                    ),
-                    kind: kind_die.sample(&mut rng),
-                }))
-            }
+            writable_view[..]
+                .par_chunks_mut(mem::size_of::<Point>())
+                .for_each_init(
+                    || rand::thread_rng(),
+                    |rng, chunk| {
+                        chunk.copy_from_slice(bytemuck::bytes_of(&Point {
+                            pos: Vec3::new(
+                                pos_die.sample(rng),
+                                pos_die.sample(rng),
+                                pos_die.sample(rng),
+                            ),
+                            kind: kind_die.sample(rng),
+                        }))
+                    },
+                );
         }
 
         point_buffer.unmap();
@@ -247,9 +252,7 @@ fn create_billboards(
             },
             wgpu::Binding {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer(
-                    point_buffer.slice(..),
-                ),
+                resource: wgpu::BindingResource::Buffer(point_buffer.slice(..)),
             },
             wgpu::Binding {
                 binding: 2,
