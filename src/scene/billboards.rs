@@ -101,50 +101,22 @@ pub struct Billboards {
 
 impl Billboards {
     pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
-        // let mut rng = rand::thread_rng();
-        // let pos_die = RandUniform::from(-3.0..3.0);
-        // let kind_die = RandUniform::from(0..=1);
-
-        // let mut points = Vec::with_capacity(num_points);
-
-        // for _ in 0..num_points {
-        //     points.push(Point {
-        //         pos: Vec3::new(
-        //             pos_die.sample(&mut rng),
-        //             pos_die.sample(&mut rng),
-        //             pos_die.sample(&mut rng),
-        //         ),
-        //         kind: kind_die.sample(&mut rng),
-        //     });
-        // }
-
-        // let points: Vec<Point> = std::iter::repeat_with(|| {
-        //     Point {
-        //         pos: Vec3::new(
-        //             pos_die.sample(&mut rng),
-        //             pos_die.sample(&mut rng),
-        //             pos_die.sample(&mut rng),
-        //         ),
-        //         kind: kind_die.sample(&mut rng),
-        //     }
-        // }).take(10).collect();
-
-        let num_points = 10;
+        let num_points = 80_000_000;
 
         let point_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             size: (mem::size_of::<Point>() * num_points) as u64,
-            usage: wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::MAP_WRITE,
+            usage: wgpu::BufferUsage::STORAGE,
             mapped_at_creation: true,
             label: None,
         });
-        
+
         {
             let buffer_slice = point_buffer.slice(..);
 
             let mut writable_view = buffer_slice.get_mapped_range_mut();
 
             let mut rng = rand::thread_rng();
-            let pos_die = RandUniform::from(-3.0..3.0);
+            let pos_die = RandUniform::from(-600.0..600.0);
             let kind_die = RandUniform::from(0..=1);
 
             for chunk in writable_view.chunks_exact_mut(mem::size_of::<Point>()) {
@@ -159,7 +131,7 @@ impl Billboards {
             }
         }
 
-        // let point_buffer = device.create_buffer_with_data(bytemuck::cast_slice(&points[..]), wgpu::BufferUsage::STORAGE_READ);
+        point_buffer.unmap();
 
         create_billboards(device, size, point_buffer, num_points)
     }
@@ -276,7 +248,7 @@ fn create_billboards(
             wgpu::Binding {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(
-                    point_buffer.slice(..(POINTS.len() * mem::size_of::<Point>()) as u64),
+                    point_buffer.slice(..),
                 ),
             },
             wgpu::Binding {

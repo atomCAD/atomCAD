@@ -62,7 +62,8 @@ impl Hub {
 
         let surface = unsafe { instance.create_surface(&window) };
 
-        let (device, queue) = futures::executor::block_on(get_wgpu_objects(&surface))?;
+        let (device, queue) = futures::executor::block_on(get_wgpu_objects(&instance, &surface))?;
+
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
@@ -129,7 +130,7 @@ impl Hub {
                 Event::MainEventsCleared => self.on_events_cleared(&mut scene_events),
                 Event::RedrawRequested(_) => {
                     // Tick the FPS counter.
-                    self.ui.fps.set_fps(self.fps.tick());
+                    // self.ui.fps.set_fps(self.fps.tick());
 
                     // NOTE:
                     // Send all the current scene events to the scene thread.
@@ -353,9 +354,7 @@ impl Iced {
     }
 }
 
-async fn get_wgpu_objects(surface: &wgpu::Surface) -> Result<(wgpu::Device, wgpu::Queue)> {
-    let instance = wgpu::Instance::new();
-
+async fn get_wgpu_objects(instance: &wgpu::Instance, surface: &wgpu::Surface) -> Result<(wgpu::Device, wgpu::Queue)> {
     let adapter = instance
         .request_adapter(
             &wgpu::RequestAdapterOptions {
