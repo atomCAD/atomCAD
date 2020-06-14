@@ -19,6 +19,7 @@ where
             label: None,
             size: mem::size_of::<T>() as u64,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            mapped_at_creation: false,
         });
 
         Self {
@@ -27,21 +28,12 @@ where
         }
     }
 
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        &self.buffer
-    }
-
-    pub fn size(&self) -> usize {
-        mem::size_of::<T>()
+    pub fn buffer_view(&self) -> wgpu::BufferSlice {
+        self.buffer.slice(..mem::size_of::<T>() as u64)
     }
 
     /// This will eventually be replaced with either `queue.write_buffer` or a staging buffer belt.
-    pub fn set(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, data: T) {
-        let src = device.create_buffer_with_data(
-            glsl_layout::as_bytes(&data.std140()),
-            wgpu::BufferUsage::COPY_SRC,
-        );
-
-        encoder.copy_buffer_to_buffer(&src, 0, &self.buffer, 0, mem::size_of::<T>() as u64);
+    pub fn set(&mut self, queue: &wgpu::Queue, data: T) {
+        queue.write_buffer(&self.buffer, 0, glsl_layout::as_bytes(&data.std140()));
     }
 }

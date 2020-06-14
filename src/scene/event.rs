@@ -8,7 +8,6 @@ use winit::{
     event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
 };
 
-#[derive(Debug)]
 pub struct Resize {
     pub new_texture: wgpu::Texture,
     pub size: PhysicalSize<u32>,

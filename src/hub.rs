@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use iced_wgpu::{Primitive, Renderer, Settings, Target, Viewport};
+use iced_wgpu::{Backend, Primitive, Renderer, Settings, Viewport};
 use iced_winit::{mouse, Cache, Clipboard, Event as IcedEvent, Size, UserInterface};
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
@@ -13,7 +13,7 @@ use winit::{
 
 use anyhow::{Context, Result};
 
-use std::{convert::TryInto, mem, sync::Arc};
+use std::{convert::TryInto, iter, mem, sync::Arc};
 
 use crate::compositor::Compositor;
 use crate::fps::Fps;
@@ -37,8 +37,9 @@ pub struct Hub {
     window: Window,
     surface: wgpu::Surface,
 
+    instance: wgpu::Instance,
     device: Arc<wgpu::Device>,
-    queue: wgpu::Queue,
+    queue: Arc<wgpu::Queue>,
 
     swapchain_desc: wgpu::SwapChainDescriptor,
     swapchain: wgpu::SwapChain,
@@ -57,18 +58,22 @@ impl Hub {
     pub fn new(event_loop: &EventLoop<()>) -> Result<Hub> {
         let window = Window::new(&event_loop)?;
 
-        let size = window.inner_size();
-        let surface = wgpu::Surface::create(&window);
+        let instance = wgpu::Instance::new();
 
-        let (device, queue) = futures::executor::block_on(get_device_and_queue(&surface))?;
+        let surface = unsafe { instance.create_surface(&window) };
+
+        let (device, queue) = futures::executor::block_on(get_wgpu_objects(&surface))?;
         let device = Arc::new(device);
+        let queue = Arc::new(queue);
+
+        let size = window.inner_size();
 
         let swapchain_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: wgpu::PresentMode::Fifo,
         };
 
         let swapchain = device.create_swap_chain(&surface, &swapchain_desc);
@@ -78,7 +83,8 @@ impl Hub {
             modifiers: ModifiersState::default(),
         };
 
-        let (scene, scene_render_view) = SceneHandle::create_scene(Arc::clone(&device), size);
+        let (scene, scene_render_view) =
+            SceneHandle::create_scene(Arc::clone(&device), Arc::clone(&queue), size);
         let compositor = Compositor::new(&device, scene_render_view, size);
 
         let iced = Iced::new(&device, &window);
@@ -88,6 +94,7 @@ impl Hub {
             window,
             surface,
 
+            instance,
             device,
             queue,
 
@@ -113,7 +120,7 @@ impl Hub {
         event_loop.run(move |event, _, control_flow| {
             // This may be able to be `Wait` because the scene rendering
             // is independent from the UI rendering.
-            *control_flow = ControlFlow::Wait;
+            *control_flow = ControlFlow::Poll;
 
             match event {
                 Event::WindowEvent { event, .. } => {
@@ -178,34 +185,41 @@ impl Hub {
                         });
 
                         // Then draw the ui.
-                        let mouse_cursor = self.iced.renderer.draw::<&str>(
+                        let mouse_cursor = self.iced.renderer.backend_mut().draw::<&str>(
                             &self.device,
                             &mut command_encoder,
-                            Target {
-                                texture: &ui_texture,
-                                viewport: &self.iced.viewport,
-                            },
+                            &ui_texture,
+                            &self.iced.viewport,
                             &self.iced.draw_output,
-                            self.window.scale_factor(),
                             &[],
                         );
 
                         mouse_cursor
                     };
-
-                    let frame = self
-                        .swapchain
-                        .get_next_texture()
-                        .expect("timeout when acquiring next swapchain texture");
+                    
+                    let frame = match self.swapchain.get_next_frame() {
+                        Ok(frame) => frame,
+                        Err(_) => {
+                            self.swapchain = self
+                                .device
+                                .create_swap_chain(&self.surface, &self.swapchain_desc);
+                            self.swapchain
+                                .get_next_frame()
+                                .expect("Failed to acquire next swap chain texture!")
+                        }
+                    };
 
                     // TODO(important): Implement buffer swap/belt to present previous render until new render arrives.
                     let scene_command_buffer = self.scene.recv_cmd_buffer().unwrap();
 
-                    self.compositor.blit(&frame.view, &mut command_encoder);
+                    self.compositor
+                        .blit(&frame.output.view, &mut command_encoder);
 
                     // Finally, submit everything to the GPU to draw!
-                    self.queue
-                        .submit(&[scene_command_buffer, command_encoder.finish()]);
+                    self.queue.submit(
+                        iter::once(scene_command_buffer)
+                            .chain(iter::once(command_encoder.finish())),
+                    );
 
                     self.window
                         .set_cursor_icon(iced_winit::conversion::mouse_interaction(mouse_cursor));
@@ -219,7 +233,10 @@ impl Hub {
         self.swapchain_desc.width = new_size.width;
         self.swapchain_desc.height = new_size.height;
 
-        self.iced.viewport = Viewport::new(new_size.width, new_size.height);
+        self.iced.viewport = Viewport::with_physical_size(
+            Size::new(new_size.width, new_size.height),
+            self.window.scale_factor(),
+        );
         self.swapchain = self
             .device
             .create_swap_chain(&self.surface, &self.swapchain_desc);
@@ -279,8 +296,11 @@ impl Iced {
             cache: Some(Cache::default()),
             clipboard: Clipboard::new(window),
             draw_output: (Primitive::None, mouse::Interaction::Idle),
-            renderer: Renderer::new(device, Settings::default()),
-            viewport: Viewport::new(size.width, size.height),
+            renderer: Renderer::new(Backend::new(device, Settings::default())),
+            viewport: Viewport::with_physical_size(
+                Size::new(size.width, size.height),
+                window.scale_factor(),
+            ),
         }
     }
 
@@ -333,23 +353,30 @@ impl Iced {
     }
 }
 
-async fn get_device_and_queue(surface: &wgpu::Surface) -> Result<(wgpu::Device, wgpu::Queue)> {
-    let adapter = wgpu::Adapter::request(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: Some(surface),
-        },
-        wgpu::BackendBit::PRIMARY,
-    )
-    .await
-    .context("Unable to request a webgpu adapter")?;
+async fn get_wgpu_objects(surface: &wgpu::Surface) -> Result<(wgpu::Device, wgpu::Queue)> {
+    let instance = wgpu::Instance::new();
 
-    Ok(adapter
-        .request_device(&wgpu::DeviceDescriptor {
-            extensions: wgpu::Extensions {
-                anisotropic_filtering: false,
+    let adapter = instance
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(surface),
             },
-            limits: wgpu::Limits::default(),
-        })
-        .await)
+            wgpu::UnsafeExtensions::disallow(),
+            wgpu::BackendBit::PRIMARY,
+        )
+        .await
+        .context("Unable to request a webgpu adapter")?;
+
+    adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                extensions: wgpu::Extensions::empty(),
+                limits: wgpu::Limits::default(),
+                shader_validation: true,
+            },
+            None,
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Unable to request webgpu device"))
 }

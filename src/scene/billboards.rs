@@ -15,7 +15,7 @@ use super::{DEFAULT_FORMAT, DEPTH_FORMAT};
 static POINTS: &[Point] = &[
     Point {
         pos: Vec3 {
-            x: 0.5,
+            x: 1.0,
             y: 0.0,
             z: 0.0,
         },
@@ -23,9 +23,41 @@ static POINTS: &[Point] = &[
     },
     Point {
         pos: Vec3 {
-            x: -0.5,
+            x: -1.0,
             y: 0.0,
             z: 0.0,
+        },
+        kind: 1,
+    },
+    Point {
+        pos: Vec3 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        kind: 0,
+    },
+    Point {
+        pos: Vec3 {
+            x: 0.0,
+            y: -1.0,
+            z: 0.0,
+        },
+        kind: 1,
+    },
+    Point {
+        pos: Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        },
+        kind: 0,
+    },
+    Point {
+        pos: Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: -1.0,
         },
         kind: 1,
     },
@@ -69,36 +101,72 @@ pub struct Billboards {
 
 impl Billboards {
     pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
-        let num_points = 4_000_000;
+        // let mut rng = rand::thread_rng();
+        // let pos_die = RandUniform::from(-3.0..3.0);
+        // let kind_die = RandUniform::from(0..=1);
 
-        let point_buffer = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+        // let mut points = Vec::with_capacity(num_points);
+
+        // for _ in 0..num_points {
+        //     points.push(Point {
+        //         pos: Vec3::new(
+        //             pos_die.sample(&mut rng),
+        //             pos_die.sample(&mut rng),
+        //             pos_die.sample(&mut rng),
+        //         ),
+        //         kind: kind_die.sample(&mut rng),
+        //     });
+        // }
+
+        // let points: Vec<Point> = std::iter::repeat_with(|| {
+        //     Point {
+        //         pos: Vec3::new(
+        //             pos_die.sample(&mut rng),
+        //             pos_die.sample(&mut rng),
+        //             pos_die.sample(&mut rng),
+        //         ),
+        //         kind: kind_die.sample(&mut rng),
+        //     }
+        // }).take(10).collect();
+
+        let num_points = 10;
+
+        let point_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             size: (mem::size_of::<Point>() * num_points) as u64,
-            usage: wgpu::BufferUsage::STORAGE_READ,
+            usage: wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::MAP_WRITE,
+            mapped_at_creation: true,
             label: None,
         });
+        
+        {
+            let buffer_slice = point_buffer.slice(..);
 
-        let mut rng = rand::thread_rng();
-        let pos_die = RandUniform::from(-400.0..400.0);
-        let kind_die = RandUniform::from(0..=1);
+            let mut writable_view = buffer_slice.get_mapped_range_mut();
 
-        for chunk in point_buffer.data.chunks_exact_mut(mem::size_of::<Point>()) {
-            chunk.copy_from_slice(bytemuck::bytes_of(&Point {
-                pos: Vec3::new(
-                    pos_die.sample(&mut rng),
-                    pos_die.sample(&mut rng),
-                    pos_die.sample(&mut rng),
-                ),
-                kind: kind_die.sample(&mut rng),
-            }))
+            let mut rng = rand::thread_rng();
+            let pos_die = RandUniform::from(-3.0..3.0);
+            let kind_die = RandUniform::from(0..=1);
+
+            for chunk in writable_view.chunks_exact_mut(mem::size_of::<Point>()) {
+                chunk.copy_from_slice(bytemuck::bytes_of(&Point {
+                    pos: Vec3::new(
+                        pos_die.sample(&mut rng),
+                        pos_die.sample(&mut rng),
+                        pos_die.sample(&mut rng),
+                    ),
+                    kind: kind_die.sample(&mut rng),
+                }))
+            }
         }
 
-        create_billboards(device, size, point_buffer.finish(), num_points)
+        // let point_buffer = device.create_buffer_with_data(bytemuck::cast_slice(&points[..]), wgpu::BufferUsage::STORAGE_READ);
+
+        create_billboards(device, size, point_buffer, num_points)
     }
 
     pub fn update(
         &mut self,
-        device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
+        queue: &wgpu::Queue,
         world_mx: Mat4,
         projection_mx: Mat4,
         inv_view_mx: Mat3,
@@ -113,8 +181,8 @@ impl Billboards {
             projection_mx: Into::<[[f32; 4]; 4]>::into(projection_mx).into(),
         };
 
-        self.vert_uniform_buffer.set(device, encoder, vert_uniforms);
-        self.frag_uniform_buffer.set(device, encoder, frag_uniforms);
+        self.vert_uniform_buffer.set(queue, vert_uniforms);
+        self.frag_uniform_buffer.set(queue, frag_uniforms);
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, size: PhysicalSize<u32>) {
@@ -140,6 +208,8 @@ impl Billboards {
                 stencil_load_op: wgpu::LoadOp::Clear,
                 stencil_store_op: wgpu::StoreOp::Store,
                 clear_stencil: 1,
+                depth_read_only: false,
+                stencil_read_only: true,
             }),
         });
 
@@ -175,6 +245,7 @@ fn create_billboards(
                 binding: 0,
                 visibility: wgpu::ShaderStage::VERTEX,
                 ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                ..Default::default()
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
@@ -183,11 +254,13 @@ fn create_billboards(
                     dynamic: false,
                     readonly: true,
                 },
+                ..Default::default()
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStage::FRAGMENT,
                 ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                ..Default::default()
             },
         ],
         label: None,
@@ -198,25 +271,17 @@ fn create_billboards(
         bindings: &[
             wgpu::Binding {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: vert_uniform_buffer.buffer(),
-                    range: 0..vert_uniform_buffer.size() as u64,
-                },
+                resource: wgpu::BindingResource::Buffer(vert_uniform_buffer.buffer_view()),
             },
             wgpu::Binding {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &point_buffer,
-                    range: 0..(POINTS.len() * mem::size_of::<Point>()) as u64,
-                },
+                resource: wgpu::BindingResource::Buffer(
+                    point_buffer.slice(..(POINTS.len() * mem::size_of::<Point>()) as u64),
+                ),
             },
             wgpu::Binding {
                 binding: 2,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: frag_uniform_buffer.buffer(),
-                    // range: 0..uniform_buffer.size() as u64,
-                    range: 0..frag_uniform_buffer.size() as u64,
-                },
+                resource: wgpu::BindingResource::Buffer(frag_uniform_buffer.buffer_view()),
             },
         ],
         label: None,
@@ -291,7 +356,6 @@ fn create_depth_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
             height: size.height,
             depth: 1,
         },
-        array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,

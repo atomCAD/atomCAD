@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 struct EventMsg {
     pub resize: Option<Resize>,
     pub events: Vec<Event>,
@@ -35,6 +35,7 @@ impl SceneHandle {
     /// Spawn the scene thread and return a handle to it, as well as the first texture view.
     pub fn create_scene(
         device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
         size: PhysicalSize<u32>,
     ) -> (SceneHandle, wgpu::TextureView) {
         let mut scene = Scene::new(&device, size);
@@ -53,7 +54,7 @@ impl SceneHandle {
                         => break,
                 };
 
-                match scene.render_frame(&device, events.events, events.resize) {
+                match scene.render_frame(&device, &queue, events.events, events.resize) {
                     Ok(cmd_buffer) => output_tx
                         .send(Ok(cmd_buffer))
                         .expect("unable to send command buffer to main thread"),
@@ -123,7 +124,6 @@ fn build_render_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
             height: size.height,
             depth: 1,
         },
-        array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,

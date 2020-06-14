@@ -7,7 +7,6 @@ use bytemuck;
 // use ultraviolet::{projection::perspective_gl, Isometry3, Mat4, Vec2, Vec3};
 use arcball::ArcballCamera;
 use cgmath::{perspective, Deg};
-use parking_lot::Once;
 use winit::{
     dpi::{LogicalPosition, PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton, MouseScrollDelta},
@@ -71,7 +70,7 @@ struct Scene {
 }
 
 impl Scene {
-    pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
+    fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
         create_scene(device, size)
     }
 
@@ -79,6 +78,7 @@ impl Scene {
     fn render_frame(
         &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         events: Vec<Event>,
         resize: Option<Resize>,
     ) -> Result<wgpu::CommandBuffer> {
@@ -102,8 +102,7 @@ impl Scene {
         {
             let inv_camera = self.arcball_camera.get_inv_camera();
             self.billboards.update(
-                device,
-                &mut cmd_encoder,
+                queue,
                 self.world_mx,
                 projection_matrix,
                 Mat3::from_cols(
@@ -164,14 +163,10 @@ impl Scene {
 
                     match delta {
                         MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) => {
-                            self.arcball_camera.zoom(y as f32 / 100.0, 1.0)
+                            self.arcball_camera.zoom(y as f32 / 100.0, 1.0);
                         }
-                        MouseScrollDelta::LineDelta(_, _) => {
-                            static ONCE: Once = Once::new();
-
-                            ONCE.call_once(|| {
-                                log::warn!("line delta zooming is not yet implemented");
-                            })
+                        MouseScrollDelta::LineDelta(_, y) => {
+                            self.arcball_camera.zoom(y, 1.0);
                         }
                     }
                 }
@@ -230,7 +225,7 @@ fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
         [size.width as f32, size.height as f32],
     );
 
-    arcball_camera.zoom(-700.0, 1.0);
+    arcball_camera.zoom(-10.0, 1.0);
 
     let world_mx = VIEWPORT_MATRIX
         * generate_projection_matrix(size.width as f32 / size.height as f32)
@@ -247,7 +242,6 @@ fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
             height: size.height,
             depth: 1,
         },
-        array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
