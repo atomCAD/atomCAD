@@ -36,7 +36,7 @@ layout(location = 2) flat out vec3 color;
 layout(location = 3) flat out uint id;
 
 void main(void) {
-    // Look into whether using triangles instead of quads is more efficient with large numbers.
+    // Look into whether using triangles instead of quads is more efficient with very large quantities of atoms.
     uint particle_index = gl_VertexIndex / 6;
     uint vertex_in_tri = abs(3 - gl_VertexIndex % 6);
 
