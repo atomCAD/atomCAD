@@ -31,37 +31,48 @@ layout(set = 0, binding = 1, std430) buffer Points {
     Atom atom_buffer[];
 };
 
-layout(location = 0) out vec2 uv;
-layout(location = 1) out vec4 position_clip_space;
-layout(location = 2) flat out vec3 color;
-layout(location = 3) flat out uint id;
+layout(location = 0) out vec2 out_uv;
+layout(location = 1) out vec4 out_position_clip_space;
+layout(location = 2) flat out vec3 out_color;
+layout(location = 3) flat out uint out_id;
+
+const float sphere_radius = 1.0;
+
+const vec2 coords[3] = {
+    vec2(1.73, -1.0),
+    vec2(-1.73, -1.0),
+    vec2(0.0, 2.0)
+};
 
 void main(void) {
     // Look into whether using triangles instead of quads is more efficient with very large quantities of atoms.
-    uint particle_index = gl_VertexIndex / 6;
-    uint vertex_in_tri = abs(3 - gl_VertexIndex % 6);
+    uint particle_index = gl_VertexIndex / 3;
+    uint vertex_in_tri = gl_VertexIndex % 3;
+    // uint vertex_in_tri = abs(3 - gl_VertexIndex % 6);
 
-    id = particle_index;
+    out_id = particle_index;
 
-    uv = vec2(
-        bool(vertex_in_tri & 1) ? -1.0 : 1.0,
-        bool(vertex_in_tri & 2) ? -1.0 : 1.0
-    );
+    // out_uv = vec2(
+    //     bool(vertex_in_tri & 1) ? -1.0 : 1.0,
+    //     bool(vertex_in_tri & 2) ? -1.0 : 1.0
+    // );
 
-    vec3 position_objectspace = uniforms.inv_view_mx * vec3(uv, 1.0);
-    
+    out_uv = coords[vertex_in_tri];
+
+    vec3 position_objectspace = uniforms.inv_view_mx * (sphere_radius * vec3(out_uv, 1.0));
+
     Atom atom = atom_buffer[particle_index];
 
     if (atom.kind == 0)
-        color = vec3(0.96, 0.26, 0.82);
+        out_color = vec3(0.96, 0.26, 0.82);
     else
-        color = vec3(0.23, 0.26, 0.82);
+        out_color = vec3(0.23, 0.26, 0.82);
 
     vec4 position_worldspace = vec4(atom.pos + position_objectspace, 1.0);
 
-    position_clip_space = uniforms.world_mx * position_worldspace;
+    out_position_clip_space = uniforms.world_mx * position_worldspace;
 
-    gl_Position = position_clip_space;
+    gl_Position = out_position_clip_space;
 
     // // color = atom.color;
 

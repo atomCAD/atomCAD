@@ -49,7 +49,7 @@ pub struct Billboards {
 
 impl Billboards {
     pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
-        let num_points = 10_000_000;
+        let num_points = 40_000_000;
 
         let point_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             size: (mem::size_of::<Point>() * num_points) as u64,
@@ -150,7 +150,7 @@ impl Billboards {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
         render_pass.draw(
-            0..(self.num_points * 6) // See shaders/billboard.vert.
+            0..(self.num_points * 3) // See shaders/billboard.vert.
                 .try_into()
                 .expect("too many points to draw"),
             0..1,

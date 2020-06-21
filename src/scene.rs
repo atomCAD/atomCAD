@@ -222,7 +222,7 @@ impl State {
 }
 
 fn generate_projection_matrix(aspect_ratio: f32) -> Mat4 {
-    perspective(Deg(45.0), aspect_ratio, 1.0, 2000.0)
+    perspective(Deg(45.0), aspect_ratio, 1.0, 3000.0)
 }
 
 fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
@@ -232,7 +232,7 @@ fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
         [size.width as f32, size.height as f32],
     );
 
-    arcball_camera.zoom(-10.0, 1.0);
+    arcball_camera.zoom(-1000.0, 1.0);
 
     let world_mx = VIEWPORT_MATRIX
         * generate_projection_matrix(size.width as f32 / size.height as f32)
