@@ -10,6 +10,7 @@ layout(location = 2) flat in vec3 color;
 layout(location = 3) flat in uint id;
 
 layout(location = 0) out vec4 out_color;
+layout(location = 1) out uint out_id;
 layout(depth_greater) out float gl_FragDepth;
 
 const float sphere_radius = 1.0;
@@ -24,4 +25,5 @@ void main(void) {
     
     // out_color = vec4(0.96, 0.26, 0.82, 1.0);
     out_color = vec4(color, 1.0);
+    out_id = id;
 }

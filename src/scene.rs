@@ -16,6 +16,7 @@ use crate::math::{Mat3, Mat4, Vec2, Vec3, Vec4};
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+const ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
 const VIEWPORT_MATRIX: Mat4 = Mat4::from_cols(
     Vec4::new(1.0, 0.0, 0.0, 0.0),
@@ -112,6 +113,8 @@ impl Scene {
                 ),
             );
         }
+
+        {}
 
         self.draw(&mut cmd_encoder);
 
