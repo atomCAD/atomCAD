@@ -13,8 +13,9 @@
 
 layout(set = 0, binding = 0) uniform Uniforms {
     mat4 world_mx;
+    mat4 projection_mx;
     mat3 inv_view_mx; // Effectively vec4[3]?
-    float sphere_radius;
+    uvec2 cursor;
 } uniforms;
 
 struct Atom {
@@ -47,11 +48,7 @@ void main(void) {
         bool(vertex_in_tri & 2) ? -1.0 : 1.0
     );
 
-    vec3 position_objectspace = uniforms.inv_view_mx *
-        (uniforms.sphere_radius * vec3(
-           uv,
-            1.0
-        ));
+    vec3 position_objectspace = uniforms.inv_view_mx * vec3(uv, 1.0);
     
     Atom atom = atom_buffer[particle_index];
 

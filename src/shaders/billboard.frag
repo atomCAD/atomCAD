@@ -1,7 +1,10 @@
 #version 450
 
-layout(set = 0, binding = 2) uniform Uniforms {
+layout(set = 0, binding = 0) uniform Uniforms {
+    mat4 world_mx;
     mat4 projection_mx;
+    mat3 inv_view_mx; // Effectively vec4[3]?
+    uvec2 cursor;
 } uniforms;
 
 layout(location = 0) in vec2 uv;
@@ -17,13 +20,12 @@ const float sphere_radius = 1.0;
 
 void main(void) {
     float dist = length(uv);
-    if (dist > 1)
+    if (dist > sphere_radius)
         discard;
 
     vec4 fragment_position_clip = position_clip_space + uniforms.projection_mx[2] * (1.0 + sqrt(1 - dist*dist));
     gl_FragDepth =  fragment_position_clip.z / fragment_position_clip.w;
     
-    // out_color = vec4(0.96, 0.26, 0.82, 1.0);
     out_color = vec4(color, 1.0);
     out_id = id;
 }
