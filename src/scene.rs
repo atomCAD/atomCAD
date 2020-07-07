@@ -2,28 +2,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use crate::camera::Camera;
 use anyhow::Result;
 use bytemuck;
-// use ultraviolet::{projection::perspective_gl, Isometry3, Mat4, Vec2, Vec3};
-use arcball::ArcballCamera;
-use cgmath::{perspective, Deg};
+use na::{Matrix3, Matrix4, Vector3};
 use winit::{
     dpi::{LogicalPosition, PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
-use crate::math::{Mat3, Mat4, Vec2, Vec3, Vec4};
-
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
-
-const VIEWPORT_MATRIX: Mat4 = Mat4::from_cols(
-    Vec4::new(1.0, 0.0, 0.0, 0.0),
-    Vec4::new(0.0, 1.0, 0.0, 0.0),
-    Vec4::new(0.0, 0.0, 0.5, 0.0),
-    Vec4::new(0.0, 0.0, 0.5, 1.0),
-);
 
 mod billboards;
 mod event;
@@ -34,6 +24,13 @@ mod uniform;
 use billboards::Billboards;
 pub use event::{Event, Resize};
 pub use handle::SceneHandle;
+
+const VIEWPORT_MATRIX: [[f32; 4]; 4] = [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 0.5, 0.0],
+    [0.0, 0.0, 0.5, 1.0],
+];
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -62,8 +59,8 @@ struct Scene {
     render_texture: wgpu::Texture,
 
     size: PhysicalSize<u32>,
-    world_mx: Mat4,
-    arcball_camera: ArcballCamera<f32>,
+    world_mx: Matrix4<f32>,
+    arcball_camera: Camera,
 
     billboards: Billboards,
 
@@ -83,6 +80,8 @@ impl Scene {
         events: Vec<Event>,
         resize: Option<Resize>,
     ) -> Result<wgpu::CommandBuffer> {
+        let viewport_matrix: Matrix4<f32> = VIEWPORT_MATRIX.into();
+
         let mut cmd_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
@@ -98,7 +97,7 @@ impl Scene {
         let projection_matrix =
             generate_projection_matrix(self.size.width as f32 / self.size.height as f32);
 
-        self.world_mx = VIEWPORT_MATRIX * projection_matrix * self.arcball_camera.get_mat4();
+        self.world_mx = viewport_matrix * projection_matrix * self.arcball_camera.get_camera();
 
         {
             let inv_camera = self.arcball_camera.get_inv_camera();
@@ -106,11 +105,11 @@ impl Scene {
                 queue,
                 self.world_mx,
                 projection_matrix,
-                Mat3::from_cols(
-                    inv_camera.x.truncate(),
-                    inv_camera.y.truncate(),
-                    inv_camera.z.truncate(),
-                ),
+                Matrix3::from_columns(&[
+                    inv_camera.column(0).xyz(),
+                    inv_camera.column(1).xyz(),
+                    inv_camera.column(2).xyz(),
+                ]),
                 self.state
                     .mouse
                     .cursor
@@ -133,10 +132,7 @@ impl Scene {
             ..
         } = self.state.mouse
         {
-            let convert = |pos: PhysicalPosition<u32>| Vec2::new(pos.x as f32, pos.y as f32);
-
-            self.arcball_camera
-                .rotate(convert(old_cursor), convert(new_cursor));
+            self.arcball_camera.rotate(old_cursor, new_cursor);
         }
     }
 
@@ -165,15 +161,15 @@ impl Scene {
                 }
                 Event::Zoom { delta, .. } => {
                     if let MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) = delta {
-                        self.arcball_camera.zoom(y as f32 / 100.0, 1.0);
+                        self.arcball_camera.zoom(y as f32 / 100.0);
                     }
 
                     match delta {
                         MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) => {
-                            self.arcball_camera.zoom(y as f32 / 100.0, 1.0);
+                            self.arcball_camera.zoom(y as f32 / 100.0);
                         }
                         MouseScrollDelta::LineDelta(_, y) => {
-                            self.arcball_camera.zoom(y * 20.0, 1.0);
+                            self.arcball_camera.zoom(y * 20.0);
                         }
                     }
                 }
@@ -195,8 +191,7 @@ impl Scene {
         self.render_texture = render_texture;
         self.size = size;
 
-        self.arcball_camera
-            .update_screen(size.width as f32, size.height as f32);
+        self.arcball_camera.resize(size);
 
         self.billboards.resize(device, size);
     }
@@ -221,22 +216,20 @@ impl State {
     }
 }
 
-fn generate_projection_matrix(aspect_ratio: f32) -> Mat4 {
-    perspective(Deg(45.0), aspect_ratio, 1.0, 3000.0)
+fn generate_projection_matrix(aspect_ratio: f32) -> Matrix4<f32> {
+    Matrix4::new_perspective(aspect_ratio, 45.0_f32.to_radians(), 1.0, 3000.0)
 }
 
 fn create_scene(device: &wgpu::Device, size: PhysicalSize<u32>) -> Scene {
-    let mut arcball_camera = ArcballCamera::new(
-        Vec3::new(0.0, 0.0, 0.0),
-        1.0,
-        [size.width as f32, size.height as f32],
-    );
+    let viewport_matrix: Matrix4<f32> = VIEWPORT_MATRIX.into();
 
-    arcball_camera.zoom(-1000.0, 1.0);
+    let mut arcball_camera = Camera::new(Vector3::zeros(), 1.0, size);
 
-    let world_mx = VIEWPORT_MATRIX
+    arcball_camera.zoom(-1000.0);
+
+    let world_mx = viewport_matrix
         * generate_projection_matrix(size.width as f32 / size.height as f32)
-        * arcball_camera.get_mat4();
+        * arcball_camera.get_camera();
 
     let billboards = Billboards::new(device, size);
 

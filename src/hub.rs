@@ -37,7 +37,6 @@ pub struct Hub {
     window: Window,
     surface: wgpu::Surface,
 
-    instance: wgpu::Instance,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
 
@@ -95,7 +94,6 @@ impl Hub {
             window,
             surface,
 
-            instance,
             device,
             queue,
 

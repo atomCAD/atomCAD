@@ -59,9 +59,7 @@ iced_wgpu = { git = "https://github.com/lachlansneff/iced.git" }
 # iced_wgpu = "0.2.1"
 
 # For matrix math
-# ultraviolet = "0.4"
-cgmath = "0.17.0"
-arcball = "1.0.0"
+nalgebra = "0.21"
 
 futures = "0.3"
 parking_lot = "0.10"

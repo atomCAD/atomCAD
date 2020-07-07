@@ -2,11 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::math::{Mat3, Mat4, Vec3};
 use glsl_layout::AsStd140;
+use na::{Matrix3, Matrix4, Vector3};
 use rand::distributions::{Distribution, Uniform as RandUniform};
 use rayon::prelude::*;
-use std::{convert::TryInto as _, future::Future, mem};
+use std::{convert::TryInto as _, mem};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 
 use super::uniform::Uniform;
@@ -15,7 +15,7 @@ use super::{DEFAULT_FORMAT, DEPTH_FORMAT, ID_FORMAT};
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
 pub struct Point {
-    pub pos: Vec3,
+    pub pos: Vector3<f32>,
     pub kind: u32,
 }
 
@@ -49,7 +49,7 @@ pub struct Billboards {
 
 impl Billboards {
     pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>) -> Self {
-        let num_points = 40_000_000;
+        let num_points = 100;
 
         let point_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             size: (mem::size_of::<Point>() * num_points) as u64,
@@ -63,7 +63,7 @@ impl Billboards {
 
             let mut writable_view = buffer_slice.get_mapped_range_mut();
 
-            let pos_die = RandUniform::from(-600.0..600.0);
+            let pos_die = RandUniform::from(-10.0..10.0);
             let kind_die = RandUniform::from(0..=1);
 
             writable_view[..]
@@ -72,7 +72,7 @@ impl Billboards {
                     || rand::thread_rng(),
                     |rng, chunk| {
                         chunk.copy_from_slice(bytemuck::bytes_of(&Point {
-                            pos: Vec3::new(
+                            pos: Vector3::new(
                                 pos_die.sample(rng),
                                 pos_die.sample(rng),
                                 pos_die.sample(rng),
@@ -91,9 +91,9 @@ impl Billboards {
     pub fn update(
         &mut self,
         queue: &wgpu::Queue,
-        world_mx: Mat4,
-        projection_mx: Mat4,
-        inv_view_mx: Mat3,
+        world_mx: Matrix4<f32>,
+        projection_mx: Matrix4<f32>,
+        inv_view_mx: Matrix3<f32>,
         cursor: PhysicalPosition<u32>,
     ) {
         let uniforms = Uniforms {

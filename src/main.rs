@@ -2,18 +2,20 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+extern crate nalgebra as na;
+
 #[macro_use]
 mod macros;
 // mod arcball;
 mod fps;
 mod logging;
 use log::error;
+mod camera;
 
 mod hub;
 use self::hub::Hub;
 
 mod compositor;
-mod math;
 mod most_recent;
 mod scene;
 mod ui;
