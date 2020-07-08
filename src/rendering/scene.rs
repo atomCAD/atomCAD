@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{camera::Camera, command_encoder::CommandEncoder};
 use anyhow::Result;
 use bytemuck;
 use futures::{executor::LocalSpawner, future::FutureExt, task::SpawnExt};
@@ -10,6 +9,11 @@ use na::{Matrix3, Matrix4, Vector3};
 use winit::{
     dpi::{LogicalPosition, PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton, MouseScrollDelta},
+};
+
+use crate::{
+    camera::Camera,
+    rendering::CommandEncoder,
 };
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;

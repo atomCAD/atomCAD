@@ -8,12 +8,14 @@ use std::{sync::Arc, thread};
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    command_encoder::{CommandEncoder, Tripper},
-    most_recent::{self, Receiver, RecvError, Sender},
-    scene::{
-        event::{Event, Resize},
-        Scene, DEFAULT_FORMAT,
+    rendering::{
+        CommandEncoder, Tripper,
+        scene::{
+            event::{Event, Resize},
+            Scene, DEFAULT_FORMAT,
+        }
     },
+    most_recent::{self, Receiver, RecvError, Sender},
 };
 
 #[derive(Default)]

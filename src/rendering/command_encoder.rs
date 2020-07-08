@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use futures::{
     channel::oneshot::{channel, Receiver, Sender},
     future::{FutureExt as _, Shared},
@@ -19,7 +23,7 @@ pub struct CommandEncoder {
 
 impl CommandEncoder {
     pub fn new(device: &wgpu::Device) -> Self {
-        let mut command_encoder =
+        let command_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let (sender, receiver) = channel();

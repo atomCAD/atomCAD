@@ -12,7 +12,7 @@ use winit::dpi::{PhysicalPosition, PhysicalSize};
 
 use super::uniform::Uniform;
 use super::{DEFAULT_FORMAT, DEPTH_FORMAT, ID_FORMAT};
-use crate::command_encoder::CommandEncoder;
+use crate::rendering::CommandEncoder;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
