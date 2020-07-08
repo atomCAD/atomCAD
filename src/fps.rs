@@ -1,5 +1,3 @@
-// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
-// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -18,7 +16,7 @@ impl Fps {
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> usize {
         let now = Instant::now();
         let a_second_ago = now - Duration::from_secs(1);
 
@@ -31,9 +29,6 @@ impl Fps {
         }
 
         self.last_second_frames.push_back(now);
-    }
-
-    pub fn get(&self) -> usize {
         self.last_second_frames.len()
     }
 }

@@ -1,5 +1,3 @@
-// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
-// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -37,6 +35,7 @@ impl Compositor {
                         component_type: wgpu::TextureComponentType::Float,
                         multisampled: false,
                     },
+                    ..Default::default()
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
@@ -46,11 +45,13 @@ impl Compositor {
                         component_type: wgpu::TextureComponentType::Float,
                         multisampled: false,
                     },
+                    ..Default::default()
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::Sampler { comparison: false },
+                    ..Default::default()
                 },
             ],
         });
@@ -64,7 +65,8 @@ impl Compositor {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
-            compare: wgpu::CompareFunction::Undefined,
+            compare: None,
+            ..Default::default()
         });
 
         let ui_texture = Self::generate_ui_texture(device, size);
@@ -137,7 +139,6 @@ impl Compositor {
                 height: size.height,
                 depth: 1,
             },
-            array_layer_count: 1,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,

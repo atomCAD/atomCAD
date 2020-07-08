@@ -44,25 +44,28 @@ winit = "0.22"
 
 # For GPU
 # wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "04db8c973c6c7bfbb5f89d3d18ef365d19d9af82" }
-wgpu = "0.5.0"
+# wgpu = "0.5.0"
+wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "554327a3d5bf596c9ca9514db5522287e69b9c18" }
 gfx-memory = "=0.1.1"
 bytemuck = "1.2"
+glsl-layout = "0.3"
 
 # For UI
 # The iced crate is still very much a WIP, so we're pulling
 # from a known commit in the github repo for the near future.
-iced_winit = { git = "https://github.com/hecrj/iced.git", rev =  "33448508a524db6447b380cc236be6f0d5ca8a86" }
-iced_wgpu = { git = "https://github.com/hecrj/iced.git", rev = "33448508a524db6447b380cc236be6f0d5ca8a86" }
+iced_winit = { git = "https://github.com/lachlansneff/iced.git" }
+iced_wgpu = { git = "https://github.com/lachlansneff/iced.git" }
 # iced_winit = "0.1.0"
 # iced_wgpu = "0.2.1"
 
 # For matrix math
-# ultraviolet = "0.4"
-cgmath = "0.17.0"
-arcball = "1.0.0"
+nalgebra = "0.21"
 
 futures = "0.3"
 parking_lot = "0.10"
+rayon = "1.3"
+rand = "0.7"
+crossbeam-queue = "0.2"
 
 [build-dependencies]
 shaderc = "0.6"

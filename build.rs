@@ -1,5 +1,3 @@
-// Copyright (c) 2020 by Lachlan Sneff <lachlan@charted.space>
-// Copyright (c) 2020 by Mark Friedenbach <mark@friedenbach.org>
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -36,24 +34,29 @@ fn main() -> io::Result<()> {
         fs::create_dir(&out_dir)?;
     }
 
-    visit_files(Path::new("src/shaders"), &mut |path| {
-        let binary = compiler
-            .compile_into_spirv(
-                &fs::read_to_string(path)?,
-                match path.extension().and_then(|s| s.to_str()).unwrap() {
-                    "vert" => shaderc::ShaderKind::Vertex,
-                    "frag" => shaderc::ShaderKind::Fragment,
-                    "comp" => shaderc::ShaderKind::Compute,
-                    _ => panic!("unknown shader kind: {}", path.display()),
-                },
-                path.file_name().and_then(|s| s.to_str()).unwrap(),
-                "main",
-                None,
-            )
-            .unwrap();
+    visit_files(Path::new("src/rendering/shaders"), &mut |path| {
+        let binary = match compiler.compile_into_spirv(
+            &fs::read_to_string(path)?,
+            match path.extension().and_then(|s| s.to_str()).unwrap() {
+                "vert" => shaderc::ShaderKind::Vertex,
+                "frag" => shaderc::ShaderKind::Fragment,
+                "comp" => shaderc::ShaderKind::Compute,
+                _ => panic!("unknown shader kind: {}", path.display()),
+            },
+            path.file_name().and_then(|s| s.to_str()).unwrap(),
+            "main",
+            None,
+        ) {
+            Ok(v) => v,
+            Err(shaderc::Error::CompilationError(_, msg)) => {
+                println!("{}", msg);
+                panic!("shader compilation error")
+            }
+            e => e.unwrap(),
+        };
 
         let mut new_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-        new_path.push(path.strip_prefix("src").unwrap());
+        new_path.push(path.strip_prefix("src/rendering").unwrap());
 
         fs::write(&new_path, binary.as_binary_u8())?;
 
