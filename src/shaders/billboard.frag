@@ -27,5 +27,5 @@ void main(void) {
     gl_FragDepth =  fragment_position_clip.z / fragment_position_clip.w;
     
     out_color = vec4(color, 1.0);
-    out_id = id;
+    out_id = id + 1;
 }

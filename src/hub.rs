@@ -209,7 +209,7 @@ impl Hub {
                     };
 
                     // TODO(important): Implement buffer swap/belt to present previous render until new render arrives.
-                    let scene_command_buffer = self.scene.recv_cmd_buffer().unwrap();
+                    let (scene_command_buffer, scene_submit_tripper) = self.scene.recv_cmd_buffer().unwrap();
 
                     self.compositor
                         .blit(&frame.output.view, &mut command_encoder);
@@ -219,6 +219,8 @@ impl Hub {
                         iter::once(scene_command_buffer)
                             .chain(iter::once(command_encoder.finish())),
                     );
+
+                    scene_submit_tripper.trip();
 
                     self.window
                         .set_cursor_icon(iced_winit::conversion::mouse_interaction(mouse_cursor));

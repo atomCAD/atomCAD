@@ -3,10 +3,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use anyhow::{Context, Result};
+use futures::executor::LocalPool;
 use std::{sync::Arc, thread};
 use winit::dpi::PhysicalSize;
 
 use crate::{
+    command_encoder::{CommandEncoder, Tripper},
     most_recent::{self, Receiver, RecvError, Sender},
     scene::{
         event::{Event, Resize},
@@ -27,7 +29,7 @@ enum Msg {
 
 pub struct SceneHandle {
     input_tx: Sender<Msg>,
-    output_rx: Receiver<Result<wgpu::CommandBuffer>>,
+    output_rx: Receiver<Result<(wgpu::CommandBuffer, Tripper)>>,
     scene_thread: Option<thread::JoinHandle<()>>,
 }
 
@@ -46,6 +48,9 @@ impl SceneHandle {
         let texture_view = scene.render_texture.create_default_view();
 
         let scene_thread = thread::spawn(move || {
+            let mut local_pool = LocalPool::new();
+            let spawner = local_pool.spawner();
+
             loop {
                 let events = match input_rx.recv() {
                     Ok(Msg::Events(events)) => events,
@@ -54,14 +59,29 @@ impl SceneHandle {
                         => break,
                 };
 
-                match scene.render_frame(&device, &queue, events.events, events.resize) {
-                    Ok(cmd_buffer) => output_tx
-                        .send(Ok(cmd_buffer))
-                        .expect("unable to send command buffer to main thread"),
+                let mut cmd_encoder = CommandEncoder::new(&device);
+
+                match scene.render_frame(
+                    &device,
+                    &queue,
+                    &mut cmd_encoder,
+                    events.events,
+                    events.resize,
+                    &spawner,
+                ) {
+                    Ok(_) => {
+                        let (cmd_encoder, tripper) = cmd_encoder.inner();
+                        let cmd_buffer = cmd_encoder.finish();
+                        output_tx
+                            .send(Ok((cmd_buffer, tripper)))
+                            .expect("unable to send command buffer to main thread");
+                    }
                     Err(e) => output_tx
                         .send(Err(e))
                         .expect("unable to send error to main thread"),
                 }
+
+                local_pool.run_until_stalled();
             }
 
             log::info!("scene thread is shutting down");
@@ -99,7 +119,7 @@ impl SceneHandle {
         Ok(new_texture_view)
     }
 
-    pub fn recv_cmd_buffer(&mut self) -> Result<wgpu::CommandBuffer> {
+    pub fn recv_cmd_buffer(&mut self) -> Result<(wgpu::CommandBuffer, Tripper)> {
         // self.output_rx.try_recv()
         //     .context("didn't retrieve the command buffer from the scene thread in time")?
         //     .context("the scene thread reported an error")

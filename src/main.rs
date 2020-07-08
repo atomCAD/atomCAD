@@ -15,6 +15,7 @@ mod camera;
 mod hub;
 use self::hub::Hub;
 
+mod command_encoder;
 mod compositor;
 mod most_recent;
 mod scene;

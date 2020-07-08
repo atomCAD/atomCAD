@@ -2,15 +2,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use crossbeam_queue::SegQueue;
 use glsl_layout::AsStd140;
 use na::{Matrix3, Matrix4, Vector3};
 use rand::distributions::{Distribution, Uniform as RandUniform};
 use rayon::prelude::*;
-use std::{convert::TryInto as _, mem};
+use std::{convert::TryInto as _, future::Future, mem, sync::Arc};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 
 use super::uniform::Uniform;
 use super::{DEFAULT_FORMAT, DEPTH_FORMAT, ID_FORMAT};
+use crate::command_encoder::CommandEncoder;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
@@ -37,7 +39,7 @@ pub struct Billboards {
 
     depth_texture: wgpu::Texture,
     id_texture: wgpu::Texture,
-    cursor_id_buffer: wgpu::Buffer,
+    cursor_id_buffer_queue: Arc<SegQueue<wgpu::Buffer>>,
     current_size: PhysicalSize<u32>,
 
     /// These are temporary.
@@ -157,44 +159,74 @@ impl Billboards {
         );
     }
 
-    // pub fn retrieve_mouseover_id(&self, encoder: &mut wgpu::CommandEncoder, cursor_pos: PhysicalPosition<u32>) -> impl Future<Output = u32> {
-    //     encoder.copy_texture_to_buffer(
-    //         wgpu::TextureCopyView {
-    //             texture: &self.id_texture,
-    //             mip_level: 1,
-    //             origin: wgpu::Origin3d {
-    //                 x: cursor_pos.x,
-    //                 y: cursor_pos.y,
-    //                 z: 1,
-    //             },
-    //         },
-    //         wgpu::BufferCopyView {
-    //             buffer: &self.cursor_id_buffer,
-    //             layout: wgpu::TextureDataLayout {
-    //                 offset: 0,
-    //                 bytes_per_row: self.current_size.width * mem::size_of::<u32>() as u32,
-    //                 rows_per_image: self.current_size.height,
-    //             }
-    //         },
-    //         wgpu::Extent3d {
-    //             width: 1,
-    //             height: 1,
-    //             depth: 1,
-    //         }
-    //     );
+    pub fn get_mouseover_id(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut CommandEncoder,
+        cursor_pos: PhysicalPosition<u32>,
+    ) -> impl Future<Output = Option<u32>> {
+        let cursor_id_buffer_queue = Arc::clone(&self.cursor_id_buffer_queue);
 
-    //     async move {
-    //         let buffer_slice = self.cursor_id_buffer.slice(..);
-    //         buffer_slice.map_async(wgpu::MapMode::Read).await;
+        let cursor_id_buffer = cursor_id_buffer_queue.pop().unwrap_or_else(|_| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                size: mem::size_of::<u32>() as u64,
+                usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
+                mapped_at_creation: false,
+                label: None,
+            })
+        });
 
-    //         let view = buffer_slice.get_mapped_range();
-    //         let id = u32::from_le_bytes(view.split_at(mem::size_of::<u32>()).0.try_into().unwrap());
+        encoder.copy_texture_to_buffer(
+            wgpu::TextureCopyView {
+                texture: &self.id_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: cursor_pos.x,
+                    y: cursor_pos.y,
+                    z: 0,
+                },
+            },
+            wgpu::BufferCopyView {
+                buffer: &cursor_id_buffer,
+                layout: wgpu::TextureDataLayout {
+                    offset: 0,
+                    bytes_per_row: self.current_size.width * mem::size_of::<u32>() as u32,
+                    rows_per_image: self.current_size.height,
+                },
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth: 0,
+            },
+        );
 
-    //         self.cursor_id_buffer.unmap();
+        let on_submit = encoder.on_submit();
 
-    //         id
-    //     }
-    // }
+        async move {
+            on_submit.await;
+
+            let id = {
+                let buffer_slice = cursor_id_buffer.slice(..);
+                buffer_slice
+                    .map_async(wgpu::MapMode::Read)
+                    .await
+                    .expect("unable to map id buffer");
+
+                let view = buffer_slice.get_mapped_range();
+                u32::from_le_bytes(view[..mem::size_of::<u32>()].try_into().unwrap())
+            };
+
+            cursor_id_buffer.unmap();
+            cursor_id_buffer_queue.push(cursor_id_buffer);
+
+            if id != 0 {
+                Some(id - 1)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 fn create_billboards(
@@ -305,13 +337,6 @@ fn create_billboards(
     let depth_texture = create_depth_texture(device, size);
     let id_texture = create_id_texture(device, size);
 
-    let cursor_id_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        size: mem::size_of::<u32>() as u64,
-        usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
-        mapped_at_creation: false,
-        label: None,
-    });
-
     Billboards {
         render_pipeline,
         bind_group,
@@ -319,8 +344,8 @@ fn create_billboards(
 
         depth_texture,
         id_texture,
-        cursor_id_buffer,
         current_size: size,
+        cursor_id_buffer_queue: Arc::new(SegQueue::new()),
 
         point_buffer,
         num_points,
@@ -354,7 +379,7 @@ fn create_id_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::Te
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: ID_FORMAT,
-        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::COPY_SRC,
         label: None,
     })
 }

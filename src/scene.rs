@@ -2,9 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::camera::Camera;
+use crate::{camera::Camera, command_encoder::CommandEncoder};
 use anyhow::Result;
 use bytemuck;
+use futures::{executor::LocalSpawner, future::FutureExt, task::SpawnExt};
 use na::{Matrix3, Matrix4, Vector3};
 use winit::{
     dpi::{LogicalPosition, PhysicalPosition, PhysicalSize},
@@ -77,13 +78,12 @@ impl Scene {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        cmd_encoder: &mut CommandEncoder,
         events: Vec<Event>,
         resize: Option<Resize>,
-    ) -> Result<wgpu::CommandBuffer> {
+        spawner: &LocalSpawner,
+    ) -> Result<()> {
         let viewport_matrix: Matrix4<f32> = VIEWPORT_MATRIX.into();
-
-        let mut cmd_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         if let Some(Resize { new_texture, size }) = resize {
             self.resize(&device, new_texture, size);
@@ -117,11 +117,20 @@ impl Scene {
             );
         }
 
-        {}
+        self.draw(cmd_encoder);
 
-        self.draw(&mut cmd_encoder);
+        if let Some(cursor_pos) = self.state.mouse.cursor {
+            let mouseover_id =
+                self.billboards
+                    .get_mouseover_id(&device, cmd_encoder, cursor_pos);
+            spawner
+                .spawn(mouseover_id.map(|id| {
+                    println!("async mouseover id: {:?}", id);
+                }))
+                .expect("unable to spawn mouseover future");
+        }
 
-        Ok(cmd_encoder.finish())
+        Ok(())
     }
 
     fn rotate_with_arcball(&mut self) {
