@@ -14,7 +14,7 @@ pub struct Resize {
 }
 
 #[derive(Debug)]
-pub enum Event {
+pub enum SceneEvent {
     MouseInput {
         button: MouseButton,
         state: ElementState,
@@ -31,17 +31,17 @@ pub enum Event {
 
 pub struct NotApplicable;
 
-impl TryFrom<&'_ WindowEvent<'_>> for Event {
+impl TryFrom<&'_ WindowEvent<'_>> for SceneEvent {
     type Error = NotApplicable;
 
     fn try_from(window_event: &WindowEvent) -> Result<Self, Self::Error> {
         Ok(match *window_event {
-            WindowEvent::MouseInput { state, button, .. } => Event::MouseInput { state, button },
-            WindowEvent::CursorMoved { position, .. } => Event::CursorMoved {
+            WindowEvent::MouseInput { state, button, .. } => Self::MouseInput { state, button },
+            WindowEvent::CursorMoved { position, .. } => Self::CursorMoved {
                 new_pos: position.cast(),
             },
-            WindowEvent::CursorLeft { .. } => Event::CursorLeft,
-            WindowEvent::MouseWheel { delta, phase, .. } => Event::Zoom { delta, phase },
+            WindowEvent::CursorLeft { .. } => Self::CursorLeft,
+            WindowEvent::MouseWheel { delta, phase, .. } => Self::Zoom { delta, phase },
             WindowEvent::Resized(_) => {
                 // This window event is special and should be handled by the
                 // the hub.

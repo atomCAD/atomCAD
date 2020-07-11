@@ -11,10 +11,7 @@ use winit::{
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
-use crate::{
-    camera::Camera,
-    rendering::CommandEncoder,
-};
+use crate::{camera::Camera, CommandEncoder};
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -24,10 +21,9 @@ mod billboards;
 mod event;
 mod handle;
 mod uniform;
-// mod filter;
 
 use billboards::Billboards;
-pub use event::{Event, Resize};
+pub use event::{Resize, SceneEvent};
 pub use handle::SceneHandle;
 
 const VIEWPORT_MATRIX: [[f32; 4]; 4] = [
@@ -83,7 +79,7 @@ impl Scene {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         cmd_encoder: &mut CommandEncoder,
-        events: Vec<Event>,
+        events: Vec<SceneEvent>,
         resize: Option<Resize>,
         spawner: &LocalSpawner,
     ) -> Result<()> {
@@ -124,9 +120,9 @@ impl Scene {
         self.draw(cmd_encoder);
 
         if let Some(cursor_pos) = self.state.mouse.cursor {
-            let mouseover_id =
-                self.billboards
-                    .get_mouseover_id(&device, cmd_encoder, cursor_pos);
+            let mouseover_id = self
+                .billboards
+                .get_mouseover_id(&device, cmd_encoder, cursor_pos);
             spawner
                 .spawn(mouseover_id.map(|id| {
                     println!("async mouseover id: {:?}", id);
@@ -149,14 +145,14 @@ impl Scene {
         }
     }
 
-    fn process_events(&mut self, events: impl Iterator<Item = Event>) {
+    fn process_events(&mut self, events: impl Iterator<Item = SceneEvent>) {
         let mut cursor_left = false;
 
         self.state.mouse.old_cursor = self.state.mouse.cursor.take();
 
         for event in events {
             match event {
-                Event::MouseInput { button, state } => match button {
+                SceneEvent::MouseInput { button, state } => match button {
                     MouseButton::Left => {
                         self.state.mouse.left_button = state;
                     }
@@ -165,14 +161,14 @@ impl Scene {
                     }
                     _ => {}
                 },
-                Event::CursorMoved { new_pos } => {
+                SceneEvent::CursorMoved { new_pos } => {
                     // This event can be fired several times during a single frame.
                     self.state.mouse.cursor = Some(new_pos);
                 }
-                Event::CursorLeft => {
+                SceneEvent::CursorLeft => {
                     cursor_left = true;
                 }
-                Event::Zoom { delta, .. } => {
+                SceneEvent::Zoom { delta, .. } => {
                     if let MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) = delta {
                         self.arcball_camera.zoom(y as f32 / 100.0);
                     }

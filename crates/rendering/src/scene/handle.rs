@@ -8,20 +8,15 @@ use std::{sync::Arc, thread};
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    rendering::{
-        CommandEncoder, Tripper,
-        scene::{
-            event::{Event, Resize},
-            Scene, DEFAULT_FORMAT,
-        }
-    },
     most_recent::{self, Receiver, RecvError, Sender},
+    scene::{Scene, DEFAULT_FORMAT},
+    CommandEncoder, Resize, SceneEvent, Tripper,
 };
 
 #[derive(Default)]
 struct EventMsg {
     pub resize: Option<Resize>,
-    pub events: Vec<Event>,
+    pub events: Vec<SceneEvent>,
 }
 
 enum Msg {
@@ -104,7 +99,7 @@ impl SceneHandle {
     pub fn apply_events(
         &mut self,
         device: &wgpu::Device,
-        events: Vec<Event>,
+        events: Vec<SceneEvent>,
         new_size: Option<PhysicalSize<u32>>,
     ) -> Result<Option<(PhysicalSize<u32>, wgpu::TextureView)>> {
         let new_texture = new_size.map(|size| (size, build_render_texture(device, size)));

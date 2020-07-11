@@ -10,9 +10,10 @@ use rayon::prelude::*;
 use std::{convert::TryInto as _, future::Future, mem, sync::Arc};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 
-use super::uniform::Uniform;
-use super::{DEFAULT_FORMAT, DEPTH_FORMAT, ID_FORMAT};
-use crate::rendering::CommandEncoder;
+use crate::{
+    scene::{uniform::Uniform, DEFAULT_FORMAT, DEPTH_FORMAT, ID_FORMAT},
+    CommandEncoder,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]

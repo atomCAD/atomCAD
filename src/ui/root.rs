@@ -5,10 +5,9 @@
 use iced_wgpu::Renderer;
 use iced_winit::{Align, Element, Length, Row};
 
-use crate::{
-    ui::fps,
-    rendering::scene::Event as SceneEvent,
-};
+use rendering::SceneEvent;
+
+use crate::ui::fps;
 
 pub enum Message {}
 pub struct Root {

@@ -1,27 +1,20 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.use anyhow::{Context, Result};
 use iced_wgpu::{Backend, Primitive, Renderer, Settings, Viewport};
 use iced_winit::{mouse, Cache, Clipboard, Event as IcedEvent, Size, UserInterface};
+use std::{convert::TryInto, iter, mem, sync::Arc};
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event::{Event, ModifiersState, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-use anyhow::{Context, Result};
-use std::{convert::TryInto, iter, mem, sync::Arc};
+use anyhow::{Result, Context as _};
+
+use rendering::{Compositor, SceneEvent, SceneHandle};
 
 use crate::{
-    rendering::{
-        Compositor,
-        scene::{Event as SceneEvent, SceneHandle},
-    },
     fps::Fps,
     ui,
 };
@@ -215,7 +208,8 @@ impl Hub {
                     };
 
                     // TODO(important): Implement buffer swap/belt to present previous render until new render arrives.
-                    let (scene_command_buffer, scene_submit_tripper) = self.scene.recv_cmd_buffer().unwrap();
+                    let (scene_command_buffer, scene_submit_tripper) =
+                        self.scene.recv_cmd_buffer().unwrap();
 
                     self.compositor
                         .blit(&frame.output.view, &mut command_encoder);

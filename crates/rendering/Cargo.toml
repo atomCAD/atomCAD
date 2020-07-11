@@ -1,0 +1,29 @@
+[package]
+name = "rendering"
+version = "0.1.0"
+authors = ["Lachlan Sneff <lachlan@charted.space>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit = "0.22"
+log = "0.4"
+wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "554327a3d5bf596c9ca9514db5522287e69b9c18" }
+bytemuck = "1.2"
+glsl-layout = "0.3"
+futures = "0.3"
+parking_lot = "0.10"
+rayon = "1.3"
+rand = "0.7"
+crossbeam-queue = "0.2"
+nalgebra = "0.21"
+thiserror = "1.0"
+
+# Maybe temporary
+anyhow = "1.0"
+
+gfx-memory = "=0.1.1"
+
+[build-dependencies]
+shaderc = "0.6"

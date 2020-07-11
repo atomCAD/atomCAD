@@ -7,6 +7,11 @@ authors = [
 ]
 edition = "2018"
 
+[workspace]
+members = [
+    "crates/rendering"
+]
+
 [features]
 default = ["metrics"]
 metrics = []
@@ -31,9 +36,12 @@ debug = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rendering = { path = "./crates/rendering" }
 # errors
 thiserror = "1.0"
 anyhow = "1.0"
+
+futures = "0.3"
 
 # log
 log = "0.4"
@@ -47,8 +55,6 @@ winit = "0.22"
 # wgpu = "0.5.0"
 wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git", rev = "554327a3d5bf596c9ca9514db5522287e69b9c18" }
 gfx-memory = "=0.1.1"
-bytemuck = "1.2"
-glsl-layout = "0.3"
 
 # For UI
 # The iced crate is still very much a WIP, so we're pulling
@@ -57,17 +63,3 @@ iced_winit = { git = "https://github.com/lachlansneff/iced.git" }
 iced_wgpu = { git = "https://github.com/lachlansneff/iced.git" }
 # iced_winit = "0.1.0"
 # iced_wgpu = "0.2.1"
-
-# For matrix math
-nalgebra = "0.21"
-
-futures = "0.3"
-parking_lot = "0.10"
-rayon = "1.3"
-rand = "0.7"
-crossbeam-queue = "0.2"
-
-[build-dependencies]
-shaderc = "0.6"
-
-# End of File
