@@ -10,7 +10,7 @@ use winit::dpi::PhysicalSize;
 use crate::{
     most_recent::{self, Receiver, RecvError, Sender},
     scene::{Scene, DEFAULT_FORMAT},
-    CommandEncoder, Resize, SceneEvent, Tripper,
+    EncoderWrapper, Resize, SceneEvent, Tripper,
 };
 
 #[derive(Default)]
@@ -56,7 +56,7 @@ impl SceneHandle {
                         => break,
                 };
 
-                let mut cmd_encoder = CommandEncoder::new(&device);
+                let mut cmd_encoder = EncoderWrapper::new(&device);
 
                 match scene.render_frame(
                     &device,

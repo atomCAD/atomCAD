@@ -4,14 +4,14 @@
 
 use anyhow::Result;
 use bytemuck;
-use futures::{executor::LocalSpawner, future::FutureExt, task::SpawnExt};
+use futures::{future::FutureExt, task::{Spawn, SpawnExt as _}};
 use na::{Matrix3, Matrix4, Vector3};
 use winit::{
     dpi::{LogicalPosition, PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
-use crate::{camera::Camera, CommandEncoder};
+use crate::{camera::Camera, EncoderWrapper};
 
 const DEFAULT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -78,10 +78,10 @@ impl Scene {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        cmd_encoder: &mut CommandEncoder,
+        cmd_encoder: &mut EncoderWrapper,
         events: Vec<SceneEvent>,
         resize: Option<Resize>,
-        spawner: &LocalSpawner,
+        spawner: &impl Spawn,
     ) -> Result<()> {
         let viewport_matrix: Matrix4<f32> = VIEWPORT_MATRIX.into();
 

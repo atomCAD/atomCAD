@@ -12,7 +12,7 @@ use winit::dpi::{PhysicalPosition, PhysicalSize};
 
 use crate::{
     scene::{uniform::Uniform, DEFAULT_FORMAT, DEPTH_FORMAT, ID_FORMAT},
-    CommandEncoder,
+    EncoderWrapper,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -163,7 +163,7 @@ impl Billboards {
     pub fn get_mouseover_id(
         &self,
         device: &wgpu::Device,
-        encoder: &mut CommandEncoder,
+        encoder: &mut EncoderWrapper,
         cursor_pos: PhysicalPosition<u32>,
     ) -> impl Future<Output = Option<u32>> {
         let cursor_id_buffer_queue = Arc::clone(&self.cursor_id_buffer_queue);

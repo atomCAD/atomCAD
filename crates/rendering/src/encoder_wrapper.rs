@@ -15,13 +15,13 @@ pub struct Tripper {
     sender: Sender<()>,
 }
 
-pub struct CommandEncoder {
+pub struct EncoderWrapper {
     command_encoder: wgpu::CommandEncoder,
     sender: Sender<()>,
     shared: Shared<Receiver<()>>,
 }
 
-impl CommandEncoder {
+impl EncoderWrapper {
     pub fn new(device: &wgpu::Device) -> Self {
         let command_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -49,7 +49,7 @@ impl CommandEncoder {
     }
 }
 
-impl Deref for CommandEncoder {
+impl Deref for EncoderWrapper {
     type Target = wgpu::CommandEncoder;
 
     fn deref(&self) -> &Self::Target {
@@ -57,7 +57,7 @@ impl Deref for CommandEncoder {
     }
 }
 
-impl DerefMut for CommandEncoder {
+impl DerefMut for EncoderWrapper {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.command_encoder
     }

@@ -305,15 +305,13 @@ impl Iced {
         }
     }
 
-    pub fn update<I>(
+    pub fn update(
         &mut self,
         ui: &mut ui::Root,
         scene_events: &mut Vec<SceneEvent>,
         state: &State,
-        events: I,
-    ) where
-        I: IntoIterator<Item = IcedEvent>,
-    {
+        events: impl IntoIterator<Item = IcedEvent>,
+    ) {
         let mut user_interface = UserInterface::build(
             ui.view(),
             Size::new(state.logical_size.width, state.logical_size.height),
@@ -365,7 +363,7 @@ async fn get_wgpu_objects(
                 compatible_surface: Some(surface),
             },
             wgpu::UnsafeExtensions::disallow(),
-            wgpu::BackendBit::PRIMARY,
+            wgpu::BackendBit::PRIMARY,   
         )
         .await
         .context("Unable to request a webgpu adapter")?;

@@ -7,7 +7,7 @@ extern crate nalgebra as na;
 #[macro_use]
 mod macros;
 mod camera;
-mod command_encoder;
+mod encoder_wrapper;
 mod compositor;
 mod most_recent;
 mod scene;
@@ -15,4 +15,13 @@ mod scene;
 pub use self::compositor::Compositor;
 pub use self::scene::{Resize, SceneEvent, SceneHandle};
 
-use self::command_encoder::{CommandEncoder, Tripper};
+use self::encoder_wrapper::{EncoderWrapper, Tripper};
+
+pub trait Scene {
+    type Event;
+    type Error;
+
+    fn update<I>(&mut self, events: I) -> Result<(), Self::Error>
+        where I: Iterator<Item = Self::Event>;
+    fn render(&self, encoder: &mut EncoderWrapper) -> Result<(), Self::Error>;
+}
