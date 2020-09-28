@@ -1,4 +1,3 @@
-
 pub trait AsBindingResource {
     fn as_binding_resource(&self) -> wgpu::BindingResource;
 }
@@ -26,7 +25,7 @@ impl BindGroupLayouts {
                     },
                     // configuration
                     wgpu::BindGroupLayoutEntry {
-                        binding: 0,
+                        binding: 1,
                         visibility: wgpu::ShaderStage::VERTEX,
                         ty: wgpu::BindingType::StorageBuffer {
                             dynamic: false,
@@ -39,21 +38,17 @@ impl BindGroupLayouts {
             }),
             atoms: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStage::VERTEX,
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
-                            min_binding_size: None,
-                            readonly: false,
-                        },
-                        count: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStage::VERTEX,
+                    ty: wgpu::BindingType::StorageBuffer {
+                        dynamic: false,
+                        min_binding_size: None,
+                        readonly: false,
                     },
-                ],
+                    count: None,
+                }],
             }),
         }
     }
 }
-
-

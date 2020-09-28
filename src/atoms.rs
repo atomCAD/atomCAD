@@ -1,8 +1,4 @@
-use crate::{
-    utils::AsBytes,
-    elements::Element,
-    bind_groups::BindGroupLayouts,
-};
+use crate::{bind_groups::BindGroupLayouts, elements::Element, utils::AsBytes};
 use std::mem;
 use ultraviolet::Vec3;
 
@@ -74,16 +70,14 @@ impl Atoms {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bgl.atoms,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &buffer,
-                        offset: 0,
-                        size: None,
-                    },
+            entries: &[wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &buffer,
+                    offset: 0,
+                    size: None,
                 },
-            ]
+            }],
         });
 
         Self {
@@ -101,4 +95,3 @@ impl Atoms {
         self.number_of_atoms
     }
 }
-

@@ -1,17 +1,10 @@
-use crate::{
-    InputEvent,
-    utils::AsBytes,
-    bind_groups::AsBindingResource,
-};
-use ultraviolet::{
-    projection,
-    Mat4, Vec3,
-};
-use winit::{
-    dpi::{PhysicalSize, LogicalPosition},
-    event::{WindowEvent, DeviceEvent, MouseScrollDelta, ElementState, MouseButton},
-};
+use crate::{bind_groups::AsBindingResource, utils::AsBytes, InputEvent};
+use ultraviolet::{projection, Mat4, Vec3};
 use wgpu::util::DeviceExt as _;
+use winit::{
+    dpi::{LogicalPosition, PhysicalSize},
+    event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent},
+};
 
 const PI: f32 = std::f32::consts::PI;
 
@@ -55,14 +48,15 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(
-        device: &wgpu::Device,
-        size: PhysicalSize<u32>,
-        fov: f32,
-        near: f32,
-    ) -> Self {
+    pub fn new(device: &wgpu::Device, size: PhysicalSize<u32>, fov: f32, near: f32) -> Self {
         // let camera = StaticCamera::new(fov, size.width as f32 / size.height as f32, near);
-        let camera = ArcballCamera::new(size.width as f32 / size.height as f32, 100.0, 1.0, fov, near);
+        let camera = ArcballCamera::new(
+            size.width as f32 / size.height as f32,
+            100.0,
+            1.0,
+            fov,
+            near,
+        );
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: camera.repr().as_bytes(),
@@ -89,17 +83,17 @@ impl Camera {
         self.camera_was_updated = true;
     }
 
-    pub fn update(&mut self, event: InputEvent) {
-        if let InputEvent::Window(WindowEvent::Resized(size)) = event {
-            self.camera_impl.resize(size.width as f32 / size.height as f32, self.fov, self.near);
-            self.camera_was_updated = true;
-        } else {
-            self.camera_was_updated |= self.camera_impl.update(event);
-        }
-        
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.camera_impl
+            .resize(new_size.width as f32 / new_size.height as f32, self.fov, self.near);
+        self.camera_was_updated = true;
     }
 
-    pub fn finalize(&mut self, queue: &wgpu::Queue) {
+    pub fn update(&mut self, event: InputEvent) {
+        self.camera_was_updated |= self.camera_impl.update(event);
+    }
+
+    pub fn upload(&mut self, queue: &wgpu::Queue) {
         self.camera_impl.finalize();
         if self.camera_was_updated {
             self.camera_was_updated = false;
@@ -162,7 +156,8 @@ impl ArcballCamera {
 
 impl CameraImpl for ArcballCamera {
     fn resize(&mut self, aspect: f32, fov: f32, near: f32) {
-        self.camera.projection = projection::perspective_reversed_infinite_z_wgpu_dx_gl(fov, aspect, near);
+        self.camera.projection =
+            projection::perspective_reversed_infinite_z_wgpu_dx_gl(fov, aspect, near);
     }
 
     fn update(&mut self, event: InputEvent) -> bool {
@@ -184,7 +179,7 @@ impl CameraImpl for ArcballCamera {
                         if state == ElementState::Pressed {
                             self.mouse_button_pressed = true;
                         } else {
-                            self.mouse_button_pressed = false;   
+                            self.mouse_button_pressed = false;
                         }
                     }
                     false
@@ -193,8 +188,8 @@ impl CameraImpl for ArcballCamera {
                     self.mouse_button_pressed = false;
                     false
                 }
-                _ => false
-            }
+                _ => false,
+            },
             InputEvent::Device(event) => match event {
                 DeviceEvent::MouseMotion { delta: (x, y) } => {
                     if self.mouse_button_pressed {
@@ -205,17 +200,18 @@ impl CameraImpl for ArcballCamera {
                         false
                     }
                 }
-                _ => false
-            }
+                _ => false,
+            },
         }
     }
 
     fn finalize(&mut self) {
-        let eye = self.distance * Vec3::new(
-            self.yaw.sin() * self.pitch.cos(),
-            self.pitch.sin(),
-            self.yaw.cos() * self.pitch.cos(),
-        );
+        let eye = self.distance
+            * Vec3::new(
+                self.yaw.sin() * self.pitch.cos(),
+                self.pitch.sin(),
+                self.yaw.cos() * self.pitch.cos(),
+            );
 
         // let eye = self.rotor * (self.distance * Vec3::unit_z());
         self.camera.view = Mat4::look_at(eye, Vec3::zero(), Vec3::unit_y());

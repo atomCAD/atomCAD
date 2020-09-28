@@ -1,8 +1,4 @@
-use std::{
-    ops::Range,
-    mem,
-    slice,
-};
+use std::{mem, ops::Range, slice};
 use ultraviolet::Vec3;
 
 pub struct BoundingBox {
@@ -22,29 +18,31 @@ impl BoundingBox {
                 self.max.x.max(other.max.x),
                 self.max.y.max(other.max.y),
                 self.max.z.max(other.max.z),
-            )
+            ),
         }
     }
 
     pub fn contains(&self, point: Vec3) -> bool {
-        self.min.x <= point.x && point.x <= self.max.x
-        && self.min.y <= point.y && point.y <= self.max.y
-        && self.min.z <= point.z && point.z <= self.max.z
+        self.min.x <= point.x
+            && point.x <= self.max.x
+            && self.min.y <= point.y
+            && point.y <= self.max.y
+            && self.min.z <= point.z
+            && point.z <= self.max.z
     }
 }
 
 pub unsafe trait AsBytes {
     fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(self as *const _ as *const u8, mem::size_of_val(self))
-        }
+        unsafe { slice::from_raw_parts(self as *const _ as *const u8, mem::size_of_val(self)) }
     }
 }
 
-unsafe impl<T> AsBytes for [T] where T: AsBytes + Sized {
+unsafe impl<T> AsBytes for [T]
+where
+    T: AsBytes + Sized,
+{
     fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(self.as_ptr().cast(), mem::size_of::<T>() * self.len())
-        }
+        unsafe { slice::from_raw_parts(self.as_ptr().cast(), mem::size_of::<T>() * self.len()) }
     }
 }

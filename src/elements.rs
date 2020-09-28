@@ -133,7 +133,7 @@ impl Element {
 
     pub fn from_atomic_number(n: u8) -> Option<Self> {
         if n >= 1 && n <= Self::MAX as u8 {
-            Some(unsafe { mem::transmute(n) } )
+            Some(unsafe { mem::transmute(n) })
         } else {
             None
         }
@@ -162,27 +162,27 @@ const fn element_render_config() -> [ElementRepr; 118] {
     };
     elements[Element::Carbon as usize - 1] = ElementRepr {
         color: Vec3::new(0.30196, 0.2902, 0.3098), // dark grey
-        radius: 1.4167, // van der waals relative to hydrogen
+        radius: 1.4167,                            // van der waals relative to hydrogen
     };
     elements[Element::Oxygen as usize - 1] = ElementRepr {
         color: Vec3::new(0.7490, 0.2118, 0.3176), // red
-        radius: 1.267, // van der waals relative to hydrogen
+        radius: 1.267,                            // van der waals relative to hydrogen
     };
     elements[Element::Silicon as usize - 1] = ElementRepr {
         color: Vec3::new(0.7294, 0.5804, 0.1686), // yellow
-        radius: 1.75, // van der waals relative to hydrogen
+        radius: 1.75,                             // van der waals relative to hydrogen
     };
     elements[Element::Phosphorus as usize - 1] = ElementRepr {
         color: Vec3::new(0.7019, 0.4314, 0.1451), // orange
-        radius: 1.625, // van der waals relative to hydrogen
+        radius: 1.625,                            // van der waals relative to hydrogen
     };
     elements[Element::Nitrogen as usize - 1] = ElementRepr {
         color: Vec3::new(0.2078, 0.4549, 0.6118), // blue
-        radius: 1.292, // van der waals relative to hydrogen
+        radius: 1.292,                            // van der waals relative to hydrogen
     };
     elements[Element::Sulfur as usize - 1] = ElementRepr {
         color: Vec3::new(0.7294, 0.5804, 0.1686), // yellow
-        radius: 1.5, // van der waals relative to hydrogen
+        radius: 1.5,                              // van der waals relative to hydrogen
     };
 
     elements

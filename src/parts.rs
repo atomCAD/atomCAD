@@ -1,19 +1,14 @@
 use crate::{
-    utils::{BoundingBox, AsBytes},
+    atoms::{AtomKind, AtomRepr, Atoms},
     elements::Element,
-    atoms::{Atoms, AtomRepr, AtomKind},
+    utils::{AsBytes, BoundingBox},
 };
-use std::{
-    iter,
-    mem,
-    convert::TryInto as _,
-    path::Path,
-};
-use ultraviolet::Vec3;
 use rand::{
     distributions::{Distribution, Uniform as RandUniform},
     seq::SliceRandom as _,
 };
+use std::{convert::TryInto as _, iter, mem, path::Path};
+use ultraviolet::Vec3;
 
 pub struct Fragment {
     atoms: Atoms,
@@ -26,17 +21,20 @@ impl Fragment {
     fn new_mock(device: &wgpu::Device, bgl: &crate::BindGroupLayouts) -> Self {
         let mut rng = rand::thread_rng();
         let position_sampler = RandUniform::from(-10.0..10.0);
-        let allowed_elements = [Element::Hydrogen, Element::Carbon, Element::Oxygen, Element::Silicon];
+        let allowed_elements = [
+            Element::Hydrogen,
+            Element::Carbon,
+            Element::Oxygen,
+            Element::Silicon,
+        ];
 
-        let atoms = (0..100).map(|_| {
-            AtomRepr {
-                pos: Vec3::new(
-                    position_sampler.sample(&mut rng),
-                    position_sampler.sample(&mut rng),
-                    position_sampler.sample(&mut rng),
-                ),
-                kind: AtomKind::new(*allowed_elements.choose(&mut rng).unwrap()),
-            }
+        let atoms = (0..100).map(|_| AtomRepr {
+            pos: Vec3::new(
+                position_sampler.sample(&mut rng),
+                position_sampler.sample(&mut rng),
+                position_sampler.sample(&mut rng),
+            ),
+            kind: AtomKind::new(*allowed_elements.choose(&mut rng).unwrap()),
         });
 
         Self::from_atoms(device, bgl, atoms)
@@ -51,15 +49,19 @@ impl Fragment {
         let mut max_point = Vec3::new(-f32::INFINITY, -f32::INFINITY, -f32::INFINITY);
         let mut min_point = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
-        let atoms = Atoms::new(device, bgl, atoms.into_iter().inspect(|atom| {
-            point_sum += atom.pos;
-            max_point.x = atom.pos.x.max(max_point.x);
-            max_point.y = atom.pos.x.max(max_point.y);
-            max_point.z = atom.pos.x.max(max_point.z);
-            min_point.x = atom.pos.x.min(min_point.x);
-            min_point.y = atom.pos.x.min(min_point.y);
-            min_point.z = atom.pos.x.min(min_point.z);
-        }));
+        let atoms = Atoms::new(
+            device,
+            bgl,
+            atoms.into_iter().inspect(|atom| {
+                point_sum += atom.pos;
+                max_point.x = atom.pos.x.max(max_point.x);
+                max_point.y = atom.pos.x.max(max_point.y);
+                max_point.z = atom.pos.x.max(max_point.z);
+                min_point.x = atom.pos.x.min(min_point.x);
+                min_point.y = atom.pos.x.min(min_point.y);
+                min_point.z = atom.pos.x.min(min_point.z);
+            }),
+        );
 
         let center = point_sum / atoms.len() as f32;
         let bounding_box = BoundingBox {
@@ -88,16 +90,17 @@ pub struct Part {
 
 impl Part {
     /// Create some mock data.
-    pub fn new_mock(
-        device: &wgpu::Device,
-        bgl: &crate::BindGroupLayouts,
-    ) -> Self {
+    pub fn new_mock(device: &wgpu::Device, bgl: &crate::BindGroupLayouts) -> Self {
         let fragment = Fragment::new_mock(device, bgl);
 
         Self::from_fragments(device, bgl, iter::once(fragment))
     }
 
-    pub fn from_fragments<I>(device: &wgpu::Device, bgl: &crate::BindGroupLayouts, fragments: I) -> Self
+    pub fn from_fragments<I>(
+        device: &wgpu::Device,
+        bgl: &crate::BindGroupLayouts,
+        fragments: I,
+    ) -> Self
     where
         I: IntoIterator<Item = Fragment>,
     {
@@ -114,10 +117,13 @@ impl Part {
                 center += fragment.center;
             })
             .collect();
-        
+
         let center = center / fragments.len() as f32;
 
-        assert!(fragments.len() > 0, "must have at least one fragment in a part");
+        assert!(
+            fragments.len() > 0,
+            "must have at least one fragment in a part"
+        );
 
         Part {
             fragments,
@@ -133,10 +139,7 @@ impl Part {
         name: &str,
         path: P,
     ) -> Result<Vec<Self>, String> {
-        use lib3dmol::{
-            parser::read_pdb,
-            structures::GetAtom as _,
-        };
+        use lib3dmol::{parser::read_pdb, structures::GetAtom as _};
 
         let path = path.as_ref();
         if !path.exists() {
@@ -145,23 +148,27 @@ impl Part {
 
         let structure = read_pdb(&*path.to_string_lossy(), name);
 
-        let parts = structure.chains.iter().map(|chain| {
-            let fragments = chain.lst_res.iter().map(|residue| {
-                let atoms = residue.get_atom();
-                let atoms = atoms.iter().map(|atom| {
-                    let element = (&atom.a_type).into();
+        let parts = structure
+            .chains
+            .iter()
+            .map(|chain| {
+                let fragments = chain.lst_res.iter().map(|residue| {
+                    let atoms = residue.get_atom();
+                    let atoms = atoms.iter().map(|atom| {
+                        let element = (&atom.a_type).into();
 
-                    AtomRepr {
-                        pos: atom.coord.into(),
-                        kind: AtomKind::new(element),
-                    }
+                        AtomRepr {
+                            pos: atom.coord.into(),
+                            kind: AtomKind::new(element),
+                        }
+                    });
+
+                    Fragment::from_atoms(device, bgl, atoms)
                 });
 
-                Fragment::from_atoms(device, bgl, atoms)
-            });
-
-            Part::from_fragments(device, bgl, fragments)
-        }).collect();
+                Part::from_fragments(device, bgl, fragments)
+            })
+            .collect();
 
         Ok(parts)
     }
@@ -174,12 +181,26 @@ impl Part {
         &self.fragments
     }
 
-    pub fn offset_by(&mut self, offset: Vec3) {
+    pub fn offset_by(&mut self, offset: Vec3) {}
 
+    pub fn move_to(&mut self, point: Vec3) {}
+}
+
+pub struct Parts {
+    parts: Vec<Part>,
+}
+
+impl Parts {
+    pub fn parts(&self) -> impl Iterator<Item = &Part> {
+        self.parts.iter()
     }
+}
 
-    pub fn move_to(&mut self, point: Vec3) {
-
+impl iter::FromIterator<Part> for Parts {
+    fn from_iter<T: IntoIterator<Item = Part>>(iter: T) -> Self {
+        Self {
+            parts: iter.into_iter().collect(),
+        }
     }
 }
 
