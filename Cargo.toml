@@ -21,7 +21,12 @@ members = ["crates/*"]
 bevy = "0.18"
 # Input
 keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
+# Math
+ultraviolet = "0.10"
+# Serialization
+serde = "1"
 # Utilities
+asbytes = { package = "atomcad-asbytes", path = "crates/asbytes" }
 bitflags = "2"
 # Windowing
 menu = { package = "atomcad-menu", path = "crates/menu" }
