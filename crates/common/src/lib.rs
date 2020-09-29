@@ -1,9 +1,5 @@
-use std::{
-    slice,
-    mem,
-};
-use winit::event::{WindowEvent, DeviceEvent};
-
+use std::{mem, slice};
+use winit::event::{DeviceEvent, WindowEvent};
 
 pub enum InputEvent<'a> {
     Window(WindowEvent<'a>),

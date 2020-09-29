@@ -1,4 +1,3 @@
-use std::{mem, ops::Range, slice};
 use ultraviolet::Vec3;
 
 pub struct BoundingBox {

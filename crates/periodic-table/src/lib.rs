@@ -1,7 +1,7 @@
 use common::AsBytes;
+use static_assertions::const_assert_eq;
 use std::mem;
 use ultraviolet::Vec3;
-use static_assertions::const_assert_eq;
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

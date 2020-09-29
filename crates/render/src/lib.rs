@@ -1,25 +1,17 @@
+use crate::bind_groups::{AsBindingResource as _, BindGroupLayouts};
 pub use crate::{
+    camera::{Camera, CameraRepr, RenderCamera},
     parts::Parts,
-    camera::{RenderCamera, Camera, CameraRepr},
 };
-use crate::bind_groups::{BindGroupLayouts, AsBindingResource as _};
 use common::AsBytes as _;
 use periodic_table::Element;
-use std::{
-    mem,
-    sync::Arc,
-    convert::TryInto as _,
-};
+use std::{convert::TryInto as _, mem, sync::Arc};
 use wgpu::util::DeviceExt as _;
-use wgpu_conveyor::{AutomatedBufferManager, AutomatedBuffer, UploadStyle};
-use winit::{
-    window::Window,
-    dpi::PhysicalSize,
-};
-use ultraviolet::Mat4;
+use wgpu_conveyor::{AutomatedBuffer, AutomatedBufferManager, UploadStyle};
+use winit::{dpi::PhysicalSize, window::Window};
 
-mod bind_groups;
 mod atoms;
+mod bind_groups;
 mod camera;
 mod parts;
 mod utils;
@@ -30,12 +22,11 @@ macro_rules! include_spirv {
     };
 }
 
-const SWAPCHAIN_FORMAT: wgpu::TextureFormat =
-    if cfg!(target_arch = "wasm32") {
-        wgpu::TextureFormat::Bgra8Unorm
-    } else {
-        wgpu::TextureFormat::Bgra8UnormSrgb
-    };
+const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
+    wgpu::TextureFormat::Bgra8Unorm
+} else {
+    wgpu::TextureFormat::Bgra8UnormSrgb
+};
 
 pub struct Renderer {
     swap_chain_desc: wgpu::SwapChainDescriptor,
@@ -56,7 +47,7 @@ pub struct Renderer {
     atom_frag_shader: wgpu::ShaderModule,
 
     bgl: BindGroupLayouts,
-    
+
     depth_texture: wgpu::TextureView,
 
     shader_runtime_config_buffer: wgpu::Buffer,
@@ -92,17 +83,17 @@ impl Renderer {
         let device = Arc::new(device);
 
         let mut buffer_mananger = AutomatedBufferManager::new(UploadStyle::Staging);
-            
+
         let bgl = BindGroupLayouts::create(&device);
 
-        let camera = RenderCamera::new(&device, size, 0.7, 0.1);
+        let camera = RenderCamera::new_empty(&device, 0.7, 0.1);
 
         let shader_runtime_config_buffer =
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: Element::RENDERING_CONFIG.as_ref().as_bytes(),
-            usage: wgpu::BufferUsage::STORAGE,
-        });
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: Element::RENDERING_CONFIG.as_ref().as_bytes(),
+                usage: wgpu::BufferUsage::STORAGE,
+            });
 
         let global_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("shader_runtime_config_bg"),
@@ -229,7 +220,7 @@ impl Renderer {
                 shader_runtime_config_buffer,
                 global_bg,
                 camera,
-            }
+            },
         )
     }
 
@@ -238,23 +229,26 @@ impl Renderer {
         self.swap_chain_desc.width = new_size.width;
         self.swap_chain_desc.height = new_size.height;
 
-        self.swap_chain = self.device.create_swap_chain(&self.surface, &self.swap_chain_desc);
+        self.swap_chain = self
+            .device
+            .create_swap_chain(&self.surface, &self.swap_chain_desc);
 
-        self.depth_texture = self.device
-        .create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d {
-                width: new_size.width,
-                height: new_size.height,
-                depth: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-        })
-        .create_view(&wgpu::TextureViewDescriptor::default());
+        self.depth_texture = self
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: new_size.width,
+                    height: new_size.height,
+                    depth: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth32Float,
+                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         self.camera.resize(new_size);
     }
@@ -280,9 +274,9 @@ impl Renderer {
     }
 
     pub fn render(&mut self, parts: &Parts) {
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: None,
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         if !self.camera.upload(&self.queue) {
             // no camera is set, so no reason to do rendering.
@@ -291,16 +285,23 @@ impl Renderer {
 
         self.upload_transforms(&mut encoder, parts);
 
-        let frame = self.swap_chain.get_current_frame().map(|mut frame| {
-            if frame.suboptimal {
-                // try again
-                frame = self.swap_chain.get_current_frame().expect("could not retrieve swapchain on second try");
+        let frame = self
+            .swap_chain
+            .get_current_frame()
+            .map(|mut frame| {
                 if frame.suboptimal {
-                    log::warn!("suboptimal swapchain frame");
+                    // try again
+                    frame = self
+                        .swap_chain
+                        .get_current_frame()
+                        .expect("could not retrieve swapchain on second try");
+                    if frame.suboptimal {
+                        log::warn!("suboptimal swapchain frame");
+                    }
                 }
-            }
-            frame
-        }).expect("failed to get next swapchain");
+                frame
+            })
+            .expect("failed to get next swapchain");
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -317,16 +318,14 @@ impl Renderer {
                         store: true,
                     },
                 }],
-                depth_stencil_attachment: Some(
-                    wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                        attachment: &self.depth_texture,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(0.0),
-                            store: true,
-                        }),
-                        stencil_ops: None,
-                    },
-                ),
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                    attachment: &self.depth_texture,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             rpass.set_pipeline(&self.atom_render_pipeline);
@@ -343,7 +342,6 @@ impl Renderer {
         }
 
         self.queue.submit(Some(encoder.finish()));
-
     }
 
     /// Immediately calls resize on the supplied camera.

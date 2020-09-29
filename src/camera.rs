@@ -1,5 +1,5 @@
-use render::{Camera, CameraRepr};
 use common::InputEvent;
+use render::{Camera, CameraRepr};
 use ultraviolet::{projection, Mat4, Vec3};
 use winit::{
     dpi::LogicalPosition,

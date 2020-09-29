@@ -1,14 +1,13 @@
 use crate::{
     atoms::{AtomKind, AtomRepr, Atoms},
-    utils::{BoundingBox},
+    utils::BoundingBox,
 };
-use common::AsBytes;
 use periodic_table::Element;
 use rand::{
     distributions::{Distribution, Uniform as RandUniform},
     seq::SliceRandom as _,
 };
-use std::{convert::TryInto as _, iter, mem, path::Path};
+use std::{iter, path::Path};
 use ultraviolet::Vec3;
 
 pub struct Fragment {
@@ -94,14 +93,10 @@ impl Part {
     pub fn new_mock(device: &wgpu::Device, bgl: &crate::BindGroupLayouts) -> Self {
         let fragment = Fragment::new_mock(device, bgl);
 
-        Self::from_fragments(device, bgl, iter::once(fragment))
+        Self::from_fragments(iter::once(fragment))
     }
 
-    pub fn from_fragments<I>(
-        device: &wgpu::Device,
-        bgl: &crate::BindGroupLayouts,
-        fragments: I,
-    ) -> Self
+    pub fn from_fragments<I>(fragments: I) -> Self
     where
         I: IntoIterator<Item = Fragment>,
     {
@@ -185,13 +180,11 @@ impl Parts {
                     Fragment::from_atoms(device, bgl, atoms)
                 });
 
-                Part::from_fragments(device, bgl, fragments)
+                Part::from_fragments(fragments)
             })
             .collect();
 
-        Ok(Self {
-            parts,
-        })
+        Ok(Self { parts })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Part> {

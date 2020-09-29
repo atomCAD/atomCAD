@@ -1,6 +1,6 @@
-use crate::{bind_groups::BindGroupLayouts};
-use periodic_table::Element;
+use crate::bind_groups::BindGroupLayouts;
 use common::AsBytes;
+use periodic_table::Element;
 use std::mem;
 use ultraviolet::Vec3;
 
