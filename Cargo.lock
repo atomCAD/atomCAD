@@ -348,6 +348,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-periodic-table"
+version = "0.1.0"
+dependencies = [
+ "atomcad-asbytes",
+ "bevy",
+ "serde",
+ "static_assertions",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

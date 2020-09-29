@@ -19,6 +19,8 @@ members = ["crates/*"]
 [workspace.dependencies]
 # Bevy
 bevy = "0.18"
+# Chemistry
+periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 # Input
 keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
 # Math
@@ -28,6 +30,7 @@ serde = "1"
 # Utilities
 asbytes = { package = "atomcad-asbytes", path = "crates/asbytes" }
 bitflags = "2"
+static_assertions = "1"
 # Windowing
 menu = { package = "atomcad-menu", path = "crates/menu" }
 # macOS platform support
