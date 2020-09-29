@@ -1,8 +1,9 @@
 use crate::{
     atoms::{AtomKind, AtomRepr, Atoms},
-    elements::Element,
-    utils::{AsBytes, BoundingBox},
+    utils::{BoundingBox},
 };
+use common::AsBytes;
+use periodic_table::Element;
 use rand::{
     distributions::{Distribution, Uniform as RandUniform},
     seq::SliceRandom as _,
@@ -132,47 +133,6 @@ impl Part {
         }
     }
 
-    // TODO: Better result error type.
-    pub fn load_from_pdb<P: AsRef<Path>>(
-        device: &wgpu::Device,
-        bgl: &crate::BindGroupLayouts,
-        name: &str,
-        path: P,
-    ) -> Result<Vec<Self>, String> {
-        use lib3dmol::{parser::read_pdb, structures::GetAtom as _};
-
-        let path = path.as_ref();
-        if !path.exists() {
-            return Err("path does not exist".to_string());
-        }
-
-        let structure = read_pdb(&*path.to_string_lossy(), name);
-
-        let parts = structure
-            .chains
-            .iter()
-            .map(|chain| {
-                let fragments = chain.lst_res.iter().map(|residue| {
-                    let atoms = residue.get_atom();
-                    let atoms = atoms.iter().map(|atom| {
-                        let element = (&atom.a_type).into();
-
-                        AtomRepr {
-                            pos: atom.coord.into(),
-                            kind: AtomKind::new(element),
-                        }
-                    });
-
-                    Fragment::from_atoms(device, bgl, atoms)
-                });
-
-                Part::from_fragments(device, bgl, fragments)
-            })
-            .collect();
-
-        Ok(parts)
-    }
-
     pub fn center(&self) -> Vec3 {
         self.center
     }
@@ -191,7 +151,50 @@ pub struct Parts {
 }
 
 impl Parts {
-    pub fn parts(&self) -> impl Iterator<Item = &Part> {
+    // TODO: Better result error type.
+    pub fn load_from_pdb<P: AsRef<Path>>(
+        device: &wgpu::Device,
+        bgl: &crate::BindGroupLayouts,
+        name: &str,
+        path: P,
+    ) -> Result<Self, String> {
+        use lib3dmol::{parser::read_pdb, structures::GetAtom as _};
+
+        let path = path.as_ref();
+        if !path.exists() {
+            return Err("path does not exist".to_string());
+        }
+
+        let structure = read_pdb(&*path.to_string_lossy(), name);
+
+        let parts = structure
+            .chains
+            .iter()
+            .map(|chain| {
+                let fragments = chain.lst_res.iter().map(|residue| {
+                    let atoms = residue.get_atom();
+                    let atoms = atoms.iter().map(|atom| {
+                        let element = atom_type_to_element(&atom.a_type);
+
+                        AtomRepr {
+                            pos: atom.coord.into(),
+                            kind: AtomKind::new(element),
+                        }
+                    });
+
+                    Fragment::from_atoms(device, bgl, atoms)
+                });
+
+                Part::from_fragments(device, bgl, fragments)
+            })
+            .collect();
+
+        Ok(Self {
+            parts,
+        })
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Part> {
         self.parts.iter()
     }
 }
@@ -204,18 +207,16 @@ impl iter::FromIterator<Part> for Parts {
     }
 }
 
-impl From<&'_ lib3dmol::structures::atom::AtomType> for Element {
-    fn from(atom_type: &lib3dmol::structures::atom::AtomType) -> Self {
-        use lib3dmol::structures::atom::AtomType;
-        match atom_type {
-            AtomType::Hydrogen => Element::Hydrogen,
-            AtomType::Carbon => Element::Carbon,
-            AtomType::Oxygen => Element::Oxygen,
-            AtomType::Silicon => Element::Silicon,
-            AtomType::Phosphorus => Element::Phosphorus,
-            AtomType::Nitrogen => Element::Nitrogen,
-            AtomType::Sulfur => Element::Sulfur,
-            _ => Element::MAX,
-        }
+fn atom_type_to_element(atom_type: &lib3dmol::structures::atom::AtomType) -> Element {
+    use lib3dmol::structures::atom::AtomType;
+    match atom_type {
+        AtomType::Hydrogen => Element::Hydrogen,
+        AtomType::Carbon => Element::Carbon,
+        AtomType::Oxygen => Element::Oxygen,
+        AtomType::Silicon => Element::Silicon,
+        AtomType::Phosphorus => Element::Phosphorus,
+        AtomType::Nitrogen => Element::Nitrogen,
+        AtomType::Sulfur => Element::Sulfur,
+        _ => Element::MAX,
     }
 }

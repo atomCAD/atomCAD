@@ -1,0 +1,15 @@
+[package]
+name = "atomcad-periodic-table"
+version = "0.1.0"
+authors = ["Lachlan Sneff <lachlan.sneff@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.common]
+package = "atomcad-common"
+path = "../common"
+
+[dependencies]
+ultraviolet = "0.7.0"
+static_assertions = "1"

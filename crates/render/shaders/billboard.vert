@@ -22,7 +22,7 @@ struct Element {
     float radius;
 };
 
-layout(set = 0, binding = 1, std430) buffer ShaderConfiguration {
+layout(set = 0, binding = 1) readonly buffer ShaderConfiguration {
     Element elements[118];
 } config;
 
@@ -35,7 +35,7 @@ struct Atom {
  * Will this work? The alignment of vec3 in arrays with std430
  * is quite hazy.
  */
-layout(set = 1, binding = 1, std430) buffer Points {
+layout(set = 1, binding = 1, std430) readonly buffer Points {
     Atom atoms[];
 };
 

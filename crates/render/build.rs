@@ -34,7 +34,7 @@ fn main() -> io::Result<()> {
         fs::create_dir(&out_dir)?;
     }
 
-    visit_files(Path::new("src/shaders"), &mut |path| {
+    visit_files(Path::new("shaders/"), &mut |path| {
         let binary = match compiler.compile_into_spirv(
             &fs::read_to_string(path)?,
             match path.extension().and_then(|s| s.to_str()).unwrap() {
@@ -56,7 +56,7 @@ fn main() -> io::Result<()> {
         };
 
         let mut new_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-        new_path.push(path.strip_prefix("src/").unwrap());
+        new_path.push(path);
 
         fs::write(&new_path, binary.as_binary_u8())?;
 

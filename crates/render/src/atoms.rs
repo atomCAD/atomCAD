@@ -1,4 +1,6 @@
-use crate::{bind_groups::BindGroupLayouts, elements::Element, utils::AsBytes};
+use crate::{bind_groups::BindGroupLayouts};
+use periodic_table::Element;
+use common::AsBytes;
 use std::mem;
 use ultraviolet::Vec3;
 
@@ -29,7 +31,7 @@ pub struct AtomRepr {
     pub kind: AtomKind,
 }
 
-const_assert_eq!(mem::size_of::<AtomRepr>(), 16);
+static_assertions::const_assert_eq!(mem::size_of::<AtomRepr>(), 16);
 unsafe impl AsBytes for AtomRepr {}
 
 pub struct Atoms {

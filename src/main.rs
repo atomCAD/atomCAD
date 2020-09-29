@@ -1,43 +1,29 @@
-#[macro_use]
-extern crate static_assertions;
+use crate::camera::ArcballCamera;
+use render::{Renderer, Parts};
+use common::InputEvent;
 
-mod atoms;
-mod bind_groups;
-mod camera;
-mod elements;
-mod parts;
-mod utils;
-mod render;
-
-// use crate::elements::Element;
-use crate::{
-    bind_groups::{AsBindingResource as _, BindGroupLayouts},
-    elements::Element,
-    utils::AsBytes as _,
-    render::Renderer,
-};
-
-use std::{convert::TryInto as _, iter, mem};
-use wgpu::util::DeviceExt as _;
 use winit::{
-    event::{DeviceEvent, Event, WindowEvent},
+    event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
 
-pub enum InputEvent<'a> {
-    Window(WindowEvent<'a>),
-    Device(DeviceEvent),
-}
+mod camera;
 
-async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::TextureFormat) {
-    let (device, mut renderer) = Renderer::new(&window, swapchain_format).await;
+async fn run(event_loop: EventLoop<()>, window: Window) {
+    let (device, mut renderer) = Renderer::new(&window).await;
 
-    let parts =
-        parts::Part::load_from_pdb(&device, &renderer.bind_group_layouts(), "Neon Pump", "data/neon_pump_imm.pdb")
-        .map(|parts| parts.into_iter().collect()).unwrap();
-    
-    
+    renderer.set_camera(ArcballCamera::new(
+        100.0,
+        1.0,
+    ));
+
+    let parts = Parts::load_from_pdb(
+        &device,
+        &renderer.bind_group_layouts(),
+        "Neon Pump",
+        "data/neon_pump_imm.pdb"
+    ).unwrap();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -49,7 +35,6 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                 renderer.resize(new_size);
             }
             Event::MainEventsCleared => {
-                renderer.prepare_for_frame();
                 renderer.render(&parts);
             }
             Event::WindowEvent {
@@ -74,7 +59,7 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         subscriber::initialize_default_subscriber(None);
-        futures::executor::block_on(run(event_loop, window, wgpu::TextureFormat::Bgra8UnormSrgb));
+        futures::executor::block_on(run(event_loop, window));
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -90,6 +75,6 @@ fn main() {
                     .ok()
             })
             .expect("couldn't append canvas to document body");
-        wasm_bindgen_futures::spawn_local(run(event_loop, window, wgpu::TextureFormat::Bgra8Unorm));
+        wasm_bindgen_futures::spawn_local(run(event_loop, window));
     }
 }

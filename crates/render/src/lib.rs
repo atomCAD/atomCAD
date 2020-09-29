@@ -1,20 +1,28 @@
-use crate::{
-    bind_groups::{BindGroupLayouts, AsBindingResource as _},
-    elements::Element,
+pub use crate::{
     parts::Parts,
-    utils::AsBytes as _,
-    camera::Camera,
+    camera::{RenderCamera, Camera, CameraRepr},
 };
+use crate::bind_groups::{BindGroupLayouts, AsBindingResource as _};
+use common::AsBytes as _;
+use periodic_table::Element;
 use std::{
     mem,
     sync::Arc,
     convert::TryInto as _,
 };
 use wgpu::util::DeviceExt as _;
+use wgpu_conveyor::{AutomatedBufferManager, AutomatedBuffer, UploadStyle};
 use winit::{
     window::Window,
     dpi::PhysicalSize,
 };
+use ultraviolet::Mat4;
+
+mod bind_groups;
+mod atoms;
+mod camera;
+mod parts;
+mod utils;
 
 macro_rules! include_spirv {
     ($name:literal) => {
@@ -22,15 +30,27 @@ macro_rules! include_spirv {
     };
 }
 
+const SWAPCHAIN_FORMAT: wgpu::TextureFormat =
+    if cfg!(target_arch = "wasm32") {
+        wgpu::TextureFormat::Bgra8Unorm
+    } else {
+        wgpu::TextureFormat::Bgra8UnormSrgb
+    };
+
 pub struct Renderer {
     swap_chain_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     surface: wgpu::Surface,
+
+    size: PhysicalSize<u32>,
+
     device: Arc<wgpu::Device>,
     queue: wgpu::Queue,
+    buffer_mananger: AutomatedBufferManager,
 
     atom_pipeline_layout: wgpu::PipelineLayout,
     atom_render_pipeline: wgpu::RenderPipeline,
+    atom_transform_buffer: AutomatedBuffer,
 
     atom_vert_shader: wgpu::ShaderModule,
     atom_frag_shader: wgpu::ShaderModule,
@@ -41,11 +61,11 @@ pub struct Renderer {
 
     shader_runtime_config_buffer: wgpu::Buffer,
     global_bg: wgpu::BindGroup,
-    camera: Camera,
+    camera: RenderCamera,
 }
 
 impl Renderer {
-    pub async fn new(window: &Window, swapchain_format: wgpu::TextureFormat) -> (Arc<wgpu::Device>, Self) {
+    pub async fn new(window: &Window) -> (Arc<wgpu::Device>, Self) {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
@@ -70,10 +90,12 @@ impl Renderer {
             .await
             .expect("failed to create device");
         let device = Arc::new(device);
+
+        let mut buffer_mananger = AutomatedBufferManager::new(UploadStyle::Staging);
             
         let bgl = BindGroupLayouts::create(&device);
 
-        let camera = Camera::new(&device, size, 0.7, 0.1);
+        let camera = RenderCamera::new(&device, size, 0.7, 0.1);
 
         let shader_runtime_config_buffer =
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -125,7 +147,7 @@ impl Renderer {
             }),
             rasterization_state: None, // this might not be right
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[swapchain_format.into()],
+            color_states: &[SWAPCHAIN_FORMAT.into()],
             depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: true,
@@ -151,9 +173,12 @@ impl Renderer {
             alpha_to_coverage_enabled: false,
         });
 
+        let atom_transform_buffer =
+            buffer_mananger.create_new_buffer(&device, 0, wgpu::BufferUsage::VERTEX, None::<&str>);
+
         let swap_chain_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            format: swapchain_format,
+            format: SWAPCHAIN_FORMAT,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Mailbox,
@@ -183,11 +208,16 @@ impl Renderer {
                 swap_chain_desc,
                 swap_chain,
                 surface,
+
+                size,
+
                 device,
                 queue,
+                buffer_mananger,
 
                 atom_pipeline_layout,
                 atom_render_pipeline,
+                atom_transform_buffer,
 
                 atom_vert_shader,
                 atom_frag_shader,
@@ -204,6 +234,7 @@ impl Renderer {
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.size = new_size;
         self.swap_chain_desc.width = new_size.width;
         self.swap_chain_desc.height = new_size.height;
 
@@ -228,18 +259,37 @@ impl Renderer {
         self.camera.resize(new_size);
     }
 
-    pub fn prepare_for_frame(&mut self) {
-        self.camera.upload(&self.queue);
+    /// TODO: Upload any new transforms or transforms that changed
+    pub fn upload_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, parts: &Parts) {
+        // let transform_count: usize = parts
+        //     .iter()
+        //     .map(|part| part.fragments().len() * mem::size_of::<Mat4>())
+        //     .sum();
 
-        // TODO: Upload all transformation matricies (maybe quats + offset in the future)?
-        // Should I instead only send up a patch and have a compute shader rewrite the
-        // correct matrices?
+        // self.atom_transform_buffer.write_to_buffer(
+        //     &self.device,
+        //     encoder,
+        //     transform_count as u64,
+        //     |buffer| {
+        //         for part in parts.iter() {
+        //             let part_transform = todo!();
+        //             let fragment_transform = todo!();
+        //         }
+        //     },
+        // );
     }
 
-    pub fn render(&self, parts: &Parts) {
+    pub fn render(&mut self, parts: &Parts) {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: None,
         });
+
+        if !self.camera.upload(&self.queue) {
+            // no camera is set, so no reason to do rendering.
+            return;
+        }
+
+        self.upload_transforms(&mut encoder, parts);
 
         let frame = self.swap_chain.get_current_frame().map(|mut frame| {
             if frame.suboptimal {
@@ -282,7 +332,7 @@ impl Renderer {
             rpass.set_pipeline(&self.atom_render_pipeline);
             rpass.set_bind_group(0, &self.global_bg, &[]);
 
-            for part in parts.parts() {
+            for part in parts.iter() {
                 // TODO: set vertex buffer to the right matrixes.
 
                 for fragment in part.fragments() {
@@ -296,7 +346,12 @@ impl Renderer {
 
     }
 
-    pub fn camera(&mut self) -> &mut Camera {
+    /// Immediately calls resize on the supplied camera.
+    pub fn set_camera<C: Camera + 'static>(&mut self, camera: C) {
+        self.camera.set_camera(camera, self.size);
+    }
+
+    pub fn camera(&mut self) -> &mut RenderCamera {
         &mut self.camera
     }
 
