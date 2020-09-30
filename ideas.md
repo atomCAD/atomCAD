@@ -9,8 +9,10 @@
 - [ ] Try batching many parts/fragments into a single buffer + bind group.
 - [ ] Use a compute shader to efficiently patch the transform 'vertex' buffer.
     - Should all modified transforms be sorted into contiguous memory?
-- [ ] Move `BindGroupLayouts` to `Renderer` with helper function.
-- [ ] Split into a `render` crate?
+- [x] Move `BindGroupLayouts` to `Renderer` with helper function.
+- [x] Split into a `render` crate?
+- [ ] Make parts "world" and allow importing smaller part collections.
+- [ ] Should parts and fragments be in an ecs?
 
 ## Future
 - If we run out of gpu memory, try downloading everything to RAM or disk and re-uploading to defragment.

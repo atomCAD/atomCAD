@@ -1,7 +1,8 @@
 use crate::bind_groups::{AsBindingResource as _, BindGroupLayouts};
 pub use crate::{
+    atoms::{AtomKind, AtomRepr},
     camera::{Camera, CameraRepr, RenderCamera},
-    parts::Parts,
+    world::{Fragment, FragmentId, Part, PartId, World},
 };
 use common::AsBytes as _;
 use periodic_table::Element;
@@ -13,8 +14,8 @@ use winit::{dpi::PhysicalSize, window::Window};
 mod atoms;
 mod bind_groups;
 mod camera;
-mod parts;
 mod utils;
+mod world;
 
 macro_rules! include_spirv {
     ($name:literal) => {
@@ -28,15 +29,19 @@ const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
     wgpu::TextureFormat::Bgra8UnormSrgb
 };
 
+struct SharedRenderState {
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
+    pub(crate) bgl: BindGroupLayouts,
+}
+
 pub struct Renderer {
     swap_chain_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     surface: wgpu::Surface,
-
+    shared: Arc<SharedRenderState>,
     size: PhysicalSize<u32>,
 
-    device: Arc<wgpu::Device>,
-    queue: wgpu::Queue,
     buffer_mananger: AutomatedBufferManager,
 
     atom_pipeline_layout: wgpu::PipelineLayout,
@@ -46,8 +51,6 @@ pub struct Renderer {
     atom_vert_shader: wgpu::ShaderModule,
     atom_frag_shader: wgpu::ShaderModule,
 
-    bgl: BindGroupLayouts,
-
     depth_texture: wgpu::TextureView,
 
     shader_runtime_config_buffer: wgpu::Buffer,
@@ -56,7 +59,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(window: &Window) -> (Arc<wgpu::Device>, Self) {
+    pub async fn new(window: &Window) -> (Self, World) {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
@@ -80,7 +83,7 @@ impl Renderer {
             )
             .await
             .expect("failed to create device");
-        let device = Arc::new(device);
+        let device = device;
 
         let mut buffer_mananger = AutomatedBufferManager::new(UploadStyle::Staging);
 
@@ -193,17 +196,18 @@ impl Renderer {
             })
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        let shared = Arc::new(SharedRenderState { device, queue, bgl });
+
+        let world = World::new(Arc::clone(&shared));
+
         (
-            Arc::clone(&device),
             Self {
                 swap_chain_desc,
                 swap_chain,
                 surface,
-
+                shared,
                 size,
 
-                device,
-                queue,
                 buffer_mananger,
 
                 atom_pipeline_layout,
@@ -213,14 +217,13 @@ impl Renderer {
                 atom_vert_shader,
                 atom_frag_shader,
 
-                bgl,
-
                 depth_texture,
 
                 shader_runtime_config_buffer,
                 global_bg,
                 camera,
             },
+            world,
         )
     }
 
@@ -230,10 +233,12 @@ impl Renderer {
         self.swap_chain_desc.height = new_size.height;
 
         self.swap_chain = self
+            .shared
             .device
             .create_swap_chain(&self.surface, &self.swap_chain_desc);
 
         self.depth_texture = self
+            .shared
             .device
             .create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -254,7 +259,7 @@ impl Renderer {
     }
 
     /// TODO: Upload any new transforms or transforms that changed
-    pub fn upload_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, parts: &Parts) {
+    pub fn upload_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &World) {
         // let transform_count: usize = parts
         //     .iter()
         //     .map(|part| part.fragments().len() * mem::size_of::<Mat4>())
@@ -273,17 +278,18 @@ impl Renderer {
         // );
     }
 
-    pub fn render(&mut self, parts: &Parts) {
+    pub fn render(&mut self, world: &World) {
         let mut encoder = self
+            .shared
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        if !self.camera.upload(&self.queue) {
+        if !self.camera.upload(&self.shared.queue) {
             // no camera is set, so no reason to do rendering.
             return;
         }
 
-        self.upload_transforms(&mut encoder, parts);
+        self.upload_transforms(&mut encoder, world);
 
         let frame = self
             .swap_chain
@@ -331,17 +337,15 @@ impl Renderer {
             rpass.set_pipeline(&self.atom_render_pipeline);
             rpass.set_bind_group(0, &self.global_bg, &[]);
 
-            for part in parts.iter() {
-                // TODO: set vertex buffer to the right matrixes.
+            for fragment in world.fragments() {
+                // TODO: set vertex buffer to the right matrices.
 
-                for fragment in part.fragments() {
-                    rpass.set_bind_group(1, &fragment.atoms().bind_group(), &[]);
-                    rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)
-                }
+                rpass.set_bind_group(1, &fragment.atoms().bind_group(), &[]);
+                rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)
             }
         }
 
-        self.queue.submit(Some(encoder.finish()));
+        self.shared.queue.submit(Some(encoder.finish()));
     }
 
     /// Immediately calls resize on the supplied camera.
@@ -351,9 +355,5 @@ impl Renderer {
 
     pub fn camera(&mut self) -> &mut RenderCamera {
         &mut self.camera
-    }
-
-    pub fn bind_group_layouts(&self) -> &BindGroupLayouts {
-        &self.bgl
     }
 }

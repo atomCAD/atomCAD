@@ -89,7 +89,8 @@ void main(void) {
         1.0
     );
 
-    position_clip_space = camera.projection_view * part_fragment_transform * position_worldspace;
+    // position_clip_space = camera.projection_view * part_fragment_transform * position_worldspace;
+    position_clip_space = camera.projection_view * position_worldspace;
     uv = vertex;
     // sphere_radius = element.radius;
     gl_Position = position_clip_space;

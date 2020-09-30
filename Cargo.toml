@@ -19,11 +19,15 @@ path = "crates/render/"
 [dependencies.common]
 package = "atomcad-common"
 path = "crates/common/"
+[dependencies.periodic-table]
+package = "atomcad-periodic-table"
+path = "crates/periodic-table"
 
 [dependencies]
 futures = "0.3.5"
 ultraviolet = "0.7.0"
 log = "0.4.11"
+lib3dmol = "0.3.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 winit = "0.22.2"

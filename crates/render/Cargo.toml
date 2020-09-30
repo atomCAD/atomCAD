@@ -21,10 +21,9 @@ wgpu-conveyor = "0.1.0"
 futures = "0.3.5"
 ultraviolet = "0.7.0"
 static_assertions = "1"
-rand = "0.7.3"
 log = "0.4.11"
-lib3dmol = "0.3.2"
 winit = "0.22.2"
+indexmap = "1.6"
 
 [build-dependencies]
 shaderc = "0.6.2"
