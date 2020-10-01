@@ -5,10 +5,16 @@ pub use crate::{
     world::{Fragment, FragmentId, Part, PartId, World},
 };
 use common::AsBytes as _;
+use parking_lot::Mutex;
 use periodic_table::Element;
-use std::{convert::TryInto as _, mem, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto as _,
+    iter::FromIterator,
+    mem,
+    sync::Arc,
+};
 use wgpu::util::DeviceExt as _;
-use wgpu_conveyor::{AutomatedBuffer, AutomatedBufferManager, UploadStyle};
 use winit::{dpi::PhysicalSize, window::Window};
 
 mod atoms;
@@ -16,6 +22,7 @@ mod bind_groups;
 mod camera;
 mod utils;
 mod world;
+// mod gpu_vec;
 
 macro_rules! include_spirv {
     ($name:literal) => {
@@ -33,6 +40,7 @@ struct SharedRenderState {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) bgl: BindGroupLayouts,
+    // pub(crate) staging_belt: Arc<Mutex<wgpu::util::StagingBelt>>,
 }
 
 pub struct Renderer {
@@ -42,12 +50,9 @@ pub struct Renderer {
     shared: Arc<SharedRenderState>,
     size: PhysicalSize<u32>,
 
-    buffer_mananger: AutomatedBufferManager,
-
     atom_pipeline_layout: wgpu::PipelineLayout,
     atom_render_pipeline: wgpu::RenderPipeline,
-    atom_transform_buffer: AutomatedBuffer,
-
+    // atom_transform_buffer: GpuVec<ultraviolet::Mat4>,
     atom_vert_shader: wgpu::ShaderModule,
     atom_frag_shader: wgpu::ShaderModule,
 
@@ -56,6 +61,7 @@ pub struct Renderer {
     shader_runtime_config_buffer: wgpu::Buffer,
     global_bg: wgpu::BindGroup,
     camera: RenderCamera,
+    // fragment_id_to_transform_index: HashMap<FragmentId, usize>,
 }
 
 impl Renderer {
@@ -84,8 +90,6 @@ impl Renderer {
             .await
             .expect("failed to create device");
         let device = device;
-
-        let mut buffer_mananger = AutomatedBufferManager::new(UploadStyle::Staging);
 
         let bgl = BindGroupLayouts::create(&device);
 
@@ -167,9 +171,6 @@ impl Renderer {
             alpha_to_coverage_enabled: false,
         });
 
-        let atom_transform_buffer =
-            buffer_mananger.create_new_buffer(&device, 0, wgpu::BufferUsage::VERTEX, None::<&str>);
-
         let swap_chain_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             format: SWAPCHAIN_FORMAT,
@@ -208,12 +209,9 @@ impl Renderer {
                 shared,
                 size,
 
-                buffer_mananger,
-
                 atom_pipeline_layout,
                 atom_render_pipeline,
-                atom_transform_buffer,
-
+                // atom_transform_buffer,
                 atom_vert_shader,
                 atom_frag_shader,
 
@@ -222,6 +220,7 @@ impl Renderer {
                 shader_runtime_config_buffer,
                 global_bg,
                 camera,
+                // fragment_id_to_transform_index: HashMap::new(),
             },
             world,
         )
@@ -258,27 +257,53 @@ impl Renderer {
         self.camera.resize(new_size);
     }
 
-    /// TODO: Upload any new transforms or transforms that changed
-    pub fn upload_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &World) {
-        // let transform_count: usize = parts
-        //     .iter()
-        //     .map(|part| part.fragments().len() * mem::size_of::<Mat4>())
-        //     .sum();
-
-        // self.atom_transform_buffer.write_to_buffer(
-        //     &self.device,
-        //     encoder,
-        //     transform_count as u64,
-        //     |buffer| {
-        //         for part in parts.iter() {
-        //             let part_transform = todo!();
-        //             let fragment_transform = todo!();
-        //         }
-        //     },
-        // );
+    pub fn upload_new_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
+        if world.added_parts.len() + world.added_fragments.len() == 0 {
+            return;
+        }
     }
 
-    pub fn render(&mut self, world: &World) {
+    /// TODO: Upload any new transforms or transforms that changed
+    // pub fn update_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
+    //     if world.added_fragments.len() + world.added_parts.len() == 0
+    //         && world.modified_fragments.len() + world.modified_parts.len() == 0
+    //     {
+    //         // no work to be done
+    //         return;
+    //     }
+
+    //     let mut dedup_fragments: HashSet<FragmentId> = HashSet::from_iter(world.modified_fragments.drain(..));
+
+    //     for part_id in world.modified_parts.drain(..) {
+    //         dedup_fragments.extend(world.parts[&part_id].fragments());
+    //     }
+
+    //     // tune this number
+    //     if dedup_fragments.len() <= 1 {
+
+    //     } else {
+
+    //     }
+
+    //     // let transform_count: usize = parts
+    //     //     .iter()
+    //     //     .map(|part| part.fragments().len() * mem::size_of::<Mat4>())
+    //     //     .sum();
+
+    //     // self.atom_transform_buffer.write_to_buffer(
+    //     //     &self.device,
+    //     //     encoder,
+    //     //     transform_count as u64,
+    //     //     |buffer| {
+    //     //         for part in parts.iter() {
+    //     //             let part_transform = todo!();
+    //     //             let fragment_transform = todo!();
+    //     //         }
+    //     //     },
+    //     // );
+    // }
+
+    pub fn render(&mut self, world: &mut World) {
         let mut encoder = self
             .shared
             .device
@@ -289,7 +314,8 @@ impl Renderer {
             return;
         }
 
-        self.upload_transforms(&mut encoder, world);
+        self.upload_new_transforms(&mut encoder, world);
+        // self.update_transforms(&mut encoder, world);
 
         let frame = self
             .swap_chain

@@ -16,10 +16,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     renderer.set_camera(ArcballCamera::new(100.0, 1.0));
 
-    let pdb = pdb::load_from_pdb(&mut world, "Neon Pump", "data/neon_pump_imm.pdb")
+    pdb::load_from_pdb(&mut world, "Neon Pump", "data/neon_pump_imm.pdb")
         .expect("failed to load pdb");
-
-    world.consume(pdb);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -31,7 +29,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 renderer.resize(new_size);
             }
             Event::MainEventsCleared => {
-                renderer.render(&world);
+                renderer.render(&mut world);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

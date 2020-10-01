@@ -17,13 +17,13 @@ path = "../periodic-table"
 
 [dependencies]
 wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git" }
-wgpu-conveyor = "0.1.0"
 futures = "0.3.5"
 ultraviolet = "0.7.0"
 static_assertions = "1"
 log = "0.4.11"
 winit = "0.22.2"
 indexmap = "1.6"
+parking_lot =  "0.11"
 
 [build-dependencies]
 shaderc = "0.6.2"

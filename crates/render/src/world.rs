@@ -146,36 +146,47 @@ impl Part {
 /// Represents all the parts and fragments currently alive in a scene.
 pub struct World {
     pub(crate) shared_render: Arc<SharedRenderState>,
-    parts: IndexMap<PartId, Part>,
-    fragments: IndexMap<FragmentId, Fragment>,
+
+    pub(crate) parts: IndexMap<PartId, Part>,
+    pub(crate) fragments: IndexMap<FragmentId, Fragment>,
+
+    // These are updated and cleared every frame.
+    pub(crate) added_parts: Vec<PartId>,
+    pub(crate) added_fragments: Vec<FragmentId>,
+    pub(crate) modified_parts: Vec<PartId>,
+    pub(crate) modified_fragments: Vec<FragmentId>,
 }
 
 impl World {
     pub(crate) fn new(shared_render: Arc<SharedRenderState>) -> Self {
         Self {
             shared_render,
+
             parts: IndexMap::new(),
             fragments: IndexMap::new(),
+
+            added_parts: Vec::new(),
+            added_fragments: Vec::new(),
+            modified_parts: Vec::new(),
+            modified_fragments: Vec::new(),
         }
     }
 
-    pub fn new_empty(&self) -> Self {
-        Self {
-            shared_render: Arc::clone(&self.shared_render),
-            parts: IndexMap::new(),
-            fragments: IndexMap::new(),
-        }
-    }
+    // pub fn split_empty(&self) -> Self {
+    //     Self::new(Arc::clone(&self.shared_render))
+    // }
 
     pub fn spawn_part(&mut self, part: Part) -> PartId {
         let id = PartId::new();
         self.parts.insert(id, part);
+        self.added_parts.push(id);
         id
     }
 
     pub fn spawn_fragment(&mut self, fragment: Fragment) -> FragmentId {
         let id = FragmentId::new();
         self.fragments.insert(id, fragment);
+        self.added_fragments.push(id);
         id
     }
 
@@ -188,6 +199,7 @@ impl World {
         let ids = PartId::new_many(parts.len());
 
         self.parts.extend(ids.clone().zip(parts));
+        self.added_parts.extend(ids.clone());
         ids
     }
 
@@ -203,13 +215,14 @@ impl World {
         let ids = FragmentId::new_many(fragments.len());
 
         self.fragments.extend(ids.clone().zip(fragments));
+        self.added_fragments.extend(ids.clone());
         ids
     }
 
-    pub fn consume(&mut self, other: World) {
-        self.parts.extend(other.parts);
-        self.fragments.extend(other.fragments);
-    }
+    // pub fn consume(&mut self, other: World) {
+    //     self.parts.extend(other.parts);
+    //     self.fragments.extend(other.fragments);
+    // }
 
     pub fn fragments(&self) -> impl Iterator<Item = &Fragment> {
         self.fragments.values()
