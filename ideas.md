@@ -13,6 +13,8 @@
 - [x] Split into a `render` crate?
 - [ ] Make parts "world" and allow importing smaller part collections.
 - [ ] Should parts and fragments be in an ecs?
+- [ ] Add orientation cube like [this](https://cad.onshape.com/help/Content/Resources/Images/tutorial/viewcube.png).
+    - Should this be geometry or a fancy shader (combination?)
 
 ## Future
 - If we run out of gpu memory, try downloading everything to RAM or disk and re-uploading to defragment.
