@@ -29,7 +29,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     .expect("failed to load pdb");
 
     // for part in loaded_pdb.parts_mut() {
-    //     part.move_to(ultraviolet::Vec3::new(0.0, 0.0, 0.0));
+    //     part.move_to(ultraviolet::Vec3::new(0.0, 0.0, 10.0));
     // }
 
     world.merge(loaded_pdb);

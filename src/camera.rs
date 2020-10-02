@@ -90,7 +90,7 @@ impl Camera for ArcballCamera {
             InputEvent::Device(event) => match event {
                 DeviceEvent::MouseMotion { delta: (x, y) } => {
                     if self.mouse_button_pressed {
-                        self.add_yaw(-x as f32 / 200.0);
+                        self.add_yaw(x as f32 / 200.0);
                         self.add_pitch(y as f32 / 200.0);
                         true
                     } else {
@@ -106,12 +106,12 @@ impl Camera for ArcballCamera {
         let eye = self.distance
             * Vec3::new(
                 self.yaw.sin() * self.pitch.cos(),
-                self.pitch.sin(),
                 self.yaw.cos() * self.pitch.cos(),
+                self.pitch.sin(),
             );
 
         // let eye = self.rotor * (self.distance * Vec3::unit_z());
-        self.camera.view = Mat4::look_at(eye, Vec3::zero(), Vec3::unit_y());
+        self.camera.view = Mat4::look_at(eye, Vec3::zero(), Vec3::unit_z());
         self.camera.projection_view = self.camera.projection * self.camera.view;
     }
 
