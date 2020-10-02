@@ -18,8 +18,15 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let mut world = World::new();
 
-    let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
-        .expect("failed to load pdb");
+    // let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
+    //     .expect("failed to load pdb");
+
+    let loaded_pdb = pdb::load_from_pdb(
+        &gpu_resources,
+        "Carbon Nanotube and DNA",
+        "data/nanotube_and_dna.pdb",
+    )
+    .expect("failed to load pdb");
 
     // for part in loaded_pdb.parts_mut() {
     //     part.move_to(ultraviolet::Vec3::new(0.0, 0.0, 0.0));

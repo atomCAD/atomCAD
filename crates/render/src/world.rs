@@ -13,16 +13,11 @@ macro_rules! declare_id {
         pub struct $id_name(usize);
 
         impl $id_name {
-            const COUNTER: AtomicUsize = AtomicUsize::new(1);
-
             pub fn new() -> Self {
-                let id = Self::COUNTER.fetch_add(1, Ordering::Relaxed);
-                Self(id)
-            }
+                static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
-            pub fn new_many(count: usize) -> impl ExactSizeIterator<Item = Self> + Clone {
-                let first_id = Self::COUNTER.fetch_add(count, Ordering::Relaxed);
-                (first_id..(first_id + count)).map(|id| Self(id))
+                let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+                Self(id)
             }
         }
     };
@@ -216,7 +211,7 @@ impl World {
 
     pub fn spawn_part(&mut self, part: Part) -> PartId {
         let id = part.id;
-        self.parts.insert(id, part);
+        assert!(self.parts.insert(id, part).is_none());
         self.added_parts.push(id);
         id
     }

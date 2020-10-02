@@ -25,12 +25,10 @@ pub fn load_from_pdb<P: AsRef<Path>>(
         .chains
         .into_iter()
         .map(|chain| {
-            println!("chain name: {}", chain.name);
             let fragments: Vec<_> = chain
                 .lst_res
                 .iter()
                 .map(|residue| {
-                    println!("residue name: {}", residue.name);
                     let atoms = residue.get_atom();
                     let atoms = atoms.iter().map(|atom| {
                         let element = atom_type_to_element(&atom.a_type);
@@ -49,6 +47,8 @@ pub fn load_from_pdb<P: AsRef<Path>>(
             world.spawn_part(part);
         })
         .for_each(|_| {});
+
+    log::info!("loaded {} parts", world.parts().count());
 
     Ok(world)
 }

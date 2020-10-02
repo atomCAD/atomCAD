@@ -306,7 +306,7 @@ impl Renderer {
         );
     }
 
-    /// TODO: Upload any new transforms or transforms that changed
+    /// TODO: Re-upload any transforms that have changed
     // pub fn update_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
     //     if world.added_fragments.len() + world.added_parts.len() == 0
     //         && world.modified_fragments.len() + world.modified_parts.len() == 0
@@ -353,6 +353,7 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         if !self.camera.upload(&self.gpu_resources.queue) {
+            log::warn!("no camera is set");
             // no camera is set, so no reason to do rendering.
             return;
         }
@@ -408,6 +409,7 @@ impl Renderer {
 
             let transform_buffer = self.fragment_transforms.inner_buffer();
 
+            // TODO: This should probably be multithreaded.
             for fragment in world.fragments() {
                 // TODO: set vertex buffer to the right matrices.
                 let transform_offset = self.fragment_to_transform[&fragment.id()];
