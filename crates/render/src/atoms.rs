@@ -1,4 +1,4 @@
-use crate::World;
+use crate::GlobalGpuResources;
 use common::AsBytes;
 use periodic_table::Element;
 use std::mem;
@@ -41,7 +41,7 @@ pub struct Atoms {
 }
 
 impl Atoms {
-    pub fn new<I>(world: &World, iter: I) -> Self
+    pub fn new<I>(gpu_resources: &GlobalGpuResources, iter: I) -> Self
     where
         I: IntoIterator<Item = AtomRepr>,
         I::IntoIter: ExactSizeIterator,
@@ -51,15 +51,12 @@ impl Atoms {
 
         assert!(number_of_atoms > 0, "must have at least one atom");
 
-        let buffer = world
-            .shared_render
-            .device
-            .create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: (number_of_atoms * mem::size_of::<AtomRepr>()) as u64,
-                usage: wgpu::BufferUsage::STORAGE,
-                mapped_at_creation: true,
-            });
+        let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: (number_of_atoms * mem::size_of::<AtomRepr>()) as u64,
+            usage: wgpu::BufferUsage::STORAGE,
+            mapped_at_creation: true,
+        });
 
         {
             let mut buffer_view = buffer.slice(..).get_mapped_range_mut();
@@ -72,12 +69,11 @@ impl Atoms {
         }
         buffer.unmap();
 
-        let bind_group = world
-            .shared_render
+        let bind_group = gpu_resources
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
-                layout: &world.shared_render.bgl.atoms,
+                layout: &gpu_resources.bgl.atoms,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer {

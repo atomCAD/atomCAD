@@ -36,7 +36,7 @@ const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
     wgpu::TextureFormat::Bgra8UnormSrgb
 };
 
-struct SharedRenderState {
+pub struct GlobalGpuResources {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) bgl: BindGroupLayouts,
@@ -47,7 +47,7 @@ pub struct Renderer {
     swap_chain_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     surface: wgpu::Surface,
-    shared: Arc<SharedRenderState>,
+    gpu_resources: Arc<GlobalGpuResources>,
     size: PhysicalSize<u32>,
 
     atom_pipeline_layout: wgpu::PipelineLayout,
@@ -65,7 +65,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(window: &Window) -> (Self, World) {
+    pub async fn new(window: &Window) -> (Self, Arc<GlobalGpuResources>) {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
@@ -197,16 +197,14 @@ impl Renderer {
             })
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let shared = Arc::new(SharedRenderState { device, queue, bgl });
-
-        let world = World::new(Arc::clone(&shared));
+        let gpu_resources = Arc::new(GlobalGpuResources { device, queue, bgl });
 
         (
             Self {
                 swap_chain_desc,
                 swap_chain,
                 surface,
-                shared,
+                gpu_resources: Arc::clone(&gpu_resources),
                 size,
 
                 atom_pipeline_layout,
@@ -222,7 +220,7 @@ impl Renderer {
                 camera,
                 // fragment_id_to_transform_index: HashMap::new(),
             },
-            world,
+            gpu_resources,
         )
     }
 
@@ -232,12 +230,12 @@ impl Renderer {
         self.swap_chain_desc.height = new_size.height;
 
         self.swap_chain = self
-            .shared
+            .gpu_resources
             .device
             .create_swap_chain(&self.surface, &self.swap_chain_desc);
 
         self.depth_texture = self
-            .shared
+            .gpu_resources
             .device
             .create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -305,11 +303,11 @@ impl Renderer {
 
     pub fn render(&mut self, world: &mut World) {
         let mut encoder = self
-            .shared
+            .gpu_resources
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        if !self.camera.upload(&self.shared.queue) {
+        if !self.camera.upload(&self.gpu_resources.queue) {
             // no camera is set, so no reason to do rendering.
             return;
         }
@@ -371,7 +369,7 @@ impl Renderer {
             }
         }
 
-        self.shared.queue.submit(Some(encoder.finish()));
+        self.gpu_resources.queue.submit(Some(encoder.finish()));
     }
 
     /// Immediately calls resize on the supplied camera.

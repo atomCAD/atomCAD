@@ -3,21 +3,23 @@ use lib3dmol::{
     structures::{atom::AtomType, GetAtom as _},
 };
 use periodic_table::Element;
-use render::{AtomKind, AtomRepr, Fragment, Part, PartId, World};
+use render::{AtomKind, AtomRepr, Fragment, GlobalGpuResources, Part, World};
 use std::path::Path;
 
 // TODO: Better result error type.
 pub fn load_from_pdb<P: AsRef<Path>>(
-    world: &mut World,
+    gpu_resources: &GlobalGpuResources,
     name: &str,
     path: P,
-) -> Result<Vec<PartId>, String> {
+) -> Result<World, String> {
     let path = path.as_ref();
     if !path.exists() {
         return Err("path does not exist".to_string());
     }
 
     let structure = read_pdb(&*path.to_string_lossy(), name);
+
+    let mut world = World::new();
 
     let parts: Vec<Part> = structure
         .chains
@@ -37,15 +39,17 @@ pub fn load_from_pdb<P: AsRef<Path>>(
                         }
                     });
 
-                    Fragment::from_atoms(&world, atoms)
+                    Fragment::from_atoms(gpu_resources, atoms)
                 })
                 .collect();
 
-            Part::from_fragments(world, fragments)
+            Part::from_fragments(&mut world, fragments)
         })
         .collect();
 
-    Ok(world.spawn_part_batch(parts).collect())
+    world.spawn_part_batch(parts).for_each(|_| {});
+
+    Ok(world)
 }
 
 fn atom_type_to_element(atom_type: &AtomType) -> Element {

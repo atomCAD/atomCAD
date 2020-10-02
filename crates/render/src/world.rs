@@ -1,13 +1,10 @@
 use crate::{
     atoms::{AtomRepr, Atoms},
     utils::BoundingBox,
-    SharedRenderState,
+    GlobalGpuResources,
 };
 use indexmap::IndexMap;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ultraviolet::Vec3;
 
 macro_rules! declare_id {
@@ -46,7 +43,7 @@ pub struct Fragment {
 }
 
 impl Fragment {
-    pub fn from_atoms<I>(world: &World, atoms: I) -> Self
+    pub fn from_atoms<I>(gpu_resources: &GlobalGpuResources, atoms: I) -> Self
     where
         I: IntoIterator<Item = AtomRepr>,
         I::IntoIter: ExactSizeIterator,
@@ -56,7 +53,7 @@ impl Fragment {
         let mut min_point = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
         let atoms = Atoms::new(
-            world,
+            gpu_resources,
             atoms.into_iter().inspect(|atom| {
                 point_sum += atom.pos;
                 max_point.x = atom.pos.x.max(max_point.x);
@@ -145,8 +142,6 @@ impl Part {
 
 /// Represents all the parts and fragments currently alive in a scene.
 pub struct World {
-    pub(crate) shared_render: Arc<SharedRenderState>,
-
     pub(crate) parts: IndexMap<PartId, Part>,
     pub(crate) fragments: IndexMap<FragmentId, Fragment>,
 
@@ -158,10 +153,8 @@ pub struct World {
 }
 
 impl World {
-    pub(crate) fn new(shared_render: Arc<SharedRenderState>) -> Self {
+    pub fn new() -> Self {
         Self {
-            shared_render,
-
             parts: IndexMap::new(),
             fragments: IndexMap::new(),
 
@@ -219,10 +212,15 @@ impl World {
         ids
     }
 
-    // pub fn consume(&mut self, other: World) {
-    //     self.parts.extend(other.parts);
-    //     self.fragments.extend(other.fragments);
-    // }
+    pub fn merge(&mut self, other: World) {
+        self.parts.extend(other.parts);
+        self.fragments.extend(other.fragments);
+
+        self.added_parts.extend(other.added_parts);
+        self.added_fragments.extend(other.added_fragments);
+        self.modified_parts.extend(other.modified_parts);
+        self.modified_fragments.extend(other.modified_fragments);
+    }
 
     pub fn fragments(&self) -> impl Iterator<Item = &Fragment> {
         self.fragments.values()

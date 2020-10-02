@@ -1,6 +1,6 @@
 use crate::camera::ArcballCamera;
 use common::InputEvent;
-use render::Renderer;
+use render::{Renderer, World};
 
 use winit::{
     event::{Event, WindowEvent},
@@ -12,12 +12,16 @@ mod camera;
 mod pdb;
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
-    let (mut renderer, mut world) = Renderer::new(&window).await;
+    let (mut renderer, gpu_resources) = Renderer::new(&window).await;
 
     renderer.set_camera(ArcballCamera::new(100.0, 1.0));
 
-    pdb::load_from_pdb(&mut world, "Neon Pump", "data/neon_pump_imm.pdb")
+    let mut world = World::new();
+
+    let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
         .expect("failed to load pdb");
+
+    world.merge(loaded_pdb);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;

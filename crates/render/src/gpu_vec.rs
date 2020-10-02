@@ -25,5 +25,7 @@ impl<T: AsBytes> GpuVec<T> {
         }
     }
 
+    pub fn new_with_data(shared: &SharedRenderState)
+
     pub fn 
 }
