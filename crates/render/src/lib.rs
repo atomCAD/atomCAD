@@ -58,7 +58,7 @@ pub struct Renderer {
     camera: RenderCamera,
 
     fragment_transforms: BufferVec,
-    fragment_to_transform: HashMap<FragmentId, u64>,
+    per_fragment: HashMap<FragmentId, (PartId, u64 /* transform offset */)>,
 }
 
 impl Renderer {
@@ -219,7 +219,7 @@ impl Renderer {
                 camera,
 
                 fragment_transforms,
-                fragment_to_transform: HashMap::new(),
+                per_fragment: HashMap::new(),
             },
             gpu_resources,
         )
@@ -281,8 +281,8 @@ impl Renderer {
 
         let transforms: Vec<_> = added_fragments
             .map(|(part_id, fragment_id)| {
-                self.fragment_to_transform
-                    .insert(fragment_id, buffer_offset);
+                self.per_fragment
+                    .insert(fragment_id, (part_id, buffer_offset));
                 buffer_offset += mem::size_of::<ultraviolet::Mat4>() as u64;
 
                 let part = &parts[&part_id];
@@ -412,7 +412,7 @@ impl Renderer {
             // TODO: This should probably be multithreaded.
             for fragment in world.fragments() {
                 // TODO: set vertex buffer to the right matrices.
-                let transform_offset = self.fragment_to_transform[&fragment.id()];
+                let transform_offset = self.per_fragment[&fragment.id()].1;
                 rpass.set_vertex_buffer(
                     0,
                     transform_buffer.slice(

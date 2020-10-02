@@ -31,12 +31,10 @@ struct Atom {
     uint kind;
 };
 
-/*
- * Will this work? The alignment of vec3 in arrays with std430
- * is quite hazy.
- */
-layout(set = 1, binding = 1, std430) readonly buffer Points {
-    Atom atoms[];
+layout(set = 1, binding = 1, std430) readonly buffer Atoms {
+    uvec2 fragment_id; // high and low
+
+    Atom atoms[]; // this must be aligned to 16 bytes.
 };
 
 // struct Bivec {

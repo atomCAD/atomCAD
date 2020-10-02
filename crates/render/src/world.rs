@@ -3,18 +3,22 @@ use crate::{
     utils::BoundingBox,
     GlobalGpuResources,
 };
+use common::AsBytes;
 use indexmap::IndexMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use ultraviolet::{Rotor3, Vec3};
 
 macro_rules! declare_id {
     ($id_name:ident) => {
         #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
-        pub struct $id_name(usize);
+        #[repr(transparent)]
+        pub struct $id_name(u64);
+
+        unsafe impl AsBytes for $id_name {}
 
         impl $id_name {
             pub fn new() -> Self {
-                static COUNTER: AtomicUsize = AtomicUsize::new(1);
+                static COUNTER: AtomicU64 = AtomicU64::new(1);
 
                 let id = COUNTER.fetch_add(1, Ordering::Relaxed);
                 Self(id)
@@ -50,8 +54,11 @@ impl Fragment {
         let mut max_point = Vec3::new(-f32::INFINITY, -f32::INFINITY, -f32::INFINITY);
         let mut min_point = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
+        let fragment_id = FragmentId::new();
+
         let atoms = Atoms::new(
             gpu_resources,
+            fragment_id,
             atoms.into_iter().inspect(|atom| {
                 point_sum += atom.pos;
                 max_point.x = atom.pos.x.max(max_point.x);
@@ -70,7 +77,7 @@ impl Fragment {
         };
 
         Self {
-            id: FragmentId::new(),
+            id: fragment_id,
             atoms,
 
             bounding_box,

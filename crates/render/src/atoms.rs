@@ -1,4 +1,4 @@
-use crate::{buffer_vec::BufferVec, GlobalGpuResources};
+use crate::{buffer_vec::BufferVec, FragmentId, GlobalGpuResources, PartId};
 use common::AsBytes;
 use periodic_table::Element;
 use std::mem;
@@ -34,6 +34,16 @@ pub struct AtomRepr {
 static_assertions::const_assert_eq!(mem::size_of::<AtomRepr>(), 16);
 unsafe impl AsBytes for AtomRepr {}
 
+/// Essentially a per-fragment uniform.
+#[repr(C, align(16))]
+struct AtomBufferHeader {
+    fragment_id: FragmentId, // 64 bits
+}
+
+static_assertions::const_assert_eq!(mem::size_of::<FragmentId>(), 8);
+static_assertions::const_assert_eq!(mem::size_of::<AtomBufferHeader>(), 16);
+unsafe impl AsBytes for AtomBufferHeader {}
+
 pub struct Atoms {
     bind_group: wgpu::BindGroup,
     buffer: BufferVec,
@@ -41,7 +51,7 @@ pub struct Atoms {
 }
 
 impl Atoms {
-    pub fn new<I>(gpu_resources: &GlobalGpuResources, iter: I) -> Self
+    pub fn new<I>(gpu_resources: &GlobalGpuResources, fragment_id: FragmentId, iter: I) -> Self
     where
         I: IntoIterator<Item = AtomRepr>,
         I::IntoIter: ExactSizeIterator,
@@ -54,10 +64,14 @@ impl Atoms {
         let buffer = BufferVec::new_with_data(
             &gpu_resources.device,
             wgpu::BufferUsage::STORAGE,
-            (number_of_atoms * mem::size_of::<AtomRepr>()) as u64,
+            (mem::size_of::<AtomBufferHeader>() + number_of_atoms * mem::size_of::<AtomRepr>())
+                as u64,
             |buffer_view| {
-                buffer_view
-                    .chunks_exact_mut(mem::size_of::<AtomRepr>())
+                let (header, rest) = buffer_view.split_at_mut(mem::size_of::<AtomBufferHeader>());
+
+                header.copy_from_slice(AtomBufferHeader { fragment_id }.as_bytes());
+
+                rest.chunks_exact_mut(mem::size_of::<AtomRepr>())
                     .zip(atoms)
                     .for_each(|(chunk, atom)| {
                         chunk.copy_from_slice(atom.as_bytes());
