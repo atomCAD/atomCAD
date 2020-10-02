@@ -1,4 +1,4 @@
-use crate::GlobalGpuResources;
+use crate::{buffer_vec::BufferVec, GlobalGpuResources};
 use common::AsBytes;
 use periodic_table::Element;
 use std::mem;
@@ -36,7 +36,7 @@ unsafe impl AsBytes for AtomRepr {}
 
 pub struct Atoms {
     bind_group: wgpu::BindGroup,
-    buffer: wgpu::Buffer,
+    buffer: BufferVec,
     number_of_atoms: usize,
 }
 
@@ -51,23 +51,19 @@ impl Atoms {
 
         assert!(number_of_atoms > 0, "must have at least one atom");
 
-        let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: (number_of_atoms * mem::size_of::<AtomRepr>()) as u64,
-            usage: wgpu::BufferUsage::STORAGE,
-            mapped_at_creation: true,
-        });
-
-        {
-            let mut buffer_view = buffer.slice(..).get_mapped_range_mut();
-            buffer_view
-                .chunks_exact_mut(mem::size_of::<AtomRepr>())
-                .zip(atoms)
-                .for_each(|(chunk, atom)| {
-                    chunk.copy_from_slice(atom.as_bytes());
-                });
-        }
-        buffer.unmap();
+        let buffer = BufferVec::new_with_data(
+            &gpu_resources.device,
+            wgpu::BufferUsage::STORAGE,
+            (number_of_atoms * mem::size_of::<AtomRepr>()) as u64,
+            |buffer_view| {
+                buffer_view
+                    .chunks_exact_mut(mem::size_of::<AtomRepr>())
+                    .zip(atoms)
+                    .for_each(|(chunk, atom)| {
+                        chunk.copy_from_slice(atom.as_bytes());
+                    });
+            },
+        );
 
         let bind_group = gpu_resources
             .device
@@ -77,7 +73,7 @@ impl Atoms {
                 entries: &[wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer {
-                        buffer: &buffer,
+                        buffer: buffer.inner_buffer(),
                         offset: 0,
                         size: None,
                     },

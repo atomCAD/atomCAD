@@ -12,6 +12,27 @@ pub unsafe trait AsBytes {
     }
 }
 
+macro_rules! impl_as_bytes {
+    ($ty:ty) => {
+        unsafe impl AsBytes for $ty {}
+    };
+    ($($ty:ty),*) => {
+        $(
+            impl_as_bytes!($ty);
+        )*
+    };
+}
+
+impl_as_bytes!(
+    ultraviolet::Vec2,
+    ultraviolet::Vec3,
+    ultraviolet::Mat2,
+    ultraviolet::Mat3,
+    ultraviolet::Mat4,
+    ultraviolet::Rotor2,
+    ultraviolet::Rotor3
+);
+
 unsafe impl<T> AsBytes for [T]
 where
     T: AsBytes + Sized,

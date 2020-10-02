@@ -1,28 +1,24 @@
-use crate::bind_groups::{AsBindingResource as _, BindGroupLayouts};
 pub use crate::{
     atoms::{AtomKind, AtomRepr},
     camera::{Camera, CameraRepr, RenderCamera},
     world::{Fragment, FragmentId, Part, PartId, World},
 };
-use common::AsBytes as _;
-use parking_lot::Mutex;
-use periodic_table::Element;
-use std::{
-    collections::{HashMap, HashSet},
-    convert::TryInto as _,
-    iter::FromIterator,
-    mem,
-    sync::Arc,
+use crate::{
+    bind_groups::{AsBindingResource as _, BindGroupLayouts},
+    buffer_vec::BufferVec,
 };
+use common::AsBytes as _;
+use periodic_table::Element;
+use std::{collections::HashMap, convert::TryInto as _, mem, sync::Arc};
 use wgpu::util::DeviceExt as _;
 use winit::{dpi::PhysicalSize, window::Window};
 
 mod atoms;
 mod bind_groups;
+mod buffer_vec;
 mod camera;
 mod utils;
 mod world;
-// mod gpu_vec;
 
 macro_rules! include_spirv {
     ($name:literal) => {
@@ -52,7 +48,6 @@ pub struct Renderer {
 
     atom_pipeline_layout: wgpu::PipelineLayout,
     atom_render_pipeline: wgpu::RenderPipeline,
-    // atom_transform_buffer: GpuVec<ultraviolet::Mat4>,
     atom_vert_shader: wgpu::ShaderModule,
     atom_frag_shader: wgpu::ShaderModule,
 
@@ -61,7 +56,9 @@ pub struct Renderer {
     shader_runtime_config_buffer: wgpu::Buffer,
     global_bg: wgpu::BindGroup,
     camera: RenderCamera,
-    // fragment_id_to_transform_index: HashMap<FragmentId, usize>,
+
+    fragment_transforms: BufferVec,
+    fragment_to_transform: HashMap<FragmentId, u64>,
 }
 
 impl Renderer {
@@ -199,6 +196,8 @@ impl Renderer {
 
         let gpu_resources = Arc::new(GlobalGpuResources { device, queue, bgl });
 
+        let fragment_transforms = BufferVec::new(wgpu::BufferUsage::VERTEX);
+
         (
             Self {
                 swap_chain_desc,
@@ -218,7 +217,9 @@ impl Renderer {
                 shader_runtime_config_buffer,
                 global_bg,
                 camera,
-                // fragment_id_to_transform_index: HashMap::new(),
+
+                fragment_transforms,
+                fragment_to_transform: HashMap::new(),
             },
             gpu_resources,
         )
@@ -259,6 +260,50 @@ impl Renderer {
         if world.added_parts.len() + world.added_fragments.len() == 0 {
             return;
         }
+
+        let (parts, fragments) = (&world.parts, &world.fragments);
+
+        let added_fragments = world.added_fragments.drain(..).chain(
+            world
+                .added_parts
+                .drain(..)
+                .map(|part_id| {
+                    parts[&part_id]
+                        .fragments()
+                        .iter()
+                        .copied()
+                        .map(move |id| (part_id, id))
+                })
+                .flatten(),
+        );
+
+        let mut buffer_offset = self.fragment_transforms.len();
+
+        let transforms: Vec<_> = added_fragments
+            .map(|(part_id, fragment_id)| {
+                self.fragment_to_transform
+                    .insert(fragment_id, buffer_offset);
+                buffer_offset += mem::size_of::<ultraviolet::Mat4>() as u64;
+
+                let part = &parts[&part_id];
+                let fragment = &fragments[&fragment_id];
+
+                let offset = part.offset() + fragment.offset();
+                let rotation = part.rotation() * fragment.rotation();
+
+                rotation
+                    .into_matrix()
+                    .into_homogeneous()
+                    .translated(&offset)
+            })
+            .collect();
+
+        // This doesn't use a bind group.
+        let _ = self.fragment_transforms.push_small(
+            &self.gpu_resources,
+            encoder,
+            transforms[..].as_bytes(),
+        );
     }
 
     /// TODO: Upload any new transforms or transforms that changed
@@ -361,8 +406,18 @@ impl Renderer {
             rpass.set_pipeline(&self.atom_render_pipeline);
             rpass.set_bind_group(0, &self.global_bg, &[]);
 
+            let transform_buffer = self.fragment_transforms.inner_buffer();
+
             for fragment in world.fragments() {
                 // TODO: set vertex buffer to the right matrices.
+                let transform_offset = self.fragment_to_transform[&fragment.id()];
+                rpass.set_vertex_buffer(
+                    0,
+                    transform_buffer.slice(
+                        transform_offset
+                            ..transform_offset + mem::size_of::<ultraviolet::Mat4>() as u64,
+                    ),
+                );
 
                 rpass.set_bind_group(1, &fragment.atoms().bind_group(), &[]);
                 rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)

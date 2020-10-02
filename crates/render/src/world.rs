@@ -5,7 +5,7 @@ use crate::{
 };
 use indexmap::IndexMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use ultraviolet::Vec3;
+use ultraviolet::{Rotor3, Vec3};
 
 macro_rules! declare_id {
     ($id_name:ident) => {
@@ -36,10 +36,13 @@ macro_rules! declare_id {
 declare_id!(FragmentId, PartId);
 
 pub struct Fragment {
+    id: FragmentId,
     atoms: Atoms,
 
     bounding_box: BoundingBox,
     center: Vec3, // not sure what type of center yet (median, initial atom, etc)
+    offset: Vec3,
+    rotation: Rotor3,
 }
 
 impl Fragment {
@@ -72,22 +75,40 @@ impl Fragment {
         };
 
         Self {
+            id: FragmentId::new(),
             atoms,
 
             bounding_box,
             center,
+            offset: Vec3::zero(),
+            rotation: Rotor3::default(),
         }
+    }
+
+    pub fn id(&self) -> FragmentId {
+        self.id
     }
 
     pub fn atoms(&self) -> &Atoms {
         &self.atoms
     }
+
+    pub fn offset(&self) -> Vec3 {
+        self.offset
+    }
+
+    pub fn rotation(&self) -> Rotor3 {
+        self.rotation
+    }
 }
 
 pub struct Part {
+    id: PartId,
     fragments: Vec<FragmentId>,
     bounding_box: BoundingBox,
     center: Vec3,
+    offset: Vec3,
+    rotation: Rotor3,
 }
 
 impl Part {
@@ -101,13 +122,26 @@ impl Part {
             max: Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY),
         };
         let mut center = Vec3::zero();
+        let part_id = PartId::new();
 
-        let fragments: Vec<_> = world
-            .spawn_fragment_batch(fragments.into_iter().inspect(|fragment| {
+        let fragments: Vec<_> = fragments
+            .into_iter()
+            .inspect(|fragment| {
                 bounding_box = bounding_box.union(&fragment.bounding_box);
                 center += fragment.center;
-            }))
+            })
+            .map(move |fragment| world.spawn_fragment(part_id, fragment))
             .collect();
+
+        // let fragments: Vec<_> = world
+        //     .spawn_fragment_batch(
+        //         id,
+        //         fragments.into_iter().inspect(|fragment| {
+        //             bounding_box = bounding_box.union(&fragment.bounding_box);
+        //             center += fragment.center;
+        //         }),
+        //     )
+        //     .collect();
 
         let center = center / fragments.len() as f32;
 
@@ -117,26 +151,37 @@ impl Part {
         );
 
         Part {
+            id: part_id,
             fragments,
             bounding_box,
             center,
+            offset: -center,
+            rotation: Rotor3::default(),
         }
     }
 
-    pub fn center(&self) -> Vec3 {
-        self.center
+    pub fn id(&self) -> PartId {
+        self.id
     }
 
     pub fn fragments(&self) -> &[FragmentId] {
         &self.fragments
     }
 
+    pub fn offset(&self) -> Vec3 {
+        self.offset
+    }
+
+    pub fn rotation(&self) -> Rotor3 {
+        self.rotation
+    }
+
     pub fn offset_by(&mut self, offset: Vec3) {
-        todo!()
+        self.offset += offset;
     }
 
     pub fn move_to(&mut self, point: Vec3) {
-        todo!()
+        self.offset = point - self.center;
     }
 }
 
@@ -147,9 +192,9 @@ pub struct World {
 
     // These are updated and cleared every frame.
     pub(crate) added_parts: Vec<PartId>,
-    pub(crate) added_fragments: Vec<FragmentId>,
+    pub(crate) added_fragments: Vec<(PartId, FragmentId)>,
     pub(crate) modified_parts: Vec<PartId>,
-    pub(crate) modified_fragments: Vec<FragmentId>,
+    pub(crate) modified_fragments: Vec<(PartId, FragmentId)>,
 }
 
 impl World {
@@ -170,46 +215,17 @@ impl World {
     // }
 
     pub fn spawn_part(&mut self, part: Part) -> PartId {
-        let id = PartId::new();
+        let id = part.id;
         self.parts.insert(id, part);
         self.added_parts.push(id);
         id
     }
 
-    pub fn spawn_fragment(&mut self, fragment: Fragment) -> FragmentId {
-        let id = FragmentId::new();
+    pub fn spawn_fragment(&mut self, part_id: PartId, fragment: Fragment) -> FragmentId {
+        let id = fragment.id;
         self.fragments.insert(id, fragment);
-        self.added_fragments.push(id);
+        self.added_fragments.push((part_id, id));
         id
-    }
-
-    pub fn spawn_part_batch<I>(&mut self, parts: I) -> impl ExactSizeIterator<Item = PartId>
-    where
-        I: IntoIterator<Item = Part>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        let parts = parts.into_iter();
-        let ids = PartId::new_many(parts.len());
-
-        self.parts.extend(ids.clone().zip(parts));
-        self.added_parts.extend(ids.clone());
-        ids
-    }
-
-    pub fn spawn_fragment_batch<I>(
-        &mut self,
-        fragments: I,
-    ) -> impl ExactSizeIterator<Item = FragmentId>
-    where
-        I: IntoIterator<Item = Fragment>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        let fragments = fragments.into_iter();
-        let ids = FragmentId::new_many(fragments.len());
-
-        self.fragments.extend(ids.clone().zip(fragments));
-        self.added_fragments.extend(ids.clone());
-        ids
     }
 
     pub fn merge(&mut self, other: World) {
@@ -222,7 +238,19 @@ impl World {
         self.modified_fragments.extend(other.modified_fragments);
     }
 
-    pub fn fragments(&self) -> impl Iterator<Item = &Fragment> {
+    pub fn parts(&self) -> impl ExactSizeIterator<Item = &Part> {
+        self.parts.values()
+    }
+
+    pub fn parts_mut(&mut self) -> impl ExactSizeIterator<Item = &mut Part> {
+        self.parts.values_mut()
+    }
+
+    pub fn fragments(&self) -> impl ExactSizeIterator<Item = &Fragment> {
         self.fragments.values()
+    }
+
+    pub fn fragments_mut(&mut self) -> impl ExactSizeIterator<Item = &mut Fragment> {
+        self.fragments.values_mut()
     }
 }
