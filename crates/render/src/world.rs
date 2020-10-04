@@ -178,12 +178,12 @@ impl Part {
         self.rotation
     }
 
-    pub fn offset_by(&mut self, offset: Vec3) {
-        self.offset += offset;
+    pub fn offset_by(&mut self, x: f32, y: f32, z: f32) {
+        self.offset += Vec3::new(x, y, z);
     }
 
-    pub fn move_to(&mut self, point: Vec3) {
-        self.offset = point - self.center;
+    pub fn move_to(&mut self, x: f32, y: f32, z: f32) {
+        self.offset = Vec3::new(x, y, z) - self.center;
     }
 }
 

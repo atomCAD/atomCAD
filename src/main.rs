@@ -67,9 +67,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     },
                 ..
             } => {
-                world
-                    .part_mut(some_part)
-                    .offset_by(ultraviolet::Vec3::new(0.0, 0.0, 2.0));
+                world.part_mut(some_part).offset_by(0.0, 0.0, 2.0);
             }
             Event::WindowEvent { event, .. } => {
                 renderer.camera().update(InputEvent::Window(event));
