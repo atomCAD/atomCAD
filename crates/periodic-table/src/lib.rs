@@ -183,9 +183,9 @@ impl PeriodicTable {
             radius: 1.5,                              // van der waals relative to hydrogen
         };
 
-        for repr in &mut element_reprs {
-            repr.radius *= 0.85;
-        }
+        // for repr in &mut element_reprs {
+        //     repr.radius *= 0.85;
+        // }
 
         Self { element_reprs }
     }

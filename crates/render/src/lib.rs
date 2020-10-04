@@ -101,7 +101,6 @@ impl Renderer {
             )
             .await
             .expect("failed to create device");
-        let device = device;
 
         let bgl = BindGroupLayouts::create(&device);
 
@@ -290,6 +289,7 @@ impl Renderer {
         self.render_all_fragments(world, &frame.output.view, &mut encoder);
 
         if interactions.selected_fragments.len() != 0 {
+            log::warn!("trying to render to stencil");
             // currently broken
             self.render_fragments_to_stencil(
                 world,
@@ -400,46 +400,6 @@ impl Renderer {
             );
         }
     }
-
-    /// TODO: Re-upload any transforms that have changed
-    // fn update_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
-    //     if world.added_fragments.len() + world.added_parts.len() == 0
-    //         && world.modified_fragments.len() + world.modified_parts.len() == 0
-    //     {
-    //         // no work to be done
-    //         return;
-    //     }
-
-    //     let mut dedup_fragments: HashSet<FragmentId> = HashSet::from_iter(world.modified_fragments.drain(..));
-
-    //     for part_id in world.modified_parts.drain(..) {
-    //         dedup_fragments.extend(world.parts[&part_id].fragments());
-    //     }
-
-    //     // tune this number
-    //     if dedup_fragments.len() <= 1 {
-
-    //     } else {
-
-    //     }
-
-    //     // let transform_count: usize = parts
-    //     //     .iter()
-    //     //     .map(|part| part.fragments().len() * mem::size_of::<Mat4>())
-    //     //     .sum();
-
-    //     // self.atom_transform_buffer.write_to_buffer(
-    //     //     &self.device,
-    //     //     encoder,
-    //     //     transform_count as u64,
-    //     //     |buffer| {
-    //     //         for part in parts.iter() {
-    //     //             let part_transform = todo!();
-    //     //             let fragment_transform = todo!();
-    //     //         }
-    //     //     },
-    //     // );
-    // }
 
     fn render_all_fragments(
         &self,
