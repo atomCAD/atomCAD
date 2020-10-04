@@ -214,4 +214,34 @@ impl BufferVec {
             panic!("attempting to partially write beyond buffer bounds")
         }
     }
+
+    pub fn copy_new<F>(&self, gpu_resources: &GlobalGpuResources, f: F) -> Self
+    where
+        F: FnOnce(u64, &wgpu::Buffer /* from */, &wgpu::Buffer /* to */) -> u64
+    {
+        if let Some(inner) = self.inner.as_ref() {
+            let copied_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: inner.len,
+                usage: self.usage,
+                mapped_at_creation: false,
+            });
+
+            let copied_len = f(inner.len, &inner.buffer, &copied_buffer);
+
+            Self {
+                inner: Some(BufferVecInner {
+                    buffer: copied_buffer,
+                    len: copied_len,
+                    capacity: inner.len,
+                }),
+                usage: self.usage,
+            }
+        } else {
+            Self {
+                inner: None,
+                usage: self.usage,
+            }
+        }
+    }
 }

@@ -27,6 +27,11 @@ fn visit_files(dir: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Re
 
 fn main() -> io::Result<()> {
     let mut compiler = shaderc::Compiler::new().expect("failed to initialize glsl compiler");
+    let mut compile_options = shaderc::CompileOptions::new().expect("failed to initialize compiler options");
+    
+    if env::var("TARGET").unwrap() == "wasm32-unknown-unknown" {
+        compile_options.add_macro_definition("TARGET_WASM", None);
+    }
 
     let out_dir: PathBuf = [&env::var("OUT_DIR").unwrap(), "shaders"].iter().collect();
 
@@ -45,7 +50,7 @@ fn main() -> io::Result<()> {
             },
             path.file_name().and_then(|s| s.to_str()).unwrap(),
             "main",
-            None,
+            Some(&compile_options),
         ) {
             Ok(v) => v,
             Err(shaderc::Error::CompilationError(_, msg)) => {

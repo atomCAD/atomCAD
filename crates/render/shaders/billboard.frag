@@ -26,6 +26,14 @@ float map(float value, float low1, float high1, float low2, float high2) {
 	return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
 }
 
+vec4 linear_to_srgb(vec4 input_color) {
+    bvec3 cutoff = lessThan(input_color.rgb, vec3(0.0031308));
+    vec3 higher = vec3(1.005) * pow(input_color.rgb, vec3(1.0 / 2.4)) - vec3(0.055);
+    vec3 lower = input_color.rgb * vec3(12.92);
+
+    return vec4(mix(higher, lower, cutoff), input_color.a);
+}
+
 void main(void) {
     const float dist = length(uv);
     if (dist > element.radius)
@@ -42,4 +50,9 @@ void main(void) {
         1.0
     );
     normal = vec4(normalize(position_view_space.xyz - center_view_space.xyz), 0.0);
+#ifdef TARGET_WASM
+    // Currently, firefox webgpu doesn't automatically convert linear rgb outputs to srgb
+    // so we do it manually.
+    color = linear_to_srgb(color);
+#endif
 }

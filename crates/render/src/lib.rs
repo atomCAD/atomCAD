@@ -32,6 +32,7 @@ macro_rules! include_spirv {
 }
 
 const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
+    // srgb doesn't work correctly in firefox rn, so we're manually converting to it in the shader
     wgpu::TextureFormat::Bgra8Unorm
 } else {
     wgpu::TextureFormat::Bgra8UnormSrgb

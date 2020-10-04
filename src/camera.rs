@@ -63,7 +63,7 @@ impl Camera for ArcballCamera {
                 WindowEvent::MouseWheel { delta, .. } => {
                     match delta {
                         MouseScrollDelta::LineDelta(_, delta) => {
-                            self.distance = (self.distance - delta * self.speed).max(0.001);
+                            self.distance = (self.distance - delta * self.speed * 10.0).max(0.001);
                         }
                         MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) => {
                             self.distance = (self.distance - y as f32 * self.speed).max(0.001);
