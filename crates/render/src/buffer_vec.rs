@@ -151,6 +151,21 @@ impl BufferVec {
     // #[must_use = "user must be aware if the vector re-allocated or not"]
     // pub fn push_large -> BufferVecOp
 
-    // #[must_use = "user must be aware if the vector re-allocated or not"]
-    // pub fn write_partial(&mut self, gpu_resources: &GlobalGpuResources, encoder: &mut wgpu::CommandEncoder) -> BufferVecOp
+    pub fn write_partial_small(
+        &mut self,
+        gpu_resources: &GlobalGpuResources,
+        offset: u64,
+        data: &[u8],
+    ) {
+        let inner = self.inner.as_ref().expect(
+            "you must have already instantiated this buffer vec to call `write_partial_small`",
+        );
+        if offset + (data.len() as u64) <= inner.len {
+            gpu_resources
+                .queue
+                .write_buffer(&inner.buffer, offset, data);
+        } else {
+            panic!("attempting to partially write beyond buffer bounds")
+        }
+    }
 }

@@ -72,7 +72,7 @@ impl Camera for ArcballCamera {
                     true
                 }
                 WindowEvent::MouseInput { state, button, .. } => {
-                    if button == MouseButton::Left {
+                    if button == MouseButton::Right {
                         if state == ElementState::Pressed {
                             self.mouse_button_pressed = true;
                         } else {

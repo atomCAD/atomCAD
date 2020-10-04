@@ -34,6 +34,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     //     part.move_to(ultraviolet::Vec3::new(0.0, 0.0, 10.0));
     // }
 
+    let some_part = loaded_pdb.parts().next().unwrap().id();
+
     world.merge(loaded_pdb);
 
     let interations = Interactions::default();
@@ -55,6 +57,20 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 event: WindowEvent::CloseRequested,
                 ..
             } => *control_flow = ControlFlow::Exit,
+            // test to show that modifying parts is working correctly.
+            Event::WindowEvent {
+                event:
+                    winit::event::WindowEvent::MouseInput {
+                        state: winit::event::ElementState::Pressed,
+                        button: winit::event::MouseButton::Left,
+                        ..
+                    },
+                ..
+            } => {
+                world
+                    .part_mut(some_part)
+                    .offset_by(ultraviolet::Vec3::new(0.0, 0.0, 2.0));
+            }
             Event::WindowEvent { event, .. } => {
                 renderer.camera().update(InputEvent::Window(event));
             }

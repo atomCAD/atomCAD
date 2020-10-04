@@ -196,7 +196,7 @@ pub struct World {
     pub(crate) added_parts: Vec<PartId>,
     pub(crate) added_fragments: Vec<(PartId, FragmentId)>,
     pub(crate) modified_parts: Vec<PartId>,
-    pub(crate) modified_fragments: Vec<(PartId, FragmentId)>,
+    pub(crate) modified_fragments: Vec<FragmentId>,
 }
 
 impl World {
@@ -238,6 +238,12 @@ impl World {
         self.added_fragments.extend(other.added_fragments);
         self.modified_parts.extend(other.modified_parts);
         self.modified_fragments.extend(other.modified_fragments);
+    }
+
+    pub fn part_mut(&mut self, id: PartId) -> &mut Part {
+        let part = &mut self.parts[&id];
+        self.modified_parts.push(id);
+        part
     }
 
     pub fn parts(&self) -> impl ExactSizeIterator<Item = &Part> {

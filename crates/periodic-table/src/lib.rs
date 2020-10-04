@@ -146,10 +146,13 @@ pub struct PeriodicTable {
 
 impl PeriodicTable {
     pub fn new() -> Self {
-        let mut element_reprs = vec![ElementRepr {
-            color: Vec3::new(0.0, 0.0, 0.0), // Black
-            radius: 1.0,
-        }; 118];
+        let mut element_reprs = vec![
+            ElementRepr {
+                color: Vec3::new(0.0, 0.0, 0.0), // Black
+                radius: 1.0,
+            };
+            118
+        ];
 
         element_reprs[Element::Hydrogen as usize - 1] = ElementRepr {
             color: Vec3::new(1.0, 1.0, 1.0), // white
@@ -184,9 +187,7 @@ impl PeriodicTable {
             repr.radius *= 0.85;
         }
 
-        Self {
-            element_reprs,
-        }
+        Self { element_reprs }
     }
 }
 

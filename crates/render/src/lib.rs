@@ -8,7 +8,7 @@ use crate::{
     buffer_vec::BufferVec,
 };
 use common::AsBytes as _;
-use periodic_table::{PeriodicTable, Element};
+use periodic_table::{Element, PeriodicTable};
 use std::{
     collections::{HashMap, HashSet},
     convert::TryInto as _,
@@ -267,7 +267,7 @@ impl Renderer {
         }
 
         self.upload_new_transforms(&mut encoder, world);
-        // self.update_transforms(&mut encoder, world);
+        self.update_transforms(&mut encoder, world);
 
         let frame = self
             .swap_chain
@@ -356,11 +356,49 @@ impl Renderer {
             .collect();
 
         // This doesn't use a bind group.
+        // Eventually switch this to `push_large`, once it's written.
         let _ = self.fragment_transforms.push_small(
             &self.gpu_resources,
             encoder,
             transforms[..].as_bytes(),
         );
+    }
+
+    fn update_transforms(&mut self, _encoder: &mut wgpu::CommandEncoder, world: &mut World) {
+        if world.modified_parts.len() + world.modified_fragments.len() == 0 {
+            return;
+        }
+
+        let (parts, fragments) = (&world.parts, &world.fragments);
+
+        let modified_fragments = world.modified_fragments.drain(..).chain(
+            world
+                .modified_parts
+                .drain(..)
+                .map(|part_id| parts[&part_id].fragments().iter().copied())
+                .flatten(),
+        );
+
+        for fragment_id in modified_fragments {
+            let (part_id, buffer_offset) = self.per_fragment[&fragment_id];
+
+            let part = &parts[&part_id];
+            let fragment = &fragments[&fragment_id];
+
+            let offset = part.offset() + fragment.offset();
+            let rotation = part.rotation() * fragment.rotation();
+
+            let transform = rotation
+                .into_matrix()
+                .into_homogeneous()
+                .translated(&offset);
+
+            self.fragment_transforms.write_partial_small(
+                &self.gpu_resources,
+                buffer_offset,
+                transform.as_bytes(),
+            );
+        }
     }
 
     /// TODO: Re-upload any transforms that have changed
