@@ -1,6 +1,6 @@
 use crate::camera::ArcballCamera;
 use common::InputEvent;
-use render::{Renderer, World};
+use render::{Interactions, Renderer, World};
 
 use winit::{
     event::{Event, WindowEvent},
@@ -18,21 +18,26 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let mut world = World::new();
 
-    // let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
-    //     .expect("failed to load pdb");
+    let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
+        .expect("failed to load pdb");
 
-    let loaded_pdb = pdb::load_from_pdb(
-        &gpu_resources,
-        "Carbon Nanotube and DNA",
-        "data/nanotube_and_dna.pdb",
-    )
-    .expect("failed to load pdb");
+    // let loaded_pdb = pdb::load_from_pdb(
+    //     &gpu_resources,
+    //     "Carbon Nanotube and DNA",
+    //     "data/nanotube_and_dna.pdb",
+    // )
+    // .expect("failed to load pdb");
+
+    // let fragment_id = loaded_pdb.fragments().next().unwrap().id();
 
     // for part in loaded_pdb.parts_mut() {
     //     part.move_to(ultraviolet::Vec3::new(0.0, 0.0, 10.0));
     // }
 
     world.merge(loaded_pdb);
+
+    let interations = Interactions::default();
+    // interations.selected_fragments.insert(fragment_id);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -44,7 +49,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 renderer.resize(new_size);
             }
             Event::MainEventsCleared => {
-                renderer.render(&mut world);
+                renderer.render(&mut world, &interations);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

@@ -53,6 +53,8 @@ layout(location = 0) in mat4 part_fragment_transform; // fragement * part transf
 layout(location = 0) out vec2 uv;
 layout(location = 1) out vec4 position_clip_space;
 layout(location = 2) flat out Element element;
+layout(location = 4) flat out vec4 center_view_space;
+layout(location = 5) out vec4 position_view_space;
 
 const vec2 vertices[3] = {
     vec2(1.73, -1.0),
@@ -81,7 +83,7 @@ void main(void) {
     const vec3 camera_right_worldspace = vec3(camera.view[0][0], camera.view[1][0], camera.view[2][0]);
     const vec3 camera_up_worldspace = vec3(camera.view[0][1], camera.view[1][1], camera.view[2][1]);
     const vec4 position_worldspace = vec4(
-        atom.pos.xyz +
+        atom.pos +
         vertex.x * camera_right_worldspace +
         vertex.y * camera_up_worldspace,
         1.0
@@ -91,5 +93,7 @@ void main(void) {
     // position_clip_space = camera.projection_view * position_worldspace;
     uv = vertex;
     // sphere_radius = element.radius;
+    center_view_space = camera.view * vec4(atom.pos, 0.0);
+    position_view_space = camera.view * part_fragment_transform * position_worldspace;
     gl_Position = position_clip_space;
 }

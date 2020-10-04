@@ -8,8 +8,13 @@ use crate::{
     buffer_vec::BufferVec,
 };
 use common::AsBytes as _;
-use periodic_table::Element;
-use std::{collections::HashMap, convert::TryInto as _, mem, sync::Arc};
+use periodic_table::{PeriodicTable, Element};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto as _,
+    mem,
+    sync::Arc,
+};
 use wgpu::util::DeviceExt as _;
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -32,6 +37,11 @@ const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
     wgpu::TextureFormat::Bgra8UnormSrgb
 };
 
+#[derive(Default)]
+pub struct Interactions {
+    pub selected_fragments: HashSet<FragmentId>,
+}
+
 pub struct GlobalGpuResources {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -46,12 +56,17 @@ pub struct Renderer {
     gpu_resources: Arc<GlobalGpuResources>,
     size: PhysicalSize<u32>,
 
+    periodic_table: PeriodicTable,
+
     atom_pipeline_layout: wgpu::PipelineLayout,
     atom_render_pipeline: wgpu::RenderPipeline,
     atom_vert_shader: wgpu::ShaderModule,
     atom_frag_shader: wgpu::ShaderModule,
 
     depth_texture: wgpu::TextureView,
+    stencil_texture: wgpu::TextureView,
+    // for deferred rendering/ambient occlusion approximation
+    normals_texture: wgpu::TextureView,
 
     shader_runtime_config_buffer: wgpu::Buffer,
     global_bg: wgpu::BindGroup,
@@ -92,10 +107,12 @@ impl Renderer {
 
         let camera = RenderCamera::new_empty(&device, 0.7, 0.1);
 
+        let periodic_table = PeriodicTable::new();
+
         let shader_runtime_config_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
-                contents: Element::RENDERING_CONFIG.as_ref().as_bytes(),
+                contents: periodic_table.element_reprs.as_bytes(),
                 usage: wgpu::BufferUsage::STORAGE,
             });
 
@@ -142,7 +159,10 @@ impl Renderer {
             }),
             rasterization_state: None, // this might not be right
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[SWAPCHAIN_FORMAT.into()],
+            color_states: &[
+                SWAPCHAIN_FORMAT.into(),
+                wgpu::TextureFormat::Rgba16Float.into(),
+            ],
             depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: true,
@@ -178,21 +198,9 @@ impl Renderer {
 
         let swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
 
-        let depth_texture = device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: size.width,
-                    height: size.height,
-                    depth: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Depth32Float,
-                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            })
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_texture = Self::create_depth_texture(&device, size);
+        let stencil_texture = Self::create_stencil_buffer(&device, size);
+        let normals_texture = Self::create_normals_texture(&device, size);
 
         let gpu_resources = Arc::new(GlobalGpuResources { device, queue, bgl });
 
@@ -206,6 +214,8 @@ impl Renderer {
                 gpu_resources: Arc::clone(&gpu_resources),
                 size,
 
+                periodic_table,
+
                 atom_pipeline_layout,
                 atom_render_pipeline,
                 // atom_transform_buffer,
@@ -213,6 +223,8 @@ impl Renderer {
                 atom_frag_shader,
 
                 depth_texture,
+                stencil_texture,
+                normals_texture,
 
                 shader_runtime_config_buffer,
                 global_bg,
@@ -235,28 +247,73 @@ impl Renderer {
             .device
             .create_swap_chain(&self.surface, &self.swap_chain_desc);
 
-        self.depth_texture = self
-            .gpu_resources
-            .device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: new_size.width,
-                    height: new_size.height,
-                    depth: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Depth32Float,
-                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            })
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        self.depth_texture = Self::create_depth_texture(&self.gpu_resources.device, new_size);
+        self.stencil_texture = Self::create_stencil_buffer(&self.gpu_resources.device, new_size);
+        self.normals_texture = Self::create_normals_texture(&self.gpu_resources.device, new_size);
 
         self.camera.resize(new_size);
     }
 
-    pub fn upload_new_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
+    pub fn render(&mut self, world: &mut World, interactions: &Interactions) {
+        let mut encoder = self
+            .gpu_resources
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        if !self.camera.upload(&self.gpu_resources.queue) {
+            log::warn!("no camera is set");
+            // no camera is set, so no reason to do rendering.
+            return;
+        }
+
+        self.upload_new_transforms(&mut encoder, world);
+        // self.update_transforms(&mut encoder, world);
+
+        let frame = self
+            .swap_chain
+            .get_current_frame()
+            .map(|mut frame| {
+                if frame.suboptimal {
+                    // try again
+                    frame = self
+                        .swap_chain
+                        .get_current_frame()
+                        .expect("could not retrieve swapchain on second try");
+                    if frame.suboptimal {
+                        log::warn!("suboptimal swapchain frame");
+                    }
+                }
+                frame
+            })
+            .expect("failed to get next swapchain");
+
+        self.render_all_fragments(world, &frame.output.view, &mut encoder);
+
+        if interactions.selected_fragments.len() != 0 {
+            // currently broken
+            self.render_fragments_to_stencil(
+                world,
+                &frame.output.view,
+                &mut encoder,
+                interactions.selected_fragments.iter().copied(),
+            );
+        }
+
+        self.gpu_resources.queue.submit(Some(encoder.finish()));
+    }
+
+    /// Immediately calls resize on the supplied camera.
+    pub fn set_camera<C: Camera + 'static>(&mut self, camera: C) {
+        self.camera.set_camera(camera, self.size);
+    }
+
+    pub fn camera(&mut self) -> &mut RenderCamera {
+        &mut self.camera
+    }
+}
+
+impl Renderer {
+    fn upload_new_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
         if world.added_parts.len() + world.added_fragments.len() == 0 {
             return;
         }
@@ -307,7 +364,7 @@ impl Renderer {
     }
 
     /// TODO: Re-upload any transforms that have changed
-    // pub fn update_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
+    // fn update_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
     //     if world.added_fragments.len() + world.added_parts.len() == 0
     //         && world.modified_fragments.len() + world.modified_parts.len() == 0
     //     {
@@ -346,43 +403,16 @@ impl Renderer {
     //     // );
     // }
 
-    pub fn render(&mut self, world: &mut World) {
-        let mut encoder = self
-            .gpu_resources
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        if !self.camera.upload(&self.gpu_resources.queue) {
-            log::warn!("no camera is set");
-            // no camera is set, so no reason to do rendering.
-            return;
-        }
-
-        self.upload_new_transforms(&mut encoder, world);
-        // self.update_transforms(&mut encoder, world);
-
-        let frame = self
-            .swap_chain
-            .get_current_frame()
-            .map(|mut frame| {
-                if frame.suboptimal {
-                    // try again
-                    frame = self
-                        .swap_chain
-                        .get_current_frame()
-                        .expect("could not retrieve swapchain on second try");
-                    if frame.suboptimal {
-                        log::warn!("suboptimal swapchain frame");
-                    }
-                }
-                frame
-            })
-            .expect("failed to get next swapchain");
-
-        {
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &frame.output.view,
+    fn render_all_fragments(
+        &self,
+        world: &World,
+        attachment: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[
+                wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -393,48 +423,148 @@ impl Renderer {
                         }),
                         store: true,
                     },
-                }],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                    attachment: &self.depth_texture,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.0),
+                },
+                // multiple render targets
+                // render to normals texture
+                wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &self.normals_texture,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: true,
-                    }),
-                    stencil_ops: None,
+                    },
+                },
+            ],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                attachment: &self.depth_texture,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0.0),
+                    store: true,
                 }),
-            });
+                stencil_ops: None,
+            }),
+        });
 
-            rpass.set_pipeline(&self.atom_render_pipeline);
-            rpass.set_bind_group(0, &self.global_bg, &[]);
+        rpass.set_pipeline(&self.atom_render_pipeline);
+        rpass.set_bind_group(0, &self.global_bg, &[]);
 
-            let transform_buffer = self.fragment_transforms.inner_buffer();
+        let transform_buffer = self.fragment_transforms.inner_buffer();
 
-            // TODO: This should probably be multithreaded.
-            for fragment in world.fragments() {
-                // TODO: set vertex buffer to the right matrices.
-                let transform_offset = self.per_fragment[&fragment.id()].1;
-                rpass.set_vertex_buffer(
-                    0,
-                    transform_buffer.slice(
-                        transform_offset
-                            ..transform_offset + mem::size_of::<ultraviolet::Mat4>() as u64,
-                    ),
-                );
+        // TODO: This should probably be multithreaded.
+        for fragment in world.fragments() {
+            // TODO: set vertex buffer to the right matrices.
+            let transform_offset = self.per_fragment[&fragment.id()].1;
+            rpass.set_vertex_buffer(
+                0,
+                transform_buffer.slice(
+                    transform_offset..transform_offset + mem::size_of::<ultraviolet::Mat4>() as u64,
+                ),
+            );
 
-                rpass.set_bind_group(1, &fragment.atoms().bind_group(), &[]);
-                rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)
-            }
+            rpass.set_bind_group(1, &fragment.atoms().bind_group(), &[]);
+            rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)
         }
-
-        self.gpu_resources.queue.submit(Some(encoder.finish()));
     }
 
-    /// Immediately calls resize on the supplied camera.
-    pub fn set_camera<C: Camera + 'static>(&mut self, camera: C) {
-        self.camera.set_camera(camera, self.size);
+    /// Render selected objects to the stencil buffer so they can be outlined post-process.
+    fn render_fragments_to_stencil(
+        &self,
+        world: &World,
+        attachment: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+        fragments: impl Iterator<Item = FragmentId>,
+    ) {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                attachment,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: false,
+                },
+            }],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                attachment: &self.stencil_texture,
+                depth_ops: None,
+                stencil_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0),
+                    store: true,
+                }),
+            }),
+        });
+
+        rpass.set_pipeline(&self.atom_render_pipeline);
+        rpass.set_bind_group(0, &self.global_bg, &[]);
+
+        let transform_buffer = self.fragment_transforms.inner_buffer();
+
+        // TODO: This should probably be multithreaded.
+        for fragment in fragments.map(|id| &world.fragments[&id]) {
+            // TODO: set vertex buffer to the right matrices.
+            let transform_offset = self.per_fragment[&fragment.id()].1;
+            rpass.set_vertex_buffer(
+                0,
+                transform_buffer.slice(
+                    transform_offset..transform_offset + mem::size_of::<ultraviolet::Mat4>() as u64,
+                ),
+            );
+
+            rpass.set_bind_group(1, &fragment.atoms().bind_group(), &[]);
+            rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)
+        }
     }
 
-    pub fn camera(&mut self) -> &mut RenderCamera {
-        &mut self.camera
+    fn create_depth_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: size.width,
+                    height: size.height,
+                    depth: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth32Float,
+                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
+    }
+
+    fn create_stencil_buffer(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: size.width / 8,
+                    height: size.height / 8,
+                    depth: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::R8Uint, // This isn't the correct format, should be `Stencil8`
+                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
+    }
+
+    fn create_normals_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: size.width,
+                    height: size.height,
+                    depth: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
     }
 }

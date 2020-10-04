@@ -39,3 +39,20 @@ web-sys = "0.3.45"
 wasm-bindgen-futures = "0.4.18"
 console_error_panic_hook = "0.1.6"
 console_log = "0.2.0"
+
+# [patch."https://github.com/gfx-rs/wgpu".wgpu-core]
+# git = "https://github.com/lachlansneff/wgpu"
+# rev = "55dd333c2b1596b8f1317b4e7f5bc8cb95af4233"
+
+# [patch."https://github.com/gfx-rs/wgpu".wgpu-types]
+# git = "https://github.com/lachlansneff/wgpu"
+# rev = "55dd333c2b1596b8f1317b4e7f5bc8cb95af4233"
+
+# [patch.crates-io.gfx-backend-metal]
+# git = "https://github.com/lachlansneff/gfx"
+# rev = "e3e1e285170cdad7e100d7bf0b0833c00ea28dcd"
+
+# [patch.crates-io.gfx-hal]
+# git = "https://github.com/lachlansneff/gfx"
+# rev = "e3e1e285170cdad7e100d7bf0b0833c00ea28dcd"
+
