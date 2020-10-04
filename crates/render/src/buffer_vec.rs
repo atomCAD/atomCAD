@@ -34,18 +34,34 @@ impl BufferVec {
     where
         F: FnOnce(&mut [u8]),
     {
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size,
-            usage: usage | wgpu::BufferUsage::COPY_DST,
-            mapped_at_creation: true,
-        });
+        
+        #[cfg(not(target_arch = "wasm32"))]
+        let buffer = {
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size,
+                usage: usage | wgpu::BufferUsage::COPY_DST,
+                mapped_at_creation: true,
+            });
 
-        {
-            let mut buffer_view = buffer.slice(..).get_mapped_range_mut();
-            fill(&mut buffer_view);
-        }
-        buffer.unmap();
+            {
+                let mut buffer_view = buffer.slice(..).get_mapped_range_mut();
+                fill(&mut buffer_view);
+            }
+            buffer.unmap();
+            buffer
+        };
+        #[cfg(target_arch = "wasm32")]
+        let buffer = {
+            use wgpu::util::{DeviceExt as _, BufferInitDescriptor};
+            let mut vec = vec![0; size as usize];
+            fill(&mut vec);
+            device.create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents: &vec[..],
+                usage: usage | wgpu::BufferUsage::COPY_DST,
+            })
+        };
 
         Self {
             inner: Some(BufferVecInner {
@@ -93,21 +109,36 @@ impl BufferVec {
                     data.len()
                 );
 
-                let new_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: None,
-                    size: new_capacity,
-                    usage: self.usage,
-                    mapped_at_creation: true,
-                });
+                #[cfg(not(target_arch = "wasm32"))]
+                let new_buffer = {
+                    let new_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: None,
+                        size: new_capacity,
+                        usage: self.usage,
+                        mapped_at_creation: true,
+                    });
 
-                {
-                    let mut buffer_view = new_buffer
-                        .slice(inner.len..(inner.len + data.len() as u64))
-                        .get_mapped_range_mut();
-                    buffer_view.copy_from_slice(data);
-                }
+                    {
+                        let mut buffer_view = new_buffer
+                            .slice(inner.len..(inner.len + data.len() as u64))
+                            .get_mapped_range_mut();
+                        buffer_view.copy_from_slice(data);
+                    }
 
-                new_buffer.unmap();
+                    new_buffer.unmap();
+                    new_buffer
+                };
+                #[cfg(target_arch = "wasm32")]
+                let new_buffer = {
+                    let new_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: None,
+                        size: new_capacity,
+                        usage: self.usage,
+                        mapped_at_creation: false,
+                    });
+                    gpu_resources.queue.write_buffer(&new_buffer, inner.len, data);
+                    new_buffer
+                };
 
                 encoder.copy_buffer_to_buffer(&inner.buffer, 0, &new_buffer, 0, inner.len);
 
@@ -125,18 +156,33 @@ impl BufferVec {
                 data.len()
             );
             // there's no buffer yet, let's allocate it + some extra space and fill it
-            let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: capacity,
-                usage: self.usage,
-                mapped_at_creation: true,
-            });
+            #[cfg(not(target_arch = "wasm32"))]
+            let buffer = {
+                let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: capacity,
+                    usage: self.usage,
+                    mapped_at_creation: true,
+                });
 
-            {
-                let mut buffer_view = buffer.slice(..data.len() as u64).get_mapped_range_mut();
-                buffer_view.copy_from_slice(data);
-            }
-            buffer.unmap();
+                {
+                    let mut buffer_view = buffer.slice(..data.len() as u64).get_mapped_range_mut();
+                    buffer_view.copy_from_slice(data);
+                }
+                buffer.unmap();
+                buffer
+            };
+            #[cfg(target_arch = "wasm32")]
+            let buffer = {
+                let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: capacity,
+                    usage: self.usage,
+                    mapped_at_creation: false,
+                });
+                gpu_resources.queue.write_buffer(&buffer, 0, data);
+                buffer
+            };
 
             self.inner = Some(BufferVecInner {
                 buffer,

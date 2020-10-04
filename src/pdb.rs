@@ -1,5 +1,5 @@
 use lib3dmol::{
-    parser::read_pdb,
+    parser::{read_pdb, read_pdb_txt},
     structures::{atom::AtomType, GetAtom as _},
 };
 use periodic_table::Element;
@@ -18,6 +18,47 @@ pub fn load_from_pdb<P: AsRef<Path>>(
     }
 
     let structure = read_pdb(&*path.to_string_lossy(), name);
+
+    let mut world = World::new();
+
+    structure
+        .chains
+        .into_iter()
+        .map(|chain| {
+            let fragments: Vec<_> = chain
+                .lst_res
+                .iter()
+                .map(|residue| {
+                    let atoms = residue.get_atom();
+                    let atoms = atoms.iter().map(|atom| {
+                        let element = atom_type_to_element(&atom.a_type);
+
+                        AtomRepr {
+                            pos: atom.coord.into(),
+                            kind: AtomKind::new(element),
+                        }
+                    });
+
+                    Fragment::from_atoms(gpu_resources, atoms)
+                })
+                .collect();
+
+            let part = Part::from_fragments(&mut world, fragments);
+            world.spawn_part(part);
+        })
+        .for_each(|_| {});
+
+    log::info!("loaded {} parts", world.parts().count());
+
+    Ok(world)
+}
+
+pub fn load_from_pdb_str(
+    gpu_resources: &GlobalGpuResources,
+    name: &str,
+    contents: &str
+) -> Result<World, String> {
+    let structure = read_pdb_txt(contents, name);
 
     let mut world = World::new();
 

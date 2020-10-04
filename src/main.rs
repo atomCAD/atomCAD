@@ -18,8 +18,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let mut world = World::new();
 
-    let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
-        .expect("failed to load pdb");
+    // let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
+    //     .expect("failed to load pdb");
+
+    let loaded_pdb = pdb::load_from_pdb_str(&gpu_resources, "Neon Pump", include_str!("../data/neon_pump_imm.pdb")).unwrap();
 
     // let loaded_pdb = pdb::load_from_pdb(
     //     &gpu_resources,
@@ -57,18 +59,18 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 event: WindowEvent::CloseRequested,
                 ..
             } => *control_flow = ControlFlow::Exit,
-            // test to show that modifying parts is working correctly.
-            Event::WindowEvent {
-                event:
-                    winit::event::WindowEvent::MouseInput {
-                        state: winit::event::ElementState::Pressed,
-                        button: winit::event::MouseButton::Left,
-                        ..
-                    },
-                ..
-            } => {
-                world.part_mut(some_part).offset_by(0.0, 0.0, 2.0);
-            }
+            // // test to show that modifying parts is working correctly.
+            // Event::WindowEvent {
+            //     event:
+            //         winit::event::WindowEvent::MouseInput {
+            //             state: winit::event::ElementState::Pressed,
+            //             button: winit::event::MouseButton::Left,
+            //             ..
+            //         },
+            //     ..
+            // } => {
+            //     world.part_mut(some_part).offset_by(0.0, 0.0, 2.0);
+            // }
             Event::WindowEvent { event, .. } => {
                 renderer.camera().update(InputEvent::Window(event));
             }
