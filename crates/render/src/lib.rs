@@ -183,7 +183,7 @@ impl Renderer {
                     ],
                 }],
             },
-            sample_count: 1, // TODO: Try multisampling?
+            sample_count: 1, // multisampling doesn't work for shader effects (like spherical imposters/billboards)
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
         });

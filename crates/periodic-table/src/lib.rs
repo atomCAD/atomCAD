@@ -155,32 +155,33 @@ impl PeriodicTable {
         ];
 
         element_reprs[Element::Hydrogen as usize - 1] = ElementRepr {
-            color: Vec3::new(1.0, 1.0, 1.0), // white
-            radius: 1.0,
+            color: Vec3::new(0.8510, 0.8510, 0.8510), // white
+            radius: 1.2,
         };
         element_reprs[Element::Carbon as usize - 1] = ElementRepr {
             color: Vec3::new(0.30196, 0.2902, 0.3098), // dark grey
-            radius: 1.4167,                            // van der waals relative to hydrogen
+            radius: 1.7,
         };
         element_reprs[Element::Oxygen as usize - 1] = ElementRepr {
             color: Vec3::new(0.7490, 0.2118, 0.3176), // red
-            radius: 1.267,                            // van der waals relative to hydrogen
+            radius: 1.52,
         };
         element_reprs[Element::Silicon as usize - 1] = ElementRepr {
-            color: Vec3::new(0.7294, 0.5804, 0.1686), // yellow
-            radius: 1.75,                             // van der waals relative to hydrogen
+            // color: Vec3::new(0.7294, 0.5804, 0.1686), // yellow
+            color: Vec3::new(0.5234, 0.5234, 0.5234), // light grey
+            radius: 2.1,
         };
         element_reprs[Element::Phosphorus as usize - 1] = ElementRepr {
             color: Vec3::new(0.7019, 0.4314, 0.1451), // orange
-            radius: 1.625,                            // van der waals relative to hydrogen
+            radius: 1.8,
         };
         element_reprs[Element::Nitrogen as usize - 1] = ElementRepr {
             color: Vec3::new(0.2078, 0.4549, 0.6118), // blue
-            radius: 1.292,                            // van der waals relative to hydrogen
+            radius: 1.55,
         };
         element_reprs[Element::Sulfur as usize - 1] = ElementRepr {
             color: Vec3::new(0.7294, 0.5804, 0.1686), // yellow
-            radius: 1.5,                              // van der waals relative to hydrogen
+            radius: 1.8,
         };
 
         // for repr in &mut element_reprs {
@@ -194,7 +195,7 @@ impl PeriodicTable {
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct ElementRepr {
-    color: Vec3,
+    color: Vec3, // in angstroms
     radius: f32,
 }
 
