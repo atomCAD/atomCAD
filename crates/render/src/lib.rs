@@ -52,6 +52,11 @@ pub struct GlobalGpuResources {
     // pub(crate) staging_belt: Arc<Mutex<wgpu::util::StagingBelt>>,
 }
 
+pub struct RenderOptions {
+    pub fxaa: Option<()>, // to be filled out with fxaa configuration options
+                          // ssao: ...,
+}
+
 pub struct Renderer {
     swap_chain_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
@@ -81,10 +86,12 @@ pub struct Renderer {
 
     fragment_transforms: BufferVec,
     per_fragment: HashMap<FragmentId, (PartId, u64 /* transform offset */)>,
+
+    options: RenderOptions,
 }
 
 impl Renderer {
-    pub async fn new(window: &Window) -> (Self, Arc<GlobalGpuResources>) {
+    pub async fn new(window: &Window, options: RenderOptions) -> (Self, Arc<GlobalGpuResources>) {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
@@ -262,6 +269,8 @@ impl Renderer {
 
                 fragment_transforms,
                 per_fragment: HashMap::new(),
+
+                options,
             },
             gpu_resources,
         )
@@ -389,6 +398,10 @@ impl Renderer {
     pub fn camera(&mut self) -> &mut RenderCamera {
         &mut self.camera
     }
+
+    // pub fn update_render_config(&mut self, enabled: bool) {
+
+    // }
 }
 
 impl Renderer {

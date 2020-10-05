@@ -15,6 +15,7 @@
 - [ ] Should parts and fragments be in an ecs?
 - [ ] Add orientation cube like [this](https://cad.onshape.com/help/Content/Resources/Images/tutorial/viewcube.png).
     - Should this be geometry or a fancy shader (combination?)
+- [ ] Move rendering passes to `passes` module.
 
 ## Future
 - If we run out of gpu memory, try downloading everything to RAM or disk and re-uploading to defragment.

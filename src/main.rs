@@ -1,6 +1,6 @@
 use crate::camera::ArcballCamera;
 use common::InputEvent;
-use render::{Interactions, Renderer, World};
+use render::{Interactions, RenderOptions, Renderer, World};
 
 use winit::{
     event::{Event, WindowEvent},
@@ -12,7 +12,13 @@ mod camera;
 mod pdb;
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
-    let (mut renderer, gpu_resources) = Renderer::new(&window).await;
+    let (mut renderer, gpu_resources) = Renderer::new(
+        &window,
+        RenderOptions {
+            fxaa: Some(()), // placeholder
+        },
+    )
+    .await;
 
     renderer.set_camera(ArcballCamera::new(100.0, 1.0));
 
