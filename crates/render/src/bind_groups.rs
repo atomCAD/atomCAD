@@ -6,6 +6,7 @@ pub struct BindGroupLayouts {
     pub global: wgpu::BindGroupLayout,
     pub atoms: wgpu::BindGroupLayout,
     pub blit: wgpu::BindGroupLayout,
+    pub fxaa: wgpu::BindGroupLayout,
 }
 
 impl BindGroupLayouts {
@@ -56,9 +57,7 @@ impl BindGroupLayouts {
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStage::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                        },
+                        ty: wgpu::BindingType::Sampler { comparison: false },
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
@@ -71,8 +70,39 @@ impl BindGroupLayouts {
                         },
                         count: None,
                     },
-                ]
-            })
+                ],
+            }),
+            fxaa: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::COMPUTE,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::COMPUTE,
+                        ty: wgpu::BindingType::SampledTexture {
+                            dimension: wgpu::TextureViewDimension::D2,
+                            component_type: wgpu::TextureComponentType::Float,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStage::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            dimension: wgpu::TextureViewDimension::D2,
+                            format: crate::STORAGE_TEXTURE_FORMAT,
+                            readonly: false,
+                        },
+                        count: None,
+                    },
+                ],
+            }),
         }
     }
 }

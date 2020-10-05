@@ -56,7 +56,7 @@ pub fn load_from_pdb<P: AsRef<Path>>(
 pub fn load_from_pdb_str(
     gpu_resources: &GlobalGpuResources,
     name: &str,
-    contents: &str
+    contents: &str,
 ) -> Result<World, String> {
     let structure = read_pdb_txt(contents, name);
 

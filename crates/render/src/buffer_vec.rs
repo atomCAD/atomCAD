@@ -34,7 +34,6 @@ impl BufferVec {
     where
         F: FnOnce(&mut [u8]),
     {
-        
         #[cfg(not(target_arch = "wasm32"))]
         let buffer = {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -53,7 +52,7 @@ impl BufferVec {
         };
         #[cfg(target_arch = "wasm32")]
         let buffer = {
-            use wgpu::util::{DeviceExt as _, BufferInitDescriptor};
+            use wgpu::util::{BufferInitDescriptor, DeviceExt as _};
             let mut vec = vec![0; size as usize];
             fill(&mut vec);
             device.create_buffer_init(&BufferInitDescriptor {
@@ -136,7 +135,9 @@ impl BufferVec {
                         usage: self.usage,
                         mapped_at_creation: false,
                     });
-                    gpu_resources.queue.write_buffer(&new_buffer, inner.len, data);
+                    gpu_resources
+                        .queue
+                        .write_buffer(&new_buffer, inner.len, data);
                     new_buffer
                 };
 
@@ -217,7 +218,7 @@ impl BufferVec {
 
     pub fn copy_new<F>(&self, gpu_resources: &GlobalGpuResources, f: F) -> Self
     where
-        F: FnOnce(u64, &wgpu::Buffer /* from */, &wgpu::Buffer /* to */) -> u64
+        F: FnOnce(u64, &wgpu::Buffer /* from */, &wgpu::Buffer /* to */) -> u64,
     {
         if let Some(inner) = self.inner.as_ref() {
             let copied_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {

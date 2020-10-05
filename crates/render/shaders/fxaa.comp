@@ -1,5 +1,8 @@
 /*
  * FXAA as a compute shader
+ *
+ * This is roughly based on https://github.com/mattdesl/glsl-fxaa,
+ * which is based on https://www.geeks3d.com/20110405/fxaa-fast-approximate-anti-aliasing-demo-glsl-opengl-test-radeon-geforce/
  */
 #version 450
 
@@ -21,13 +24,11 @@ void main(void) {
     const vec2 global_coord = vec2(gl_GlobalInvocationID.xy);
     const vec2 inverse_size = 1.0 / vec2(gl_NumWorkGroups.xy * gl_WorkGroupSize.xy);
 
-    // Grab the pixel we're sitting directly on
-    // this fills in the center of the `loaded_texels` matrix.
     const vec4 color_center = texture(sampler2D(color_input, linear_sampler), global_coord * inverse_size);
-    const vec3 color_nw = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(1.0, 1.0)) * inverse_size).rgb;
+    const vec3 color_nw = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(-1.0, -1.0)) * inverse_size).rgb;
     const vec3 color_ne = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(1.0, -1.0)) * inverse_size).rgb;
     const vec3 color_sw = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(-1.0, 1.0)) * inverse_size).rgb;
-    const vec3 color_se = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(-1.0, -1.0)) * inverse_size).rgb;
+    const vec3 color_se = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(1.0, 1.0)) * inverse_size).rgb;
 
     const vec3 luma = vec3(0.299, 0.587, 0.114);
     const float luma_nw = dot(color_nw, luma);
@@ -39,7 +40,7 @@ void main(void) {
     float luma_min = min(luma_center, min(min(luma_nw, luma_ne), min(luma_sw, luma_se)));
     float luma_max = max(luma_center, max(max(luma_nw, luma_ne), max(luma_sw, luma_se)));
 
-    vec2 dir = vec2(
+    mediump vec2 dir = vec2(
         -((luma_nw + luma_ne) - (luma_sw + luma_se)),
         (luma_nw + luma_sw) - (luma_ne + luma_se)
     );
