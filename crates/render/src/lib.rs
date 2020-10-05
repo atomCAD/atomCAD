@@ -59,11 +59,14 @@ pub struct Renderer {
 
     periodic_table: PeriodicTable,
 
-    atom_pipeline_layout: wgpu::PipelineLayout,
     atom_render_pipeline: wgpu::RenderPipeline,
-    atom_vert_shader: wgpu::ShaderModule,
-    atom_frag_shader: wgpu::ShaderModule,
+    blit_pipeline: wgpu::RenderPipeline,
+    blit_render_bundle: wgpu::RenderBundle,
+    // fxaa_pipeline: wgpu::ComputePipeline,
 
+    linear_sampler: wgpu::Sampler,
+    unprocessed_texture: wgpu::TextureView,
+    fxaa_texture: wgpu::TextureView,
     depth_texture: wgpu::TextureView,
     stencil_texture: wgpu::TextureView,
     // for deferred rendering/ambient occlusion approximation
@@ -198,9 +201,21 @@ impl Renderer {
 
         let swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
 
+        let linear_sampler = Self::create_linear_sampler(&device);
+        let unprocessed_texture = Self::create_unprocessed_texture(&device, size);
+        let fxaa_texture = Self::create_fxaa_texture(&device, size);
         let depth_texture = Self::create_depth_texture(&device, size);
-        let stencil_texture = Self::create_stencil_buffer(&device, size);
+        let stencil_texture = Self::create_stencil_texture(&device, size);
         let normals_texture = Self::create_normals_texture(&device, size);
+
+        let blit_pipeline = Self::create_blit_pipeline(&device, &bgl);
+        let blit_render_bundle = Self::create_blit_render_bundle(
+            &device,
+            &bgl,
+            &linear_sampler,
+            &unprocessed_texture,
+            &blit_pipeline
+        );
 
         let gpu_resources = Arc::new(GlobalGpuResources { device, queue, bgl });
 
@@ -216,12 +231,13 @@ impl Renderer {
 
                 periodic_table,
 
-                atom_pipeline_layout,
                 atom_render_pipeline,
-                // atom_transform_buffer,
-                atom_vert_shader,
-                atom_frag_shader,
+                blit_pipeline,
+                blit_render_bundle,
 
+                linear_sampler,
+                unprocessed_texture,
+                fxaa_texture,
                 depth_texture,
                 stencil_texture,
                 normals_texture,
@@ -247,9 +263,20 @@ impl Renderer {
             .device
             .create_swap_chain(&self.surface, &self.swap_chain_desc);
 
+        self.unprocessed_texture = Self::create_unprocessed_texture(&self.gpu_resources.device, new_size);
+        self.fxaa_texture = Self::create_fxaa_texture(&self.gpu_resources.device, new_size);
         self.depth_texture = Self::create_depth_texture(&self.gpu_resources.device, new_size);
-        self.stencil_texture = Self::create_stencil_buffer(&self.gpu_resources.device, new_size);
+        self.stencil_texture = Self::create_stencil_texture(&self.gpu_resources.device, new_size);
         self.normals_texture = Self::create_normals_texture(&self.gpu_resources.device, new_size);
+
+        // Must be called after creating all the new textures.
+        self.blit_render_bundle = Self::create_blit_render_bundle(
+            &self.gpu_resources.device,
+            &self.gpu_resources.bgl,
+            &self.linear_sampler,
+            &self.unprocessed_texture,
+            &self.blit_pipeline,
+        );
 
         self.camera.resize(new_size);
     }
@@ -287,7 +314,28 @@ impl Renderer {
             })
             .expect("failed to get next swapchain");
 
-        self.render_all_fragments(world, &frame.output.view, &mut encoder);
+        self.render_all_fragments(world, &mut encoder);
+
+        {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.output.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.8,
+                            g: 0.8,
+                            b: 0.8,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                }],
+                depth_stencil_attachment: None,
+            });
+
+            rpass.execute_bundles(Some(&self.blit_render_bundle).into_iter());
+        }
 
         if interactions.selected_fragments.len() != 0 {
             log::warn!("trying to render to stencil");
@@ -405,13 +453,12 @@ impl Renderer {
     fn render_all_fragments(
         &self,
         world: &World,
-        attachment: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[
                 wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment,
+                    attachment: &self.unprocessed_texture,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -513,7 +560,7 @@ impl Renderer {
         }
     }
 
-    fn create_depth_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+    fn create_texture(device: &wgpu::Device, size: PhysicalSize<u32>, format: wgpu::TextureFormat, usage: wgpu::TextureUsage) -> wgpu::TextureView {
         device
             .create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -525,13 +572,17 @@ impl Renderer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Depth32Float,
-                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+                format,
+                usage,
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    fn create_stencil_buffer(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+    fn create_depth_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+        Self::create_texture(device, size, wgpu::TextureFormat::Depth32Float, wgpu::TextureUsage::OUTPUT_ATTACHMENT)
+    }
+
+    fn create_stencil_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
         device
             .create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -550,20 +601,99 @@ impl Renderer {
     }
 
     fn create_normals_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
-        device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: size.width,
-                    height: size.height,
-                    depth: 1,
+        Self::create_texture(device, size,
+            wgpu::TextureFormat::Rgba16Float,
+            wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED
+        )
+    }
+
+    fn create_unprocessed_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+        Self::create_texture(device, size,
+            SWAPCHAIN_FORMAT,
+            wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED
+        )
+    }
+
+    fn create_fxaa_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
+        Self::create_texture(device, size,
+            SWAPCHAIN_FORMAT,
+            wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED
+        )
+    }
+
+    fn create_blit_pipeline(device: &wgpu::Device, bgl: &BindGroupLayouts) -> wgpu::RenderPipeline {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bgl.blit],
+            push_constant_ranges: &[],
+        });
+
+        let vert_shader = device.create_shader_module(include_spirv!("blit.vert"));
+        let frag_shader = device.create_shader_module(include_spirv!("blit.frag"));
+
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            vertex_stage: wgpu::ProgrammableStageDescriptor {
+                module: &vert_shader,
+                entry_point: "main",
+            },
+            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
+                module: &frag_shader,
+                entry_point: "main",
+            }),
+            rasterization_state: None,
+            primitive_topology: wgpu::PrimitiveTopology::TriangleList, // doesn't matter
+            color_states: &[SWAPCHAIN_FORMAT.into()],
+            depth_stencil_state: None,
+            vertex_state: wgpu::VertexStateDescriptor { // doesn't matter
+                index_format: wgpu::IndexFormat::Uint16,
+                vertex_buffers: &[]
+            },
+            sample_count: 1,
+            sample_mask: !0,
+            alpha_to_coverage_enabled: false,
+        })
+    }
+
+    fn create_linear_sampler(device: &wgpu::Device) -> wgpu::Sampler {
+        device.create_sampler(&wgpu::SamplerDescriptor::default())
+    }
+
+    fn create_blit_render_bundle(
+        device: &wgpu::Device,
+        bgl: &BindGroupLayouts,
+        linear_sampler: &wgpu::Sampler,
+        input_texture: &wgpu::TextureView,
+        blit_pipeline: &wgpu::RenderPipeline
+    ) -> wgpu::RenderBundle {
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl.blit,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(linear_sampler),
                 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba16Float,
-                usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
-            })
-            .create_view(&wgpu::TextureViewDescriptor::default())
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&input_texture),
+                }
+            ]
+        });
+
+        let mut encoder = device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+            label: None,
+            color_formats: &[SWAPCHAIN_FORMAT],
+            depth_stencil_format: None,
+            sample_count: 1,
+        });
+
+        encoder.set_pipeline(blit_pipeline);
+        encoder.set_bind_group(0, &bind_group, &[]);
+        encoder.draw(0..3, 0..1);
+        encoder.finish(&wgpu::RenderBundleDescriptor {
+            label: None,
+        })
     }
 }

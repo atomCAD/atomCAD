@@ -1,0 +1,80 @@
+/*
+ * FXAA as a compute shader
+ */
+#version 450
+
+#define FXAA_REDUCE_MIN (1.0/128.0)
+#define FXAA_SPAN_MAX (8.0)
+#define FXAA_REDUCE_MUL (1.0/8.0)
+
+
+// Sampler
+layout(set = 0, binding = 0) uniform sampler linear_sampler;
+// Input
+layout(set = 0, binding = 1) uniform texture2D color_input;
+// Output
+layout(set = 0, binding = 2) uniform writeonly image2D color_output;
+
+
+layout(local_size_x = 8, local_size_y = 8) in;
+void main(void) {
+    const vec2 global_coord = vec2(gl_GlobalInvocationID.xy);
+    const vec2 inverse_size = 1.0 / vec2(gl_NumWorkGroups.xy * gl_WorkGroupSize.xy);
+
+    // Grab the pixel we're sitting directly on
+    // this fills in the center of the `loaded_texels` matrix.
+    const vec4 color_center = texture(sampler2D(color_input, linear_sampler), global_coord * inverse_size);
+    const vec3 color_nw = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(1.0, 1.0)) * inverse_size).rgb;
+    const vec3 color_ne = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(1.0, -1.0)) * inverse_size).rgb;
+    const vec3 color_sw = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(-1.0, 1.0)) * inverse_size).rgb;
+    const vec3 color_se = texture(sampler2D(color_input, linear_sampler), (global_coord + vec2(-1.0, -1.0)) * inverse_size).rgb;
+
+    const vec3 luma = vec3(0.299, 0.587, 0.114);
+    const float luma_nw = dot(color_nw, luma);
+    const float luma_ne = dot(color_ne, luma);
+    const float luma_sw = dot(color_sw, luma);
+    const float luma_se = dot(color_se, luma);
+    const float luma_center = dot(color_center.rgb, luma);
+
+    float luma_min = min(luma_center, min(min(luma_nw, luma_ne), min(luma_sw, luma_se)));
+    float luma_max = max(luma_center, max(max(luma_nw, luma_ne), max(luma_sw, luma_se)));
+
+    vec2 dir = vec2(
+        -((luma_nw + luma_ne) - (luma_sw + luma_se)),
+        (luma_nw + luma_sw) - (luma_ne + luma_se)
+    );
+
+    const float dir_reduce = max(
+        (luma_nw + luma_ne + luma_sw + luma_se) * (0.25 * FXAA_REDUCE_MUL),
+        FXAA_REDUCE_MIN
+    );
+
+    const float rcp_dir_min = 1.0 / (min(abs(dir.x), abs(dir.y)) + dir_reduce);
+    dir = min(
+        vec2(FXAA_SPAN_MAX),
+        max(
+            vec2(-FXAA_SPAN_MAX),
+            dir * rcp_dir_min
+        )
+    ) * inverse_size;
+
+    const vec3 color_a = 0.5 * (
+        texture(sampler2D(color_input, linear_sampler), global_coord * inverse_size + dir * (1.0 / 3.0 - 0.5)).rgb
+        + texture(sampler2D(color_input, linear_sampler), global_coord * inverse_size + dir * (2.0 / 3.0 - 0.5)).rgb
+    );
+    const vec3 color_b = color_a * 0.5 + 0.25 * (
+        texture(sampler2D(color_input, linear_sampler), global_coord * inverse_size + dir * -0.5).rgb
+        + texture(sampler2D(color_input, linear_sampler), global_coord * inverse_size + dir * 0.5).rgb
+    );
+
+    const float luma_b = dot(color_b, luma);
+
+    vec4 fxaa;
+    if ((luma_b < luma_min) || (luma_b > luma_max)) {
+        fxaa = vec4(color_a, color_center.a);
+    } else {
+        fxaa = vec4(color_b, color_center.a);
+    }
+
+    imageStore(color_output, ivec2(gl_GlobalInvocationID.xy), fxaa);
+}

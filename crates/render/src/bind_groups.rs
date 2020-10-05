@@ -5,6 +5,7 @@ pub trait AsBindingResource {
 pub struct BindGroupLayouts {
     pub global: wgpu::BindGroupLayout,
     pub atoms: wgpu::BindGroupLayout,
+    pub blit: wgpu::BindGroupLayout,
 }
 
 impl BindGroupLayouts {
@@ -49,6 +50,29 @@ impl BindGroupLayouts {
                     count: None,
                 }],
             }),
+            blit: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler {
+                            comparison: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
+                            dimension: wgpu::TextureViewDimension::D2,
+                            component_type: wgpu::TextureComponentType::Float,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                ]
+            })
         }
     }
 }
