@@ -22,9 +22,9 @@ struct Element {
     float radius;
 };
 
-layout(set = 0, binding = 1) readonly buffer ShaderConfiguration {
+layout(set = 0, binding = 1) readonly buffer PeriodicTable {
     Element elements[118];
-} config;
+} periodic_table;
 
 struct Atom {
     vec3 pos;
@@ -77,7 +77,7 @@ const vec2 vertices[3] = {
 
 void main(void) {
     const Atom atom = atoms[gl_VertexIndex / 3];
-    element = config.elements[atom.kind & 0x7f];
+    element = periodic_table.elements[atom.kind & 0x7f];
     const vec2 vertex = element.radius * vertices[gl_VertexIndex % 3];
 
     const vec3 camera_right_worldspace = vec3(camera.view[0][0], camera.view[1][0], camera.view[2][0]);

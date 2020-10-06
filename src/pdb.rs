@@ -3,12 +3,12 @@ use lib3dmol::{
     structures::{atom::AtomType, GetAtom as _},
 };
 use periodic_table::Element;
-use render::{AtomKind, AtomRepr, Fragment, GlobalGpuResources, Part, World};
+use render::{AtomKind, AtomRepr, Fragment, GlobalRenderResources, Part, World};
 use std::path::Path;
 
 // TODO: Better result error type.
 pub fn load_from_pdb<P: AsRef<Path>>(
-    gpu_resources: &GlobalGpuResources,
+    gpu_resources: &GlobalRenderResources,
     name: &str,
     path: P,
 ) -> Result<World, String> {
@@ -54,7 +54,7 @@ pub fn load_from_pdb<P: AsRef<Path>>(
 }
 
 pub fn load_from_pdb_str(
-    gpu_resources: &GlobalGpuResources,
+    gpu_resources: &GlobalRenderResources,
     name: &str,
     contents: &str,
 ) -> Result<World, String> {

@@ -1,4 +1,4 @@
-use crate::{buffer_vec::BufferVec, FragmentId, GlobalGpuResources, PartId};
+use crate::{buffer_vec::BufferVec, FragmentId, GlobalRenderResources};
 use common::AsBytes;
 use periodic_table::Element;
 use std::mem;
@@ -51,7 +51,7 @@ pub struct Atoms {
 }
 
 impl Atoms {
-    pub fn new<I>(gpu_resources: &GlobalGpuResources, fragment_id: FragmentId, iter: I) -> Self
+    pub fn new<I>(gpu_resources: &GlobalRenderResources, fragment_id: FragmentId, iter: I) -> Self
     where
         I: IntoIterator<Item = AtomRepr>,
         I::IntoIter: ExactSizeIterator,
@@ -83,7 +83,7 @@ impl Atoms {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
-                layout: &gpu_resources.bgl.atoms,
+                layout: &gpu_resources.atom_bgl,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer {
@@ -103,7 +103,7 @@ impl Atoms {
 
     pub fn copy_new(
         &self,
-        gpu_resources: &GlobalGpuResources,
+        gpu_resources: &GlobalRenderResources,
         fragment_id: FragmentId,
         encoder: &mut wgpu::CommandEncoder,
     ) -> Self {
@@ -125,7 +125,7 @@ impl Atoms {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
-                layout: &gpu_resources.bgl.atoms,
+                layout: &gpu_resources.atom_bgl,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer {

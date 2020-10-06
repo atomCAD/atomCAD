@@ -1,7 +1,7 @@
 use crate::{
     atoms::{AtomRepr, Atoms},
     utils::BoundingBox,
-    GlobalGpuResources,
+    GlobalRenderResources,
 };
 use common::AsBytes;
 use indexmap::IndexMap;
@@ -45,7 +45,7 @@ pub struct Fragment {
 }
 
 impl Fragment {
-    pub fn from_atoms<I>(gpu_resources: &GlobalGpuResources, atoms: I) -> Self
+    pub fn from_atoms<I>(gpu_resources: &GlobalRenderResources, atoms: I) -> Self
     where
         I: IntoIterator<Item = AtomRepr>,
         I::IntoIter: ExactSizeIterator,

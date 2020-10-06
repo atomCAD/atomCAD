@@ -1,4 +1,4 @@
-use crate::GlobalGpuResources;
+use crate::GlobalRenderResources;
 
 struct BufferVecInner {
     buffer: wgpu::Buffer,
@@ -83,7 +83,7 @@ impl BufferVec {
     #[must_use = "user must be aware if the vector re-allocated or not"]
     pub fn push_small(
         &mut self,
-        gpu_resources: &GlobalGpuResources,
+        gpu_resources: &GlobalRenderResources,
         encoder: &mut wgpu::CommandEncoder,
         data: &[u8],
     ) -> BufferVecOp {
@@ -200,7 +200,7 @@ impl BufferVec {
 
     pub fn write_partial_small(
         &mut self,
-        gpu_resources: &GlobalGpuResources,
+        gpu_resources: &GlobalRenderResources,
         offset: u64,
         data: &[u8],
     ) {
@@ -216,7 +216,7 @@ impl BufferVec {
         }
     }
 
-    pub fn copy_new<F>(&self, gpu_resources: &GlobalGpuResources, f: F) -> Self
+    pub fn copy_new<F>(&self, gpu_resources: &GlobalRenderResources, f: F) -> Self
     where
         F: FnOnce(u64, &wgpu::Buffer /* from */, &wgpu::Buffer /* to */) -> u64,
     {
