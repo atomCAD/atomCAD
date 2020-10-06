@@ -96,7 +96,7 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
+                    features: wgpu::Features::DEVICE_BUFFER_ADDRESS,
                     limits: wgpu::Limits::default(),
                     shader_validation: true,
                 },

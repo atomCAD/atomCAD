@@ -48,6 +48,11 @@ impl BufferVec {
                 fill(&mut buffer_view);
             }
             buffer.unmap();
+
+            println!("buffer address: {:#x?}", unsafe {
+                buffer.get_device_address()
+            });
+
             buffer
         };
         #[cfg(target_arch = "wasm32")]

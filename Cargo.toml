@@ -56,3 +56,18 @@ console_log = "0.2.0"
 # git = "https://github.com/lachlansneff/gfx"
 # rev = "e3e1e285170cdad7e100d7bf0b0833c00ea28dcd"
 
+[patch."https://github.com/gfx-rs/wgpu-rs"]
+wgpu = { git = "https://github.com/lachlansneff/wgpu-rs", rev = "8aee18961eb03afa59147d7493f413b73c5bea5d" }
+
+[patch."https://github.com/gfx-rs/wgpu"]
+wgpu-core = { git = "https://github.com/lachlansneff/wgpu", rev = "b84cfcb834cd3a447151fe9ebfb543ff558e2d76" }
+wgpu-types = { git = "https://github.com/lachlansneff/wgpu", rev = "b84cfcb834cd3a447151fe9ebfb543ff558e2d76" }
+#wgpu-types = { version = "0.6", path = "../wgpu/wgpu-types" }
+#wgpu-core = { version = "0.6", path = "../wgpu/wgpu-core" }
+
+[patch.crates-io]
+gfx-hal = { git = "https://github.com/lachlansneff/gfx", rev = "01a81050eccc909428ab928c251ad8b1683fd45f" }
+gfx-backend-vulkan = { git = "https://github.com/lachlansneff/gfx", rev = "01a81050eccc909428ab928c251ad8b1683fd45f" }
+gfx-backend-empty = { git = "https://github.com/lachlansneff/gfx", rev = "01a81050eccc909428ab928c251ad8b1683fd45f" }
+gfx-backend-metal = { git = "https://github.com/lachlansneff/gfx", rev = "01a81050eccc909428ab928c251ad8b1683fd45f" }
+
