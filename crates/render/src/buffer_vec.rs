@@ -28,6 +28,14 @@ where
     T: AsBytes,
 {
     pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsage, header: Header) -> Self {
+        assert!(
+            mem::align_of::<Header>() <= 1
+                || mem::align_of::<T>() <= 1
+                || mem::align_of::<Header>() % mem::align_of::<T>() == 0,
+            "align of `{}` must be a multiple of the align of `{}`",
+            type_name::<Header>(),
+            type_name::<T>(),
+        );
         let buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: header.as_bytes(),
@@ -52,6 +60,14 @@ where
     where
         F: FnOnce(&mut MaybeUninit<Header>, &mut [MaybeUninit<T>]),
     {
+        assert!(
+            mem::align_of::<Header>() <= 1
+                || mem::align_of::<T>() <= 1
+                || mem::align_of::<Header>() % mem::align_of::<T>() == 0,
+            "align of `{}` must be a multiple of the align of `{}`",
+            type_name::<Header>(),
+            type_name::<T>(),
+        );
         #[cfg(not(target_arch = "wasm32"))]
         let buffer = {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
