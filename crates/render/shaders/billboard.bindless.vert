@@ -9,7 +9,9 @@
  *
  * See slide 20 of https://www.slideshare.net/DevCentralAMD/vertex-shader-tricks-bill-bilodeau.
  */
-#version 450
+#version 460
+#extension GL_ARB_gpu_shader_int64 : require
+#extension GL_EXT_buffer_reference : require
 
 layout(set = 0, binding = 0) uniform Camera {
     mat4 projection;
@@ -31,10 +33,14 @@ struct Atom {
     uint kind;
 };
 
-layout(set = 1, binding = 1, std430) readonly buffer Atoms {
-    uvec2 fragment_id; // high and low
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer FragmentBuffer {
+    uint64_t fragment_id;
 
     Atom atoms[]; // this must be aligned to 16 bytes.
+};
+
+layout(set = 1, binding = 1, std430) readonly buffer FragmentBuffers {
+    FragmentBuffer fragments[];
 };
 
 // struct Bivec {
@@ -76,8 +82,10 @@ const vec2 vertices[3] = {
 // }
 
 void main(void) {
-    const Atom atom = atoms[gl_VertexIndex / 3];
+    const uint fragment_index = gl_DrawID;
+    const Atom atom = fragments[fragment_index].atoms[gl_VertexIndex / 3];
     element = periodic_table.elements[atom.kind & 0x7f];
+
     const vec2 vertex = element.radius * vertices[gl_VertexIndex % 3];
 
     const vec3 camera_right_worldspace = vec3(camera.view[0][0], camera.view[1][0], camera.view[2][0]);

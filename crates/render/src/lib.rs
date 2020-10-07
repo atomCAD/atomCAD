@@ -52,7 +52,8 @@ pub struct GlobalRenderResources {
 }
 
 pub struct RenderOptions {
-    pub fxaa: Option<()>, // to be filled out with fxaa configuration options
+    pub fxaa: Option<()>,         // to be filled out with fxaa configuration options
+    pub attempt_gpu_driven: bool, // Will attempt to drive rendering, culling, etc on gpu if supported by the adapter
 }
 
 pub struct Renderer {
@@ -70,9 +71,10 @@ pub struct Renderer {
     fxaa_pass: passes::FxaaPass,
     blit_pass: passes::BlitPass,
 
-    fragment_transforms: BufferVec,
-    per_fragment: HashMap<FragmentId, (PartId, u64 /* transform offset */)>,
+    fragment_transforms: BufferVec<(), ultraviolet::Mat4>,
+    per_fragment: HashMap<FragmentId, (PartId, u64 /* transform index */)>,
 
+    gpu_driven_rendering: bool,
     options: RenderOptions,
 }
 
@@ -93,10 +95,25 @@ impl Renderer {
             .await
             .expect("failed to find an appropriate adapter");
 
+        let gpu_driven_features =
+            wgpu::Features::DEVICE_BUFFER_ADDRESS | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
+        let gpu_driven_rendering;
+
+        let requested_features =
+            if options.attempt_gpu_driven && adapter.features().contains(gpu_driven_features) {
+                // we can do culling and draw calls directly on gpu
+                // Hopefully massive performance boost
+                gpu_driven_rendering = true;
+                gpu_driven_features
+            } else {
+                gpu_driven_rendering = false;
+                wgpu::Features::empty()
+            };
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::DEVICE_BUFFER_ADDRESS,
+                    features: requested_features,
                     limits: wgpu::Limits::default(),
                     shader_validation: true,
                 },
@@ -152,12 +169,14 @@ impl Renderer {
             camera.as_binding_resource(),
             &periodic_table_buffer,
             size,
+            gpu_driven_rendering,
         );
         let (fxaa_pass, fxaa_texture) =
             passes::FxaaPass::new(&render_resources, size, &color_texture);
         let blit_pass = passes::BlitPass::new(&render_resources, &fxaa_texture);
 
-        let fragment_transforms = BufferVec::new(wgpu::BufferUsage::VERTEX);
+        let fragment_transforms =
+            BufferVec::new(&render_resources.device, wgpu::BufferUsage::VERTEX, ());
 
         (
             Self {
@@ -178,6 +197,7 @@ impl Renderer {
                 fragment_transforms,
                 per_fragment: HashMap::new(),
 
+                gpu_driven_rendering,
                 options,
             },
             render_resources,
@@ -303,13 +323,13 @@ impl Renderer {
                 .flatten(),
         );
 
-        let mut buffer_offset = self.fragment_transforms.len();
+        let mut transform_index = self.fragment_transforms.len();
 
         let transforms: Vec<_> = added_fragments
             .map(|(part_id, fragment_id)| {
                 self.per_fragment
-                    .insert(fragment_id, (part_id, buffer_offset));
-                buffer_offset += mem::size_of::<ultraviolet::Mat4>() as u64;
+                    .insert(fragment_id, (part_id, transform_index));
+                transform_index += 1;
 
                 let part = &parts[&part_id];
                 let fragment = &fragments[&fragment_id];
@@ -326,11 +346,9 @@ impl Renderer {
 
         // This doesn't use a bind group.
         // Eventually switch this to `push_large`, once it's written.
-        let _ = self.fragment_transforms.push_small(
-            &self.render_resources,
-            encoder,
-            transforms[..].as_bytes(),
-        );
+        let _ =
+            self.fragment_transforms
+                .push_small(&self.render_resources, encoder, &transforms[..]);
     }
 
     fn update_transforms(&mut self, _encoder: &mut wgpu::CommandEncoder, world: &mut World) {
@@ -349,7 +367,7 @@ impl Renderer {
         );
 
         for fragment_id in modified_fragments {
-            let (part_id, buffer_offset) = self.per_fragment[&fragment_id];
+            let (part_id, transform_index) = self.per_fragment[&fragment_id];
 
             let part = &parts[&part_id];
             let fragment = &fragments[&fragment_id];
@@ -364,8 +382,8 @@ impl Renderer {
 
             self.fragment_transforms.write_partial_small(
                 &self.render_resources,
-                buffer_offset,
-                transform.as_bytes(),
+                transform_index,
+                &[transform],
             );
         }
     }

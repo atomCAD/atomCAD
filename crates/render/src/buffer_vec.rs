@@ -1,57 +1,87 @@
 use crate::GlobalRenderResources;
+use common::AsBytes;
+use std::{
+    any::type_name,
+    marker::PhantomData,
+    mem::{self, MaybeUninit},
+    slice,
+};
+use wgpu::util::{BufferInitDescriptor, DeviceExt as _};
 
-struct BufferVecInner {
-    buffer: wgpu::Buffer,
-    len: u64,
-    capacity: u64,
-}
-
-pub enum BufferVecOp {
+pub enum PushStategy {
     InPlace,
     Realloc,
 }
 
 /// Does not contain a bind group.
-pub struct BufferVec {
-    inner: Option<BufferVecInner>,
+pub struct BufferVec<Header, T> {
+    buffer: wgpu::Buffer,
+    len: u64,
+    capacity: u64,
     usage: wgpu::BufferUsage,
+    _marker: PhantomData<(Header, T)>,
 }
 
-impl BufferVec {
-    pub fn new(usage: wgpu::BufferUsage) -> Self {
+impl<Header, T> BufferVec<Header, T>
+where
+    Header: AsBytes,
+    T: AsBytes,
+{
+    pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsage, header: Header) -> Self {
+        let buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: header.as_bytes(),
+            usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+        });
+
         Self {
-            inner: None,
-            usage: usage | wgpu::BufferUsage::COPY_DST,
+            buffer,
+            len: 0,
+            capacity: 0,
+            usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+            _marker: PhantomData,
         }
     }
 
     pub fn new_with_data<F>(
         device: &wgpu::Device,
         usage: wgpu::BufferUsage,
-        size: u64,
+        len: u64,
         fill: F,
     ) -> Self
     where
-        F: FnOnce(&mut [u8]),
+        F: FnOnce(&mut MaybeUninit<Header>, &mut [MaybeUninit<T>]),
     {
         #[cfg(not(target_arch = "wasm32"))]
         let buffer = {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
-                size,
-                usage: usage | wgpu::BufferUsage::COPY_DST,
+                size: mem::size_of::<Header>() as u64 + mem::size_of::<T>() as u64 * len,
+                usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
                 mapped_at_creation: true,
             });
 
             {
                 let mut buffer_view = buffer.slice(..).get_mapped_range_mut();
-                fill(&mut buffer_view);
+
+                let (header, rest) = buffer_view.split_at_mut(mem::size_of::<Header>());
+                assert_eq!(header.len(), mem::size_of::<Header>());
+
+                unsafe {
+                    fill(
+                        &mut *(header.as_mut_ptr() as *mut MaybeUninit<Header>),
+                        slice::from_raw_parts_mut(
+                            rest.as_mut_ptr() as *mut MaybeUninit<T>,
+                            rest.len() / mem::size_of::<T>(),
+                        ),
+                    );
+                }
             }
             buffer.unmap();
 
-            println!("buffer address: {:#x?}", unsafe {
-                buffer.get_device_address()
-            });
+            // println!("buffer address: {:#x?}", unsafe {
+            //     buffer.get_device_address()
+            // });
 
             buffer
         };
@@ -59,7 +89,20 @@ impl BufferVec {
         let buffer = {
             use wgpu::util::{BufferInitDescriptor, DeviceExt as _};
             let mut vec = vec![0; size as usize];
-            fill(&mut vec);
+
+            let (header, rest) = vec.split_at_mut(mem::size_of::<Header>());
+            assert_eq!(header.len(), mem::size_of::<Header>());
+
+            unsafe {
+                fill(
+                    header.as_mut_ptr() as *mut MaybeUninit<Header>,
+                    slice::from_raw_parts_mut(
+                        rest.as_mut_ptr() as *mut MaybeUninit<T>,
+                        rest.len() / mem::size_of::<T>(),
+                    ),
+                );
+            }
+
             device.create_buffer_init(&BufferInitDescriptor {
                 label: None,
                 contents: &vec[..],
@@ -68,136 +111,145 @@ impl BufferVec {
         };
 
         Self {
-            inner: Some(BufferVecInner {
-                buffer,
-                len: size,
-                capacity: size,
-            }),
-            usage: usage | wgpu::BufferUsage::COPY_DST,
+            buffer,
+            len,
+            capacity: len,
+            usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+            _marker: PhantomData,
         }
     }
 
     pub fn len(&self) -> u64 {
-        self.inner.as_ref().map(|inner| inner.len).unwrap_or(0)
+        self.len
     }
 
     pub fn inner_buffer(&self) -> &wgpu::Buffer {
-        &self.inner.as_ref().unwrap().buffer
+        &self.buffer
     }
 
-    #[must_use = "user must be aware if the vector re-allocated or not"]
+    #[must_use = "user must be aware if the buffer re-allocated or not"]
     pub fn push_small(
         &mut self,
         gpu_resources: &GlobalRenderResources,
         encoder: &mut wgpu::CommandEncoder,
-        data: &[u8],
-    ) -> BufferVecOp {
-        if let Some(inner) = self.inner.as_mut() {
-            if inner.capacity - inner.len >= data.len() as u64 {
-                // There's enough space to push this data immediately.
-                gpu_resources
-                    .queue
-                    .write_buffer(&inner.buffer, inner.len, data);
-                inner.len += data.len() as u64;
+        data: &[T],
+    ) -> PushStategy {
+        let offset = (mem::size_of::<Header>() as u64) + (mem::size_of::<T>() as u64) * self.len;
 
-                BufferVecOp::InPlace
-            } else {
-                // we need to reallocate
-                let new_capacity = (inner.capacity * 2)
-                    .max((data.len() * 2) as u64)
-                    .next_power_of_two();
+        if (data.len() as u64) <= self.capacity - self.len {
+            // There's enough space to push this data immediately.
+            gpu_resources
+                .queue
+                .write_buffer(&self.buffer, offset, data.as_bytes());
+            self.len += data.len() as u64;
 
-                log::info!(
-                    "allocating new buffer with capacity of {} to fit {}",
-                    new_capacity,
-                    data.len()
-                );
-
-                #[cfg(not(target_arch = "wasm32"))]
-                let new_buffer = {
-                    let new_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
-                        label: None,
-                        size: new_capacity,
-                        usage: self.usage,
-                        mapped_at_creation: true,
-                    });
-
-                    {
-                        let mut buffer_view = new_buffer
-                            .slice(inner.len..(inner.len + data.len() as u64))
-                            .get_mapped_range_mut();
-                        buffer_view.copy_from_slice(data);
-                    }
-
-                    new_buffer.unmap();
-                    new_buffer
-                };
-                #[cfg(target_arch = "wasm32")]
-                let new_buffer = {
-                    let new_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
-                        label: None,
-                        size: new_capacity,
-                        usage: self.usage,
-                        mapped_at_creation: false,
-                    });
-                    gpu_resources
-                        .queue
-                        .write_buffer(&new_buffer, inner.len, data);
-                    new_buffer
-                };
-
-                encoder.copy_buffer_to_buffer(&inner.buffer, 0, &new_buffer, 0, inner.len);
-
-                inner.buffer = new_buffer;
-                inner.capacity = new_capacity;
-                inner.len += data.len() as u64;
-
-                BufferVecOp::Realloc
-            }
+            PushStategy::InPlace
         } else {
-            let capacity = (data.len() * 2).next_power_of_two() as u64;
+            // we need to reallocate
+            let new_capacity = (self.capacity * 2)
+                .max((data.len() * 2) as u64)
+                .next_power_of_two();
+
             log::info!(
-                "allocating buffer with capacity of {} to fit {}",
-                capacity,
-                data.len()
+                "allocating new buffer (`{}` + `{}`) with capacity of {} to fit {} ({} bytes -> {} bytes)",
+                type_name::<Header>(),
+                type_name::<T>(),
+                new_capacity,
+                data.len(),
+                mem::size_of::<Header>() as u64 + new_capacity * mem::size_of::<T>() as u64,
+                mem::size_of::<Header>() as u64 + (data.len() * mem::size_of::<T>()) as u64,
             );
-            // there's no buffer yet, let's allocate it + some extra space and fill it
+
             #[cfg(not(target_arch = "wasm32"))]
-            let buffer = {
-                let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+            let new_buffer = {
+                let new_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
                     label: None,
-                    size: capacity,
+                    size: mem::size_of::<Header>() as u64
+                        + new_capacity * mem::size_of::<T>() as u64,
                     usage: self.usage,
                     mapped_at_creation: true,
                 });
 
                 {
-                    let mut buffer_view = buffer.slice(..data.len() as u64).get_mapped_range_mut();
-                    buffer_view.copy_from_slice(data);
+                    let mut buffer_view = new_buffer
+                        .slice(offset..offset + (data.len() * mem::size_of::<T>()) as u64)
+                        .get_mapped_range_mut();
+                    buffer_view.copy_from_slice(data.as_bytes());
                 }
-                buffer.unmap();
-                buffer
+
+                new_buffer.unmap();
+                new_buffer
             };
             #[cfg(target_arch = "wasm32")]
-            let buffer = {
-                let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+            let new_buffer = {
+                let new_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
                     label: None,
-                    size: capacity,
+                    size: mem::size_of::<Header>() as u64
+                        + new_capacity * mem::size_of::<T>() as u64,
                     usage: self.usage,
                     mapped_at_creation: false,
                 });
-                gpu_resources.queue.write_buffer(&buffer, 0, data);
-                buffer
+                gpu_resources
+                    .queue
+                    .write_buffer(&new_buffer, offset, data.as_bytes());
+                new_buffer
             };
 
-            self.inner = Some(BufferVecInner {
-                buffer,
-                len: data.len() as u64,
-                capacity,
-            });
+            encoder.copy_buffer_to_buffer(&self.buffer, 0, &new_buffer, 0, offset);
 
-            BufferVecOp::Realloc
+            self.buffer = new_buffer;
+            self.capacity = new_capacity;
+            self.len += data.len() as u64;
+
+            PushStategy::Realloc
         }
+        // if let Some(inner) = self.inner.as_mut() {
+
+        // } else {
+        //     let capacity = (data.len() * 2).next_power_of_two() as u64;
+        //     log::info!(
+        //         "allocating buffer with capacity of {} to fit {}",
+        //         capacity,
+        //         data.len()
+        //     );
+        //     // there's no buffer yet, let's allocate it + some extra space and fill it
+        //     #[cfg(not(target_arch = "wasm32"))]
+        //     let buffer = {
+        //         let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+        //             label: None,
+        //             size: mem::size_of::<Header>() as u64 + capacity * mem::size_of::<T>() as u64,
+        //             usage: self.usage,
+        //             mapped_at_creation: true,
+        //         });
+
+        //         {
+        //             let offset = mem
+        //             let mut buffer_view = buffer.slice(..data.len() as u64).get_mapped_range_mut();
+        //             buffer_view.copy_from_slice(data);
+        //         }
+        //         buffer.unmap();
+        //         buffer
+        //     };
+        //     #[cfg(target_arch = "wasm32")]
+        //     let buffer = {
+        //         let buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
+        //             label: None,
+        //             size: capacity,
+        //             usage: self.usage,
+        //             mapped_at_creation: false,
+        //         });
+        //         gpu_resources.queue.write_buffer(&buffer, 0, data);
+        //         buffer
+        //     };
+
+        //     self.inner = Some(BufferVecInner {
+        //         buffer,
+        //         len: data.len() as u64,
+        //         capacity,
+        //     });
+
+        //     BufferVecOp::Realloc
+        // }
     }
 
     // #[must_use = "user must be aware if the vector re-allocated or not"]
@@ -206,16 +258,15 @@ impl BufferVec {
     pub fn write_partial_small(
         &mut self,
         gpu_resources: &GlobalRenderResources,
-        offset: u64,
-        data: &[u8],
+        starting_index: u64,
+        data: &[T],
     ) {
-        let inner = self.inner.as_ref().expect(
-            "you must have already instantiated this buffer vec to call `write_partial_small`",
-        );
-        if offset + (data.len() as u64) <= inner.len {
+        if starting_index + (data.len() as u64) <= self.len {
+            let offset =
+                (mem::size_of::<Header>() as u64) + (data.len() * mem::size_of::<T>()) as u64;
             gpu_resources
                 .queue
-                .write_buffer(&inner.buffer, offset, data);
+                .write_buffer(&self.buffer, offset, data.as_bytes());
         } else {
             panic!("attempting to partially write beyond buffer bounds")
         }
@@ -225,29 +276,6 @@ impl BufferVec {
     where
         F: FnOnce(u64, &wgpu::Buffer /* from */, &wgpu::Buffer /* to */) -> u64,
     {
-        if let Some(inner) = self.inner.as_ref() {
-            let copied_buffer = gpu_resources.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: inner.len,
-                usage: self.usage,
-                mapped_at_creation: false,
-            });
-
-            let copied_len = f(inner.len, &inner.buffer, &copied_buffer);
-
-            Self {
-                inner: Some(BufferVecInner {
-                    buffer: copied_buffer,
-                    len: copied_len,
-                    capacity: inner.len,
-                }),
-                usage: self.usage,
-            }
-        } else {
-            Self {
-                inner: None,
-                usage: self.usage,
-            }
-        }
+        unimplemented!()
     }
 }

@@ -24,6 +24,7 @@ macro_rules! impl_as_bytes {
 }
 
 impl_as_bytes!(
+    (),
     ultraviolet::Vec2,
     ultraviolet::Vec3,
     ultraviolet::Mat2,

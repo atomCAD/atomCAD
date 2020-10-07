@@ -1,7 +1,7 @@
 use crate::{buffer_vec::BufferVec, FragmentId, GlobalRenderResources};
 use common::AsBytes;
 use periodic_table::Element;
-use std::mem;
+use std::mem::{self, MaybeUninit};
 use ultraviolet::Vec3;
 
 /// Packed bit field
@@ -46,7 +46,7 @@ unsafe impl AsBytes for AtomBufferHeader {}
 
 pub struct Atoms {
     bind_group: wgpu::BindGroup,
-    buffer: BufferVec,
+    buffer: BufferVec<AtomBufferHeader, AtomRepr>,
     number_of_atoms: usize,
 }
 
@@ -64,18 +64,15 @@ impl Atoms {
         let buffer = BufferVec::new_with_data(
             &gpu_resources.device,
             wgpu::BufferUsage::STORAGE,
-            (mem::size_of::<AtomBufferHeader>() + number_of_atoms * mem::size_of::<AtomRepr>())
-                as u64,
-            |buffer_view| {
-                let (header, rest) = buffer_view.split_at_mut(mem::size_of::<AtomBufferHeader>());
+            number_of_atoms as u64,
+            |header, array| {
+                // header.write(AtomBufferHeader { fragment_id });
+                *header = MaybeUninit::new(AtomBufferHeader { fragment_id });
 
-                header.copy_from_slice(AtomBufferHeader { fragment_id }.as_bytes());
-
-                rest.chunks_exact_mut(mem::size_of::<AtomRepr>())
-                    .zip(atoms)
-                    .for_each(|(chunk, atom)| {
-                        chunk.copy_from_slice(atom.as_bytes());
-                    });
+                for (block, atom) in array.iter_mut().zip(atoms) {
+                    // block.write(atom);
+                    *block = MaybeUninit::new(atom);
+                }
             },
         );
 

@@ -1,5 +1,6 @@
 use crate::{
-    include_spirv, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT,
+    include_spirv, BufferVec, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer,
+    SWAPCHAIN_FORMAT,
 };
 use std::{collections::HashMap, convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
@@ -14,6 +15,25 @@ pub struct MolecularPass {
     // stencil_texture: wgpu::TextureView,
     // for deferred rendering/ambient occlusion approximation
     normals_texture: wgpu::TextureView,
+
+    driven: Driven,
+}
+
+#[repr(C)]
+struct DrawIndirect {
+    vertex_count: u32,   // The number of vertices to draw.
+    instance_count: u32, // The number of instances to draw.
+    base_vertex: u32,    // The Index of the first vertex to draw.
+    base_instance: u32,  // The instance ID of the first instance to draw.
+}
+
+enum Driven {
+    CpuDriven,
+    GpuDriven {
+        // fragment_buffer_refs: BufferVec,
+    // draw_commands: BufferVec,
+    // do we embed additional passes here?
+    },
 }
 
 impl MolecularPass {
@@ -22,6 +42,7 @@ impl MolecularPass {
         camera_binding_resource: wgpu::BindingResource,
         periodic_table_buffer: &wgpu::Buffer,
         size: PhysicalSize<u32>,
+        gpu_driven_rendering: bool,
     ) -> (Self, wgpu::TextureView) {
         let top_level_bgl = create_top_level_bgl(&render_resources.device);
         let pipeline = create_render_pipeline(
@@ -40,6 +61,8 @@ impl MolecularPass {
         let depth_texture = create_depth_texture(&render_resources.device, size);
         let normals_texture = create_normals_texture(&render_resources.device, size);
 
+        assert!(!gpu_driven_rendering);
+
         (
             Self {
                 pipeline,
@@ -48,6 +71,7 @@ impl MolecularPass {
                 color_texture: color_texture.create_view(&wgpu::TextureViewDescriptor::default()),
                 depth_texture,
                 normals_texture,
+                driven: Driven::CpuDriven,
             },
             color_texture.create_view(&wgpu::TextureViewDescriptor::default()),
         )
@@ -73,7 +97,7 @@ impl MolecularPass {
         encoder: &mut wgpu::CommandEncoder,
         fragments: impl IntoIterator<Item = &'a Fragment>,
         fragment_transforms: &wgpu::Buffer,
-        per_fragment: &HashMap<FragmentId, (PartId, u64 /* transform offset */)>,
+        per_fragment: &HashMap<FragmentId, (PartId, u64 /* transform index */)>,
     ) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[
@@ -116,7 +140,9 @@ impl MolecularPass {
 
         // TODO: Try instancing?
         for fragment in fragments {
-            let transform_offset = per_fragment[&fragment.id()].1;
+            let transform_offset =
+                per_fragment[&fragment.id()].1 * (mem::size_of::<ultraviolet::Mat4>() as u64);
+
             rpass.set_vertex_buffer(
                 0,
                 fragment_transforms.slice(
