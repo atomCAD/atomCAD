@@ -1,4 +1,5 @@
 use crate::camera::ArcballCamera;
+// use crate::rotating_camera::RotatingArcballCamera;
 use common::InputEvent;
 use render::{Interactions, RenderOptions, Renderer, World};
 
@@ -9,7 +10,9 @@ use winit::{
 };
 
 mod camera;
+// mod rotating_camera;
 mod pdb;
+// mod ti;
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let (mut renderer, gpu_resources) = Renderer::new(
@@ -25,15 +28,29 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let mut world = World::new();
 
-    // let loaded_pdb = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
-    //     .expect("failed to load pdb");
+    let mut neon_pump = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
+        .expect("failed to load pdb");
 
-    let loaded_pdb = pdb::load_from_pdb_str(
-        &gpu_resources,
-        "Neon Pump",
-        include_str!("../data/neon_pump_imm.pdb"),
-    )
-    .unwrap();
+    println!(
+        "Loaded {} parts and {} fragments",
+        neon_pump.parts().len(),
+        neon_pump.fragments().len()
+    );
+
+    for part in neon_pump.parts_mut() {
+        // This doesn't let the world now that this part is going to be updated,
+        // but we're adding them for the first time, so it'll work anyhow.
+        part.move_to(0.0, 0.0, 0.0);
+    }
+
+    world.merge(neon_pump);
+
+    // let loaded_pdb = pdb::load_from_pdb_str(
+    //     &gpu_resources,
+    //     "Neon Pump",
+    //     include_str!("../data/neon_pump_imm.pdb"),
+    // )
+    // .unwrap();
 
     // let loaded_pdb = pdb::load_from_pdb(
     //     &gpu_resources,
@@ -42,18 +59,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     // )
     // .expect("failed to load pdb");
 
-    // let fragment_id = loaded_pdb.fragments().next().unwrap().id();
-
-    // for part in loaded_pdb.parts_mut() {
-    //     part.move_to(ultraviolet::Vec3::new(0.0, 0.0, 10.0));
-    // }
-
-    let some_part = loaded_pdb.parts().next().unwrap().id();
-
-    world.merge(loaded_pdb);
-
     let interations = Interactions::default();
-    // interations.selected_fragments.insert(fragment_id);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -71,18 +77,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 event: WindowEvent::CloseRequested,
                 ..
             } => *control_flow = ControlFlow::Exit,
-            // // test to show that modifying parts is working correctly.
-            // Event::WindowEvent {
-            //     event:
-            //         winit::event::WindowEvent::MouseInput {
-            //             state: winit::event::ElementState::Pressed,
-            //             button: winit::event::MouseButton::Left,
-            //             ..
-            //         },
-            //     ..
-            // } => {
-            //     world.part_mut(some_part).offset_by(0.0, 0.0, 2.0);
-            // }
             Event::WindowEvent { event, .. } => {
                 renderer.camera().update(InputEvent::Window(event));
             }

@@ -20,7 +20,7 @@ fn clamp(mut x: f32, min: f32, max: f32) -> f32 {
     x
 }
 
-pub struct ArcballCamera {
+pub struct RotatingArcballCamera {
     camera: CameraRepr,
 
     mouse_button_pressed: bool,
@@ -30,7 +30,7 @@ pub struct ArcballCamera {
     speed: f32,
 }
 
-impl ArcballCamera {
+impl RotatingArcballCamera {
     pub fn new(distance: f32, speed: f32) -> Self {
         Self {
             camera: CameraRepr::default(),
@@ -51,7 +51,7 @@ impl ArcballCamera {
     }
 }
 
-impl Camera for ArcballCamera {
+impl Camera for RotatingArcballCamera {
     fn resize(&mut self, aspect: f32, fov: f32, near: f32) {
         self.camera.projection =
             projection::perspective_reversed_infinite_z_wgpu_dx_gl(fov, aspect, near);
@@ -99,11 +99,12 @@ impl Camera for ArcballCamera {
                 }
                 _ => false,
             },
-            InputEvent::BeginningFrame => false,
+            InputEvent::BeginningFrame => true,
         }
     }
 
     fn finalize(&mut self) {
+        self.add_yaw(0.01);
         let eye = self.distance
             * Vec3::new(
                 self.yaw.sin() * self.pitch.cos(),

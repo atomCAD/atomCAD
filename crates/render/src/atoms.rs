@@ -100,29 +100,22 @@ impl Atoms {
 
     pub fn copy_new(
         &self,
-        gpu_resources: &GlobalRenderResources,
+        render_resources: &GlobalRenderResources,
         fragment_id: FragmentId,
-        encoder: &mut wgpu::CommandEncoder,
     ) -> Self {
-        let buffer = self
-            .buffer
-            .copy_new(gpu_resources, |len, src_buffer, dest_buffer| {
-                let header_size = mem::size_of::<AtomBufferHeader>() as u64;
-                encoder.copy_buffer_to_buffer(
-                    src_buffer,
-                    header_size,
-                    dest_buffer,
-                    header_size,
-                    self.buffer.len(),
-                );
-                len
-            });
+        let buffer = self.buffer.copy_new(render_resources, false);
 
-        let bind_group = gpu_resources
+        render_resources.queue.write_buffer(
+            buffer.inner_buffer(),
+            0,
+            AtomBufferHeader { fragment_id }.as_bytes(),
+        );
+
+        let bind_group = render_resources
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
-                layout: &gpu_resources.atom_bgl,
+                layout: &render_resources.atom_bgl,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer {

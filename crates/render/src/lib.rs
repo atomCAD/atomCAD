@@ -230,6 +230,7 @@ impl Renderer {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+        self.camera.update(common::InputEvent::BeginningFrame);
         if !self.camera.upload(&self.render_resources.queue) {
             log::warn!("no camera is set");
             // no camera is set, so no reason to do rendering.

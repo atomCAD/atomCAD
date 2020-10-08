@@ -1,5 +1,6 @@
 use ultraviolet::Vec3;
 
+#[derive(Copy, Clone)]
 pub struct BoundingBox {
     pub min: Vec3,
     pub max: Vec3,

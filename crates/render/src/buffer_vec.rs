@@ -279,7 +279,9 @@ where
     ) {
         if starting_index + (data.len() as u64) <= self.len {
             let offset =
-                (mem::size_of::<Header>() as u64) + (data.len() * mem::size_of::<T>()) as u64;
+                (mem::size_of::<Header>() as u64) + (starting_index * mem::size_of::<T>() as u64);
+            // let offset =
+            //     (starting_index * mem::size_of::<() + (mem::size_of::<Header>() as u64) + (data.len() * mem::size_of::<T>()) as u64;
             gpu_resources
                 .queue
                 .write_buffer(&self.buffer, offset, data.as_bytes());
@@ -288,10 +290,41 @@ where
         }
     }
 
-    pub fn copy_new<F>(&self, gpu_resources: &GlobalRenderResources, f: F) -> Self
-    where
-        F: FnOnce(u64, &wgpu::Buffer /* from */, &wgpu::Buffer /* to */) -> u64,
-    {
-        unimplemented!()
+    pub fn copy_new(&self, render_resources: &GlobalRenderResources, copy_header: bool) -> Self {
+        let size = mem::size_of::<Header>() as u64 + self.len * mem::size_of::<T>() as u64;
+        let buffer = render_resources
+            .device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size,
+                usage: self.usage,
+                mapped_at_creation: false,
+            });
+
+        // TODO: This is bad and should not be done.
+        let mut encoder = render_resources
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        let (offset, copy_size) = if copy_header {
+            (0, size)
+        } else {
+            (
+                mem::size_of::<Header>() as u64,
+                size - (mem::size_of::<Header>() as u64),
+            )
+        };
+
+        encoder.copy_buffer_to_buffer(&self.buffer, offset, &buffer, offset, copy_size);
+
+        render_resources.queue.submit(Some(encoder.finish()));
+
+        Self {
+            buffer,
+            len: self.len,
+            capacity: self.len,
+            usage: self.usage,
+            _marker: PhantomData,
+        }
     }
 }

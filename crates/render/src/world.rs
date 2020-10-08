@@ -5,7 +5,10 @@ use crate::{
 };
 use common::AsBytes;
 use indexmap::IndexMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicU64, Ordering},
+};
 use ultraviolet::{Rotor3, Vec3};
 
 macro_rules! declare_id {
@@ -102,9 +105,19 @@ impl Fragment {
     pub fn rotation(&self) -> Rotor3 {
         self.rotation
     }
+
+    pub fn copy_new(&self, render_resources: &GlobalRenderResources) -> Self {
+        let id = FragmentId::new();
+        Self {
+            id,
+            atoms: self.atoms.copy_new(render_resources, id),
+            ..*self
+        }
+    }
 }
 
 pub struct Part {
+    name: String,
     id: PartId,
     fragments: Vec<FragmentId>,
     bounding_box: BoundingBox,
@@ -114,8 +127,9 @@ pub struct Part {
 }
 
 impl Part {
-    pub fn from_fragments<I>(world: &mut World, fragments: I) -> Self
+    pub fn from_fragments<S, I>(world: &mut World, name: S, fragments: I) -> Self
     where
+        S: ToString,
         I: IntoIterator<Item = Fragment>,
         I::IntoIter: ExactSizeIterator,
     {
@@ -135,16 +149,6 @@ impl Part {
             .map(move |fragment| world.spawn_fragment(part_id, fragment))
             .collect();
 
-        // let fragments: Vec<_> = world
-        //     .spawn_fragment_batch(
-        //         id,
-        //         fragments.into_iter().inspect(|fragment| {
-        //             bounding_box = bounding_box.union(&fragment.bounding_box);
-        //             center += fragment.center;
-        //         }),
-        //     )
-        //     .collect();
-
         let center = center / fragments.len() as f32;
 
         assert!(
@@ -153,13 +157,18 @@ impl Part {
         );
 
         Part {
+            name: name.to_string(),
             id: part_id,
             fragments,
             bounding_box,
             center,
-            offset: -center,
+            offset: Vec3::zero(),
             rotation: Rotor3::default(),
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn id(&self) -> PartId {
@@ -184,6 +193,13 @@ impl Part {
 
     pub fn move_to(&mut self, x: f32, y: f32, z: f32) {
         self.offset = Vec3::new(x, y, z) - self.center;
+    }
+
+    /// Takes angles in degrees.
+    pub fn rotate_by(&mut self, roll: f32, pitch: f32, yaw: f32) {
+        self.rotation =
+            Rotor3::from_euler_angles(roll.to_radians(), pitch.to_radians(), yaw.to_radians())
+                * self.rotation;
     }
 }
 
@@ -216,6 +232,38 @@ impl World {
     //     Self::new(Arc::clone(&self.shared_render))
     // }
 
+    pub fn copy_part(
+        &mut self,
+        render_resources: &GlobalRenderResources,
+        part_id: PartId,
+    ) -> PartId {
+        let part = &self.parts[&part_id];
+        let id = PartId::new();
+        let name = format!("{} (Copy)", part.name);
+
+        let mut fragments = Vec::new();
+
+        for fragment_id in &part.fragments {
+            let fragment = &self.fragments[fragment_id];
+            let fragment = fragment.copy_new(render_resources);
+
+            let id = fragment.id;
+            self.fragments.insert(id, fragment);
+            self.added_fragments.push((part_id, id));
+
+            fragments.push(id);
+        }
+
+        let part = Part {
+            id,
+            name,
+            fragments,
+            ..*part
+        };
+
+        self.spawn_part(part)
+    }
+
     pub fn spawn_part(&mut self, part: Part) -> PartId {
         let id = part.id;
         assert!(self.parts.insert(id, part).is_none());
@@ -244,6 +292,14 @@ impl World {
         let part = &mut self.parts[&id];
         self.modified_parts.push(id);
         part
+    }
+
+    pub fn find_part<S: AsRef<str>>(&self, name: S) -> Option<PartId> {
+        let name = name.as_ref();
+        self.parts
+            .iter()
+            .find(|(_, p)| p.name == name)
+            .map(|(&id, _)| id)
     }
 
     pub fn parts(&self) -> impl ExactSizeIterator<Item = &Part> {

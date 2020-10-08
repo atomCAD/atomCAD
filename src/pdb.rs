@@ -21,6 +21,8 @@ pub fn load_from_pdb<P: AsRef<Path>>(
 
     let mut world = World::new();
 
+    let mut counter = 0;
+
     structure
         .chains
         .into_iter()
@@ -43,7 +45,8 @@ pub fn load_from_pdb<P: AsRef<Path>>(
                 })
                 .collect();
 
-            let part = Part::from_fragments(&mut world, fragments);
+            let part = Part::from_fragments(&mut world, format!("{}{}", name, counter), fragments);
+            counter += 1;
             world.spawn_part(part);
         })
         .for_each(|_| {});
@@ -62,6 +65,8 @@ pub fn load_from_pdb_str(
 
     let mut world = World::new();
 
+    let mut counter = 0;
+
     structure
         .chains
         .into_iter()
@@ -84,7 +89,8 @@ pub fn load_from_pdb_str(
                 })
                 .collect();
 
-            let part = Part::from_fragments(&mut world, fragments);
+            let part = Part::from_fragments(&mut world, format!("{}{}", name, counter), fragments);
+            counter += 1;
             world.spawn_part(part);
         })
         .for_each(|_| {});

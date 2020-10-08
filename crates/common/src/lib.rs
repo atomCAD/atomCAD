@@ -4,6 +4,7 @@ use winit::event::{DeviceEvent, WindowEvent};
 pub enum InputEvent<'a> {
     Window(WindowEvent<'a>),
     Device(DeviceEvent),
+    BeginningFrame,
 }
 
 pub unsafe trait AsBytes {
