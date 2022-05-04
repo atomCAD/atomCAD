@@ -2,7 +2,7 @@ use common::InputEvent;
 use render::{Camera, CameraRepr};
 use ultraviolet::{projection, Mat4, Vec3};
 use winit::{
-    dpi::LogicalPosition,
+    dpi::PhysicalPosition,
     event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent},
 };
 
@@ -65,7 +65,7 @@ impl Camera for ArcballCamera {
                         MouseScrollDelta::LineDelta(_, delta) => {
                             self.distance = (self.distance - delta * self.speed * 10.0).max(0.001);
                         }
-                        MouseScrollDelta::PixelDelta(LogicalPosition { y, .. }) => {
+                        MouseScrollDelta::PixelDelta(PhysicalPosition { y, .. }) => {
                             self.distance = (self.distance - y as f32 * self.speed).max(0.001);
                         }
                     }
