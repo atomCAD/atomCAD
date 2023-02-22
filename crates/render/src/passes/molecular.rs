@@ -1,6 +1,5 @@
 use crate::{
-    include_spirv, BufferVec, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer,
-    SWAPCHAIN_FORMAT,
+    include_spirv, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT,
 };
 use std::{collections::HashMap, convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
@@ -16,10 +15,12 @@ pub struct MolecularPass {
     // for deferred rendering/ambient occlusion approximation
     normals_texture: wgpu::TextureView,
 
+    #[allow(dead_code)]
     driven: Driven,
 }
 
 #[repr(C)]
+#[allow(dead_code)]
 struct DrawIndirect {
     vertex_count: u32,   // The number of vertices to draw.
     instance_count: u32, // The number of instances to draw.
@@ -29,10 +30,11 @@ struct DrawIndirect {
 
 enum Driven {
     CpuDriven,
+    #[allow(dead_code)]
     GpuDriven {
         // fragment_buffer_refs: BufferVec,
-    // draw_commands: BufferVec,
-    // do we embed additional passes here?
+        // draw_commands: BufferVec,
+        // do we embed additional passes here?
     },
 }
 

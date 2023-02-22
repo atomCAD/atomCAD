@@ -56,6 +56,7 @@ pub fn load_from_pdb<P: AsRef<Path>>(
     Ok(world)
 }
 
+#[allow(dead_code)]
 pub fn load_from_pdb_str(
     gpu_resources: &GlobalRenderResources,
     name: &str,

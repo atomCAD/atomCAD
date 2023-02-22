@@ -8,7 +8,6 @@ use common::AsBytes as _;
 use periodic_table::PeriodicTable;
 use std::{
     collections::{HashMap, HashSet},
-    mem,
     sync::Arc,
 };
 use wgpu::util::DeviceExt as _;
@@ -56,6 +55,7 @@ pub struct RenderOptions {
     pub attempt_gpu_driven: bool, // Will attempt to drive rendering, culling, etc on gpu if supported by the adapter
 }
 
+#[allow(dead_code)]
 pub struct Renderer {
     swap_chain_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
@@ -224,7 +224,11 @@ impl Renderer {
         self.camera.resize(new_size);
     }
 
-    pub fn render(&mut self, world: &mut World, interactions: &Interactions) {
+    pub fn render(
+        &mut self,
+        world: &mut World,
+        #[allow(unused_variables)] interactions: &Interactions,
+    ) {
         let mut encoder = self
             .render_resources
             .device

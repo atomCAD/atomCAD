@@ -22,6 +22,7 @@ impl BoundingBox {
         }
     }
 
+    #[allow(dead_code)]
     pub fn contains(&self, point: Vec3) -> bool {
         self.min.x <= point.x
             && point.x <= self.max.x

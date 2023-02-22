@@ -5,10 +5,7 @@ use crate::{
 };
 use common::AsBytes;
 use indexmap::IndexMap;
-use std::{
-    ops::{Deref, DerefMut},
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 use ultraviolet::{Rotor3, Vec3};
 
 macro_rules! declare_id {
@@ -120,6 +117,7 @@ pub struct Part {
     name: String,
     id: PartId,
     fragments: Vec<FragmentId>,
+    #[allow(dead_code)]
     bounding_box: BoundingBox,
     center: Vec3,
     offset: Vec3,
