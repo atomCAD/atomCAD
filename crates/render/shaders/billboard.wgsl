@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # This shader uses an interesting technique that is sometimes
 # called progrmamable vertex pulling.
 #
@@ -84,3 +88,5 @@ fn main_frag() -> void {
     frag_color = vec4<f32>(in_color, 1.0);
 }
 entry_point fragment as "main" = main_frag;
+
+// End of File

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use crate::{include_spirv, GlobalRenderResources, Renderer, STORAGE_TEXTURE_FORMAT};
 use winit::dpi::PhysicalSize;
 
@@ -158,3 +162,5 @@ fn create_fxaa_bind_group(
         ],
     })
 }
+
+// End of File

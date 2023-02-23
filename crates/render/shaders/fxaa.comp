@@ -1,9 +1,11 @@
-/*
- * FXAA as a compute shader
- *
- * This is roughly based on https://github.com/mattdesl/glsl-fxaa,
- * which is based on https://www.geeks3d.com/20110405/fxaa-fast-approximate-anti-aliasing-demo-glsl-opengl-test-radeon-geforce/
- */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+// FXAA as a compute shader
+//
+// This is roughly based on https://github.com/mattdesl/glsl-fxaa,
+// which is based on https://www.geeks3d.com/20110405/fxaa-fast-approximate-anti-aliasing-demo-glsl-opengl-test-radeon-geforce/
 #version 450
 
 #define FXAA_REDUCE_MIN (1.0/128.0)
@@ -79,3 +81,5 @@ void main(void) {
 
     imageStore(color_output, ivec2(gl_GlobalInvocationID.xy), fxaa);
 }
+
+// End of File

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use render::{AtomKind, AtomRepr, Fragment, GlobalRenderResources, Part, World};
 use periodic_table::Element;
 use ultraviolet::Vec3;
@@ -148,3 +152,5 @@ pub fn load_ti_and_adjust(render_resources: &GlobalRenderResources) -> World {
 
     ti_parts
 }
+
+// End of File

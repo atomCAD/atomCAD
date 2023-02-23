@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use crate::camera::ArcballCamera;
 // use crate::rotating_camera::RotatingArcballCamera;
 use common::InputEvent;
@@ -114,3 +118,5 @@ fn main() {
         wasm_bindgen_futures::spawn_local(run(event_loop, window));
     }
 }
+
+// End of File

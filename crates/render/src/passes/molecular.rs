@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use crate::{
     include_spirv, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT,
 };
@@ -300,3 +304,5 @@ fn create_normals_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgp
     )
     .create_view(&wgpu::TextureViewDescriptor::default())
 }
+
+// End of File

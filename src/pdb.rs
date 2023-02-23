@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use lib3dmol::{
     parser::{read_pdb, read_pdb_txt},
     structures::{atom::AtomType, GetAtom as _},
@@ -113,3 +117,5 @@ fn atom_type_to_element(atom_type: &AtomType) -> Element {
         _ => Element::MAX,
     }
 }
+
+// End of File
