@@ -55,6 +55,10 @@ bevy = { version = "0.11", default-features = false, features = [
     "webgl2"
 ] }
 bevy_asset_loader = { version = "0.17" }
+bevy_egui = { version = "0.21", default-features = false, features = [
+    "open_url",
+    "default_fonts"
+] }
 bevy_kira_audio = { version = "0.16" }
 rand = { version = "0.8.3" }
 

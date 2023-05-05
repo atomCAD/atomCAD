@@ -6,6 +6,7 @@ use crate::actions::Actions;
 use crate::loading::TextureAssets;
 use crate::GameState;
 use bevy::prelude::*;
+use bevy_egui::{egui, EguiContexts};
 
 pub struct ScenePlugin;
 
@@ -17,8 +18,15 @@ pub struct Torus;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Active), spawn_scene)
+            .add_systems(Update, ui_hello_world.run_if(in_state(GameState::Active)))
             .add_systems(Update, move_torus.run_if(in_state(GameState::Active)));
     }
+}
+
+fn ui_hello_world(mut egui_contexts: EguiContexts) {
+    egui::Window::new("Hello").show(egui_contexts.ctx_mut(), |ui| {
+        ui.label("Hello World!");
+    });
 }
 
 fn spawn_scene(

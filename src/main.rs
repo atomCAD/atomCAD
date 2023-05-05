@@ -12,6 +12,7 @@ use bevy::{
     winit::{WinitSettings, WinitWindows},
     DefaultPlugins,
 };
+use bevy_egui::EguiPlugin;
 use std::io::Cursor;
 use winit::window::Icon;
 
@@ -40,6 +41,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(PlatformTweaks)
+        .add_plugins(EguiPlugin)
         .add_plugins(GamePlugin)
         .add_systems(Startup, set_window_icon)
         .add_systems(Startup, setup_menu_bar)
