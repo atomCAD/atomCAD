@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::actions::Actions;
+use crate::camera::CameraPlugin;
 use crate::loading::TextureAssets;
 use crate::GameState;
 use bevy::prelude::*;
@@ -18,7 +19,7 @@ pub struct Torus;
 /// Scene logic is only active during the State `GameState::Active`
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(InfiniteGridPlugin);
+        app.add_plugins((CameraPlugin, InfiniteGridPlugin));
         app.add_systems(OnEnter(GameState::Active), spawn_scene)
             .add_systems(Update, ui_hello_world.run_if(in_state(GameState::Active)))
             .add_systems(Update, move_torus.run_if(in_state(GameState::Active)));
@@ -37,12 +38,6 @@ fn spawn_scene(
     mut materials: ResMut<Assets<StandardMaterial>>,
     _textures: Res<TextureAssets>,
 ) {
-    // camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 1.5, 6.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-
     // infinite grid
     commands.spawn(InfiniteGridBundle {
         transform: Transform::from_xyz(0.0, 0.0, 0.0),

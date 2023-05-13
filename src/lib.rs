@@ -6,6 +6,7 @@
 
 mod actions;
 mod audio;
+mod camera;
 mod loading;
 mod menu;
 pub mod menubar;
