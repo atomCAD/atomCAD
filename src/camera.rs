@@ -10,6 +10,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 use bevy_egui::EguiContexts;
+use bevy_mod_picking::prelude::*;
 
 const CONST_SCROLL_SPEED_PIXELS: f32 = 0.05;
 const CONST_SCROLL_SPEED_LINES: f32 = 1.6;
@@ -38,6 +39,8 @@ fn spawn_camera(mut commands: Commands) {
             transform: Transform::from_translation(position).looking_at(target, Vec3::Y),
             ..default()
         },
+        // Enable picking from this camera view.
+        RaycastPickCamera::default(),
         // Enable bloom effects with default settings.
         BloomSettings::default(),
         PanOrbitCamera {

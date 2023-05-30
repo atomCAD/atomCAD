@@ -1,0 +1,13 @@
+[package]
+name = "atomcad-molecule"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2021"
+
+[dependencies]
+bevy = { workspace = true }
+bevy_mod_picking = { workspace = true }
+periodic-table = { workspace = true }
+petgraph = { workspace = true }

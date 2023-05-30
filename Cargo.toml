@@ -10,13 +10,38 @@ exclude = ["dist", "build", "assets", "credits"]
 [workspace]
 members = [
     "crates/common",
+    "crates/molecule",
     "crates/periodic-table",
     "mobile"
 ]
 
 [workspace.dependencies]
+bevy = { version = "0.11", default-features = false, features = [
+    "animation",
+    "bevy_asset",
+    "bevy_scene",
+    "bevy_winit",
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "bevy_gltf",
+    "bevy_render",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "png",
+    "hdr",
+    "zstd",
+    "x11",
+    "ktx2",
+    "filesystem_watcher",
+    "tonemapping_luts",
+    "webgl2"
+] }
+bevy_mod_picking = { version = "0.15.0", features = ["backend_raycast"] }
 common = { package = "atomcad-common", path = "crates/common" }
+molecule = { package = "atomcad-molecule", path = "crates/molecule" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
+petgraph = { version = "0.6.4" }
 serde = { version =  "1.0" }
 static_assertions = { version = "1" }
 ultraviolet = { version = "0.9" }
@@ -44,27 +69,7 @@ dev = [
 ]
 
 [dependencies]
-bevy = { version = "0.11", default-features = false, features = [
-    "animation",
-    "bevy_asset",
-    "bevy_scene",
-    "bevy_winit",
-    "bevy_core_pipeline",
-    "bevy_pbr",
-    "bevy_gltf",
-    "bevy_render",
-    "bevy_sprite",
-    "bevy_text",
-    "bevy_ui",
-    "png",
-    "hdr",
-    "zstd",
-    "x11",
-    "ktx2",
-    "filesystem_watcher",
-    "tonemapping_luts",
-    "webgl2"
-] }
+bevy = { workspace = true }
 bevy_asset_loader = { version = "0.17" }
 bevy_egui = { version = "0.21", default-features = false, features = [
     "open_url",
@@ -72,7 +77,9 @@ bevy_egui = { version = "0.21", default-features = false, features = [
 ] }
 bevy_infinite_grid = { version = "0.8" }
 bevy_kira_audio = { version = "0.16" }
+bevy_mod_picking = { workspace = true }
 common = { workspace = true }
+molecule = { workspace = true }
 periodic-table = { workspace = true }
 rand = { version = "0.8.3" }
 

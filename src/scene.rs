@@ -2,54 +2,32 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::actions::Actions;
 use crate::camera::CameraPlugin;
-use crate::loading::TextureAssets;
 use crate::AppState;
 use bevy::prelude::*;
 use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
+use bevy_mod_picking::DefaultPickingPlugins;
+use molecule::{init_molecule, molecule_builder};
 
 pub struct ScenePlugin;
-
-#[derive(Component)]
-pub struct Torus;
 
 /// This plugin handles scene related stuff
 /// Scene logic is only active during the State `AppState::Active`
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((CameraPlugin, InfiniteGridPlugin));
+        app.add_plugins((CameraPlugin, DefaultPickingPlugins, InfiniteGridPlugin));
         app.add_systems(OnEnter(AppState::Active), spawn_scene)
-            .add_systems(Update, move_torus.run_if(in_state(AppState::Active)));
+            .add_systems(OnEnter(AppState::Active), init_molecule)
+            .add_systems(Update, molecule_builder.run_if(in_state(AppState::Active)));
     }
 }
 
-fn spawn_scene(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    _textures: Res<TextureAssets>,
-) {
+fn spawn_scene(mut commands: Commands) {
     // infinite grid
     commands.spawn(InfiniteGridBundle {
         transform: Transform::from_xyz(0.0, 0.0, 0.0),
         ..default()
     });
-
-    // torus
-    commands
-        .spawn(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Torus {
-                radius: 1.0,
-                subdivisions_segments: 4,
-                subdivisions_sides: 16,
-                ..default()
-            })),
-            material: materials.add(Color::rgb(0.6, 2.4, 1.2).into()), // green, with slight glow
-            transform: Transform::from_xyz(0.0, 0.0, 0.0),
-            ..default()
-        })
-        .insert(Torus);
 
     // light source
     commands.spawn(DirectionalLightBundle {
@@ -65,25 +43,6 @@ fn spawn_scene(
         },
         ..default()
     });
-}
-
-fn move_torus(
-    time: Res<Time>,
-    actions: Res<Actions>,
-    mut torus_query: Query<&mut Transform, With<Torus>>,
-) {
-    if actions.torus_movement.is_none() {
-        return;
-    }
-    let speed = 1.;
-    let movement = Vec3::new(
-        actions.torus_movement.unwrap().x * speed * time.delta_seconds(),
-        0.,
-        -actions.torus_movement.unwrap().y * speed * time.delta_seconds(),
-    );
-    for mut torus_transform in &mut torus_query {
-        torus_transform.translation += movement;
-    }
 }
 
 // End of File
