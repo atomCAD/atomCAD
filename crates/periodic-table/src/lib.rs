@@ -9,7 +9,7 @@ use ultraviolet::Vec3;
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(u8)]
+#[repr(u8)] // Oganesson == 118
 pub enum Element {
     Hydrogen = 1,
     Helium,
@@ -130,13 +130,14 @@ pub enum Element {
     Tennessine,
     Oganesson,
 }
+const_assert_eq!(Element::Oganesson as usize, 118);
 
 impl Element {
-    pub const MIN: Self = Element::Hydrogen;
-    pub const MAX: Self = Element::Oganesson;
+    pub const MIN: Self = Element::Hydrogen; // 1
+    pub const MAX: Self = Element::Oganesson; // 118
 
     pub fn from_atomic_number(n: u8) -> Option<Self> {
-        if n >= 1 && n <= Self::MAX as u8 {
+        if Self::MIN as u8 <= n && n <= Self::MAX as u8 {
             Some(unsafe { mem::transmute(n) })
         } else {
             None
@@ -199,7 +200,7 @@ impl PeriodicTable {
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct ElementRepr {
-    color: Vec3,
+    color: Vec3, // RGB color space
     radius: f32, // in angstroms
 }
 
