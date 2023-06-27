@@ -209,11 +209,7 @@ fn create_top_level_bg(
             // periodic table
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &periodic_table_buffer,
-                    offset: 0,
-                    size: None,
-                },
+                resource: wgpu::BindingResource::Buffer(periodic_table_buffer.slice(0..)),
             },
         ],
     })

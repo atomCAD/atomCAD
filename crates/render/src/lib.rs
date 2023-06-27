@@ -99,8 +99,7 @@ impl Renderer {
             .await
             .expect("failed to find an appropriate adapter");
 
-        let gpu_driven_features =
-            wgpu::Features::DEVICE_BUFFER_ADDRESS | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
+        let gpu_driven_features = wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
         let gpu_driven_rendering;
 
         let requested_features =
