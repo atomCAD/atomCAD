@@ -16,7 +16,7 @@ package = "atomcad-periodic-table"
 path = "../periodic-table"
 
 [dependencies]
-wgpu = "0.6.0"
+wgpu = "0.7.0"
 futures = "0.3.28"
 ultraviolet = "0.9.1"
 static_assertions = "1"

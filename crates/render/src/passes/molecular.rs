@@ -106,6 +106,7 @@ impl MolecularPass {
         per_fragment: &HashMap<FragmentId, (PartId, u64 /* transform index */)>,
     ) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
             color_attachments: &[
                 wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &self.color_texture,
@@ -170,8 +171,9 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                ty: wgpu::BindingType::UniformBuffer {
-                    dynamic: false,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
                     min_binding_size: None,
                 },
                 count: None,
@@ -180,10 +182,10 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStage::VERTEX,
-                ty: wgpu::BindingType::StorageBuffer {
-                    dynamic: false,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
                     min_binding_size: None,
-                    readonly: true,
                 },
                 count: None,
             },
@@ -209,7 +211,11 @@ fn create_top_level_bg(
             // periodic table
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer(periodic_table_buffer.slice(0..)),
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &periodic_table_buffer,
+                    offset: 0,
+                    size: None,
+                },
             },
         ],
     })
@@ -232,30 +238,11 @@ fn create_render_pipeline(
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&atom_pipeline_layout),
-        vertex_stage: wgpu::ProgrammableStageDescriptor {
+        vertex: wgpu::VertexState {
             module: &atom_vert_shader,
             entry_point: "main",
-        },
-        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-            module: &atom_frag_shader,
-            entry_point: "main",
-        }),
-        rasterization_state: None, // this might not be right
-        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        color_states: &[
-            SWAPCHAIN_FORMAT.into(),
-            wgpu::TextureFormat::Rgba16Float.into(),
-        ],
-        depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
-            format: wgpu::TextureFormat::Depth32Float,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Greater,
-            stencil: wgpu::StencilStateDescriptor::default(),
-        }),
-        vertex_state: wgpu::VertexStateDescriptor {
-            index_format: wgpu::IndexFormat::Uint16,
-            vertex_buffers: &[wgpu::VertexBufferDescriptor {
-                stride: mem::size_of::<ultraviolet::Mat4>() as _,
+            buffers: &[wgpu::VertexBufferLayout {
+                array_stride: mem::size_of::<ultraviolet::Mat4>() as _,
                 step_mode: wgpu::InputStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     // part and fragment transform matrix
@@ -266,9 +253,34 @@ fn create_render_pipeline(
                 ],
             }],
         },
-        sample_count: 1, // multisampling doesn't work for shader effects (like spherical imposters/billboards)
-        sample_mask: !0,
-        alpha_to_coverage_enabled: false,
+        fragment: Some(wgpu::FragmentState {
+            module: &atom_frag_shader,
+            entry_point: "main",
+            targets: &[
+                SWAPCHAIN_FORMAT.into(),
+                wgpu::TextureFormat::Rgba16Float.into(),
+            ],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: Some(wgpu::IndexFormat::Uint16),
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: wgpu::CullMode::Front,
+            polygon_mode: wgpu::PolygonMode::Fill,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Greater,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+            clamp_depth: false,
+        }),
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
     })
 }
 
@@ -277,7 +289,7 @@ fn create_color_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
         device,
         size,
         SWAPCHAIN_FORMAT,
-        wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+        wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
     )
 }
 
@@ -286,7 +298,7 @@ fn create_depth_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
         device,
         size,
         wgpu::TextureFormat::Depth32Float,
-        wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        wgpu::TextureUsage::RENDER_ATTACHMENT,
     )
     .create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -296,7 +308,7 @@ fn create_normals_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgp
         device,
         size,
         wgpu::TextureFormat::Rgba16Float,
-        wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+        wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
     )
     .create_view(&wgpu::TextureViewDescriptor::default())
 }

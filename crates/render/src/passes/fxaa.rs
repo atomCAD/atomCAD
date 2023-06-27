@@ -74,7 +74,7 @@ fn create_fxaa_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::
         device,
         size,
         STORAGE_TEXTURE_FORMAT,
-        wgpu::TextureUsage::OUTPUT_ATTACHMENT
+        wgpu::TextureUsage::RENDER_ATTACHMENT
             | wgpu::TextureUsage::SAMPLED
             | wgpu::TextureUsage::STORAGE,
     )
@@ -87,15 +87,18 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStage::COMPUTE,
-                ty: wgpu::BindingType::Sampler { comparison: false },
+                ty: wgpu::BindingType::Sampler {
+                    filtering: false,
+                    comparison: false,
+                },
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStage::COMPUTE,
-                ty: wgpu::BindingType::SampledTexture {
-                    dimension: wgpu::TextureViewDimension::D2,
-                    component_type: wgpu::TextureComponentType::Float,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 },
                 count: None,
@@ -104,9 +107,9 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 binding: 2,
                 visibility: wgpu::ShaderStage::COMPUTE,
                 ty: wgpu::BindingType::StorageTexture {
-                    dimension: wgpu::TextureViewDimension::D2,
+                    access: wgpu::StorageTextureAccess::WriteOnly,
+                    view_dimension: wgpu::TextureViewDimension::D2,
                     format: crate::STORAGE_TEXTURE_FORMAT,
-                    readonly: false,
                 },
                 count: None,
             },
@@ -129,10 +132,8 @@ fn create_fxaa_pipeline(
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: Some(&layout),
-        compute_stage: wgpu::ProgrammableStageDescriptor {
-            module: &shader,
-            entry_point: "main",
-        },
+        module: &shader,
+        entry_point: "main",
     })
 }
 

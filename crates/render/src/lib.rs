@@ -28,7 +28,7 @@ mod world;
 #[macro_export]
 macro_rules! include_spirv {
     ($name:literal) => {
-        wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shaders/", $name))
+        &wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shaders/", $name))
     };
 }
 
@@ -116,9 +116,9 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
+                    label: None,
                     features: requested_features,
                     limits: wgpu::Limits::default(),
-                    shader_validation: true,
                 },
                 None,
             )
@@ -136,7 +136,7 @@ impl Renderer {
         });
 
         let swap_chain_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
             format: SWAPCHAIN_FORMAT,
             width: size.width,
             height: size.height,
@@ -150,10 +150,10 @@ impl Renderer {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStage::VERTEX,
-                ty: wgpu::BindingType::StorageBuffer {
-                    dynamic: false,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
                     min_binding_size: None,
-                    readonly: false,
                 },
                 count: None,
             }],
@@ -284,7 +284,8 @@ impl Renderer {
 
         // run compute passes
         {
-            let mut cpass = encoder.begin_compute_pass();
+            let mut cpass =
+                encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
 
             self.fxaa_pass.run(&mut cpass);
         }
