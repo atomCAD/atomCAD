@@ -26,7 +26,7 @@ fn visit_files(dir: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Re
 }
 
 fn main() -> io::Result<()> {
-    let mut compiler = shaderc::Compiler::new().expect("failed to initialize glsl compiler");
+    let compiler = shaderc::Compiler::new().expect("failed to initialize glsl compiler");
     let mut compile_options =
         shaderc::CompileOptions::new().expect("failed to initialize compiler options");
 
