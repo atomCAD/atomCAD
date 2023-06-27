@@ -108,8 +108,8 @@ impl MolecularPass {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[
-                wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &self.color_texture,
+                wgpu::RenderPassColorAttachment {
+                    view: &self.color_texture,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -123,8 +123,8 @@ impl MolecularPass {
                 },
                 // multiple render targets
                 // render to normals texture
-                wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &self.normals_texture,
+                wgpu::RenderPassColorAttachment {
+                    view: &self.normals_texture,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -132,8 +132,8 @@ impl MolecularPass {
                     },
                 },
             ],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                attachment: &self.depth_texture,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(0.0),
                     store: true,
@@ -211,11 +211,11 @@ fn create_top_level_bg(
             // periodic table
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer {
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &periodic_table_buffer,
                     offset: 0,
                     size: None,
-                },
+                }),
             },
         ],
     })
@@ -246,10 +246,10 @@ fn create_render_pipeline(
                 step_mode: wgpu::InputStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     // part and fragment transform matrix
-                    0 => Float4,
-                    1 => Float4,
-                    2 => Float4,
-                    3 => Float4,
+                    0 => Float32x4,
+                    1 => Float32x4,
+                    2 => Float32x4,
+                    3 => Float32x4,
                 ],
             }],
         },
@@ -263,10 +263,12 @@ fn create_render_pipeline(
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: Some(wgpu::IndexFormat::Uint16),
+            strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::Front,
+            cull_mode: Some(wgpu::Face::Front),
+            clamp_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth32Float,
@@ -274,7 +276,6 @@ fn create_render_pipeline(
             depth_compare: wgpu::CompareFunction::Greater,
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
-            clamp_depth: false,
         }),
         multisample: wgpu::MultisampleState {
             count: 1,

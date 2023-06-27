@@ -32,8 +32,8 @@ impl BlitPass {
     pub fn run(&self, encoder: &mut wgpu::CommandEncoder, frame: &wgpu::TextureView) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: frame,
+            color_attachments: &[wgpu::RenderPassColorAttachment {
+                view: frame,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -117,10 +117,12 @@ fn create_blit_pipeline(
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList, // doesn't matter
-            strip_index_format: Some(wgpu::IndexFormat::Uint16),
+            strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::Front,
+            cull_mode: Some(wgpu::Face::Front),
+            clamp_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState {

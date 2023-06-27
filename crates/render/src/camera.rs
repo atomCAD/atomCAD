@@ -129,11 +129,11 @@ impl RenderCamera {
 
 impl AsBindingResource for RenderCamera {
     fn as_binding_resource(&self) -> wgpu::BindingResource {
-        wgpu::BindingResource::Buffer {
+        wgpu::BindingResource::Buffer(wgpu::BufferBinding {
             buffer: &self.uniform_buffer,
             offset: 0,
             size: None,
-        }
+        })
     }
 }
 
