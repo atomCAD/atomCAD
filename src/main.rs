@@ -9,14 +9,16 @@ use render::{Interactions, RenderOptions, Renderer, World};
 
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
+    window::{Window, WindowBuilder},
 };
 
 mod camera;
 // mod rotating_camera;
 mod pdb;
 // mod ti;
+
+pub const APP_NAME: &str = "atomCAD";
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let (mut renderer, gpu_resources) = Renderer::new(
@@ -93,8 +95,18 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 }
 
 fn main() {
-    let event_loop = EventLoop::new();
-    let window = Window::new(&event_loop).unwrap();
+    // Create the event loop.
+    let mut event_loop = EventLoopBuilder::new();
+    let event_loop = event_loop.build();
+
+    // Create the main window.
+    let window = match WindowBuilder::new().with_title(APP_NAME).build(&event_loop) {
+        Err(e) => {
+            println!("Failed to create window: {}", e);
+            std::process::exit(1);
+        }
+        Ok(window) => window,
+    };
 
     #[cfg(not(target_arch = "wasm32"))]
     {
