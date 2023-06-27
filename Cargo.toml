@@ -26,7 +26,7 @@ path = "crates/periodic-table"
 [dependencies]
 futures = "0.3.28"
 ultraviolet = "0.9.1"
-log = "0.4.11"
+log = "0.4.19"
 lib3dmol = "0.3.2"
 nom = "7.1.3"
 
