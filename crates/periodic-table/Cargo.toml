@@ -11,5 +11,5 @@ package = "atomcad-common"
 path = "../common"
 
 [dependencies]
-ultraviolet = "0.7.0"
+ultraviolet = "0.9.1"
 static_assertions = "1"

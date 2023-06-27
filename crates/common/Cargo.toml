@@ -8,4 +8,4 @@ edition = "2021"
 
 [dependencies]
 winit = "0.27.0"
-ultraviolet = "0.7.0"
+ultraviolet = "0.9.1"
