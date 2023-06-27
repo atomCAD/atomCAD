@@ -17,7 +17,7 @@ path = "../periodic-table"
 
 [dependencies]
 wgpu = { git = "https://github.com/gfx-rs/wgpu-rs.git" }
-futures = "0.3.5"
+futures = "0.3.28"
 ultraviolet = "0.9.1"
 static_assertions = "1"
 log = "0.4.11"

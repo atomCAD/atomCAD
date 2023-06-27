@@ -24,7 +24,7 @@ package = "atomcad-periodic-table"
 path = "crates/periodic-table"
 
 [dependencies]
-futures = "0.3.5"
+futures = "0.3.28"
 ultraviolet = "0.9.1"
 log = "0.4.11"
 lib3dmol = "0.3.2"
