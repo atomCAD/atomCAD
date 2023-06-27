@@ -16,9 +16,9 @@
 #version 450
 
 layout(set = 0, binding = 0) uniform Camera {
-    mat4 projection;
-    mat4 view;
-    mat4 projection_view;
+    vec4 projection[4];
+    vec4 view[4];
+    vec4 projection_view[4];
 } camera;
 
 struct Element {
@@ -52,11 +52,14 @@ layout(set = 1, binding = 1, std430) readonly buffer Atoms {
 //     Bivec bv;
 // };
 
-layout(location = 0) in mat4 part_fragment_transform; // fragement * part transformation
+layout(location = 0) in vec4 part_fragment_transform_0; // fragement * part transformation
+layout(location = 1) in vec4 part_fragment_transform_1;
+layout(location = 2) in vec4 part_fragment_transform_2;
+layout(location = 3) in vec4 part_fragment_transform_3;
 
 layout(location = 0) out vec2 uv;
 layout(location = 1) out vec4 position_clip_space;
-layout(location = 2) flat out Element element;
+layout(location = 2) flat out vec4 element_vec;
 layout(location = 4) flat out vec4 center_view_space;
 layout(location = 5) out vec4 position_view_space;
 
@@ -79,11 +82,22 @@ const vec2 vertices[3] = {
 //     );
 // }
 
+out gl_PerVertex {
+    vec4 gl_Position;
+};
+
 void main(void) {
     const Atom atom = atoms[gl_VertexIndex / 3];
-    element = periodic_table.elements[atom.kind & 0x7f];
+    Element element = periodic_table.elements[atom.kind & 0x7f];
+    element_vec = vec4(element.color, element.radius);
     const vec2 vertex = element.radius * vertices[gl_VertexIndex % 3];
 
+    const mat4 part_fragment_transform = mat4(
+        part_fragment_transform_0,
+        part_fragment_transform_1,
+        part_fragment_transform_2,
+        part_fragment_transform_3
+    );
     const vec4 position = part_fragment_transform * vec4(atom.pos, 1.0);
 
     const vec3 camera_right_worldspace = vec3(camera.view[0][0], camera.view[1][0], camera.view[2][0]);
@@ -95,12 +109,24 @@ void main(void) {
         1.0
     );
 
-    position_clip_space = camera.projection_view * position_worldspace;
-    // position_clip_space = camera.projection_view * position_worldspace;
+    const mat4 camera_projection_view = mat4(
+        camera.projection_view[0],
+        camera.projection_view[1],
+        camera.projection_view[2],
+        camera.projection_view[3]
+    );
+    position_clip_space = camera_projection_view * position_worldspace;
+    // position_clip_space = camera_projection_view * position_worldspace;
     uv = vertex;
     // sphere_radius = element.radius;
-    center_view_space = camera.view * vec4(atom.pos, 0.0);
-    position_view_space = camera.view * position_worldspace;
+    const mat4 camera_view = mat4(
+        camera.view[0],
+        camera.view[1],
+        camera.view[2],
+        camera.view[3]
+    );
+    center_view_space = camera_view * vec4(atom.pos, 0.0);
+    position_view_space = camera_view * position_worldspace;
     gl_Position = position_clip_space;
 }
 
