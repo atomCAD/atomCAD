@@ -15,10 +15,10 @@ members = [
 
 [dependencies.render]
 package = "atomcad-render"
-path = "crates/render/"
+path = "crates/render"
 [dependencies.common]
 package = "atomcad-common"
-path = "crates/common/"
+path = "crates/common"
 [dependencies.periodic-table]
 package = "atomcad-periodic-table"
 path = "crates/periodic-table"
