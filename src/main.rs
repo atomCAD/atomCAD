@@ -3,10 +3,13 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::camera::ArcballCamera;
+use crate::menubar::setup_menu_bar;
 // use crate::rotating_camera::RotatingArcballCamera;
 use common::InputEvent;
 use render::{Interactions, RenderOptions, Renderer, World};
 
+#[cfg(target_os = "macos")]
+use winit::platform::macos::EventLoopBuilderExtMacOS;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
@@ -14,8 +17,11 @@ use winit::{
 };
 
 mod camera;
+mod menubar;
 // mod rotating_camera;
 mod pdb;
+mod platform;
+mod platform_impl;
 // mod ti;
 
 pub const APP_NAME: &str = "atomCAD";
@@ -97,6 +103,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 fn main() {
     // Create the event loop.
     let mut event_loop = EventLoopBuilder::new();
+    #[cfg(target_os = "macos")]
+    event_loop.with_default_menu(false);
     let event_loop = event_loop.build();
 
     // Create the main window.
@@ -107,6 +115,7 @@ fn main() {
         }
         Ok(window) => window,
     };
+    setup_menu_bar(&window);
 
     #[cfg(not(target_arch = "wasm32"))]
     {

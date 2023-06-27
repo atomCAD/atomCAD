@@ -30,6 +30,10 @@ log = "0.4.11"
 lib3dmol = "0.3.2"
 nom = "7.1.3"
 
+# macOS:
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2.7"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 winit = "0.27.0"
 subscriber = { package = "wgpu-subscriber", version = "0.1" }
