@@ -34,10 +34,12 @@ nom = "7.1.3"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
 
+# native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 winit = "0.27.0"
 subscriber = { package = "wgpu-subscriber", version = "0.1" }
 
+# web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 winit = { version = "0.22.2", features = ["web-sys"] }
 web-sys = "0.3.45"
