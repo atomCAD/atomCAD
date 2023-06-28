@@ -193,7 +193,6 @@ impl Renderer {
             camera.as_binding_resource(),
             &periodic_table_buffer,
             size,
-            gpu_driven_rendering,
         );
         let (fxaa_pass, fxaa_texture) =
             passes::FxaaPass::new(&render_resources, size, &color_texture);

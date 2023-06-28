@@ -48,7 +48,6 @@ impl MolecularPass {
         camera_binding_resource: wgpu::BindingResource,
         periodic_table_buffer: &wgpu::Buffer,
         size: PhysicalSize<u32>,
-        gpu_driven_rendering: bool,
     ) -> (Self, wgpu::TextureView) {
         let top_level_bgl = create_top_level_bgl(&render_resources.device);
         let pipeline = create_render_pipeline(
@@ -66,8 +65,6 @@ impl MolecularPass {
         let color_texture = create_color_texture(&render_resources.device, size);
         let depth_texture = create_depth_texture(&render_resources.device, size);
         let normals_texture = create_normals_texture(&render_resources.device, size);
-
-        assert!(!gpu_driven_rendering);
 
         (
             Self {
