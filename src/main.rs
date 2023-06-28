@@ -31,7 +31,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         &window,
         RenderOptions {
             fxaa: Some(()), // placeholder
-            attempt_gpu_driven: false,
+            attempt_gpu_driven: true,
         },
     )
     .await;

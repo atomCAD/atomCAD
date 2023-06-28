@@ -101,6 +101,7 @@ impl Renderer {
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
+                force_fallback_adapter: !options.attempt_gpu_driven,
             })
             .await
             .expect("failed to find an appropriate adapter");
@@ -260,13 +261,13 @@ impl Renderer {
 
         let frame = self
             .surface
-            .get_current_frame()
+            .get_current_texture()
             .map(|mut frame| {
                 if frame.suboptimal {
                     // try again
                     frame = self
                         .surface
-                        .get_current_frame()
+                        .get_current_texture()
                         .expect("could not retrieve swapchain on second try");
                     if frame.suboptimal {
                         log::warn!("suboptimal swapchain frame");
@@ -305,12 +306,12 @@ impl Renderer {
         self.blit_pass.run(
             &mut encoder,
             &frame
-                .output
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default()),
         );
 
         self.render_resources.queue.submit(Some(encoder.finish()));
+        frame.present();
     }
 
     /// Immediately calls resize on the supplied camera.
