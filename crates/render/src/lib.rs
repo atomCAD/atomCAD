@@ -28,7 +28,7 @@ mod world;
 #[macro_export]
 macro_rules! include_spirv {
     ($name:literal) => {
-        &wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shaders/", $name))
+        wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shaders/", $name))
     };
 }
 
@@ -155,7 +155,7 @@ impl Renderer {
             format: SWAPCHAIN_FORMAT,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: wgpu::PresentMode::AutoVsync,
         };
 
         surface.configure(&device, &surface_config);

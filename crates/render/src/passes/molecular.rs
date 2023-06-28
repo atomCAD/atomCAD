@@ -108,7 +108,7 @@ impl MolecularPass {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[
-                wgpu::RenderPassColorAttachment {
+                Some(wgpu::RenderPassColorAttachment {
                     view: &self.color_texture,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -120,17 +120,17 @@ impl MolecularPass {
                         }),
                         store: true,
                     },
-                },
+                }),
                 // multiple render targets
                 // render to normals texture
-                wgpu::RenderPassColorAttachment {
+                Some(wgpu::RenderPassColorAttachment {
                     view: &self.normals_texture,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: true,
                     },
-                },
+                }),
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &self.depth_texture,
@@ -257,8 +257,8 @@ fn create_render_pipeline(
             module: &atom_frag_shader,
             entry_point: "main",
             targets: &[
-                SWAPCHAIN_FORMAT.into(),
-                wgpu::TextureFormat::Rgba16Float.into(),
+                Some(SWAPCHAIN_FORMAT.into()),
+                Some(wgpu::TextureFormat::Rgba16Float.into()),
             ],
         }),
         primitive: wgpu::PrimitiveState {

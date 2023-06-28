@@ -32,7 +32,7 @@ impl BlitPass {
     pub fn run(&self, encoder: &mut wgpu::CommandEncoder, frame: &wgpu::TextureView) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: frame,
                 resolve_target: None,
                 ops: wgpu::Operations {
@@ -44,7 +44,7 @@ impl BlitPass {
                     }),
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
         });
 
@@ -110,7 +110,7 @@ fn create_blit_pipeline(
         fragment: Some(wgpu::FragmentState {
             module: &frag_shader,
             entry_point: "main",
-            targets: &[SWAPCHAIN_FORMAT.into()],
+            targets: &[Some(SWAPCHAIN_FORMAT.into())],
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList, // doesn't matter
@@ -155,7 +155,7 @@ fn create_blit_render_bundle(
 
     let mut encoder = device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
         label: None,
-        color_formats: &[SWAPCHAIN_FORMAT],
+        color_formats: &[Some(SWAPCHAIN_FORMAT)],
         depth_stencil: None,
         sample_count: 1,
         multiview: None,
