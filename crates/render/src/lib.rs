@@ -61,8 +61,7 @@ pub struct RenderOptions {
 
 #[allow(dead_code)]
 pub struct Renderer {
-    swap_chain_desc: wgpu::SwapChainDescriptor,
-    swap_chain: wgpu::SwapChain,
+    surface_config: wgpu::SurfaceConfiguration,
     surface: wgpu::Surface,
     render_resources: Arc<GlobalRenderResources>,
     size: PhysicalSize<u32>,
@@ -88,7 +87,14 @@ impl Renderer {
         options: RenderOptions,
     ) -> (Self, Arc<GlobalRenderResources>) {
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+
+        // The instance is a handle to our GPU.
+        // Backends::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
+        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
+
+        // # Safety
+        //
+        // The surface needs to live as long as the window that created it.
         let surface = unsafe { instance.create_surface(window) };
 
         let adapter = instance
@@ -134,24 +140,24 @@ impl Renderer {
         let periodic_table_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: periodic_table.element_reprs.as_bytes(),
-            usage: wgpu::BufferUsage::STORAGE,
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let swap_chain_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: SWAPCHAIN_FORMAT,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Mailbox,
         };
 
-        let swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
+        surface.configure(&device, &surface_config);
 
         let atom_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 1,
-                visibility: wgpu::ShaderStage::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
@@ -181,12 +187,11 @@ impl Renderer {
         let blit_pass = passes::BlitPass::new(&render_resources, &fxaa_texture);
 
         let fragment_transforms =
-            BufferVec::new(&render_resources.device, wgpu::BufferUsage::VERTEX, ());
+            BufferVec::new(&render_resources.device, wgpu::BufferUsages::VERTEX, ());
 
         (
             Self {
-                swap_chain_desc,
-                swap_chain,
+                surface_config,
                 surface,
                 render_resources: Arc::clone(&render_resources),
                 size,
@@ -211,13 +216,11 @@ impl Renderer {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.size = new_size;
-        self.swap_chain_desc.width = new_size.width;
-        self.swap_chain_desc.height = new_size.height;
+        self.surface_config.width = new_size.width;
+        self.surface_config.height = new_size.height;
 
-        self.swap_chain = self
-            .render_resources
-            .device
-            .create_swap_chain(&self.surface, &self.swap_chain_desc);
+        self.surface
+            .configure(&self.render_resources.device, &self.surface_config);
 
         let (color_texture, _normals_texture) =
             self.molecular_pass.update(&self.render_resources, new_size);
@@ -250,13 +253,13 @@ impl Renderer {
         self.update_transforms(&mut encoder, world);
 
         let frame = self
-            .swap_chain
+            .surface
             .get_current_frame()
             .map(|mut frame| {
                 if frame.suboptimal {
                     // try again
                     frame = self
-                        .swap_chain
+                        .surface
                         .get_current_frame()
                         .expect("could not retrieve swapchain on second try");
                     if frame.suboptimal {
@@ -293,7 +296,13 @@ impl Renderer {
         }
 
         // blit to screen
-        self.blit_pass.run(&mut encoder, &frame.output.view);
+        self.blit_pass.run(
+            &mut encoder,
+            &frame
+                .output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+        );
 
         self.render_resources.queue.submit(Some(encoder.finish()));
     }
@@ -450,7 +459,7 @@ impl Renderer {
         device: &wgpu::Device,
         size: PhysicalSize<u32>,
         format: wgpu::TextureFormat,
-        usage: wgpu::TextureUsage,
+        usage: wgpu::TextureUsages,
     ) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
             label: None,

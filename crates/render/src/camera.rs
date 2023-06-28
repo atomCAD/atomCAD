@@ -40,7 +40,7 @@ impl RenderCamera {
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: mem::size_of::<CameraRepr>() as u64,
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 

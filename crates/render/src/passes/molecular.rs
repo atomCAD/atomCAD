@@ -170,7 +170,7 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             // camera
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -181,7 +181,7 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             // configuration
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
-                visibility: wgpu::ShaderStage::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
@@ -243,7 +243,7 @@ fn create_render_pipeline(
             entry_point: "main",
             buffers: &[wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<ultraviolet::Mat4>() as _,
-                step_mode: wgpu::InputStepMode::Instance,
+                step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     // part and fragment transform matrix
                     0 => Float32x4,
@@ -290,7 +290,7 @@ fn create_color_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
         device,
         size,
         SWAPCHAIN_FORMAT,
-        wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+        wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
     )
 }
 
@@ -299,7 +299,7 @@ fn create_depth_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
         device,
         size,
         wgpu::TextureFormat::Depth32Float,
-        wgpu::TextureUsage::RENDER_ATTACHMENT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
     )
     .create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -309,7 +309,7 @@ fn create_normals_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgp
         device,
         size,
         wgpu::TextureFormat::Rgba16Float,
-        wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+        wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
     )
     .create_view(&wgpu::TextureViewDescriptor::default())
 }

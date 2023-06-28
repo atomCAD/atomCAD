@@ -35,7 +35,9 @@ struct Atom {
     uint kind;
 };
 
-layout(set = 1, binding = 1, std430) readonly buffer Atoms {
+// Should be marked 'readonly', but this is causing wgpu to barf.  Maybe this
+// is fixed upstream in later releases?
+layout(set = 1, binding = 1, std430) buffer Atoms {
     uvec2 fragment_id; // high and low
 
     Atom atoms[]; // this must be aligned to 16 bytes.

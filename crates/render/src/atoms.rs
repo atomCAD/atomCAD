@@ -67,7 +67,7 @@ impl Atoms {
 
         let buffer = BufferVec::new_with_data(
             &gpu_resources.device,
-            wgpu::BufferUsage::STORAGE,
+            wgpu::BufferUsages::STORAGE,
             number_of_atoms as u64,
             |header, array| {
                 // header.write(AtomBufferHeader { fragment_id });

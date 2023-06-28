@@ -22,7 +22,7 @@ pub struct BufferVec<Header, T> {
     buffer: wgpu::Buffer,
     len: u64,
     capacity: u64,
-    usage: wgpu::BufferUsage,
+    usage: wgpu::BufferUsages,
     _marker: PhantomData<(Header, T)>,
 }
 
@@ -31,7 +31,7 @@ where
     Header: AsBytes,
     T: AsBytes,
 {
-    pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsage, header: Header) -> Self {
+    pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsages, header: Header) -> Self {
         assert!(
             mem::align_of::<Header>() <= 1
                 || mem::align_of::<T>() <= 1
@@ -43,21 +43,21 @@ where
         let buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: header.as_bytes(),
-            usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+            usage: usage | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
         });
 
         Self {
             buffer,
             len: 0,
             capacity: 0,
-            usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+            usage: usage | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
             _marker: PhantomData,
         }
     }
 
     pub fn new_with_data<F>(
         device: &wgpu::Device,
-        usage: wgpu::BufferUsage,
+        usage: wgpu::BufferUsages,
         len: u64,
         fill: F,
     ) -> Self
@@ -78,7 +78,7 @@ where
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: size as u64,
-                usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+                usage: usage | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: true,
             });
 
@@ -126,7 +126,7 @@ where
             device.create_buffer_init(&BufferInitDescriptor {
                 label: None,
                 contents: &vec[..],
-                usage: usage | wgpu::BufferUsage::COPY_DST,
+                usage: usage | wgpu::BufferUsages::COPY_DST,
             })
         };
 
@@ -134,7 +134,7 @@ where
             buffer,
             len,
             capacity: len,
-            usage: usage | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+            usage: usage | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
             _marker: PhantomData,
         }
     }

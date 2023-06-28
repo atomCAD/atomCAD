@@ -74,9 +74,9 @@ fn create_fxaa_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::
         device,
         size,
         STORAGE_TEXTURE_FORMAT,
-        wgpu::TextureUsage::RENDER_ATTACHMENT
-            | wgpu::TextureUsage::SAMPLED
-            | wgpu::TextureUsage::STORAGE,
+        wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::STORAGE_BINDING,
     )
 }
 
@@ -86,7 +86,7 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStage::COMPUTE,
+                visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Sampler {
                     filtering: false,
                     comparison: false,
@@ -95,7 +95,7 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
-                visibility: wgpu::ShaderStage::COMPUTE,
+                visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: false },
                     view_dimension: wgpu::TextureViewDimension::D2,
@@ -105,7 +105,7 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
-                visibility: wgpu::ShaderStage::COMPUTE,
+                visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::StorageTexture {
                     access: wgpu::StorageTextureAccess::WriteOnly,
                     view_dimension: wgpu::TextureViewDimension::D2,
