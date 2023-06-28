@@ -68,6 +68,7 @@ pub enum SystemShortcut {
 #[derive(Clone, Copy, PartialEq)]
 pub struct ModifierKeys(u8);
 
+#[allow(dead_code)] // Not used by all platforms.
 impl ModifierKeys {
     pub const NONE: ModifierKeys = ModifierKeys(0);
     pub const CAPSLOCK: ModifierKeys = ModifierKeys(1 << 0);
