@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<!-- Disable zooming: -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>atomCAD</title>
+    <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
+    <link data-trunk rel="rust" data-wasm-opt="2" />
+    <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
+    <base data-trunk-public-url />
+    <link data-trunk rel="copy-file" href="build/windows/icon.ico"/>
+    <link rel="icon" href="icon.ico">
+    <link data-trunk rel="inline" href="build/web/styles.css"/>
+</head>
+<body oncontextmenu="return false;">
+</body>
+</html>
