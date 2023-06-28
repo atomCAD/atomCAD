@@ -119,7 +119,6 @@ fn main() {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        subscriber::initialize_default_subscriber(None);
         futures::executor::block_on(run(event_loop, window));
     }
     #[cfg(target_arch = "wasm32")]
