@@ -90,12 +90,16 @@ impl Renderer {
 
         // The instance is a handle to our GPU.
         // Backends::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            dx12_shader_compiler: Default::default(),
+        });
 
         // # Safety
         //
         // The surface needs to live as long as the window that created it.
-        let surface = unsafe { instance.create_surface(window) };
+        let surface = unsafe { instance.create_surface(window) }
+            .expect("failed to retrieve surface for window");
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -157,6 +161,7 @@ impl Renderer {
             height: size.height,
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![SWAPCHAIN_FORMAT],
         };
 
         surface.configure(&device, &surface_config);
@@ -481,6 +486,7 @@ impl Renderer {
             dimension: wgpu::TextureDimension::D2,
             format,
             usage,
+            view_formats: &vec![format],
         })
     }
 }
