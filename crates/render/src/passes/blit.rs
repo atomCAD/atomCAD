@@ -69,10 +69,7 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler {
-                    filtering: false,
-                    comparison: false,
-                },
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
@@ -120,7 +117,7 @@ fn create_blit_pipeline(
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Front),
-            clamp_depth: false,
+            unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
@@ -130,6 +127,7 @@ fn create_blit_pipeline(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
+        multiview: None,
     })
 }
 
@@ -160,6 +158,7 @@ fn create_blit_render_bundle(
         color_formats: &[SWAPCHAIN_FORMAT],
         depth_stencil: None,
         sample_count: 1,
+        multiview: None,
     });
 
     encoder.set_pipeline(blit_pipeline);
