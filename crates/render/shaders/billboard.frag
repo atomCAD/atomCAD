@@ -52,7 +52,7 @@ void main(void) {
     gl_FragDepth = in_pos_clipspace.z / in_pos_clipspace.w;
 
     color = vec4(
-        element.color * map(z, 0.0, element.radius, 0.5, 1.0),
+        element.color * map(z, 0.0, element.radius, 0.25, 1.0),
         1.0
     );
     normal = vec4(normalize(position_view_space.xyz - center_view_space.xyz), 0.0);
