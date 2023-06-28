@@ -126,7 +126,13 @@ impl Renderer {
                 &wgpu::DeviceDescriptor {
                     label: None,
                     features: requested_features,
-                    limits: wgpu::Limits::default(),
+                    // WebGL doesn't support all of wgpu's features, so if
+                    // we're building for the web we'll have to disable some.
+                    limits: if cfg!(target_family = "wasm") {
+                        wgpu::Limits::downlevel_defaults()
+                    } else {
+                        wgpu::Limits::default()
+                    },
                 },
                 None,
             )
