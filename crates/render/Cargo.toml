@@ -21,7 +21,7 @@ futures = "0.3.28"
 ultraviolet = "0.9.1"
 static_assertions = "1"
 log = "0.4.19"
-winit = "0.27.0"
+winit = "0.28.0"
 indexmap = "1.6"
 parking_lot =  "0.12"
 
