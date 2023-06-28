@@ -99,7 +99,9 @@ impl Renderer {
             .await
             .expect("failed to find an appropriate adapter");
 
-        let gpu_driven_features = wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
+        let software_driven_features = wgpu::Features::VERTEX_WRITABLE_STORAGE;
+        let gpu_driven_features =
+            software_driven_features | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
         let gpu_driven_rendering;
 
         let requested_features =
@@ -110,7 +112,7 @@ impl Renderer {
                 gpu_driven_features
             } else {
                 gpu_driven_rendering = false;
-                wgpu::Features::empty()
+                software_driven_features
             };
 
         let (device, queue) = adapter
