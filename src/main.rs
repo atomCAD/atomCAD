@@ -124,7 +124,7 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
 fn main() {
     // Create the event loop.
     let mut event_loop = EventLoopBuilder::new();
-    #[cfg(target_os = "macos")]
+    #[cfg(target_os = "macos")] // We will create our own menu bar.
     event_loop.with_default_menu(false);
     let event_loop = event_loop.build();
 
