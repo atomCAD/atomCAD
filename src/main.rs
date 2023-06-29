@@ -143,6 +143,7 @@ fn main() {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
+        env_logger::init();
         futures::executor::block_on(run(event_loop, Some(window)));
     }
     #[cfg(target_arch = "wasm32")]
