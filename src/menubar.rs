@@ -25,7 +25,7 @@ impl Menu {
         }
     }
 
-    pub fn add(mut self, item: MenuItem) -> Self {
+    pub fn and_then(mut self, item: MenuItem) -> Self {
         self.items.push(item);
         self
     }
@@ -111,43 +111,43 @@ pub enum SystemAction {
 }
 
 pub fn setup_menu_bar(window: &Window) {
-    let menubar = Menu::new(APP_NAME).add(MenuItem::SubMenu(
+    let menubar = Menu::new(APP_NAME).and_then(MenuItem::SubMenu(
         Menu::new("")
-            .add(MenuItem::new(
+            .and_then(MenuItem::new(
                 &format!("About {}", APP_NAME),
                 MenuShortcut::None,
                 MenuAction::System(SystemAction::LaunchAboutWindow),
             ))
-            .add(MenuItem::Separator)
-            .add(MenuItem::new(
+            .and_then(MenuItem::Separator)
+            .and_then(MenuItem::new(
                 "Settings...",
                 MenuShortcut::System(SystemShortcut::Preferences),
                 MenuAction::System(SystemAction::LaunchPreferences),
             ))
-            .add(MenuItem::Separator)
-            .add(MenuItem::new(
+            .and_then(MenuItem::Separator)
+            .and_then(MenuItem::new(
                 "Services",
                 MenuShortcut::None,
                 MenuAction::System(SystemAction::ServicesMenu),
             ))
-            .add(MenuItem::Separator)
-            .add(MenuItem::new(
+            .and_then(MenuItem::Separator)
+            .and_then(MenuItem::new(
                 &format!("Hide {}", APP_NAME),
                 MenuShortcut::System(SystemShortcut::HideApp),
                 MenuAction::System(SystemAction::HideApp),
             ))
-            .add(MenuItem::new(
+            .and_then(MenuItem::new(
                 "Hide Others",
                 MenuShortcut::System(SystemShortcut::HideOthers),
                 MenuAction::System(SystemAction::HideOthers),
             ))
-            .add(MenuItem::new(
+            .and_then(MenuItem::new(
                 "Show All",
                 MenuShortcut::None,
                 MenuAction::System(SystemAction::ShowAll),
             ))
-            .add(MenuItem::Separator)
-            .add(MenuItem::new(
+            .and_then(MenuItem::Separator)
+            .and_then(MenuItem::new(
                 &format!("Quit {}", APP_NAME),
                 MenuShortcut::System(SystemShortcut::QuitApp),
                 MenuAction::System(SystemAction::Terminate),
