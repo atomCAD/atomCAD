@@ -85,10 +85,6 @@ impl Camera for RotatingArcballCamera {
                     }
                     false
                 }
-                WindowEvent::CursorLeft { .. } => {
-                    self.mouse_button_pressed = false;
-                    false
-                }
                 _ => false,
             },
             InputEvent::Device(event) => match event {
