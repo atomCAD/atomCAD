@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use atomcad::camera::ArcballCamera;
-use atomcad::menubar::setup_menu_bar;
+use atomcad::menubar;
 use atomcad::pdb;
 use atomcad::APP_NAME;
 use common::InputEvent;
@@ -106,7 +106,10 @@ fn main() {
         }
         Ok(window) => window,
     };
-    setup_menu_bar(&window);
+
+    // Add the menu bar to the window / application instance, using native
+    // APIs.
+    menubar::setup_menu_bar(&window);
 
     #[cfg(not(target_arch = "wasm32"))]
     {
