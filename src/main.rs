@@ -12,7 +12,7 @@ use render::{Interactions, RenderOptions, Renderer, World};
 #[cfg(target_os = "macos")]
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 use winit::{
-    event::{Event, WindowEvent},
+    event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::{Window, WindowBuilder},
 };
@@ -69,6 +69,9 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
+            Event::NewEvents(StartCause::Init) => {
+                // Will be called once when the event loop starts.
+            }
             Event::WindowEvent {
                 event: WindowEvent::Resized(new_size),
                 ..
