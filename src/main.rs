@@ -40,7 +40,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let mut world = World::new();
 
-    let mut neon_pump = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "data/neon_pump_imm.pdb")
+    let mut neon_pump = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "assets/neon_pump_imm.pdb")
         .expect("failed to load pdb");
 
     println!(
@@ -60,14 +60,14 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     // let loaded_pdb = pdb::load_from_pdb_str(
     //     &gpu_resources,
     //     "Neon Pump",
-    //     include_str!("../data/neon_pump_imm.pdb"),
+    //     include_str!("../assets/neon_pump_imm.pdb"),
     // )
     // .unwrap();
 
     // let loaded_pdb = pdb::load_from_pdb(
     //     &gpu_resources,
     //     "Carbon Nanotube and DNA",
-    //     "data/nanotube_and_dna.pdb",
+    //     "assets/nanotube_and_dna.pdb",
     // )
     // .expect("failed to load pdb");
 
