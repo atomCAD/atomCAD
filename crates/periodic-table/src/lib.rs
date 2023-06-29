@@ -356,6 +356,12 @@ impl PeriodicTable {
     }
 }
 
+impl Default for PeriodicTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct ElementRepr {

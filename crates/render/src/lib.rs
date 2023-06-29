@@ -341,19 +341,17 @@ impl Renderer {
 
         let (parts, fragments) = (&world.parts, &world.fragments);
 
-        let added_fragments = world.added_fragments.drain(..).chain(
+        let added_fragments =
             world
-                .added_parts
+                .added_fragments
                 .drain(..)
-                .map(|part_id| {
+                .chain(world.added_parts.drain(..).flat_map(|part_id| {
                     parts[&part_id]
                         .fragments()
                         .iter()
                         .copied()
                         .map(move |id| (part_id, id))
-                })
-                .flatten(),
-        );
+                }));
 
         let mut transform_index = self.fragment_transforms.len();
 
@@ -394,8 +392,7 @@ impl Renderer {
             world
                 .modified_parts
                 .drain(..)
-                .map(|part_id| parts[&part_id].fragments().iter().copied())
-                .flatten(),
+                .flat_map(|part_id| parts[&part_id].fragments().iter().copied()),
         );
 
         for fragment_id in modified_fragments {
@@ -485,7 +482,7 @@ impl Renderer {
             dimension: wgpu::TextureDimension::D2,
             format,
             usage,
-            view_formats: &vec![format],
+            view_formats: &[format],
         })
     }
 }

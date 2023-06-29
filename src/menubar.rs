@@ -162,7 +162,7 @@ pub fn setup_menu_bar(
 
     // Do the platform-dependent work of constructing the menubar and
     // attaching it to the application object or main window.
-    attach_menu(&window, &menubar);
+    attach_menu(window, &menubar);
 }
 
 // End of File

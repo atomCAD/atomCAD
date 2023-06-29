@@ -21,7 +21,7 @@ pub fn load_from_pdb<P: AsRef<Path>>(
         return Err("path does not exist".to_string());
     }
 
-    let structure = read_pdb(&*path.to_string_lossy(), name);
+    let structure = read_pdb(&path.to_string_lossy(), name);
 
     let mut world = World::new();
 

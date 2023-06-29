@@ -25,7 +25,7 @@ fn nsstring(s: &str) -> *mut Object {
     }
 }
 
-unsafe fn build_menu(app: *mut Object, services_menu: *mut Object, menu: &Menu) -> *mut Object {
+unsafe fn build_menu(_app: *mut Object, services_menu: *mut Object, menu: &Menu) -> *mut Object {
     // Create root menu bar.
     let menuobj: *mut Object = msg_send![class![NSMenu], alloc];
     let menuobj: *mut Object = msg_send![menuobj, initWithTitle: nsstring(&menu.title)];
@@ -38,7 +38,7 @@ unsafe fn build_menu(app: *mut Object, services_menu: *mut Object, menu: &Menu) 
                 let _: () = msg_send![menuobj, addItem: item];
             }
             MenuItem::Entry(title, shortcut, action) => {
-                let title = nsstring(&title);
+                let title = nsstring(title);
                 let mut is_service_menu = false;
                 let action = match action {
                     MenuAction::System(action) => match action {
@@ -124,7 +124,7 @@ unsafe fn build_menu(app: *mut Object, services_menu: *mut Object, menu: &Menu) 
                 let item: *mut Object = msg_send![class![NSMenuItem], alloc];
                 let item: *mut Object = msg_send![item, init];
                 let item: *mut Object = msg_send![item, autorelease];
-                let submenu = build_menu(app, services_menu, &submenu);
+                let submenu = build_menu(_app, services_menu, submenu);
                 let _: () = msg_send![item, setSubmenu: submenu];
                 let _: () = msg_send![menuobj, addItem: item];
             }
@@ -156,7 +156,7 @@ pub fn attach_menu(
         let _: () = msg_send![app, setServicesMenu: services_menu];
 
         // Turn the menubar description into a Cocoa menu.
-        let obj = build_menu(app, services_menu, &menu);
+        let obj = build_menu(app, services_menu, menu);
 
         // Register the menu with the NSApplication object.
         let _: () = msg_send![app, setMainMenu: obj];

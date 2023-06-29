@@ -148,7 +148,7 @@ fn create_blit_render_bundle(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::TextureView(&input_texture),
+                resource: wgpu::BindingResource::TextureView(input_texture),
             },
         ],
     });

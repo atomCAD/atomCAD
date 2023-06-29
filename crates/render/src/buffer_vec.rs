@@ -177,7 +177,7 @@ where
                 new_capacity,
                 data.len(),
                 mem::size_of::<Header>() as u64 + new_capacity * mem::size_of::<T>() as u64,
-                mem::size_of::<Header>() as u64 + (data.len() * mem::size_of::<T>()) as u64,
+                mem::size_of::<Header>() as u64 + mem::size_of_val(data) as u64,
             );
 
             #[cfg(not(target_arch = "wasm32"))]
@@ -192,7 +192,7 @@ where
 
                 {
                     let mut buffer_view = new_buffer
-                        .slice(offset..offset + (data.len() * mem::size_of::<T>()) as u64)
+                        .slice(offset..offset + mem::size_of_val(data) as u64)
                         .get_mapped_range_mut();
                     buffer_view.copy_from_slice(data.as_bytes());
                 }

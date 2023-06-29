@@ -18,11 +18,11 @@ use ultraviolet::Vec3;
 pub struct AtomKind(u32);
 impl AtomKind {
     pub fn new(element: Element) -> Self {
-        Self(((element as u8 - 1) & 0b1111_111) as u32)
+        Self(((element as u8 - 1) & 0b111_1111) as u32)
     }
 
     pub fn element(&self) -> Element {
-        let n = (self.0 & 0b1111_111) as u8 + 1;
+        let n = (self.0 & 0b111_1111) as u8 + 1;
         Element::from_atomic_number(n)
             .unwrap_or_else(|| unreachable!("invalid atomic number in atom kind"))
     }

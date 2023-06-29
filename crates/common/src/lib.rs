@@ -11,6 +11,16 @@ pub enum InputEvent<'a> {
     BeginningFrame,
 }
 
+/// # Safety
+///
+/// This is safe because it merely exposes the backing memory use natively to
+/// store the instance of the type as a byte array.  It is tagged unsafe only
+/// because of the pointer and slice operations involved.
+///
+/// Still, even though this won't result in memory leaks or dereferencing NULL,
+/// it is still moderately unsafe as the direct memory storage layout may
+/// change across architectures.  Be very careful with what you store or you
+/// will get inconsistent results across platforms.
 pub unsafe trait AsBytes {
     fn as_bytes(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self as *const _ as *const u8, mem::size_of_val(self)) }
@@ -44,7 +54,7 @@ where
     T: AsBytes + Sized,
 {
     fn as_bytes(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.as_ptr().cast(), mem::size_of::<T>() * self.len()) }
+        unsafe { slice::from_raw_parts(self.as_ptr().cast(), mem::size_of_val(self)) }
     }
 }
 

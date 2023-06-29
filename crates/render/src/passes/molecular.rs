@@ -154,7 +154,7 @@ impl MolecularPass {
                 ),
             );
 
-            rpass.set_bind_group(1, &fragment.atoms().bind_group(), &[]);
+            rpass.set_bind_group(1, fragment.atoms().bind_group(), &[]);
             rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)
         }
     }
@@ -209,7 +209,7 @@ fn create_top_level_bg(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &periodic_table_buffer,
+                    buffer: periodic_table_buffer,
                     offset: 0,
                     size: None,
                 }),
@@ -225,7 +225,7 @@ fn create_render_pipeline(
 ) -> wgpu::RenderPipeline {
     let atom_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&top_level_bgl, atom_bgl],
+        bind_group_layouts: &[top_level_bgl, atom_bgl],
         push_constant_ranges: &[],
     });
 

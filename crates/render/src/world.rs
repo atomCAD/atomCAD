@@ -20,6 +20,12 @@ macro_rules! declare_id {
 
         unsafe impl AsBytes for $id_name {}
 
+        impl Default for $id_name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
         impl $id_name {
             pub fn new() -> Self {
                 static COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -154,7 +160,7 @@ impl Part {
         let center = center / fragments.len() as f32;
 
         assert!(
-            fragments.len() > 0,
+            !fragments.is_empty(),
             "must have at least one fragment in a part"
         );
 
@@ -206,6 +212,7 @@ impl Part {
 }
 
 /// Represents all the parts and fragments currently alive in a scene.
+#[derive(Default)]
 pub struct World {
     pub(crate) parts: IndexMap<PartId, Part>,
     pub(crate) fragments: IndexMap<FragmentId, Fragment>,
@@ -219,15 +226,7 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-        Self {
-            parts: IndexMap::new(),
-            fragments: IndexMap::new(),
-
-            added_parts: Vec::new(),
-            added_fragments: Vec::new(),
-            modified_parts: Vec::new(),
-            modified_fragments: Vec::new(),
-        }
+        Self::default()
     }
 
     // pub fn split_empty(&self) -> Self {
