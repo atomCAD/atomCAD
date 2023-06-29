@@ -33,8 +33,12 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
 
     let mut world = World::new();
 
-    let mut neon_pump = pdb::load_from_pdb(&gpu_resources, "Neon Pump", "assets/neon_pump_imm.pdb")
-        .expect("failed to load pdb");
+    let mut neon_pump = pdb::load_from_pdb_str(
+        &gpu_resources,
+        "Neon Pump",
+        include_str!("../assets/neon_pump_imm.pdb"),
+    )
+    .expect("failed to load pdb");
 
     println!(
         "Loaded {} parts and {} fragments",
@@ -85,6 +89,26 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
             Event::MainEventsCleared => {
                 // The event queue is empty, so we can safely redraw the window.
                 if window.is_some() {
+                    // Winit prevents sizing with CSS, so we have to set
+                    // the size manually when on web.
+                    #[cfg(target_arch = "wasm32")]
+                    (|| {
+                        use winit::dpi::PhysicalSize;
+                        log::error!("Resizing window");
+                        let win = web_sys::window()?;
+                        let width = win.inner_width().ok()?.as_f64()?;
+                        let height = win.inner_height().ok()?.as_f64()?;
+                        window.as_ref().map(|window| {
+                            let scale_factor = window.scale_factor();
+                            let new_size = PhysicalSize::new(
+                                (width * scale_factor) as u32,
+                                (height * scale_factor) as u32,
+                            );
+                            window.set_inner_size(new_size);
+                            renderer.resize(new_size);
+                            Some(())
+                        })
+                    })();
                     renderer.render(&mut world, &interations);
                 }
             }
@@ -150,16 +174,33 @@ fn main() {
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init().expect("could not initialize logger");
-        use winit::platform::web::WindowExtWebSys;
+        // Winit prevents sizing with CSS, so we have to set
+        // the size manually when on web.
+        use winit::dpi::PhysicalSize;
+        let width = web_sys::window()
+            .and_then(|win| win.inner_width().ok())
+            .and_then(|w| w.as_f64())
+            .unwrap_or(800.0);
+        let height = web_sys::window()
+            .and_then(|win| win.inner_height().ok())
+            .and_then(|h| h.as_f64())
+            .unwrap_or(600.0);
+        let scale_factor = window.scale_factor();
+        window.set_inner_size(PhysicalSize::new(
+            width * scale_factor,
+            height * scale_factor,
+        ));
         // On wasm, append the canvas to the document body
+        use winit::platform::web::WindowExtWebSys;
         web_sys::window()
             .and_then(|win| win.document())
-            .and_then(|doc| doc.body())
-            .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
-                    .ok()
+            .and_then(|doc| {
+                let dst = doc.get_element_by_id("app-container")?;
+                let canvas = web_sys::Element::from(window.canvas());
+                dst.append_child(&canvas).ok()?;
+                Some(())
             })
-            .expect("couldn't append canvas to document body");
+            .expect("Couldn't append canvas to document body.");
         wasm_bindgen_futures::spawn_local(run(event_loop, Some(window)));
     }
 }

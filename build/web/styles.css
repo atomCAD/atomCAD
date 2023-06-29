@@ -13,7 +13,7 @@ body {
     margin: 0;
 }
 
-.game-container {
+#app-container {
     width: 100%;
     height: 100%;
     display: flex;
@@ -21,7 +21,7 @@ body {
     align-items: center;
 }
 
-#bevy {
+#atomCAD {
     background-color: white;
     width: 800px;
     height: 600px;

@@ -98,8 +98,15 @@ impl Renderer {
         // # Safety
         //
         // The surface needs to live as long as the window that created it.
+        #[cfg(not(target_arch = "wasm32"))]
         let surface = unsafe { instance.create_surface(window) }
             .expect("failed to retrieve surface for window");
+        #[cfg(target_arch = "wasm32")]
+        use winit::platform::web::WindowExtWebSys;
+        #[cfg(target_arch = "wasm32")]
+        let surface = instance
+            .create_surface_from_canvas(window.canvas())
+            .expect("failed to retrieve surface for canvas");
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -134,7 +141,7 @@ impl Renderer {
                     // WebGL doesn't support all of wgpu's features, so if
                     // we're building for the web we'll have to disable some.
                     limits: if cfg!(target_family = "wasm") {
-                        wgpu::Limits::downlevel_defaults()
+                        wgpu::Limits::downlevel_webgl2_defaults()
                     } else {
                         wgpu::Limits::default()
                     },
@@ -170,9 +177,9 @@ impl Renderer {
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 1,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
