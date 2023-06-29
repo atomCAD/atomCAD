@@ -17,9 +17,11 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-async fn run(event_loop: EventLoop<()>, window: Window) {
+async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
+    window.as_ref().expect("window should exist");
+
     let (mut renderer, gpu_resources) = Renderer::new(
-        &window,
+        window.as_ref().unwrap(),
         RenderOptions {
             fxaa: Some(()), // placeholder
             attempt_gpu_driven: true,
@@ -74,12 +76,31 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 renderer.resize(new_size);
             }
             Event::MainEventsCleared => {
-                renderer.render(&mut world, &interations);
+                // The event queue is empty, so we can safely redraw the window.
+                if window.is_some() {
+                    renderer.render(&mut world, &interations);
+                }
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
-            } => *control_flow = ControlFlow::Exit,
+            } => {
+                // The user has requested to close the window.
+                // Drop the window to fire the `Destroyed` event.
+                window = None;
+            }
+            Event::WindowEvent {
+                event: WindowEvent::Destroyed,
+                ..
+            } => {
+                // The window has been destroyed, time to exit stage left.
+                *control_flow = ControlFlow::ExitWithCode(0);
+            }
+            Event::LoopDestroyed => {
+                // The event loop has been destroyed, so we can safely terminate
+                // the application.  This is the very last event we will ever
+                // receive, so we can safely perform final rites.
+            }
             Event::WindowEvent { event, .. } => {
                 renderer.camera().update(InputEvent::Window(event));
             }
@@ -113,7 +134,7 @@ fn main() {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        futures::executor::block_on(run(event_loop, window));
+        futures::executor::block_on(run(event_loop, Some(window)));
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -129,7 +150,7 @@ fn main() {
                     .ok()
             })
             .expect("couldn't append canvas to document body");
-        wasm_bindgen_futures::spawn_local(run(event_loop, window));
+        wasm_bindgen_futures::spawn_local(run(event_loop, Some(window)));
     }
 }
 
