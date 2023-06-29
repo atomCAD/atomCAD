@@ -2,8 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::camera::ArcballCamera;
-use crate::menubar::setup_menu_bar;
+use atomcad::camera::ArcballCamera;
+use atomcad::menubar::setup_menu_bar;
+use atomcad::pdb;
+use atomcad::APP_NAME;
 // use crate::rotating_camera::RotatingArcballCamera;
 use common::InputEvent;
 use render::{Interactions, RenderOptions, Renderer, World};
@@ -15,16 +17,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::{Window, WindowBuilder},
 };
-
-mod camera;
-mod menubar;
-// mod rotating_camera;
-mod pdb;
-mod platform;
-mod platform_impl;
-// mod ti;
-
-pub const APP_NAME: &str = "atomCAD";
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let (mut renderer, gpu_resources) = Renderer::new(
