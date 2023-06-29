@@ -2,6 +2,7 @@
 name = "atomcad-render"
 version = "0.1.0"
 authors = ["Mark Friedenbach <mark@friedenbach.org>", "Lachlan Sneff <lachlan.sneff@gmail.com>"]
+license = "MPL-2.0"
 edition = "2021"
 build = "build.rs"
 
