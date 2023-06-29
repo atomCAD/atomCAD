@@ -6,7 +6,6 @@ use atomcad::camera::ArcballCamera;
 use atomcad::menubar::setup_menu_bar;
 use atomcad::pdb;
 use atomcad::APP_NAME;
-// use crate::rotating_camera::RotatingArcballCamera;
 use common::InputEvent;
 use render::{Interactions, RenderOptions, Renderer, World};
 
