@@ -111,7 +111,6 @@ impl Camera for ArcballCamera {
                 self.pitch.sin(),
             );
 
-        // let eye = self.rotor * (self.distance * Vec3::unit_z());
         self.camera.view = Mat4::look_at(eye, Vec3::zero(), Vec3::unit_z());
         self.camera.projection_view = self.camera.projection * self.camera.view;
     }
