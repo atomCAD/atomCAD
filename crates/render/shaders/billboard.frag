@@ -21,7 +21,11 @@ layout(location = 2) flat in vec4 element_vec;
 layout(location = 4) flat in vec4 center_view_space;
 layout(location = 5) in vec4 position_view_space;
 
-layout(depth_greater) out float gl_FragDepth;
+// WF: We should be doing the following, according to the GLSL specs.  However
+//     including this line generates a validation error as of wgpu v0.16.1.
+//     We are waiting for proper wgpu support for the EARLY_DEPTH_TEST feature
+//     across all backends.
+//layout(depth_greater) out float gl_FragDepth;
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 normal;
 
