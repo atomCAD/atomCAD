@@ -110,13 +110,7 @@ pub enum SystemAction {
     Terminate,
 }
 
-pub fn setup_menu_bar(
-    // We have to use `NonSend` here.  This forces this function to be called
-    // from the winit thread (which is the main thread on macOS), after the
-    // window has been created.  We don't actually use it on macOS, but this
-    // does control when and from where we will be called.
-    window: &Window,
-) {
+pub fn setup_menu_bar(window: &Window) {
     let menubar = Menu::new(APP_NAME).add(MenuItem::SubMenu(
         Menu::new("")
             .add(MenuItem::new(
