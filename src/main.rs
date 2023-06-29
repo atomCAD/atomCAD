@@ -66,8 +66,12 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
 
     let interations = Interactions::default();
 
+    // Run the event loop.
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
+        // When we are done handling this event, suspend until the next event.
+        *control_flow = ControlFlow::Wait;
+
+        // Handle events.
         match event {
             Event::NewEvents(StartCause::Init) => {
                 // Will be called once when the event loop starts.
@@ -110,7 +114,9 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
             Event::DeviceEvent { event, .. } => {
                 renderer.camera().update(InputEvent::Device(event));
             }
-            _ => {}
+            _ => {
+                // Unknown event; do nothing.
+            }
         }
     })
 }
