@@ -54,20 +54,6 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
 
     world.merge(neon_pump);
 
-    // let loaded_pdb = pdb::load_from_pdb_str(
-    //     &gpu_resources,
-    //     "Neon Pump",
-    //     include_str!("../assets/neon_pump_imm.pdb"),
-    // )
-    // .unwrap();
-
-    // let loaded_pdb = pdb::load_from_pdb(
-    //     &gpu_resources,
-    //     "Carbon Nanotube and DNA",
-    //     "assets/nanotube_and_dna.pdb",
-    // )
-    // .expect("failed to load pdb");
-
     let interations = Interactions::default();
 
     // Run the event loop.
