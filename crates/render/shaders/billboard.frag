@@ -62,8 +62,8 @@ void main(void) {
     normal = vec4(normalize(position_view_space.xyz - center_view_space.xyz), 0.0);
 
 #ifdef TARGET_WASM
-    // Currently, firefox webgpu doesn't automatically convert linear rgb outputs to srgb
-    // so we do it manually.
+    // Currently, webgpu doesn't automatically convert linear rgb outputs to
+    // srgb so we do it manually.
     color = linear_to_srgb(color);
 #endif
 }
