@@ -104,8 +104,12 @@ impl Renderer {
         #[cfg(target_arch = "wasm32")]
         use winit::platform::web::WindowExtWebSys;
         #[cfg(target_arch = "wasm32")]
+        let canvas = window
+            .canvas()
+            .expect("failed to retrieve canvas for window");
+        #[cfg(target_arch = "wasm32")]
         let surface = instance
-            .create_surface_from_canvas(window.canvas())
+            .create_surface_from_canvas(canvas)
             .expect("failed to retrieve surface for canvas");
 
         let adapter = instance

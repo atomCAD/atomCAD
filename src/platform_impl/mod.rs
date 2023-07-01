@@ -2,6 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#[cfg(target_os = "android")]
+pub mod android;
+#[cfg(target_os = "android")]
+pub use self::android::*;
+
 #[cfg(target_os = "ios")]
 pub mod ios;
 #[cfg(target_os = "ios")]

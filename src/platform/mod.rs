@@ -8,6 +8,11 @@
 // public.
 mod defaults;
 
+#[cfg(target_os = "android")]
+pub mod android;
+#[cfg(target_os = "android")]
+pub use self::android::*;
+
 #[cfg(target_os = "ios")]
 pub mod ios;
 #[cfg(target_os = "ios")]
