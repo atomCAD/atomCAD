@@ -2,6 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! The 3D view camera in atomCAD is a user interface element that can be
+//! interacted with.  Just like a slider widget can be dragged to change a
+//! number, the 3D viewport can be clicked, dragged, scrolled, etc. to change
+//! the orientation or focus of the viewport.
+//!
+//! This module implements that user interface processing logic, and exposes
+//! an implementation of the [Camera](`render::Camera`) trait that translates
+//! the camera's current state into parameters used by the rendering system.
+
 use common::InputEvent;
 use render::{Camera, CameraRepr};
 use ultraviolet::{projection, Mat4, Vec3};
@@ -12,6 +21,10 @@ use winit::{
 
 const PI: f32 = std::f32::consts::PI;
 
+// Make sure that the given value is between min and max, inclusive.  This is
+// used to keep the user from rotating beyond the vertical.
+//
+// TODO: Move this to a common math module.
 #[inline]
 fn clamp(mut x: f32, min: f32, max: f32) -> f32 {
     assert!(min <= max);
@@ -24,6 +37,10 @@ fn clamp(mut x: f32, min: f32, max: f32) -> f32 {
     x
 }
 
+/// The arcball camera is the simplest camera type, used in the part editing
+/// view.  It allows the user to rotate the camera around a focus point,
+/// usually the center of the part or assembly being worked on, and zoom
+/// in and out.
 pub struct ArcballCamera {
     camera: CameraRepr,
 
