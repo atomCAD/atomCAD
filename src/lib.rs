@@ -27,7 +27,7 @@
 //!
 //! As is common with binary applications, the main entry point is in the
 //! `main.rs` file, and the rest of the application is implemented in this
-//! crate.
+//! crate, so that it is accessible to integration tests.
 //!
 //! [wgpu]: https://crates.io/crates/wgpu
 //! [rui]: https://crates.io/crates/rui

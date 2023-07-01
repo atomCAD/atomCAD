@@ -50,8 +50,9 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     // Center the neon pump around the origin, so that the rotating arcball
     // camera will be centered on it.
     for part in neon_pump.parts_mut() {
-        // This doesn't let the world now that this part is going to be updated,
-        // but we're adding them for the first time, so it'll work anyhow.
+        // This doesn't let the world know that this part is going to be
+        // updated, but we're adding them for the first time, so it'll work
+        // anyhow.
         part.move_to(0.0, 0.0, 0.0);
     }
 
