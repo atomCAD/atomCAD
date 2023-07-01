@@ -45,6 +45,7 @@ pub struct ArcballCamera {
     camera: CameraRepr,
 
     mouse_button_pressed: bool,
+    focus: Vec3,
     yaw: f32,
     pitch: f32,
     distance: f32,
@@ -52,10 +53,11 @@ pub struct ArcballCamera {
 }
 
 impl ArcballCamera {
-    pub fn new(distance: f32, speed: f32) -> Self {
+    pub fn new(focus: Vec3, distance: f32, speed: f32) -> Self {
         Self {
             camera: CameraRepr::default(),
             mouse_button_pressed: false,
+            focus,
             yaw: 0.0,
             pitch: 0.0,
             distance,
@@ -128,7 +130,7 @@ impl Camera for ArcballCamera {
                 self.pitch.sin(),
             );
 
-        self.camera.view = Mat4::look_at(eye, Vec3::zero(), Vec3::unit_z());
+        self.camera.view = Mat4::look_at(eye, self.focus, Vec3::unit_z());
         self.camera.projection_view = self.camera.projection * self.camera.view;
     }
 

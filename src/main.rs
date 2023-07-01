@@ -9,6 +9,7 @@ use atomcad::APP_NAME;
 use common::InputEvent;
 use render::{Interactions, RenderOptions, Renderer, World};
 
+use ultraviolet::Vec3;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 use winit::{
@@ -29,7 +30,7 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     )
     .await;
 
-    renderer.set_camera(ArcballCamera::new(100.0, 1.0));
+    renderer.set_camera(ArcballCamera::new(Vec3::zero(), 100.0, 1.0));
 
     let mut world = World::new();
 
