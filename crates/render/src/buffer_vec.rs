@@ -73,7 +73,6 @@ where
             type_name::<T>(),
         );
         let size = mem::size_of::<Header>() + mem::size_of::<T>() * len as usize;
-        #[cfg(not(target_arch = "wasm32"))]
         let buffer = {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
@@ -105,29 +104,6 @@ where
             // });
 
             buffer
-        };
-        #[cfg(target_arch = "wasm32")]
-        let buffer = {
-            let mut vec = vec![0; size];
-
-            let (header, rest) = vec.split_at_mut(mem::size_of::<Header>());
-            assert_eq!(header.len(), mem::size_of::<Header>());
-
-            unsafe {
-                fill(
-                    &mut *(header.as_mut_ptr() as *mut MaybeUninit<Header>),
-                    slice::from_raw_parts_mut(
-                        rest.as_mut_ptr() as *mut MaybeUninit<T>,
-                        rest.len() / mem::size_of::<T>(),
-                    ),
-                );
-            }
-
-            device.create_buffer_init(&BufferInitDescriptor {
-                label: None,
-                contents: &vec[..],
-                usage: usage | wgpu::BufferUsages::COPY_DST,
-            })
         };
 
         Self {
