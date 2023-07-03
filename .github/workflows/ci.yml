@@ -22,6 +22,7 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
       - uses: dtolnay/rust-toolchain@master
+        if: runner.os == 'macos'
         with:
           toolchain: stable
           targets: |
@@ -48,6 +49,14 @@ jobs:
             aarch64-pc-windows-msvc
             aarch64-pc-windows-msvc
             wasm32-unknown-unknown
+      - uses: dtolnay/rust-toolchain@master
+        if: runner.os == 'linux'
+        with:
+          toolchain: stable
+      - uses: dtolnay/rust-toolchain@master
+        if: runner.os == 'windows'
+        with:
+          toolchain: stable
       - name: Install alsa and udev
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
         if: runner.os == 'linux'
