@@ -31,14 +31,35 @@ jobs:
             x86_64-apple-ios
             aarch64-apple-darwin
             x86_64-apple-darwin
+            wasm32-unknown-unknown
       - uses: dtolnay/rust-toolchain@master
         if: runner.os == 'linux'
         with:
           toolchain: stable
+          targets: |
+            aarch64-linux-android
+            thumbv7neon-linux-androideabi
+            x86_64-linux-android
+            i686-linux-android
+            x86_64-unknown-linux-gnu
+            i686-unknown-linux-gnu
+            riscv64gc-unknown-linux-gnu
+            aarch64-unknown-linux-gnu
+            thumbv7neon-unknown-linux-gnueabihf
+            powerpc64-unknown-linux-gnu
+            powerpc64le-unknown-linux-gnu
+            x86_64-pc-windows-msvc
+            x86_64-pc-windows-gnu
+            i686-pc-windows-msvc
+            i686-pc-windows-gnu
+            aarch64-pc-windows-msvc
+            wasm32-unknown-unknown
       - uses: dtolnay/rust-toolchain@master
         if: runner.os == 'windows'
         with:
           toolchain: stable
+          targets: |
+            wasm32-unknown-unknown
       - name: Install alsa and udev
         if: runner.os == 'linux'
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
