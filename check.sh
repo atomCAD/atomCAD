@@ -24,7 +24,6 @@ x86_64-pc-windows-gnu
 i686-pc-windows-msvc
 i686-pc-windows-gnu
 aarch64-pc-windows-msvc
-aarch64-pc-windows-msvc
 EOM
 )
 
