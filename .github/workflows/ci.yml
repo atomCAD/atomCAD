@@ -53,7 +53,7 @@ jobs:
         if: runner.os == 'linux'
       - name: Build & run tests
         run: cargo test
-      - name: Run check script
+      - name: Run cross-compiler checks
         if: runner.os == 'macos'
         run: |
           ./ci/check-macos.sh
