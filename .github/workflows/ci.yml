@@ -26,29 +26,11 @@ jobs:
         with:
           toolchain: stable
           targets: |
-            aarch64-linux-android
-            thumbv7neon-linux-androideabi
-            x86_64-linux-android
-            i686-linux-android
             aarch64-apple-ios
             aarch64-apple-ios-sim
             x86_64-apple-ios
             aarch64-apple-darwin
             x86_64-apple-darwin
-            x86_64-unknown-linux-gnu
-            i686-unknown-linux-gnu
-            riscv64gc-unknown-linux-gnu
-            aarch64-unknown-linux-gnu
-            thumbv7neon-unknown-linux-gnueabihf
-            powerpc64-unknown-linux-gnu
-            powerpc64le-unknown-linux-gnu
-            x86_64-pc-windows-msvc
-            x86_64-pc-windows-gnu
-            i686-pc-windows-msvc
-            i686-pc-windows-gnu
-            aarch64-pc-windows-msvc
-            aarch64-pc-windows-msvc
-            wasm32-unknown-unknown
       - uses: dtolnay/rust-toolchain@master
         if: runner.os == 'linux'
         with:
@@ -63,9 +45,8 @@ jobs:
       - name: Build & run tests
         run: cargo test
       - name: Run cross-compiler checks
-        if: runner.os == 'macos'
         run: |
-          ./ci/check-macos.sh
+          ./ci/check-${{ runner.os }}.sh
   all-doc-tests:
     runs-on: ubuntu-latest
     steps:
