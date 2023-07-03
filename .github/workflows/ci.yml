@@ -24,11 +24,39 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+          targets: |
+            aarch64-linux-android
+            thumbv7neon-linux-androideabi
+            x86_64-linux-android
+            i686-linux-android
+            aarch64-apple-ios
+            aarch64-apple-ios-sim
+            x86_64-apple-ios
+            aarch64-apple-darwin
+            x86_64-apple-darwin
+            x86_64-unknown-linux-gnu
+            i686-unknown-linux-gnu
+            riscv64gc-unknown-linux-gnu
+            aarch64-unknown-linux-gnu
+            thumbv7neon-unknown-linux-gnueabihf
+            powerpc64-unknown-linux-gnu
+            powerpc64le-unknown-linux-gnu
+            x86_64-pc-windows-msvc
+            x86_64-pc-windows-gnu
+            i686-pc-windows-msvc
+            i686-pc-windows-gnu
+            aarch64-pc-windows-msvc
+            aarch64-pc-windows-msvc
+            wasm32-unknown-unknown
       - name: Install alsa and udev
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
         if: runner.os == 'linux'
       - name: Build & run tests
         run: cargo test
+      - name: Run check script
+        if: runner.os == 'macos'
+        run: |
+          ./ci/check-macos.sh
   all-doc-tests:
     runs-on: ubuntu-latest
     steps:
