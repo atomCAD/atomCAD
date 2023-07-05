@@ -1,6 +1,8 @@
 # atomCAD
 
-A CAD environment for designing atomically-precise molecular nanotechnology.
+A CAD/CAM environment for designing atomically-precise molecular nanotechnology.
+Eventually.  Right now it's a decently fast molecular viewer able to parse PDB
+files.
 
 ![panning around a nanoscale neon pump](./media/neon-pump.gif)
 
