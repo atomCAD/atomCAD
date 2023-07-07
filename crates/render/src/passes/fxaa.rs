@@ -2,13 +2,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{include_spirv, GlobalRenderResources, Renderer, STORAGE_TEXTURE_FORMAT};
+use crate::{GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
 use winit::dpi::PhysicalSize;
 
 pub struct FxaaPass {
-    pipeline: wgpu::ComputePipeline,
+    pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
+    sampler: wgpu::Sampler,
     texture: wgpu::TextureView,
     size: (u32, u32),
 }
@@ -19,6 +20,15 @@ impl FxaaPass {
         size: PhysicalSize<u32>,
         input: &wgpu::TextureView,
     ) -> (Self, wgpu::TextureView) {
+        let sampler = render_resources
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                label: None,
+                mipmap_filter: wgpu::FilterMode::Linear,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
         let og_texture = create_fxaa_texture(&render_resources.device, size);
         let bind_group_layout = create_bind_group_layout(&render_resources.device);
 
@@ -30,11 +40,11 @@ impl FxaaPass {
                 bind_group: create_fxaa_bind_group(
                     &render_resources.device,
                     &bind_group_layout,
-                    &render_resources.linear_sampler,
+                    &sampler,
                     input,
-                    &texture,
                 ),
                 bind_group_layout,
+                sampler,
                 texture,
                 size: ((size.width + 7) / 8, (size.height + 7) / 8),
             },
@@ -42,10 +52,20 @@ impl FxaaPass {
         )
     }
 
-    pub fn run<'a>(&'a self, cpass: &mut wgpu::ComputePass<'a>) {
-        cpass.set_pipeline(&self.pipeline);
-        cpass.set_bind_group(0, &self.bind_group, &[]);
-        cpass.dispatch_workgroups(self.size.0, self.size.1, 1);
+    pub fn run(&self, encoder: &mut wgpu::CommandEncoder) {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("fxaa_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.texture,
+                resolve_target: None,
+                ops: wgpu::Operations::default(),
+            })],
+            depth_stencil_attachment: None,
+        });
+
+        rpass.set_pipeline(&self.pipeline);
+        rpass.set_bind_group(0, &self.bind_group, &[]);
+        rpass.draw(0..3, 0..1);
     }
 
     pub fn update(
@@ -59,9 +79,8 @@ impl FxaaPass {
         self.bind_group = create_fxaa_bind_group(
             &render_resources.device,
             &self.bind_group_layout,
-            &render_resources.linear_sampler,
+            &self.sampler,
             input,
-            &self.texture,
         );
         self.size = ((size.width + 7) / 8, (size.height + 7) / 8);
 
@@ -73,41 +92,29 @@ fn create_fxaa_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::
     Renderer::create_texture(
         device,
         size,
-        STORAGE_TEXTURE_FORMAT,
-        wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::STORAGE_BINDING,
+        SWAPCHAIN_FORMAT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
     )
 }
 
 fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
+        label: Some("fxaa_bind_group_layout"),
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::COMPUTE,
+                visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 },
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::StorageTexture {
-                    access: wgpu::StorageTextureAccess::WriteOnly,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    format: crate::STORAGE_TEXTURE_FORMAT,
-                },
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
         ],
@@ -117,45 +124,57 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 fn create_fxaa_pipeline(
     device: &wgpu::Device,
     bind_group_layout: &wgpu::BindGroupLayout,
-) -> wgpu::ComputePipeline {
+) -> wgpu::RenderPipeline {
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[bind_group_layout],
         push_constant_ranges: &[],
     });
 
-    let shader = device.create_shader_module(include_spirv!("fxaa.comp"));
+    let vert = device.create_shader_module(wgpu::include_wgsl!("fullscreen.wgsl"));
+    let frag = device.create_shader_module(wgpu::include_wgsl!("fxaa.wgsl"));
 
-    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&layout),
-        module: &shader,
-        entry_point: "main",
+        vertex: wgpu::VertexState {
+            module: &vert,
+            entry_point: "fullscreen",
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &frag,
+            entry_point: "fxaa",
+            targets: &[Some(wgpu::ColorTargetState {
+                format: SWAPCHAIN_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
     })
 }
 
 fn create_fxaa_bind_group(
     device: &wgpu::Device,
     bind_group_layout: &wgpu::BindGroupLayout,
-    linear_sampler: &wgpu::Sampler,
+    sampler: &wgpu::Sampler,
     input_texture: &wgpu::TextureView,
-    fxaa_texture: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
+        label: Some("fxaa_bind_group"),
         layout: bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Sampler(linear_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
                 resource: wgpu::BindingResource::TextureView(input_texture),
             },
             wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(fxaa_texture),
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(sampler),
             },
         ],
     })

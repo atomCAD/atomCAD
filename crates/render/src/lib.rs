@@ -41,8 +41,6 @@ const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
     wgpu::TextureFormat::Bgra8UnormSrgb
 };
 
-const STORAGE_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
-
 #[derive(Default)]
 pub struct Interactions {
     pub selected_fragments: HashSet<FragmentId>,
@@ -312,13 +310,8 @@ impl Renderer {
         //     );
         // }
 
-        // run compute passes
-        {
-            let mut cpass =
-                encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
-
-            self.fxaa_pass.run(&mut cpass);
-        }
+        // run fxaa pass
+        self.fxaa_pass.run(&mut encoder);
 
         // blit to screen
         self.blit_pass.run(

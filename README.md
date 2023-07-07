@@ -42,3 +42,13 @@ rustup target add aarch64-linux-android thumbv7neon-linux-androideabi \
     i686-pc-windows-msvc i686-pc-windows-gnu aarch64-pc-windows-msvc \
     wasm32-unknown-unknown
 ```
+
+## License
+
+This project is distributed under the terms of the Mozilla Public License, v.
+2.0.  See [LICENSE](./LICENSE) for details.
+
+Some parts of this project are derived from other projects using compatible
+licenses, and only those parts are distributed under the terms of their
+original license.  See [LICENSE-3RD-PARTY](./LICENSE-3RD-PARTY) or the
+copyright declaration of individual files for details.
