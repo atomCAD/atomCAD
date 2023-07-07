@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{include_spirv, GlobalRenderResources, SWAPCHAIN_FORMAT};
+use crate::{GlobalRenderResources, SWAPCHAIN_FORMAT};
 
 pub struct BlitPass {
     bind_group_layout: wgpu::BindGroupLayout,
@@ -96,15 +96,15 @@ fn create_blit_pipeline(
         push_constant_ranges: &[],
     });
 
-    let vert_shader = device.create_shader_module(include_spirv!("blit.vert"));
-    let frag_shader = device.create_shader_module(include_spirv!("blit.frag"));
+    let vert_shader = device.create_shader_module(wgpu::include_wgsl!("fullscreen.wgsl"));
+    let frag_shader = device.create_shader_module(wgpu::include_wgsl!("blit.wgsl"));
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&layout),
         vertex: wgpu::VertexState {
             module: &vert_shader,
-            entry_point: "main",
+            entry_point: "fullscreen",
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
@@ -115,7 +115,7 @@ fn create_blit_pipeline(
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList, // doesn't matter
             strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
+            front_face: wgpu::FrontFace::Cw,
             cull_mode: Some(wgpu::Face::Front),
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
