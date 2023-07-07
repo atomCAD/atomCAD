@@ -30,6 +30,7 @@
 //
 // Still further tweaks by the atomCAD developers.
 
+// See fullscreen.wgsl
 struct FullscreenVertexOutput {
     @builtin(position)
     position: vec4<f32>,
