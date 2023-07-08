@@ -42,6 +42,15 @@ unsafe impl AsBytes for AtomRepr {}
 #[repr(C, align(16))]
 struct AtomBufferHeader {
     fragment_id: FragmentId, // 64 bits
+    _pad: u64,               // unused
+}
+impl AtomBufferHeader {
+    fn new(fragment_id: FragmentId) -> Self {
+        Self {
+            fragment_id,
+            _pad: 0,
+        }
+    }
 }
 
 static_assertions::const_assert_eq!(mem::size_of::<FragmentId>(), 8);
@@ -74,7 +83,7 @@ impl Atoms {
                 unsafe {
                     std::ptr::write_unaligned(
                         header.as_mut_ptr() as *mut MaybeUninit<AtomBufferHeader>,
-                        MaybeUninit::new(AtomBufferHeader { fragment_id }),
+                        MaybeUninit::new(AtomBufferHeader::new(fragment_id)),
                     );
                 }
 
@@ -119,7 +128,7 @@ impl Atoms {
         render_resources.queue.write_buffer(
             buffer.inner_buffer(),
             0,
-            AtomBufferHeader { fragment_id }.as_bytes(),
+            AtomBufferHeader::new(fragment_id).as_bytes(),
         );
 
         let bind_group = render_resources
