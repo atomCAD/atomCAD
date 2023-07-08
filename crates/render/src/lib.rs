@@ -14,6 +14,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use ultraviolet::Vec2;
 use wgpu::util::DeviceExt as _;
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -66,6 +67,8 @@ pub struct Renderer {
     render_resources: Arc<GlobalRenderResources>,
     size: PhysicalSize<u32>,
 
+    vertices: [Vec2; 3],
+    vertices_buffer: wgpu::Buffer,
     periodic_table: PeriodicTable,
     periodic_table_buffer: wgpu::Buffer,
     camera: RenderCamera,
@@ -159,6 +162,17 @@ impl Renderer {
 
         let periodic_table = PeriodicTable::new();
 
+        let vertices = [
+            Vec2::new(1.73, -1.0),
+            Vec2::new(-1.73, -1.0),
+            Vec2::new(0.0, 2.0),
+        ];
+        let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: vertices.as_bytes(),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
         let periodic_table_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: periodic_table.element_reprs.as_bytes(),
@@ -202,6 +216,7 @@ impl Renderer {
         let (molecular_pass, color_texture) = passes::MolecularPass::new(
             &render_resources,
             camera.as_binding_resource(),
+            &vertices_buffer,
             &periodic_table_buffer,
             size,
         );
@@ -219,6 +234,8 @@ impl Renderer {
                 render_resources: Arc::clone(&render_resources),
                 size,
 
+                vertices,
+                vertices_buffer,
                 periodic_table,
                 periodic_table_buffer,
                 camera,

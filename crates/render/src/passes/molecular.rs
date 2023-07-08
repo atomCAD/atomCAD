@@ -46,6 +46,7 @@ impl MolecularPass {
     pub fn new(
         render_resources: &GlobalRenderResources,
         camera_binding_resource: wgpu::BindingResource,
+        vertices_buffer: &wgpu::Buffer,
         periodic_table_buffer: &wgpu::Buffer,
         size: PhysicalSize<u32>,
     ) -> (Self, wgpu::TextureView) {
@@ -59,6 +60,7 @@ impl MolecularPass {
             &render_resources.device,
             &top_level_bgl,
             camera_binding_resource,
+            vertices_buffer,
             periodic_table_buffer,
         );
 
@@ -175,9 +177,20 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 },
                 count: None,
             },
-            // configuration
+            // vertices
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // periodic table
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -194,6 +207,7 @@ fn create_top_level_bg(
     device: &wgpu::Device,
     top_level_bgl: &wgpu::BindGroupLayout,
     camera_binding_resource: wgpu::BindingResource,
+    vertices_buffer: &wgpu::Buffer,
     periodic_table_buffer: &wgpu::Buffer,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -205,9 +219,18 @@ fn create_top_level_bg(
                 binding: 0,
                 resource: camera_binding_resource,
             },
-            // periodic table
+            // vertices
             wgpu::BindGroupEntry {
                 binding: 1,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: vertices_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            // periodic table
+            wgpu::BindGroupEntry {
+                binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: periodic_table_buffer,
                     offset: 0,
@@ -229,7 +252,7 @@ fn create_render_pipeline(
         push_constant_ranges: &[],
     });
 
-    let atom_vert_shader = device.create_shader_module(include_spirv!("billboard.vert"));
+    let atom_vert_shader = device.create_shader_module(wgpu::include_wgsl!("atom.wgsl"));
     let atom_frag_shader = device.create_shader_module(include_spirv!("billboard.frag"));
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -237,7 +260,7 @@ fn create_render_pipeline(
         layout: Some(&atom_pipeline_layout),
         vertex: wgpu::VertexState {
             module: &atom_vert_shader,
-            entry_point: "main",
+            entry_point: "vs_main",
             buffers: &[wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<ultraviolet::Mat4>() as _,
                 step_mode: wgpu::VertexStepMode::Instance,
