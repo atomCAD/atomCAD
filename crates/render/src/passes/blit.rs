@@ -97,7 +97,11 @@ fn create_blit_pipeline(
     });
 
     let vert_shader = device.create_shader_module(wgpu::include_wgsl!("fullscreen.wgsl"));
-    let frag_shader = device.create_shader_module(wgpu::include_wgsl!("blit.wgsl"));
+    let frag_shader = device.create_shader_module(if cfg!(target_arch = "wasm32") {
+        wgpu::include_wgsl!("blit-web.wgsl")
+    } else {
+        wgpu::include_wgsl!("blit-native.wgsl")
+    });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,

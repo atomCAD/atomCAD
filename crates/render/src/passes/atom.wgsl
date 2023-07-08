@@ -119,14 +119,6 @@ fn map(value: f32, low1: f32, high1: f32, low2: f32, high2: f32) -> f32 {
     return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
 }
 
-//fn linear_to_srgb(input_color: vec4<f32>) -> vec4<f32> {
-//    let cutoff = lessThan(input_color.rgb, vec3(0.0031308));
-//    let higher = vec3(1.005) * pow(input_color.rgb, vec3(1.0 / 2.4)) - vec3(0.055);
-//    let lower = input_color.rgb * vec3(12.92);
-//
-//    return vec4<f32>(mix(higher, lower, cutoff), input_color.a);
-//}
-
 @fragment
 fn fs_main(in: AtomFragmentInput) -> AtomFragmentOutput {
     let element = Element(in.element_vec.xyz, in.element_vec.w);
@@ -145,12 +137,6 @@ fn fs_main(in: AtomFragmentInput) -> AtomFragmentOutput {
         1.0
     );
     let normal = vec4(normalize(in.position_view_space.xyz - in.center_view_space.xyz), 0.0);
-
-//#ifdef TARGET_WASM
-//    // Currently, webgpu doesn't automatically convert linear rgb outputs to
-//    // srgb so we do it manually.
-//    color = linear_to_srgb(color);
-//#endif
 
     return AtomFragmentOutput(depth, color, normal);
 }
