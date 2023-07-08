@@ -104,4 +104,55 @@ fn vs_main(in: AtomVertexInput) -> AtomVertexOutput {
     return AtomVertexOutput(position_clip_space, vertex, position_clip_space, element_vec, center_view_space, position_view_space);
 }
 
+alias AtomFragmentInput = AtomVertexOutput;
+
+struct AtomFragmentOutput {
+    @builtin(frag_depth)
+    depth: f32,
+    @location(0)
+    color: vec4<f32>,
+    @location(1)
+    normal: vec4<f32>,
+}
+
+fn map(value: f32, low1: f32, high1: f32, low2: f32, high2: f32) -> f32 {
+    return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
+}
+
+//fn linear_to_srgb(input_color: vec4<f32>) -> vec4<f32> {
+//    let cutoff = lessThan(input_color.rgb, vec3(0.0031308));
+//    let higher = vec3(1.005) * pow(input_color.rgb, vec3(1.0 / 2.4)) - vec3(0.055);
+//    let lower = input_color.rgb * vec3(12.92);
+//
+//    return vec4<f32>(mix(higher, lower, cutoff), input_color.a);
+//}
+
+@fragment
+fn fs_main(in: AtomFragmentInput) -> AtomFragmentOutput {
+    let element = Element(in.element_vec.xyz, in.element_vec.w);
+    let dist = length(in.uv);
+    if (dist > element.radius) {
+        discard;
+    }
+
+    let z = sqrt(element.radius * element.radius - dist * dist);
+    let in_pos_clipspace = in.position_clip_space + camera.projection[2] * z;
+
+    let depth = in_pos_clipspace.z / in_pos_clipspace.w;
+
+    let color = vec4(
+        element.color * map(z, 0.0, element.radius, 0.25, 1.0),
+        1.0
+    );
+    let normal = vec4(normalize(in.position_view_space.xyz - in.center_view_space.xyz), 0.0);
+
+//#ifdef TARGET_WASM
+//    // Currently, webgpu doesn't automatically convert linear rgb outputs to
+//    // srgb so we do it manually.
+//    color = linear_to_srgb(color);
+//#endif
+
+    return AtomFragmentOutput(depth, color, normal);
+}
+
 // End of File

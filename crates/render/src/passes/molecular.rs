@@ -2,9 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    include_spirv, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT,
-};
+use crate::{Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT};
 use std::{collections::HashMap, convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
@@ -252,14 +250,13 @@ fn create_render_pipeline(
         push_constant_ranges: &[],
     });
 
-    let atom_vert_shader = device.create_shader_module(wgpu::include_wgsl!("atom.wgsl"));
-    let atom_frag_shader = device.create_shader_module(include_spirv!("billboard.frag"));
+    let atom_shader = device.create_shader_module(wgpu::include_wgsl!("atom.wgsl"));
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&atom_pipeline_layout),
         vertex: wgpu::VertexState {
-            module: &atom_vert_shader,
+            module: &atom_shader,
             entry_point: "vs_main",
             buffers: &[wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<ultraviolet::Mat4>() as _,
@@ -274,8 +271,8 @@ fn create_render_pipeline(
             }],
         },
         fragment: Some(wgpu::FragmentState {
-            module: &atom_frag_shader,
-            entry_point: "main",
+            module: &atom_shader,
+            entry_point: "fs_main",
             targets: &[
                 Some(SWAPCHAIN_FORMAT.into()),
                 Some(wgpu::TextureFormat::Rgba16Float.into()),
