@@ -62,12 +62,10 @@ where
         fill: F,
     ) -> Self
     where
-        F: FnOnce(&mut MaybeUninit<Header>, &mut [MaybeUninit<T>]),
+        F: FnOnce(&mut [u8], &mut [MaybeUninit<T>]),
     {
         assert!(
-            mem::align_of::<Header>() <= 1
-                || mem::align_of::<T>() <= 1
-                || mem::align_of::<Header>() % mem::align_of::<T>() == 0,
+            mem::align_of::<Header>() % mem::align_of::<T>() == 0,
             "align of `{}` must be a multiple of the align of `{}`",
             type_name::<Header>(),
             type_name::<T>(),
@@ -89,7 +87,7 @@ where
 
                 unsafe {
                     fill(
-                        &mut *(header.as_mut_ptr() as *mut MaybeUninit<Header>),
+                        header,
                         slice::from_raw_parts_mut(
                             rest.as_mut_ptr() as *mut MaybeUninit<T>,
                             rest.len() / mem::size_of::<T>(),

@@ -71,11 +71,18 @@ impl Atoms {
             number_of_atoms as u64,
             |header, array| {
                 // header.write(AtomBufferHeader { fragment_id });
-                *header = MaybeUninit::new(AtomBufferHeader { fragment_id });
+                unsafe {
+                    std::ptr::write_unaligned(
+                        header.as_mut_ptr() as *mut MaybeUninit<AtomBufferHeader>,
+                        MaybeUninit::new(AtomBufferHeader { fragment_id }),
+                    );
+                }
 
                 for (block, atom) in array.iter_mut().zip(atoms) {
                     // block.write(atom);
-                    *block = MaybeUninit::new(atom);
+                    unsafe {
+                        std::ptr::write_unaligned(block, MaybeUninit::new(atom));
+                    }
                 }
             },
         );

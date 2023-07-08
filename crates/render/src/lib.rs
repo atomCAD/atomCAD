@@ -60,7 +60,7 @@ pub struct RenderOptions {
     pub attempt_gpu_driven: bool, // Will attempt to drive rendering, culling, etc on gpu if supported by the adapter
 }
 
-#[repr(C)]
+#[repr(C, align(16))]
 struct MolecularVertexConsts {
     array: [Vec2; 3],
 }
