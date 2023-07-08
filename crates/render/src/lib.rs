@@ -60,6 +60,16 @@ pub struct RenderOptions {
     pub attempt_gpu_driven: bool, // Will attempt to drive rendering, culling, etc on gpu if supported by the adapter
 }
 
+#[repr(C)]
+struct MolecularVertexConsts {
+    array: [Vec2; 3],
+}
+impl MolecularVertexConsts {
+    fn new(a: Vec2, b: Vec2, c: Vec2) -> Self {
+        Self { array: [a, b, c] }
+    }
+}
+
 #[allow(dead_code)]
 pub struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
@@ -67,7 +77,7 @@ pub struct Renderer {
     render_resources: Arc<GlobalRenderResources>,
     size: PhysicalSize<u32>,
 
-    vertices: [Vec2; 3],
+    vertices: MolecularVertexConsts,
     vertices_buffer: wgpu::Buffer,
     periodic_table: PeriodicTable,
     periodic_table_buffer: wgpu::Buffer,
@@ -162,14 +172,14 @@ impl Renderer {
 
         let periodic_table = PeriodicTable::new();
 
-        let vertices = [
+        let vertices = MolecularVertexConsts::new(
             Vec2::new(1.73, -1.0),
             Vec2::new(-1.73, -1.0),
             Vec2::new(0.0, 2.0),
-        ];
+        );
         let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: vertices.as_bytes(),
+            contents: vertices.array.as_bytes(),
             usage: wgpu::BufferUsages::STORAGE,
         });
 
