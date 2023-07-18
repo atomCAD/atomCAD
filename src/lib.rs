@@ -62,7 +62,11 @@ pub const APP_NAME: &str = "atomCAD";
 
 use camera::ArcballCamera;
 use common::InputEvent;
-use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer, World};
+use periodic_table::Element;
+use render::{
+    AtomKind, AtomRepr, Fragment, GlobalRenderResources, Interactions, Part, RenderOptions,
+    Renderer, World,
+};
 
 use std::sync::Arc;
 use ultraviolet::Vec3;
@@ -85,26 +89,56 @@ async fn resume_renderer(
     .await;
 
     let mut world = World::new();
-    let mut neon_pump = pdb::load_from_pdb_str(
+    let fragment = Fragment::from_atoms(
         &gpu_resources,
-        "Neon Pump",
-        include_str!("../assets/neon_pump_imm.pdb"),
-    )
-    .expect("failed to load pdb");
-    println!(
-        "Loaded {} parts and {} fragments",
-        neon_pump.parts().len(),
-        neon_pump.fragments().len()
+        vec![
+            AtomRepr {
+                pos: Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                kind: AtomKind::new(Element::Carbon),
+            },
+            AtomRepr {
+                pos: Vec3 {
+                    x: 5.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                kind: AtomKind::new(Element::Sulfur),
+            },
+        ],
     );
-    // Center the neon pump around the origin, so that the rotating arcball
-    // camera will be centered on it.
-    for part in neon_pump.parts_mut() {
-        // This doesn't let the world know that this part is going to be
-        // updated, but we're adding them for the first time, so it'll work
-        // anyhow.
-        part.move_to(0.0, 0.0, 0.0);
-    }
-    world.merge(neon_pump);
+    let mut part = Part::from_fragments(&mut world, "test part", vec![fragment]);
+    // part.move_to(0.0, 0.0, 0.0);
+    world.spawn_part(part);
+
+    // The PDB parser lib3dmol does not parse connectivity information.
+    // Because of this, we cannot build a molecule graph out of a PDB,
+    // and so for now we use this hardcoded molecule to test the graph
+    // implementation:
+
+    // let mut neon_pump = pdb::load_from_pdb_str(
+    //     &gpu_resources,
+    //     "Neon Pump",
+    //     include_str!("../assets/neon_pump_imm.pdb"),
+    // )
+    // .expect("failed to load pdb");
+    // println!(
+    //     "Loaded {} parts and {} fragments",
+    //     neon_pump.parts().len(),
+    //     neon_pump.fragments().len()
+    // );
+    // // Center the neon pump around the origin, so that the rotating arcball
+    // // camera will be centered on it.
+    // for part in neon_pump.parts_mut() {
+    //     // This doesn't let the world know that this part is going to be
+    //     // updated, but we're adding them for the first time, so it'll work
+    //     // anyhow.
+    //     part.move_to(0.0, 0.0, 0.0);
+    // }
+    // world.merge(neon_pump);
 
     let interactions = Interactions::default();
 
