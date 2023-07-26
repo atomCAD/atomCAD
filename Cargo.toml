@@ -1,7 +1,10 @@
 [package]
 name = "atomcad"
 version = "0.1.0"
-authors = ["Mark Friedenbach <mark@friedenbach.org>", "Lachlan Sneff <lachlan.sneff@gmail.com>"]
+authors = [
+    "Mark Friedenbach <mark@friedenbach.org>",
+    "Lachlan Sneff <lachlan.sneff@gmail.com>",
+]
 license = "MPL-2.0"
 edition = "2021"
 
@@ -12,30 +15,34 @@ members = [
     "crates/render",
     "crates/periodic-table",
     "crates/common",
+    "crates/scene",
 ]
 
-[dependencies.render]
-package = "atomcad-render"
-path = "crates/render"
-[dependencies.common]
-package = "atomcad-common"
-path = "crates/common"
-[dependencies.periodic-table]
-package = "atomcad-periodic-table"
-path = "crates/periodic-table"
+[workspace.dependencies]
+render = { package = "atomcad-render", path = "crates/render" }
+common = { package = "atomcad-common", path = "crates/common" }
+periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
+scene = { package = "atomcad-scene", path = "crates/scene" }
+
 
 [dependencies]
+render = { workspace = true }
+common = { workspace = true }
+periodic-table = { workspace = true }
+scene = { workspace = true }
 futures = "0.3.28"
 ultraviolet = "0.9.1"
 log = "0.4.19"
 lib3dmol = "0.4"
 nom = "7.1.3"
-winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190ef93829af080fcca046c19bc80", features = ["android-native-activity"] }
+winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190ef93829af080fcca046c19bc80", features = [
+    "android-native-activity",
+] }
 env_logger = "0.10.0"
 
 # android:
 [target.'cfg(target_os = "android")'.dependencies]
-android-activity = { version = "0.4", features = [ "native-activity" ] }
+android-activity = { version = "0.4", features = ["native-activity"] }
 android_logger = "0.13.1"
 
 # macOS:

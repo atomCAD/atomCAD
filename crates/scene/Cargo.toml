@@ -1,0 +1,10 @@
+[package]
+name = "atomcad-scene"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+render = { package = "atomcad-render", workspace = true }
+periodic-table = { package = "atomcad-periodic-table", workspace = true }
