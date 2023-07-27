@@ -2,7 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT};
+use crate::{
+    Atoms, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT,
+};
 use std::{collections::HashMap, convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
@@ -98,9 +100,11 @@ impl MolecularPass {
     pub fn run<'a>(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        fragments: impl IntoIterator<Item = &'a Fragment>,
+        scene: impl IntoIterator<Item = (&'a Atoms, &'a ultraviolet::Mat4)>,
         fragment_transforms: &wgpu::Buffer,
-        per_fragment: &HashMap<FragmentId, (PartId, u64 /* transform index */)>,
+        // fragments: impl IntoIterator<Item = &'a Fragment>,
+        // fragment_transforms: &wgpu::Buffer,
+        // per_fragment: &HashMap<FragmentId, (PartId, u64 /* transform index */)>,
     ) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -142,10 +146,8 @@ impl MolecularPass {
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.top_level_bg, &[]);
 
-        // TODO: Try instancing?
-        for fragment in fragments {
-            let transform_offset =
-                per_fragment[&fragment.id()].1 * (mem::size_of::<ultraviolet::Mat4>() as u64);
+        for (idx, (atoms, __)) in scene.into_iter().enumerate() {
+            let transform_offset = (idx * mem::size_of::<ultraviolet::Mat4>()) as u64;
 
             rpass.set_vertex_buffer(
                 0,
@@ -154,8 +156,8 @@ impl MolecularPass {
                 ),
             );
 
-            rpass.set_bind_group(1, fragment.atoms().bind_group(), &[]);
-            rpass.draw(0..(fragment.atoms().len() * 3).try_into().unwrap(), 0..1)
+            rpass.set_bind_group(1, atoms.bind_group(), &[]);
+            rpass.draw(0..(atoms.len() * 3).try_into().unwrap(), 0..1);
         }
     }
 }

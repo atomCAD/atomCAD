@@ -1,30 +1,28 @@
 [package]
 name = "atomcad-render"
 version = "0.1.0"
-authors = ["Mark Friedenbach <mark@friedenbach.org>", "Lachlan Sneff <lachlan.sneff@gmail.com>"]
+authors = [
+    "Mark Friedenbach <mark@friedenbach.org>",
+    "Lachlan Sneff <lachlan.sneff@gmail.com>",
+]
 license = "MPL-2.0"
 edition = "2021"
 build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies.common]
-package = "atomcad-common"
-path = "../common"
-
-[dependencies.periodic-table]
-package = "atomcad-periodic-table"
-path = "../periodic-table"
-
 [dependencies]
 wgpu = { version = "0.17.0", features = ["spirv"] }
 futures = "0.3.28"
-ultraviolet = "0.9.1"
 static_assertions = "1"
 log = "0.4.19"
-winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190ef93829af080fcca046c19bc80", features = ["android-native-activity"] }
+winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190ef93829af080fcca046c19bc80", features = [
+    "android-native-activity",
+] }
 indexmap = "1.6"
-parking_lot =  "0.12"
+parking_lot = "0.12"
+common = { workspace = true }
+periodic-table = { workspace = true }
+ultraviolet = { workspace = true }
 
 [build-dependencies]
 shaderc = "0.8.2"

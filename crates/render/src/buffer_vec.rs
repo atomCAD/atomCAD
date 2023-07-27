@@ -115,12 +115,25 @@ where
         }
     }
 
+    // The number of elements currently stored in this BufferVec. len <= capacity
     pub fn len(&self) -> u64 {
         self.len
     }
 
+    // The number of elements that this BufferVec's allocated memory could store, regardless of
+    // how many elements are currently inside of it.
+    pub fn capacity(&self) -> u64 {
+        self.capacity
+    }
+
     pub fn inner_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
+    }
+
+    // Marks the buffer as empty (len == 0) without reallocating or zeroing the contents.
+    // Useful when you want to repurpose a buffer.
+    pub fn clear(&mut self) {
+        self.len = 0;
     }
 
     #[must_use = "user must be aware if the buffer re-allocated or not"]

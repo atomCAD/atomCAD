@@ -68,6 +68,8 @@ use render::{
     Renderer, World,
 };
 
+use scene::Molecule;
+
 use std::sync::Arc;
 use ultraviolet::Vec3;
 use winit::{

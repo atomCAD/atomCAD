@@ -23,6 +23,7 @@ render = { package = "atomcad-render", path = "crates/render" }
 common = { package = "atomcad-common", path = "crates/common" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 scene = { package = "atomcad-scene", path = "crates/scene" }
+ultraviolet = "0.9.1"
 
 
 [dependencies]
@@ -30,8 +31,8 @@ render = { workspace = true }
 common = { workspace = true }
 periodic-table = { workspace = true }
 scene = { workspace = true }
+ultraviolet = { workspace = true }
 futures = "0.3.28"
-ultraviolet = "0.9.1"
 log = "0.4.19"
 lib3dmol = "0.4"
 nom = "7.1.3"
