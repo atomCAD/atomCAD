@@ -3,9 +3,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 pub use crate::{
-    atoms::{AtomKind, AtomRepr},
+    atoms::{AtomKind, AtomRepr, Atoms},
     camera::{Camera, CameraRepr, RenderCamera},
-    world::{Fragment, FragmentId, Part, PartId, World},
 };
 use crate::{bind_groups::AsBindingResource as _, buffer_vec::BufferVec};
 use common::AsBytes as _;
@@ -23,8 +22,6 @@ mod bind_groups;
 mod buffer_vec;
 mod camera;
 mod passes;
-mod utils;
-mod world;
 
 #[macro_export]
 macro_rules! include_spirv {
@@ -44,7 +41,7 @@ const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
 
 #[derive(Default)]
 pub struct Interactions {
-    pub selected_fragments: HashSet<FragmentId>,
+    // pub selected_fragments: HashSet<FragmentId>,
 }
 
 pub struct GlobalRenderResources {
@@ -88,7 +85,6 @@ pub struct Renderer {
     blit_pass: passes::BlitPass,
 
     fragment_transforms: BufferVec<(), ultraviolet::Mat4>,
-    per_fragment: HashMap<FragmentId, (PartId, u64 /* transform index */)>,
 
     gpu_driven_rendering: bool,
     options: RenderOptions,
@@ -223,6 +219,9 @@ impl Renderer {
             linear_sampler,
         });
 
+        let fragment_transforms =
+            BufferVec::new(&render_resources.device, wgpu::BufferUsages::VERTEX, ());
+
         let (molecular_pass, color_texture) = passes::MolecularPass::new(
             &render_resources,
             camera.as_binding_resource(),
@@ -233,9 +232,6 @@ impl Renderer {
         let (fxaa_pass, fxaa_texture) =
             passes::FxaaPass::new(&render_resources, size, &color_texture);
         let blit_pass = passes::BlitPass::new(&render_resources, &fxaa_texture);
-
-        let fragment_transforms =
-            BufferVec::new(&render_resources.device, wgpu::BufferUsages::VERTEX, ());
 
         (
             Self {
@@ -255,7 +251,6 @@ impl Renderer {
                 blit_pass,
 
                 fragment_transforms,
-                per_fragment: HashMap::new(),
 
                 gpu_driven_rendering,
                 options,
@@ -282,10 +277,21 @@ impl Renderer {
         self.camera.resize(new_size);
     }
 
-    pub fn render(
+    pub fn upload_transforms<'a>(
         &mut self,
-        world: &mut World,
-        #[allow(unused_variables)] interactions: &Interactions,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: impl IntoIterator<Item = (&'a Atoms, &'a ultraviolet::Mat4)>,
+    ) {
+        let transforms: Vec<ultraviolet::Mat4> =
+            scene.into_iter().map(|(_, transform)| *transform).collect();
+        self.fragment_transforms.clear();
+        self.fragment_transforms
+            .push_small(&self.render_resources, encoder, &transforms[..]);
+    }
+
+    pub fn render<'a>(
+        &mut self,
+        scene: impl IntoIterator<Item = (&'a Atoms, &'a ultraviolet::Mat4)>,
     ) {
         let mut encoder = self
             .render_resources
@@ -299,8 +305,9 @@ impl Renderer {
             return;
         }
 
-        self.upload_new_transforms(&mut encoder, world);
-        self.update_transforms(&mut encoder, world);
+        self.upload_transforms(&mut encoder, scene);
+        // self.upload_new_transforms(&mut encoder, world);
+        // self.update_transforms(&mut encoder, world);
 
         let frame = self
             .surface
@@ -320,12 +327,7 @@ impl Renderer {
             })
             .expect("failed to get next swapchain");
 
-        self.molecular_pass.run(
-            &mut encoder,
-            world.fragments(),
-            self.fragment_transforms.inner_buffer(),
-            &self.per_fragment,
-        );
+        self.molecular_pass.run(&mut encoder, scene);
 
         // if interactions.selected_fragments.len() != 0 {
         //     log::warn!("trying to render to stencil");
@@ -352,6 +354,76 @@ impl Renderer {
         frame.present();
     }
 
+    // pub fn render(
+    //     &mut self,
+    //     world: &mut World,
+    //     #[allow(unused_variables)] interactions: &Interactions,
+    // ) {
+    //     let mut encoder = self
+    //         .render_resources
+    //         .device
+    //         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    //     self.camera.update(common::InputEvent::BeginningFrame);
+    //     if !self.camera.upload(&self.render_resources.queue) {
+    //         log::warn!("no camera is set");
+    //         // no camera is set, so no reason to do rendering.
+    //         return;
+    //     }
+
+    //     self.upload_new_transforms(&mut encoder, world);
+    //     self.update_transforms(&mut encoder, world);
+
+    //     let frame = self
+    //         .surface
+    //         .get_current_texture()
+    //         .map(|mut frame| {
+    //             if frame.suboptimal {
+    //                 // try again
+    //                 frame = self
+    //                     .surface
+    //                     .get_current_texture()
+    //                     .expect("could not retrieve swapchain on second try");
+    //                 if frame.suboptimal {
+    //                     log::warn!("suboptimal swapchain frame");
+    //                 }
+    //             }
+    //             frame
+    //         })
+    //         .expect("failed to get next swapchain");
+
+    //     self.molecular_pass.run(
+    //         &mut encoder,
+    //         world.fragments(),
+    //         self.fragment_transforms.inner_buffer(),
+    //         &self.per_fragment,
+    //     );
+
+    //     // if interactions.selected_fragments.len() != 0 {
+    //     //     log::warn!("trying to render to stencil");
+    //     //     // currently broken
+    //     //     self.render_fragments_to_stencil(
+    //     //         world,
+    //     //         &mut encoder,
+    //     //         interactions.selected_fragments.iter().copied(),
+    //     //     );
+    //     // }
+
+    //     // run fxaa pass
+    //     self.fxaa_pass.run(&mut encoder);
+
+    //     // blit to screen
+    //     self.blit_pass.run(
+    //         &mut encoder,
+    //         &frame
+    //             .texture
+    //             .create_view(&wgpu::TextureViewDescriptor::default()),
+    //     );
+
+    //     self.render_resources.queue.submit(Some(encoder.finish()));
+    //     frame.present();
+    // }
+
     /// Immediately calls resize on the supplied camera.
     pub fn set_camera<C: Camera + 'static>(&mut self, camera: C) {
         self.camera.set_camera(camera, self.size);
@@ -367,89 +439,6 @@ impl Renderer {
 }
 
 impl Renderer {
-    fn upload_new_transforms(&mut self, encoder: &mut wgpu::CommandEncoder, world: &mut World) {
-        if world.added_parts.len() + world.added_fragments.len() == 0 {
-            return;
-        }
-
-        let (parts, fragments) = (&world.parts, &world.fragments);
-
-        let added_fragments =
-            world
-                .added_fragments
-                .drain(..)
-                .chain(world.added_parts.drain(..).flat_map(|part_id| {
-                    parts[&part_id]
-                        .fragments()
-                        .iter()
-                        .copied()
-                        .map(move |id| (part_id, id))
-                }));
-
-        let mut transform_index = self.fragment_transforms.len();
-
-        let transforms: Vec<_> = added_fragments
-            .map(|(part_id, fragment_id)| {
-                self.per_fragment
-                    .insert(fragment_id, (part_id, transform_index));
-                transform_index += 1;
-
-                let part = &parts[&part_id];
-                let fragment = &fragments[&fragment_id];
-
-                let offset = part.offset() + fragment.offset();
-                let rotation = part.rotation() * fragment.rotation();
-
-                rotation
-                    .into_matrix()
-                    .into_homogeneous()
-                    .translated(&offset)
-            })
-            .collect();
-
-        // This doesn't use a bind group.
-        // Eventually switch this to `push_large`, once it's written.
-        let _ =
-            self.fragment_transforms
-                .push_small(&self.render_resources, encoder, &transforms[..]);
-    }
-
-    fn update_transforms(&mut self, _encoder: &mut wgpu::CommandEncoder, world: &mut World) {
-        if world.modified_parts.len() + world.modified_fragments.len() == 0 {
-            return;
-        }
-
-        let (parts, fragments) = (&world.parts, &world.fragments);
-
-        let modified_fragments = world.modified_fragments.drain(..).chain(
-            world
-                .modified_parts
-                .drain(..)
-                .flat_map(|part_id| parts[&part_id].fragments().iter().copied()),
-        );
-
-        for fragment_id in modified_fragments {
-            let (part_id, transform_index) = self.per_fragment[&fragment_id];
-
-            let part = &parts[&part_id];
-            let fragment = &fragments[&fragment_id];
-
-            let offset = part.offset() + fragment.offset();
-            let rotation = part.rotation() * fragment.rotation();
-
-            let transform = rotation
-                .into_matrix()
-                .into_homogeneous()
-                .translated(&offset);
-
-            self.fragment_transforms.write_partial_small(
-                &self.render_resources,
-                transform_index,
-                &[transform],
-            );
-        }
-    }
-
     /// Render selected objects to the stencil buffer so they can be outlined post-process.
     // fn render_fragments_to_stencil(
     //     &self,
