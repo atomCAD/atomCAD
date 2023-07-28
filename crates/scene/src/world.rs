@@ -65,7 +65,6 @@ impl Fragment {
 
         let atoms = Atoms::new(
             gpu_resources,
-            fragment_id,
             atoms.into_iter().inspect(|atom| {
                 point_sum += atom.pos;
                 max_point.x = atom.pos.x.max(max_point.x);
@@ -111,10 +110,8 @@ impl Fragment {
     }
 
     pub fn copy_new(&self, render_resources: &GlobalRenderResources) -> Self {
-        let id = FragmentId::new();
         Self {
-            id,
-            atoms: self.atoms.copy_new(render_resources, id),
+            atoms: self.atoms.copy_new(render_resources),
             ..*self
         }
     }

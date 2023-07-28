@@ -9,4 +9,6 @@ edition = "2021"
 render = { workspace = true }
 periodic-table = { workspace = true }
 ultraviolet = { workspace = true }
+common = { workspace = true }
 petgraph = "0.6.3"
+indexmap = "1.6"
