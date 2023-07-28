@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{buffer_vec::BufferVec, FragmentId, GlobalRenderResources};
+use crate::{buffer_vec::BufferVec, GlobalRenderResources};
 use common::AsBytes;
 use periodic_table::Element;
 use std::mem::{self, MaybeUninit};
@@ -40,21 +40,10 @@ unsafe impl AsBytes for AtomRepr {}
 
 /// Essentially a per-fragment uniform.
 #[repr(C, align(16))]
-struct AtomBufferHeader {
-    fragment_id: FragmentId, // 64 bits
-    _pad: u64,               // unused
-}
-impl AtomBufferHeader {
-    fn new(fragment_id: FragmentId) -> Self {
-        Self {
-            fragment_id,
-            _pad: 0,
-        }
-    }
-}
+#[derive(Default)]
+struct AtomBufferHeader;
 
-static_assertions::const_assert_eq!(mem::size_of::<FragmentId>(), 8);
-static_assertions::const_assert_eq!(mem::size_of::<AtomBufferHeader>(), 16);
+// static_assertions::const_assert_eq!(mem::size_of::<AtomBufferHeader>(), 16);
 unsafe impl AsBytes for AtomBufferHeader {}
 
 pub struct Atoms {
@@ -64,7 +53,7 @@ pub struct Atoms {
 }
 
 impl Atoms {
-    pub fn new<I>(gpu_resources: &GlobalRenderResources, fragment_id: FragmentId, iter: I) -> Self
+    pub fn new<I>(gpu_resources: &GlobalRenderResources, iter: I) -> Self
     where
         I: IntoIterator<Item = AtomRepr>,
         I::IntoIter: ExactSizeIterator,
@@ -83,7 +72,7 @@ impl Atoms {
                 unsafe {
                     std::ptr::write_unaligned(
                         header.as_mut_ptr() as *mut MaybeUninit<AtomBufferHeader>,
-                        MaybeUninit::new(AtomBufferHeader::new(fragment_id)),
+                        MaybeUninit::new(AtomBufferHeader::default()),
                     );
                 }
 
@@ -118,17 +107,13 @@ impl Atoms {
         }
     }
 
-    pub fn copy_new(
-        &self,
-        render_resources: &GlobalRenderResources,
-        fragment_id: FragmentId,
-    ) -> Self {
+    pub fn copy_new(&self, render_resources: &GlobalRenderResources) -> Self {
         let buffer = self.buffer.copy_new(render_resources, false);
 
         render_resources.queue.write_buffer(
             buffer.inner_buffer(),
             0,
-            AtomBufferHeader::new(fragment_id).as_bytes(),
+            AtomBufferHeader::default().as_bytes(),
         );
 
         let bind_group = render_resources

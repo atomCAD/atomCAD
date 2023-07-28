@@ -7,7 +7,8 @@ use lib3dmol::{
     structures::{atom::AtomType, GetAtom as _},
 };
 use periodic_table::Element;
-use render::{AtomKind, AtomRepr, Fragment, GlobalRenderResources, Part, World};
+use render::{AtomKind, AtomRepr, GlobalRenderResources};
+use scene::{Fragment, Part, World};
 
 // TODO: Better result error type.
 pub fn load_from_pdb_str(

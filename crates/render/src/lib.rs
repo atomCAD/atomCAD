@@ -277,13 +277,11 @@ impl Renderer {
         self.camera.resize(new_size);
     }
 
-    pub fn upload_transforms<'a>(
+    pub fn upload_transforms(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        scene: impl IntoIterator<Item = (&'a Atoms, &'a ultraviolet::Mat4)>,
+        transforms: Vec<ultraviolet::Mat4>,
     ) {
-        let transforms: Vec<ultraviolet::Mat4> =
-            scene.into_iter().map(|(_, transform)| *transform).collect();
         self.fragment_transforms.clear();
         self.fragment_transforms
             .push_small(&self.render_resources, encoder, &transforms[..]);
@@ -291,7 +289,8 @@ impl Renderer {
 
     pub fn render<'a>(
         &mut self,
-        scene: impl IntoIterator<Item = (&'a Atoms, &'a ultraviolet::Mat4)>,
+        atoms: impl IntoIterator<Item = &'a Atoms>,
+        transforms: Vec<ultraviolet::Mat4>,
     ) {
         let mut encoder = self
             .render_resources
@@ -305,7 +304,7 @@ impl Renderer {
             return;
         }
 
-        self.upload_transforms(&mut encoder, scene);
+        self.upload_transforms(&mut encoder, transforms);
         // self.upload_new_transforms(&mut encoder, world);
         // self.update_transforms(&mut encoder, world);
 
@@ -327,7 +326,8 @@ impl Renderer {
             })
             .expect("failed to get next swapchain");
 
-        self.molecular_pass.run(&mut encoder, scene);
+        self.molecular_pass
+            .run(&mut encoder, atoms, self.fragment_transforms.inner_buffer());
 
         // if interactions.selected_fragments.len() != 0 {
         //     log::warn!("trying to render to stencil");

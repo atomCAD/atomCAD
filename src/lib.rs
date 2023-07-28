@@ -63,10 +63,8 @@ pub const APP_NAME: &str = "atomCAD";
 use camera::ArcballCamera;
 use common::InputEvent;
 use periodic_table::Element;
-use render::{
-    AtomKind, AtomRepr, Fragment, GlobalRenderResources, Interactions, Part, RenderOptions,
-    Renderer, World,
-};
+use render::{AtomKind, AtomRepr, GlobalRenderResources, Interactions, RenderOptions, Renderer};
+use scene::{Fragment, Part, World};
 
 use scene::Molecule;
 
@@ -196,7 +194,20 @@ fn handle_event(
                 if let Some(renderer) = renderer {
                     if let Some(world) = world {
                         if let Some(interactions) = interactions {
-                            renderer.render(world, interactions);
+                            let transforms = world
+                                .fragments()
+                                .map(|fragment| {
+                                    let mut transform =
+                                        fragment.rotation().into_matrix().into_homogeneous();
+                                    transform.translate(&fragment.offset());
+                                    transform
+                                })
+                                .collect();
+
+                            renderer.render(
+                                world.fragments().map(|fragment| fragment.atoms()),
+                                transforms,
+                            );
                         }
                     }
                 }

@@ -2,9 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    Atoms, Fragment, FragmentId, GlobalRenderResources, PartId, Renderer, SWAPCHAIN_FORMAT,
-};
+use crate::{Atoms, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
 use std::{collections::HashMap, convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
@@ -100,7 +98,7 @@ impl MolecularPass {
     pub fn run<'a>(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        scene: impl IntoIterator<Item = (&'a Atoms, &'a ultraviolet::Mat4)>,
+        atoms: impl IntoIterator<Item = &'a Atoms>,
         fragment_transforms: &wgpu::Buffer,
         // fragments: impl IntoIterator<Item = &'a Fragment>,
         // fragment_transforms: &wgpu::Buffer,
@@ -146,7 +144,7 @@ impl MolecularPass {
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.top_level_bg, &[]);
 
-        for (idx, (atoms, __)) in scene.into_iter().enumerate() {
+        for (idx, atoms_inst) in atoms.into_iter().enumerate() {
             let transform_offset = (idx * mem::size_of::<ultraviolet::Mat4>()) as u64;
 
             rpass.set_vertex_buffer(
@@ -156,8 +154,8 @@ impl MolecularPass {
                 ),
             );
 
-            rpass.set_bind_group(1, atoms.bind_group(), &[]);
-            rpass.draw(0..(atoms.len() * 3).try_into().unwrap(), 0..1);
+            rpass.set_bind_group(1, atoms_inst.bind_group(), &[]);
+            rpass.draw(0..(atoms_inst.len() * 3).try_into().unwrap(), 0..1);
         }
     }
 }
