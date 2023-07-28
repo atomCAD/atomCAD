@@ -91,7 +91,7 @@ impl Atoms {
                 label: None,
                 layout: &gpu_resources.atom_bgl,
                 entries: &[wgpu::BindGroupEntry {
-                    binding: 1,
+                    binding: 0,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: buffer.inner_buffer(),
                         offset: 0,
@@ -122,7 +122,7 @@ impl Atoms {
                 label: None,
                 layout: &render_resources.atom_bgl,
                 entries: &[wgpu::BindGroupEntry {
-                    binding: 1,
+                    binding: 0,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: buffer.inner_buffer(),
                         offset: 0,
