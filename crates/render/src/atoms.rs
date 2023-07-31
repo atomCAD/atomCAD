@@ -41,15 +41,14 @@ unsafe impl AsBytes for AtomRepr {}
 /// Essentially a per-fragment uniform.
 #[repr(C, align(16))]
 #[derive(Default)]
-struct AtomBufferHeader;
+pub struct AtomBufferHeader;
 
-// static_assertions::const_assert_eq!(mem::size_of::<AtomBufferHeader>(), 16);
 unsafe impl AsBytes for AtomBufferHeader {}
 
 pub struct Atoms {
     bind_group: wgpu::BindGroup,
     buffer: BufferVec<AtomBufferHeader, AtomRepr>,
-    number_of_atoms: usize,
+    // number_of_atoms: usize,
 }
 
 impl Atoms {
@@ -85,6 +84,7 @@ impl Atoms {
             },
         );
 
+        assert!(std::mem::size_of::<AtomBufferHeader>() % gpu_resources.device.limits().min_storage_buffer_offset_alignment as usize == 0, "AtomBufferHeader's size needs to be an integer multiple of the min storage buffer offset alignment of the gpu. See https://github.com/shinzlet/atomCAD/issues/1");
         let bind_group = gpu_resources
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -94,7 +94,7 @@ impl Atoms {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: buffer.inner_buffer(),
-                        offset: 0,
+                        offset: std::mem::size_of::<AtomBufferHeader>() as u64,
                         size: None,
                     }),
                 }],
@@ -103,7 +103,7 @@ impl Atoms {
         Self {
             bind_group,
             buffer,
-            number_of_atoms,
+            // number_of_atoms,
         }
     }
 
@@ -125,7 +125,7 @@ impl Atoms {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: buffer.inner_buffer(),
-                        offset: 0,
+                        offset: std::mem::size_of::<AtomBufferHeader>() as u64,
                         size: None,
                     }),
                 }],
@@ -134,7 +134,7 @@ impl Atoms {
         Self {
             bind_group,
             buffer,
-            number_of_atoms: self.number_of_atoms,
+            // number_of_atoms: self.number_of_atoms,
         }
     }
 
@@ -143,7 +143,28 @@ impl Atoms {
     }
 
     pub fn len(&self) -> usize {
-        self.number_of_atoms
+        self.buffer.len() as usize
+        // self.number_of_atoms
+    }
+
+    pub fn with_buffer(&mut self, f: impl Fn(&mut BufferVec<AtomBufferHeader, AtomRepr>) -> ()) {
+        f(&mut self.buffer);
+    }
+
+    pub fn reupload_atoms(
+        &mut self,
+        atoms: &[AtomRepr],
+        gpu_resources: &GlobalRenderResources,
+    ) -> crate::buffer_vec::PushStategy {
+        let mut encoder = gpu_resources
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        self.buffer.clear();
+        println!("buffer size after clear: {}", self.buffer.len());
+
+        let foo = self.buffer.push_small(gpu_resources, &mut encoder, atoms);
+        println!("buffer size after push_small: {}", self.buffer.len());
+        foo
     }
 }
 

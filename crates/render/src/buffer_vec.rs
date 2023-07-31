@@ -204,8 +204,7 @@ where
                 new_buffer
             };
 
-            encoder.copy_buffer_to_buffer(&self.buffer, 0, &new_buffer, 0, offset);
-
+            // encoder.copy_buffer_to_buffer(&self.buffer, 0, &new_buffer, 0, offset);
             self.buffer = new_buffer;
             self.capacity = new_capacity;
             self.len += data.len() as u64;

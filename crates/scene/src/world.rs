@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::utils::BoundingBox;
+use crate::{utils::BoundingBox, Molecule};
 use common::AsBytes;
 use indexmap::IndexMap;
 use render::{AtomRepr, Atoms, GlobalRenderResources};
@@ -216,6 +216,7 @@ pub struct World {
     pub(crate) added_fragments: Vec<(PartId, FragmentId)>,
     pub(crate) modified_parts: Vec<PartId>,
     pub(crate) modified_fragments: Vec<FragmentId>,
+    pub molecule: Option<Molecule>,
 }
 
 impl World {
