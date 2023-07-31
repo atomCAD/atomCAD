@@ -64,9 +64,7 @@ use camera::ArcballCamera;
 use common::InputEvent;
 use periodic_table::Element;
 use render::{AtomKind, AtomRepr, GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{Fragment, Part, World};
-
-use scene::Molecule;
+use scene::{Fragment, Molecule, Part, World};
 
 use std::sync::Arc;
 use ultraviolet::Vec3;
@@ -98,7 +96,7 @@ async fn resume_renderer(
                     y: 0.0,
                     z: 0.0,
                 },
-                kind: AtomKind::new(Element::Carbon),
+                kind: AtomKind::new(Element::Phosphorus),
             },
             AtomRepr {
                 pos: Vec3 {
@@ -108,11 +106,24 @@ async fn resume_renderer(
                 },
                 kind: AtomKind::new(Element::Sulfur),
             },
+            AtomRepr {
+                pos: Vec3 {
+                    x: 10.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                kind: AtomKind::new(Element::Nitrogen),
+            },
         ],
     );
     let mut part = Part::from_fragments(&mut world, "test part", vec![fragment]);
     // part.move_to(0.0, 0.0, 0.0);
     world.spawn_part(part);
+
+    let (mut molecule, first_atom) = Molecule::from_first_atom(&gpu_resources, Element::Phosphorus);
+    let second_atom = molecule.add_atom(Element::Sulfur, first_atom, 1, &gpu_resources);
+    let second_atom = molecule.add_atom(Element::Iodine, first_atom, 1, &gpu_resources);
+    world.molecule = Some(molecule);
 
     // The PDB parser lib3dmol does not parse connectivity information.
     // Because of this, we cannot build a molecule graph out of a PDB,
@@ -204,10 +215,17 @@ fn handle_event(
                                 })
                                 .collect();
 
-                            renderer.render(
-                                world.fragments().map(|fragment| fragment.atoms()),
-                                transforms,
-                            );
+                            // renderer.render(
+                            //     world.fragments().map(|fragment| fragment.atoms()),
+                            //     transforms,
+                            // );
+
+                            let atoms: Vec<&render::Atoms> = vec![world.molecule.as_ref().unwrap()]
+                                .into_iter()
+                                .map(|molecule| molecule.atoms())
+                                .collect();
+
+                            renderer.render(atoms, transforms);
                         }
                     }
                 }
