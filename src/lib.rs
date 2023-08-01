@@ -41,7 +41,7 @@ pub mod menubar;
 /// A module for loading and parsing PDB files.
 ///
 /// TODO: Should probably be abstracted into its own crate.
-pub mod pdb;
+// pub mod pdb;
 
 // This module is not public.  It is a common abstraction over the various
 // platform-specific APIs.  For example, `platform::menubar` exposes an API
@@ -63,11 +63,11 @@ pub const APP_NAME: &str = "atomCAD";
 use camera::ArcballCamera;
 use common::InputEvent;
 use periodic_table::Element;
-use render::{AtomKind, AtomRepr, GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{Fragment, Molecule, Part, World};
+use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
+use scene::{Assembly, Component, Molecule};
 
 use std::sync::Arc;
-use ultraviolet::Vec3;
+use ultraviolet::{Mat4, Vec3};
 use winit::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -76,7 +76,7 @@ use winit::{
 
 async fn resume_renderer(
     window: &Window,
-) -> (Renderer, Arc<GlobalRenderResources>, World, Interactions) {
+) -> (Renderer, Arc<GlobalRenderResources>, Assembly, Interactions) {
     let (renderer, gpu_resources) = Renderer::new(
         window,
         RenderOptions {
@@ -86,44 +86,11 @@ async fn resume_renderer(
     )
     .await;
 
-    let mut world = World::new();
-    let fragment = Fragment::from_atoms(
-        &gpu_resources,
-        vec![
-            AtomRepr {
-                pos: Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                kind: AtomKind::new(Element::Phosphorus),
-            },
-            AtomRepr {
-                pos: Vec3 {
-                    x: 5.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                kind: AtomKind::new(Element::Sulfur),
-            },
-            AtomRepr {
-                pos: Vec3 {
-                    x: 10.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                kind: AtomKind::new(Element::Nitrogen),
-            },
-        ],
-    );
-    let mut part = Part::from_fragments(&mut world, "test part", vec![fragment]);
-    // part.move_to(0.0, 0.0, 0.0);
-    world.spawn_part(part);
-
     let (mut molecule, first_atom) = Molecule::from_first_atom(&gpu_resources, Element::Phosphorus);
     let second_atom = molecule.add_atom(Element::Sulfur, first_atom, 1, &gpu_resources);
     let second_atom = molecule.add_atom(Element::Iodine, first_atom, 1, &gpu_resources);
-    world.molecule = Some(molecule);
+
+    let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
 
     // The PDB parser lib3dmol does not parse connectivity information.
     // Because of this, we cannot build a molecule graph out of a PDB,
@@ -153,7 +120,7 @@ async fn resume_renderer(
 
     let interactions = Interactions::default();
 
-    (renderer, gpu_resources, world, interactions)
+    (renderer, gpu_resources, assembly, interactions)
 }
 
 fn handle_event(
@@ -162,7 +129,7 @@ fn handle_event(
     window: &mut Option<Window>,
     renderer: &mut Option<Renderer>,
     _gpu_resources: &mut Option<Arc<GlobalRenderResources>>,
-    world: &mut Option<World>,
+    world: &mut Option<Assembly>,
     interactions: &mut Option<Interactions>,
 ) {
     match event {
@@ -205,27 +172,11 @@ fn handle_event(
                 if let Some(renderer) = renderer {
                     if let Some(world) = world {
                         if let Some(interactions) = interactions {
-                            let transforms = world
-                                .fragments()
-                                .map(|fragment| {
-                                    let mut transform =
-                                        fragment.rotation().into_matrix().into_homogeneous();
-                                    transform.translate(&fragment.offset());
-                                    transform
-                                })
-                                .collect();
-
-                            // renderer.render(
-                            //     world.fragments().map(|fragment| fragment.atoms()),
-                            //     transforms,
-                            // );
-
-                            let atoms: Vec<&render::Atoms> = vec![world.molecule.as_ref().unwrap()]
-                                .into_iter()
-                                .map(|molecule| molecule.atoms())
-                                .collect();
-
-                            renderer.render(atoms, transforms);
+                            let (molecules, transforms) = world.collect_molecules_and_transforms();
+                            renderer.render(
+                                molecules.into_iter().map(|molecule| molecule.atoms()),
+                                transforms,
+                            );
                         }
                     }
                 }
@@ -280,7 +231,7 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     // as necessary.
     let mut renderer: Option<Renderer> = None;
     let mut gpu_resources: Option<Arc<GlobalRenderResources>> = None;
-    let mut world: Option<World> = None;
+    let mut world: Option<Assembly> = None;
     let mut interactions: Option<Interactions> = None;
 
     // Run the event loop.
