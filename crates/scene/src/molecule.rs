@@ -9,8 +9,10 @@ use petgraph::{
 use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
 use ultraviolet::Vec3;
 
-type BondOrder = u8;
 type Graph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
+pub type BondOrder = u8;
+pub type AtomIndex = stable_graph::NodeIndex;
+pub type BondIndex = stable_graph::EdgeIndex;
 
 struct AtomNode {
     element: Element,
@@ -22,10 +24,13 @@ pub struct Molecule {
     graph: Graph,
     rotation: ultraviolet::Rotor3,
     offset: ultraviolet::Vec3,
+    gpu_synced: bool,
 }
 
 impl Molecule {
-    // Creates a `Molecule` containing no data.
+    // Creates a `Molecule` containing just one atom. At the moment, it is not possible
+    // to construct a `Molecule` with no contents, as wgpu will panic if an empty gpu buffer
+    // is created
     pub fn from_first_atom(
         gpu_resources: &GlobalRenderResources,
         first_atom: Element,
@@ -51,18 +56,18 @@ impl Molecule {
                 graph,
                 rotation: ultraviolet::Rotor3::default(),
                 offset: ultraviolet::Vec3::default(),
+                gpu_synced: false,
             },
             first_index,
         )
     }
 
-    //
     pub fn add_atom(
         &mut self,
         element: Element,
         bond_to: NodeIndex,
         bond_order: BondOrder,
-        gpu_resources: &GlobalRenderResources,
+        gpu_resources: Option<&GlobalRenderResources>,
     ) -> NodeIndex {
         // Create the node on the graph
         let new_node = self.graph.add_node(AtomNode {
@@ -72,8 +77,13 @@ impl Molecule {
         });
         self.graph.add_edge(new_node, bond_to, bond_order);
 
-        // Synchronize with the GPU
-        self.reupload_atoms(gpu_resources);
+        if let Some(gpu_resources) = gpu_resources {
+            // Synchronize with the GPU
+            self.reupload_atoms(gpu_resources);
+        } else {
+            self.gpu_synced = false;
+        }
+
         new_node
     }
 
@@ -93,6 +103,7 @@ impl Molecule {
         // This is a workaround, but it has bad perf as it always drops and
         // reallocates
         self.gpu_atoms = Atoms::new(gpu_resources, atoms);
+        self.gpu_synced = true;
     }
 
     pub fn atoms(&self) -> &Atoms {
