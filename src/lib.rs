@@ -64,7 +64,7 @@ use camera::ArcballCamera;
 use common::InputEvent;
 use periodic_table::Element;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{Assembly, Component, Molecule};
+use scene::{feature::*, Assembly, Component, Molecule};
 
 use std::sync::Arc;
 use ultraviolet::{Mat4, Vec3};
@@ -86,9 +86,27 @@ async fn resume_renderer(
     )
     .await;
 
-    let (mut molecule, first_atom) = Molecule::from_first_atom(&gpu_resources, Element::Phosphorus);
-    let second_atom = molecule.add_atom(Element::Sulfur, first_atom, 1, &gpu_resources);
-    let second_atom = molecule.add_atom(Element::Iodine, first_atom, 1, &gpu_resources);
+    let (mut molecule, first_atom) = Molecule::from_first_atom(&gpu_resources, Element::Iodine);
+    let mut features = FeatureList::default();
+    features.push_back(MoleculeFeature::new(first_atom));
+    features.push_back(AtomFeature::new(
+        Element::Phosphorus,
+        AtomSpecifier::new(first_atom),
+        1,
+    ));
+
+    let mut i = 0;
+    for feature in &features {
+        if i == 0 {
+            i = 1;
+            continue;
+        }
+        feature.apply(&features, &mut molecule);
+    }
+
+    // let second_atom = molecule.add_atom(Element::Sulfur, first_atom, 1, None);
+    // let second_atom = molecule.add_atom(Element::Iodine, first_atom, 1, None);
+    molecule.reupload_atoms(&gpu_resources);
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
 
