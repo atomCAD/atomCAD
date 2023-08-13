@@ -181,6 +181,19 @@ impl Feature for AtomFeature {
     }
 }
 
+/// Refers to a specific derived feature. For example, to refer to the second copy of a feature created by a linear pattern
+/// with ID 3, create FeatureCopyReference { feature_id: 3, copy_id: 1 }
+pub struct FeatureCopyReference {
+    feature_id: FeatureIndex,
+    copy_id: usize
+}
+
+pub type AtomSpecifier = Vec<FeatureCopyReference>
+
+pub trait MoleculeCommands {
+    pub fn find_atom(specifier: AtomSpecifier) -> AtomIndex;
+}
+
 // A container that stores a list of features. It allows the list to be manipulated without
 // changing the indexes of existing features,
 #[derive(Default)]
