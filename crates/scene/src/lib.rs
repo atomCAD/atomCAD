@@ -4,6 +4,7 @@ pub use assembly::{Assembly, Component};
 
 mod assembly;
 pub mod feature;
+pub mod ids;
 mod molecule;
 mod utils;
 mod vsepr;

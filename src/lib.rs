@@ -86,23 +86,23 @@ async fn resume_renderer(
     )
     .await;
 
-    let (mut molecule, first_atom) = Molecule::from_first_atom(&gpu_resources, Element::Iodine);
-    let mut features = FeatureList::default();
-    features.push_back(MoleculeFeature::new(first_atom));
-    features.push_back(AtomFeature::new(
-        Element::Phosphorus,
-        AtomSpecifier::new(first_atom),
-        1,
-    ));
+    let mut molecule = Molecule::from_first_atom(&gpu_resources, Element::Iodine);
+    // let mut features = FeatureList::default();
+    // features.push_back(MoleculeFeature::new(first_atom));
+    // features.push_back(AtomFeature::new(
+    //     Element::Phosphorus,
+    //     AtomSpecifier::new(first_atom),
+    //     1,
+    // ));
 
-    let mut i = 0;
-    for feature in &features {
-        if i == 0 {
-            i = 1;
-            continue;
-        }
-        feature.apply(&features, &mut molecule);
-    }
+    // let mut i = 0;
+    // for feature in &features {
+    //     if i == 0 {
+    //         i = 1;
+    //         continue;
+    //     }
+    //     feature.apply(&features, &mut molecule);
+    // }
 
     // let second_atom = molecule.add_atom(Element::Sulfur, first_atom, 1, None);
     // let second_atom = molecule.add_atom(Element::Iodine, first_atom, 1, None);
