@@ -5,6 +5,7 @@
 use std::{mem, slice};
 
 mod bounding_box;
+pub mod ids;
 
 pub use bounding_box::BoundingBox;
 
