@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use ultraviolet::Mat4;
 
-use crate::Molecule;
+use crate::{molecule::MoleculeRepr, Molecule};
 
 enum ComponentType {
     Molecule(Molecule),
@@ -60,12 +60,12 @@ impl Assembly {
         }
     }
 
-    pub fn collect_molecules_and_transforms(&self) -> (Vec<&Molecule>, Vec<Mat4>) {
+    pub fn collect_molecules_and_transforms(&self) -> (Vec<&MoleculeRepr>, Vec<Mat4>) {
         // The number of direct children of the world is an estimate of the
         // lower bound of the number of molecules. It is only possible for this to
         // overestimate if a child assembly contains zero children (which is unusual).
         let mut transforms = Vec::<Mat4>::with_capacity(self.components.len());
-        let mut molecules = Vec::<&Molecule>::with_capacity(self.components.len());
+        let mut molecules = Vec::<&MoleculeRepr>::with_capacity(self.components.len());
 
         // DFS
         let mut stack: Vec<(&Assembly, Mat4)> = vec![(self, Mat4::default())];
@@ -75,7 +75,7 @@ impl Assembly {
                 let new_transform = component.transform * acc_transform;
                 match &component.data {
                     ComponentType::Molecule(molecule) => {
-                        molecules.push(molecule);
+                        molecules.push(&molecule.repr);
                         transforms.push(new_transform);
                     }
                     ComponentType::SubAssembly(sub_assembly) => {
@@ -86,6 +86,20 @@ impl Assembly {
         }
 
         (molecules, transforms)
+    }
+
+    /// Recursively synchronize the atom data of each molecule to the GPU.
+    pub fn synchronize_buffers(&mut self, gpu_resources: &render::GlobalRenderResources) {
+        for component in self.components.iter_mut() {
+            match &mut component.data {
+                ComponentType::Molecule(ref mut molecule) => {
+                    molecule.repr.reupload_atoms(gpu_resources);
+                }
+                ComponentType::SubAssembly(ref mut assembly) => {
+                    assembly.synchronize_buffers(gpu_resources);
+                }
+            }
+        }
     }
 
     // I don't think these have to be seperate

@@ -98,7 +98,19 @@ async fn resume_renderer(
             },
             element: Element::Sulfur,
         });
+
+        features.push_back(AtomFeature {
+            target: scene::ids::AtomSpecifier {
+                feature_path: vec![scene::ids::FeatureCopyId {
+                    feature_id: 1,
+                    copy_index: 0,
+                }],
+                child_index: 0,
+            },
+            element: Element::Carbon,
+        });
     });
+    molecule.apply_all_features();
     // let mut features = FeatureList::default();
     // features.push_back(MoleculeFeature::new(first_atom));
     // features.push_back(AtomFeature::new(
@@ -118,7 +130,7 @@ async fn resume_renderer(
 
     // let second_atom = molecule.add_atom(Element::Sulfur, first_atom, 1, None);
     // let second_atom = molecule.add_atom(Element::Iodine, first_atom, 1, None);
-    molecule.reupload_atoms(&gpu_resources);
+    // molecule.repr.reupload_atoms(&gpu_resources);
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
 
@@ -158,7 +170,7 @@ fn handle_event(
     control_flow: &mut ControlFlow,
     window: &mut Option<Window>,
     renderer: &mut Option<Renderer>,
-    _gpu_resources: &mut Option<Arc<GlobalRenderResources>>,
+    gpu_resources: &mut Option<Arc<GlobalRenderResources>>,
     world: &mut Option<Assembly>,
     interactions: &mut Option<Interactions>,
 ) {
@@ -202,6 +214,9 @@ fn handle_event(
                 if let Some(renderer) = renderer {
                     if let Some(world) = world {
                         if let Some(interactions) = interactions {
+                            if let Some(gpu_resources) = gpu_resources {
+                                world.synchronize_buffers(gpu_resources);
+                            }
                             let (molecules, transforms) = world.collect_molecules_and_transforms();
                             renderer.render(
                                 molecules.into_iter().map(|molecule| molecule.atoms()),
