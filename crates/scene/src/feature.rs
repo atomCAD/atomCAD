@@ -2,10 +2,11 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use periodic_table::Element;
 
-use crate::{ids::*, molecule::AtomIndex, BondOrder, Molecule};
+use crate::{ids::*, molecule::AtomNode, BondOrder};
 
+// At some point all of these should return Result types
 pub trait MoleculeCommands {
-    // fn find_atom(&self, spec: &AtomSpecifier) -> Option<AtomIndex>;
+    fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode>;
     fn add_atom(&mut self, element: Element, pos: ultraviolet::Vec3, spec: AtomSpecifier);
     fn create_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier, order: BondOrder);
 }
@@ -33,9 +34,16 @@ impl Feature for AtomFeature {
             }],
             child_index: 0,
         };
+
+        let x = {
+            let atom = commands.find_atom(&self.target);
+            let atom = atom.expect("Atom Specifier referenced by feature should exist");
+            atom.pos.x + 5.0
+        };
+
         commands.add_atom(
             self.element,
-            ultraviolet::Vec3::new(5.0, 0.0, 0.0),
+            ultraviolet::Vec3::new(x, 0.0, 0.0),
             spec.clone(),
         );
 
