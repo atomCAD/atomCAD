@@ -10,7 +10,7 @@ use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
 use ultraviolet::Vec3;
 
 use crate::{
-    feature::{FeatureList, MoleculeCommands},
+    feature::{FeatureList, MoleculeCommands, RootFeature},
     ids::{AtomSpecifier, FeatureCopyId},
 };
 
@@ -31,14 +31,20 @@ pub struct Molecule {
     rotation: ultraviolet::Rotor3,
     offset: ultraviolet::Vec3,
     gpu_synced: bool,
-    feature_list: FeatureList,
+    features: FeatureList,
     // TODO: This atom map is a simple but extremely inefficient implementation. This data
     // is highly structued and repetitive: compression, flattening, and a tree could do
     // a lot to optimize this.
     atom_map: HashMap<AtomSpecifier, AtomIndex>,
+    // The index one greater than the most recently applied feature's location in the feature list.
+    // This is unrelated to feature IDs: it is effectively just a counter of how many features are
+    // applied. (i.e. our current location in the edit history timeline)
+    history_step: usize,
 }
 
 impl Molecule {
+    // TODO: from_feature
+
     // Creates a `Molecule` containing just one atom. At the moment, it is not possible
     // to construct a `Molecule` with no contents, as wgpu will panic if an empty gpu buffer
     // is created
@@ -67,14 +73,18 @@ impl Molecule {
             }],
         );
 
+        let mut features = FeatureList::default();
+        features.push_back(RootFeature);
+
         Molecule {
             gpu_atoms,
             graph,
             rotation: ultraviolet::Rotor3::default(),
             offset: ultraviolet::Vec3::default(),
             gpu_synced: false,
-            feature_list: Default::default(),
+            features: Default::default(),
             atom_map: HashMap::from([(spec, first_index)]),
+            history_step: 1,
         }
     }
 
@@ -100,9 +110,52 @@ impl Molecule {
     pub fn atoms(&self) -> &Atoms {
         &self.gpu_atoms
     }
+
+    pub fn features(&self) -> &FeatureList {
+        &self.features
+    }
+
+    pub fn with_features(&mut self, mut func: impl FnMut(&mut FeatureList) -> ()) {
+        func(&mut self.features)
+        // TODO: Either recompute the model every time this is called, or implement
+        // a mechanism for FeatureList to track what has been altered and flag itself
+        // as edited.
+        // Could also make it illegal to modify the past using this method: i.e. make
+        // the past features immutable and the future features mutable using some sort
+        // of split list straddling the history step
+    }
+
+    // Recomputes the model to advance itself to a given history step.
+    pub fn set_history_step(&mut self, history_step: usize) {
+        // TODO: Handle stepping backwards. Right now this only allows stepping forwards
+        // in the feature history
+        assert!(
+            history_step <= self.features.len(),
+            "history step exceeds feature list size"
+        );
+        assert!(
+            history_step > self.history_step,
+            "stepping backwards in history is not yet implemented"
+        );
+        for feature_id in &self.features.order()[self.history_step..history_step] {
+            let feature = self
+                .features
+                .get(feature_id)
+                .expect("Feature IDs referenced by the FeatureList order should exist!");
+            feature.apply(feature_id, &mut self.graph);
+        }
+
+        self.history_step = history_step;
+    }
+
+    // equivalent to `set_history_step(features.len()): applies every feature that is in the
+    // feature timeline.
+    pub fn apply_all_features(&mut self) {
+        self.set_history_step(self.features.len())
+    }
 }
 
-impl MoleculeCommands for Molecule {
+impl MoleculeCommands for Graph {
     fn add_atom(&mut self, element: Element, pos: ultraviolet::Vec3, spec: AtomSpecifier) {
         let index = self.graph.add_node(AtomNode {
             element,
@@ -110,7 +163,7 @@ impl MoleculeCommands for Molecule {
             spec: spec.clone(),
         });
         self.atom_map.insert(spec, index);
-        self.gpu_synced = false;
+        // self.gpu_synced = false;
     }
 
     fn create_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier, order: BondOrder) {}
