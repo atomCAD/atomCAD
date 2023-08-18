@@ -11,7 +11,36 @@ pub trait MoleculeCommands {
 }
 
 pub trait Feature {
-    fn apply(&self, commands: &mut dyn MoleculeCommands);
+    fn apply(&self, feature_id: &FeatureId, commands: &mut dyn MoleculeCommands);
+}
+
+pub struct RootFeature;
+impl Feature for RootFeature {
+    fn apply(&self, _feature_id: &FeatureId, _commands: &mut dyn MoleculeCommands) {}
+}
+
+pub struct AtomFeature {
+    pub target: AtomSpecifier,
+    pub element: Element,
+}
+
+impl Feature for AtomFeature {
+    fn apply(&self, feature_id: &FeatureId, commands: &mut dyn MoleculeCommands) {
+        let spec = AtomSpecifier {
+            feature_path: vec![FeatureCopyId {
+                feature_id: *feature_id,
+                copy_index: 0,
+            }],
+            child_index: 0,
+        };
+        commands.add_atom(
+            self.element,
+            ultraviolet::Vec3::new(5.0, 0.0, 0.0),
+            spec.clone(),
+        );
+
+        commands.create_bond(&self.target, &spec, 1);
+    }
 }
 
 // A container that stores a list of features. It allows the list to be manipulated without
@@ -41,8 +70,8 @@ impl FeatureList {
         self.order.remove(id);
     }
 
-    pub fn get(&self, id: FeatureId) -> Option<&dyn Feature> {
-        self.features.get(&id).map(|bo| bo.borrow())
+    pub fn get(&self, id: &FeatureId) -> Option<&dyn Feature> {
+        self.features.get(id).map(|bo| bo.borrow())
     }
 
     // Adds a new feature to the end of the feature list.
@@ -54,6 +83,14 @@ impl FeatureList {
 
         self.counter += 1;
         self.counter
+    }
+
+    pub fn len(&self) -> usize {
+        return self.order.len();
+    }
+
+    pub fn order(&self) -> &[FeatureId] {
+        &self.order
     }
 }
 
@@ -71,7 +108,7 @@ impl<'a> Iterator for FeatureListIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.list.order.get(self.current_index)?;
         self.current_index += 1;
-        self.list.get(*index)
+        self.list.get(index)
         // self.list.features.get(index).map(|bo| bo.borrow())
     }
 }

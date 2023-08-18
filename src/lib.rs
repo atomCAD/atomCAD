@@ -87,6 +87,18 @@ async fn resume_renderer(
     .await;
 
     let mut molecule = Molecule::from_first_atom(&gpu_resources, Element::Iodine);
+    molecule.with_features(|features| {
+        features.push_back(AtomFeature {
+            target: scene::ids::AtomSpecifier {
+                feature_path: vec![scene::ids::FeatureCopyId {
+                    feature_id: 0,
+                    copy_index: 0,
+                }],
+                child_index: 0,
+            },
+            element: Element::Sulfur,
+        });
+    });
     // let mut features = FeatureList::default();
     // features.push_back(MoleculeFeature::new(first_atom));
     // features.push_back(AtomFeature::new(
