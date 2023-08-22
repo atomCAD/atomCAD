@@ -69,8 +69,10 @@ use scene::{feature::*, Assembly, Component, Molecule};
 use std::sync::Arc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
-    event::{Event, StartCause, WindowEvent},
+    dpi::{PhysicalPosition, Position},
+    event::{DeviceEvent, ElementState, Event, RawKeyEvent, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
+    keyboard::KeyCode,
     window::{Window, WindowBuilder},
 };
 
@@ -173,6 +175,7 @@ fn handle_event(
     gpu_resources: &mut Option<Arc<GlobalRenderResources>>,
     world: &mut Option<Assembly>,
     interactions: &mut Option<Interactions>,
+    cursor_pos: &PhysicalPosition<f64>,
 ) {
     match event {
         Event::NewEvents(StartCause::Init) => {
@@ -249,7 +252,16 @@ fn handle_event(
         }
         Event::WindowEvent { event, .. } => {
             if let Some(renderer) = renderer {
-                renderer.camera().update(InputEvent::Window(event));
+                match event {
+                    WindowEvent::KeyboardInput { event: key, .. } => {
+                        if key.physical_key == KeyCode::Space && key.state == ElementState::Released
+                        {
+                        }
+                    }
+                    _ => {
+                        renderer.camera().update(InputEvent::Window(event));
+                    }
+                }
             }
         }
         Event::DeviceEvent { event, .. } => {
@@ -278,6 +290,7 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     let mut gpu_resources: Option<Arc<GlobalRenderResources>> = None;
     let mut world: Option<Assembly> = None;
     let mut interactions: Option<Interactions> = None;
+    let mut cursor_pos: PhysicalPosition<f64> = Default::default();
 
     // Run the event loop.
     event_loop.run(move |event, _, control_flow| {
@@ -310,6 +323,14 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
                 renderer = None;
                 window = None;
             }
+            Event::WindowEvent {
+                event: WindowEvent::CursorMoved { position, .. },
+                ..
+            } => {
+                // The event system does not expose the cursor position on-demand. We track all
+                // the mouse movement events to make this easier to access later.
+                cursor_pos = position;
+            }
             _ => {
                 // Process all other events.
                 handle_event(
@@ -320,6 +341,7 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
                     &mut gpu_resources,
                     &mut world,
                     &mut interactions,
+                    &cursor_pos,
                 );
             }
         }

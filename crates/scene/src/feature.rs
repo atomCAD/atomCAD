@@ -61,7 +61,7 @@ pub struct FeatureList {
 }
 
 impl FeatureList {
-    // Inserts an feature at position `location` within the feature list, shifting all features after it to the right.
+    // Inserts a feature at position `location` within the feature list, shifting all features after it to the right.
     pub fn insert(&mut self, feature: impl Feature + 'static, location: usize) -> usize {
         let id = self.counter;
 

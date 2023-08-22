@@ -121,7 +121,6 @@ impl Molecule {
         let first_index = graph.add_node(AtomNode {
             element: first_atom,
             pos: Vec3::default(),
-            // TODO: This needs to either come from a feature or be returned
             spec: spec.clone(),
         });
 

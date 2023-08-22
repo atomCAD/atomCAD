@@ -5,8 +5,8 @@
 use crate::bind_groups::AsBindingResource;
 use common::{AsBytes, InputEvent};
 use std::mem;
-use ultraviolet::Mat4;
-use winit::dpi::PhysicalSize;
+use ultraviolet::{Mat4, Vec3};
+use winit::dpi::{PhysicalPosition, PhysicalSize};
 
 #[derive(Clone, Default)]
 #[repr(C)]
@@ -23,6 +23,8 @@ pub trait Camera {
     fn update(&mut self, event: InputEvent) -> bool;
     fn finalize(&mut self);
     fn repr(&self) -> CameraRepr;
+    // TODO: This is needed for atom picking
+    // fn get_ray_from(&self, pixel: PhysicalPosition<f64>) -> Vec3;
 }
 
 pub struct RenderCamera {
