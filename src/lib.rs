@@ -88,7 +88,12 @@ async fn resume_renderer(
     )
     .await;
 
-    let mut molecule = Molecule::from_first_atom(&gpu_resources, Element::Iodine);
+    let mut molecule = Molecule::from_feature(
+        &gpu_resources,
+        RootAtom {
+            element: Element::Iodine,
+        },
+    );
     molecule.with_features(|features| {
         features.push_back(AtomFeature {
             target: scene::ids::AtomSpecifier {
@@ -220,11 +225,8 @@ fn handle_event(
                             if let Some(gpu_resources) = gpu_resources {
                                 world.synchronize_buffers(gpu_resources);
                             }
-                            let (molecules, transforms) = world.collect_molecules_and_transforms();
-                            renderer.render(
-                                molecules.into_iter().map(|molecule| molecule.atoms()),
-                                transforms,
-                            );
+                            let (atoms, transforms) = world.collect_atoms_and_transforms();
+                            renderer.render(atoms, transforms);
                         }
                     }
                 }

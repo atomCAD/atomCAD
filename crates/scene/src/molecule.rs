@@ -10,11 +10,11 @@ use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
 use ultraviolet::Vec3;
 
 use crate::{
-    feature::{FeatureList, MoleculeCommands, RootFeature},
+    feature::{Feature, FeatureError, FeatureList, MoleculeCommands, ReferenceType, RootAtom},
     ids::{AtomSpecifier, FeatureCopyId},
 };
 
-type Graph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
+pub type Graph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
 pub type BondOrder = u8;
 pub type AtomIndex = stable_graph::NodeIndex;
 pub type BondIndex = stable_graph::EdgeIndex;
@@ -26,43 +26,39 @@ pub struct AtomNode {
 }
 
 /// The concrete representation of the molecule at some time in the feature history.
+#[derive(Default)]
 pub struct MoleculeRepr {
     // TODO: This atom map is a simple but extremely inefficient implementation. This data
     // is highly structued and repetitive: compression, flattening, and a tree could do
     // a lot to optimize this.
     atom_map: HashMap<AtomSpecifier, AtomIndex>,
-    gpu_atoms: Atoms,
     graph: Graph,
     gpu_synced: bool,
 }
 
 impl MoleculeRepr {
-    pub fn reupload_atoms(&mut self, gpu_resources: &GlobalRenderResources) {
-        let atoms: Vec<AtomRepr> = self
-            .graph
+    fn atom_reprs(&self) -> Vec<AtomRepr> {
+        self.graph
             .node_weights()
             .map(|node| AtomRepr {
                 kind: AtomKind::new(node.element),
                 pos: node.pos,
             })
-            .collect();
-
-        // TODO: not working, see shinzlet/atomCAD #3
-        // self.gpu_atoms.reupload_atoms(&atoms, gpu_resources);
-
-        // This is a workaround, but it has bad perf as it always drops and
-        // reallocates
-        self.gpu_atoms = Atoms::new(gpu_resources, atoms);
-        self.gpu_synced = true;
-    }
-
-    pub fn atoms(&self) -> &Atoms {
-        &self.gpu_atoms
+            .collect()
     }
 }
 
 impl MoleculeCommands for MoleculeRepr {
-    fn add_atom(&mut self, element: Element, pos: ultraviolet::Vec3, spec: AtomSpecifier) {
+    fn add_atom(
+        &mut self,
+        element: Element,
+        pos: ultraviolet::Vec3,
+        spec: AtomSpecifier,
+    ) -> Result<(), FeatureError> {
+        if self.atom_map.contains_key(&spec) {
+            return Err(FeatureError::AtomOverwrite);
+        }
+
         let index = self.graph.add_node(AtomNode {
             element,
             pos,
@@ -70,16 +66,21 @@ impl MoleculeCommands for MoleculeRepr {
         });
         self.atom_map.insert(spec, index);
         self.gpu_synced = false;
+        Ok(())
     }
 
-    fn create_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier, order: BondOrder) {
+    fn create_bond(
+        &mut self,
+        a1: &AtomSpecifier,
+        a2: &AtomSpecifier,
+        order: BondOrder,
+    ) -> Result<(), FeatureError> {
         match (self.atom_map.get(&a1), self.atom_map.get(&a2)) {
             (Some(&a1_index), Some(&a2_index)) => {
                 self.graph.add_edge(a1_index, a2_index, order);
+                Ok(())
             }
-            _ => {
-                panic!("AtomSpecifiers referenced in a feature should always resolve");
-            }
+            _ => Err(FeatureError::BrokenReference(ReferenceType::Atom)),
         }
     }
 
@@ -93,6 +94,7 @@ impl MoleculeCommands for MoleculeRepr {
 
 pub struct Molecule {
     pub repr: MoleculeRepr,
+    gpu_atoms: Atoms,
     rotation: ultraviolet::Rotor3,
     offset: ultraviolet::Vec3,
     features: FeatureList,
@@ -103,49 +105,25 @@ pub struct Molecule {
 }
 
 impl Molecule {
-    // TODO: from_feature
-
-    // Creates a `Molecule` containing just one atom. At the moment, it is not possible
-    // to construct a `Molecule` with no contents, as wgpu will panic if an empty gpu buffer
-    // is created
-    pub fn from_first_atom(gpu_resources: &GlobalRenderResources, first_atom: Element) -> Self {
-        let mut graph = Graph::default();
-        let spec = AtomSpecifier {
-            feature_path: vec![FeatureCopyId {
-                feature_id: 0,
-                copy_index: 0,
-            }],
-            child_index: 0,
-        };
-
-        let first_index = graph.add_node(AtomNode {
-            element: first_atom,
-            pos: Vec3::default(),
-            spec: spec.clone(),
-        });
-
-        let gpu_atoms = Atoms::new(
-            gpu_resources,
-            [AtomRepr {
-                kind: AtomKind::new(first_atom),
-                pos: Vec3::default(),
-            }],
-        );
-
+    pub fn from_feature(
+        gpu_resources: &GlobalRenderResources,
+        feature: impl Feature + 'static,
+    ) -> Self {
+        let mut repr = MoleculeRepr::default();
+        feature
+            .apply(&0, &mut repr)
+            .expect("Primitive features should never return a feature error!");
+        let gpu_atoms = Atoms::new(gpu_resources, repr.atom_reprs());
         let mut features = FeatureList::default();
-        features.push_back(RootFeature);
+        features.push_back(feature);
 
-        Molecule {
-            repr: MoleculeRepr {
-                atom_map: HashMap::from([(spec, first_index)]),
-                gpu_atoms,
-                graph,
-                gpu_synced: false,
-            },
+        Self {
+            repr,
+            gpu_atoms,
             rotation: ultraviolet::Rotor3::default(),
             offset: ultraviolet::Vec3::default(),
             features,
-            history_step: 1,
+            history_step: 0,
         }
     }
 
@@ -163,25 +141,33 @@ impl Molecule {
         // of split list straddling the history step
     }
 
-    // Recomputes the model to advance itself to a given history step.
+    // Advances the model to a given history step by applying features in the timeline.
+    // This will not in general recompute the history, so if a past feature is changed,
+    // you must recompute from there.
     pub fn set_history_step(&mut self, history_step: usize) {
-        // TODO: Handle stepping backwards. Right now this only allows stepping forwards
-        // in the feature history
+        // TODO: Bubble error to user
         assert!(
             history_step <= self.features.len(),
             "history step exceeds feature list size"
         );
-        assert!(
-            history_step > self.history_step,
-            "stepping backwards in history is not yet implemented"
-        );
+
+        // If we are stepping back, we need to recompute starting at the beginning
+        // (we don't currently use checkpoints or feature inversion).
+        if history_step < self.history_step {
+            self.history_step = 0;
+            self.repr.graph.clear();
+        }
 
         for feature_id in &self.features.order()[self.history_step..history_step] {
             let feature = self
                 .features
                 .get(feature_id)
                 .expect("Feature IDs referenced by the FeatureList order should exist!");
-            feature.apply(feature_id, &mut self.repr);
+
+            if feature.apply(feature_id, &mut self.repr).is_err() {
+                // TODO: Bubble error to the user
+                println!("Feature reconstruction error on feature {}", feature_id);
+            }
         }
 
         self.history_step = history_step;
@@ -191,5 +177,19 @@ impl Molecule {
     // feature timeline.
     pub fn apply_all_features(&mut self) {
         self.set_history_step(self.features.len())
+    }
+
+    pub fn reupload_atoms(&mut self, gpu_resources: &GlobalRenderResources) {
+        // TODO: not working, see shinzlet/atomCAD #3
+        // self.gpu_atoms.reupload_atoms(&atoms, gpu_resources);
+
+        // This is a workaround, but it has bad perf as it always drops and
+        // reallocates
+        self.gpu_atoms = Atoms::new(gpu_resources, self.repr.atom_reprs());
+        self.repr.gpu_synced = true;
+    }
+
+    pub fn atoms(&self) -> &Atoms {
+        &self.gpu_atoms
     }
 }
