@@ -2,22 +2,70 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use periodic_table::Element;
 
-use crate::{ids::*, molecule::AtomNode, BondOrder};
+use crate::{
+    ids::*,
+    molecule::{self, AtomIndex, AtomNode, BondIndex},
+    BondOrder, Molecule,
+};
+
+#[derive(Debug)]
+pub enum ReferenceType {
+    Atom,
+    Feature,
+    // Molecule,
+    // File,
+    // etc.
+}
+
+#[derive(Debug)]
+pub enum FeatureError {
+    BrokenReference(ReferenceType),
+    AtomOverwrite,
+}
 
 // At some point all of these should return Result types
 pub trait MoleculeCommands {
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode>;
-    fn add_atom(&mut self, element: Element, pos: ultraviolet::Vec3, spec: AtomSpecifier);
-    fn create_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier, order: BondOrder);
+    fn add_atom(
+        &mut self,
+        element: Element,
+        pos: ultraviolet::Vec3,
+        spec: AtomSpecifier,
+    ) -> Result<(), FeatureError>;
+    fn create_bond(
+        &mut self,
+        a1: &AtomSpecifier,
+        a2: &AtomSpecifier,
+        order: BondOrder,
+    ) -> Result<(), FeatureError>;
 }
 
 pub trait Feature {
-    fn apply(&self, feature_id: &FeatureId, commands: &mut dyn MoleculeCommands);
+    fn apply(
+        &self,
+        feature_id: &FeatureId,
+        commands: &mut dyn MoleculeCommands,
+    ) -> Result<(), FeatureError>;
 }
 
-pub struct RootFeature;
-impl Feature for RootFeature {
-    fn apply(&self, _feature_id: &FeatureId, _commands: &mut dyn MoleculeCommands) {}
+pub struct RootAtom {
+    pub element: Element,
+}
+
+impl Feature for RootAtom {
+    fn apply(
+        &self,
+        feature_id: &FeatureId,
+        commands: &mut dyn MoleculeCommands,
+    ) -> Result<(), FeatureError> {
+        commands.add_atom(
+            self.element,
+            Default::default(),
+            AtomSpecifier::new(*feature_id),
+        );
+
+        Ok(())
+    }
 }
 
 pub struct AtomFeature {
@@ -26,18 +74,16 @@ pub struct AtomFeature {
 }
 
 impl Feature for AtomFeature {
-    fn apply(&self, feature_id: &FeatureId, commands: &mut dyn MoleculeCommands) {
-        let spec = AtomSpecifier {
-            feature_path: vec![FeatureCopyId {
-                feature_id: *feature_id,
-                copy_index: 0,
-            }],
-            child_index: 0,
-        };
+    fn apply(
+        &self,
+        feature_id: &FeatureId,
+        commands: &mut dyn MoleculeCommands,
+    ) -> Result<(), FeatureError> {
+        let spec = AtomSpecifier::new(*feature_id);
 
         let x = {
             let atom = commands.find_atom(&self.target);
-            let atom = atom.expect("Atom Specifier referenced by feature should exist");
+            let atom = atom.ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
             atom.pos.x + 5.0
         };
 
@@ -45,9 +91,11 @@ impl Feature for AtomFeature {
             self.element,
             ultraviolet::Vec3::new(x, 0.0, 0.0),
             spec.clone(),
-        );
+        )?;
 
-        commands.create_bond(&self.target, &spec, 1);
+        commands.create_bond(&self.target, &spec, 1)?;
+
+        Ok(())
     }
 }
 
