@@ -46,6 +46,12 @@ impl MoleculeRepr {
             })
             .collect()
     }
+
+    fn clear(&mut self) {
+        self.atom_map.clear();
+        self.graph.clear();
+        self.gpu_synced = false;
+    }
 }
 
 impl MoleculeCommands for MoleculeRepr {
@@ -102,6 +108,12 @@ pub struct Molecule {
     // This is unrelated to feature IDs: it is effectively just a counter of how many features are
     // applied. (i.e. our current location in the edit history timeline)
     history_step: usize,
+    // When checkpointing is implemented, this will be needed:
+    // the history step we cannot equal or exceed without first recomputing. For example, if repr
+    // is up to date with the feature list, and then a past feature is changed, dirty_step would change
+    // from `features.len()` to the index of the changed feature. This is used to determine if recomputation
+    // is needed when moving forwards in the timeline, or if a future checkpoint can be used.
+    // dirty_step: usize,
 }
 
 impl Molecule {
@@ -131,14 +143,8 @@ impl Molecule {
         &self.features
     }
 
-    pub fn with_features(&mut self, mut func: impl FnMut(&mut FeatureList) -> ()) {
-        func(&mut self.features)
-        // TODO: Either recompute the model every time this is called, or implement
-        // a mechanism for FeatureList to track what has been altered and flag itself
-        // as edited.
-        // Could also make it illegal to modify the past using this method: i.e. make
-        // the past features immutable and the future features mutable using some sort
-        // of split list straddling the history step
+    pub fn push_feature(&mut self, feature: impl Feature + 'static) {
+        self.features.insert(feature, self.history_step);
     }
 
     // Advances the model to a given history step by applying features in the timeline.
@@ -155,7 +161,7 @@ impl Molecule {
         // (we don't currently use checkpoints or feature inversion).
         if history_step < self.history_step {
             self.history_step = 0;
-            self.repr.graph.clear();
+            self.repr.clear();
         }
 
         for feature_id in &self.features.order()[self.history_step..history_step] {
