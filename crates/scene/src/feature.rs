@@ -62,7 +62,7 @@ impl Feature for RootAtom {
             self.element,
             Default::default(),
             AtomSpecifier::new(*feature_id),
-        );
+        )?;
 
         Ok(())
     }

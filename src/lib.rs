@@ -94,30 +94,32 @@ async fn resume_renderer(
             element: Element::Iodine,
         },
     );
-    molecule.with_features(|features| {
-        features.push_back(AtomFeature {
-            target: scene::ids::AtomSpecifier {
-                feature_path: vec![scene::ids::FeatureCopyId {
-                    feature_id: 0,
-                    copy_index: 0,
-                }],
-                child_index: 0,
-            },
-            element: Element::Sulfur,
-        });
 
-        features.push_back(AtomFeature {
-            target: scene::ids::AtomSpecifier {
-                feature_path: vec![scene::ids::FeatureCopyId {
-                    feature_id: 1,
-                    copy_index: 0,
-                }],
-                child_index: 0,
-            },
-            element: Element::Carbon,
-        });
+    molecule.push_feature(AtomFeature {
+        target: scene::ids::AtomSpecifier {
+            feature_path: vec![scene::ids::FeatureCopyId {
+                feature_id: 0,
+                copy_index: 0,
+            }],
+            child_index: 0,
+        },
+        element: Element::Sulfur,
     });
+
+    molecule.push_feature(AtomFeature {
+        target: scene::ids::AtomSpecifier {
+            feature_path: vec![scene::ids::FeatureCopyId {
+                feature_id: 1,
+                copy_index: 0,
+            }],
+            child_index: 0,
+        },
+        element: Element::Carbon,
+    });
+
     molecule.apply_all_features();
+    molecule.set_history_step(3);
+    molecule.reupload_atoms(&gpu_resources);
     // let mut features = FeatureList::default();
     // features.push_back(MoleculeFeature::new(first_atom));
     // features.push_back(AtomFeature::new(
