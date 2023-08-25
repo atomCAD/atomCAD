@@ -365,8 +365,8 @@ impl Default for PeriodicTable {
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct ElementRepr {
-    color: Vec3, // RGB color space
-    radius: f32, // in angstroms
+    pub color: Vec3, // RGB color space
+    pub radius: f32, // in angstroms
 }
 
 const_assert_eq!(mem::size_of::<ElementRepr>(), 16);

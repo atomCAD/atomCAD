@@ -53,6 +53,11 @@ impl MoleculeRepr {
     }
 }
 
+const PERIODIC_TABLE: once_cell::unsync::Lazy<periodic_table::PeriodicTable> =
+    once_cell::unsync::Lazy::<periodic_table::PeriodicTable>::new(|| {
+        periodic_table::PeriodicTable::new()
+    });
+
 impl MoleculeCommands for MoleculeRepr {
     fn add_atom(
         &mut self,
@@ -71,7 +76,11 @@ impl MoleculeCommands for MoleculeRepr {
         });
 
         self.atom_map.insert(spec, index);
-        self.bounding_box.enclose(pos);
+        self.bounding_box.enclose_sphere(
+            pos,
+            // TODO: This is
+            PERIODIC_TABLE.element_reprs[element as usize].radius,
+        );
         self.gpu_synced = false;
 
         Ok(())

@@ -36,13 +36,24 @@ impl BoundingBox {
             && point.z <= self.max.z
     }
 
-    pub fn enclose(&mut self, point: Vec3) {
-        self.min.x = self.min.x.min(point.x);
-        self.min.y = self.min.y.min(point.y);
-        self.min.z = self.min.z.min(point.z);
-        self.max.x = self.max.x.max(point.x);
-        self.max.y = self.max.y.max(point.y);
-        self.max.z = self.max.z.max(point.z);
+    pub fn enclose_point(&mut self, point: Vec3) {
+        self.min.x = f32::min(self.min.x, point.x);
+        self.min.y = f32::min(self.min.y, point.y);
+        self.min.z = f32::min(self.min.z, point.z);
+
+        self.max.x = f32::max(self.max.x, point.x);
+        self.max.y = f32::max(self.max.y, point.y);
+        self.max.z = f32::max(self.max.z, point.z);
+    }
+
+    pub fn enclose_sphere(&mut self, center: Vec3, radius: f32) {
+        self.min.x = f32::min(self.min.x, center.x - radius);
+        self.min.y = f32::min(self.min.y, center.y - radius);
+        self.min.z = f32::min(self.min.z, center.z - radius);
+
+        self.max.x = f32::max(self.max.x, center.x + radius);
+        self.max.y = f32::max(self.max.y, center.y + radius);
+        self.max.z = f32::max(self.max.z, center.z + radius);
     }
 }
 
