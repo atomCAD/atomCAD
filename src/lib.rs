@@ -151,7 +151,7 @@ fn handle_event(
     gpu_resources: &mut Option<Arc<GlobalRenderResources>>,
     world: &mut Option<Assembly>,
     interactions: &mut Option<Interactions>,
-    _cursor_pos: &PhysicalPosition<f64>,
+    cursor_pos: &PhysicalPosition<f64>,
 ) {
     match event {
         Event::NewEvents(StartCause::Init) => {
@@ -229,6 +229,11 @@ fn handle_event(
                     WindowEvent::KeyboardInput { event: key, .. } => {
                         if key.physical_key == KeyCode::Space && key.state == ElementState::Released
                         {
+                            if let Some(window) = window {
+                                if let Some(camera) = renderer.camera().camera() {
+                                    dbg!(camera.get_ray_from(cursor_pos, &window.inner_size()));
+                                }
+                            }
                         }
                     }
                     _ => {

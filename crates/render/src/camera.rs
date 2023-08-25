@@ -23,8 +23,11 @@ pub trait Camera {
     fn update(&mut self, event: InputEvent) -> bool;
     fn finalize(&mut self);
     fn repr(&self) -> CameraRepr;
-    // TODO: This is needed for atom picking
-    // fn get_ray_from(&self, pixel: PhysicalPosition<f64>) -> Vec3;
+    fn get_ray_from(
+        &self,
+        pixel: &PhysicalPosition<f64>,
+        viewport_size: &PhysicalSize<u32>,
+    ) -> (Vec3, Vec3);
 }
 
 pub struct RenderCamera {
@@ -126,6 +129,10 @@ impl RenderCamera {
         //     self.camera_was_updated = false;
         //     queue.write_buffer(&self.uniform_buffer, 0, self.camera_impl.repr().as_bytes());
         // }
+    }
+
+    pub fn camera(&self) -> &Option<Box<dyn Camera>> {
+        &self.camera
     }
 }
 
