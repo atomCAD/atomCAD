@@ -4,7 +4,7 @@
 
 use ultraviolet::Vec3;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct BoundingBox {
     pub min: Vec3,
     pub max: Vec3,
@@ -34,6 +34,15 @@ impl BoundingBox {
             && point.y <= self.max.y
             && self.min.z <= point.z
             && point.z <= self.max.z
+    }
+
+    pub fn enclose(&mut self, point: Vec3) {
+        self.min.x = self.min.x.min(point.x);
+        self.min.y = self.min.y.min(point.y);
+        self.min.z = self.min.z.min(point.z);
+        self.max.x = self.max.x.max(point.x);
+        self.max.y = self.max.y.max(point.y);
+        self.max.z = self.max.z.max(point.z);
     }
 }
 

@@ -69,8 +69,8 @@ use scene::{feature::*, Assembly, Component, Molecule};
 use std::sync::Arc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
-    dpi::{PhysicalPosition, Position},
-    event::{DeviceEvent, ElementState, Event, RawKeyEvent, StartCause, WindowEvent},
+    dpi::PhysicalPosition,
+    event::{ElementState, Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::KeyCode,
     window::{Window, WindowBuilder},
@@ -96,50 +96,19 @@ async fn resume_renderer(
     );
 
     molecule.push_feature(AtomFeature {
-        target: scene::ids::AtomSpecifier {
-            feature_path: vec![scene::ids::FeatureCopyId {
-                feature_id: 0,
-                copy_index: 0,
-            }],
-            child_index: 0,
-        },
+        target: scene::ids::AtomSpecifier::new(0),
         element: Element::Sulfur,
     });
+    molecule.apply_all_features();
 
     molecule.push_feature(AtomFeature {
-        target: scene::ids::AtomSpecifier {
-            feature_path: vec![scene::ids::FeatureCopyId {
-                feature_id: 1,
-                copy_index: 0,
-            }],
-            child_index: 0,
-        },
+        target: scene::ids::AtomSpecifier::new(1),
         element: Element::Carbon,
     });
-
     molecule.apply_all_features();
-    molecule.set_history_step(3);
+
+    molecule.set_history_step(2);
     molecule.reupload_atoms(&gpu_resources);
-    // let mut features = FeatureList::default();
-    // features.push_back(MoleculeFeature::new(first_atom));
-    // features.push_back(AtomFeature::new(
-    //     Element::Phosphorus,
-    //     AtomSpecifier::new(first_atom),
-    //     1,
-    // ));
-
-    // let mut i = 0;
-    // for feature in &features {
-    //     if i == 0 {
-    //         i = 1;
-    //         continue;
-    //     }
-    //     feature.apply(&features, &mut molecule);
-    // }
-
-    // let second_atom = molecule.add_atom(Element::Sulfur, first_atom, 1, None);
-    // let second_atom = molecule.add_atom(Element::Iodine, first_atom, 1, None);
-    // molecule.repr.reupload_atoms(&gpu_resources);
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
 
@@ -182,7 +151,7 @@ fn handle_event(
     gpu_resources: &mut Option<Arc<GlobalRenderResources>>,
     world: &mut Option<Assembly>,
     interactions: &mut Option<Interactions>,
-    cursor_pos: &PhysicalPosition<f64>,
+    _cursor_pos: &PhysicalPosition<f64>,
 ) {
     match event {
         Event::NewEvents(StartCause::Init) => {
@@ -223,7 +192,7 @@ fn handle_event(
                 })();
                 if let Some(renderer) = renderer {
                     if let Some(world) = world {
-                        if let Some(interactions) = interactions {
+                        if let Some(_interactions) = interactions {
                             if let Some(gpu_resources) = gpu_resources {
                                 world.synchronize_buffers(gpu_resources);
                             }
