@@ -4,6 +4,10 @@
 
 use std::{mem, slice};
 
+mod bounding_box;
+
+pub use bounding_box::BoundingBox;
+
 /// # Safety
 ///
 /// This is safe because it merely exposes the backing memory use natively to
