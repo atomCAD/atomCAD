@@ -1,17 +1,14 @@
 use std::{collections::HashMap, iter::Empty};
 
 use periodic_table::Element;
-use petgraph::{
-    data::{Build, DataMap},
-    graph::Node,
-    stable_graph::{self, NodeIndex},
-};
+use petgraph::stable_graph;
 use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
 use ultraviolet::Vec3;
 
 use crate::{
     feature::{Feature, FeatureError, FeatureList, MoleculeCommands, ReferenceType, RootAtom},
     ids::{AtomSpecifier, FeatureCopyId},
+    utils::BoundingBox,
 };
 
 pub type Graph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
@@ -33,6 +30,7 @@ pub struct MoleculeRepr {
     // a lot to optimize this.
     atom_map: HashMap<AtomSpecifier, AtomIndex>,
     graph: Graph,
+    bounding_box: BoundingBox,
     gpu_synced: bool,
 }
 
@@ -50,6 +48,7 @@ impl MoleculeRepr {
     fn clear(&mut self) {
         self.atom_map.clear();
         self.graph.clear();
+        self.bounding_box = Default::default();
         self.gpu_synced = false;
     }
 }
@@ -70,8 +69,11 @@ impl MoleculeCommands for MoleculeRepr {
             pos,
             spec: spec.clone(),
         });
+
         self.atom_map.insert(spec, index);
+        self.bounding_box.enclose(pos);
         self.gpu_synced = false;
+
         Ok(())
     }
 
@@ -135,7 +137,7 @@ impl Molecule {
             rotation: ultraviolet::Rotor3::default(),
             offset: ultraviolet::Vec3::default(),
             features,
-            history_step: 0,
+            history_step: 1, // This starts at 1 because we applied the primitive feature
         }
     }
 
@@ -165,6 +167,7 @@ impl Molecule {
         }
 
         for feature_id in &self.features.order()[self.history_step..history_step] {
+            println!("Applying feature {}", feature_id);
             let feature = self
                 .features
                 .get(feature_id)
@@ -174,6 +177,9 @@ impl Molecule {
                 // TODO: Bubble error to the user
                 println!("Feature reconstruction error on feature {}", feature_id);
             }
+
+            dbg!(&self.repr.bounding_box);
+            println!("");
         }
 
         self.history_step = history_step;
