@@ -4,4 +4,7 @@
 mod as_bytes;
 pub use as_bytes::AsBytes;
 
+mod bounding_box;
+pub use bounding_box::BoundingBox;
+
 // End of File
