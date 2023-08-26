@@ -43,7 +43,7 @@ impl Assembly {
         }
     }
 
-    fn walk_mut(&self, mut f: impl FnMut(&Molecule, Mat4)) {
+    pub fn walk_mut(&self, mut f: impl FnMut(&Molecule, Mat4)) {
         let mut stack: Vec<(&Assembly, Mat4)> = vec![(self, Mat4::default())];
 
         while let Some((assembly, acc_transform)) = stack.pop() {

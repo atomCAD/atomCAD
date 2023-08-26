@@ -55,6 +55,48 @@ impl BoundingBox {
         self.max.y = f32::max(self.max.y, center.y + radius);
         self.max.z = f32::max(self.max.z, center.z + radius);
     }
+
+    // Computes the 1D intersection times for a directed line segment. i.e.
+    fn intersection_times(origin: f32, speed: f32, min: f32, max: f32) -> Option<(f32, f32)> {
+        // If the speed is non-zero, we can compute the times normally.
+        if speed != 0.0 {
+            Some(((min - origin) / speed, (max - origin) / speed))
+        }
+        // If the speed is zero and the origin is within the bounding slab
+        // along that axis, the ray runs parallel to the slab. We represent this as
+        // "intersecting" the slab from negative infinity to positive infinity.
+        else if origin >= min && origin <= max {
+            Some((f32::NEG_INFINITY, f32::INFINITY))
+        }
+        // If the direction component is zero and the origin is outside the bounding slab
+        // along that axis, the ray will never intersect the slab.
+        else {
+            None
+        }
+    }
+
+    // Given a raycast defined by target_point = origin + velocity * t, returns the
+    // values of t where the ray enters and exits the box (in that order). If the ray
+    // fails to hit this box, returns None. Note that the time values may be negative,
+    // but tmin will always be <= tmax.
+    pub fn ray_hit_times(&self, origin: Vec3, velocity: Vec3) -> Option<(f32, f32)> {
+        // Calculate intersection times using the function for each axis
+        let (tx1, tx2) = Self::intersection_times(origin.x, velocity.x, self.min.x, self.max.x)?;
+        let (ty1, ty2) = Self::intersection_times(origin.y, velocity.y, self.min.y, self.max.y)?;
+        let (tz1, tz2) = Self::intersection_times(origin.z, velocity.z, self.min.z, self.max.z)?;
+
+        // Find the largest tmin and smallest tmax across all axes
+        let tmin = tx1.max(ty1).max(tz1);
+        let tmax = tx2.min(ty2).min(tz2);
+
+        // If the ray exits the box before it enters it, then our assumption
+        // that the ray intersects with the box is wrong and we return None.
+        if tmin > tmax {
+            return None;
+        }
+
+        Some((tmin, tmax))
+    }
 }
 
 // End of File

@@ -231,7 +231,11 @@ fn handle_event(
                         {
                             if let Some(window) = window {
                                 if let Some(camera) = renderer.camera().camera() {
-                                    dbg!(camera.get_ray_from(cursor_pos, &window.inner_size()));
+                                    let (ray_origin, ray_direction) =
+                                        camera.get_ray_from(cursor_pos, &window.inner_size());
+                                    world.as_mut().unwrap().walk_mut(|molecule, _| {
+                                        molecule.get_ray_hit(ray_origin, ray_direction);
+                                    });
                                 }
                             }
                         }
