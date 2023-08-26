@@ -213,4 +213,45 @@ impl Molecule {
     pub fn atoms(&self) -> &Atoms {
         &self.gpu_atoms
     }
+
+    pub fn get_ray_hit(&self, origin: Vec3, direction: Vec3) -> Option<AtomIndex> {
+        // Using `direction` as a velocity vector, determine when the ray will
+        // collide with the bounding box. Note the ? - this fn returns early if there
+        // isn't a collision.
+        let (tmin, tmax) = self.repr.bounding_box.ray_hit_times(origin, direction)?;
+        println!("got a ray");
+        dbg!(tmin, tmax);
+
+        // If the box is fully behind the raycast direction, we will never get a hit.
+        if tmax <= 0.0 {
+            return None;
+        }
+
+        println!("sad");
+
+        // Knowing that the ray will enter the box, we can now march along it by a fixed step
+        // size. At each step, we check for a collision with an atom, and return that atom's index
+        // if a collision occurs.
+
+        // We know that the box is first hit at `origin + tmin * direction`. However,
+        // tmin can be negative, and we only want to march forwards. So,
+        // we constrain tmin to be nonnegative.
+        let mut current_pos = origin + f32::max(0.0, tmin) * direction;
+
+        // This is an empirically reasonable value. It is still possible to miss an atom if
+        // the user clicks on the very edge of it, but this is rare.
+        let step_size = PERIODIC_TABLE.element_reprs[Element::Hydrogen as usize].radius / 10.0;
+        let step = direction * step_size;
+
+        while self.repr.bounding_box.contains(current_pos) {
+            // Placeholder for additional logic
+            dbg!(&current_pos);
+
+            current_pos += step;
+        }
+
+        None
+    }
+
+    // TODO: Optimize heavily (use octree, compute entry point of ray analytically)
 }

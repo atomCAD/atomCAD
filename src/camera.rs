@@ -147,14 +147,14 @@ impl Camera for ArcballCamera {
         let y = (viewport_size.height as f32 - 2.0 * pixel.y as f32) / viewport_size.height as f32;
 
         // 2. Create a ray in clip space.
-        let ray_clip = Vec3::new(x, y, -1.0); // The -1.0 assumes the near plane is at z=-1 in clip space
+        let ray_clip = Vec3::new(x, y, 1.0); // The -1.0 assumes the near plane is at z=-1 in clip space
 
         // 3. Inverse project this ray from clip space to camera's view space.
         let proj_inv = self.camera.projection.inversed();
         let ray_eye = proj_inv.transform_vec3(ray_clip);
 
         // For the perspective projection, we need to flip the direction along the z-axis
-        let ray_eye = Vec3::new(ray_eye.x, ray_eye.y, 1.0);
+        let ray_eye = Vec3::new(ray_eye.x, ray_eye.y, -1.0);
 
         // 4. Inverse transform this ray from the camera's view space to world space.
         let view_inv = self.camera.view.inversed();
