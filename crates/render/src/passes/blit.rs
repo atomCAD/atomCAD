@@ -48,7 +48,7 @@ impl BlitPass {
             depth_stencil_attachment: None,
         });
 
-        rpass.execute_bundles(Some(&self.render_bundle).into_iter());
+        rpass.execute_bundles(Some(&self.render_bundle));
     }
 
     pub fn update(&mut self, render_resources: &GlobalRenderResources, input: &wgpu::TextureView) {

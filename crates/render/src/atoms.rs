@@ -71,7 +71,7 @@ impl Atoms {
                 unsafe {
                     std::ptr::write_unaligned(
                         header.as_mut_ptr() as *mut MaybeUninit<AtomBufferHeader>,
-                        MaybeUninit::new(AtomBufferHeader::default()),
+                        MaybeUninit::new(AtomBufferHeader),
                     );
                 }
 
@@ -110,11 +110,9 @@ impl Atoms {
     pub fn copy_new(&self, render_resources: &GlobalRenderResources) -> Self {
         let buffer = self.buffer.copy_new(render_resources, false);
 
-        render_resources.queue.write_buffer(
-            buffer.inner_buffer(),
-            0,
-            AtomBufferHeader::default().as_bytes(),
-        );
+        render_resources
+            .queue
+            .write_buffer(buffer.inner_buffer(), 0, AtomBufferHeader.as_bytes());
 
         let bind_group = render_resources
             .device
@@ -147,7 +145,11 @@ impl Atoms {
         // self.number_of_atoms
     }
 
-    pub fn with_buffer(&mut self, f: impl Fn(&mut BufferVec<AtomBufferHeader, AtomRepr>) -> ()) {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn with_buffer(&mut self, f: impl Fn(&mut BufferVec<AtomBufferHeader, AtomRepr>)) {
         f(&mut self.buffer);
     }
 
@@ -162,9 +164,9 @@ impl Atoms {
         self.buffer.clear();
         println!("buffer size after clear: {}", self.buffer.len());
 
-        let foo = self.buffer.push_small(gpu_resources, &mut encoder, atoms);
+        let ret = self.buffer.push_small(gpu_resources, &mut encoder, atoms);
         println!("buffer size after push_small: {}", self.buffer.len());
-        foo
+        ret
     }
 }
 

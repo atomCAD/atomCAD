@@ -59,7 +59,7 @@ impl AtomSpecifier {
 
     // Uses this `AtomSpecifier` like an iterator: mutates self to increment the child index,
     // and returns a clone of this AtomSpecifier that can be used to name an atom.
-    pub fn next(&mut self) -> Self {
+    pub fn next_spec(&mut self) -> Self {
         let ret = AtomSpecifier {
             feature_path: self.feature_path.clone(),
             child_index: self.child_index,

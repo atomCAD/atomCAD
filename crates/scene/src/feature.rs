@@ -139,7 +139,11 @@ impl FeatureList {
     }
 
     pub fn len(&self) -> usize {
-        return self.order.len();
+        self.order.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.order.is_empty()
     }
 
     pub fn order(&self) -> &[FeatureId] {

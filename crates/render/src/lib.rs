@@ -9,7 +9,7 @@ pub use crate::{
 use crate::{bind_groups::AsBindingResource as _, buffer_vec::BufferVec};
 use common::AsBytes as _;
 use periodic_table::PeriodicTable;
-use std::sync::Arc;
+use std::rc::Rc;
 use ultraviolet::Vec2;
 use wgpu::util::DeviceExt as _;
 use winit::{dpi::PhysicalSize, window::Window};
@@ -68,7 +68,7 @@ impl MolecularVertexConsts {
 pub struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
     surface: wgpu::Surface,
-    render_resources: Arc<GlobalRenderResources>,
+    render_resources: Rc<GlobalRenderResources>,
     size: PhysicalSize<u32>,
 
     vertices: MolecularVertexConsts,
@@ -88,10 +88,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(
-        window: &Window,
-        options: RenderOptions,
-    ) -> (Self, Arc<GlobalRenderResources>) {
+    pub async fn new(window: &Window, options: RenderOptions) -> (Self, Rc<GlobalRenderResources>) {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU.
@@ -209,7 +206,7 @@ impl Renderer {
         });
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
 
-        let render_resources = Arc::new(GlobalRenderResources {
+        let render_resources = Rc::new(GlobalRenderResources {
             device,
             queue,
             atom_bgl,
@@ -234,7 +231,7 @@ impl Renderer {
             Self {
                 surface_config,
                 surface,
-                render_resources: Arc::clone(&render_resources),
+                render_resources: Rc::clone(&render_resources),
                 size,
 
                 vertices,

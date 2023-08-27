@@ -66,7 +66,7 @@ use pdb::PdbFeature;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
 use scene::{Assembly, Component, Molecule};
 
-use std::sync::Arc;
+use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
     dpi::PhysicalPosition,
@@ -78,7 +78,7 @@ use winit::{
 
 async fn resume_renderer(
     window: &Window,
-) -> (Renderer, Arc<GlobalRenderResources>, Assembly, Interactions) {
+) -> (Renderer, Rc<GlobalRenderResources>, Assembly, Interactions) {
     let (renderer, gpu_resources) = Renderer::new(
         window,
         RenderOptions {
@@ -129,12 +129,13 @@ async fn resume_renderer(
     (renderer, gpu_resources, assembly, interactions)
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
 fn handle_event(
     event: Event<()>,
     control_flow: &mut ControlFlow,
     window: &mut Option<Window>,
     renderer: &mut Option<Renderer>,
-    gpu_resources: &mut Option<Arc<GlobalRenderResources>>,
+    gpu_resources: &mut Option<Rc<GlobalRenderResources>>,
     world: &mut Option<Assembly>,
     interactions: &mut Option<Interactions>,
     cursor_pos: &PhysicalPosition<f64>,
@@ -255,7 +256,7 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     // suspended, so we need to be able to drop these resources and recreate
     // as necessary.
     let mut renderer: Option<Renderer> = None;
-    let mut gpu_resources: Option<Arc<GlobalRenderResources>> = None;
+    let mut gpu_resources: Option<Rc<GlobalRenderResources>> = None;
     let mut world: Option<Assembly> = None;
     let mut interactions: Option<Interactions> = None;
     let mut cursor_pos: PhysicalPosition<f64> = Default::default();

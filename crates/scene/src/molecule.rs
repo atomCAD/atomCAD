@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use lazy_static::lazy_static;
 use periodic_table::Element;
 use petgraph::stable_graph;
 use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
@@ -54,10 +55,10 @@ impl MoleculeRepr {
     }
 }
 
-const PERIODIC_TABLE: once_cell::unsync::Lazy<periodic_table::PeriodicTable> =
-    once_cell::unsync::Lazy::<periodic_table::PeriodicTable>::new(|| {
-        periodic_table::PeriodicTable::new()
-    });
+lazy_static! {
+    pub static ref PERIODIC_TABLE: periodic_table::PeriodicTable =
+        periodic_table::PeriodicTable::new();
+}
 
 impl MoleculeCommands for MoleculeRepr {
     fn add_atom(
@@ -93,7 +94,7 @@ impl MoleculeCommands for MoleculeRepr {
         a2: &AtomSpecifier,
         order: BondOrder,
     ) -> Result<(), FeatureError> {
-        match (self.atom_map.get(&a1), self.atom_map.get(&a2)) {
+        match (self.atom_map.get(a1), self.atom_map.get(a2)) {
             (Some(&a1_index), Some(&a2_index)) => {
                 self.graph.add_edge(a1_index, a2_index, order);
                 Ok(())
@@ -103,7 +104,7 @@ impl MoleculeCommands for MoleculeRepr {
     }
 
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode> {
-        match self.atom_map.get(&spec) {
+        match self.atom_map.get(spec) {
             Some(atom_index) => self.graph.node_weight(*atom_index),
             None => None,
         }
@@ -214,7 +215,7 @@ impl Molecule {
             }
 
             dbg!(&self.repr.bounding_box);
-            println!("");
+            println!();
         }
 
         self.history_step = history_step;
