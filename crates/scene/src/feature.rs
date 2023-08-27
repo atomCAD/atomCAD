@@ -23,7 +23,8 @@ pub enum FeatureError {
     AtomOverwrite,
 }
 
-// At some point all of these should return Result types
+/// A proxy trait that allows a molecule to be manipulated without exposing its implementation.
+/// Features can only manipulate a molecule using MoleculeCommands.
 pub trait MoleculeCommands {
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode>;
     fn add_atom(
@@ -99,8 +100,8 @@ impl Feature for AtomFeature {
     }
 }
 
-// A container that stores a list of features. It allows the list to be manipulated without
-// changing the indexes of existing features
+/// A container that stores a list of features. It allows the list to be manipulated without
+/// changing the indexes of existing features.
 #[derive(Default)]
 pub struct FeatureList {
     counter: usize,
@@ -127,7 +128,7 @@ impl FeatureList {
     }
 
     pub fn get(&self, id: &FeatureId) -> Option<&dyn Feature> {
-        self.features.get(id).map(|bo| bo.borrow())
+        self.features.get(id).map(|feature| feature.borrow())
     }
 
     // Adds a new feature to the end of the feature list.
@@ -150,7 +151,7 @@ impl FeatureList {
     }
 }
 
-// Allows a feature list to be iterated over.
+/// Allows a FeatureList to be iterated over.
 pub struct FeatureListIter<'a> {
     list: &'a FeatureList,
     // This stores the index of iteration - but not the current feature ID.
@@ -165,7 +166,6 @@ impl<'a> Iterator for FeatureListIter<'a> {
         let index = self.list.order.get(self.current_index)?;
         self.current_index += 1;
         self.list.get(index)
-        // self.list.features.get(index).map(|bo| bo.borrow())
     }
 }
 
