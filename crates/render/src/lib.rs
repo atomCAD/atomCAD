@@ -9,10 +9,7 @@ pub use crate::{
 use crate::{bind_groups::AsBindingResource as _, buffer_vec::BufferVec};
 use common::AsBytes as _;
 use periodic_table::PeriodicTable;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 use ultraviolet::Vec2;
 use wgpu::util::DeviceExt as _;
 use winit::{dpi::PhysicalSize, window::Window};
@@ -283,8 +280,9 @@ impl Renderer {
         transforms: Vec<ultraviolet::Mat4>,
     ) {
         self.fragment_transforms.clear();
-        self.fragment_transforms
-            .push_small(&self.render_resources, encoder, &transforms[..]);
+        let _ =
+            self.fragment_transforms
+                .push_small(&self.render_resources, encoder, &transforms[..]);
     }
 
     pub fn render<'a>(

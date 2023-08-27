@@ -63,9 +63,8 @@ pub const APP_NAME: &str = "atomCAD";
 use camera::ArcballCamera;
 use common::InputEvent;
 use pdb::PdbFeature;
-use periodic_table::Element;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{feature::*, Assembly, Component, Molecule};
+use scene::{Assembly, Component, Molecule};
 
 use std::sync::Arc;
 use ultraviolet::{Mat4, Vec3};

@@ -8,7 +8,9 @@ pub struct Angles {
     pub polar: f32,
 }
 
+#[allow(dead_code)]
 pub static TETRAHEDRAL_ANGLE: f32 = 1.9106332362; // acos(-1 / 3)
+#[allow(dead_code)]
 pub static BOND_SHAPES: [Option<&[Angles]>; 7] = [
     // There are no bond angles for an atom with zero bonding sites
     None,

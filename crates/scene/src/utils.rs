@@ -11,6 +11,7 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    #[allow(dead_code)]
     pub fn union(&self, other: &Self) -> Self {
         Self {
             min: Vec3::new(
@@ -36,6 +37,7 @@ impl BoundingBox {
             && point.z <= self.max.z
     }
 
+    #[allow(dead_code)]
     pub fn enclose_point(&mut self, point: Vec3) {
         self.min.x = f32::min(self.min.x, point.x);
         self.min.y = f32::min(self.min.y, point.y);

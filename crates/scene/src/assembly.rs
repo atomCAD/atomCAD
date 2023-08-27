@@ -1,9 +1,7 @@
-use std::collections::VecDeque;
-
 use render::Atoms;
 use ultraviolet::Mat4;
 
-use crate::{molecule::MoleculeRepr, Molecule};
+use crate::Molecule;
 
 enum ComponentType {
     Molecule(Molecule),

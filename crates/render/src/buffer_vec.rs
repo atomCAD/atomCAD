@@ -140,7 +140,7 @@ where
     pub fn push_small(
         &mut self,
         gpu_resources: &GlobalRenderResources,
-        encoder: &mut wgpu::CommandEncoder,
+        _encoder: &mut wgpu::CommandEncoder,
         data: &[T],
     ) -> PushStategy {
         let offset = (mem::size_of::<Header>() as u64) + (mem::size_of::<T>() as u64) * self.len;

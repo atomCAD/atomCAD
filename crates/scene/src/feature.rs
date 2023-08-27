@@ -2,11 +2,7 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use periodic_table::Element;
 
-use crate::{
-    ids::*,
-    molecule::{self, AtomIndex, AtomNode, BondIndex},
-    BondOrder, Molecule,
-};
+use crate::{ids::*, molecule::AtomNode, BondOrder};
 
 #[derive(Debug)]
 pub enum ReferenceType {

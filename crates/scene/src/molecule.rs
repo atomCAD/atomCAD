@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::Empty};
+use std::collections::HashMap;
 
 use periodic_table::Element;
 use petgraph::stable_graph;
@@ -6,14 +6,15 @@ use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
 use ultraviolet::Vec3;
 
 use crate::{
-    feature::{Feature, FeatureError, FeatureList, MoleculeCommands, ReferenceType, RootAtom},
-    ids::{AtomSpecifier, FeatureCopyId},
+    feature::{Feature, FeatureError, FeatureList, MoleculeCommands, ReferenceType},
+    ids::AtomSpecifier,
     utils::BoundingBox,
 };
 
 pub type Graph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
 pub type BondOrder = u8;
 pub type AtomIndex = stable_graph::NodeIndex;
+#[allow(unused)]
 pub type BondIndex = stable_graph::EdgeIndex;
 
 pub struct AtomNode {
@@ -134,7 +135,9 @@ impl MoleculeCommands for MoleculeRepr {
 pub struct Molecule {
     pub repr: MoleculeRepr,
     gpu_atoms: Atoms,
+    #[allow(unused)]
     rotation: ultraviolet::Rotor3,
+    #[allow(unused)]
     offset: ultraviolet::Vec3,
     features: FeatureList,
     // The index one greater than the most recently applied feature's location in the feature list.

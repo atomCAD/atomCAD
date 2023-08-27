@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{Atoms, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
-use std::{collections::HashMap, convert::TryInto as _, mem};
+use std::{convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
 // Renders atoms
