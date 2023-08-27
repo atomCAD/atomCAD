@@ -41,7 +41,7 @@ pub mod menubar;
 /// A module for loading and parsing PDB files.
 ///
 /// TODO: Should probably be abstracted into its own crate.
-// pub mod pdb;
+pub mod pdb;
 
 // This module is not public.  It is a common abstraction over the various
 // platform-specific APIs.  For example, `platform::menubar` exposes an API
@@ -62,6 +62,7 @@ pub const APP_NAME: &str = "atomCAD";
 
 use camera::ArcballCamera;
 use common::InputEvent;
+use pdb::PdbFeature;
 use periodic_table::Element;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
 use scene::{feature::*, Assembly, Component, Molecule};
@@ -88,27 +89,13 @@ async fn resume_renderer(
     )
     .await;
 
-    let mut molecule = Molecule::from_feature(
+    let molecule = Molecule::from_feature(
         &gpu_resources,
-        RootAtom {
-            element: Element::Iodine,
+        PdbFeature {
+            name: "Neon Pump".into(),
+            contents: include_str!("../assets/neon_pump_imm.pdb").into(),
         },
     );
-
-    molecule.push_feature(AtomFeature {
-        target: scene::ids::AtomSpecifier::new(0),
-        element: Element::Sulfur,
-    });
-    molecule.apply_all_features();
-
-    molecule.push_feature(AtomFeature {
-        target: scene::ids::AtomSpecifier::new(1),
-        element: Element::Carbon,
-    });
-    molecule.apply_all_features();
-
-    molecule.set_history_step(2);
-    molecule.reupload_atoms(&gpu_resources);
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
 

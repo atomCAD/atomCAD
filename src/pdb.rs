@@ -7,52 +7,38 @@ use lib3dmol::{
     structures::{atom::AtomType, GetAtom as _},
 };
 use periodic_table::Element;
-use render::{AtomKind, AtomRepr, GlobalRenderResources};
-use scene::{Fragment, Part, World};
+use scene::{feature::Feature, ids::AtomSpecifier};
+use ultraviolet::Vec3;
 
-// TODO: Better result error type.
-pub fn load_from_pdb_str(
-    gpu_resources: &GlobalRenderResources,
-    name: &str,
-    contents: &str,
-) -> Result<World, String> {
-    let structure = read_pdb_txt(contents, name);
+pub struct PdbFeature {
+    pub name: String,
+    pub contents: String,
+}
 
-    let mut world = World::new();
+impl Feature for PdbFeature {
+    fn apply(
+        &self,
+        feature_id: &scene::ids::FeatureId,
+        commands: &mut dyn scene::feature::MoleculeCommands,
+    ) -> Result<(), scene::feature::FeatureError> {
+        // Currently bonds are ignored because lib3dmol does not support
+        // parsing bonding info from PDB files!
+        let mut spec = AtomSpecifier::new(*feature_id);
+        let structure = read_pdb_txt(&self.contents, &self.name);
 
-    let mut counter = 0;
+        for chain in structure.chains {
+            for residue in chain.lst_res {
+                for atom in residue.get_atom() {
+                    let element = atom_type_to_element(&atom.a_type);
+                    let pos: Vec3 = atom.coord.into();
 
-    structure
-        .chains
-        .into_iter()
-        .map(|chain| {
-            let fragments: Vec<_> = chain
-                .lst_res
-                .iter()
-                .map(|residue| {
-                    let atoms = residue.get_atom();
-                    let atoms = atoms.iter().map(|atom| {
-                        let element = atom_type_to_element(&atom.a_type);
+                    commands.add_atom(element, pos, spec.next())?;
+                }
+            }
+        }
 
-                        AtomRepr {
-                            pos: atom.coord.into(),
-                            kind: AtomKind::new(element),
-                        }
-                    });
-
-                    Fragment::from_atoms(gpu_resources, atoms)
-                })
-                .collect();
-
-            let part = Part::from_fragments(&mut world, format!("{}{}", name, counter), fragments);
-            counter += 1;
-            world.spawn_part(part);
-        })
-        .for_each(|_| {});
-
-    log::info!("loaded {} parts", world.parts().count());
-
-    Ok(world)
+        Ok(())
+    }
 }
 
 fn atom_type_to_element(atom_type: &AtomType) -> Element {

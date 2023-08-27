@@ -109,6 +109,28 @@ impl MoleculeCommands for MoleculeRepr {
     }
 }
 
+/// Demonstration of how to use the feature system
+/// let mut molecule = Molecule::from_feature(
+///     &gpu_resources,
+///     RootAtom {
+///         element: Element::Iodine,
+///     },
+/// );
+///
+/// molecule.push_feature(AtomFeature {
+///     target: scene::ids::AtomSpecifier::new(0),
+///     element: Element::Sulfur,
+/// });
+/// molecule.apply_all_features();
+///
+/// molecule.push_feature(AtomFeature {
+///     target: scene::ids::AtomSpecifier::new(1),
+///     element: Element::Carbon,
+/// });
+/// molecule.apply_all_features();
+///
+/// molecule.set_history_step(2);
+/// molecule.reupload_atoms(&gpu_resources);
 pub struct Molecule {
     pub repr: MoleculeRepr,
     gpu_atoms: Atoms,
@@ -120,6 +142,7 @@ pub struct Molecule {
     // applied. (i.e. our current location in the edit history timeline)
     history_step: usize,
     // When checkpointing is implemented, this will be needed:
+    //
     // the history step we cannot equal or exceed without first recomputing. For example, if repr
     // is up to date with the feature list, and then a past feature is changed, dirty_step would change
     // from `features.len()` to the index of the changed feature. This is used to determine if recomputation
@@ -226,8 +249,6 @@ impl Molecule {
         if tmax <= 0.0 {
             return None;
         }
-
-        println!("sad");
 
         // Knowing that the ray will enter the box, we can now march along it by a fixed step
         // size. At each step, we check for a collision with an atom, and return that atom's index

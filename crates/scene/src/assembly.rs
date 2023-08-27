@@ -103,40 +103,6 @@ impl Assembly {
         }
     }
 
-    // I don't think these have to be seperate
-    // pub fn walk_molecules(&self, f: impl Fn(&Molecule)) {
-    //     let mut stack: VecDeque<&Component> = self.components.iter().collect();
-
-    //     while let Some(component) = stack.pop_back() {
-    //         match &component.data {
-    //             ComponentType::Molecule(molecule) => f(molecule),
-    //             ComponentType::SubAssembly(assembly) => stack.extend(&assembly.components),
-    //         }
-    //     }
-    // }
-    //
-    // pub fn walk_transforms(&self, f: impl Fn(Mat4)) {
-    //     let mut stack: VecDeque<(&Component, Mat4)> = self
-    //         .components
-    //         .iter()
-    //         .map(|component| (component, component.transform))
-    //         .collect();
-
-    //     while let Some((component, acc_transform)) = stack.pop_back() {
-    //         match &component.data {
-    //             ComponentType::Molecule(_) => {
-    //                 f(acc_transform);
-    //             }
-    //             ComponentType::SubAssembly(sub_assembly) => {
-    //                 for sub_component in &sub_assembly.components {
-    //                     let new_transform = sub_component.transform * acc_transform;
-    //                     stack.push_back((sub_component, new_transform));
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
     // Returns a reference to a Vec storing the children that are directly owned by this
     // Assembly. This is NOT a list of every component that the assembly contains, as the
     // directly owned children might be assemblies themselves.
