@@ -335,6 +335,7 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     let mut gpu_resources = Some(g);
     let mut world = Some(w);
     let mut interactions = Some(i);
+    let mut cursor_pos: PhysicalPosition<f64> = Default::default();
 
     // Run the event loop.
     event_loop.run(move |event, _, control_flow| {
@@ -347,6 +348,16 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
             Event::Resumed => {}
             Event::Suspended => {}
 
+            // The event system does not expose the cursor position on-demand.
+            // We track all the mouse movement events to make this easier to
+            // access later.
+            Event::WindowEvent {
+                event: WindowEvent::CursorMoved { position, .. },
+                ..
+            } => {
+                cursor_pos = position;
+            }
+
             // Process all other events.
             _ => {
                 handle_event(
@@ -357,6 +368,7 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
                     &mut gpu_resources,
                     &mut world,
                     &mut interactions,
+                    &cursor_pos,
                 );
             }
         }
