@@ -64,7 +64,10 @@ use camera::ArcballCamera;
 use common::InputEvent;
 use pdb::PdbFeature;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{Assembly, Component, Molecule};
+use scene::{
+    feature::{AtomFeature, RootAtom},
+    Assembly, Component, Molecule,
+};
 
 use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
@@ -75,6 +78,16 @@ use winit::{
     keyboard::KeyCode,
     window::{Window, WindowBuilder},
 };
+
+fn make_pdb_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
+    Molecule::from_feature(
+        &gpu_resources,
+        PdbFeature {
+            name: "Neon Pump".into(),
+            contents: include_str!("../assets/neon_pump_imm.pdb").into(),
+        },
+    )
+}
 
 async fn resume_renderer(
     window: &Window,
@@ -88,13 +101,7 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = Molecule::from_feature(
-        &gpu_resources,
-        PdbFeature {
-            name: "Neon Pump".into(),
-            contents: include_str!("../assets/neon_pump_imm.pdb").into(),
-        },
-    );
+    let molecule = make_pdb_demo_scene(&gpu_resources);
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
 
@@ -223,7 +230,19 @@ fn handle_event(
                                 {
                                     Some((ray_origin, ray_direction)) => {
                                         world.as_mut().unwrap().walk_mut(|molecule, _| {
-                                            molecule.get_ray_hit(ray_origin, ray_direction);
+                                            if let Some(hit) =
+                                                molecule.get_ray_hit(ray_origin, ray_direction)
+                                            {
+                                                println!("Atom {:?} clicked!", hit);
+                                                // molecule.push_feature(AtomFeature {
+                                                //     target: hit,
+                                                //     element: periodic_table::Element::Carbon,
+                                                // });
+                                                // molecule.apply_all_features();
+                                                // molecule.reupload_atoms(
+                                                //     gpu_resources.as_ref().unwrap(),
+                                                // );
+                                            }
                                         });
                                     }
                                     None => {

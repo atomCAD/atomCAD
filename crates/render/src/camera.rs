@@ -142,7 +142,6 @@ impl RenderCamera {
 
         // 2. Create a ray in clip space.
         let ray_clip = Vec3::new(x, y, -self.near);
-        dbg!(self.near);
 
         // 3. Inverse project this ray from clip space to camera's view space.
         let proj_inv = camera_repr.projection.inversed();
@@ -158,7 +157,6 @@ impl RenderCamera {
         // Normalize the ray's direction
         let ray_dir = ray_world.normalized();
 
-        dbg!(&ray_dir);
         Some((camera.position(), ray_dir))
     }
 }
