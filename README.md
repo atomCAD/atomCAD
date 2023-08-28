@@ -11,7 +11,8 @@ files.
 1. [Install Rust](https://rustup.rs/)
 2. Install build dependencies: 
     - __macOS__: `brew install cmake`
-    - __debian/ubuntu__: `apt install build-essential cmake libx11-dev` 
+    - __Debian/Ubuntu__: `apt install build-essential cmake libx11-dev` 
+    - __RHEL/Fedora__: `dnf groupinstall "Development Tools" && dnf install gcc-c++ cmake libX11-devel`
     - __Windows__ 
         - [Install Git](https://git-scm.com/download/win)
         - [Install CMake](https://cmake.org/download/)
@@ -26,7 +27,8 @@ If your browser supports WebGPU, you can run atomCAD in your browser:
 1. [Install Rust](https://rustup.rs/)
 2. Install build dependencies: 
     - __macOS__: `brew install cmake`
-    - __debian/ubuntu__: `apt install build-essential cmake libx11-dev` 
+    - __Debian/Ubuntu__: `apt install build-essential cmake libx11-dev` 
+    - __RHEL/Fedora__: `dnf groupinstall "Development Tools" && dnf install gcc-c++ cmake libX11-devel`
     - __Windows__ 
         - [Install Git](https://git-scm.com/download/win)
         - [Install CMake](https://cmake.org/download/)
