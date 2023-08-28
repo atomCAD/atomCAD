@@ -13,6 +13,7 @@ files.
     - __macOS__: `brew install cmake`
     - __debian/ubuntu__: `apt install build-essential cmake libx11-dev` 
     - __Windows__ 
+        - [Install Git](https://git-scm.com/download/win)
         - [Install CMake](https://cmake.org/download/)
         - [Install Ninja](https://ninja-build.org/) - manual setup, ensure it's in your PATH
 3. `git clone` this repository and navigate to it
@@ -27,6 +28,7 @@ If your browser supports WebGPU, you can run atomCAD in your browser:
     - __macOS__: `brew install cmake`
     - __debian/ubuntu__: `apt install build-essential cmake libx11-dev` 
     - __Windows__ 
+        - [Install Git](https://git-scm.com/download/win)
         - [Install CMake](https://cmake.org/download/)
         - [Install Ninja](https://ninja-build.org/) - manual setup, ensure it's in your PATH
 3. Install wasm32 target: `rustup target add wasm32-unknown-unknown`
