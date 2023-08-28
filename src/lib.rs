@@ -217,12 +217,18 @@ fn handle_event(
                         if key.physical_key == KeyCode::Space && key.state == ElementState::Released
                         {
                             if let Some(window) = window {
-                                if let Some(camera) = renderer.camera().camera() {
-                                    let (ray_origin, ray_direction) =
-                                        camera.get_ray_from(cursor_pos, &window.inner_size());
-                                    world.as_mut().unwrap().walk_mut(|molecule, _| {
-                                        molecule.get_ray_hit(ray_origin, ray_direction);
-                                    });
+                                match renderer
+                                    .camera()
+                                    .get_ray_from(cursor_pos, &window.inner_size())
+                                {
+                                    Some((ray_origin, ray_direction)) => {
+                                        world.as_mut().unwrap().walk_mut(|molecule, _| {
+                                            molecule.get_ray_hit(ray_origin, ray_direction);
+                                        });
+                                    }
+                                    None => {
+                                        println!("failed to create ray!");
+                                    }
                                 }
                             }
                         }
