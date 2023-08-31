@@ -102,35 +102,7 @@ async fn resume_renderer(
     .await;
 
     let molecule = make_pdb_demo_scene(&gpu_resources);
-
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
-
-    // The PDB parser lib3dmol does not parse connectivity information.
-    // Because of this, we cannot build a molecule graph out of a PDB,
-    // and so for now we use this hardcoded molecule to test the graph
-    // implementation:
-
-    // let mut neon_pump = pdb::load_from_pdb_str(
-    //     &gpu_resources,
-    //     "Neon Pump",
-    //     include_str!("../assets/neon_pump_imm.pdb"),
-    // )
-    // .expect("failed to load pdb");
-    // println!(
-    //     "Loaded {} parts and {} fragments",
-    //     neon_pump.parts().len(),
-    //     neon_pump.fragments().len()
-    // );
-    // // Center the neon pump around the origin, so that the rotating arcball
-    // // camera will be centered on it.
-    // for part in neon_pump.parts_mut() {
-    //     // This doesn't let the world know that this part is going to be
-    //     // updated, but we're adding them for the first time, so it'll work
-    //     // anyhow.
-    //     part.move_to(0.0, 0.0, 0.0);
-    // }
-    // world.merge(neon_pump);
-
     let interactions = Interactions::default();
 
     (renderer, gpu_resources, assembly, interactions)
