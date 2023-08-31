@@ -1,5 +1,7 @@
 # atomCAD
 
+![CI status](https://github.com/atomCAD/atomCAD/actions/workflows/ci.yml/badge.svg)
+
 A CAD/CAM environment for designing atomically-precise molecular nanotechnology.
 Eventually.  Right now it's a decently fast molecular viewer able to parse PDB
 files.
