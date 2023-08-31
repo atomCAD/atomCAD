@@ -64,10 +64,7 @@ use camera::ArcballCamera;
 use common::InputEvent;
 use pdb::PdbFeature;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{
-    feature::{AtomFeature, RootAtom},
-    Assembly, Component, Molecule,
-};
+use scene::{Assembly, Component, Molecule};
 
 use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
@@ -81,7 +78,7 @@ use winit::{
 
 fn make_pdb_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
     Molecule::from_feature(
-        &gpu_resources,
+        gpu_resources,
         PdbFeature {
             name: "Neon Pump".into(),
             contents: include_str!("../assets/neon_pump_imm.pdb").into(),

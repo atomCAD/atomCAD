@@ -15,7 +15,7 @@ use common::InputEvent;
 use render::{Camera, CameraRepr};
 use ultraviolet::{projection, Mat4, Vec3};
 use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
+    dpi::PhysicalPosition,
     event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent},
 };
 
