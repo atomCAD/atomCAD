@@ -41,14 +41,14 @@ impl Assembly {
         }
     }
 
-    pub fn walk_mut(&self, mut f: impl FnMut(&Molecule, Mat4)) {
-        let mut stack: Vec<(&Assembly, Mat4)> = vec![(self, Mat4::default())];
+    pub fn walk_mut(&mut self, mut f: impl FnMut(&mut Molecule, Mat4)) {
+        let mut stack: Vec<(&mut Assembly, Mat4)> = vec![(self, Mat4::default())];
 
         while let Some((assembly, acc_transform)) = stack.pop() {
-            for component in &assembly.components {
+            for component in &mut assembly.components {
                 let new_transform = component.transform * acc_transform;
-                match &component.data {
-                    ComponentType::Molecule(molecule) => {
+                match &mut component.data {
+                    ComponentType::Molecule(ref mut molecule) => {
                         f(molecule, new_transform);
                     }
                     ComponentType::SubAssembly(sub_assembly) => {

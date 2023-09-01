@@ -15,7 +15,7 @@ use common::InputEvent;
 use render::{Camera, CameraRepr};
 use ultraviolet::{projection, Mat4, Vec3};
 use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
+    dpi::PhysicalPosition,
     event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent},
 };
 
@@ -72,16 +72,6 @@ impl ArcballCamera {
     fn add_pitch(&mut self, dpitch: f32) {
         self.pitch = clamp(self.pitch + dpitch, (-PI / 2.0) + 0.001, (PI / 2.0) - 0.001);
     }
-
-    fn position(&self) -> Vec3 {
-        self.focus
-            + self.distance
-                * Vec3::new(
-                    self.yaw.sin() * self.pitch.cos(),
-                    self.yaw.cos() * self.pitch.cos(),
-                    self.pitch.sin(),
-                )
-    }
 }
 
 impl Camera for ArcballCamera {
@@ -137,33 +127,14 @@ impl Camera for ArcballCamera {
         self.camera.clone()
     }
 
-    fn get_ray_from(
-        &self,
-        pixel: &PhysicalPosition<f64>,
-        viewport_size: &PhysicalSize<u32>,
-    ) -> (Vec3, Vec3) {
-        // 1. Convert the pixel position to normalized device coordinates.
-        let x = (2.0 * pixel.x as f32 - viewport_size.width as f32) / viewport_size.width as f32;
-        let y = (viewport_size.height as f32 - 2.0 * pixel.y as f32) / viewport_size.height as f32;
-
-        // 2. Create a ray in clip space.
-        let ray_clip = Vec3::new(x, y, 1.0); // The -1.0 assumes the near plane is at z=-1 in clip space
-
-        // 3. Inverse project this ray from clip space to camera's view space.
-        let proj_inv = self.camera.projection.inversed();
-        let ray_eye = proj_inv.transform_vec3(ray_clip);
-
-        // For the perspective projection, we need to flip the direction along the z-axis
-        let ray_eye = Vec3::new(ray_eye.x, ray_eye.y, -1.0);
-
-        // 4. Inverse transform this ray from the camera's view space to world space.
-        let view_inv = self.camera.view.inversed();
-        let ray_world = view_inv.transform_vec3(ray_eye);
-
-        // Normalize the ray's direction
-        let ray_dir = ray_world.normalized();
-
-        (self.position(), ray_dir)
+    fn position(&self) -> Vec3 {
+        self.focus
+            + self.distance
+                * Vec3::new(
+                    self.yaw.sin() * self.pitch.cos(),
+                    self.yaw.cos() * self.pitch.cos(),
+                    self.pitch.sin(),
+                )
     }
 }
 

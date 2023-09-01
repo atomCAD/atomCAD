@@ -76,6 +76,16 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+fn make_pdb_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
+    Molecule::from_feature(
+        gpu_resources,
+        PdbFeature {
+            name: "Neon Pump".into(),
+            contents: include_str!("../assets/neon_pump_imm.pdb").into(),
+        },
+    )
+}
+
 async fn resume_renderer(
     window: &Window,
 ) -> (Renderer, Rc<GlobalRenderResources>, Assembly, Interactions) {
@@ -88,42 +98,8 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = Molecule::from_feature(
-        &gpu_resources,
-        PdbFeature {
-            name: "Neon Pump".into(),
-            contents: include_str!("../assets/neon_pump_imm.pdb").into(),
-        },
-    );
-
+    let molecule = make_pdb_demo_scene(&gpu_resources);
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
-
-    // The PDB parser lib3dmol does not parse connectivity information.
-    // Because of this, we cannot build a molecule graph out of a PDB,
-    // and so for now we use this hardcoded molecule to test the graph
-    // implementation:
-
-    // let mut neon_pump = pdb::load_from_pdb_str(
-    //     &gpu_resources,
-    //     "Neon Pump",
-    //     include_str!("../assets/neon_pump_imm.pdb"),
-    // )
-    // .expect("failed to load pdb");
-    // println!(
-    //     "Loaded {} parts and {} fragments",
-    //     neon_pump.parts().len(),
-    //     neon_pump.fragments().len()
-    // );
-    // // Center the neon pump around the origin, so that the rotating arcball
-    // // camera will be centered on it.
-    // for part in neon_pump.parts_mut() {
-    //     // This doesn't let the world know that this part is going to be
-    //     // updated, but we're adding them for the first time, so it'll work
-    //     // anyhow.
-    //     part.move_to(0.0, 0.0, 0.0);
-    // }
-    // world.merge(neon_pump);
-
     let interactions = Interactions::default();
 
     (renderer, gpu_resources, assembly, interactions)
@@ -217,12 +193,30 @@ fn handle_event(
                         if key.physical_key == KeyCode::Space && key.state == ElementState::Released
                         {
                             if let Some(window) = window {
-                                if let Some(camera) = renderer.camera().camera() {
-                                    let (ray_origin, ray_direction) =
-                                        camera.get_ray_from(cursor_pos, &window.inner_size());
-                                    world.as_mut().unwrap().walk_mut(|molecule, _| {
-                                        molecule.get_ray_hit(ray_origin, ray_direction);
-                                    });
+                                match renderer
+                                    .camera()
+                                    .get_ray_from(cursor_pos, &window.inner_size())
+                                {
+                                    Some((ray_origin, ray_direction)) => {
+                                        world.as_mut().unwrap().walk_mut(|molecule, _| {
+                                            if let Some(hit) =
+                                                molecule.get_ray_hit(ray_origin, ray_direction)
+                                            {
+                                                println!("Atom {:?} clicked!", hit);
+                                                // molecule.push_feature(AtomFeature {
+                                                //     target: hit,
+                                                //     element: periodic_table::Element::Carbon,
+                                                // });
+                                                // molecule.apply_all_features();
+                                                // molecule.reupload_atoms(
+                                                //     gpu_resources.as_ref().unwrap(),
+                                                // );
+                                            }
+                                        });
+                                    }
+                                    None => {
+                                        println!("failed to create ray!");
+                                    }
                                 }
                             }
                         }

@@ -55,11 +55,14 @@ impl Feature for RootAtom {
         feature_id: &FeatureId,
         commands: &mut dyn MoleculeCommands,
     ) -> Result<(), FeatureError> {
-        commands.add_atom(
-            self.element,
-            Default::default(),
-            AtomSpecifier::new(*feature_id),
-        )?;
+        let pos = match self.element {
+            Element::Phosphorus => ultraviolet::Vec3::new(5.0, 0.0, 0.0),
+            Element::Nitrogen => ultraviolet::Vec3::new(0.0, 0.0, 5.0),
+            Element::Xenon => ultraviolet::Vec3::new(0.0, 5.0, 0.0),
+            _ => Default::default(),
+        };
+
+        commands.add_atom(self.element, pos, AtomSpecifier::new(*feature_id))?;
 
         Ok(())
     }
@@ -78,17 +81,15 @@ impl Feature for AtomFeature {
     ) -> Result<(), FeatureError> {
         let spec = AtomSpecifier::new(*feature_id);
 
-        let x = {
+        let mut pos = {
             let atom = commands.find_atom(&self.target);
             let atom = atom.ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
-            atom.pos.x + 5.0
+            atom.pos
         };
 
-        commands.add_atom(
-            self.element,
-            ultraviolet::Vec3::new(x, 0.0, 0.0),
-            spec.clone(),
-        )?;
+        pos.x += 5.0;
+
+        commands.add_atom(self.element, pos, spec.clone())?;
 
         commands.create_bond(&self.target, &spec, 1)?;
 

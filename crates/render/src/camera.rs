@@ -23,11 +23,7 @@ pub trait Camera {
     fn update(&mut self, event: InputEvent) -> bool;
     fn finalize(&mut self);
     fn repr(&self) -> CameraRepr;
-    fn get_ray_from(
-        &self,
-        pixel: &PhysicalPosition<f64>,
-        viewport_size: &PhysicalSize<u32>,
-    ) -> (Vec3, Vec3);
+    fn position(&self) -> Vec3;
 }
 
 pub struct RenderCamera {
@@ -131,8 +127,37 @@ impl RenderCamera {
         // }
     }
 
-    pub fn camera(&self) -> &Option<Box<dyn Camera>> {
-        &self.camera
+    pub fn get_ray_from(
+        &self,
+        pixel: &PhysicalPosition<f64>,
+        viewport_size: &PhysicalSize<u32>,
+    ) -> Option<(Vec3, Vec3)> {
+        println!();
+        let camera = self.camera.as_ref()?;
+        let camera_repr = camera.repr();
+
+        // 1. Convert the pixel position to normalized device coordinates.
+        let x = (2.0 * pixel.x as f32 - viewport_size.width as f32) / viewport_size.width as f32;
+        let y = (viewport_size.height as f32 - 2.0 * pixel.y as f32) / viewport_size.height as f32;
+
+        // 2. Create a ray in clip space.
+        let ray_clip = Vec3::new(x, y, -self.near);
+
+        // 3. Inverse project this ray from clip space to camera's view space.
+        let proj_inv = camera_repr.projection.inversed();
+        let ray_eye = proj_inv.transform_vec3(ray_clip);
+
+        // For the perspective projection, we need to flip the direction along the z-axis
+        let ray_eye = Vec3::new(ray_eye.x, ray_eye.y, -1.0);
+
+        // 4. Inverse transform this ray from the camera's view space to world space.
+        let view_inv = camera_repr.view.inversed();
+        let ray_world = view_inv.transform_vec3(ray_eye);
+
+        // Normalize the ray's direction
+        let ray_dir = ray_world.normalized();
+
+        Some((camera.position(), ray_dir))
     }
 }
 
