@@ -62,7 +62,9 @@ impl BoundingBox {
     fn intersection_times(origin: f32, speed: f32, min: f32, max: f32) -> Option<(f32, f32)> {
         // If the speed is non-zero, we can compute the times normally.
         if speed != 0.0 {
-            Some(((min - origin) / speed, (max - origin) / speed))
+            let t1 = (min - origin) / speed;
+            let t2 = (max - origin) / speed;
+            Some((f32::min(t1, t2), f32::max(t1, t2)))
         }
         // If the speed is zero and the origin is within the bounding slab
         // along that axis, the ray runs parallel to the slab. We represent this as

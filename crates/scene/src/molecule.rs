@@ -210,9 +210,6 @@ impl Molecule {
                 // TODO: Bubble error to the user
                 println!("Feature reconstruction error on feature {}", feature_id);
             }
-
-            dbg!(&self.repr.bounding_box);
-            println!();
         }
 
         self.history_step = history_step;
@@ -238,13 +235,11 @@ impl Molecule {
         &self.gpu_atoms
     }
 
-    pub fn get_ray_hit(&self, origin: Vec3, direction: Vec3) -> Option<AtomIndex> {
+    pub fn get_ray_hit(&self, origin: Vec3, direction: Vec3) -> Option<AtomSpecifier> {
         // Using `direction` as a velocity vector, determine when the ray will
         // collide with the bounding box. Note the ? - this fn returns early if there
         // isn't a collision.
         let (tmin, tmax) = self.repr.bounding_box.ray_hit_times(origin, direction)?;
-        println!("got a ray");
-        dbg!(tmin, tmax);
 
         // If the box is fully behind the raycast direction, we will never get a hit.
         if tmax <= 0.0 {
@@ -264,10 +259,22 @@ impl Molecule {
         // the user clicks on the very edge of it, but this is rare.
         let step_size = PERIODIC_TABLE.element_reprs[Element::Hydrogen as usize].radius / 10.0;
         let step = direction * step_size;
+        let t_span = tmax - f32::max(0.0, tmin);
+        // the direction vector is normalized, so 1 unit of time = 1 unit of space
+        let num_steps = (t_span / step_size) as usize;
 
-        while self.repr.bounding_box.contains(current_pos) {
-            // Placeholder for additional logic
-            dbg!(&current_pos);
+        let graph = &self.repr.graph;
+        for _ in 0..num_steps {
+            for atom_index in graph.node_indices() {
+                let atom = graph.node_weight(atom_index).expect("Iterating over an immutably referenced graph should always provide valid node indexes");
+                let atom_radius_sq = PERIODIC_TABLE.element_reprs[atom.element as usize]
+                    .radius
+                    .powi(2);
+
+                if (current_pos - atom.pos).mag_sq() < atom_radius_sq {
+                    return Some(atom.spec.clone());
+                }
+            }
 
             current_pos += step;
         }
