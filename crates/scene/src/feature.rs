@@ -1,10 +1,10 @@
-use std::{borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 use periodic_table::Element;
 
 use crate::{ids::*, molecule::AtomNode, BondOrder};
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub enum ReferenceType {
