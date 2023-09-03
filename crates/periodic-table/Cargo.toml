@@ -12,5 +12,6 @@ edition = "2021"
 
 [dependencies]
 ultraviolet = { workspace = true }
-static_assertions = "1"
 common = { workspace = true }
+serde = { workspace = true }
+static_assertions = "1"

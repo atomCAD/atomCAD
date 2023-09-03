@@ -3,12 +3,13 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use common::AsBytes;
+use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
 use std::mem;
 use ultraviolet::Vec3;
 
 #[allow(dead_code)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[repr(u8)] // Oganesson == 118
 pub enum Element {
     Hydrogen = 1,

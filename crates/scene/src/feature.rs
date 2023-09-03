@@ -4,6 +4,8 @@ use periodic_table::Element;
 
 use crate::{ids::*, molecule::AtomNode, BondOrder};
 
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
 #[derive(Debug)]
 pub enum ReferenceType {
     Atom,
@@ -37,60 +39,56 @@ pub trait MoleculeCommands {
     ) -> Result<(), FeatureError>;
 }
 
-pub trait Feature {
-    fn apply(
-        &self,
-        feature_id: &FeatureId,
-        commands: &mut dyn MoleculeCommands,
-    ) -> Result<(), FeatureError>;
-}
-
-pub struct RootAtom {
-    pub element: Element,
-}
-
-impl Feature for RootAtom {
-    fn apply(
-        &self,
-        feature_id: &FeatureId,
-        commands: &mut dyn MoleculeCommands,
-    ) -> Result<(), FeatureError> {
-        commands.add_atom(
-            self.element,
-            Default::default(),
-            AtomSpecifier::new(*feature_id),
-        )?;
-
-        Ok(())
-    }
-}
-
-pub struct AtomFeature {
+#[derive(Deserialize, Serialize)]
+pub struct BondedAtom {
     pub target: AtomSpecifier,
     pub element: Element,
 }
 
-impl Feature for AtomFeature {
-    fn apply(
+#[derive(Deserialize, Serialize)]
+pub struct PdbFeature {
+    pub name: String,
+    pub contents: String,
+}
+
+#[derive(Deserialize, Serialize)]
+pub enum Feature {
+    RootAtom(Element),
+    BondedAtom(BondedAtom),
+    PdbFeature(PdbFeature),
+}
+
+impl Feature {
+    pub fn apply(
         &self,
         feature_id: &FeatureId,
         commands: &mut dyn MoleculeCommands,
     ) -> Result<(), FeatureError> {
-        let spec = AtomSpecifier::new(*feature_id);
+        match self {
+            Feature::RootAtom(element) => {
+                commands.add_atom(
+                    *element,
+                    Default::default(),
+                    AtomSpecifier::new(*feature_id),
+                )?;
+            }
+            Feature::BondedAtom(BondedAtom { target, element }) => {
+                let spec = AtomSpecifier::new(*feature_id);
 
-        let x = {
-            let atom = commands.find_atom(&self.target);
-            let atom = atom.ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
-            atom.pos.x + 5.0
-        };
+                let x = {
+                    let atom = commands.find_atom(target);
+                    let atom = atom.ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
+                    atom.pos.x + 5.0
+                };
 
-        commands.add_atom(
-            self.element,
-            ultraviolet::Vec3::new(x, 0.0, 0.0),
-            spec.clone(),
-        )?;
+                commands.add_atom(*element, ultraviolet::Vec3::new(x, 0.0, 0.0), spec.clone())?;
 
-        commands.create_bond(&self.target, &spec, 1)?;
+                commands.create_bond(target, &spec, 1)?;
+            }
+            Feature::PdbFeature(PdbFeature { name, contents }) => {
+                crate::pdb::spawn_pdb(name, contents, feature_id, commands)?;
+            }
+        }
 
         Ok(())
     }
@@ -98,20 +96,20 @@ impl Feature for AtomFeature {
 
 /// A container that stores a list of features. It allows the list to be manipulated without
 /// changing the indexes of existing features.
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct FeatureList {
     counter: usize,
     order: Vec<FeatureId>,
-    features: HashMap<FeatureId, Box<dyn Feature>>,
+    features: HashMap<FeatureId, Feature>,
 }
 
 impl FeatureList {
     // Inserts a feature at position `location` within the feature list, shifting all features after it to the right.
-    pub fn insert(&mut self, feature: impl Feature + 'static, location: usize) -> usize {
+    pub fn insert(&mut self, feature: Feature, location: usize) -> usize {
         let id = self.counter;
 
         self.order.insert(location, id);
-        self.features.insert(id, Box::new(feature));
+        self.features.insert(id, feature);
 
         self.counter += 1;
         self.counter
@@ -123,16 +121,16 @@ impl FeatureList {
         self.order.remove(id);
     }
 
-    pub fn get(&self, id: &FeatureId) -> Option<&dyn Feature> {
-        self.features.get(id).map(|feature| feature.borrow())
+    pub fn get(&self, id: &FeatureId) -> Option<&Feature> {
+        self.features.get(id)
     }
 
     // Adds a new feature to the end of the feature list.
-    pub fn push_back(&mut self, feature: impl Feature + 'static) -> usize {
+    pub fn push_back(&mut self, feature: Feature) -> usize {
         let id = self.counter;
 
         self.order.push(id);
-        self.features.insert(id, Box::new(feature));
+        self.features.insert(id, feature);
 
         self.counter += 1;
         self.counter
@@ -160,7 +158,7 @@ pub struct FeatureListIter<'a> {
 }
 
 impl<'a> Iterator for FeatureListIter<'a> {
-    type Item = &'a dyn Feature;
+    type Item = &'a Feature;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.list.order.get(self.current_index)?;
@@ -170,7 +168,7 @@ impl<'a> Iterator for FeatureListIter<'a> {
 }
 
 impl<'a> IntoIterator for &'a FeatureList {
-    type Item = &'a dyn Feature;
+    type Item = &'a Feature;
     type IntoIter = FeatureListIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {

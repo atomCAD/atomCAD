@@ -38,10 +38,6 @@ pub mod camera;
 /// A platform-independent abstraction over the windowing system's interface
 /// for menus and menubars.  Used to setup the application menubar on startup.
 pub mod menubar;
-/// A module for loading and parsing PDB files.
-///
-/// TODO: Should probably be abstracted into its own crate.
-pub mod pdb;
 
 // This module is not public.  It is a common abstraction over the various
 // platform-specific APIs.  For example, `platform::menubar` exposes an API
@@ -62,9 +58,11 @@ pub const APP_NAME: &str = "atomCAD";
 
 use camera::ArcballCamera;
 use common::InputEvent;
-use pdb::PdbFeature;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{Assembly, Component, Molecule};
+use scene::{
+    feature::{Feature, PdbFeature},
+    Assembly, Component, Molecule,
+};
 
 use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
@@ -90,10 +88,10 @@ async fn resume_renderer(
 
     let molecule = Molecule::from_feature(
         &gpu_resources,
-        PdbFeature {
+        Feature::PdbFeature(PdbFeature {
             name: "Neon Pump".into(),
             contents: include_str!("../assets/neon_pump_imm.pdb").into(),
-        },
+        }),
     );
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);

@@ -155,10 +155,7 @@ pub struct Molecule {
 }
 
 impl Molecule {
-    pub fn from_feature(
-        gpu_resources: &GlobalRenderResources,
-        feature: impl Feature + 'static,
-    ) -> Self {
+    pub fn from_feature(gpu_resources: &GlobalRenderResources, feature: Feature) -> Self {
         let mut repr = MoleculeRepr::default();
         feature
             .apply(&0, &mut repr)
@@ -181,7 +178,7 @@ impl Molecule {
         &self.features
     }
 
-    pub fn push_feature(&mut self, feature: impl Feature + 'static) {
+    pub fn push_feature(&mut self, feature: Feature) {
         self.features.insert(feature, self.history_step);
     }
 

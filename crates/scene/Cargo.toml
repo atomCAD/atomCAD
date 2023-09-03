@@ -10,7 +10,10 @@ render = { workspace = true }
 periodic-table = { workspace = true }
 ultraviolet = { workspace = true }
 common = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 petgraph = "0.6.3"
 indexmap = "1.6"
 once_cell = "1.18.0"
 lazy_static = "1.4.0"
+lib3dmol = "0.4"

@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 pub type FeatureId = usize;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct FeatureCopyId {
     pub feature_id: FeatureId,
     pub copy_index: usize,
@@ -39,7 +41,7 @@ pub struct FeatureCopyId {
 /// atom is a mirrored copy of a mirrored copy of some primitive, it's feature path will include
 /// all of those features). Trivially, this is useful for figuring out where an atom comes from,
 /// but it is less obvious that edge cases with repeated patterning arise if it is not included.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AtomSpecifier {
     pub feature_path: Vec<FeatureCopyId>,
     pub child_index: usize,
