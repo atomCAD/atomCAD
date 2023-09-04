@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use periodic_table::Element;
 use petgraph::stable_graph;
 use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
+use serde::{Deserialize, Serialize};
 use ultraviolet::Vec3;
 
 use crate::{
@@ -34,6 +35,7 @@ pub struct MoleculeRepr {
     graph: Graph,
     bounding_box: BoundingBox,
     gpu_synced: bool,
+    gpu_atoms: Option<Atoms>,
 }
 
 impl MoleculeRepr {
@@ -52,6 +54,26 @@ impl MoleculeRepr {
         self.graph.clear();
         self.bounding_box = Default::default();
         self.gpu_synced = false;
+    }
+
+    pub fn reupload_atoms(&mut self, gpu_resources: &GlobalRenderResources) {
+        // TODO: not working, see shinzlet/atomCAD #3
+        // self.gpu_atoms.reupload_atoms(&atoms, gpu_resources);
+
+        // This is a workaround, but it has bad perf as it always drops and
+        // reallocates
+
+        if self.graph.node_count() == 0 {
+            self.gpu_atoms = None;
+        } else {
+            self.gpu_atoms = Some(Atoms::new(gpu_resources, self.atom_reprs()));
+        }
+
+        self.gpu_synced = true;
+    }
+
+    pub fn atoms(&self) -> Option<&Atoms> {
+        self.gpu_atoms.as_ref()
     }
 }
 
@@ -133,9 +155,10 @@ impl MoleculeCommands for MoleculeRepr {
 ///
 /// molecule.set_history_step(2);
 /// molecule.reupload_atoms(&gpu_resources);
+#[derive(Serialize)]
 pub struct Molecule {
+    #[serde(skip)]
     pub repr: MoleculeRepr,
-    gpu_atoms: Atoms,
     #[allow(unused)]
     rotation: ultraviolet::Rotor3,
     #[allow(unused)]
@@ -155,18 +178,16 @@ pub struct Molecule {
 }
 
 impl Molecule {
-    pub fn from_feature(gpu_resources: &GlobalRenderResources, feature: Feature) -> Self {
+    pub fn from_feature(feature: Feature) -> Self {
         let mut repr = MoleculeRepr::default();
         feature
             .apply(&0, &mut repr)
             .expect("Primitive features should never return a feature error!");
-        let gpu_atoms = Atoms::new(gpu_resources, repr.atom_reprs());
         let mut features = FeatureList::default();
         features.push_back(feature);
 
         Self {
             repr,
-            gpu_atoms,
             rotation: ultraviolet::Rotor3::default(),
             offset: ultraviolet::Vec3::default(),
             features,
@@ -209,6 +230,7 @@ impl Molecule {
             if feature.apply(feature_id, &mut self.repr).is_err() {
                 // TODO: Bubble error to the user
                 println!("Feature reconstruction error on feature {}", feature_id);
+                dbg!(&feature);
             }
         }
 
@@ -221,20 +243,7 @@ impl Molecule {
         self.set_history_step(self.features.len())
     }
 
-    pub fn reupload_atoms(&mut self, gpu_resources: &GlobalRenderResources) {
-        // TODO: not working, see shinzlet/atomCAD #3
-        // self.gpu_atoms.reupload_atoms(&atoms, gpu_resources);
-
-        // This is a workaround, but it has bad perf as it always drops and
-        // reallocates
-        self.gpu_atoms = Atoms::new(gpu_resources, self.repr.atom_reprs());
-        self.repr.gpu_synced = true;
-    }
-
-    pub fn atoms(&self) -> &Atoms {
-        &self.gpu_atoms
-    }
-
+    // TODO: Optimize heavily (use octree, compute entry point of ray analytically)
     pub fn get_ray_hit(&self, origin: Vec3, direction: Vec3) -> Option<AtomSpecifier> {
         // Using `direction` as a velocity vector, determine when the ray will
         // collide with the bounding box. Note the ? - this fn returns early if there
@@ -281,6 +290,40 @@ impl Molecule {
 
         None
     }
+}
 
-    // TODO: Optimize heavily (use octree, compute entry point of ray analytically)
+impl<'de> Deserialize<'de> for Molecule {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // This is all the data that a Molecule serializes into. The other
+        // fields on molecule are large in size and easy to recompute, so we will
+        // use the raw molecule representation to reconstruct them.
+        #[derive(Deserialize)]
+        struct RawMolecule {
+            rotation: ultraviolet::Rotor3,
+            offset: ultraviolet::Vec3,
+            features: FeatureList,
+            history_step: usize,
+        }
+
+        // TODO: integrity check of the deserialized struct
+
+        let raw_molecule = RawMolecule::deserialize(deserializer)?;
+        let mut repr = MoleculeRepr::default();
+
+        let mut molecule = Molecule {
+            repr,
+            rotation: ultraviolet::Rotor3::default(),
+            offset: ultraviolet::Vec3::default(),
+            features: raw_molecule.features,
+            history_step: 0, // This starts at 0 because we haven't applied the features, we've just loaded them
+        };
+
+        // this advances the history step to the correct location
+        molecule.set_history_step(raw_molecule.history_step);
+
+        Ok(molecule)
+    }
 }

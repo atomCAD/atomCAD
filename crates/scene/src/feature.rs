@@ -39,19 +39,19 @@ pub trait MoleculeCommands {
     ) -> Result<(), FeatureError>;
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct BondedAtom {
     pub target: AtomSpecifier,
     pub element: Element,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PdbFeature {
     pub name: String,
     pub contents: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum Feature {
     RootAtom(Element),
     BondedAtom(BondedAtom),
