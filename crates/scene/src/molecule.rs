@@ -311,12 +311,11 @@ impl<'de> Deserialize<'de> for Molecule {
         // TODO: integrity check of the deserialized struct
 
         let raw_molecule = RawMolecule::deserialize(deserializer)?;
-        let mut repr = MoleculeRepr::default();
 
         let mut molecule = Molecule {
-            repr,
-            rotation: ultraviolet::Rotor3::default(),
-            offset: ultraviolet::Vec3::default(),
+            repr: MoleculeRepr::default(),
+            rotation: raw_molecule.rotation,
+            offset: raw_molecule.offset,
             features: raw_molecule.features,
             history_step: 0, // This starts at 0 because we haven't applied the features, we've just loaded them
         };

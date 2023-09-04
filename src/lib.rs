@@ -64,7 +64,6 @@ use scene::{
     Assembly, Component, Molecule,
 };
 
-use serde_json;
 use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
@@ -85,6 +84,7 @@ fn make_pdb_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
     molecule
 }
 
+#[allow(dead_code)]
 fn make_salt_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
     let mut molecule = Molecule::from_feature(Feature::RootAtom(periodic_table::Element::Sodium));
 
