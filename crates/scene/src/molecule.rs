@@ -23,6 +23,27 @@ pub struct AtomNode {
     pub element: Element,
     pub pos: Vec3,
     pub spec: AtomSpecifier,
+    // The atom that this atom was bonded to (and uses as a "forward" direction). If
+    // no such atom exists, then this atom is the root atom, and the forward direction
+    // should be taken to be the molecule's +z axis. Although this field is not yet
+    // used (as of september 3rd 2023), it is needed to describe molecular geometry
+    // in terms of bond angles and lengths (which will be useful later on).
+    pub head: Option<AtomSpecifier>,
+}
+
+impl AtomNode {
+    pub fn forward(&self, commands: &dyn MoleculeCommands) -> Vec3 {
+        match self.head {
+            Some(ref head) => {
+                let head = commands
+                    .find_atom(head)
+                    .expect("The atom specifier an atom that is bonded should exist");
+
+                (head.pos - self.pos).normalized()
+            }
+            None => Vec3::unit_z(),
+        }
+    }
 }
 
 /// The concrete representation of the molecule at some time in the feature history.
@@ -36,6 +57,7 @@ pub struct MoleculeRepr {
     bounding_box: BoundingBox,
     gpu_synced: bool,
     gpu_atoms: Option<Atoms>,
+    corrections: HashMap<AtomSpecifier, Vec3>,
 }
 
 impl MoleculeRepr {
@@ -83,11 +105,24 @@ lazy_static! {
 }
 
 impl MoleculeCommands for MoleculeRepr {
+    fn add_bonded_atom(
+        &mut self,
+        element: Element,
+        pos: ultraviolet::Vec3,
+        spec: AtomSpecifier,
+        bond_target: AtomSpecifier,
+        bond_order: BondOrder,
+    ) -> Result<(), FeatureError> {
+        self.add_atom(element, pos, spec.clone(), Some(bond_target.clone()))?;
+        self.create_bond(&spec, &bond_target, bond_order)
+    }
+
     fn add_atom(
         &mut self,
         element: Element,
         pos: ultraviolet::Vec3,
         spec: AtomSpecifier,
+        head: Option<AtomSpecifier>,
     ) -> Result<(), FeatureError> {
         if self.atom_map.contains_key(&spec) {
             return Err(FeatureError::AtomOverwrite);
@@ -97,9 +132,11 @@ impl MoleculeCommands for MoleculeRepr {
             element,
             pos,
             spec: spec.clone(),
+            head,
         });
 
-        self.atom_map.insert(spec, index);
+        self.atom_map.insert(spec.clone(), index);
+        self.corrections.insert(spec, Default::default());
         self.bounding_box.enclose_sphere(
             pos,
             // TODO: This is

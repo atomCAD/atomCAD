@@ -30,12 +30,21 @@ pub trait MoleculeCommands {
         element: Element,
         pos: ultraviolet::Vec3,
         spec: AtomSpecifier,
+        head: Option<AtomSpecifier>,
     ) -> Result<(), FeatureError>;
     fn create_bond(
         &mut self,
         a1: &AtomSpecifier,
         a2: &AtomSpecifier,
         order: BondOrder,
+    ) -> Result<(), FeatureError>;
+    fn add_bonded_atom(
+        &mut self,
+        element: Element,
+        pos: ultraviolet::Vec3,
+        spec: AtomSpecifier,
+        bond_target: AtomSpecifier,
+        bond_order: BondOrder,
     ) -> Result<(), FeatureError>;
 }
 
@@ -70,6 +79,7 @@ impl Feature {
                     *element,
                     Default::default(),
                     AtomSpecifier::new(*feature_id),
+                    None,
                 )?;
             }
             Feature::BondedAtom(BondedAtom { target, element }) => {
@@ -81,9 +91,13 @@ impl Feature {
                     atom.pos.x + 5.0
                 };
 
-                commands.add_atom(*element, ultraviolet::Vec3::new(x, 0.0, 0.0), spec.clone())?;
-
-                commands.create_bond(target, &spec, 1)?;
+                commands.add_bonded_atom(
+                    *element,
+                    ultraviolet::Vec3::new(x, 0.0, 0.0),
+                    spec.clone(),
+                    target.clone(),
+                    1,
+                )?;
             }
             Feature::PdbFeature(PdbFeature { name, contents }) => {
                 crate::pdb::spawn_pdb(name, contents, feature_id, commands)?;
