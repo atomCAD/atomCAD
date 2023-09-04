@@ -76,18 +76,15 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-fn make_pdb_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
-    let mut molecule = Molecule::from_feature(Feature::PdbFeature(PdbFeature {
+fn make_pdb_demo_scene() -> Molecule {
+    Molecule::from_feature(Feature::PdbFeature(PdbFeature {
         name: "Neon Pump".into(),
         contents: include_str!("../assets/neon_pump_imm.pdb").into(),
-    }));
-
-    molecule.repr.reupload_atoms(gpu_resources);
-    molecule
+    }))
 }
 
 #[allow(dead_code)]
-fn make_salt_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
+fn make_salt_demo_scene() -> Molecule {
     let mut molecule = Molecule::from_feature(Feature::RootAtom(periodic_table::Element::Sodium));
 
     molecule.push_feature(Feature::BondedAtom(scene::feature::BondedAtom {
@@ -96,7 +93,6 @@ fn make_salt_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
     }));
 
     molecule.apply_all_features();
-    molecule.repr.reupload_atoms(gpu_resources);
     molecule
 }
 
@@ -112,9 +108,10 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = make_pdb_demo_scene(&gpu_resources);
-    let molecule = serde_json::to_string(&molecule).unwrap();
-    let molecule: Molecule = serde_json::from_str(&molecule).unwrap();
+    let mut molecule = make_salt_demo_scene();
+    dynamics::relax(&mut molecule.repr.graph);
+    // let molecule = serde_json::to_string(&molecule).unwrap();
+    // let molecule: Molecule = serde_json::from_str(&molecule).unwrap();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();

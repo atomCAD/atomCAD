@@ -23,9 +23,11 @@ render = { package = "atomcad-render", path = "crates/render" }
 common = { package = "atomcad-common", path = "crates/common" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 scene = { package = "atomcad-scene", path = "crates/scene" }
+dynamics = { package = "atomcad-dynamics", path = "crates/dynamics" }
 ultraviolet = { version = "0.9.1", features = ["serde"] }
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.105"
+petgraph = "0.6.3"
 
 
 [dependencies]
@@ -33,6 +35,7 @@ render = { workspace = true }
 common = { workspace = true }
 periodic-table = { workspace = true }
 scene = { workspace = true }
+dynamics = { workspace = true }
 ultraviolet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

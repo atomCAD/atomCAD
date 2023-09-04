@@ -12,7 +12,7 @@ ultraviolet = { workspace = true }
 common = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-petgraph = "0.6.3"
+petgraph = { workspace = true }
 indexmap = "1.6"
 lazy_static = "1.4.0"
 lib3dmol = "0.4"

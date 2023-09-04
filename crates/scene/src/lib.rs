@@ -1,4 +1,4 @@
-pub use crate::molecule::{BondOrder, Molecule};
+pub use crate::molecule::{AtomIndex, BondIndex, BondOrder, Molecule, MoleculeGraph};
 // pub use assembly::{Fragment, FragmentId, Part, PartId, World};
 pub use assembly::{Assembly, Component};
 

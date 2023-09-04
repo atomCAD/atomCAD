@@ -13,7 +13,7 @@ use crate::{
     utils::BoundingBox,
 };
 
-pub type Graph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
+pub type MoleculeGraph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
 pub type BondOrder = u8;
 pub type AtomIndex = stable_graph::NodeIndex;
 #[allow(unused)]
@@ -32,7 +32,7 @@ pub struct MoleculeRepr {
     // is highly structued and repetitive: compression, flattening, and a tree could do
     // a lot to optimize this.
     atom_map: HashMap<AtomSpecifier, AtomIndex>,
-    graph: Graph,
+    pub graph: MoleculeGraph,
     bounding_box: BoundingBox,
     gpu_synced: bool,
     gpu_atoms: Option<Atoms>,
