@@ -25,6 +25,7 @@ pub enum FeatureError {
 /// Features can only manipulate a molecule using MoleculeCommands.
 pub trait MoleculeCommands {
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode>;
+    fn pos(&self, spec: &AtomSpecifier) -> Option<ultraviolet::Vec3>;
     fn add_atom(
         &mut self,
         element: Element,
@@ -88,7 +89,7 @@ impl Feature {
                 let x = {
                     let atom = commands.find_atom(target);
                     let atom = atom.ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
-                    atom.pos.x + 5.0
+                    atom.raw_pos.x + 5.0
                 };
 
                 commands.add_bonded_atom(

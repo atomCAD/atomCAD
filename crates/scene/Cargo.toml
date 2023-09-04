@@ -16,3 +16,4 @@ petgraph = { workspace = true }
 indexmap = "1.6"
 lazy_static = "1.4.0"
 lib3dmol = "0.4"
+serde_with = "3.3.0"

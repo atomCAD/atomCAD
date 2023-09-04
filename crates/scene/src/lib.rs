@@ -3,6 +3,7 @@ pub use crate::molecule::{AtomIndex, BondIndex, BondOrder, Molecule, MoleculeGra
 pub use assembly::{Assembly, Component};
 
 mod assembly;
+mod dynamics;
 pub mod feature;
 pub mod ids;
 mod molecule;

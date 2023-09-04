@@ -108,10 +108,9 @@ async fn resume_renderer(
     )
     .await;
 
-    let mut molecule = make_salt_demo_scene();
-    dynamics::relax(&mut molecule.repr.graph);
-    // let molecule = serde_json::to_string(&molecule).unwrap();
-    // let molecule: Molecule = serde_json::from_str(&molecule).unwrap();
+    let molecule = make_salt_demo_scene();
+    let molecule = serde_json::to_string(&molecule).unwrap();
+    let molecule: Molecule = serde_json::from_str(&molecule).unwrap();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();

@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use lazy_static::lazy_static;
 use periodic_table::Element;
-use petgraph::stable_graph;
+use petgraph::{stable_graph, visit::IntoNodeReferences};
 use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use ultraviolet::Vec3;
 
 use crate::{
@@ -14,6 +15,9 @@ use crate::{
 };
 
 pub type MoleculeGraph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
+// A map that gives each atom in a molecule a coordinate. Used to cache structure energy minimization
+// calculations
+pub type MoleculeCheckpoint = HashMap<AtomSpecifier, Vec3>;
 pub type BondOrder = u8;
 pub type AtomIndex = stable_graph::NodeIndex;
 #[allow(unused)]
@@ -21,7 +25,7 @@ pub type BondIndex = stable_graph::EdgeIndex;
 
 pub struct AtomNode {
     pub element: Element,
-    pub pos: Vec3,
+    pub raw_pos: Vec3,
     pub spec: AtomSpecifier,
     // The atom that this atom was bonded to (and uses as a "forward" direction). If
     // no such atom exists, then this atom is the root atom, and the forward direction
@@ -39,7 +43,7 @@ impl AtomNode {
                     .find_atom(head)
                     .expect("The atom specifier an atom that is bonded should exist");
 
-                (head.pos - self.pos).normalized()
+                (head.raw_pos - self.raw_pos).normalized()
             }
             None => Vec3::unit_z(),
         }
@@ -57,7 +61,7 @@ pub struct MoleculeRepr {
     bounding_box: BoundingBox,
     gpu_synced: bool,
     gpu_atoms: Option<Atoms>,
-    corrections: HashMap<AtomSpecifier, Vec3>,
+    corrections: MoleculeCheckpoint,
 }
 
 impl MoleculeRepr {
@@ -66,7 +70,9 @@ impl MoleculeRepr {
             .node_weights()
             .map(|node| AtomRepr {
                 kind: AtomKind::new(node.element),
-                pos: node.pos,
+                pos: self
+                    .pos(&node.spec)
+                    .expect("Every atom in the graph should have a correction"),
             })
             .collect()
     }
@@ -96,6 +102,16 @@ impl MoleculeRepr {
 
     pub fn atoms(&self) -> Option<&Atoms> {
         self.gpu_atoms.as_ref()
+    }
+
+    pub fn compute_corrections(&mut self, target_positions: &HashMap<AtomSpecifier, Vec3>) {
+        for atom in self.graph.node_weights() {
+            let new_position = target_positions
+                .get(&atom.spec)
+                .expect("A map of target positions should contain every atom's position.");
+            let correction = *new_position - atom.raw_pos;
+            self.corrections.insert(atom.spec.clone(), correction);
+        }
     }
 }
 
@@ -130,7 +146,7 @@ impl MoleculeCommands for MoleculeRepr {
 
         let index = self.graph.add_node(AtomNode {
             element,
-            pos,
+            raw_pos: pos,
             spec: spec.clone(),
             head,
         });
@@ -168,6 +184,14 @@ impl MoleculeCommands for MoleculeRepr {
             None => None,
         }
     }
+
+    fn pos(&self, spec: &AtomSpecifier) -> Option<Vec3> {
+        if let Some(&correction) = self.corrections.get(spec) {
+            return Some(self.find_atom(spec)?.raw_pos + correction);
+        }
+
+        None
+    }
 }
 
 /// Demonstration of how to use the feature system
@@ -192,6 +216,7 @@ impl MoleculeCommands for MoleculeRepr {
 ///
 /// molecule.set_history_step(2);
 /// molecule.reupload_atoms(&gpu_resources);
+#[serde_as]
 #[derive(Serialize)]
 pub struct Molecule {
     #[serde(skip)]
@@ -205,13 +230,20 @@ pub struct Molecule {
     // This is unrelated to feature IDs: it is effectively just a counter of how many features are
     // applied. (i.e. our current location in the edit history timeline)
     history_step: usize,
-    // When checkpointing is implemented, this will be needed:
+    // checkpoints: HashMap<usize, MoleculeCheckpoint>,
+    // TODO: this is just a shim. In the future, we want to have a map of history steps to checkpoints,
+    // and then use them to make feature reconstruction much faster. For now, we just store the currrent
+    // checkpoint. For reference, this `checkpoint` is just a clone of repr.corrections.
     //
-    // the history step we cannot equal or exceed without first recomputing. For example, if repr
-    // is up to date with the feature list, and then a past feature is changed, dirty_step would change
-    // from `features.len()` to the index of the changed feature. This is used to determine if recomputation
-    // is needed when moving forwards in the timeline, or if a future checkpoint can be used.
-    // dirty_step: usize,
+    // To properly address this, we need to perform
+    #[serde_as(as = "Vec<(_, _)>")]
+    pub active_checkpoint: HashMap<AtomSpecifier, Vec3>, // When checkpointing is implemented, this will be needed:
+                                                         //
+                                                         // the history step we cannot equal or exceed without first recomputing. For example, if repr
+                                                         // is up to date with the feature list, and then a past feature is changed, dirty_step would change
+                                                         // from `features.len()` to the index of the changed feature. This is used to determine if recomputation
+                                                         // is needed when moving forwards in the timeline, or if a future checkpoint can be used.
+                                                         // dirty_step: usize,
 }
 
 impl Molecule {
@@ -222,6 +254,7 @@ impl Molecule {
             .expect("Primitive features should never return a feature error!");
         let mut features = FeatureList::default();
         features.push_back(feature);
+        let active_checkpoint = repr.corrections.clone();
 
         Self {
             repr,
@@ -229,6 +262,7 @@ impl Molecule {
             offset: ultraviolet::Vec3::default(),
             features,
             history_step: 1, // This starts at 1 because we applied the primitive feature
+            active_checkpoint,
         }
     }
 
@@ -269,6 +303,10 @@ impl Molecule {
                 println!("Feature reconstruction error on feature {}", feature_id);
                 dbg!(&feature);
             }
+
+            let new_positions = crate::dynamics::relax(&self.repr.graph, &self.repr, 0.01);
+            self.repr.compute_corrections(&new_positions);
+            self.active_checkpoint = self.repr.corrections.clone();
         }
 
         self.history_step = history_step;
@@ -317,7 +355,7 @@ impl Molecule {
                     .radius
                     .powi(2);
 
-                if (current_pos - atom.pos).mag_sq() < atom_radius_sq {
+                if (current_pos - atom.raw_pos).mag_sq() < atom_radius_sq {
                     return Some(atom.spec.clone());
                 }
             }
@@ -337,12 +375,15 @@ impl<'de> Deserialize<'de> for Molecule {
         // This is all the data that a Molecule serializes into. The other
         // fields on molecule are large in size and easy to recompute, so we will
         // use the raw molecule representation to reconstruct them.
+        #[serde_as]
         #[derive(Deserialize)]
         struct RawMolecule {
             rotation: ultraviolet::Rotor3,
             offset: ultraviolet::Vec3,
             features: FeatureList,
             history_step: usize,
+            #[serde_as(as = "Vec<(_, _)>")]
+            active_checkpoint: HashMap<AtomSpecifier, Vec3>,
         }
 
         // TODO: integrity check of the deserialized struct
@@ -355,6 +396,7 @@ impl<'de> Deserialize<'de> for Molecule {
             offset: raw_molecule.offset,
             features: raw_molecule.features,
             history_step: 0, // This starts at 0 because we haven't applied the features, we've just loaded them
+            active_checkpoint: raw_molecule.active_checkpoint,
         };
 
         // this advances the history step to the correct location
