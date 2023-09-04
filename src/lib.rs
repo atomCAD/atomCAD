@@ -71,7 +71,7 @@ use ultraviolet::{Mat4, Vec3};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, Event, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     keyboard::KeyCode,
     window::{Window, WindowBuilder},
 };
@@ -370,7 +370,10 @@ async fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     })
 }
 
-pub fn start(event_loop: winit::event_loop::EventLoop<()>) {
+pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
+    let menu = menubar::setup_menu_bar(event_loop_builder);
+    let event_loop = event_loop_builder.build();
+
     // Create the main window.
     let window = match WindowBuilder::new().with_title(APP_NAME).build(&event_loop) {
         Err(e) => {
@@ -382,7 +385,7 @@ pub fn start(event_loop: winit::event_loop::EventLoop<()>) {
 
     // Add the menu bar to the window / application instance, using native
     // APIs.
-    menubar::setup_menu_bar(&window);
+    menubar::attach_menu_bar(&window, &menu);
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -438,13 +441,8 @@ use winit::platform::android::activity::AndroidApp;
 #[cfg(target_os = "android")]
 #[no_mangle]
 fn android_main(app: AndroidApp) {
-    use winit::event_loop::EventLoopBuilder;
     use winit::platform::android::EventLoopBuilderExtAndroid;
-    start(
-        EventLoopBuilder::with_user_event()
-            .with_android_app(app)
-            .build(),
-    )
+    start(EventLoopBuilder::with_user_event().with_android_app(app))
 }
 
 // End of File

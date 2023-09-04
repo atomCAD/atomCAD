@@ -6,7 +6,9 @@ use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 use objc::{class, msg_send, sel, sel_impl};
 
-use winit::window::Window;
+use winit::{
+    event_loop::EventLoopBuilder, platform::macos::EventLoopBuilderExtMacOS, window::Window,
+};
 
 use crate::menubar::{
     Menu, MenuAction, MenuItem, MenuShortcut, ModifierKeys, SystemAction, SystemShortcut,
@@ -133,6 +135,13 @@ unsafe fn build_menu(_app: *mut Object, services_menu: *mut Object, menu: &Menu)
 
     // Return the menu object to the caller.
     menuobj
+}
+
+pub fn configure_event_loop<T: 'static>(
+    event_loop_builder: &mut EventLoopBuilder<T>,
+    _menu: &Menu,
+) {
+    event_loop_builder.with_default_menu(false);
 }
 
 pub fn attach_menu(

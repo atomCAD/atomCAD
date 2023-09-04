@@ -2,8 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::platform::menubar::attach_menu;
+use crate::platform::menubar::{attach_menu, configure_event_loop};
 use crate::APP_NAME;
+use winit::event_loop::EventLoopBuilder;
 use winit::window::Window;
 
 // A menubar is a hierarchical list of actions with attached titles and/or
@@ -110,7 +111,7 @@ pub enum SystemAction {
     Terminate,
 }
 
-pub fn setup_menu_bar(window: &Window) {
+pub fn setup_menu_bar<T: 'static>(event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {
     let menubar = Menu::new(APP_NAME).and_then(MenuItem::SubMenu(
         Menu::new("")
             .and_then(MenuItem::new(
@@ -154,9 +155,15 @@ pub fn setup_menu_bar(window: &Window) {
             )),
     ));
 
+    configure_event_loop(event_loop_builder, &menubar);
+
+    menubar
+}
+
+pub fn attach_menu_bar(window: &Window, menu: &Menu) {
     // Do the platform-dependent work of constructing the menubar and
     // attaching it to the application object or main window.
-    attach_menu(window, &menubar);
+    attach_menu(window, menu);
 }
 
 // End of File
