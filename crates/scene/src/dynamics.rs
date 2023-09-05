@@ -1,4 +1,3 @@
-use crate::feature::MoleculeCommands;
 use crate::ids::AtomSpecifier;
 use crate::molecule::MoleculeGraph;
 use std::collections::HashMap;
@@ -15,16 +14,12 @@ use ultraviolet::Vec3;
 
 pub fn relax(
     graph: &MoleculeGraph,
-    commands: &dyn MoleculeCommands,
+    positions: &HashMap<AtomSpecifier, Vec3>,
     threshold: f32,
 ) -> HashMap<AtomSpecifier, Vec3> {
-    let mut old_positions = HashMap::<AtomSpecifier, Vec3>::with_capacity(graph.node_count());
-    let mut positions = HashMap::<AtomSpecifier, Vec3>::with_capacity(graph.node_count());
+    let mut old_positions = positions.clone();
+    let mut positions = HashMap::<AtomSpecifier, Vec3>::with_capacity(positions.len());
     let mut step_count = 0;
-
-    for node in graph.node_weights() {
-        old_positions.insert(node.spec.clone(), commands.pos(&node.spec).unwrap());
-    }
 
     loop {
         let mut largest_adjustment = 0.0;

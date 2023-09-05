@@ -25,7 +25,7 @@ pub enum FeatureError {
 /// Features can only manipulate a molecule using MoleculeCommands.
 pub trait MoleculeCommands {
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode>;
-    fn pos(&self, spec: &AtomSpecifier) -> Option<ultraviolet::Vec3>;
+    fn pos(&self, spec: &AtomSpecifier) -> Option<&ultraviolet::Vec3>;
     fn add_atom(
         &mut self,
         element: Element,
@@ -49,19 +49,19 @@ pub trait MoleculeCommands {
     ) -> Result<(), FeatureError>;
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BondedAtom {
     pub target: AtomSpecifier,
     pub element: Element,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PdbFeature {
     pub name: String,
     pub contents: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Feature {
     RootAtom(Element),
     BondedAtom(BondedAtom),
@@ -86,19 +86,12 @@ impl Feature {
             Feature::BondedAtom(BondedAtom { target, element }) => {
                 let spec = AtomSpecifier::new(*feature_id);
 
-                let x = {
-                    let atom = commands.find_atom(target);
-                    let atom = atom.ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
-                    atom.raw_pos.x + 5.0
-                };
+                let pos = *commands
+                    .pos(target)
+                    .ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
+                let pos = pos + ultraviolet::Vec3::new(5.0, 0.0, 0.0);
 
-                commands.add_bonded_atom(
-                    *element,
-                    ultraviolet::Vec3::new(x, 0.0, 0.0),
-                    spec.clone(),
-                    target.clone(),
-                    1,
-                )?;
+                commands.add_bonded_atom(*element, pos, spec.clone(), target.clone(), 1)?;
             }
             Feature::PdbFeature(PdbFeature { name, contents }) => {
                 crate::pdb::spawn_pdb(name, contents, feature_id, commands)?;
@@ -111,7 +104,7 @@ impl Feature {
 
 /// A container that stores a list of features. It allows the list to be manipulated without
 /// changing the indexes of existing features.
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default, Clone, Deserialize, Serialize)]
 pub struct FeatureList {
     counter: usize,
     order: Vec<FeatureId>,

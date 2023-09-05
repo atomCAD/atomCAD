@@ -76,6 +76,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+#[allow(dead_code)]
 fn make_pdb_demo_scene() -> Molecule {
     Molecule::from_feature(Feature::PdbFeature(PdbFeature {
         name: "Neon Pump".into(),
@@ -110,6 +111,7 @@ async fn resume_renderer(
 
     let molecule = make_salt_demo_scene();
     let molecule = serde_json::to_string(&molecule).unwrap();
+    println!("{}", molecule);
     let molecule: Molecule = serde_json::from_str(&molecule).unwrap();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
