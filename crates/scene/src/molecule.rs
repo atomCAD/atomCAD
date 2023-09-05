@@ -433,7 +433,7 @@ impl Serialize for Molecule {
             offset: self.offset,
             features: self.features.clone(),
             history_step: self.history_step,
-            checkpoints: checkpoints,
+            checkpoints,
             dirty_step: self.dirty_step,
         };
 

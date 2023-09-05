@@ -91,7 +91,7 @@ impl Feature {
                     .ok_or(FeatureError::BrokenReference(ReferenceType::Atom))?;
                 let pos = pos + ultraviolet::Vec3::new(5.0, 0.0, 0.0);
 
-                commands.add_bonded_atom(*element, pos, spec.clone(), target.clone(), 1)?;
+                commands.add_bonded_atom(*element, pos, spec, target.clone(), 1)?;
             }
             Feature::PdbFeature(PdbFeature { name, contents }) => {
                 crate::pdb::spawn_pdb(name, contents, feature_id, commands)?;
