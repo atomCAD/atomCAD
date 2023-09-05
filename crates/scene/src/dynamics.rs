@@ -3,15 +3,6 @@ use crate::molecule::MoleculeGraph;
 use std::collections::HashMap;
 use ultraviolet::Vec3;
 
-// considerations:
-// - we need to start the relaxation from the current corrections
-// - because of this, it would be nice if we can just return a new correction buffer rather than mutating
-//   anything
-// - additionally, this lets us store corrections buffers as checkpoints and only apply them when needed! good!
-// - so don't store corrections in the AtomNode. this does make iteration harder, we can't just iterate
-//   over the graph, so we'll need to find another way of handling this.
-// For now, this is done using cartesian coordinates
-
 pub fn relax(
     graph: &MoleculeGraph,
     positions: &HashMap<AtomSpecifier, Vec3>,
