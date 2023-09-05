@@ -4,6 +4,6 @@
 
 // FIXME: Should use the win32 APIs to setup the menubar for the main
 //        window(s).
-pub use super::defaults::menubar;
+pub use crate::platform_impl::windows::menubar;
 
 // End of File

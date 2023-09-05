@@ -11,7 +11,7 @@ use winit::{
 };
 
 use crate::menubar::{
-    Menu, MenuAction, MenuItem, MenuShortcut, ModifierKeys, SystemAction, SystemShortcut,
+    MenuAction, MenuItem, MenuShortcut, MenuSpec, ModifierKeys, SystemAction, SystemShortcut,
 };
 
 fn nsstring(s: &str) -> *mut Object {
@@ -27,7 +27,11 @@ fn nsstring(s: &str) -> *mut Object {
     }
 }
 
-unsafe fn build_menu(_app: *mut Object, services_menu: *mut Object, menu: &Menu) -> *mut Object {
+unsafe fn build_menu(
+    _app: *mut Object,
+    services_menu: *mut Object,
+    menu_spec: &MenuSpec,
+) -> *mut Object {
     // Create root menu bar.
     let menuobj: *mut Object = msg_send![class![NSMenu], alloc];
     let menuobj: *mut Object = msg_send![menuobj, initWithTitle: nsstring(&menu.title)];
@@ -137,11 +141,12 @@ unsafe fn build_menu(_app: *mut Object, services_menu: *mut Object, menu: &Menu)
     menuobj
 }
 
-pub fn configure_event_loop<T: 'static>(
-    event_loop_builder: &mut EventLoopBuilder<T>,
-    _menu: &Menu,
-) {
+// Placeholder struct to allow compilation.
+pub struct Menu;
+
+pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {
     event_loop_builder.with_default_menu(false);
+    Menu
 }
 
 pub fn attach_menu(
@@ -151,8 +156,11 @@ pub fn attach_menu(
     // shared by the entire process, so we only need to set it once and don't
     // use the _window parameter.
     _window: &Window,
-    menu: &Menu,
+    // On some platforms the Menu type would need access to the Window, e.g Windows.
+    _menu: &mut Menu,
 ) {
+    // Create the menubar spec
+    let menu_bar_spec: MenuSpec = MenuSpec::default();
     // Create the menu on macOS using Cocoa APIs.
     autoreleasepool(|| unsafe {
         // Get the application object.
@@ -165,7 +173,7 @@ pub fn attach_menu(
         let _: () = msg_send![app, setServicesMenu: services_menu];
 
         // Turn the menubar description into a Cocoa menu.
-        let obj = build_menu(app, services_menu, menu);
+        let obj = build_menu(app, services_menu, menu_bar_spec);
 
         // Register the menu with the NSApplication object.
         let _: () = msg_send![app, setMainMenu: obj];
