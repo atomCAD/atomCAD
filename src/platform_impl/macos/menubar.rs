@@ -34,17 +34,17 @@ unsafe fn build_menu(
 ) -> *mut Object {
     // Create root menu bar.
     let menuobj: *mut Object = msg_send![class![NSMenu], alloc];
-    let menuobj: *mut Object = msg_send![menuobj, initWithTitle: nsstring(&menu.title)];
+    let menuobj: *mut Object = msg_send![menuobj, initWithTitle: nsstring(&menu_spec.title)];
     let menuobj: *mut Object = msg_send![menuobj, autorelease];
 
-    for menuitem in menu.items.iter() {
+    for menuitem in menu_spec.items.iter() {
         match menuitem {
             MenuItem::Separator => {
                 let item: *mut Object = msg_send![class![NSMenuItem], separatorItem];
                 let _: () = msg_send![menuobj, addItem: item];
             }
             MenuItem::Entry(title, shortcut, action) => {
-                let title = nsstring(title);
+                let title = nsstring(&title);
                 let mut is_service_menu = false;
                 let action = match action {
                     MenuAction::System(action) => match action {
@@ -130,7 +130,7 @@ unsafe fn build_menu(
                 let item: *mut Object = msg_send![class![NSMenuItem], alloc];
                 let item: *mut Object = msg_send![item, init];
                 let item: *mut Object = msg_send![item, autorelease];
-                let submenu = build_menu(_app, services_menu, submenu);
+                let submenu = build_menu(_app, services_menu, &submenu);
                 let _: () = msg_send![item, setSubmenu: submenu];
                 let _: () = msg_send![menuobj, addItem: item];
             }
@@ -157,7 +157,7 @@ pub fn attach_menu(
     // use the _window parameter.
     _window: &Window,
     // On some platforms the Menu type would need access to the Window, e.g Windows.
-    _menu: &mut Menu,
+    _menu: &Menu,
 ) {
     // Create the menubar spec
     let menu_bar_spec: MenuSpec = MenuSpec::default();
@@ -173,7 +173,7 @@ pub fn attach_menu(
         let _: () = msg_send![app, setServicesMenu: services_menu];
 
         // Turn the menubar description into a Cocoa menu.
-        let obj = build_menu(app, services_menu, menu_bar_spec);
+        let obj = build_menu(app, services_menu, &menu_bar_spec);
 
         // Register the menu with the NSApplication object.
         let _: () = msg_send![app, setMainMenu: obj];

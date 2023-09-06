@@ -14,6 +14,7 @@ pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilde
     use winit::platform::windows::EventLoopBuilderExtWindows;
     {
         let menu_bar_: Menu = menu_bar.clone();
+        // Add the accelator table
         event_loop_builder.with_msg_hook(move |msg| {
             use windows_sys::Win32::UI::WindowsAndMessaging::{TranslateAcceleratorW, MSG};
             unsafe {
