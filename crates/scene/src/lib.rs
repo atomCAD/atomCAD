@@ -6,5 +6,6 @@ mod assembly;
 pub mod feature;
 pub mod ids;
 mod molecule;
+mod pdb;
 mod utils;
 mod vsepr;

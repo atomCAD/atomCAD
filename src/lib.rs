@@ -38,10 +38,6 @@ pub mod camera;
 /// A platform-independent abstraction over the windowing system's interface
 /// for menus and menubars.  Used to setup the application menubar on startup.
 pub mod menubar;
-/// A module for loading and parsing PDB files.
-///
-/// TODO: Should probably be abstracted into its own crate.
-pub mod pdb;
 
 // This module is not public.  It is a common abstraction over the various
 // platform-specific APIs.  For example, `platform::menubar` exposes an API
@@ -64,9 +60,11 @@ pub const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 
 use camera::ArcballCamera;
 use common::InputEvent;
-use pdb::PdbFeature;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{Assembly, Component, Molecule};
+use scene::{
+    feature::{Feature, PdbFeature},
+    Assembly, Component, Molecule,
+};
 
 use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
@@ -79,13 +77,27 @@ use winit::{
 };
 
 fn make_pdb_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
-    Molecule::from_feature(
-        gpu_resources,
-        PdbFeature {
-            name: "Neon Pump".into(),
-            contents: include_str!("../assets/neon_pump_imm.pdb").into(),
-        },
-    )
+    let mut molecule = Molecule::from_feature(Feature::PdbFeature(PdbFeature {
+        name: "Neon Pump".into(),
+        contents: include_str!("../assets/neon_pump_imm.pdb").into(),
+    }));
+
+    molecule.repr.reupload_atoms(gpu_resources);
+    molecule
+}
+
+#[allow(dead_code)]
+fn make_salt_demo_scene(gpu_resources: &GlobalRenderResources) -> Molecule {
+    let mut molecule = Molecule::from_feature(Feature::RootAtom(periodic_table::Element::Sodium));
+
+    molecule.push_feature(Feature::BondedAtom(scene::feature::BondedAtom {
+        target: scene::ids::AtomSpecifier::new(0),
+        element: periodic_table::Element::Chlorine,
+    }));
+
+    molecule.apply_all_features();
+    molecule.repr.reupload_atoms(gpu_resources);
+    molecule
 }
 
 async fn resume_renderer(
@@ -101,6 +113,9 @@ async fn resume_renderer(
     .await;
 
     let molecule = make_pdb_demo_scene(&gpu_resources);
+    let molecule = serde_json::to_string(&molecule).unwrap();
+    let molecule: Molecule = serde_json::from_str(&molecule).unwrap();
+
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();
 

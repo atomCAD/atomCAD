@@ -74,8 +74,10 @@ impl Assembly {
                 let new_transform = component.transform * acc_transform;
                 match &component.data {
                     ComponentType::Molecule(molecule) => {
-                        molecules.push(molecule.atoms());
-                        transforms.push(new_transform);
+                        if let Some(atoms) = molecule.repr.atoms() {
+                            molecules.push(atoms);
+                            transforms.push(new_transform);
+                        }
                     }
                     ComponentType::SubAssembly(sub_assembly) => {
                         stack.push((sub_assembly, new_transform));
@@ -92,7 +94,7 @@ impl Assembly {
         for component in self.components.iter_mut() {
             match &mut component.data {
                 ComponentType::Molecule(ref mut molecule) => {
-                    molecule.reupload_atoms(gpu_resources);
+                    molecule.repr.reupload_atoms(gpu_resources);
                 }
                 ComponentType::SubAssembly(ref mut assembly) => {
                     assembly.synchronize_buffers(gpu_resources);

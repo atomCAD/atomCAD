@@ -2,43 +2,39 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use crate::feature::{FeatureError, MoleculeCommands};
+use crate::ids::{AtomSpecifier, FeatureId};
+
 use lib3dmol::{
     parser::read_pdb_txt,
     structures::{atom::AtomType, GetAtom as _},
 };
 use periodic_table::Element;
-use scene::{feature::Feature, ids::AtomSpecifier};
 use ultraviolet::Vec3;
 
-pub struct PdbFeature {
-    pub name: String,
-    pub contents: String,
-}
+pub(crate) fn spawn_pdb(
+    name: &str,
+    contents: &str,
+    feature_id: &FeatureId,
+    commands: &mut dyn MoleculeCommands,
+) -> Result<(), FeatureError> {
+    // Currently bonds are ignored because lib3dmol does not support
+    // parsing bonding info from PDB files!
+    let mut spec = AtomSpecifier::new(*feature_id);
+    let structure = read_pdb_txt(contents, name);
 
-impl Feature for PdbFeature {
-    fn apply(
-        &self,
-        feature_id: &scene::ids::FeatureId,
-        commands: &mut dyn scene::feature::MoleculeCommands,
-    ) -> Result<(), scene::feature::FeatureError> {
-        // Currently bonds are ignored because lib3dmol does not support
-        // parsing bonding info from PDB files!
-        let mut spec = AtomSpecifier::new(*feature_id);
-        let structure = read_pdb_txt(&self.contents, &self.name);
+    for chain in structure.chains {
+        for residue in chain.lst_res {
+            for atom in residue.get_atom() {
+                let element = atom_type_to_element(&atom.a_type);
+                let pos: Vec3 = atom.coord.into();
 
-        for chain in structure.chains {
-            for residue in chain.lst_res {
-                for atom in residue.get_atom() {
-                    let element = atom_type_to_element(&atom.a_type);
-                    let pos: Vec3 = atom.coord.into();
-
-                    commands.add_atom(element, pos, spec.next_spec())?;
-                }
+                commands.add_atom(element, pos, spec.next_spec())?;
             }
         }
-
-        Ok(())
     }
+
+    Ok(())
 }
 
 fn atom_type_to_element(atom_type: &AtomType) -> Element {
