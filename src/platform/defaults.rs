@@ -7,13 +7,13 @@ pub mod menubar {
     // Currently does nothing, and is present merely to ensure we compile on
     // platforms, including those that don't natively support any menubar
     // functionality.
-    use crate::menubar::Menu;
     use winit::{event_loop::EventLoopBuilder, window::Window};
 
-    pub fn configure_event_loop<T: 'static>(
-        _event_loop_builder: &mut EventLoopBuilder<T>,
-        _menu: &Menu,
-    ) {
+    // Platform-specific type that handles all menu allocations.
+    pub struct Menu;
+
+    pub fn configure_event_loop<T: 'static>(_event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {
+        Menu
     }
 
     pub fn attach_menu(_window: &Window, _menu: &Menu) {}

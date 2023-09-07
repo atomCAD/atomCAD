@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::platform::menubar::{attach_menu, configure_event_loop};
+use crate::platform::menubar::{attach_menu, configure_event_loop, Menu};
 use crate::APP_NAME;
 use winit::event_loop::EventLoopBuilder;
 use winit::window::Window;
@@ -13,12 +13,59 @@ use winit::window::Window;
 //
 // Menus can also be contextual (e.g. a popup right-click menu) or accessed
 // from the system tray.
-pub struct Menu {
+pub struct MenuSpec {
     pub title: String,
     pub items: Vec<MenuItem>,
 }
 
-impl Menu {
+impl Default for MenuSpec {
+    fn default() -> Self {
+        MenuSpec::new(APP_NAME).and_then(MenuItem::SubMenu(
+            MenuSpec::new("")
+                .and_then(MenuItem::new(
+                    &format!("About {}", APP_NAME),
+                    MenuShortcut::None,
+                    MenuAction::System(SystemAction::LaunchAboutWindow),
+                ))
+                .and_then(MenuItem::Separator)
+                .and_then(MenuItem::new(
+                    "Settings...",
+                    MenuShortcut::System(SystemShortcut::Preferences),
+                    MenuAction::System(SystemAction::LaunchPreferences),
+                ))
+                .and_then(MenuItem::Separator)
+                .and_then(MenuItem::new(
+                    "Services",
+                    MenuShortcut::None,
+                    MenuAction::System(SystemAction::ServicesMenu),
+                ))
+                .and_then(MenuItem::Separator)
+                .and_then(MenuItem::new(
+                    &format!("Hide {}", APP_NAME),
+                    MenuShortcut::System(SystemShortcut::HideApp),
+                    MenuAction::System(SystemAction::HideApp),
+                ))
+                .and_then(MenuItem::new(
+                    "Hide Others",
+                    MenuShortcut::System(SystemShortcut::HideOthers),
+                    MenuAction::System(SystemAction::HideOthers),
+                ))
+                .and_then(MenuItem::new(
+                    "Show All",
+                    MenuShortcut::None,
+                    MenuAction::System(SystemAction::ShowAll),
+                ))
+                .and_then(MenuItem::Separator)
+                .and_then(MenuItem::new(
+                    &format!("Quit {}", APP_NAME),
+                    MenuShortcut::System(SystemShortcut::QuitApp),
+                    MenuAction::System(SystemAction::Terminate),
+                )),
+        ))
+    }
+}
+
+impl MenuSpec {
     pub fn new(title: &str) -> Self {
         Self {
             title: title.to_owned(),
@@ -38,7 +85,7 @@ impl Menu {
 pub enum MenuItem {
     Separator,
     Entry(String, MenuShortcut, MenuAction),
-    SubMenu(Menu),
+    SubMenu(MenuSpec),
 }
 
 impl MenuItem {
@@ -112,52 +159,7 @@ pub enum SystemAction {
 }
 
 pub fn setup_menu_bar<T: 'static>(event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {
-    let menubar = Menu::new(APP_NAME).and_then(MenuItem::SubMenu(
-        Menu::new("")
-            .and_then(MenuItem::new(
-                &format!("About {}", APP_NAME),
-                MenuShortcut::None,
-                MenuAction::System(SystemAction::LaunchAboutWindow),
-            ))
-            .and_then(MenuItem::Separator)
-            .and_then(MenuItem::new(
-                "Settings...",
-                MenuShortcut::System(SystemShortcut::Preferences),
-                MenuAction::System(SystemAction::LaunchPreferences),
-            ))
-            .and_then(MenuItem::Separator)
-            .and_then(MenuItem::new(
-                "Services",
-                MenuShortcut::None,
-                MenuAction::System(SystemAction::ServicesMenu),
-            ))
-            .and_then(MenuItem::Separator)
-            .and_then(MenuItem::new(
-                &format!("Hide {}", APP_NAME),
-                MenuShortcut::System(SystemShortcut::HideApp),
-                MenuAction::System(SystemAction::HideApp),
-            ))
-            .and_then(MenuItem::new(
-                "Hide Others",
-                MenuShortcut::System(SystemShortcut::HideOthers),
-                MenuAction::System(SystemAction::HideOthers),
-            ))
-            .and_then(MenuItem::new(
-                "Show All",
-                MenuShortcut::None,
-                MenuAction::System(SystemAction::ShowAll),
-            ))
-            .and_then(MenuItem::Separator)
-            .and_then(MenuItem::new(
-                &format!("Quit {}", APP_NAME),
-                MenuShortcut::System(SystemShortcut::QuitApp),
-                MenuAction::System(SystemAction::Terminate),
-            )),
-    ));
-
-    configure_event_loop(event_loop_builder, &menubar);
-
-    menubar
+    configure_event_loop(event_loop_builder)
 }
 
 pub fn attach_menu_bar(window: &Window, menu: &Menu) {

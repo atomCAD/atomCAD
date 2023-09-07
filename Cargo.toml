@@ -46,6 +46,11 @@ env_logger = "0.10.0"
 android-activity = { version = "0.4", features = ["native-activity"] }
 android_logger = "0.13.1"
 
+# Windows
+[target.'cfg(target_os = "windows")'.dependencies]
+muda = "0.9.1"
+windows-sys = { version = "0.48", features = ["Win32_UI_WindowsAndMessaging"] }
+
 # macOS:
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
