@@ -78,7 +78,7 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
             }
             MenuItem::SubMenu(sub_menu_spec) => {
                 menu_bar
-                    .append(&build_sub_menu(&sub_menu_spec))
+                    .append(&build_sub_menu(sub_menu_spec))
                     .expect("Appending a sub-menu to the menubar shouldn't");
             }
         }
@@ -131,7 +131,7 @@ fn build_sub_menu(sub_menu_spec: &MenuSpec) -> Submenu {
                     .expect("Appending sub-menu 'Separator' shouldn't return an error.");
             }
             MenuItem::SubMenu(sub_sub_menu_spec) => {
-                let sub_sub_menu: Submenu = build_sub_menu(&sub_sub_menu_spec);
+                let sub_sub_menu: Submenu = build_sub_menu(sub_sub_menu_spec);
                 sub_menu
                     .append(&sub_sub_menu)
                     .expect("Appending a sub-menu to a sub-menu shouldn't");
