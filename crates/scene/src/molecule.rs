@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 use periodic_table::Element;
-use petgraph::stable_graph;
+use petgraph::{stable_graph, visit::IntoNodeReferences};
 use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use ultraviolet::Vec3;
 
 use crate::{
@@ -13,16 +14,51 @@ use crate::{
     utils::BoundingBox,
 };
 
-pub type Graph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
+pub type MoleculeGraph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
+// A map that gives each atom in a molecule a coordinate. Used to cache structure energy minimization
+// calculations
+pub type AtomPositions = HashMap<AtomSpecifier, Vec3>;
 pub type BondOrder = u8;
 pub type AtomIndex = stable_graph::NodeIndex;
 #[allow(unused)]
 pub type BondIndex = stable_graph::EdgeIndex;
 
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct MoleculeCheckpoint {
+    graph: MoleculeGraph,
+    #[serde_as(as = "Vec<(_, _)>")]
+    positions: AtomPositions,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AtomNode {
     pub element: Element,
-    pub pos: Vec3,
     pub spec: AtomSpecifier,
+    // The atom that this atom was bonded to (and uses as a "forward" direction). If
+    // no such atom exists, then this atom is the root atom, and the forward direction
+    // should be taken to be the molecule's +z axis. Although this field is not yet
+    // used (as of september 3rd 2023), it is needed to describe molecular geometry
+    // in terms of bond angles and lengths (which will be useful later on).
+    pub head: Option<AtomSpecifier>,
+}
+
+impl AtomNode {
+    pub fn forward(&self, commands: &dyn MoleculeCommands) -> Vec3 {
+        match self.head {
+            Some(ref head) => {
+                let head_pos = commands
+                    .pos(head)
+                    .expect("The atom specifier an atom that is bonded should exist");
+                let pos = commands
+                    .pos(&self.spec)
+                    .expect("The atom specifier an atom that is bonded should exist");
+
+                (*head_pos - *pos).normalized()
+            }
+            None => Vec3::unit_z(),
+        }
+    }
 }
 
 /// The concrete representation of the molecule at some time in the feature history.
@@ -32,10 +68,11 @@ pub struct MoleculeRepr {
     // is highly structued and repetitive: compression, flattening, and a tree could do
     // a lot to optimize this.
     atom_map: HashMap<AtomSpecifier, AtomIndex>,
-    graph: Graph,
+    pub graph: MoleculeGraph,
     bounding_box: BoundingBox,
     gpu_synced: bool,
     gpu_atoms: Option<Atoms>,
+    positions: AtomPositions,
 }
 
 impl MoleculeRepr {
@@ -44,7 +81,9 @@ impl MoleculeRepr {
             .node_weights()
             .map(|node| AtomRepr {
                 kind: AtomKind::new(node.element),
-                pos: node.pos,
+                pos: *self
+                    .pos(&node.spec)
+                    .expect("Every atom in the graph should have a position"),
             })
             .collect()
     }
@@ -54,6 +93,10 @@ impl MoleculeRepr {
         self.graph.clear();
         self.bounding_box = Default::default();
         self.gpu_synced = false;
+    }
+
+    pub(crate) fn relax(&mut self) {
+        self.positions = crate::dynamics::relax(&self.graph, &self.positions, 0.01);
     }
 
     pub fn reupload_atoms(&mut self, gpu_resources: &GlobalRenderResources) {
@@ -75,6 +118,23 @@ impl MoleculeRepr {
     pub fn atoms(&self) -> Option<&Atoms> {
         self.gpu_atoms.as_ref()
     }
+
+    pub fn set_checkpoint(&mut self, checkpoint: MoleculeCheckpoint) {
+        self.graph = checkpoint.graph;
+        self.positions = checkpoint.positions;
+        self.atom_map.clear();
+
+        for (atom_index, atom) in self.graph.node_references() {
+            self.atom_map.insert(atom.spec.clone(), atom_index);
+        }
+    }
+
+    pub fn make_checkpoint(&self) -> MoleculeCheckpoint {
+        MoleculeCheckpoint {
+            graph: self.graph.clone(),
+            positions: self.positions.clone(),
+        }
+    }
 }
 
 lazy_static! {
@@ -83,11 +143,24 @@ lazy_static! {
 }
 
 impl MoleculeCommands for MoleculeRepr {
+    fn add_bonded_atom(
+        &mut self,
+        element: Element,
+        pos: ultraviolet::Vec3,
+        spec: AtomSpecifier,
+        bond_target: AtomSpecifier,
+        bond_order: BondOrder,
+    ) -> Result<(), FeatureError> {
+        self.add_atom(element, pos, spec.clone(), Some(bond_target.clone()))?;
+        self.create_bond(&spec, &bond_target, bond_order)
+    }
+
     fn add_atom(
         &mut self,
         element: Element,
         pos: ultraviolet::Vec3,
         spec: AtomSpecifier,
+        head: Option<AtomSpecifier>,
     ) -> Result<(), FeatureError> {
         if self.atom_map.contains_key(&spec) {
             return Err(FeatureError::AtomOverwrite);
@@ -95,17 +168,18 @@ impl MoleculeCommands for MoleculeRepr {
 
         let index = self.graph.add_node(AtomNode {
             element,
-            pos,
             spec: spec.clone(),
+            head,
         });
 
-        self.atom_map.insert(spec, index);
+        self.atom_map.insert(spec.clone(), index);
         self.bounding_box.enclose_sphere(
             pos,
             // TODO: This is
             PERIODIC_TABLE.element_reprs[element as usize].radius,
         );
         self.gpu_synced = false;
+        self.positions.insert(spec, pos);
 
         Ok(())
     }
@@ -131,6 +205,10 @@ impl MoleculeCommands for MoleculeRepr {
             None => None,
         }
     }
+
+    fn pos(&self, spec: &AtomSpecifier) -> Option<&Vec3> {
+        self.positions.get(spec)
+    }
 }
 
 /// Demonstration of how to use the feature system
@@ -155,9 +233,7 @@ impl MoleculeCommands for MoleculeRepr {
 ///
 /// molecule.set_history_step(2);
 /// molecule.reupload_atoms(&gpu_resources);
-#[derive(Serialize)]
 pub struct Molecule {
-    #[serde(skip)]
     pub repr: MoleculeRepr,
     #[allow(unused)]
     rotation: ultraviolet::Rotor3,
@@ -168,13 +244,17 @@ pub struct Molecule {
     // This is unrelated to feature IDs: it is effectively just a counter of how many features are
     // applied. (i.e. our current location in the edit history timeline)
     history_step: usize,
-    // When checkpointing is implemented, this will be needed:
-    //
+    // when `history_step` is set to `i`, if `checkpoints` contains the key `i`, then
+    // `checkpoints.get(i)` contains the graph and geometry which should be used to render
+    // the molecule. This allows feature application and relaxation to be cached until they
+    // need to be recomputed. This saves a lot of time, as relaxation is a very expensive operation that does not
+    // commute with feature application.
+    checkpoints: HashMap<usize, MoleculeCheckpoint>,
     // the history step we cannot equal or exceed without first recomputing. For example, if repr
     // is up to date with the feature list, and then a past feature is changed, dirty_step would change
     // from `features.len()` to the index of the changed feature. This is used to determine if recomputation
     // is needed when moving forwards in the timeline, or if a future checkpoint can be used.
-    // dirty_step: usize,
+    dirty_step: usize,
 }
 
 impl Molecule {
@@ -183,6 +263,8 @@ impl Molecule {
         feature
             .apply(&0, &mut repr)
             .expect("Primitive features should never return a feature error!");
+        repr.relax();
+
         let mut features = FeatureList::default();
         features.push_back(feature);
 
@@ -192,6 +274,8 @@ impl Molecule {
             offset: ultraviolet::Vec3::default(),
             features,
             history_step: 1, // This starts at 1 because we applied the primitive feature
+            checkpoints: Default::default(),
+            dirty_step: 1, // Although no checkpoints exist, repr is not dirty, so we advance this to its max
         }
     }
 
@@ -213,11 +297,30 @@ impl Molecule {
             "history step exceeds feature list size"
         );
 
-        // If we are stepping back, we need to recompute starting at the beginning
-        // (we don't currently use checkpoints or feature inversion).
-        if history_step < self.history_step {
-            self.history_step = 0;
-            self.repr.clear();
+        // Find the best checkpoint to start reconstructing from:
+        let best_checkpoint = self
+            .checkpoints
+            .keys()
+            .filter(|candidate| **candidate <= history_step)
+            .max();
+
+        match best_checkpoint {
+            None => {
+                // If there wasn't a usable checkpoint, we can either keep computing forwards or
+                // restart. We only have to restart from scratch if we're moving backwards, otherwise
+                // we can just move forwards.
+
+                if self.history_step > history_step {
+                    self.history_step = 0;
+                    self.repr.clear();
+                }
+            }
+            Some(best_checkpoint) => {
+                // If there was, we can go there and resume from that point
+                self.repr
+                    .set_checkpoint(self.checkpoints.get(best_checkpoint).unwrap().clone());
+                self.history_step = *best_checkpoint;
+            }
         }
 
         for feature_id in &self.features.order()[self.history_step..history_step] {
@@ -232,8 +335,11 @@ impl Molecule {
                 println!("Feature reconstruction error on feature {}", feature_id);
                 dbg!(&feature);
             }
+
+            self.repr.relax();
         }
 
+        self.dirty_step = history_step;
         self.history_step = history_step;
     }
 
@@ -274,13 +380,17 @@ impl Molecule {
 
         let graph = &self.repr.graph;
         for _ in 0..num_steps {
-            for atom_index in graph.node_indices() {
-                let atom = graph.node_weight(atom_index).expect("Iterating over an immutably referenced graph should always provide valid node indexes");
+            for atom in graph.node_weights() {
                 let atom_radius_sq = PERIODIC_TABLE.element_reprs[atom.element as usize]
                     .radius
                     .powi(2);
 
-                if (current_pos - atom.pos).mag_sq() < atom_radius_sq {
+                let atom_pos = *self
+                    .repr
+                    .positions
+                    .get(&atom.spec)
+                    .expect("Every atom in the graph should have an associated position");
+                if (current_pos - atom_pos).mag_sq() < atom_radius_sq {
                     return Some(atom.spec.clone());
                 }
             }
@@ -292,36 +402,67 @@ impl Molecule {
     }
 }
 
+// This is a stripped down representation of the molecule that removes several
+// fields (some are redundant, like repr.atom_map, and some are not serializable,
+// like repr.gpu_atoms).
+#[derive(Serialize, Deserialize)]
+struct ProxyMolecule {
+    rotation: ultraviolet::Rotor3,
+    offset: ultraviolet::Vec3,
+    features: FeatureList,
+    history_step: usize,
+    checkpoints: HashMap<usize, MoleculeCheckpoint>,
+    dirty_step: usize,
+}
+
+impl Serialize for Molecule {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Custom serialization is used to ensure that the current molecule state is
+        // saved as a checkpoint, even if it normally would not be (i.e. if it's already
+        // very close to an existing checkpoint). This allows faster loading when the file
+        // is reopened.
+
+        let mut checkpoints = self.checkpoints.clone();
+        checkpoints.insert(self.history_step, self.repr.make_checkpoint());
+
+        let data = ProxyMolecule {
+            rotation: self.rotation,
+            offset: self.offset,
+            features: self.features.clone(),
+            history_step: self.history_step,
+            checkpoints,
+            dirty_step: self.dirty_step,
+        };
+
+        data.serialize(serializer)
+    }
+}
+
 impl<'de> Deserialize<'de> for Molecule {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        // This is all the data that a Molecule serializes into. The other
-        // fields on molecule are large in size and easy to recompute, so we will
-        // use the raw molecule representation to reconstruct them.
-        #[derive(Deserialize)]
-        struct RawMolecule {
-            rotation: ultraviolet::Rotor3,
-            offset: ultraviolet::Vec3,
-            features: FeatureList,
-            history_step: usize,
-        }
-
         // TODO: integrity check of the deserialized struct
 
-        let raw_molecule = RawMolecule::deserialize(deserializer)?;
+        let data = ProxyMolecule::deserialize(deserializer)?;
 
         let mut molecule = Molecule {
             repr: MoleculeRepr::default(),
-            rotation: raw_molecule.rotation,
-            offset: raw_molecule.offset,
-            features: raw_molecule.features,
-            history_step: 0, // This starts at 0 because we haven't applied the features, we've just loaded them
+            rotation: data.rotation,
+            offset: data.offset,
+            features: data.features,
+            history_step: data.history_step, // This starts at 0 because we haven't applied the features, we've just loaded them
+
+            checkpoints: data.checkpoints,
+            dirty_step: data.dirty_step,
         };
 
         // this advances the history step to the correct location
-        molecule.set_history_step(raw_molecule.history_step);
+        molecule.set_history_step(data.history_step);
 
         Ok(molecule)
     }

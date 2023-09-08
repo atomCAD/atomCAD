@@ -29,7 +29,7 @@ pub(crate) fn spawn_pdb(
                 let element = atom_type_to_element(&atom.a_type);
                 let pos: Vec3 = atom.coord.into();
 
-                commands.add_atom(element, pos, spec.next_spec())?;
+                commands.add_atom(element, pos, spec.next_spec(), None)?;
             }
         }
     }
