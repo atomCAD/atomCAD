@@ -5,6 +5,11 @@
 use std::{mem, slice};
 use winit::event::{DeviceEvent, WindowEvent};
 
+pub use bounding_box::BoundingBox;
+
+mod bounding_box;
+pub mod ids;
+
 pub enum InputEvent<'a> {
     Window(WindowEvent<'a>),
     Device(DeviceEvent),

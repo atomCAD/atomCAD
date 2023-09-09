@@ -60,11 +60,12 @@ pub const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 
 use camera::ArcballCamera;
 use common::InputEvent;
-use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
-use scene::{
+use molecule::{
     feature::{Feature, PdbFeature},
-    Assembly, Component, Molecule,
+    Molecule,
 };
+use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
+use scene::{Assembly, Component};
 
 use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
@@ -88,8 +89,8 @@ fn make_pdb_demo_scene() -> Molecule {
 fn make_salt_demo_scene() -> Molecule {
     let mut molecule = Molecule::from_feature(Feature::RootAtom(periodic_table::Element::Sodium));
 
-    molecule.push_feature(Feature::BondedAtom(scene::feature::BondedAtom {
-        target: scene::ids::AtomSpecifier::new(0),
+    molecule.push_feature(Feature::BondedAtom(molecule::feature::BondedAtom {
+        target: common::ids::AtomSpecifier::new(0),
         element: periodic_table::Element::Chlorine,
     }));
 

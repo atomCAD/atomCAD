@@ -1,5 +1,5 @@
-use crate::ids::AtomSpecifier;
 use crate::molecule::MoleculeGraph;
+use common::ids::AtomSpecifier;
 use std::collections::HashMap;
 use ultraviolet::Vec3;
 

@@ -12,27 +12,30 @@ edition = "2021"
 
 [workspace]
 members = [
-    "crates/render",
-    "crates/periodic-table",
     "crates/common",
+    "crates/periodic-table",
+    "crates/render",
+    "crates/molecule",
     "crates/scene",
 ]
 
 [workspace.dependencies]
-render = { package = "atomcad-render", path = "crates/render" }
 common = { package = "atomcad-common", path = "crates/common" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
+render = { package = "atomcad-render", path = "crates/render" }
+molecule = { package = "atomcad-molecule", path = "crates/molecule" }
 scene = { package = "atomcad-scene", path = "crates/scene" }
 ultraviolet = { version = "0.9.1", features = ["serde"] }
+petgraph = { version = "0.6.3", features = ["serde-1"] }
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.105"
-petgraph = { version = "0.6.3", features = ["serde-1"] }
 
 
 [dependencies]
-render = { workspace = true }
 common = { workspace = true }
 periodic-table = { workspace = true }
+render = { workspace = true }
+molecule = { workspace = true }
 scene = { workspace = true }
 ultraviolet = { workspace = true }
 serde = { workspace = true }

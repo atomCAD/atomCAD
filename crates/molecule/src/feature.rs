@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use periodic_table::Element;
 
-use crate::{ids::*, molecule::AtomNode, BondOrder};
+use crate::{molecule::AtomNode, BondOrder};
 
+use common::ids::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]

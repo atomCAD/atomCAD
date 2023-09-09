@@ -8,11 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use ultraviolet::Vec3;
 
-use crate::{
-    feature::{Feature, FeatureError, FeatureList, MoleculeCommands, ReferenceType},
-    ids::AtomSpecifier,
-    utils::BoundingBox,
-};
+use crate::feature::{Feature, FeatureError, FeatureList, MoleculeCommands, ReferenceType};
+
+use common::{ids::AtomSpecifier, BoundingBox};
 
 pub type MoleculeGraph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
 // A map that gives each atom in a molecule a coordinate. Used to cache structure energy minimization

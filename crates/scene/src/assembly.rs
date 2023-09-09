@@ -1,7 +1,6 @@
+use molecule::Molecule;
 use render::Atoms;
 use ultraviolet::Mat4;
-
-use crate::Molecule;
 
 enum ComponentType {
     Molecule(Molecule),

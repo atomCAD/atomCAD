@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::feature::{FeatureError, MoleculeCommands};
-use crate::ids::{AtomSpecifier, FeatureId};
+use common::ids::{AtomSpecifier, FeatureId};
 
 use lib3dmol::{
     parser::read_pdb_txt,
