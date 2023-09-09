@@ -72,7 +72,7 @@ pub enum Feature {
 impl Feature {
     pub fn apply(
         &self,
-        feature_id: &FeatureId,
+        feature_id: &EditId,
         commands: &mut dyn MoleculeCommands,
     ) -> Result<(), FeatureError> {
         match self {
@@ -108,8 +108,8 @@ impl Feature {
 #[derive(Default, Clone, Deserialize, Serialize)]
 pub struct FeatureList {
     counter: usize,
-    order: Vec<FeatureId>,
-    features: HashMap<FeatureId, Feature>,
+    order: Vec<EditId>,
+    features: HashMap<EditId, Feature>,
 }
 
 impl FeatureList {
@@ -125,12 +125,12 @@ impl FeatureList {
     }
 
     // Removes the feature with the given `id` from the feature list, shifting all features after it to the left.
-    pub fn remove(&mut self, id: FeatureId) {
+    pub fn remove(&mut self, id: EditId) {
         self.features.remove(&id);
         self.order.remove(id);
     }
 
-    pub fn get(&self, id: &FeatureId) -> Option<&Feature> {
+    pub fn get(&self, id: &EditId) -> Option<&Feature> {
         self.features.get(id)
     }
 
@@ -153,7 +153,7 @@ impl FeatureList {
         self.order.is_empty()
     }
 
-    pub fn order(&self) -> &[FeatureId] {
+    pub fn order(&self) -> &[EditId] {
         &self.order
     }
 }

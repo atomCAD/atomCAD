@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::feature::{FeatureError, MoleculeCommands};
-use common::ids::{AtomSpecifier, FeatureId};
+use common::ids::{AtomSpecifier, EditId};
 
 use lib3dmol::{
     parser::read_pdb_txt,
@@ -15,7 +15,7 @@ use ultraviolet::Vec3;
 pub(crate) fn spawn_pdb(
     name: &str,
     contents: &str,
-    feature_id: &FeatureId,
+    feature_id: &EditId,
     commands: &mut dyn MoleculeCommands,
 ) -> Result<(), FeatureError> {
     // Currently bonds are ignored because lib3dmol does not support
