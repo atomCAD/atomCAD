@@ -80,13 +80,13 @@ fn latency_repr<T: Into<f64>>(number: T) -> String {
     let radix = 1_000;
     format!("{}.{} ms", number / radix, number % radix / (radix / 10))
   } else if number < 60 * 1_000_000 {
-    let radix = 60 * 1_000_000;
+    let radix = 1_000_000;
     format!("{}.{} s", number / radix, number % radix / (radix /10))
-  } else if number <3_600 *1_000_000{
-    let radix =3_600 *1_000_000;
+  } else if number < 3_600 * 1_000_000 {
+    let radix = 60 * 1_000_000;
     format!("{}.{} min",number/radix,number%radix/(radix/10))
 }else{
-let radix=3_600*1_000_000;
+let radix = 3_600 * 1_000_000;
 format!("{}.{} hr",number/radix,number%radix/(radix/10))
 }
 }
