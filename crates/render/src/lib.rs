@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 pub use crate::{
-    atoms::{AtomKind, AtomRepr, Atoms},
+    atom_buffer::{AtomBuffer, AtomKind, AtomRepr},
     camera::{Camera, CameraRepr, RenderCamera},
 };
 use crate::{bind_groups::AsBindingResource as _, buffer_vec::BufferVec};
@@ -14,7 +14,7 @@ use ultraviolet::Vec2;
 use wgpu::util::DeviceExt as _;
 use winit::{dpi::PhysicalSize, window::Window};
 
-mod atoms;
+mod atom_buffer;
 mod bind_groups;
 mod buffer_vec;
 mod camera;
@@ -284,7 +284,7 @@ impl Renderer {
 
     pub fn render<'a>(
         &mut self,
-        atoms: impl IntoIterator<Item = &'a Atoms>,
+        atoms: impl IntoIterator<Item = &'a AtomBuffer>,
         transforms: Vec<ultraviolet::Mat4>,
     ) {
         let mut encoder = self

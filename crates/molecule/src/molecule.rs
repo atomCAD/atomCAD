@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 use periodic_table::Element;
 use petgraph::{stable_graph, visit::IntoNodeReferences};
-use render::{AtomKind, AtomRepr, Atoms, GlobalRenderResources};
+use render::{AtomBuffer, AtomKind, AtomRepr, GlobalRenderResources};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use ultraviolet::Vec3;
@@ -69,7 +69,7 @@ pub struct MoleculeRepr {
     pub graph: MoleculeGraph,
     bounding_box: BoundingBox,
     gpu_synced: bool,
-    gpu_atoms: Option<Atoms>,
+    gpu_atoms: Option<AtomBuffer>,
     positions: AtomPositions,
 }
 
@@ -107,13 +107,13 @@ impl MoleculeRepr {
         if self.graph.node_count() == 0 {
             self.gpu_atoms = None;
         } else {
-            self.gpu_atoms = Some(Atoms::new(gpu_resources, self.atom_reprs()));
+            self.gpu_atoms = Some(AtomBuffer::new(gpu_resources, self.atom_reprs()));
         }
 
         self.gpu_synced = true;
     }
 
-    pub fn atoms(&self) -> Option<&Atoms> {
+    pub fn atoms(&self) -> Option<&AtomBuffer> {
         self.gpu_atoms.as_ref()
     }
 

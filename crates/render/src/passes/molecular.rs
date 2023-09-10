@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Atoms, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
+use crate::{AtomBuffer, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
 use std::{convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
@@ -98,7 +98,7 @@ impl MolecularPass {
     pub fn run<'a>(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        atoms: impl IntoIterator<Item = &'a Atoms>,
+        atoms: impl IntoIterator<Item = &'a AtomBuffer>,
         fragment_transforms: &wgpu::Buffer,
         // fragments: impl IntoIterator<Item = &'a Fragment>,
         // fragment_transforms: &wgpu::Buffer,

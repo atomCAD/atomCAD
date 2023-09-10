@@ -1,5 +1,5 @@
 use molecule::Molecule;
-use render::Atoms;
+use render::AtomBuffer;
 use ultraviolet::Mat4;
 
 enum ComponentType {
@@ -58,12 +58,12 @@ impl Assembly {
         }
     }
 
-    pub fn collect_atoms_and_transforms(&self) -> (Vec<&Atoms>, Vec<Mat4>) {
+    pub fn collect_atoms_and_transforms(&self) -> (Vec<&AtomBuffer>, Vec<Mat4>) {
         // The number of direct children of the world is an estimate of the
         // lower bound of the number of molecules. It is only possible for this to
         // overestimate if a child assembly contains zero children (which is unusual).
         let mut transforms = Vec::<Mat4>::with_capacity(self.components.len());
-        let mut molecules = Vec::<&Atoms>::with_capacity(self.components.len());
+        let mut molecules = Vec::<&AtomBuffer>::with_capacity(self.components.len());
 
         // DFS
         let mut stack: Vec<(&Assembly, Mat4)> = vec![(self, Mat4::default())];
