@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use ultraviolet::Vec3;
 
-use crate::feature::{Feature, FeatureError, FeatureList, MoleculeCommands, ReferenceType};
+use crate::feature::{Edit, EditContext, EditError, EditList, ReferenceType};
 
 use common::{ids::AtomSpecifier, BoundingBox};
 
@@ -42,7 +42,7 @@ pub struct AtomNode {
 }
 
 impl AtomNode {
-    pub fn forward(&self, commands: &dyn MoleculeCommands) -> Vec3 {
+    pub fn forward(&self, commands: &dyn EditContext) -> Vec3 {
         match self.head {
             Some(ref head) => {
                 let head_pos = commands
@@ -140,7 +140,7 @@ lazy_static! {
         periodic_table::PeriodicTable::new();
 }
 
-impl MoleculeCommands for MoleculeRepr {
+impl EditContext for MoleculeRepr {
     fn add_bonded_atom(
         &mut self,
         element: Element,
@@ -148,7 +148,7 @@ impl MoleculeCommands for MoleculeRepr {
         spec: AtomSpecifier,
         bond_target: AtomSpecifier,
         bond_order: BondOrder,
-    ) -> Result<(), FeatureError> {
+    ) -> Result<(), EditError> {
         self.add_atom(element, pos, spec.clone(), Some(bond_target.clone()))?;
         self.create_bond(&spec, &bond_target, bond_order)
     }
@@ -159,9 +159,9 @@ impl MoleculeCommands for MoleculeRepr {
         pos: ultraviolet::Vec3,
         spec: AtomSpecifier,
         head: Option<AtomSpecifier>,
-    ) -> Result<(), FeatureError> {
+    ) -> Result<(), EditError> {
         if self.atom_map.contains_key(&spec) {
-            return Err(FeatureError::AtomOverwrite);
+            return Err(EditError::AtomOverwrite);
         }
 
         let index = self.graph.add_node(AtomNode {
@@ -187,13 +187,13 @@ impl MoleculeCommands for MoleculeRepr {
         a1: &AtomSpecifier,
         a2: &AtomSpecifier,
         order: BondOrder,
-    ) -> Result<(), FeatureError> {
+    ) -> Result<(), EditError> {
         match (self.atom_map.get(a1), self.atom_map.get(a2)) {
             (Some(&a1_index), Some(&a2_index)) => {
                 self.graph.add_edge(a1_index, a2_index, order);
                 Ok(())
             }
-            _ => Err(FeatureError::BrokenReference(ReferenceType::Atom)),
+            _ => Err(EditError::BrokenReference(ReferenceType::Atom)),
         }
     }
 
@@ -237,7 +237,7 @@ pub struct Molecule {
     rotation: ultraviolet::Rotor3,
     #[allow(unused)]
     offset: ultraviolet::Vec3,
-    features: FeatureList,
+    features: EditList,
     // The index one greater than the most recently applied feature's location in the feature list.
     // This is unrelated to feature IDs: it is effectively just a counter of how many features are
     // applied. (i.e. our current location in the edit history timeline)
@@ -256,14 +256,14 @@ pub struct Molecule {
 }
 
 impl Molecule {
-    pub fn from_feature(feature: Feature) -> Self {
+    pub fn from_feature(feature: Edit) -> Self {
         let mut repr = MoleculeRepr::default();
         feature
             .apply(&0, &mut repr)
             .expect("Primitive features should never return a feature error!");
         repr.relax();
 
-        let mut features = FeatureList::default();
+        let mut features = EditList::default();
         features.push_back(feature);
 
         Self {
@@ -277,11 +277,11 @@ impl Molecule {
         }
     }
 
-    pub fn features(&self) -> &FeatureList {
+    pub fn features(&self) -> &EditList {
         &self.features
     }
 
-    pub fn push_feature(&mut self, feature: Feature) {
+    pub fn push_feature(&mut self, feature: Edit) {
         self.features.insert(feature, self.history_step);
     }
 
@@ -407,7 +407,7 @@ impl Molecule {
 struct ProxyMolecule {
     rotation: ultraviolet::Rotor3,
     offset: ultraviolet::Vec3,
-    features: FeatureList,
+    features: EditList,
     history_step: usize,
     checkpoints: HashMap<usize, MoleculeCheckpoint>,
     dirty_step: usize,

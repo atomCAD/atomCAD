@@ -61,7 +61,7 @@ pub const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 use camera::ArcballCamera;
 use common::InputEvent;
 use molecule::{
-    feature::{Feature, PdbFeature},
+    feature::{Edit, PdbFeature},
     Molecule,
 };
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
@@ -79,7 +79,7 @@ use winit::{
 
 #[allow(dead_code)]
 fn make_pdb_demo_scene() -> Molecule {
-    Molecule::from_feature(Feature::PdbFeature(PdbFeature {
+    Molecule::from_feature(Edit::PdbFeature(PdbFeature {
         name: "Neon Pump".into(),
         contents: include_str!("../assets/neon_pump_imm.pdb").into(),
     }))
@@ -87,9 +87,9 @@ fn make_pdb_demo_scene() -> Molecule {
 
 #[allow(dead_code)]
 fn make_salt_demo_scene() -> Molecule {
-    let mut molecule = Molecule::from_feature(Feature::RootAtom(periodic_table::Element::Sodium));
+    let mut molecule = Molecule::from_feature(Edit::RootAtom(periodic_table::Element::Sodium));
 
-    molecule.push_feature(Feature::BondedAtom(molecule::feature::BondedAtom {
+    molecule.push_feature(Edit::BondedAtom(molecule::feature::BondedAtom {
         target: common::ids::AtomSpecifier::new(0),
         element: periodic_table::Element::Chlorine,
     }));

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::feature::{FeatureError, MoleculeCommands};
+use crate::feature::{EditContext, EditError};
 use common::ids::{AtomSpecifier, EditId};
 
 use lib3dmol::{
@@ -16,8 +16,8 @@ pub(crate) fn spawn_pdb(
     name: &str,
     contents: &str,
     feature_id: &EditId,
-    commands: &mut dyn MoleculeCommands,
-) -> Result<(), FeatureError> {
+    commands: &mut dyn EditContext,
+) -> Result<(), EditError> {
     // Currently bonds are ignored because lib3dmol does not support
     // parsing bonding info from PDB files!
     let mut spec = AtomSpecifier::new(*feature_id);
