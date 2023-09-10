@@ -70,22 +70,18 @@ pub enum Edit {
 }
 
 impl Edit {
-    pub fn apply(
-        &self,
-        feature_id: &EditId,
-        commands: &mut dyn EditContext,
-    ) -> Result<(), EditError> {
+    pub fn apply(&self, edit_id: &EditId, commands: &mut dyn EditContext) -> Result<(), EditError> {
         match self {
             Edit::RootAtom(element) => {
                 commands.add_atom(
                     *element,
                     Default::default(),
-                    AtomSpecifier::new(*feature_id),
+                    AtomSpecifier::new(*edit_id),
                     None,
                 )?;
             }
             Edit::BondedAtom(BondedAtom { target, element }) => {
-                let spec = AtomSpecifier::new(*feature_id);
+                let spec = AtomSpecifier::new(*edit_id);
 
                 let pos = *commands
                     .pos(target)
@@ -95,7 +91,7 @@ impl Edit {
                 commands.add_bonded_atom(*element, pos, spec, target.clone(), 1)?;
             }
             Edit::PdbFeature(PdbFeature { name, contents }) => {
-                crate::pdb::spawn_pdb(name, contents, feature_id, commands)?;
+                crate::pdb::spawn_pdb(name, contents, edit_id, commands)?;
             }
         }
 
@@ -109,16 +105,16 @@ impl Edit {
 pub struct EditList {
     counter: usize,
     order: Vec<EditId>,
-    features: HashMap<EditId, Edit>,
+    edits: HashMap<EditId, Edit>,
 }
 
 impl EditList {
     // Inserts a feature at position `location` within the feature list, shifting all features after it to the right.
-    pub fn insert(&mut self, feature: Edit, location: usize) -> usize {
+    pub fn insert(&mut self, edit: Edit, location: usize) -> usize {
         let id = self.counter;
 
         self.order.insert(location, id);
-        self.features.insert(id, feature);
+        self.edits.insert(id, edit);
 
         self.counter += 1;
         self.counter
@@ -126,20 +122,20 @@ impl EditList {
 
     // Removes the feature with the given `id` from the feature list, shifting all features after it to the left.
     pub fn remove(&mut self, id: EditId) {
-        self.features.remove(&id);
+        self.edits.remove(&id);
         self.order.remove(id);
     }
 
     pub fn get(&self, id: &EditId) -> Option<&Edit> {
-        self.features.get(id)
+        self.edits.get(id)
     }
 
     // Adds a new feature to the end of the feature list.
-    pub fn push_back(&mut self, feature: Edit) -> usize {
+    pub fn push_back(&mut self, edit: Edit) -> usize {
         let id = self.counter;
 
         self.order.push(id);
-        self.features.insert(id, feature);
+        self.edits.insert(id, edit);
 
         self.counter += 1;
         self.counter

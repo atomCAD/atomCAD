@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use ultraviolet::Vec3;
 
-use crate::feature::{Edit, EditContext, EditError, EditList, ReferenceType};
+use crate::edit::{Edit, EditContext, EditError, EditList, ReferenceType};
 
 use common::{ids::AtomSpecifier, BoundingBox};
 
@@ -237,7 +237,7 @@ pub struct Molecule {
     rotation: ultraviolet::Rotor3,
     #[allow(unused)]
     offset: ultraviolet::Vec3,
-    features: EditList,
+    edits: EditList,
     // The index one greater than the most recently applied feature's location in the feature list.
     // This is unrelated to feature IDs: it is effectively just a counter of how many features are
     // applied. (i.e. our current location in the edit history timeline)
@@ -256,33 +256,32 @@ pub struct Molecule {
 }
 
 impl Molecule {
-    pub fn from_feature(feature: Edit) -> Self {
+    pub fn from_feature(edit: Edit) -> Self {
         let mut repr = MoleculeRepr::default();
-        feature
-            .apply(&0, &mut repr)
+        edit.apply(&0, &mut repr)
             .expect("Primitive features should never return a feature error!");
         repr.relax();
 
         let mut features = EditList::default();
-        features.push_back(feature);
+        features.push_back(edit);
 
         Self {
             repr,
             rotation: ultraviolet::Rotor3::default(),
             offset: ultraviolet::Vec3::default(),
-            features,
+            edits: features,
             history_step: 1, // This starts at 1 because we applied the primitive feature
             checkpoints: Default::default(),
             dirty_step: 1, // Although no checkpoints exist, repr is not dirty, so we advance this to its max
         }
     }
 
-    pub fn features(&self) -> &EditList {
-        &self.features
+    pub fn edits(&self) -> &EditList {
+        &self.edits
     }
 
-    pub fn push_feature(&mut self, feature: Edit) {
-        self.features.insert(feature, self.history_step);
+    pub fn insert_edit(&mut self, edit: Edit) {
+        self.edits.insert(edit, self.history_step);
     }
 
     // Advances the model to a given history step by applying features in the timeline.
@@ -291,8 +290,8 @@ impl Molecule {
     pub fn set_history_step(&mut self, history_step: usize) {
         // TODO: Bubble error to user
         assert!(
-            history_step <= self.features.len(),
-            "history step exceeds feature list size"
+            history_step <= self.edits.len(),
+            "history step exceeds edit list size"
         );
 
         // Find the best checkpoint to start reconstructing from:
@@ -321,17 +320,17 @@ impl Molecule {
             }
         }
 
-        for feature_id in &self.features.order()[self.history_step..history_step] {
-            println!("Applying feature {}", feature_id);
-            let feature = self
-                .features
-                .get(feature_id)
+        for edit_id in &self.edits.order()[self.history_step..history_step] {
+            println!("Applying edit {}", edit_id);
+            let edit = self
+                .edits
+                .get(edit_id)
                 .expect("Feature IDs referenced by the FeatureList order should exist!");
 
-            if feature.apply(feature_id, &mut self.repr).is_err() {
+            if edit.apply(edit_id, &mut self.repr).is_err() {
                 // TODO: Bubble error to the user
-                println!("Feature reconstruction error on feature {}", feature_id);
-                dbg!(&feature);
+                println!("Failed to apply the edit with id {}", edit_id);
+                dbg!(&edit);
             }
 
             self.repr.relax();
@@ -343,8 +342,8 @@ impl Molecule {
 
     // equivalent to `set_history_step(features.len()): applies every feature that is in the
     // feature timeline.
-    pub fn apply_all_features(&mut self) {
-        self.set_history_step(self.features.len())
+    pub fn apply_all_edits(&mut self) {
+        self.set_history_step(self.edits.len())
     }
 
     // TODO: Optimize heavily (use octree, compute entry point of ray analytically)
@@ -407,7 +406,7 @@ impl Molecule {
 struct ProxyMolecule {
     rotation: ultraviolet::Rotor3,
     offset: ultraviolet::Vec3,
-    features: EditList,
+    edits: EditList,
     history_step: usize,
     checkpoints: HashMap<usize, MoleculeCheckpoint>,
     dirty_step: usize,
@@ -429,7 +428,7 @@ impl Serialize for Molecule {
         let data = ProxyMolecule {
             rotation: self.rotation,
             offset: self.offset,
-            features: self.features.clone(),
+            edits: self.edits.clone(),
             history_step: self.history_step,
             checkpoints,
             dirty_step: self.dirty_step,
@@ -452,7 +451,7 @@ impl<'de> Deserialize<'de> for Molecule {
             repr: MoleculeRepr::default(),
             rotation: data.rotation,
             offset: data.offset,
-            features: data.features,
+            edits: data.edits,
             history_step: data.history_step, // This starts at 0 because we haven't applied the features, we've just loaded them
 
             checkpoints: data.checkpoints,

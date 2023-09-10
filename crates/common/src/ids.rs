@@ -70,12 +70,12 @@ pub struct PatternInstanceId {
 /// edit 3: add the new branch. N is atom (3, 0) (N-C)
 /// edit 1: create atom (1, 0) (target atom = (0, 0)) (N-C-C)
 /// edit 2: passivate the terminal carbon (target atom = (1, 0)) (N-C-CH3)
-/// Notice how the passivation feature did not teleport this time - it stayed on the terminal
+/// Notice how the passivation `Edit` did not teleport this time - it stayed on the terminal
 /// carbon, where we wanted it.
 ///
-/// This system seems sufficient - and, in fact, it is, if we banned all copying-related features (
+/// This system seems sufficient - and, in fact, it is, if we banned all copying-related `Edit`s (
 /// like patterning, mirroring, or duplication). Let's see why a simple copy operation breaks things.
-/// To keep the example short, I'm adding a naive pattern feature that creates disconnected copies, but
+/// To keep the example short, I'm adding a naive pattern `Edit` that creates disconnected copies, but
 /// this example still holds when each copy is bonded to the original - it is just harder to follow.
 ///
 /// Fig 3. Edit ID + child index v.s. Copying
@@ -88,7 +88,7 @@ pub struct PatternInstanceId {
 /// edit 2: Passivate the first carbon in the second copy (target atom = (1, 1)) (C-C  C-CH3  C-C)
 /// Notice that the passivation has jumped from being on the second copy to being on the first copy!
 ///
-/// The problem in Fig. 3 occurs because features that copy external geometry act as an escape hatch
+/// The problem in Fig. 3 occurs because `Edit`s that copy external geometry act as an escape hatch
 /// from our indexing system. Earlier, we associated an edit ID with each atom, so that altering the
 /// "past" (and thus changing a global atom ID counter) was no longer a problem - we namespaced the
 /// atom id counter to each `Edit`. When edit 1 copied the data from edit 0, it let edit 0 increase
@@ -132,12 +132,12 @@ pub struct PatternInstanceId {
 /// child counter behind N `PatternInstanceId`s.
 ///
 /// This is how we arrive at the solution that AtomCAD uses. Every time an atom is
-/// copied by a feature, it's `AtomSpecifiers`'s `path` has a new `PatternInstanceId`
-/// pushed to the back, describing which feature made that copy and what the current
-/// instance index (the copy number inside that feature) is. The child index is never
+/// copied by a edit, it's `AtomSpecifiers`'s `path` has a new `PatternInstanceId`
+/// pushed to the back, describing which edit made that copy and what the current
+/// instance index (the copy number inside that edit) is. The child index is never
 /// changed (which means targets never invalidate), and originally comes from some
 /// primitive. For example, a primitive edit like "place a benzene ring" would create
-/// atoms with child indexes from 0 to 5. However, adding a feature that patterns an
+/// atoms with child indexes from 0 to 5. However, adding a edit that patterns an
 /// atom 10 times would never change the child index - it would just change the outermost
 /// `instance` counter in the `path`.
 ///
@@ -157,7 +157,7 @@ pub struct AtomSpecifier {
 }
 
 impl AtomSpecifier {
-    // Creates the trivial AtomSpecifier for the first atom created by feature `feature_id`.
+    // Creates the trivial AtomSpecifier for the first atom created by edit `owner_id`.
     pub fn new(owner_id: EditId) -> Self {
         AtomSpecifier {
             path: vec![PatternInstanceId {

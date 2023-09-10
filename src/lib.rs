@@ -61,7 +61,7 @@ pub const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 use camera::ArcballCamera;
 use common::InputEvent;
 use molecule::{
-    feature::{Edit, PdbFeature},
+    edit::{Edit, PdbFeature},
     Molecule,
 };
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
@@ -89,12 +89,12 @@ fn make_pdb_demo_scene() -> Molecule {
 fn make_salt_demo_scene() -> Molecule {
     let mut molecule = Molecule::from_feature(Edit::RootAtom(periodic_table::Element::Sodium));
 
-    molecule.push_feature(Edit::BondedAtom(molecule::feature::BondedAtom {
+    molecule.insert_edit(Edit::BondedAtom(molecule::edit::BondedAtom {
         target: common::ids::AtomSpecifier::new(0),
         element: periodic_table::Element::Chlorine,
     }));
 
-    molecule.apply_all_features();
+    molecule.apply_all_edits();
     molecule
 }
 
