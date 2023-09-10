@@ -62,7 +62,7 @@ use camera::ArcballCamera;
 use common::InputEvent;
 use molecule::{
     edit::{Edit, PdbFeature},
-    Molecule,
+    MoleculeEditor,
 };
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
 use scene::{Assembly, Component};
@@ -78,16 +78,17 @@ use winit::{
 };
 
 #[allow(dead_code)]
-fn make_pdb_demo_scene() -> Molecule {
-    Molecule::from_feature(Edit::PdbFeature(PdbFeature {
+fn make_pdb_demo_scene() -> MoleculeEditor {
+    MoleculeEditor::from_feature(Edit::PdbFeature(PdbFeature {
         name: "Neon Pump".into(),
         contents: include_str!("../assets/neon_pump_imm.pdb").into(),
     }))
 }
 
 #[allow(dead_code)]
-fn make_salt_demo_scene() -> Molecule {
-    let mut molecule = Molecule::from_feature(Edit::RootAtom(periodic_table::Element::Sodium));
+fn make_salt_demo_scene() -> MoleculeEditor {
+    let mut molecule =
+        MoleculeEditor::from_feature(Edit::RootAtom(periodic_table::Element::Sodium));
 
     molecule.insert_edit(Edit::BondedAtom(molecule::edit::BondedAtom {
         target: common::ids::AtomSpecifier::new(0),
@@ -113,7 +114,7 @@ async fn resume_renderer(
     let molecule = make_salt_demo_scene();
     let molecule = serde_json::to_string(&molecule).unwrap();
     println!("{}", molecule);
-    let molecule: Molecule = serde_json::from_str(&molecule).unwrap();
+    let molecule: MoleculeEditor = serde_json::from_str(&molecule).unwrap();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();
@@ -216,7 +217,7 @@ fn handle_event(
                                     Some((ray_origin, ray_direction)) => {
                                         world.as_mut().unwrap().walk_mut(|molecule, _| {
                                             if let Some(hit) =
-                                                molecule.get_ray_hit(ray_origin, ray_direction)
+                                                molecule.repr.get_ray_hit(ray_origin, ray_direction)
                                             {
                                                 println!("Atom {:?} clicked!", hit);
                                                 // molecule.push_feature(AtomFeature {

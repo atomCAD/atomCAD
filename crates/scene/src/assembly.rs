@@ -1,9 +1,9 @@
-use molecule::Molecule;
+use molecule::MoleculeEditor;
 use render::AtomBuffer;
 use ultraviolet::Mat4;
 
 enum ComponentType {
-    Molecule(Molecule),
+    Molecule(MoleculeEditor),
     SubAssembly(Assembly),
 }
 
@@ -13,7 +13,7 @@ pub struct Component {
 }
 
 impl Component {
-    pub fn from_molecule(molecule: Molecule, transform: Mat4) -> Self {
+    pub fn from_molecule(molecule: MoleculeEditor, transform: Mat4) -> Self {
         Self {
             transform,
             data: ComponentType::Molecule(molecule),
@@ -40,7 +40,7 @@ impl Assembly {
         }
     }
 
-    pub fn walk_mut(&mut self, mut f: impl FnMut(&mut Molecule, Mat4)) {
+    pub fn walk_mut(&mut self, mut f: impl FnMut(&mut MoleculeEditor, Mat4)) {
         let mut stack: Vec<(&mut Assembly, Mat4)> = vec![(self, Mat4::default())];
 
         while let Some((assembly, acc_transform)) = stack.pop() {
