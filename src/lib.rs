@@ -61,7 +61,7 @@ pub const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 use camera::ArcballCamera;
 use common::InputEvent;
 use molecule::{
-    edit::{Edit, PdbFeature},
+    edit::{Edit, PdbData},
     MoleculeEditor,
 };
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
@@ -79,7 +79,7 @@ use winit::{
 
 #[allow(dead_code)]
 fn make_pdb_demo_scene() -> MoleculeEditor {
-    MoleculeEditor::from_feature(Edit::PdbFeature(PdbFeature {
+    MoleculeEditor::from_feature(Edit::PdbImport(PdbData {
         name: "Neon Pump".into(),
         contents: include_str!("../assets/neon_pump_imm.pdb").into(),
     }))

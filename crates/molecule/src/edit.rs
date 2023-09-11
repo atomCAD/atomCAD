@@ -60,7 +60,7 @@ pub struct BondedAtom {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PdbFeature {
+pub struct PdbData {
     pub name: String,
     pub contents: String,
 }
@@ -69,7 +69,7 @@ pub struct PdbFeature {
 pub enum Edit {
     RootAtom(Element),
     BondedAtom(BondedAtom),
-    PdbFeature(PdbFeature),
+    PdbImport(PdbData),
 }
 
 impl Edit {
@@ -93,7 +93,7 @@ impl Edit {
 
                 commands.add_bonded_atom(*element, pos, spec, target.clone(), 1)?;
             }
-            Edit::PdbFeature(PdbFeature { name, contents }) => {
+            Edit::PdbImport(PdbData { name, contents }) => {
                 crate::pdb::spawn_pdb(name, contents, edit_id, commands)?;
             }
         }
