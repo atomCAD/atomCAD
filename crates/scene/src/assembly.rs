@@ -1,10 +1,13 @@
-use render::Atoms;
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+use molecule::MoleculeEditor;
+use render::AtomBuffer;
 use ultraviolet::Mat4;
 
-use crate::Molecule;
-
 enum ComponentType {
-    Molecule(Molecule),
+    Molecule(MoleculeEditor),
     SubAssembly(Assembly),
 }
 
@@ -14,7 +17,7 @@ pub struct Component {
 }
 
 impl Component {
-    pub fn from_molecule(molecule: Molecule, transform: Mat4) -> Self {
+    pub fn from_molecule(molecule: MoleculeEditor, transform: Mat4) -> Self {
         Self {
             transform,
             data: ComponentType::Molecule(molecule),
@@ -41,7 +44,7 @@ impl Assembly {
         }
     }
 
-    pub fn walk_mut(&mut self, mut f: impl FnMut(&mut Molecule, Mat4)) {
+    pub fn walk_mut(&mut self, mut f: impl FnMut(&mut MoleculeEditor, Mat4)) {
         let mut stack: Vec<(&mut Assembly, Mat4)> = vec![(self, Mat4::default())];
 
         while let Some((assembly, acc_transform)) = stack.pop() {
@@ -59,12 +62,12 @@ impl Assembly {
         }
     }
 
-    pub fn collect_atoms_and_transforms(&self) -> (Vec<&Atoms>, Vec<Mat4>) {
+    pub fn collect_atoms_and_transforms(&self) -> (Vec<&AtomBuffer>, Vec<Mat4>) {
         // The number of direct children of the world is an estimate of the
         // lower bound of the number of molecules. It is only possible for this to
         // overestimate if a child assembly contains zero children (which is unusual).
         let mut transforms = Vec::<Mat4>::with_capacity(self.components.len());
-        let mut molecules = Vec::<&Atoms>::with_capacity(self.components.len());
+        let mut molecules = Vec::<&AtomBuffer>::with_capacity(self.components.len());
 
         // DFS
         let mut stack: Vec<(&Assembly, Mat4)> = vec![(self, Mat4::default())];

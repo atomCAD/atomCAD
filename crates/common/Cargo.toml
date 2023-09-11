@@ -15,3 +15,4 @@ winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190
     "android-native-activity",
 ] }
 ultraviolet = { workspace = true }
+serde = { workspace = true }

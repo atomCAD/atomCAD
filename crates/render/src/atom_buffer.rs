@@ -45,13 +45,13 @@ pub struct AtomBufferHeader;
 
 unsafe impl AsBytes for AtomBufferHeader {}
 
-pub struct Atoms {
+pub struct AtomBuffer {
     bind_group: wgpu::BindGroup,
     buffer: BufferVec<AtomBufferHeader, AtomRepr>,
     // number_of_atoms: usize,
 }
 
-impl Atoms {
+impl AtomBuffer {
     pub fn new<I>(gpu_resources: &GlobalRenderResources, iter: I) -> Self
     where
         I: IntoIterator<Item = AtomRepr>,
