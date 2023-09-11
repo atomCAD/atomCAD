@@ -1,11 +1,14 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use std::collections::HashMap;
 
+use common::ids::*;
 use periodic_table::Element;
+use serde::{Deserialize, Serialize};
 
 use crate::{molecule::AtomNode, BondOrder};
-
-use common::ids::*;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub enum ReferenceType {

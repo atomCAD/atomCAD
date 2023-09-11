@@ -3,12 +3,13 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::{mem, slice};
-use winit::event::{DeviceEvent, WindowEvent};
 
-pub use bounding_box::BoundingBox;
+use winit::event::{DeviceEvent, WindowEvent};
 
 mod bounding_box;
 pub mod ids;
+
+pub use bounding_box::BoundingBox;
 
 pub enum InputEvent<'a> {
     Window(WindowEvent<'a>),

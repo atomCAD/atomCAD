@@ -2,15 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::edit::{EditContext, EditError};
 use common::ids::{AtomSpecifier, EditId};
-
 use lib3dmol::{
     parser::read_pdb_txt,
     structures::{atom::AtomType, GetAtom as _},
 };
 use periodic_table::Element;
 use ultraviolet::Vec3;
+
+use crate::edit::{EditContext, EditError};
 
 pub(crate) fn spawn_pdb(
     name: &str,

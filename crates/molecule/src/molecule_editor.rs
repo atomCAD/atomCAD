@@ -1,36 +1,14 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use std::collections::HashMap;
 
-use periodic_table::Element;
 use serde::{Deserialize, Serialize};
-use ultraviolet::Vec3;
 
 use crate::edit::{Edit, EditList};
 use crate::molecule::{Molecule, MoleculeCheckpoint};
 
-use common::ids::AtomSpecifier;
-
-/// Demonstration of how to use the feature system
-/// let mut molecule = Molecule::from_feature(
-///     &gpu_resources,
-///     RootAtom {
-///         element: Element::Iodine,
-///     },
-/// );
-///
-/// molecule.push_feature(AtomFeature {
-///     target: scene::ids::AtomSpecifier::new(0),
-///     element: Element::Sulfur,
-/// });
-/// molecule.apply_all_features();
-///
-/// molecule.push_feature(AtomFeature {
-///     target: scene::ids::AtomSpecifier::new(1),
-///     element: Element::Carbon,
-/// });
-/// molecule.apply_all_features();
-///
-/// molecule.set_history_step(2);
-/// molecule.reupload_atoms(&gpu_resources);
 pub struct MoleculeEditor {
     pub repr: Molecule,
     #[allow(unused)]

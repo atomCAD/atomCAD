@@ -1,5 +1,10 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use std::collections::HashMap;
 
+use common::{ids::AtomSpecifier, BoundingBox};
 use lazy_static::lazy_static;
 use periodic_table::Element;
 use petgraph::{stable_graph, visit::IntoNodeReferences};
@@ -10,22 +15,40 @@ use ultraviolet::Vec3;
 
 use crate::edit::{EditContext, EditError, ReferenceType};
 
-use common::{ids::AtomSpecifier, BoundingBox};
-
 lazy_static! {
     pub static ref PERIODIC_TABLE: periodic_table::PeriodicTable =
         periodic_table::PeriodicTable::new();
 }
 
+/// A graph representation of a molecule.
+/// The molecule graph is stable to ensure that deleting atoms will not change
+/// the index of other atoms. It is undirected because bonds have no direction.
+/// Each node stores an atom, and each edge stores the integer bond order it
+/// represents.
 pub type MoleculeGraph = stable_graph::StableUnGraph<AtomNode, BondOrder>;
-// A map that gives each atom in a molecule a coordinate. Used to cache structure energy minimization
-// calculations
+
+/// A map that gives each atom in a molecule a coordinate. Used to cache structure energy minimization
+/// calculations.
 pub type AtomPositions = HashMap<AtomSpecifier, Vec3>;
+
+/// The order of a bond (i.e. single bond = 1u8, double bond = 2u8, ..). This is a
+/// u8 because we currently do not support fractional bonding, and because bonds
+/// cannot be negative. Nothing prevents a bond order from being unrealistic (i.e. 5+),
+/// but normally a bond will have order 1..=4.
 pub type BondOrder = u8;
+
+/// An index that represents an atom in the molecule. If you want to refer to an atom
+/// in a molecule that is being edited, use `common::ids::AtomSpecifier` instead.
 pub type AtomIndex = stable_graph::NodeIndex;
+
+/// An index that represents a bond in the molecule. If you want to refer to a bond in
+/// a molecule that is being edited, it is best to instead use two `AtomSpecifiers` -
+/// one for each atom in the bond.
 #[allow(unused)]
 pub type BondIndex = stable_graph::EdgeIndex;
 
+/// Stores the state of a molecule at some point in time, but without any of the
+/// cached optimization or gpu buffers that a full `Molecule` includes.
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MoleculeCheckpoint {
@@ -34,6 +57,7 @@ pub struct MoleculeCheckpoint {
     positions: AtomPositions,
 }
 
+/// Stores the data for each atom in a `Molecule`.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AtomNode {
     pub element: Element,
@@ -47,6 +71,8 @@ pub struct AtomNode {
 }
 
 impl AtomNode {
+    /// Gets a vector with the direction that this atom is "facing". Atoms "face" along one
+    /// of their bonds, or along the molecule's `+z` axis if no bonds exist.
     pub fn forward(&self, commands: &dyn EditContext) -> Vec3 {
         match self.head {
             Some(ref head) => {
@@ -64,7 +90,8 @@ impl AtomNode {
     }
 }
 
-/// The concrete representation of the molecule at some time in the feature history.
+/// A concrete representation of a molecule, inclding a handle to the GPU buffers needed
+/// to render it.
 #[derive(Default)]
 pub struct Molecule {
     // TODO: This atom map is a simple but extremely inefficient implementation. This data

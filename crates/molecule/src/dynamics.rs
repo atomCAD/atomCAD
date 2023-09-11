@@ -1,8 +1,16 @@
-use crate::molecule::MoleculeGraph;
-use common::ids::AtomSpecifier;
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use std::collections::HashMap;
+
+use common::ids::AtomSpecifier;
 use ultraviolet::Vec3;
 
+use crate::molecule::MoleculeGraph;
+
+/// A dummy relaxation algorithm that pulls bonds towards a length of 4.0 and makes
+/// unbonded atoms repel one another.
 pub fn relax(
     graph: &MoleculeGraph,
     positions: &HashMap<AtomSpecifier, Vec3>,
