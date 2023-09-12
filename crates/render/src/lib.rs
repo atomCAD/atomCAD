@@ -56,11 +56,18 @@ pub struct RenderOptions {
 
 #[repr(C, align(16))]
 struct MolecularVertexConsts {
-    array: [Vec2; 3],
+    // Note: Each vertex is padded to 16 bytes to comply with WGSL layout
+    // rules for uniform variables.  This means that each Vec2<f32> is
+    // actually stored as a Vec4<f32> in the shader, with the last two entries
+    // as padding.
+    array: [Vec2; 6],
 }
 impl MolecularVertexConsts {
     fn new(a: Vec2, b: Vec2, c: Vec2) -> Self {
-        Self { array: [a, b, c] }
+        let pad = Vec2::zero();
+        Self {
+            array: [a, pad, b, pad, c, pad],
+        }
     }
 }
 
@@ -170,7 +177,7 @@ impl Renderer {
         let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: vertices.array.as_bytes(),
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::UNIFORM,
         });
 
         let periodic_table_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
