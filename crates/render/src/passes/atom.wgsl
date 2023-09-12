@@ -36,9 +36,9 @@ struct Atom {
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 @group(0) @binding(1)
-var<storage> vertices: array<vec2<f32>, 3>;
-@group(0) @binding(2)
 var<storage> periodic_table: PeriodicTable;
+@group(0) @binding(2)
+var<storage> vertices: array<vec2<f32>, 3>;
 
 // @group(1) @binding(0)
 // var<storage> fragment_id: vec2<u32>; // high and low

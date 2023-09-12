@@ -175,7 +175,7 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 },
                 count: None,
             },
-            // vertices
+            // periodic table
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX,
@@ -186,7 +186,7 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 },
                 count: None,
             },
-            // periodic table
+            // vertices
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::VERTEX,
@@ -217,20 +217,20 @@ fn create_top_level_bg(
                 binding: 0,
                 resource: camera_binding_resource,
             },
-            // vertices
+            // periodic table
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: vertices_buffer,
+                    buffer: periodic_table_buffer,
                     offset: 0,
                     size: None,
                 }),
             },
-            // periodic table
+            // vertices
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: periodic_table_buffer,
+                    buffer: vertices_buffer,
                     offset: 0,
                     size: None,
                 }),
