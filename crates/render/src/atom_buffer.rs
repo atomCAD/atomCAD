@@ -67,7 +67,6 @@ impl AtomBuffer {
             wgpu::BufferUsages::STORAGE,
             number_of_atoms as u64,
             |header, array| {
-                // header.write(AtomBufferHeader { fragment_id });
                 unsafe {
                     std::ptr::write_unaligned(
                         header.as_mut_ptr() as *mut MaybeUninit<AtomBufferHeader>,

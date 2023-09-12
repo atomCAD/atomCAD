@@ -45,8 +45,6 @@ var<uniform> periodic_table: PeriodicTable;
 @group(0) @binding(2)
 var<uniform> vertices: array<Vertex, 3>;
 
-// @group(1) @binding(0)
-// var<storage> fragment_id: vec2<u32>; // high and low
 @group(1) @binding(0)
 var<storage> atoms: array<Atom>;
 
