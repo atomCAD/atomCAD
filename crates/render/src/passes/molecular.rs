@@ -44,7 +44,7 @@ impl MolecularPass {
     pub fn new(
         render_resources: &GlobalRenderResources,
         camera_binding_resource: wgpu::BindingResource,
-        vertices_buffer: &wgpu::Buffer,
+        vertex_constants_buffer: &wgpu::Buffer,
         periodic_table_buffer: &wgpu::Buffer,
         size: PhysicalSize<u32>,
     ) -> (Self, wgpu::TextureView) {
@@ -58,7 +58,7 @@ impl MolecularPass {
             &render_resources.device,
             &top_level_bgl,
             camera_binding_resource,
-            vertices_buffer,
+            vertex_constants_buffer,
             periodic_table_buffer,
         );
 
@@ -186,7 +186,7 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 },
                 count: None,
             },
-            // vertices
+            // vertex constants
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::VERTEX,
@@ -205,7 +205,7 @@ fn create_top_level_bg(
     device: &wgpu::Device,
     top_level_bgl: &wgpu::BindGroupLayout,
     camera_binding_resource: wgpu::BindingResource,
-    vertices_buffer: &wgpu::Buffer,
+    vertex_constants_buffer: &wgpu::Buffer,
     periodic_table_buffer: &wgpu::Buffer,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -226,11 +226,11 @@ fn create_top_level_bg(
                     size: None,
                 }),
             },
-            // vertices
+            // vertex constants
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: vertices_buffer,
+                    buffer: vertex_constants_buffer,
                     offset: 0,
                     size: None,
                 }),

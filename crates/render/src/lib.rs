@@ -78,8 +78,8 @@ pub struct Renderer {
     render_resources: Rc<GlobalRenderResources>,
     size: PhysicalSize<u32>,
 
-    vertices: MolecularVertexConsts,
-    vertices_buffer: wgpu::Buffer,
+    vertex_contants: MolecularVertexConsts,
+    vertex_contants_buffer: wgpu::Buffer,
     periodic_table: PeriodicTable,
     periodic_table_buffer: wgpu::Buffer,
     camera: RenderCamera,
@@ -169,14 +169,14 @@ impl Renderer {
 
         let periodic_table = PeriodicTable::new();
 
-        let vertices = MolecularVertexConsts::new(
+        let vertex_contants = MolecularVertexConsts::new(
             Vec2::new(1.73, -1.0),
             Vec2::new(-1.73, -1.0),
             Vec2::new(0.0, 2.0),
         );
-        let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_contants_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: vertices.array.as_bytes(),
+            contents: vertex_contants.array.as_bytes(),
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
@@ -226,7 +226,7 @@ impl Renderer {
         let (molecular_pass, color_texture) = passes::MolecularPass::new(
             &render_resources,
             camera.as_binding_resource(),
-            &vertices_buffer,
+            &vertex_contants_buffer,
             &periodic_table_buffer,
             size,
         );
@@ -241,8 +241,8 @@ impl Renderer {
                 render_resources: Rc::clone(&render_resources),
                 size,
 
-                vertices,
-                vertices_buffer,
+                vertex_contants,
+                vertex_contants_buffer,
                 periodic_table,
                 periodic_table_buffer,
                 camera,
