@@ -176,7 +176,7 @@ impl Renderer {
         let periodic_table_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: periodic_table.element_reprs.as_bytes(),
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::UNIFORM,
         });
 
         let surface_config = wgpu::SurfaceConfiguration {

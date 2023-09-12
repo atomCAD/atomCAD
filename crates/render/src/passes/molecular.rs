@@ -180,7 +180,7 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
