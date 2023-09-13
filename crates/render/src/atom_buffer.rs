@@ -9,7 +9,7 @@ use std::mem::{self, MaybeUninit};
 use ultraviolet::Vec3;
 
 /// Packed bit field
-/// | 0 .. 7 | ----------- | 7 .. 31 |
+/// | 0 .. 6 | ----------- | 7 .. 31 |
 ///   ^ atomic number - 1    ^ unspecified
 ///
 /// TODO: Try using a buffer as an atom radius lookup table.
