@@ -193,13 +193,13 @@ pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilde
     let menu_bar_spec: MenuSpec = MenuSpec::default();
     let menu_bar: Menu = build_menu(&menu_bar_spec);
 
+    use winit::platform::EventLoopBuilderExtMacOS;
     event_loop_builder.with_default_menu(false);
 
     menu_bar
 }
 
 pub fn attach_menu(window: &Window, menu_bar: &Menu) {
-    use winit::platform::windows::WindowExtWindows;
     menu_bar
         .init_for_nsapp()
         .expect("Initializing the menubar shouldn't return an error");
@@ -211,7 +211,7 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
 
     // Add the MacOS-specific app menu
     let app_menu = Submenu::new(APP_NAME, true);
-    app_m.append_items(&[
+    app_menu.append_items(&[
         &PredefinedMenuItem::about(
             None,
             Some(AboutMetadata {
@@ -230,7 +230,7 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
         &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::quit(None),
     ]);
-    menu_bar.append(&app_m);
+    menu_bar.append(&app_menu);
 
     for menu_item in &menu_spec.items {
         match menu_item {
