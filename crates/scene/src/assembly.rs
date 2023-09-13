@@ -7,7 +7,7 @@ use render::AtomBuffer;
 use ultraviolet::Mat4;
 
 enum ComponentType {
-    Molecule(MoleculeEditor),
+    Molecule(Box<MoleculeEditor>),
     SubAssembly(Assembly),
 }
 
@@ -20,7 +20,7 @@ impl Component {
     pub fn from_molecule(molecule: MoleculeEditor, transform: Mat4) -> Self {
         Self {
             transform,
-            data: ComponentType::Molecule(molecule),
+            data: ComponentType::Molecule(Box::new(molecule)),
         }
     }
 
