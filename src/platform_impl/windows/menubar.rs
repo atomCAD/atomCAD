@@ -1,3 +1,6 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+// You can obtain one at http://mozilla.org/MPL/2.0/.
 use crate::{
     menubar::{MenuAction, MenuItem, MenuSpec, SystemAction},
     APP_LICENSE, APP_NAME, APP_VERSION,
@@ -40,22 +43,22 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
 
     for menu_item in &menu_spec.items {
         match menu_item {
-            MenuItem::Entry(_title, _shortcut, action) => match action {
-                MenuAction::System(SystemAction::HideApp) => {
-                    menu_bar
-                        .append(&PredefinedMenuItem::hide(None))
-                        .expect("Appending the 'HideApp' sub-menu item shouldn't return an error.");
-                }
-                MenuAction::System(SystemAction::Terminate) => {
-                    menu_bar
-                        .append(&PredefinedMenuItem::close_window(None))
-                        .expect(
-                            "Appending the 'Terminate' sub-menu item shouldn't return an error.",
+            MenuItem::Entry(title, _shortcut, action) => {
+                match action {
+                    MenuAction::System(SystemAction::MinizeApp) => {
+                        menu_bar.append(&PredefinedMenuItem::minimize(None)).expect(
+                            "Appending the 'MinizeApp' sub-menu item shouldn't return an error.",
                         );
-                }
-                MenuAction::System(SystemAction::LaunchAboutWindow) => {
-                    menu_bar.append(&PredefinedMenuItem::about(
-                        None,
+                    }
+
+                    MenuAction::System(SystemAction::MaximizeApp) => {
+                        menu_bar.append(&PredefinedMenuItem::maximize(None)).expect(
+                            "Appending the 'MaximizeApp' sub-menu item shouldn't return an error.",
+                        );
+                    }
+                    MenuAction::System(SystemAction::LaunchAboutWindow) => {
+                        menu_bar.append(&PredefinedMenuItem::about(
+                        Some(&title),
                         Some(AboutMetadata {
                             name: Some(APP_NAME.to_string()),
                             version: Some(APP_VERSION.to_string()),
@@ -64,13 +67,18 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
                         }),
                     ))
                     .expect("Appending the 'LaunchAboutWindow' sub-menu item shouldn't return an error.");
+                    }
+                    MenuAction::System(SystemAction::QuitApp) => {
+                        menu_bar
+                        .append(&PredefinedMenuItem::close_window(Some(&format!("Quit {APP_NAME}"))))
+                        .expect(
+                            "Appending the 'Terminate' sub-menu item shouldn't return an error.",
+                        );
+                    }
+                    // Unsupported
+                    MenuAction::System(SystemAction::LaunchPreferences) => continue,
                 }
-                // Unsupported
-                MenuAction::System(SystemAction::HideOthers)
-                | MenuAction::System(SystemAction::ShowAll)
-                | MenuAction::System(SystemAction::ServicesMenu)
-                | MenuAction::System(SystemAction::LaunchPreferences) => continue,
-            },
+            }
             MenuItem::Separator => {
                 menu_bar
                     .append(&PredefinedMenuItem::separator())
@@ -93,48 +101,50 @@ fn build_sub_menu(sub_menu_spec: &MenuSpec) -> Submenu {
 
     for menu_item in &sub_menu_spec.items {
         match menu_item {
-            MenuItem::Entry(_title, _shortcut, action) => match action {
-                MenuAction::System(SystemAction::HideApp) => {
-                    sub_menu
-                        .append(&PredefinedMenuItem::hide(None))
-                        .expect("Appending the 'HideApp' sub-menu item shouldn't return an error.");
-                }
-                MenuAction::System(SystemAction::Terminate) => {
-                    sub_menu
-                        .append(&PredefinedMenuItem::close_window(None))
+            MenuItem::Entry(title, _shortcut, action) => {
+                match action {
+                    MenuAction::System(SystemAction::MinizeApp) => {
+                        sub_menu.append(&PredefinedMenuItem::minimize(None)).expect(
+                            "Appending the 'MinizeApp' sub-menu item shouldn't return an error.",
+                        );
+                    }
+                    MenuAction::System(SystemAction::MaximizeApp) => {
+                        sub_menu.append(&PredefinedMenuItem::maximize(None)).expect(
+                            "Appending the 'MaximizeApp' sub-menu item shouldn't return an error.",
+                        );
+                    }
+                    MenuAction::System(SystemAction::LaunchAboutWindow) => {
+                        sub_menu.append(&PredefinedMenuItem::about(
+                        Some(&title),
+                        Some(AboutMetadata {
+                            name: Some(APP_NAME.to_string()),
+                            version: Some(APP_VERSION.to_string()),
+                            license: Some(APP_LICENSE.to_string()),
+                            ..Default::default()
+                        }),
+                    ))
+                    .expect("Appending the 'LaunchAboutWindow' sub-menu item shouldn't return an error.");
+                    }
+                    MenuAction::System(SystemAction::QuitApp) => {
+                        sub_menu
+                        .append(&PredefinedMenuItem::close_window(Some(&format!("Quit {APP_NAME}"))))
                         .expect(
                             "Appending the 'Terminate' sub-menu item shouldn't return an error.",
                         );
+                    }
+                    // Unsupported
+                    MenuAction::System(SystemAction::LaunchPreferences) => continue,
                 }
-                MenuAction::System(SystemAction::LaunchAboutWindow) => {
-                    sub_menu
-                        .append(&PredefinedMenuItem::about(
-                            None,
-                            Some(AboutMetadata {
-                                name: Some(APP_NAME.to_string()),
-                                version: Some(APP_VERSION.to_string()),
-                                license: Some(APP_LICENSE.to_string()),
-                                ..Default::default()
-                            }),
-                        ))
-                        .expect("Appending the 'LaunchAboutWindow' sub-menu item shouldn't return an error.");
-                }
-                // Unsupported
-                MenuAction::System(SystemAction::HideOthers)
-                | MenuAction::System(SystemAction::ShowAll)
-                | MenuAction::System(SystemAction::ServicesMenu)
-                | MenuAction::System(SystemAction::LaunchPreferences) => continue,
-            },
+            }
             MenuItem::Separator => {
                 sub_menu
                     .append(&PredefinedMenuItem::separator())
                     .expect("Appending sub-menu 'Separator' shouldn't return an error.");
             }
-            MenuItem::SubMenu(sub_sub_menu_spec) => {
-                let sub_sub_menu: Submenu = build_sub_menu(sub_sub_menu_spec);
+            MenuItem::SubMenu(sub_menu_spec) => {
                 sub_menu
-                    .append(&sub_sub_menu)
-                    .expect("Appending a sub-menu to a sub-menu shouldn't");
+                    .append(&build_sub_menu(sub_menu_spec))
+                    .expect("Appending a sub-menu to the menubar shouldn't");
             }
         }
     }

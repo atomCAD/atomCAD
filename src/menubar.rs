@@ -20,48 +20,36 @@ pub struct MenuSpec {
 
 impl Default for MenuSpec {
     fn default() -> Self {
-        MenuSpec::new(APP_NAME).and_then(MenuItem::SubMenu(
-            MenuSpec::new("")
-                .and_then(MenuItem::new(
-                    &format!("About {}", APP_NAME),
+        MenuSpec::new(APP_NAME)
+            .and_then(MenuItem::SubMenu(
+                MenuSpec::new("File")
+                    .and_then(MenuItem::Separator)
+                    .and_then(MenuItem::new(
+                        &format!("Quit {APP_NAME}"),
+                        MenuShortcut::System(SystemShortcut::QuitApp),
+                        MenuAction::System(SystemAction::QuitApp),
+                    )),
+            ))
+            .and_then(MenuItem::SubMenu(
+                MenuSpec::new("Window")
+                    .and_then(MenuItem::new(
+                        "Minimize",
+                        MenuShortcut::System(SystemShortcut::MinizeApp),
+                        MenuAction::System(SystemAction::MinizeApp),
+                    ))
+                    .and_then(MenuItem::new(
+                        "Maximize",
+                        MenuShortcut::System(SystemShortcut::MaximizeApp),
+                        MenuAction::System(SystemAction::MaximizeApp),
+                    )),
+            ))
+            .and_then(MenuItem::SubMenu(MenuSpec::new("Help").and_then(
+                MenuItem::new(
+                    &format!("About {APP_NAME}"),
                     MenuShortcut::None,
                     MenuAction::System(SystemAction::LaunchAboutWindow),
-                ))
-                .and_then(MenuItem::Separator)
-                .and_then(MenuItem::new(
-                    "Settings...",
-                    MenuShortcut::System(SystemShortcut::Preferences),
-                    MenuAction::System(SystemAction::LaunchPreferences),
-                ))
-                .and_then(MenuItem::Separator)
-                .and_then(MenuItem::new(
-                    "Services",
-                    MenuShortcut::None,
-                    MenuAction::System(SystemAction::ServicesMenu),
-                ))
-                .and_then(MenuItem::Separator)
-                .and_then(MenuItem::new(
-                    &format!("Hide {}", APP_NAME),
-                    MenuShortcut::System(SystemShortcut::HideApp),
-                    MenuAction::System(SystemAction::HideApp),
-                ))
-                .and_then(MenuItem::new(
-                    "Hide Others",
-                    MenuShortcut::System(SystemShortcut::HideOthers),
-                    MenuAction::System(SystemAction::HideOthers),
-                ))
-                .and_then(MenuItem::new(
-                    "Show All",
-                    MenuShortcut::None,
-                    MenuAction::System(SystemAction::ShowAll),
-                ))
-                .and_then(MenuItem::Separator)
-                .and_then(MenuItem::new(
-                    &format!("Quit {}", APP_NAME),
-                    MenuShortcut::System(SystemShortcut::QuitApp),
-                    MenuAction::System(SystemAction::Terminate),
-                )),
-        ))
+                ),
+            )))
     }
 }
 
@@ -108,8 +96,8 @@ pub enum MenuShortcut {
 #[derive(Clone, Copy)]
 pub enum SystemShortcut {
     Preferences,
-    HideApp,
-    HideOthers,
+    MinizeApp,
+    MaximizeApp,
     QuitApp,
 }
 
@@ -151,11 +139,9 @@ pub enum MenuAction {
 pub enum SystemAction {
     LaunchAboutWindow,
     LaunchPreferences,
-    ServicesMenu,
-    HideApp,
-    HideOthers,
-    ShowAll,
-    Terminate,
+    MinizeApp,
+    MaximizeApp,
+    QuitApp,
 }
 
 pub fn setup_menu_bar<T: 'static>(event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {
