@@ -28,11 +28,6 @@ struct PeriodicTable {
     elements: array<Element, 118>,
 };
 
-struct Atom {
-    pos: vec3<f32>,
-    kind: u32,
-};
-
 struct Vertex {
     xy: vec2<f32>,
     padding: vec2<f32>,
@@ -45,8 +40,15 @@ var<uniform> periodic_table: PeriodicTable;
 @group(0) @binding(2)
 var<uniform> vertices: array<Vertex, 3>;
 
+struct Atom {
+    pos: vec3<f32>,
+    kind: u32,
+};
+
 @group(1) @binding(0)
-var<storage> atoms: array<Atom>;
+var atoms_pos: texture_1d<f32>;
+@group(1) @binding(1)
+var atoms_kind: texture_1d<u32>;
 
 struct AtomVertexInput {
     @builtin(vertex_index)
@@ -78,7 +80,10 @@ struct AtomVertexOutput {
 
 @vertex
 fn vs_main(in: AtomVertexInput) -> AtomVertexOutput {
-    let atom = atoms[in.index / 3u];
+    let idx = in.index / 3u;
+    let texel_pos = textureLoad(atoms_pos, idx, 0);
+    let texel_kind = textureLoad(atoms_kind, idx, 0);
+    let atom = Atom(texel_pos.xyz, texel_kind.x);
     let element = periodic_table.elements[atom.kind & 0x7fu];
     let element_vec = vec4<f32>(element.color, element.radius);
     let vertex = element.radius * vertices[in.index % 3u].xy;
