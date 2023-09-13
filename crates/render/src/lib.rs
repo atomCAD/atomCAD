@@ -27,14 +27,12 @@ macro_rules! include_spirv {
     };
 }
 
-const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
-    // srgb doesn't work correctly in firefox rn, so we're manually converting to it in the shader
-    wgpu::TextureFormat::Bgra8Unorm
-} else if cfg!(target_os = "android") {
-    wgpu::TextureFormat::Rgba8UnormSrgb
-} else {
-    wgpu::TextureFormat::Bgra8UnormSrgb
-};
+const SWAPCHAIN_FORMAT: wgpu::TextureFormat =
+    if cfg!(any(target_os = "android", target_arch = "wasm32")) {
+        wgpu::TextureFormat::Rgba8UnormSrgb
+    } else {
+        wgpu::TextureFormat::Bgra8UnormSrgb
+    };
 
 #[derive(Default)]
 pub struct Interactions {
@@ -101,7 +99,7 @@ impl Renderer {
         // The instance is a handle to our GPU.
         // Backends::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
+            backends: wgpu::Backends::PRIMARY | wgpu::Backends::GL,
             dx12_shader_compiler: Default::default(),
         });
 
@@ -131,9 +129,10 @@ impl Renderer {
             .await
             .expect("failed to find an appropriate adapter");
 
-        let software_driven_features = wgpu::Features::VERTEX_WRITABLE_STORAGE;
-        let gpu_driven_features =
-            software_driven_features | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
+        let software_driven_features = wgpu::Features::empty();
+        let gpu_driven_features = software_driven_features
+            | wgpu::Features::VERTEX_WRITABLE_STORAGE
+            | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
         let gpu_driven_rendering;
 
         let requested_features =
