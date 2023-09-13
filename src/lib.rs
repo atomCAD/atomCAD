@@ -111,7 +111,7 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = make_salt_demo_scene();
+    let molecule = make_pdb_demo_scene();
     let molecule = serde_json::to_string(&molecule).unwrap();
     println!("{}", molecule);
     let molecule: MoleculeEditor = serde_json::from_str(&molecule).unwrap();
