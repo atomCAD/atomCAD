@@ -193,7 +193,7 @@ pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilde
     let menu_bar_spec: MenuSpec = MenuSpec::default();
     let menu_bar: Menu = build_menu(&menu_bar_spec);
 
-    use winit::platform::EventLoopBuilderExtMacOS;
+    use winit::platform::macos::EventLoopBuilderExtMacOS;
     event_loop_builder.with_default_menu(false);
 
     menu_bar
