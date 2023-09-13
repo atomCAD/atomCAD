@@ -64,11 +64,14 @@ impl AtomBuffer {
         assert!(number_of_atoms > 0, "must have at least one atom");
 
         // Serialize iterator into buffers
-        let mut atom_pos = Vec::with_capacity(
-            (cmp::max(1, number_of_atoms) * 4 * mem::size_of::<f32>() + 255) & !255,
-        );
-        let mut atom_kind =
-            Vec::with_capacity((cmp::max(1, number_of_atoms) * mem::size_of::<u8>() + 255) & !255);
+        let texel_count = if number_of_atoms <= 2048 {
+            cmp::max(1, number_of_atoms)
+        } else {
+            (number_of_atoms + 2047) & !2047
+        };
+        let mut atom_pos =
+            Vec::with_capacity((texel_count * 4 * mem::size_of::<f32>() + 255) & !255);
+        let mut atom_kind = Vec::with_capacity((texel_count * mem::size_of::<u8>() + 255) & !255);
         for atom in atoms {
             atom_pos.extend_from_slice(atom.pos.as_bytes());
             atom_pos.extend_from_slice(&[0; 4]); // padding
@@ -89,8 +92,8 @@ impl AtomBuffer {
         );
 
         let size = wgpu::Extent3d {
-            width: cmp::max(1, number_of_atoms as u32),
-            height: 1,
+            width: cmp::min(texel_count, 2048) as u32,
+            height: ((texel_count + 2047) / 2048) as u32,
             depth_or_array_layers: 1,
         };
 
@@ -101,7 +104,7 @@ impl AtomBuffer {
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
-                dimension: wgpu::TextureDimension::D1,
+                dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba32Float,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
@@ -117,8 +120,8 @@ impl AtomBuffer {
             &atom_pos,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(atom_pos.capacity() as u32),
-                rows_per_image: Some(1),
+                bytes_per_row: Some(size.width * 4 * mem::size_of::<f32>() as u32),
+                rows_per_image: Some(size.height),
             },
             size,
         );
@@ -130,7 +133,7 @@ impl AtomBuffer {
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
-                dimension: wgpu::TextureDimension::D1,
+                dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::R8Uint,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
@@ -146,8 +149,8 @@ impl AtomBuffer {
             &atom_kind,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(atom_kind.capacity() as u32),
-                rows_per_image: Some(1),
+                bytes_per_row: Some(size.width * mem::size_of::<u8>() as u32),
+                rows_per_image: Some(size.height),
             },
             size,
         );

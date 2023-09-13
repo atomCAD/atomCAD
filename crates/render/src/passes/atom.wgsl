@@ -46,9 +46,9 @@ struct Atom {
 };
 
 @group(1) @binding(0)
-var atoms_pos: texture_1d<f32>;
+var atoms_pos: texture_2d<f32>;
 @group(1) @binding(1)
-var atoms_kind: texture_1d<u32>;
+var atoms_kind: texture_2d<u32>;
 
 struct AtomVertexInput {
     @builtin(vertex_index)
@@ -81,8 +81,9 @@ struct AtomVertexOutput {
 @vertex
 fn vs_main(in: AtomVertexInput) -> AtomVertexOutput {
     let idx = in.index / 3u;
-    let texel_pos = textureLoad(atoms_pos, idx, 0);
-    let texel_kind = textureLoad(atoms_kind, idx, 0);
+    let coord = vec2<u32>(idx & 0x000007ffu, idx >> 11u);
+    let texel_pos = textureLoad(atoms_pos, coord, 0);
+    let texel_kind = textureLoad(atoms_kind, coord, 0);
     let atom = Atom(texel_pos.xyz, texel_kind.x);
     let element = periodic_table.elements[atom.kind & 0x7fu];
     let element_vec = vec4<f32>(element.color, element.radius);
