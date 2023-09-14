@@ -16,6 +16,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 mod atom_buffer;
 mod bind_groups;
+mod bond_buffer;
 mod buffer_vec;
 mod camera;
 mod passes;
