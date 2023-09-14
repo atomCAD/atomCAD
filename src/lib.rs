@@ -395,11 +395,10 @@ pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
             .and_then(|win| win.document())
-            .and_then(|doc| {
-                let dst = doc.get_element_by_id("app-container")?;
-                let canvas = web_sys::Element::from(window.canvas()?);
-                dst.append_child(&canvas).ok()?;
-                Some(())
+            .and_then(|doc| doc.get_element_by_id("app-container"))
+            .and_then(|dst| {
+                dst.append_child(&web_sys::Element::from(window.canvas()?))
+                    .ok()
             })
             .expect("Couldn't append canvas to document body.");
         run(event_loop, Some(window));
