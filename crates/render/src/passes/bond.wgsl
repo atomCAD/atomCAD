@@ -28,7 +28,7 @@ struct Vertex {
 var<uniform> camera: Camera;
 
 struct Atom {
-    pos: vec3<f32>,
+    midpoint: vec3<f32>,
     kind: u32,
 };
 
@@ -81,8 +81,19 @@ const bar_width = 0.8;
 
 @vertex
 fn vs_main(in: BondVertexInput) -> BondVertexOutput {
-    let idx = in.index / 6u;
-    let coord = vec2<u32>(idx & 0x000007ffu, idx >> 11u);
+    // Each vertex actually belongs to a block of six: two triangles are drawn for
+    // each bond, three vertices are designated per triangle. We get the bond index:
+    let bond_idx = in.index / 6u;
+
+    // Now, we process and decode texture data. 2D textures let us store more data
+    // than a 1D texture. We use a texture rather than a plain buffer for portability.
+    // This bitwise work just cuts the bond index into its most and least significant
+    // halves. The max texture size is 2048, which is 2^11. We use the MS and LS half
+    // as ordinates:
+    //                       bottom 11 bits          top 11 bits
+    let coord = vec2<u32>(bond_idx & 0x000007ffu, bond_idx >> 11u);
+
+    // With that coordinate, we now get the data from each struct
     let a1_index = textureLoad(bonds_a1, coord, 0).x;
     let a2_index = textureLoad(bonds_a2, coord, 0).x;
     let bond_order = textureLoad(bonds_order, coord, 0).x;
@@ -90,33 +101,52 @@ fn vs_main(in: BondVertexInput) -> BondVertexOutput {
     let a1_coord = vec2<u32>(a1_index & 0x000007ffu, a1_index >> 11u);
     let a2_coord = vec2<u32>(a2_index & 0x000007ffu, a2_index >> 11u);
 
+    // Bonds only store atom indexes. We look up the atom coords:
     let a1_pos = textureLoad(atoms_pos, a1_coord, 0).xyz;
     let a2_pos = textureLoad(atoms_pos, a2_coord, 0).xyz;
 
     let bond = Bond(a1_pos, a2_pos, bond_order);
+
     let part_fragment_transform = mat4x4<f32>(
         in.part_fragment_transform_0,
         in.part_fragment_transform_1,
         in.part_fragment_transform_2,
         in.part_fragment_transform_3
     );
-    
-    // Equivalent to:
+
+    // Currently the bond rendering is done very sloppily. Rather than rendering the
+    // bond in proper 3D, bonds are drawn in a plane parallel to the screen at a depth
+    // halfway between the endpoint atoms. This should be fixed when someone gets the
+    // time to.
+
+    // To begin, we construct a rectangle in screen space. We want it to look like it
+    // connects the atoms, so we make it as wide as the distance between the final
+    // rendered coordinates of the endpoint atoms on the screen. ss = screen space
+    let start_pos_ss = (camera.view * part_fragment_transform * vec4<f32>(bond.start_pos.xyz, 1.0)).xy;
+    let end_pos_ss = (camera.view * part_fragment_transform * vec4<f32>(bond.end_pos.xyz, 1.0)).xy;
+    let displacement_ss = start_pos_ss - end_pos_ss;
+    let apparent_bond_length = length(displacement_ss);
+
+    // We first imagine constructing a square. This means mapping from our vertex index
+    // to 45º + 90º * which_corner_we're_at. This is nontrivial, because two corners
+    // will have two vertices and two corners will just get one - the corners where
+    // the triangles meet are double counted.
+    //
+    // Branchless equivalent of:
     // var angle = pi / 2.0 * (0.5 + f32(in.index % 3u))
     // if in.index % 6u >= 3u {
     //     angle += pi;
     // }
-    let angle = pi * ((0.5 + f32(in.index % 3u)) / 2.0 + f32((in.index % 6u) / 3u));
-    let start_pos = (camera.view * part_fragment_transform * vec4<f32>(bond.start_pos.xyz, 1.0)).xy;
-    let end_pos = (camera.view * part_fragment_transform * vec4<f32>(bond.end_pos.xyz, 1.0)).xy;
-    let displacement = start_pos - end_pos;
-    let length = length(displacement);
-    let screen_angle = atan2(displacement.y, displacement.x);
+    let square_angle = pi * ((0.5 + f32(in.index % 3u)) / 2.0 + f32((in.index % 6u) / 3u));
 
-    let uv = vec2(sign(cos(angle)) + 1.0, sign(sin(angle)) + 1.0) / 2.0;
-    // make a rectangle - this looks like a weird use of sin and cos but we care about the
-    // end-to-end length, not the length of the diagonal! This is the axis-aligned rectangle
-    let aa_vertex = vec2(0.5 * length * sign(cos(angle)), 0.5 * bar_width * sign(sin(angle)));
+    // Makes a rectangle - this looks like a weird use of sin and cos but we care about the
+    // end-to-end length, not the length of the diagonal! aa = axis-aligned
+    let aa_vertex = vec2(0.5 * apparent_bond_length * sign(cos(square_angle)), 0.5 * bar_width * sign(sin(square_angle)));
+
+    // Now we want to rotate the rectangle so it is parallel to the on-screen bond
+    // displacement:
+    let screen_angle = atan2(displacement_ss.y, displacement_ss.x);
+
     // Now we rotate it to the correct angle (this is a rotation matrix in longform)
     var vertex = aa_vertex;
     let csa = cos(screen_angle);
@@ -124,21 +154,27 @@ fn vs_main(in: BondVertexInput) -> BondVertexOutput {
     vertex.x = csa * aa_vertex.x - ssa * aa_vertex.y;
     vertex.y = ssa * aa_vertex.x + csa * aa_vertex.y;
     
-    let pos = (bond.start_pos + bond.end_pos).xyz / 2.0;
-    let position = part_fragment_transform * vec4<f32>(pos, 1.0);
+    let midpoint = (bond.start_pos + bond.end_pos).xyz / 2.0;
+    
+    // ws = worldspace
+    let camera_right_ws = vec3<f32>(camera.view[0][0], camera.view[1][0], camera.view[2][0]);
+    let camera_up_ws = vec3<f32>(camera.view[0][1], camera.view[1][1], camera.view[2][1]);
+    let position_ws =
+        (part_fragment_transform * vec4<f32>(midpoint, 1.0))
+        + vec4<f32>(
+            vertex.x * camera_right_ws +
+            vertex.y * camera_up_ws,
+            0.0
+        );
 
-    let camera_right_worldspace = vec3<f32>(camera.view[0][0], camera.view[1][0], camera.view[2][0]);
-    let camera_up_worldspace = vec3<f32>(camera.view[0][1], camera.view[1][1], camera.view[2][1]);
-    let position_worldspace = vec4<f32>(
-        position.xyz +
-        vertex.x * camera_right_worldspace +
-        vertex.y * camera_up_worldspace,
-        1.0
-    );
+    let position_clip_space = camera.projection_view * position_ws;
+    let center_view_space = camera.view * vec4<f32>(midpoint, 0.0);
+    let position_view_space = camera.view * position_ws;
 
-    let position_clip_space = camera.projection_view * position_worldspace;
-    let center_view_space = camera.view * vec4<f32>(pos, 0.0);
-    let position_view_space = camera.view * position_worldspace;
+    // This creates our uv - a coordinate for each vertex on the square ranging from 0 to 1.
+    // We want this so that we have a normalized value for "how far along the bond is this
+    // pixel" later - we need that for shading.
+    let uv = vec2(sign(cos(square_angle)) + 1.0, sign(sin(square_angle)) + 1.0) / 2.0;
 
     return BondVertexOutput(position_clip_space, uv, position_clip_space, position_view_space, center_view_space, bond.order);
 }
