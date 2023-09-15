@@ -54,7 +54,7 @@ impl BondBuffer {
         for bond in bonds {
             bond_a1.extend(&(bond.atom_1).to_ne_bytes());
             bond_a2.extend(&(bond.atom_2).to_ne_bytes());
-            bond_order.extend(&(bond.order as u8).to_ne_bytes());
+            bond_order.extend(&(bond.order).to_ne_bytes());
         }
 
         bond_a1.resize(bond_a1.capacity(), 0);

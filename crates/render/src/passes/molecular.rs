@@ -157,7 +157,7 @@ impl MolecularPass {
         rpass.set_pipeline(&self.atom_pipeline);
         rpass.set_bind_group(0, &self.top_level_bg, &[]);
 
-        for (idx, atoms_inst) in atoms.into_iter().enumerate() {
+        for (idx, atoms_inst) in atoms.iter().enumerate() {
             let transform_offset = (idx * mem::size_of::<ultraviolet::Mat4>()) as u64;
 
             rpass.set_vertex_buffer(
@@ -175,7 +175,7 @@ impl MolecularPass {
         rpass.set_pipeline(&self.bond_pipeline);
         rpass.set_bind_group(0, &self.top_level_bg, &[]);
 
-        for (idx, bonds_inst) in bonds.into_iter().enumerate() {
+        for (idx, bonds_inst) in bonds.iter().enumerate() {
             if let Some(bonds_inst) = bonds_inst {
                 let transform_offset = (idx * mem::size_of::<ultraviolet::Mat4>()) as u64;
 
