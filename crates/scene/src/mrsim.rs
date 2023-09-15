@@ -1,6 +1,14 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use std::time::Instant;
 use std::fmt::Write;
 use std::sync::{Arc, Mutex};
+use std::fs::File;
+use std::io::Read;
+use std::env;
+use std::mem;
 use std::thread;
 
 // MARK: - Utilities
@@ -105,11 +113,7 @@ println!("{}",str);
 let num_cores=num_cpus::get();
 let queue=Arc::new(Mutex::new(Vec::new())); // A shared queue of tasks
 
-use std::time::Instant;
-use std::fs::File;
-use std::io::Read;
-use std::env;
-use std::mem;
+
 
 // MARK: - Header
 

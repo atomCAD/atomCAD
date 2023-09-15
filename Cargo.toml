@@ -16,6 +16,7 @@ members = [
     "crates/periodic-table",
     "crates/common",
     "crates/scene",
+    "crates/simulation-import",
 ]
 
 [workspace.dependencies]
