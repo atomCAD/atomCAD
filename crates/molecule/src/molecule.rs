@@ -7,10 +7,7 @@ use std::collections::HashMap;
 use common::{ids::AtomSpecifier, BoundingBox};
 use lazy_static::lazy_static;
 use periodic_table::Element;
-use petgraph::{
-    stable_graph,
-    visit::{IntoEdgeReferences, IntoNodeReferences},
-};
+use petgraph::{stable_graph, visit::IntoNodeReferences};
 use render::{AtomBuffer, AtomKind, AtomRepr, BondBuffer, BondRepr, GlobalRenderResources};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
