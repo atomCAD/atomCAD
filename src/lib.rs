@@ -111,7 +111,7 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = make_pdb_demo_scene();
+    let molecule = make_salt_demo_scene();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();
@@ -173,8 +173,8 @@ fn handle_event(
                             if let Some(gpu_resources) = gpu_resources {
                                 world.synchronize_buffers(gpu_resources);
                             }
-                            let (atoms, transforms) = world.collect_atoms_and_transforms();
-                            renderer.render(atoms, transforms);
+                            let (atoms, bonds, transforms) = world.collect_rendering_primitives();
+                            renderer.render(&atoms, &bonds, transforms);
                         }
                     }
                 }

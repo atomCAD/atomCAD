@@ -7,8 +7,11 @@ use std::collections::HashMap;
 use common::{ids::AtomSpecifier, BoundingBox};
 use lazy_static::lazy_static;
 use periodic_table::Element;
-use petgraph::{stable_graph, visit::IntoNodeReferences};
-use render::{AtomBuffer, AtomKind, AtomRepr, GlobalRenderResources};
+use petgraph::{
+    stable_graph,
+    visit::{IntoEdgeReferences, IntoNodeReferences},
+};
+use render::{AtomBuffer, AtomKind, AtomRepr, BondBuffer, BondRepr, GlobalRenderResources};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use ultraviolet::Vec3;
@@ -102,20 +105,49 @@ pub struct Molecule {
     bounding_box: BoundingBox,
     gpu_synced: bool,
     gpu_atoms: Option<AtomBuffer>,
+    gpu_bonds: Option<BondBuffer>,
     positions: AtomPositions,
 }
 
 impl Molecule {
-    pub fn atom_reprs(&self) -> Vec<AtomRepr> {
-        self.graph
-            .node_weights()
-            .map(|node| AtomRepr {
-                kind: AtomKind::new(node.element),
-                pos: *self
-                    .pos(&node.spec)
-                    .expect("Every atom in the graph should have a position"),
+    fn collect_rendering_primitives(&self) -> (Vec<AtomRepr>, Vec<BondRepr>) {
+        // There are likely optimizations we can use to remove this map altogether,
+        // but petgraph's documentation doesn't promise anything about the node
+        // iteration order which makes things difficult.
+        let mut index_map: HashMap<AtomIndex, u32> =
+            HashMap::with_capacity(self.graph.node_count());
+
+        let atoms = self
+            .graph
+            .node_references()
+            .enumerate()
+            .map(|(buffer_index, (atom_index, node))| {
+                index_map.insert(atom_index, buffer_index as u32);
+
+                AtomRepr {
+                    kind: AtomKind::new(node.element),
+                    pos: *self
+                        .pos(&node.spec)
+                        .expect("Every atom in the graph should have a position"),
+                }
             })
-            .collect()
+            .collect();
+
+        let edges = self
+            .graph
+            .edge_indices()
+            .map(|edge_idx| {
+                let (a1, a2) = self.graph.edge_endpoints(edge_idx).unwrap();
+
+                BondRepr {
+                    atom_1: *index_map.get(&a1).unwrap(),
+                    atom_2: *index_map.get(&a2).unwrap(),
+                    order: *self.graph.edge_weight(edge_idx).unwrap(),
+                }
+            })
+            .collect();
+
+        (atoms, edges)
     }
 
     pub fn clear(&mut self) {
@@ -129,7 +161,7 @@ impl Molecule {
         self.positions = crate::dynamics::relax(&self.graph, &self.positions, 0.01);
     }
 
-    pub fn reupload_atoms(&mut self, gpu_resources: &GlobalRenderResources) {
+    pub fn synchronize_buffers(&mut self, gpu_resources: &GlobalRenderResources) {
         // TODO: not working, see shinzlet/atomCAD #3
         // self.gpu_atoms.reupload_atoms(&atoms, gpu_resources);
 
@@ -138,8 +170,19 @@ impl Molecule {
 
         if self.graph.node_count() == 0 {
             self.gpu_atoms = None;
+
+            // Currently, bond rendering depends on having access to coordinates inside the
+            // atom buffer. So, if there are no atoms, there must not be any bonds.
+            self.gpu_bonds = None;
         } else {
-            self.gpu_atoms = Some(AtomBuffer::new(gpu_resources, self.atom_reprs()));
+            let (atom_reprs, bond_reprs) = self.collect_rendering_primitives();
+            self.gpu_atoms = Some(AtomBuffer::new(gpu_resources, atom_reprs));
+
+            if bond_reprs.is_empty() {
+                self.gpu_bonds = None
+            } else {
+                self.gpu_bonds = Some(BondBuffer::new(gpu_resources, bond_reprs))
+            }
         }
 
         self.gpu_synced = true;
@@ -147,6 +190,10 @@ impl Molecule {
 
     pub fn atoms(&self) -> Option<&AtomBuffer> {
         self.gpu_atoms.as_ref()
+    }
+
+    pub fn bonds(&self) -> Option<&BondBuffer> {
+        self.gpu_bonds.as_ref()
     }
 
     pub fn set_checkpoint(&mut self, checkpoint: MoleculeCheckpoint) {

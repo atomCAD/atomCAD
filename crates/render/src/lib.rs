@@ -4,6 +4,7 @@
 
 pub use crate::{
     atom_buffer::{AtomBuffer, AtomKind, AtomRepr},
+    bond_buffer::{BondBuffer, BondRepr},
     camera::{Camera, CameraRepr, RenderCamera},
 };
 use crate::{bind_groups::AsBindingResource as _, buffer_vec::BufferVec};
@@ -44,6 +45,7 @@ pub struct GlobalRenderResources {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) atom_bgl: wgpu::BindGroupLayout,
+    pub(crate) bond_bgl: wgpu::BindGroupLayout,
     pub(crate) linear_sampler: wgpu::Sampler,
     // pub(crate) staging_belt: Arc<Mutex<wgpu::util::StagingBelt>>,
 }
@@ -191,6 +193,7 @@ impl Renderer {
             label: None,
             entries: &[
                 wgpu::BindGroupLayoutEntry {
+                    // AtomPos
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Texture {
@@ -201,6 +204,7 @@ impl Renderer {
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
+                    // AtomKind
                     binding: 1,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Texture {
@@ -212,12 +216,53 @@ impl Renderer {
                 },
             ],
         });
+
+        let bond_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    // Bond atom 1
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    // Bond atom 2
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    // Bond order
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
 
         let render_resources = Rc::new(GlobalRenderResources {
             device,
             queue,
             atom_bgl,
+            bond_bgl,
             linear_sampler,
         });
 
@@ -292,7 +337,8 @@ impl Renderer {
 
     pub fn render<'a>(
         &mut self,
-        atoms: impl IntoIterator<Item = &'a AtomBuffer>,
+        atoms: &[&'a AtomBuffer],
+        bonds: &[Option<&'a BondBuffer>],
         transforms: Vec<ultraviolet::Mat4>,
     ) {
         let mut encoder = self
@@ -329,8 +375,12 @@ impl Renderer {
             })
             .expect("failed to get next swapchain");
 
-        self.molecular_pass
-            .run(&mut encoder, atoms, self.fragment_transforms.inner_buffer());
+        self.molecular_pass.run(
+            &mut encoder,
+            atoms,
+            bonds,
+            self.fragment_transforms.inner_buffer(),
+        );
 
         // if interactions.selected_fragments.len() != 0 {
         //     log::warn!("trying to render to stencil");
