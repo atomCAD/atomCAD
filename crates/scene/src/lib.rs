@@ -1,12 +1,7 @@
-pub use crate::molecule::{AtomIndex, BondIndex, BondOrder, Molecule, MoleculeGraph};
-// pub use assembly::{Fragment, FragmentId, Part, PartId, World};
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 pub use assembly::{Assembly, Component};
 
 mod assembly;
-mod dynamics;
-pub mod feature;
-pub mod ids;
-mod molecule;
-mod pdb;
-mod utils;
-mod vsepr;
