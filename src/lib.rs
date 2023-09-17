@@ -173,8 +173,8 @@ fn handle_event(
                             if let Some(gpu_resources) = gpu_resources {
                                 world.synchronize_buffers(gpu_resources);
                             }
-                            let (atoms, transforms) = world.collect_atoms_and_transforms();
-                            renderer.render(atoms, transforms);
+                            let (atoms, bonds, transforms) = world.collect_rendering_primitives();
+                            renderer.render(&atoms, &bonds, transforms);
                         }
                     }
                 }
