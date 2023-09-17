@@ -308,7 +308,7 @@ fn build_sub_menu(sub_menu_spec: &MenuSpec) -> Submenu {
                     }
                     MenuAction::System(SystemAction::LaunchAboutWindow) => {
                         sub_menu.append(&PredefinedMenuItem::about(
-                        Some(&title),
+                        Some(title),
                         Some(AboutMetadata {
                             name: Some(APP_NAME.to_string()),
                             version: Some(APP_VERSION.to_string()),
