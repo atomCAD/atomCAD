@@ -13,5 +13,5 @@ sips -z 512 512   ../icon_1024x1024.png --out AppIcon.iconset/icon_256x256@2x.pn
 sips -z 512 512   ../icon_1024x1024.png --out AppIcon.iconset/icon_512x512.png
 cp ../icon_1024x1024.png AppIcon.iconset/icon_512x512@2x.png
 iconutil -c icns AppIcon.iconset
-mkdir -p src/Game.app/Contents/Resources
-mv AppIcon.icns src/Game.app/Contents/Resources/
+mkdir -p src/atomCAD.app/Contents/Resources
+mv AppIcon.icns src/atomCAD.app/Contents/Resources/

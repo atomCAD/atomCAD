@@ -1,8 +1,8 @@
 [package]
-name = "bevy_game" # ToDo
+name = "atomcad"
 version = "0.1.0"
 publish = false
-authors = ["Niklas Eicker <git@nikl.me>"] # ToDo: you are the author ;)
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
 edition = "2021"
 exclude = ["dist", "build", "assets", "credits"]
 

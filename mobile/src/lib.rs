@@ -1,6 +1,6 @@
+use atomcad::GamePlugin;
 use bevy::prelude::*;
 use bevy::window::WindowMode;
-use bevy_game::GamePlugin;
 
 #[bevy_main]
 fn main() {
