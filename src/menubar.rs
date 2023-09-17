@@ -21,15 +21,13 @@ pub struct MenuSpec {
 impl Default for MenuSpec {
     fn default() -> Self {
         MenuSpec::new(APP_NAME)
-            .and_then(MenuItem::SubMenu(
-                MenuSpec::new("File")
-                    .and_then(MenuItem::Separator)
-                    .and_then(MenuItem::new(
-                        &format!("Quit {APP_NAME}"),
-                        MenuShortcut::System(SystemShortcut::QuitApp),
-                        MenuAction::System(SystemAction::QuitApp),
-                    )),
-            ))
+            .and_then(MenuItem::SubMenu(MenuSpec::new("File").and_then(
+                MenuItem::new(
+                    &format!("Quit {APP_NAME}"),
+                    MenuShortcut::System(SystemShortcut::QuitApp),
+                    MenuAction::System(SystemAction::QuitApp),
+                ),
+            )))
             .and_then(MenuItem::SubMenu(
                 MenuSpec::new("Window")
                     .and_then(MenuItem::new(
@@ -101,34 +99,6 @@ pub enum SystemShortcut {
     QuitApp,
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub struct ModifierKeys(u8);
-
-#[allow(dead_code)] // Not used by all platforms.
-impl ModifierKeys {
-    pub const NONE: ModifierKeys = ModifierKeys(0);
-    pub const CAPSLOCK: ModifierKeys = ModifierKeys(1 << 0);
-    pub const SHIFT: ModifierKeys = ModifierKeys(1 << 1);
-    pub const CONTROL: ModifierKeys = ModifierKeys(1 << 2);
-    pub const OPTION: ModifierKeys = ModifierKeys(1 << 3);
-    pub const COMMAND: ModifierKeys = ModifierKeys(1 << 4);
-    pub const NUMPAD: ModifierKeys = ModifierKeys(1 << 5);
-    pub const HELP: ModifierKeys = ModifierKeys(1 << 6);
-    pub const FUNCTION: ModifierKeys = ModifierKeys(1 << 7);
-
-    pub fn contains(self, other: ModifierKeys) -> bool {
-        (self.0 & other.0) == other.0
-    }
-}
-
-impl std::ops::BitOr for ModifierKeys {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        ModifierKeys(self.0 | rhs.0)
-    }
-}
-
 // A menu action is a callback that is invoked when the menu item is selected.
 // There are also a number of important platform-specific actions that can be
 // invoked.
@@ -145,6 +115,8 @@ pub enum SystemAction {
 }
 
 pub fn setup_menu_bar<T: 'static>(event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {
+    // Do the platform-dependent work of configuring the event loop and
+    // build the menu.
     configure_event_loop(event_loop_builder)
 }
 
