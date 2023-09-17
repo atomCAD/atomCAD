@@ -193,7 +193,7 @@ struct BondFragmentOutput {
 @fragment
 fn fs_main(in: BondFragmentInput) -> BondFragmentOutput {
     // This adds curvature, but we don't really want it because the bond floats
-    // in space between the atoms. So only when the atons happen to lie in a plane
+    // in space between the atoms. So only when the atoms happen to lie in a plane
     // parallel to the screen will this render properly
     // let z = sqrt(bar_width * bar_width - in.uv.y * in.uv.y);
     // let in_pos_clipspace = in.position_clip_space + camera.projection[2] * z;
