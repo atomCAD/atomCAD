@@ -3,6 +3,7 @@ name = "atomcad"
 version = "0.1.0"
 publish = false
 authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
 edition = "2021"
 exclude = ["dist", "build", "assets", "credits"]
 

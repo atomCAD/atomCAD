@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use bevy::prelude::{Input, KeyCode, Res};
 
 pub enum GameControl {
@@ -33,3 +37,5 @@ pub fn get_movement(control: GameControl, input: &Res<Input<KeyCode>>) -> f32 {
         0.0
     }
 }
+
+// End of File
