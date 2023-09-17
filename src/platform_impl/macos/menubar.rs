@@ -200,10 +200,8 @@ pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilde
 }
 
 pub fn attach_menu(window: &Window, menu_bar: &Menu) {
-    menu_bar
-        .init_for_nsapp()
-        .expect("Initializing the menubar shouldn't return an error");
-    menubar.set_as_windows_menu_for_nsapp();
+    menu_bar.init_for_nsapp();
+    menu_bar.set_as_windows_menu_for_nsapp();
 }
 
 fn build_menu(menu_spec: &MenuSpec) -> Menu {
