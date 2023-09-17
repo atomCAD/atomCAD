@@ -201,7 +201,6 @@ pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilde
 
 pub fn attach_menu(window: &Window, menu_bar: &Menu) {
     menu_bar.init_for_nsapp();
-    menu_bar.set_as_windows_menu_for_nsapp();
 }
 
 fn build_menu(menu_spec: &MenuSpec) -> Menu {
@@ -228,6 +227,7 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
         &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::quit(None),
     ]);
+    app_menu.set_as_windows_menu_for_nsapp();
     menu_bar.append(&app_menu);
 
     for menu_item in &menu_spec.items {
