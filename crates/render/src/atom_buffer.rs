@@ -2,14 +2,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{buffer_vec::BufferVec, GlobalRenderResources};
+use crate::GlobalRenderResources;
 use common::AsBytes;
 use periodic_table::Element;
-use std::mem::{self, MaybeUninit};
+use std::{cmp, mem};
 use ultraviolet::Vec3;
 
 /// Packed bit field
-/// | 0 .. 7 | ----------- | 7 .. 31 |
+/// | 0 .. 6 | ----------- | 7 .. 31 |
 ///   ^ atomic number - 1    ^ unspecified
 ///
 /// TODO: Try using a buffer as an atom radius lookup table.
@@ -27,6 +27,9 @@ impl AtomKind {
             .unwrap_or_else(|| unreachable!("invalid atomic number in atom kind"))
     }
 }
+
+static_assertions::const_assert_eq!(mem::size_of::<AtomKind>(), 4);
+unsafe impl AsBytes for AtomKind {}
 
 #[derive(Copy, Clone, PartialEq)]
 #[repr(C)]
@@ -47,8 +50,7 @@ unsafe impl AsBytes for AtomBufferHeader {}
 
 pub struct AtomBuffer {
     bind_group: wgpu::BindGroup,
-    buffer: BufferVec<AtomBufferHeader, AtomRepr>,
-    // number_of_atoms: usize,
+    number_of_atoms: usize,
 }
 
 impl AtomBuffer {
@@ -59,80 +61,123 @@ impl AtomBuffer {
     {
         let atoms = iter.into_iter();
         let number_of_atoms = atoms.len();
-
         assert!(number_of_atoms > 0, "must have at least one atom");
 
-        let buffer = BufferVec::new_with_data(
-            &gpu_resources.device,
-            wgpu::BufferUsages::STORAGE,
-            number_of_atoms as u64,
-            |header, array| {
-                // header.write(AtomBufferHeader { fragment_id });
-                unsafe {
-                    std::ptr::write_unaligned(
-                        header.as_mut_ptr() as *mut MaybeUninit<AtomBufferHeader>,
-                        MaybeUninit::new(AtomBufferHeader),
-                    );
-                }
+        // Serialize iterator into buffers
+        let texel_count = if number_of_atoms <= 2048 {
+            cmp::max(1, number_of_atoms)
+        } else {
+            (number_of_atoms + 2047) & !2047
+        };
+        let mut atom_pos =
+            Vec::with_capacity((texel_count * 4 * mem::size_of::<f32>() + 255) & !255);
+        let mut atom_kind = Vec::with_capacity((texel_count * mem::size_of::<u8>() + 255) & !255);
+        for atom in atoms {
+            atom_pos.extend_from_slice(atom.pos.as_bytes());
+            atom_pos.extend_from_slice(&[0; 4]); // padding
+            atom_kind.extend(&(atom.kind.0 as u8).to_ne_bytes());
+        }
+        atom_pos.resize(atom_pos.capacity(), 0);
+        atom_kind.resize(atom_kind.capacity(), 0);
 
-                for (block, atom) in array.iter_mut().zip(atoms) {
-                    // block.write(atom);
-                    unsafe {
-                        std::ptr::write_unaligned(block, MaybeUninit::new(atom));
-                    }
-                }
-            },
+        assert_eq!(
+            atom_pos.len() % 256,
+            0,
+            "texture row must be a multiple of 256 bytes"
+        );
+        assert_eq!(
+            atom_kind.len() % 256,
+            0,
+            "texture row must be a multiple of 256 bytes"
         );
 
-        assert!(std::mem::size_of::<AtomBufferHeader>() % gpu_resources.device.limits().min_storage_buffer_offset_alignment as usize == 0, "AtomBufferHeader's size needs to be an integer multiple of the min storage buffer offset alignment of the gpu. See https://github.com/shinzlet/atomCAD/issues/1");
+        let size = wgpu::Extent3d {
+            width: cmp::min(texel_count, 2048) as u32,
+            height: ((texel_count + 2047) / 2048) as u32,
+            depth_or_array_layers: 1,
+        };
+
+        let pos_texture = gpu_resources
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba32Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+
+        gpu_resources.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &pos_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &atom_pos,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(size.width * 4 * mem::size_of::<f32>() as u32),
+                rows_per_image: Some(size.height),
+            },
+            size,
+        );
+
+        let kind_texture = gpu_resources
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::R8Uint,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+
+        gpu_resources.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &kind_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &atom_kind,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(size.width * mem::size_of::<u8>() as u32),
+                rows_per_image: Some(size.height),
+            },
+            size,
+        );
+
+        let pos_texture_view = pos_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let kind_texture_view = kind_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let bind_group = gpu_resources
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
                 layout: &gpu_resources.atom_bgl,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: buffer.inner_buffer(),
-                        offset: std::mem::size_of::<AtomBufferHeader>() as u64,
-                        size: None,
-                    }),
-                }],
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&pos_texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&kind_texture_view),
+                    },
+                ],
             });
 
         Self {
             bind_group,
-            buffer,
-            // number_of_atoms,
-        }
-    }
-
-    pub fn copy_new(&self, render_resources: &GlobalRenderResources) -> Self {
-        let buffer = self.buffer.copy_new(render_resources, false);
-
-        render_resources
-            .queue
-            .write_buffer(buffer.inner_buffer(), 0, AtomBufferHeader.as_bytes());
-
-        let bind_group = render_resources
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: None,
-                layout: &render_resources.atom_bgl,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: buffer.inner_buffer(),
-                        offset: std::mem::size_of::<AtomBufferHeader>() as u64,
-                        size: None,
-                    }),
-                }],
-            });
-
-        Self {
-            bind_group,
-            buffer,
-            // number_of_atoms: self.number_of_atoms,
+            number_of_atoms,
         }
     }
 
@@ -141,32 +186,11 @@ impl AtomBuffer {
     }
 
     pub fn len(&self) -> usize {
-        self.buffer.len() as usize
-        // self.number_of_atoms
+        self.number_of_atoms
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    pub fn with_buffer(&mut self, f: impl Fn(&mut BufferVec<AtomBufferHeader, AtomRepr>)) {
-        f(&mut self.buffer);
-    }
-
-    pub fn reupload_atoms(
-        &mut self,
-        atoms: &[AtomRepr],
-        gpu_resources: &GlobalRenderResources,
-    ) -> crate::buffer_vec::PushStategy {
-        let mut encoder = gpu_resources
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        self.buffer.clear();
-        println!("buffer size after clear: {}", self.buffer.len());
-
-        let ret = self.buffer.push_small(gpu_resources, &mut encoder, atoms);
-        println!("buffer size after push_small: {}", self.buffer.len());
-        ret
     }
 }
 

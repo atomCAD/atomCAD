@@ -2,13 +2,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{AtomBuffer, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
+use crate::{AtomBuffer, BondBuffer, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
 use std::{convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
 // Renders atoms
 pub struct MolecularPass {
-    pipeline: wgpu::RenderPipeline,
+    atom_pipeline: wgpu::RenderPipeline,
+    bond_pipeline: wgpu::RenderPipeline,
     top_level_bg: wgpu::BindGroup,
 
     color_texture: wgpu::TextureView,
@@ -44,21 +45,27 @@ impl MolecularPass {
     pub fn new(
         render_resources: &GlobalRenderResources,
         camera_binding_resource: wgpu::BindingResource,
-        vertices_buffer: &wgpu::Buffer,
+        vertex_constants_buffer: &wgpu::Buffer,
         periodic_table_buffer: &wgpu::Buffer,
         size: PhysicalSize<u32>,
     ) -> (Self, wgpu::TextureView) {
         let top_level_bgl = create_top_level_bgl(&render_resources.device);
-        let pipeline = create_render_pipeline(
+        let atom_pipeline = create_atom_render_pipeline(
             &render_resources.device,
             &top_level_bgl,
             &render_resources.atom_bgl,
+        );
+        let bond_pipeline = create_bond_render_pipeline(
+            &render_resources.device,
+            &top_level_bgl,
+            &render_resources.atom_bgl,
+            &render_resources.bond_bgl,
         );
         let top_level_bg = create_top_level_bg(
             &render_resources.device,
             &top_level_bgl,
             camera_binding_resource,
-            vertices_buffer,
+            vertex_constants_buffer,
             periodic_table_buffer,
         );
 
@@ -68,7 +75,8 @@ impl MolecularPass {
 
         (
             Self {
-                pipeline,
+                atom_pipeline,
+                bond_pipeline,
                 top_level_bg,
 
                 color_texture: color_texture.create_view(&wgpu::TextureViewDescriptor::default()),
@@ -98,12 +106,17 @@ impl MolecularPass {
     pub fn run<'a>(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        atoms: impl IntoIterator<Item = &'a AtomBuffer>,
+        atoms: &[&'a AtomBuffer],
+        bonds: &[Option<&'a BondBuffer>],
         fragment_transforms: &wgpu::Buffer,
         // fragments: impl IntoIterator<Item = &'a Fragment>,
         // fragment_transforms: &wgpu::Buffer,
         // per_fragment: &HashMap<FragmentId, (PartId, u64 /* transform index */)>,
     ) {
+        assert!(
+            atoms.len() == bonds.len(),
+            "Must have equal number of AtomBuffers and Option<BondBuffers>"
+        );
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[
@@ -112,10 +125,10 @@ impl MolecularPass {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
+                            r: 0.703125,
+                            g: 0.703125,
+                            b: 0.703125,
+                            a: 1.000000,
                         }),
                         store: true,
                     },
@@ -141,10 +154,10 @@ impl MolecularPass {
             }),
         });
 
-        rpass.set_pipeline(&self.pipeline);
+        rpass.set_pipeline(&self.atom_pipeline);
         rpass.set_bind_group(0, &self.top_level_bg, &[]);
 
-        for (idx, atoms_inst) in atoms.into_iter().enumerate() {
+        for (idx, atoms_inst) in atoms.iter().enumerate() {
             let transform_offset = (idx * mem::size_of::<ultraviolet::Mat4>()) as u64;
 
             rpass.set_vertex_buffer(
@@ -156,6 +169,29 @@ impl MolecularPass {
 
             rpass.set_bind_group(1, atoms_inst.bind_group(), &[]);
             rpass.draw(0..(atoms_inst.len() * 3).try_into().unwrap(), 0..1);
+        }
+
+        // render bonds
+        rpass.set_pipeline(&self.bond_pipeline);
+        rpass.set_bind_group(0, &self.top_level_bg, &[]);
+
+        for (idx, bonds_inst) in bonds.iter().enumerate() {
+            if let Some(bonds_inst) = bonds_inst {
+                let transform_offset = (idx * mem::size_of::<ultraviolet::Mat4>()) as u64;
+
+                rpass.set_vertex_buffer(
+                    0,
+                    fragment_transforms.slice(
+                        transform_offset
+                            ..transform_offset + mem::size_of::<ultraviolet::Mat4>() as u64,
+                    ),
+                );
+
+                rpass.set_bind_group(1, atoms[idx].bind_group(), &[]);
+                rpass.set_bind_group(2, bonds_inst.bind_group(), &[]);
+                // the factor of 6 is used because each atom becomes a quad (two tris)
+                rpass.draw(0..(bonds_inst.len() * 6).try_into().unwrap(), 0..1);
+            }
         }
     }
 }
@@ -175,23 +211,23 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 },
                 count: None,
             },
-            // vertices
+            // periodic table
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
                 count: None,
             },
-            // periodic table
+            // vertex constants
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -205,7 +241,7 @@ fn create_top_level_bg(
     device: &wgpu::Device,
     top_level_bgl: &wgpu::BindGroupLayout,
     camera_binding_resource: wgpu::BindingResource,
-    vertices_buffer: &wgpu::Buffer,
+    vertex_constants_buffer: &wgpu::Buffer,
     periodic_table_buffer: &wgpu::Buffer,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -217,20 +253,20 @@ fn create_top_level_bg(
                 binding: 0,
                 resource: camera_binding_resource,
             },
-            // vertices
+            // periodic table
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: vertices_buffer,
+                    buffer: periodic_table_buffer,
                     offset: 0,
                     size: None,
                 }),
             },
-            // periodic table
+            // vertex constants
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: periodic_table_buffer,
+                    buffer: vertex_constants_buffer,
                     offset: 0,
                     size: None,
                 }),
@@ -239,7 +275,7 @@ fn create_top_level_bg(
     })
 }
 
-fn create_render_pipeline(
+fn create_atom_render_pipeline(
     device: &wgpu::Device,
     top_level_bgl: &wgpu::BindGroupLayout,
     atom_bgl: &wgpu::BindGroupLayout,
@@ -283,6 +319,71 @@ fn create_render_pipeline(
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Front),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Greater,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
+        multiview: None,
+    })
+}
+
+fn create_bond_render_pipeline(
+    device: &wgpu::Device,
+    top_level_bgl: &wgpu::BindGroupLayout,
+    atom_bgl: &wgpu::BindGroupLayout,
+    bond_bgl: &wgpu::BindGroupLayout,
+) -> wgpu::RenderPipeline {
+    let bond_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[top_level_bgl, atom_bgl, bond_bgl],
+        push_constant_ranges: &[],
+    });
+
+    let bond_shader = device.create_shader_module(wgpu::include_wgsl!("bond.wgsl"));
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(&bond_pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &bond_shader,
+            entry_point: "vs_main",
+            buffers: &[wgpu::VertexBufferLayout {
+                array_stride: mem::size_of::<ultraviolet::Mat4>() as _,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &wgpu::vertex_attr_array![
+                    // part and fragment transform matrix
+                    0 => Float32x4,
+                    1 => Float32x4,
+                    2 => Float32x4,
+                    3 => Float32x4,
+                ],
+            }],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &bond_shader,
+            entry_point: "fs_main",
+            targets: &[
+                Some(SWAPCHAIN_FORMAT.into()),
+                Some(wgpu::TextureFormat::Rgba16Float.into()),
+            ],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,

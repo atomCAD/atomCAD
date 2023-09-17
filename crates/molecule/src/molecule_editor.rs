@@ -38,7 +38,9 @@ impl MoleculeEditor {
         let mut repr = Molecule::default();
         edit.apply(&0, &mut repr)
             .expect("Primitive features should never return a feature error!");
-        repr.relax();
+        // Relaxation is currently causing infinte loops on loaded PDB files.
+        // Disabled until the code matures a bit.
+        //repr.relax();
 
         let mut features = EditList::default();
         features.push_back(edit);
