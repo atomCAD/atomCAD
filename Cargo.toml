@@ -61,7 +61,6 @@ windows-sys = { version = "0.48", features = ["Win32_UI_WindowsAndMessaging"] }
 # macOS:
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = "0.9.1"
-objc = "0.2.7"
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
