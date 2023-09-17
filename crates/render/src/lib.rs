@@ -4,6 +4,7 @@
 
 pub use crate::{
     atom_buffer::{AtomBuffer, AtomKind, AtomRepr},
+    bond_buffer::{BondBuffer, BondRepr},
     camera::{Camera, CameraRepr, RenderCamera},
 };
 use crate::{bind_groups::AsBindingResource as _, buffer_vec::BufferVec};
@@ -16,6 +17,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 mod atom_buffer;
 mod bind_groups;
+mod bond_buffer;
 mod buffer_vec;
 mod camera;
 mod passes;
@@ -27,14 +29,12 @@ macro_rules! include_spirv {
     };
 }
 
-const SWAPCHAIN_FORMAT: wgpu::TextureFormat = if cfg!(target_arch = "wasm32") {
-    // srgb doesn't work correctly in firefox rn, so we're manually converting to it in the shader
-    wgpu::TextureFormat::Bgra8Unorm
-} else if cfg!(target_os = "android") {
-    wgpu::TextureFormat::Rgba8UnormSrgb
-} else {
-    wgpu::TextureFormat::Bgra8UnormSrgb
-};
+const SWAPCHAIN_FORMAT: wgpu::TextureFormat =
+    if cfg!(any(target_os = "android", target_arch = "wasm32")) {
+        wgpu::TextureFormat::Rgba8UnormSrgb
+    } else {
+        wgpu::TextureFormat::Bgra8UnormSrgb
+    };
 
 #[derive(Default)]
 pub struct Interactions {
@@ -45,6 +45,7 @@ pub struct GlobalRenderResources {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) atom_bgl: wgpu::BindGroupLayout,
+    pub(crate) bond_bgl: wgpu::BindGroupLayout,
     pub(crate) linear_sampler: wgpu::Sampler,
     // pub(crate) staging_belt: Arc<Mutex<wgpu::util::StagingBelt>>,
 }
@@ -56,11 +57,18 @@ pub struct RenderOptions {
 
 #[repr(C, align(16))]
 struct MolecularVertexConsts {
-    array: [Vec2; 3],
+    // Note: Each vertex is padded to 16 bytes to comply with WGSL layout
+    // rules for uniform variables.  This means that each Vec2<f32> is
+    // actually stored as a Vec4<f32> in the shader, with the last two entries
+    // as padding.
+    array: [Vec2; 6],
 }
 impl MolecularVertexConsts {
     fn new(a: Vec2, b: Vec2, c: Vec2) -> Self {
-        Self { array: [a, b, c] }
+        let pad = Vec2::zero();
+        Self {
+            array: [a, pad, b, pad, c, pad],
+        }
     }
 }
 
@@ -71,8 +79,8 @@ pub struct Renderer {
     render_resources: Rc<GlobalRenderResources>,
     size: PhysicalSize<u32>,
 
-    vertices: MolecularVertexConsts,
-    vertices_buffer: wgpu::Buffer,
+    vertex_contants: MolecularVertexConsts,
+    vertex_contants_buffer: wgpu::Buffer,
     periodic_table: PeriodicTable,
     periodic_table_buffer: wgpu::Buffer,
     camera: RenderCamera,
@@ -94,26 +102,15 @@ impl Renderer {
         // The instance is a handle to our GPU.
         // Backends::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
+            backends: wgpu::Backends::PRIMARY | wgpu::Backends::GL,
             dx12_shader_compiler: Default::default(),
         });
 
         // # Safety
         //
         // The surface needs to live as long as the window that created it.
-        #[cfg(not(target_arch = "wasm32"))]
         let surface = unsafe { instance.create_surface(window) }
             .expect("failed to retrieve surface for window");
-        #[cfg(target_arch = "wasm32")]
-        use winit::platform::web::WindowExtWebSys;
-        #[cfg(target_arch = "wasm32")]
-        let canvas = window
-            .canvas()
-            .expect("failed to retrieve canvas for window");
-        #[cfg(target_arch = "wasm32")]
-        let surface = instance
-            .create_surface_from_canvas(canvas)
-            .expect("failed to retrieve surface for canvas");
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -124,9 +121,10 @@ impl Renderer {
             .await
             .expect("failed to find an appropriate adapter");
 
-        let software_driven_features = wgpu::Features::VERTEX_WRITABLE_STORAGE;
-        let gpu_driven_features =
-            software_driven_features | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
+        let software_driven_features = wgpu::Features::empty();
+        let gpu_driven_features = software_driven_features
+            | wgpu::Features::VERTEX_WRITABLE_STORAGE
+            | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
         let gpu_driven_rendering;
 
         let requested_features =
@@ -162,21 +160,21 @@ impl Renderer {
 
         let periodic_table = PeriodicTable::new();
 
-        let vertices = MolecularVertexConsts::new(
+        let vertex_contants = MolecularVertexConsts::new(
             Vec2::new(1.73, -1.0),
             Vec2::new(-1.73, -1.0),
             Vec2::new(0.0, 2.0),
         );
-        let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_contants_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: vertices.array.as_bytes(),
-            usage: wgpu::BufferUsages::STORAGE,
+            contents: vertex_contants.array.as_bytes(),
+            usage: wgpu::BufferUsages::UNIFORM,
         });
 
         let periodic_table_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: periodic_table.element_reprs.as_bytes(),
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::UNIFORM,
         });
 
         let surface_config = wgpu::SurfaceConfiguration {
@@ -193,23 +191,78 @@ impl Renderer {
 
         let atom_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    // AtomPos
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    // AtomKind
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+            ],
         });
+
+        let bond_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    // Bond atom 1
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    // Bond atom 2
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    // Bond order
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
 
         let render_resources = Rc::new(GlobalRenderResources {
             device,
             queue,
             atom_bgl,
+            bond_bgl,
             linear_sampler,
         });
 
@@ -219,7 +272,7 @@ impl Renderer {
         let (molecular_pass, color_texture) = passes::MolecularPass::new(
             &render_resources,
             camera.as_binding_resource(),
-            &vertices_buffer,
+            &vertex_contants_buffer,
             &periodic_table_buffer,
             size,
         );
@@ -234,8 +287,8 @@ impl Renderer {
                 render_resources: Rc::clone(&render_resources),
                 size,
 
-                vertices,
-                vertices_buffer,
+                vertex_contants,
+                vertex_contants_buffer,
                 periodic_table,
                 periodic_table_buffer,
                 camera,
@@ -284,7 +337,8 @@ impl Renderer {
 
     pub fn render<'a>(
         &mut self,
-        atoms: impl IntoIterator<Item = &'a AtomBuffer>,
+        atoms: &[&'a AtomBuffer],
+        bonds: &[Option<&'a BondBuffer>],
         transforms: Vec<ultraviolet::Mat4>,
     ) {
         let mut encoder = self
@@ -321,8 +375,12 @@ impl Renderer {
             })
             .expect("failed to get next swapchain");
 
-        self.molecular_pass
-            .run(&mut encoder, atoms, self.fragment_transforms.inner_buffer());
+        self.molecular_pass.run(
+            &mut encoder,
+            atoms,
+            bonds,
+            self.fragment_transforms.inner_buffer(),
+        );
 
         // if interactions.selected_fragments.len() != 0 {
         //     log::warn!("trying to render to stencil");

@@ -28,22 +28,27 @@ struct PeriodicTable {
     elements: array<Element, 118>,
 };
 
-struct Atom {
-    pos: vec3<f32>,
-    kind: u32,
+struct Vertex {
+    xy: vec2<f32>,
+    padding: vec2<f32>,
 };
 
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 @group(0) @binding(1)
-var<storage> vertices: array<vec2<f32>, 3>;
+var<uniform> periodic_table: PeriodicTable;
 @group(0) @binding(2)
-var<storage> periodic_table: PeriodicTable;
+var<uniform> vertices: array<Vertex, 3>;
 
-// @group(1) @binding(0)
-// var<storage> fragment_id: vec2<u32>; // high and low
+struct Atom {
+    pos: vec3<f32>,
+    kind: u32,
+};
+
 @group(1) @binding(0)
-var<storage> atoms: array<Atom>;
+var atoms_pos: texture_2d<f32>;
+@group(1) @binding(1)
+var atoms_kind: texture_2d<u32>;
 
 struct AtomVertexInput {
     @builtin(vertex_index)
@@ -75,10 +80,14 @@ struct AtomVertexOutput {
 
 @vertex
 fn vs_main(in: AtomVertexInput) -> AtomVertexOutput {
-    let atom = atoms[in.index / 3u];
+    let idx = in.index / 3u;
+    let coord = vec2<u32>(idx & 0x000007ffu, idx >> 11u);
+    let texel_pos = textureLoad(atoms_pos, coord, 0);
+    let texel_kind = textureLoad(atoms_kind, coord, 0);
+    let atom = Atom(texel_pos.xyz, texel_kind.x);
     let element = periodic_table.elements[atom.kind & 0x7fu];
     let element_vec = vec4<f32>(element.color, element.radius);
-    let vertex = element.radius * vertices[in.index % 3u];
+    let vertex = element.radius * vertices[in.index % 3u].xy;
 
     let part_fragment_transform = mat4x4<f32>(
         in.part_fragment_transform_0,

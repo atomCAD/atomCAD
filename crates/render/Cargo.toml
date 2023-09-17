@@ -11,7 +11,7 @@ build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-wgpu = { version = "0.17.0", features = ["spirv"] }
+wgpu = { version = "0.17.0", features = ["webgl"] }
 futures = "0.3.28"
 static_assertions = "1"
 log = "0.4.19"
