@@ -208,29 +208,31 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
 
     // Add the MacOS-specific app menu
     let app_menu = Submenu::new(APP_NAME, true);
-    app_menu.append_items(&[
-        &PredefinedMenuItem::about(
-            None,
-            Some(AboutMetadata {
-                name: Some(APP_NAME.to_string()),
-                version: Some(APP_VERSION.to_string()),
-                license: Some(APP_LICENSE.to_string()),
-                ..Default::default()
-            }),
-        ),
-        &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::services(None),
-        &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::hide(None),
-        &PredefinedMenuItem::hide_others(None),
-        &PredefinedMenuItem::show_all(None),
-        &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::quit(None),
-    ]);
+    app_menu
+        .append_items(&[
+            &PredefinedMenuItem::about(
+                None,
+                Some(AboutMetadata {
+                    name: Some(APP_NAME.to_string()),
+                    version: Some(APP_VERSION.to_string()),
+                    license: Some(APP_LICENSE.to_string()),
+                    ..Default::default()
+                }),
+            ),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::services(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::hide(None),
+            &PredefinedMenuItem::hide_others(None),
+            &PredefinedMenuItem::show_all(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::quit(None),
+        ])
+        .expect("Appending items to the app menu shouldn't cause an error!");
     app_menu.set_as_windows_menu_for_nsapp();
     menu_bar
         .append(&app_menu)
-        .expect("Appending the app menu shouldn't return an error");
+        .expect("Appending the app menu shouldn't return an error.");
 
     for menu_item in &menu_spec.items {
         match menu_item {
