@@ -228,7 +228,9 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
         &PredefinedMenuItem::quit(None),
     ]);
     app_menu.set_as_windows_menu_for_nsapp();
-    menu_bar.append(&app_menu);
+    menu_bar
+        .append(&app_menu)
+        .expect("Appending the app menu shouldn't return an error");
 
     for menu_item in &menu_spec.items {
         match menu_item {
