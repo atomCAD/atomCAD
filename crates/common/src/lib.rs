@@ -64,4 +64,46 @@ where
     }
 }
 
+// Returns true if the `target` point is inside the specified cylinder. The cylinder is
+// described by the point at the center of each endcap circle as well as the radius of the
+// endcap circle. `radius_sq = radius * radius`.
+pub fn inside_cylinder(
+    p1: ultraviolet::Vec3,
+    p2: ultraviolet::Vec3,
+    radius_sq: f32,
+    target: ultraviolet::Vec3,
+) -> bool {
+    // If p1 == p2, the cylinder's orientation is not well defined. We only consider a point
+    // to be inside this null cylinder if it is exactly coincident with those points:
+    if p1 == p2 {
+        return p1 == target;
+    }
+
+    // Now, we consider cylinders that have nonzero volume.
+    // First,  We translate the space so that p1 is at the origin (i.e. we subtract p1
+    // from all points) - this leaves us in a simpler case where the cylinder's centerline is
+    // just described by the vector p2 - p1, with no offset to consider.
+    let cyl_axis = p2 - p1;
+    let target = target - p1;
+
+    // Then, imagine projecting the target point vector orthogonally onto the centerline.
+    // This forms a new vector colinear with p2 - p1: so we can write it as alpha * (p2 - p1).
+    let alpha = cyl_axis.dot(target) / cyl_axis.mag_sq();
+    let proj = alpha * cyl_axis;
+
+    // If alpha is zero, the target point is in the plane of the p1 endcap. If it is 1, the
+    // target point is in the plane of the p2 endcap. If it is in between 0 and 1, it is in
+    // between those two planes. If it is < 0 or > 1, it is absolutely outside of the cylinder.
+    // To be clear, this just tells us if the target point is inside the 'infinite-radius
+    // cylinder' - if one existed.
+    if alpha < 0.0 || alpha > 1.0 {
+        return false;
+    }
+
+    // Finally, we just consider the radius - how long is the line from alpha * (p2 - p1) to
+    // `target`?
+    let orthogonal_distance_sq = (target - proj).mag_sq();
+    return orthogonal_distance_sq <= radius_sq;
+}
+
 // End of File

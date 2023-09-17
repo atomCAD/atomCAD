@@ -1,4 +1,4 @@
-pub use crate::molecule::{AtomIndex, BondIndex, BondOrder, MoleculeGraph};
+pub use crate::molecule::{AtomIndex, BondIndex, BondOrder, MoleculeGraph, RaycastHit};
 pub use crate::molecule_editor::MoleculeEditor;
 
 mod dynamics;

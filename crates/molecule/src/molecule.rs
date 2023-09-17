@@ -20,6 +20,8 @@ lazy_static! {
         periodic_table::PeriodicTable::new();
 }
 
+const BOND_RAYCAST_RADIUS: f32 = 0.8;
+
 /// A graph representation of a molecule.
 /// The molecule graph is stable to ensure that deleting atoms will not change
 /// the index of other atoms. It is undirected because bonds have no direction.
@@ -55,6 +57,12 @@ pub struct MoleculeCheckpoint {
     graph: MoleculeGraph,
     #[serde_as(as = "Vec<(_, _)>")]
     positions: AtomPositions,
+}
+
+#[derive(Clone, Debug)]
+pub enum RaycastHit {
+    Atom(AtomSpecifier),
+    Bond(AtomSpecifier, AtomSpecifier),
 }
 
 /// Stores the data for each atom in a `Molecule`.
@@ -215,7 +223,7 @@ impl Molecule {
     }
 
     // TODO: Optimize heavily (use octree, compute entry point of ray analytically)
-    pub fn get_ray_hit(&self, origin: Vec3, direction: Vec3) -> Option<AtomSpecifier> {
+    pub fn get_ray_hit(&self, origin: Vec3, direction: Vec3) -> Option<RaycastHit> {
         // Using `direction` as a velocity vector, determine when the ray will
         // collide with the bounding box. Note the ? - this fn returns early if there
         // isn't a collision.
@@ -237,13 +245,17 @@ impl Molecule {
 
         // This is an empirically reasonable value. It is still possible to miss an atom if
         // the user clicks on the very edge of it, but this is rare.
-        let step_size = PERIODIC_TABLE.element_reprs[Element::Hydrogen as usize].radius / 10.0;
+        let step_size = f32::min(
+            PERIODIC_TABLE.element_reprs[Element::Hydrogen as usize].radius,
+            BOND_RAYCAST_RADIUS,
+        ) / 10.0;
         let step = direction * step_size;
         let t_span = tmax - f32::max(0.0, tmin);
         // the direction vector is normalized, so 1 unit of time = 1 unit of space
         let num_steps = (t_span / step_size) as usize;
 
         for _ in 0..num_steps {
+            // Check if an atom intersection occurs
             for atom in self.graph.node_weights() {
                 let atom_radius_sq = PERIODIC_TABLE.element_reprs[atom.element as usize]
                     .radius
@@ -254,7 +266,24 @@ impl Molecule {
                     .get(&atom.spec)
                     .expect("Every atom in the graph should have an associated position");
                 if (current_pos - atom_pos).mag_sq() < atom_radius_sq {
-                    return Some(atom.spec.clone());
+                    return Some(RaycastHit::Atom(atom.spec.clone()));
+                }
+            }
+
+            // Check if a bond intersection occurs
+            for edge in self.graph.edge_indices() {
+                let (a1, a2) = self.graph.edge_endpoints(edge).unwrap();
+                let [s1, s2] = [a1, a2]
+                    .map(|atom_index| self.graph.node_weight(atom_index).unwrap().spec.clone());
+                let [p1, p2] = [&s1, &s2].map(|atom_spec| {
+                    *self
+                        .positions
+                        .get(atom_spec)
+                        .expect("Every atom in the graph should have an associated position")
+                });
+
+                if common::inside_cylinder(p1, p2, BOND_RAYCAST_RADIUS, current_pos) {
+                    return Some(RaycastHit::Bond(s1, s2));
                 }
             }
 

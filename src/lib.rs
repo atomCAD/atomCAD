@@ -62,7 +62,7 @@ use camera::ArcballCamera;
 use common::InputEvent;
 use molecule::{
     edit::{Edit, PdbData},
-    MoleculeEditor,
+    MoleculeEditor, RaycastHit,
 };
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
 use scene::{Assembly, Component};
@@ -111,7 +111,7 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = make_pdb_demo_scene();
+    let molecule = make_salt_demo_scene();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();
@@ -216,7 +216,17 @@ fn handle_event(
                                             if let Some(hit) =
                                                 molecule.repr.get_ray_hit(ray_origin, ray_direction)
                                             {
-                                                println!("Atom {:?} clicked!", hit);
+                                                match hit {
+                                                    RaycastHit::Atom(atom) => {
+                                                        println!("Atom {:?} clicked!", atom);
+                                                    }
+                                                    RaycastHit::Bond(a1, a2) => {
+                                                        println!(
+                                                            "Bond ({:?} -> {:?}) clicked!",
+                                                            a1, a2
+                                                        );
+                                                    }
+                                                }
                                                 // molecule.push_feature(AtomFeature {
                                                 //     target: hit,
                                                 //     element: periodic_table::Element::Carbon,
