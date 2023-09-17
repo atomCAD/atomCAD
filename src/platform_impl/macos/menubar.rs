@@ -199,7 +199,7 @@ pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilde
     menu_bar
 }
 
-pub fn attach_menu(window: &Window, menu_bar: &Menu) {
+pub fn attach_menu(_window: &Window, menu_bar: &Menu) {
     menu_bar.init_for_nsapp();
 }
 
@@ -251,7 +251,7 @@ fn build_menu(menu_spec: &MenuSpec) -> Menu {
                     }
                     MenuAction::System(SystemAction::LaunchAboutWindow) => {
                         menu_bar.append(&PredefinedMenuItem::about(
-                        Some(&title),
+                        Some(title),
                         Some(AboutMetadata {
                             name: Some(APP_NAME.to_string()),
                             version: Some(APP_VERSION.to_string()),
