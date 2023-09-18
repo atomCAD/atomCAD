@@ -111,7 +111,7 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = make_salt_demo_scene();
+    let molecule = make_pdb_demo_scene();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();
