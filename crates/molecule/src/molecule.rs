@@ -383,6 +383,28 @@ impl EditContext for Molecule {
         }
     }
 
+    fn remove_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier) -> Result<(), EditError> {
+        let idx1 = self
+            .atom_map
+            .get(a1)
+            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
+        let idx2 = self
+            .atom_map
+            .get(a2)
+            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
+
+        let edge = self
+            .graph
+            .find_edge(*idx1, *idx2)
+            .ok_or(EditError::BrokenReference(ReferenceType::Bond))?;
+        self.graph.remove_edge(edge);
+
+        self.recompute_bounding_box();
+        self.gpu_synced = false;
+
+        Ok(())
+    }
+
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode> {
         match self.atom_map.get(spec) {
             Some(atom_index) => self.graph.node_weight(*atom_index),

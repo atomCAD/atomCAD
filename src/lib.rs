@@ -84,6 +84,7 @@ struct UIState {
     selected_atom: Option<AtomSpecifier>,
     prev_selected_atom: Option<AtomSpecifier>,
     bond_order: u8,
+    selected_bond: Option<(AtomSpecifier, AtomSpecifier)>,
 }
 
 impl Default for UIState {
@@ -93,6 +94,7 @@ impl Default for UIState {
             selected_atom: None,
             selected_element: None,
             prev_selected_atom: None,
+            selected_bond: None,
         }
     }
 }
@@ -262,14 +264,26 @@ fn handle_event(
                                 }
                                 KeyCode::Delete | KeyCode::Backspace => {
                                     // Delete atom
-                                    if let (Some(world), Some(selection)) =
-                                        (world, &ui_state.selected_atom)
-                                    {
-                                        world.walk_mut(|editor, _| {
-                                            editor.insert_edit(Edit::DeleteAtom(selection.clone()));
+                                    if let Some(world) = world {
+                                        if let Some(selection) = &ui_state.selected_atom {
+                                            world.walk_mut(|editor, _| {
+                                                editor.insert_edit(Edit::DeleteAtom(
+                                                    selection.clone(),
+                                                ));
 
-                                            editor.apply_all_edits();
-                                        });
+                                                editor.apply_all_edits();
+                                            });
+                                        } else if let Some(selection) = &ui_state.selected_bond {
+                                            world.walk_mut(|editor, _| {
+                                                let selection = selection.clone();
+                                                editor.insert_edit(Edit::DeleteBond(
+                                                    selection.0,
+                                                    selection.1,
+                                                ));
+
+                                                editor.apply_all_edits();
+                                            });
+                                        }
                                     }
                                 }
                                 KeyCode::KeyC => ui_state.selected_element = Some(Element::Carbon),
@@ -308,12 +322,17 @@ fn handle_event(
 
                                                         println!("Atom {:?} clicked!", atom);
                                                         ui_state.selected_atom = Some(atom);
+                                                        ui_state.selected_bond = None;
                                                     }
                                                     RaycastHit::Bond(a1, a2) => {
                                                         println!(
                                                             "Bond ({:?} -> {:?}) clicked!",
                                                             a1, a2
                                                         );
+
+                                                        ui_state.selected_bond = Some((a1, a2));
+                                                        ui_state.prev_selected_atom = None;
+                                                        ui_state.selected_atom = None;
                                                     }
                                                 }
                                             }

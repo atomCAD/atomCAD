@@ -13,6 +13,7 @@ use crate::{molecule::AtomNode, BondOrder};
 #[derive(Debug)]
 pub enum ReferenceType {
     Atom,
+    Bond,
     Edit,
     // Molecule,
     // File,
@@ -44,6 +45,7 @@ pub trait EditContext {
         a2: &AtomSpecifier,
         order: BondOrder,
     ) -> Result<(), EditError>;
+    fn remove_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier) -> Result<(), EditError>;
     fn add_bonded_atom(
         &mut self,
         element: Element,
@@ -78,6 +80,7 @@ pub enum Edit {
     RootAtom(Element),
     BondedAtom(BondedAtom),
     DeleteAtom(AtomSpecifier),
+    DeleteBond(AtomSpecifier, AtomSpecifier),
     CreateBond(CreateBond),
     PdbImport(PdbData),
 }
@@ -105,6 +108,9 @@ impl Edit {
             }
             Edit::DeleteAtom(spec) => {
                 ctx.remove_atom(&spec)?;
+            }
+            Edit::DeleteBond(a1, a2) => {
+                ctx.remove_bond(&a1, &a2)?;
             }
             Edit::CreateBond(CreateBond { start, stop, order }) => {
                 ctx.create_bond(&start, &stop, *order)?;
