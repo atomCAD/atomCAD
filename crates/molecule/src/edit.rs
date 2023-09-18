@@ -37,6 +37,7 @@ pub trait EditContext {
         spec: AtomSpecifier,
         head: Option<AtomSpecifier>,
     ) -> Result<(), EditError>;
+    fn remove_atom(&mut self, target: &AtomSpecifier) -> Result<(), EditError>;
     fn create_bond(
         &mut self,
         a1: &AtomSpecifier,
@@ -60,6 +61,13 @@ pub struct BondedAtom {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CreateBond {
+    pub start: AtomSpecifier,
+    pub stop: AtomSpecifier,
+    pub order: u8,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PdbData {
     pub name: String,
     pub contents: String,
@@ -69,14 +77,16 @@ pub struct PdbData {
 pub enum Edit {
     RootAtom(Element),
     BondedAtom(BondedAtom),
+    DeleteAtom(AtomSpecifier),
+    CreateBond(CreateBond),
     PdbImport(PdbData),
 }
 
 impl Edit {
-    pub fn apply(&self, edit_id: &EditId, commands: &mut dyn EditContext) -> Result<(), EditError> {
+    pub fn apply(&self, edit_id: &EditId, ctx: &mut dyn EditContext) -> Result<(), EditError> {
         match self {
             Edit::RootAtom(element) => {
-                commands.add_atom(
+                ctx.add_atom(
                     *element,
                     Default::default(),
                     AtomSpecifier::new(*edit_id),
@@ -86,15 +96,21 @@ impl Edit {
             Edit::BondedAtom(BondedAtom { target, element }) => {
                 let spec = AtomSpecifier::new(*edit_id);
 
-                let pos = *commands
+                let pos = *ctx
                     .pos(target)
                     .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
                 let pos = pos + ultraviolet::Vec3::new(5.0, 0.0, 0.0);
 
-                commands.add_bonded_atom(*element, pos, spec, target.clone(), 1)?;
+                ctx.add_bonded_atom(*element, pos, spec, target.clone(), 1)?;
+            }
+            Edit::DeleteAtom(spec) => {
+                ctx.remove_atom(&spec)?;
+            }
+            Edit::CreateBond(CreateBond { start, stop, order }) => {
+                ctx.create_bond(&start, &stop, *order)?;
             }
             Edit::PdbImport(PdbData { name, contents }) => {
-                crate::pdb::spawn_pdb(name, contents, edit_id, commands)?;
+                crate::pdb::spawn_pdb(name, contents, edit_id, ctx)?;
             }
         }
 
