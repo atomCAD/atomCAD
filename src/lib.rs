@@ -245,21 +245,34 @@ fn handle_event(
                                     }
                                 }
                                 KeyCode::KeyB => {
-                                    // Create bond
-                                    if let (Some(world), Some(selection), Some(prev_selection)) = (
-                                        world,
-                                        &ui_state.selected_atom,
-                                        &ui_state.prev_selected_atom,
-                                    ) {
-                                        world.walk_mut(|editor, _| {
-                                            editor.insert_edit(Edit::CreateBond(CreateBond {
-                                                start: selection.clone(),
-                                                stop: prev_selection.clone(),
-                                                order: 1,
-                                            }));
+                                    if let Some(world) = world {
+                                        if let (Some(selection), Some(prev_selection)) =
+                                            (&ui_state.selected_atom, &ui_state.prev_selected_atom)
+                                        {
+                                            // If two atoms are selected, create a bond
+                                            world.walk_mut(|editor, _| {
+                                                editor.insert_edit(Edit::CreateBond(CreateBond {
+                                                    start: selection.clone(),
+                                                    stop: prev_selection.clone(),
+                                                    order: ui_state.bond_order,
+                                                }));
 
-                                            editor.apply_all_edits();
-                                        });
+                                                editor.apply_all_edits();
+                                            });
+                                        } else if let Some(selection) = &ui_state.selected_bond {
+                                            // If a bond is selected instead, update it to have the
+                                            // currently selected bond order
+                                            world.walk_mut(|editor, _| {
+                                                let selection = selection.clone();
+                                                editor.insert_edit(Edit::ChangeBondOrder(
+                                                    selection.0,
+                                                    selection.1,
+                                                    ui_state.bond_order,
+                                                ));
+
+                                                editor.apply_all_edits();
+                                            });
+                                        }
                                     }
                                 }
                                 KeyCode::Delete | KeyCode::Backspace => {
@@ -295,6 +308,10 @@ fn handle_event(
                                 }
                                 KeyCode::KeyO => ui_state.selected_element = Some(Element::Oxygen),
                                 KeyCode::KeyS => ui_state.selected_element = Some(Element::Sulfur),
+                                KeyCode::Digit1 => ui_state.bond_order = 1,
+                                KeyCode::Digit2 => ui_state.bond_order = 2,
+                                KeyCode::Digit3 => ui_state.bond_order = 3,
+                                KeyCode::Digit4 => ui_state.bond_order = 4,
                                 _ => {}
                             }
                         }

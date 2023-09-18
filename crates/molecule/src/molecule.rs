@@ -376,6 +376,10 @@ impl EditContext for Molecule {
     ) -> Result<(), EditError> {
         match (self.atom_map.get(a1), self.atom_map.get(a2)) {
             (Some(&a1_index), Some(&a2_index)) => {
+                if self.graph.find_edge(a1_index, a2_index).is_some() {
+                    return Err(EditError::BondOverwrite);
+                }
+
                 self.graph.add_edge(a1_index, a2_index, order);
                 Ok(())
             }
@@ -384,53 +388,43 @@ impl EditContext for Molecule {
     }
 
     fn remove_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier) -> Result<(), EditError> {
-        let idx1 = self
-            .atom_map
-            .get(a1)
-            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
-        let idx2 = self
-            .atom_map
-            .get(a2)
-            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
+        match (self.atom_map.get(a1), self.atom_map.get(a2)) {
+            (Some(&a1_index), Some(&a2_index)) => {
+                let edge = self
+                    .graph
+                    .find_edge(a1_index, a2_index)
+                    .ok_or(EditError::BrokenReference(ReferenceType::Bond))?;
+                self.graph.remove_edge(edge);
 
-        let edge = self
-            .graph
-            .find_edge(*idx1, *idx2)
-            .ok_or(EditError::BrokenReference(ReferenceType::Bond))?;
-        self.graph.remove_edge(edge);
-
-        self.recompute_bounding_box();
-        self.gpu_synced = false;
-
-        Ok(())
+                self.recompute_bounding_box();
+                self.gpu_synced = false;
+                Ok(())
+            }
+            _ => Err(EditError::BrokenReference(ReferenceType::Atom)),
+        }
     }
+
     fn change_bond_order(
         &mut self,
         a1: &AtomSpecifier,
         a2: &AtomSpecifier,
         new_order: BondOrder,
     ) -> Result<(), EditError> {
-        let idx1 = self
-            .atom_map
-            .get(a1)
-            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
-        let idx2 = self
-            .atom_map
-            .get(a2)
-            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
-
-        let edge = self
-            .graph
-            .find_edge(*idx1, *idx2)
-            .ok_or(EditError::BrokenReference(ReferenceType::Bond))?;
-        // This unwrap should be safe - we just verified the edge existed, and edit
-        // application is not multithreaded.
-        let edge_weight = self.graph.edge_weight_mut(edge).unwrap();
-        *edge_weight = new_order;
-
-        self.gpu_synced = false;
-
-        Ok(())
+        match (self.atom_map.get(a1), self.atom_map.get(a2)) {
+            (Some(&a1_index), Some(&a2_index)) => {
+                let edge = self
+                    .graph
+                    .find_edge(a1_index, a2_index)
+                    .ok_or(EditError::BrokenReference(ReferenceType::Bond))?;
+                // This unwrap should be safe - we just verified the edge existed, and edit
+                // application is not multithreaded.
+                let edge_weight = self.graph.edge_weight_mut(edge).unwrap();
+                *edge_weight = new_order;
+                self.gpu_synced = false;
+                Ok(())
+            }
+            _ => Err(EditError::BrokenReference(ReferenceType::Atom)),
+        }
     }
 
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode> {

@@ -24,6 +24,7 @@ pub enum ReferenceType {
 pub enum EditError {
     BrokenReference(ReferenceType),
     AtomOverwrite,
+    BondOverwrite,
 }
 
 /// A proxy trait that allows a molecule to be manipulated without exposing its implementation.
