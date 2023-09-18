@@ -59,11 +59,12 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 
 use camera::ArcballCamera;
-use common::InputEvent;
+use common::{ids::AtomSpecifier, InputEvent};
 use molecule::{
-    edit::{Edit, PdbData},
+    edit::{BondedAtom, CreateBond, Edit, PdbData},
     MoleculeEditor, RaycastHit,
 };
+use periodic_table::Element;
 use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
 use scene::{Assembly, Component};
 
@@ -71,11 +72,30 @@ use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, Event, StartCause, WindowEvent},
+    event::{DeviceEvent, ElementState, Event, MouseButton, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     keyboard::KeyCode,
     window::{Window, WindowBuilder},
 };
+
+#[derive(Debug)]
+struct UIState {
+    selected_element: Option<Element>,
+    selected_atom: Option<AtomSpecifier>,
+    prev_selected_atom: Option<AtomSpecifier>,
+    bond_order: u8,
+}
+
+impl Default for UIState {
+    fn default() -> Self {
+        UIState {
+            bond_order: 1u8,
+            selected_atom: None,
+            selected_element: None,
+            prev_selected_atom: None,
+        }
+    }
+}
 
 #[allow(dead_code)]
 fn make_pdb_demo_scene() -> MoleculeEditor {
@@ -111,7 +131,7 @@ async fn resume_renderer(
     )
     .await;
 
-    let molecule = make_pdb_demo_scene();
+    let molecule = make_salt_demo_scene();
 
     let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
     let interactions = Interactions::default();
@@ -129,6 +149,7 @@ fn handle_event(
     world: &mut Option<Assembly>,
     interactions: &mut Option<Interactions>,
     cursor_pos: &PhysicalPosition<f64>,
+    ui_state: &mut UIState,
 ) {
     match event {
         Event::NewEvents(StartCause::Init) => {
@@ -204,8 +225,70 @@ fn handle_event(
             if let Some(renderer) = renderer {
                 match event {
                     WindowEvent::KeyboardInput { event: key, .. } => {
-                        if key.physical_key == KeyCode::Space && key.state == ElementState::Released
-                        {
+                        if key.state == ElementState::Released {
+                            match key.physical_key {
+                                KeyCode::Space => {
+                                    // Create atom
+                                    if let (Some(world), Some(element), Some(selection)) =
+                                        (world, &ui_state.selected_element, &ui_state.selected_atom)
+                                    {
+                                        world.walk_mut(|editor, _| {
+                                            editor.insert_edit(Edit::BondedAtom(BondedAtom {
+                                                target: selection.clone(),
+                                                element: *element,
+                                            }));
+
+                                            editor.apply_all_edits();
+                                        });
+                                    }
+                                }
+                                KeyCode::KeyB => {
+                                    // Create bond
+                                    if let (Some(world), Some(selection), Some(prev_selection)) = (
+                                        world,
+                                        &ui_state.selected_atom,
+                                        &ui_state.prev_selected_atom,
+                                    ) {
+                                        world.walk_mut(|editor, _| {
+                                            editor.insert_edit(Edit::CreateBond(CreateBond {
+                                                start: selection.clone(),
+                                                stop: prev_selection.clone(),
+                                                order: 1,
+                                            }));
+
+                                            editor.apply_all_edits();
+                                        });
+                                    }
+                                }
+                                KeyCode::Delete | KeyCode::Backspace => {
+                                    // Delete atom
+                                    if let (Some(world), Some(selection)) =
+                                        (world, &ui_state.selected_atom)
+                                    {
+                                        world.walk_mut(|editor, _| {
+                                            editor.insert_edit(Edit::DeleteAtom(selection.clone()));
+
+                                            editor.apply_all_edits();
+                                        });
+                                    }
+                                }
+                                KeyCode::KeyC => ui_state.selected_element = Some(Element::Carbon),
+                                KeyCode::KeyN => {
+                                    ui_state.selected_element = Some(Element::Nitrogen)
+                                }
+                                KeyCode::KeyH => {
+                                    ui_state.selected_element = Some(Element::Hydrogen)
+                                }
+                                KeyCode::KeyO => ui_state.selected_element = Some(Element::Oxygen),
+                                KeyCode::KeyS => ui_state.selected_element = Some(Element::Sulfur),
+                                _ => {}
+                            }
+                        }
+                    }
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        // TODO: Don't change the selection if this mousepress was used for a camera move!
+                        // Currently the infrastructure isn't there to track events like mouse dragging
+                        if button == MouseButton::Left && state == ElementState::Released {
                             if let Some(window) = window {
                                 match renderer
                                     .camera()
@@ -218,7 +301,13 @@ fn handle_event(
                                             {
                                                 match hit {
                                                     RaycastHit::Atom(atom) => {
+                                                        std::mem::swap(
+                                                            &mut ui_state.prev_selected_atom,
+                                                            &mut ui_state.selected_atom,
+                                                        );
+
                                                         println!("Atom {:?} clicked!", atom);
+                                                        ui_state.selected_atom = Some(atom);
                                                     }
                                                     RaycastHit::Bond(a1, a2) => {
                                                         println!(
@@ -227,14 +316,6 @@ fn handle_event(
                                                         );
                                                     }
                                                 }
-                                                // molecule.push_feature(AtomFeature {
-                                                //     target: hit,
-                                                //     element: periodic_table::Element::Carbon,
-                                                // });
-                                                // molecule.apply_all_features();
-                                                // molecule.reupload_atoms(
-                                                //     gpu_resources.as_ref().unwrap(),
-                                                // );
                                             }
                                         });
                                     }
@@ -244,6 +325,8 @@ fn handle_event(
                                 }
                             }
                         }
+
+                        renderer.camera().update(InputEvent::Window(event));
                     }
                     _ => {
                         renderer.camera().update(InputEvent::Window(event));
@@ -252,6 +335,15 @@ fn handle_event(
             }
         }
         Event::DeviceEvent { event, .. } => {
+            match event {
+                DeviceEvent::Button { button, state } => {
+                    if button == 1 && state == ElementState::Released {
+                        println!("clicked");
+                    }
+                }
+                _ => {}
+            }
+
             if let Some(renderer) = renderer {
                 renderer.camera().update(InputEvent::Device(event));
             }
@@ -261,7 +353,6 @@ fn handle_event(
         }
     }
 }
-
 fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     // The event handling loop is terminated when the main window is closed.
     // We can trigger this by dropping the window, so we wrap it in the Option
@@ -277,6 +368,7 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
     let mut world: Option<Assembly> = None;
     let mut interactions: Option<Interactions> = None;
     let mut cursor_pos: PhysicalPosition<f64> = Default::default();
+    let mut ui_state: UIState = Default::default();
 
     // Run the event loop.
     let mut running = false;
@@ -346,6 +438,7 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
             &mut world,
             &mut interactions,
             &cursor_pos,
+            &mut ui_state,
         );
     })
 }
