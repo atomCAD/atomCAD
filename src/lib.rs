@@ -72,7 +72,7 @@ use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
     dpi::PhysicalPosition,
-    event::{DeviceEvent, ElementState, Event, MouseButton, StartCause, WindowEvent},
+    event::{ElementState, Event, MouseButton, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     keyboard::KeyCode,
     window::{Window, WindowBuilder},
@@ -371,15 +371,6 @@ fn handle_event(
             }
         }
         Event::DeviceEvent { event, .. } => {
-            match event {
-                DeviceEvent::Button { button, state } => {
-                    if button == 1 && state == ElementState::Released {
-                        println!("clicked");
-                    }
-                }
-                _ => {}
-            }
-
             if let Some(renderer) = renderer {
                 renderer.camera().update(InputEvent::Device(event));
             }

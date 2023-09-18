@@ -115,16 +115,16 @@ impl Edit {
                 ctx.add_bonded_atom(*element, pos, spec, target.clone(), 1)?;
             }
             Edit::DeleteAtom(spec) => {
-                ctx.remove_atom(&spec)?;
+                ctx.remove_atom(spec)?;
             }
             Edit::DeleteBond(a1, a2) => {
-                ctx.remove_bond(&a1, &a2)?;
+                ctx.remove_bond(a1, a2)?;
             }
             Edit::ChangeBondOrder(a1, a2, new_order) => {
-                ctx.change_bond_order(&a1, &a2, *new_order)?;
+                ctx.change_bond_order(a1, a2, *new_order)?;
             }
             Edit::CreateBond(CreateBond { start, stop, order }) => {
-                ctx.create_bond(&start, &stop, *order)?;
+                ctx.create_bond(start, stop, *order)?;
             }
             Edit::PdbImport(PdbData { name, contents }) => {
                 crate::pdb::spawn_pdb(name, contents, edit_id, ctx)?;
