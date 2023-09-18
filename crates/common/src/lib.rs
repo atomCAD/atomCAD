@@ -96,14 +96,14 @@ pub fn inside_cylinder(
     // between those two planes. If it is < 0 or > 1, it is absolutely outside of the cylinder.
     // To be clear, this just tells us if the target point is inside the 'infinite-radius
     // cylinder' - if one existed.
-    if alpha < 0.0 || alpha > 1.0 {
+    if !(0.0..=1.0).contains(&alpha) {
         return false;
     }
 
     // Finally, we just consider the radius - how long is the line from alpha * (p2 - p1) to
     // `target`?
     let orthogonal_distance_sq = (target - proj).mag_sq();
-    return orthogonal_distance_sq <= radius_sq;
+    orthogonal_distance_sq <= radius_sq
 }
 
 // End of File
