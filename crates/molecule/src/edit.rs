@@ -45,6 +45,12 @@ pub trait EditContext {
         a2: &AtomSpecifier,
         order: BondOrder,
     ) -> Result<(), EditError>;
+    fn change_bond_order(
+        &mut self,
+        a1: &AtomSpecifier,
+        a2: &AtomSpecifier,
+        new_order: BondOrder,
+    ) -> Result<(), EditError>;
     fn remove_bond(&mut self, a1: &AtomSpecifier, a2: &AtomSpecifier) -> Result<(), EditError>;
     fn add_bonded_atom(
         &mut self,
@@ -81,6 +87,7 @@ pub enum Edit {
     BondedAtom(BondedAtom),
     DeleteAtom(AtomSpecifier),
     DeleteBond(AtomSpecifier, AtomSpecifier),
+    ChangeBondOrder(AtomSpecifier, AtomSpecifier, u8),
     CreateBond(CreateBond),
     PdbImport(PdbData),
 }
@@ -111,6 +118,9 @@ impl Edit {
             }
             Edit::DeleteBond(a1, a2) => {
                 ctx.remove_bond(&a1, &a2)?;
+            }
+            Edit::ChangeBondOrder(a1, a2, new_order) => {
+                ctx.change_bond_order(&a1, &a2, *new_order)?;
             }
             Edit::CreateBond(CreateBond { start, stop, order }) => {
                 ctx.create_bond(&start, &stop, *order)?;

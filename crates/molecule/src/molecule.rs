@@ -404,6 +404,34 @@ impl EditContext for Molecule {
 
         Ok(())
     }
+    fn change_bond_order(
+        &mut self,
+        a1: &AtomSpecifier,
+        a2: &AtomSpecifier,
+        new_order: BondOrder,
+    ) -> Result<(), EditError> {
+        let idx1 = self
+            .atom_map
+            .get(a1)
+            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
+        let idx2 = self
+            .atom_map
+            .get(a2)
+            .ok_or(EditError::BrokenReference(ReferenceType::Atom))?;
+
+        let edge = self
+            .graph
+            .find_edge(*idx1, *idx2)
+            .ok_or(EditError::BrokenReference(ReferenceType::Bond))?;
+        // This unwrap should be safe - we just verified the edge existed, and edit
+        // application is not multithreaded.
+        let edge_weight = self.graph.edge_weight_mut(edge).unwrap();
+        *edge_weight = new_order;
+
+        self.gpu_synced = false;
+
+        Ok(())
+    }
 
     fn find_atom(&self, spec: &AtomSpecifier) -> Option<&AtomNode> {
         match self.atom_map.get(spec) {
