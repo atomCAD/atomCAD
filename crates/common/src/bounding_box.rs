@@ -4,6 +4,8 @@
 
 use ultraviolet::Vec3;
 
+/// An axis-aligned bounding box defined by two opposite corners (`min` and `max`).
+/// `min.x <= max.x`, `min.y <= max.y`, `min.z <= max.z`.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct BoundingBox {
     pub min: Vec3,
@@ -11,6 +13,7 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    /// Returns the smallest `BoundingBox` that would contain both `self` and `other`.
     #[allow(dead_code)]
     pub fn union(&self, other: &Self) -> Self {
         Self {
@@ -27,6 +30,8 @@ impl BoundingBox {
         }
     }
 
+    /// Returns true if the provided `point` is inside this `BoundingBox`. Otherwise
+    /// returns false.
     #[allow(dead_code)]
     pub fn contains(&self, point: Vec3) -> bool {
         self.min.x <= point.x
@@ -37,6 +42,7 @@ impl BoundingBox {
             && point.z <= self.max.z
     }
 
+    /// Grows this `BoundingBox` in-place to ensure that it will contain a given `point`.
     #[allow(dead_code)]
     pub fn enclose_point(&mut self, point: Vec3) {
         self.min.x = f32::min(self.min.x, point.x);
@@ -48,6 +54,8 @@ impl BoundingBox {
         self.max.z = f32::max(self.max.z, point.z);
     }
 
+    /// Grows this `BoundingBox` in-place to ensure that it will contain a sphere with a specified
+    /// `center` position and `radius`.
     pub fn enclose_sphere(&mut self, center: Vec3, radius: f32) {
         self.min.x = f32::min(self.min.x, center.x - radius);
         self.min.y = f32::min(self.min.y, center.y - radius);
@@ -58,7 +66,19 @@ impl BoundingBox {
         self.max.z = f32::max(self.max.z, center.z + radius);
     }
 
-    // Computes the 1D intersection times for a directed line segment. i.e.
+    /// Computes the 1D intersection times for a directed line segment. Imagine a point moving
+    /// the number line, starting at `origin` (when t=0) and moving at some `speed`. If the point
+    /// ever crosses the value `min` or `max`, then this function will return Some((t_min, t_max)),
+    /// such that `origin + speed * t_min = min` adn `origin + speed * t_max = max`. These time
+    /// values may be negative if needed to satisfy those relations.
+    ///
+    /// If `speed` is zero, but the `origin` is between `min` and `max`, then this function
+    /// returns `Some((f32::NEG_INFINITY, f32::INFINITY))`. This signifies that, although
+    /// intersection will not happen, the point *is* between `min` and `max` for all times.
+    ///
+    /// If `speed` is zero and `origin` is outside of `[min, max]`, then this function returns
+    /// `None` to indicate that intersection is impossible and the point will never be in
+    /// the provided range.
     fn intersection_times(origin: f32, speed: f32, min: f32, max: f32) -> Option<(f32, f32)> {
         // If the speed is non-zero, we can compute the times normally.
         if speed != 0.0 {

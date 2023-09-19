@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{Atoms, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
+use crate::{AtomBuffer, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
 use std::{convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
 
@@ -44,7 +44,7 @@ impl MolecularPass {
     pub fn new(
         render_resources: &GlobalRenderResources,
         camera_binding_resource: wgpu::BindingResource,
-        vertices_buffer: &wgpu::Buffer,
+        vertex_constants_buffer: &wgpu::Buffer,
         periodic_table_buffer: &wgpu::Buffer,
         size: PhysicalSize<u32>,
     ) -> (Self, wgpu::TextureView) {
@@ -58,7 +58,7 @@ impl MolecularPass {
             &render_resources.device,
             &top_level_bgl,
             camera_binding_resource,
-            vertices_buffer,
+            vertex_constants_buffer,
             periodic_table_buffer,
         );
 
@@ -98,7 +98,7 @@ impl MolecularPass {
     pub fn run<'a>(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        atoms: impl IntoIterator<Item = &'a Atoms>,
+        atoms: impl IntoIterator<Item = &'a AtomBuffer>,
         fragment_transforms: &wgpu::Buffer,
         // fragments: impl IntoIterator<Item = &'a Fragment>,
         // fragment_transforms: &wgpu::Buffer,
@@ -112,10 +112,10 @@ impl MolecularPass {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
+                            r: 0.703125,
+                            g: 0.703125,
+                            b: 0.703125,
+                            a: 1.000000,
                         }),
                         store: true,
                     },
@@ -175,23 +175,23 @@ fn create_top_level_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 },
                 count: None,
             },
-            // vertices
+            // periodic table
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
                 count: None,
             },
-            // periodic table
+            // vertex constants
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -205,7 +205,7 @@ fn create_top_level_bg(
     device: &wgpu::Device,
     top_level_bgl: &wgpu::BindGroupLayout,
     camera_binding_resource: wgpu::BindingResource,
-    vertices_buffer: &wgpu::Buffer,
+    vertex_constants_buffer: &wgpu::Buffer,
     periodic_table_buffer: &wgpu::Buffer,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -217,20 +217,20 @@ fn create_top_level_bg(
                 binding: 0,
                 resource: camera_binding_resource,
             },
-            // vertices
+            // periodic table
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: vertices_buffer,
+                    buffer: periodic_table_buffer,
                     offset: 0,
                     size: None,
                 }),
             },
-            // periodic table
+            // vertex constants
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: periodic_table_buffer,
+                    buffer: vertex_constants_buffer,
                     offset: 0,
                     size: None,
                 }),
