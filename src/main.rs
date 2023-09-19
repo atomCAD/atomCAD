@@ -19,7 +19,7 @@ fn main() {
     App::new()
         .insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
-        .insert_resource(ClearColor(Color::rgb(0.4, 0.4, 0.4)))
+        .insert_resource(ClearColor(Color::BLACK))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: APP_NAME.into(),
