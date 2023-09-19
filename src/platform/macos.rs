@@ -4,4 +4,6 @@
 
 pub use super::defaults::bevy;
 
+pub use crate::platform_impl::menubar;
+
 // End of File

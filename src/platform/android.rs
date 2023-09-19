@@ -4,4 +4,8 @@
 
 pub use super::defaults::bevy;
 
+// FIXME: Should use the Android APIs to setup a hamburger menu for our
+//        "menubar."
+pub use super::defaults::menubar;
+
 // End of File

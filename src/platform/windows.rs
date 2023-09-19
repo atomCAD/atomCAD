@@ -4,4 +4,8 @@
 
 pub use super::defaults::bevy;
 
+// FIXME: Should use the win32 APIs to setup the menubar for the main
+//        window(s).
+pub use super::defaults::menubar;
+
 // End of File

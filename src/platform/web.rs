@@ -4,4 +4,7 @@
 
 pub use crate::platform_impl::bevy;
 
+// FIXME: We should investigate using egui to create a menubar on web.
+pub use super::defaults::menubar;
+
 // End of File

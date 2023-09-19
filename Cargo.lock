@@ -282,6 +282,7 @@ dependencies = [
  "bevy_asset_loader",
  "embed-resource",
  "image",
+ "objc",
  "wasm-bindgen-test",
  "web-sys",
  "winit",

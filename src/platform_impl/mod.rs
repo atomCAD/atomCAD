@@ -23,7 +23,6 @@ pub use self::linux::*;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-#[allow(unused_imports)]
 pub use self::macos::*;
 
 #[cfg(target_family = "wasm")]

@@ -15,6 +15,9 @@ use assets::FontAssets;
 pub mod gui;
 use gui::set_window_icon;
 
+pub mod menubar;
+use menubar::MenuBarPlugin;
+
 pub mod state;
 use state::cadview::CadViewPlugin;
 use state::loading::LoadingPlugin;
@@ -42,7 +45,7 @@ pub struct AppPlugin;
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>()
-            .add_plugins((LoadingPlugin, CadViewPlugin))
+            .add_plugins((MenuBarPlugin, LoadingPlugin, CadViewPlugin))
             .add_systems(Startup, set_window_icon);
     }
 }
