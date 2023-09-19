@@ -14,7 +14,10 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ButtonColors>()
             .add_systems(OnEnter(GameState::Menu), setup_menu)
-            .add_systems(Update, click_play_button.run_if(in_state(GameState::Menu)))
+            .add_systems(
+                Update,
+                click_load_pdb_button.run_if(in_state(GameState::Menu)),
+            )
             .add_systems(OnExit(GameState::Menu), cleanup_menu);
     }
 }
@@ -43,7 +46,7 @@ fn setup_menu(
     commands
         .spawn(ButtonBundle {
             style: Style {
-                width: Val::Px(120.0),
+                width: Val::Px(150.0),
                 height: Val::Px(50.0),
                 margin: UiRect::all(Val::Auto),
                 justify_content: JustifyContent::Center,
@@ -55,17 +58,17 @@ fn setup_menu(
         })
         .with_children(|parent| {
             parent.spawn(TextBundle::from_section(
-                "Play",
+                "Load PDB",
                 TextStyle {
                     font: font_assets.fira_sans.clone(),
-                    font_size: 40.0,
+                    font_size: 32.0,
                     color: Color::rgb(0.9, 0.9, 0.9),
                 },
             ));
         });
 }
 
-fn click_play_button(
+fn click_load_pdb_button(
     button_colors: Res<ButtonColors>,
     mut state: ResMut<NextState<GameState>>,
     mut interaction_query: Query<
@@ -76,7 +79,7 @@ fn click_play_button(
     for (interaction, mut color) in &mut interaction_query {
         match *interaction {
             Interaction::Pressed => {
-                state.set(GameState::Playing);
+                state.set(GameState::Active);
             }
             Interaction::Hovered => {
                 *color = button_colors.hovered.into();

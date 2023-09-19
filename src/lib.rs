@@ -26,7 +26,7 @@ use bevy::prelude::*;
 
 pub const APP_NAME: &str = "atomCAD";
 
-// This example game uses States to separate logic
+// We use States to separate logic
 // See https://bevy-cheatbook.github.io/programming/states.html
 // Or https://github.com/bevyengine/bevy/blob/main/examples/ecs/state.rs
 #[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
@@ -34,9 +34,10 @@ enum GameState {
     // During the loading State the LoadingPlugin will load our assets
     #[default]
     Loading,
-    // During this State the actual game logic is executed
-    Playing,
-    // Here the menu is drawn and waiting for player interaction
+    // During this State the scene graph is rendered and the user can interact
+    // with the camera.
+    Active,
+    // Here the menu is drawn and waiting for user interaction
     Menu,
 }
 
