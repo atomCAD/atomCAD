@@ -11,13 +11,13 @@ mod menu;
 pub mod menubar;
 pub mod platform;
 pub(crate) mod platform_impl;
-mod player;
+mod scene;
 
 use crate::actions::ActionsPlugin;
 use crate::audio::InternalAudioPlugin;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
-use crate::player::PlayerPlugin;
+use crate::scene::ScenePlugin;
 
 use bevy::app::App;
 #[cfg(debug_assertions)]
@@ -50,7 +50,7 @@ impl Plugin for GamePlugin {
             MenuPlugin,
             ActionsPlugin,
             InternalAudioPlugin,
-            PlayerPlugin,
+            ScenePlugin,
         ));
 
         #[cfg(debug_assertions)]

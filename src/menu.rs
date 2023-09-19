@@ -91,8 +91,13 @@ fn click_load_pdb_button(
     }
 }
 
-fn cleanup_menu(mut commands: Commands, button: Query<Entity, With<Button>>) {
+fn cleanup_menu(
+    mut commands: Commands,
+    button: Query<Entity, With<Button>>,
+    camera: Query<Entity, With<Camera2d>>,
+) {
     commands.entity(button.single()).despawn_recursive();
+    commands.entity(camera.single()).despawn();
 }
 
 // End of File
