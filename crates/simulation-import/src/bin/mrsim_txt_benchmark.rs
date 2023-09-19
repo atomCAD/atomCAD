@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use colored::*;
-use rand::seq::SliceRandom;
+use rand::Rng;
 use simulation_import::mrsim_txt::parse;
 use std::env;
 use std::fs;
@@ -49,7 +49,7 @@ fn main() -> Result<()> {
     let spatial_resolution = *parsed_result.header().spatial_resolution() as f64;
 
     // Calculate the total number of available frames and atoms
-    let max_frames = parsed_result.clusters().len() * cluster_size; // assuming all clusters are full
+    let max_frames = parsed_result.header().frame_count();
     let max_atoms = if let Some(first_cluster) = parsed_result.clusters().values().next() {
         first_cluster.atoms().x_coordinates().len()
     } else {
@@ -63,7 +63,7 @@ fn main() -> Result<()> {
                 .filter_map(|s| s.parse().ok())
                 .collect()
         })
-        .unwrap_or_else(|| generate_random_indices(10, 0, max_frames));
+        .unwrap_or_else(|| generate_random_indices(10, 0, max_frames - 1));
 
     let predefined_atoms: Vec<usize> = atoms_arg
         .map(|atoms| {
@@ -72,7 +72,7 @@ fn main() -> Result<()> {
                 .filter_map(|s| s.parse().ok())
                 .collect()
         })
-        .unwrap_or_else(|| generate_random_indices(5, 0, max_atoms));
+        .unwrap_or_else(|| generate_random_indices(5, 0, max_atoms)); // Here we simply use 1 as the "cluster size" for atoms
 
     for &frame in &predefined_frames {
         // Calculate the cluster index and relative frame index based on the provided frame number and cluster size.
@@ -89,23 +89,26 @@ fn main() -> Result<()> {
             );
 
             for &atom_idx in &predefined_atoms {
-                if let Some(x) = atoms.x_coordinates().get(&atom_idx) {
-                    if let Some(y) = atoms.y_coordinates().get(&atom_idx) {
-                        if let Some(z) = atoms.z_coordinates().get(&atom_idx) {
-                            let element = atoms.elements()[atom_idx as usize];
-                            let flag = atoms.flags()[atom_idx as usize];
+                let x_vec = atoms.x_coordinates().get(&atom_idx).unwrap();
+                let y_vec = atoms.y_coordinates().get(&atom_idx).unwrap();
+                let z_vec = atoms.z_coordinates().get(&atom_idx).unwrap();
 
-                            // Convert the coordinates using the spatial resolution
-                            let x_pos = x[relative_frame_idx] as f64 * spatial_resolution / 1000.0;
-                            let y_pos = y[relative_frame_idx] as f64 * spatial_resolution / 1000.0;
-                            let z_pos = z[relative_frame_idx] as f64 * spatial_resolution / 1000.0;
+                if relative_frame_idx < x_vec.len() {
+                    let element = atoms.elements()[atom_idx as usize];
+                    let flag = atoms.flags()[atom_idx as usize];
 
-                            println!(
-                                " - atom {}: {:.3} {:.3} {:.3} {} {}",
-                                atom_idx, x_pos, y_pos, z_pos, element, flag
-                            );
-                        }
-                    }
+                    // Convert the coordinates using the spatial resolution
+                    let x_pos =
+                        x_vec[relative_frame_idx] as f32 * spatial_resolution as f32 / 1000.0;
+                    let y_pos =
+                        y_vec[relative_frame_idx] as f32 * spatial_resolution as f32 / 1000.0;
+                    let z_pos =
+                        z_vec[relative_frame_idx] as f32 * spatial_resolution as f32 / 1000.0;
+
+                    println!(
+                        " - atom {}: {:.3} {:.3} {:.3} {} {}",
+                        atom_idx, x_pos, y_pos, z_pos, element, flag
+                    );
                 }
             }
         }
@@ -115,7 +118,22 @@ fn main() -> Result<()> {
 }
 
 fn generate_random_indices(n: usize, min: usize, max: usize) -> Vec<usize> {
-    let range: Vec<_> = (min..max).collect();
+    let mut all_possible_indices: Vec<usize> = (min..max).collect();
     let mut rng = rand::thread_rng();
-    range.choose_multiple(&mut rng, n).cloned().collect()
+    let mut chosen_indices = Vec::new();
+
+    for _ in 0..n {
+        if all_possible_indices.is_empty() {
+            break; // Can't select more unique indices
+        }
+
+        let idx = rng.gen_range(0..all_possible_indices.len());
+        chosen_indices.push(all_possible_indices[idx]);
+
+        // Remove the chosen index to ensure uniqueness
+        all_possible_indices.swap_remove(idx);
+    }
+
+    chosen_indices.sort();
+    chosen_indices
 }
