@@ -65,13 +65,17 @@ fn spawn_scene(
         .insert(Torus);
 
     // light source
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
-            intensity: 10000.0,
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: 10000.,
             shadows_enabled: false,
             ..default()
         },
-        transform: Transform::from_xyz(-4.0, 8.0, 4.0),
+        transform: Transform {
+            translation: Vec3::new(0., 1., 0.),
+            rotation: Quat::from_rotation_x(-std::f32::consts::PI / 4.),
+            ..default()
+        },
         ..default()
     });
 }
