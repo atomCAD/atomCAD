@@ -6,12 +6,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use atomcad::{GamePlugin, APP_NAME};
-use bevy::{prelude::*, window::PrimaryWindow, winit::WinitWindows, DefaultPlugins};
+use bevy::{
+    prelude::*,
+    window::PrimaryWindow,
+    winit::{WinitSettings, WinitWindows},
+    DefaultPlugins,
+};
 use std::io::Cursor;
 use winit::window::Icon;
 
 fn main() {
     App::new()
+        .insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
         .insert_resource(ClearColor(Color::rgb(0.4, 0.4, 0.4)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
