@@ -2,11 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use serde::de::{self, Deserializer, MapAccess, Visitor};
+use serde::de::Deserializer;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::fmt;
-use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 pub struct MrSimTxt {
@@ -15,6 +13,21 @@ pub struct MrSimTxt {
     metadata: Option<Metadata>,
     #[serde(flatten, deserialize_with = "frame_clusters_deserializer")]
     clusters: HashMap<usize, FrameCluster>,
+}
+
+impl MrSimTxt {
+    pub fn specification(&self) -> &Option<Vec<String>> {
+        &self.specification
+    }
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+    pub fn metadata(&self) -> &Option<Metadata> {
+        &self.metadata
+    }
+    pub fn clusters(&self) -> &HashMap<usize, FrameCluster> {
+        &self.clusters
+    }
 }
 
 fn frame_clusters_deserializer<'de, D: serde::Deserializer<'de>>(
@@ -54,12 +67,26 @@ pub struct Header {
     frame_cluster_size: usize,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Metadata {
-    #[serde(rename = "sp3 bonds")]
-    sp3_bonds: Option<HashMap<String, Vec<usize>>>,
-    // Add other potential fields
+impl Header {
+    pub fn frame_time(&self) -> &f64 {
+        &self.frame_time
+    }
+    pub fn spatial_resolution(&self) -> &f64 {
+        &self.spatial_resolution
+    }
+    pub fn uses_checkpoints(&self) -> &bool {
+        &self.uses_checkpoints
+    }
+    pub fn frame_count(&self) -> &usize {
+        &self.frame_count
+    }
+    pub fn frame_cluster_size(&self) -> &usize {
+        &self.frame_cluster_size
+    }
 }
+
+#[derive(Debug, Deserialize)]
+pub struct Metadata {}
 
 #[derive(Debug, Deserialize)]
 pub struct FrameCluster {
@@ -69,6 +96,21 @@ pub struct FrameCluster {
     frame_end: usize,
     metadata: Option<HashMap<String, Vec<f64>>>,
     atoms: Atoms,
+}
+
+impl FrameCluster {
+    pub fn frame_start(&self) -> &usize {
+        &self.frame_start
+    }
+    pub fn frame_end(&self) -> &usize {
+        &self.frame_end
+    }
+    pub fn metadata(&self) -> &Option<HashMap<String, Vec<f64>>> {
+        &self.metadata
+    }
+    pub fn atoms(&self) -> &Atoms {
+        &self.atoms
+    }
 }
 
 #[derive(Deserialize)]
@@ -83,6 +125,24 @@ pub struct Atoms {
     elements: Vec<i32>,
     #[serde(deserialize_with = "deserialize_space_separated_ints")]
     flags: Vec<i32>,
+}
+
+impl Atoms {
+    pub fn x_coordinates(&self) -> &HashMap<usize, Vec<i32>> {
+        &self.x_coordinates
+    }
+    pub fn y_coordinates(&self) -> &HashMap<usize, Vec<i32>> {
+        &self.y_coordinates
+    }
+    pub fn z_coordinates(&self) -> &HashMap<usize, Vec<i32>> {
+        &self.z_coordinates
+    }
+    pub fn elements(&self) -> &Vec<i32> {
+        &self.elements
+    }
+    pub fn flags(&self) -> &Vec<i32> {
+        &self.flags
+    }
 }
 
 impl std::fmt::Debug for Atoms {
