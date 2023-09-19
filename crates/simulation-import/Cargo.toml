@@ -1,5 +1,9 @@
 [package]
 name = "simulation-import"
+authors = [
+    "Philip Turner <philipturner.ar@gmail.com>",
+    "Alexey Novikov <former.token@gmail.com>",
+]
 version = "0.1.0"
 edition = "2021"
 
