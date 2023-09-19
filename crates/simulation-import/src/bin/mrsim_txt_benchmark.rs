@@ -94,8 +94,8 @@ fn main() -> Result<()> {
                 let z_vec = atoms.z_coordinates().get(&atom_idx).unwrap();
 
                 if relative_frame_idx < x_vec.len() {
-                    let element = atoms.elements()[atom_idx as usize];
-                    let flag = atoms.flags()[atom_idx as usize];
+                    let element = atoms.elements()[atom_idx];
+                    let flag = atoms.flags()[atom_idx];
 
                     // Convert the coordinates using the spatial resolution
                     let x_pos =
