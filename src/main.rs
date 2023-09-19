@@ -5,7 +5,7 @@
 // disable console on windows for release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use atomcad::{platform::bevy::PlatformTweaks, GamePlugin, APP_NAME};
+use atomcad::{menubar::setup_menu_bar, platform::bevy::PlatformTweaks, GamePlugin, APP_NAME};
 use bevy::{
     prelude::*,
     window::{PresentMode, PrimaryWindow},
@@ -42,6 +42,7 @@ fn main() {
         .add_plugins(PlatformTweaks)
         .add_plugins(GamePlugin)
         .add_systems(Startup, set_window_icon)
+        .add_systems(Startup, setup_menu_bar)
         .run();
 }
 

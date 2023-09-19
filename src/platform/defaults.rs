@@ -13,4 +13,15 @@ pub mod bevy {
     }
 }
 
+#[allow(dead_code)]
+pub mod menubar {
+    use crate::menubar::Menu;
+    use bevy::winit::WinitWindows;
+
+    // Currently does nothing, and is present merely to ensure we compile on
+    // platforms, including those that don't natively support any menubar
+    // functionality.
+    pub fn attach_menu(_windows: &WinitWindows, _menu: &Menu) {}
+}
+
 // End of File
