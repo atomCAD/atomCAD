@@ -8,7 +8,7 @@
 use atomcad::{GamePlugin, APP_NAME};
 use bevy::{
     prelude::*,
-    window::PrimaryWindow,
+    window::{PresentMode, PrimaryWindow},
     winit::{WinitSettings, WinitWindows},
     DefaultPlugins,
 };
@@ -25,6 +25,11 @@ fn main() {
                 title: APP_NAME.into(),
                 // FIXME: this should be read from a persistent settings file
                 resolution: (800., 600.).into(),
+                // Turn off vsync to maximize CPU/GPU usage and prevent the
+                // application from blocking the main thread while waiting for
+                // the screen refresh.  We may want to revisit this choice
+                // later, but for now it simplifies development and testing.
+                present_mode: PresentMode::AutoNoVsync,
                 // Bind to canvas included in `index.html` on web
                 canvas: Some("#bevy".to_owned()),
                 // Tells wasm not to override default event handling,
