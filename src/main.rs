@@ -5,7 +5,7 @@
 // disable console on windows for release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use atomcad::GamePlugin;
+use atomcad::{GamePlugin, APP_NAME};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WinitWindows;
@@ -19,7 +19,7 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.4, 0.4, 0.4)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "atomCAD".to_string(),
+                title: APP_NAME.into(),
                 // FIXME: this should be read from a persistent settings file
                 resolution: (800., 600.).into(),
                 // Bind to canvas included in `index.html` on web
