@@ -20,8 +20,6 @@ use crate::menu::MenuPlugin;
 use crate::scene::ScenePlugin;
 
 use bevy::app::App;
-#[cfg(debug_assertions)]
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 
 pub const APP_NAME: &str = "atomCAD";
@@ -52,11 +50,6 @@ impl Plugin for GamePlugin {
             InternalAudioPlugin,
             ScenePlugin,
         ));
-
-        #[cfg(debug_assertions)]
-        {
-            app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
-        }
     }
 }
 
