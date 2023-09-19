@@ -6,10 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use atomcad::{GamePlugin, APP_NAME};
-use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
-use bevy::winit::WinitWindows;
-use bevy::DefaultPlugins;
+use bevy::{prelude::*, window::PrimaryWindow, winit::WinitWindows, DefaultPlugins};
 use std::io::Cursor;
 use winit::window::Icon;
 
