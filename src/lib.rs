@@ -8,6 +8,8 @@ mod actions;
 mod audio;
 mod loading;
 mod menu;
+pub mod platform;
+pub(crate) mod platform_impl;
 mod player;
 
 use crate::actions::ActionsPlugin;
