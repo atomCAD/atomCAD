@@ -46,7 +46,7 @@
 
         // If all the AudioContexts have now resumed then we unbind all
         // the event listeners from the page to prevent unnecessary resume attempts
-        // Checking count > 0 ensures that the user interaction happens AFTER the game started up
+        // Checking count > 0 ensures that the user interaction happens AFTER the app started up
         if (count > 0 && count === audioContextList.length) {
             userInputEventNames.forEach((eventName) => {
                 document.removeEventListener(eventName, resumeAllContexts);

@@ -8,7 +8,7 @@ use bevy::prelude::*;
 
 pub struct MenuPlugin;
 
-/// This plugin is responsible for the game menu (containing only one button...)
+/// This plugin is responsible for the app menu (containing only one button...)
 /// The menu is only drawn during the State `AppState::Menu` and is removed when that state is exited
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
