@@ -187,15 +187,14 @@ fn parse_space_separated_ints(s: &str) -> Result<Vec<i32>, std::num::ParseIntErr
         .collect()
 }
 
+#[derive(Default)]
 pub struct Diagnostics {
     messages: Vec<String>,
 }
 
 impl Diagnostics {
     pub fn new() -> Self {
-        Diagnostics {
-            messages: Vec::new(),
-        }
+        Self::default()
     }
     pub fn add(&mut self, message: String) {
         self.messages.push(message);

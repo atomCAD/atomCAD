@@ -41,7 +41,7 @@ fn main() -> Result<()> {
         format!("Loaded file in: {:?}", duration_load).yellow()
     );
     for diagnostic in diagnostics.iter() {
-        println!("{}", format!("{}", diagnostic).yellow());
+        println!("{}", diagnostic.yellow());
     }
     println!(
         "{}",
@@ -49,7 +49,7 @@ fn main() -> Result<()> {
     );
 
     let cluster_size = parsed_result.header().frame_cluster_size();
-    let spatial_resolution = *parsed_result.header().spatial_resolution() as f64;
+    let spatial_resolution = *parsed_result.header().spatial_resolution();
 
     // Calculate the total number of available frames and atoms
     let max_frames = parsed_result.header().frame_count();
