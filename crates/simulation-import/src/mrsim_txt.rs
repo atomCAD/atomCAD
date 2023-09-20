@@ -5,10 +5,7 @@
 use colored::*;
 use lazy_static::lazy_static;
 use num_cpus;
-use rayon::{
-    self,
-    prelude::{IntoParallelIterator, ParallelIterator},
-};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Deserializer};
 use serde_yaml;
 use std::collections::HashMap;
@@ -24,14 +21,14 @@ pub struct MrSimTxt {
 }
 
 impl MrSimTxt {
-    pub fn specification(&self) -> &Option<Vec<String>> {
-        &self.specification
+    pub fn specification(&self) -> Option<&Vec<String>> {
+        self.specification.as_ref()
     }
     pub fn header(&self) -> &Header {
         &self.header
     }
-    pub fn metadata(&self) -> &Option<Metadata> {
-        &self.metadata
+    pub fn metadata(&self) -> Option<&Metadata> {
+        self.metadata.as_ref()
     }
     pub fn clusters(&self) -> &HashMap<usize, FrameCluster> {
         &self.clusters
