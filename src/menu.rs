@@ -14,10 +14,7 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ButtonColors>()
             .add_systems(OnEnter(AppState::Menu), setup_menu)
-            .add_systems(
-                Update,
-                click_load_pdb_button.run_if(in_state(AppState::Menu)),
-            )
+            .add_systems(Update, click_get_started.run_if(in_state(AppState::Menu)))
             .add_systems(OnExit(AppState::Menu), cleanup_menu);
     }
 }
@@ -32,43 +29,80 @@ impl Default for ButtonColors {
     fn default() -> Self {
         ButtonColors {
             normal: Color::rgb(0.15, 0.15, 0.15),
-            hovered: Color::rgb(0.25, 0.25, 0.25),
+            hovered: Color::rgb(0.0, 0.655, 1.0),
         }
     }
 }
+
+// Tag component used to tag entities added on the splash screen
+#[derive(Component)]
+struct OnSplashScreen;
 
 fn setup_menu(
     mut commands: Commands,
     font_assets: Res<FontAssets>,
     button_colors: Res<ButtonColors>,
 ) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((Camera2dBundle::default(), OnSplashScreen));
     commands
-        .spawn(ButtonBundle {
-            style: Style {
-                width: Val::Px(150.0),
-                height: Val::Px(50.0),
-                margin: UiRect::all(Val::Auto),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..Default::default()
-            },
-            background_color: button_colors.normal.into(),
-            ..Default::default()
-        })
-        .with_children(|parent| {
-            parent.spawn(TextBundle::from_section(
-                "Load PDB",
-                TextStyle {
-                    font: font_assets.fira_sans.clone(),
-                    font_size: 32.0,
-                    color: Color::rgb(0.9, 0.9, 0.9),
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..default()
                 },
-            ));
+                ..default()
+            },
+            OnSplashScreen,
+        ))
+        .with_children(|parent| {
+            parent.spawn(
+                TextBundle::from_section(
+                    "Shape tomorrow's world",
+                    TextStyle {
+                        font: font_assets.fira_sans.clone(),
+                        font_size: 64.0,
+                        color: Color::WHITE,
+                    },
+                )
+                .with_style(Style {
+                    margin: UiRect::all(Val::Auto),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                }),
+            );
+            parent
+                .spawn(ButtonBundle {
+                    style: Style {
+                        width: Val::Px(250.0),
+                        height: Val::Px(50.0),
+                        margin: UiRect::all(Val::Auto),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    background_color: button_colors.normal.into(),
+                    ..Default::default()
+                })
+                .with_children(|parent| {
+                    parent.spawn(TextBundle::from_section(
+                        "Get Started",
+                        TextStyle {
+                            font: font_assets.fira_sans.clone(),
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                        },
+                    ));
+                });
         });
 }
 
-fn click_load_pdb_button(
+fn click_get_started(
     button_colors: Res<ButtonColors>,
     mut state: ResMut<NextState<AppState>>,
     mut interaction_query: Query<
@@ -91,13 +125,10 @@ fn click_load_pdb_button(
     }
 }
 
-fn cleanup_menu(
-    mut commands: Commands,
-    button: Query<Entity, With<Button>>,
-    camera: Query<Entity, With<Camera2d>>,
-) {
-    commands.entity(button.single()).despawn_recursive();
-    commands.entity(camera.single()).despawn();
+fn cleanup_menu(mut commands: Commands, entities: Query<Entity, With<OnSplashScreen>>) {
+    for entity in entities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
 }
 
 // End of File
