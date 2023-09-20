@@ -33,13 +33,16 @@ fn main() -> Result<()> {
     let duration_load = start_load.elapsed();
 
     let start_parse = Instant::now();
-    let parsed_result = parse(&content)?;
+    let (parsed_result, diagnostics) = parse(&content)?;
     let duration_parse = start_parse.elapsed();
 
     println!(
         "{}",
         format!("Loaded file in: {:?}", duration_load).yellow()
     );
+    for diagnostic in diagnostics.iter() {
+        println!("{}", format!("{}", diagnostic).yellow());
+    }
     println!(
         "{}",
         format!("Total decoding time: {:?}", duration_parse).yellow()

@@ -12,6 +12,7 @@ use rayon::{
 use serde::{Deserialize, Deserializer};
 use serde_yaml;
 use std::collections::HashMap;
+use std::time::Instant;
 
 #[derive(Debug, Deserialize)]
 pub struct MrSimTxt {
@@ -192,6 +193,29 @@ fn parse_space_separated_ints(s: &str) -> Result<Vec<i32>, std::num::ParseIntErr
         .collect()
 }
 
+pub struct Diagnostics {
+    messages: Vec<String>,
+}
+
+impl Diagnostics {
+    pub fn new() -> Self {
+        Diagnostics {
+            messages: Vec::new(),
+        }
+    }
+    pub fn add(&mut self, message: String) {
+        self.messages.push(message);
+    }
+    // Provide a method to get an iterator over the messages
+    pub fn iter(&self) -> std::slice::Iter<'_, String> {
+        self.messages.iter()
+    }
+    // Keeping this method in case you still want direct access to the Vec
+    pub fn messages(&self) -> &Vec<String> {
+        &self.messages
+    }
+}
+
 // A global thread pool
 lazy_static! {
     static ref THREAD_POOL: rayon::ThreadPool = {
@@ -236,15 +260,34 @@ fn split_yaml(yaml: &str) -> (String, Vec<String>) {
     (non_cluster, clusters)
 }
 
-pub fn parse(yaml: &str) -> Result<MrSimTxt, serde_yaml::Error> {
+pub fn parse(yaml: &str) -> Result<(MrSimTxt, Diagnostics), serde_yaml::Error> {
+    let mut diagnostics = Diagnostics::new();
+
+    let start = Instant::now();
+
     let (non_cluster, clusters) = split_yaml(yaml);
 
+    let preprocessed_duration = start.elapsed();
+
+    diagnostics.add(format!(
+        "Preprocessed text in: {}ms",
+        preprocessed_duration.as_millis()
+    ));
+
+    let header_start = Instant::now();
     // Parse non-cluster part into a partial MrSimTxt structure
     let mut mr_sim_txt: MrSimTxt = serde_yaml::from_str(&non_cluster)?;
+    let header_duration = header_start.elapsed();
+
+    diagnostics.add(format!(
+        "Parsed header in: {}ms",
+        header_duration.as_millis()
+    ));
 
     // This is where all parsed clusters would be stored
     let mut all_clusters: HashMap<usize, FrameCluster> = HashMap::new();
 
+    let cluster_start = Instant::now();
     let clusters_data: Result<Vec<HashMap<String, FrameCluster>>, serde_yaml::Error> = THREAD_POOL
         .install(|| {
             clusters
@@ -254,6 +297,13 @@ pub fn parse(yaml: &str) -> Result<MrSimTxt, serde_yaml::Error> {
                 })
                 .collect::<Result<Vec<_>, _>>()
         });
+
+    let cluster_duration = cluster_start.elapsed();
+
+    diagnostics.add(format!(
+        "Parsed clusters in: {} ms",
+        cluster_duration.as_millis()
+    ));
 
     match clusters_data {
         Ok(cluster_maps) => {
@@ -271,5 +321,5 @@ pub fn parse(yaml: &str) -> Result<MrSimTxt, serde_yaml::Error> {
     // Assign the combined clusters map to the main structure
     mr_sim_txt.clusters = all_clusters;
 
-    Ok(mr_sim_txt)
+    Ok((mr_sim_txt, diagnostics))
 }
