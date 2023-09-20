@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex, mpsc};
 
-use crate::{APP_NAME, CadViewPlugin, LoadingPlugin};
+use crate::{APP_NAME, CadViewPlugin, LoadingPlugin, SplashScreenPlugin};
 use bevy::{ecs::system::NonSendMarker, prelude::*};
 use menu::prelude::*;
 
@@ -16,6 +16,8 @@ pub enum AppState {
     // During the loading State the LoadingPlugin will load our assets
     #[default]
     Loading,
+    // Here the “Get Started” prompt is drawn and we wait for user interaction.
+    SplashScreen,
     // During this State the scene graph is rendered and the user can interact
     // with the camera.
     CadView,
@@ -183,7 +185,12 @@ impl Plugin for AppPlugin {
                     }
                 }
             })
-            .add_plugins((MenubarPlugin::new(menubar), LoadingPlugin, CadViewPlugin))
+            .add_plugins((
+                MenubarPlugin::new(menubar),
+                LoadingPlugin,
+                SplashScreenPlugin,
+                CadViewPlugin,
+            ))
             .add_systems(Startup, set_window_icon);
     }
 }
