@@ -2,8 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use serde::de::Deserializer;
-use serde::Deserialize;
+use num_cpus;
+use rayon;
+use serde::{Deserialize, Deserializer};
+use serde_yaml;
 use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
@@ -30,7 +32,7 @@ impl MrSimTxt {
     }
 }
 
-fn frame_clusters_deserializer<'de, D: serde::Deserializer<'de>>(
+fn frame_clusters_deserializer<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<HashMap<usize, FrameCluster>, D::Error> {
     let map: HashMap<String, FrameCluster> = HashMap::deserialize(deserializer)?;
@@ -178,7 +180,7 @@ where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    parse_space_separated_ints(&s).map_err(serde::de::Error::custom)
+    parse_space_separated_ints(&s).map_err(|e| serde::de::Error::custom(format!("{}", e)))
 }
 
 fn parse_space_separated_ints(s: &str) -> Result<Vec<i32>, std::num::ParseIntError> {
@@ -188,5 +190,16 @@ fn parse_space_separated_ints(s: &str) -> Result<Vec<i32>, std::num::ParseIntErr
 }
 
 pub fn parse(yaml: &str) -> Result<MrSimTxt, serde_yaml::Error> {
-    serde_yaml::from_str(yaml)
+    let num_threads = num_cpus::get() / 2;
+    println!("Using {} threads", num_threads);
+
+    let thread_pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+        .unwrap();
+
+    let mr_sim_txt: Result<MrSimTxt, serde_yaml::Error> =
+        thread_pool.install(|| serde_yaml::from_str(yaml));
+
+    mr_sim_txt
 }

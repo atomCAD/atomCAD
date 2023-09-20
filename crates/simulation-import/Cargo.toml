@@ -16,6 +16,8 @@ panic = 'abort'
 [dependencies]
 anyhow = "1.0"
 colored = "2"
+num_cpus = "1.16.0"
 rand = "0.8"
+rayon = "1.7.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
