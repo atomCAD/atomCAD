@@ -40,9 +40,9 @@ enum AppState {
     Menu,
 }
 
-pub struct GamePlugin;
+pub struct AppPlugin;
 
-impl Plugin for GamePlugin {
+impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<AppState>().add_plugins((
             LoadingPlugin,
