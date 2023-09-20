@@ -21,6 +21,7 @@ use menubar::MenuBarPlugin;
 pub mod state;
 use state::cadview::CadViewPlugin;
 use state::loading::LoadingPlugin;
+use state::splashscreen::SplashScreenPlugin;
 
 use bevy::app::App;
 use bevy::prelude::*;
@@ -35,6 +36,8 @@ enum AppState {
     // During the loading State the LoadingPlugin will load our assets
     #[default]
     Loading,
+    // Here the “Get Started” prompt is drawn and we wait for user interaction.
+    SplashScreen,
     // During this State the scene graph is rendered and the user can interact
     // with the camera.
     CadView,
@@ -45,7 +48,12 @@ pub struct AppPlugin;
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>()
-            .add_plugins((MenuBarPlugin, LoadingPlugin, CadViewPlugin))
+            .add_plugins((
+                MenuBarPlugin,
+                LoadingPlugin,
+                SplashScreenPlugin,
+                CadViewPlugin,
+            ))
             .add_systems(Startup, set_window_icon);
     }
 }

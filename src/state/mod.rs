@@ -4,5 +4,6 @@
 
 pub(crate) mod cadview;
 pub(crate) mod loading;
+pub(crate) mod splashscreen;
 
 // End of File

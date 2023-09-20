@@ -13,7 +13,7 @@ impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         app.add_loading_state(
             LoadingState::new(AppState::Loading)
-                .continue_to_state(AppState::CadView)
+                .continue_to_state(AppState::SplashScreen)
                 .load_collection::<FontAssets>(),
         );
     }
