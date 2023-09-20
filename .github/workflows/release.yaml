@@ -14,7 +14,7 @@ on:
 env:
   # heads-up: this value is used as a pattern in an sed command as a workaround for a trunk issue
   #   if you use special characters, take a look at the 'Make paths relative' step in the 'build-web' job
-  GAME_EXECUTABLE_NAME: atomcad
+  EXECUTABLE_NAME: atomcad
   GAME_OSX_APP_NAME: atomCAD
 
 permissions:
@@ -61,23 +61,23 @@ jobs:
           SDKROOT=$(xcrun -sdk macosx --show-sdk-path) cargo build --release --target=x86_64-apple-darwin
       - name: Create Universal Binary
         run: |
-          lipo -create -output target/release/${{ env.GAME_EXECUTABLE_NAME }} target/aarch64-apple-darwin/release/${{ env.GAME_EXECUTABLE_NAME }} target/x86_64-apple-darwin/release/${{ env.GAME_EXECUTABLE_NAME }}
+          lipo -create -output target/release/${{ env.EXECUTABLE_NAME }} target/aarch64-apple-darwin/release/${{ env.EXECUTABLE_NAME }} target/x86_64-apple-darwin/release/${{ env.EXECUTABLE_NAME }}
       - name: Create release
         run: |
           mkdir -p build/macos/src/atomCAD.app/Contents/MacOS/assets
           cp -r assets/ build/macos/src/atomCAD.app/Contents/MacOS/assets
           cp -r credits/ build/macos/src/atomCAD.app/Contents/MacOS/credits
-          cp target/release/${{ env.GAME_EXECUTABLE_NAME }} build/macos/src/atomCAD.app/Contents/MacOS/
-          strip build/macos/src/atomCAD.app/Contents/MacOS/${{ env.GAME_EXECUTABLE_NAME }}
+          cp target/release/${{ env.EXECUTABLE_NAME }} build/macos/src/atomCAD.app/Contents/MacOS/
+          strip build/macos/src/atomCAD.app/Contents/MacOS/${{ env.EXECUTABLE_NAME }}
           mv build/macos/src/atomCAD.app build/macos/src/${{ env.GAME_OSX_APP_NAME }}.app
           ln -s /Applications build/macos/src/
-          hdiutil create -fs HFS+ -volname "${{ env.GAME_OSX_APP_NAME }}" -srcfolder build/macos/src ${{ env.GAME_EXECUTABLE_NAME }}.dmg
+          hdiutil create -fs HFS+ -volname "${{ env.GAME_OSX_APP_NAME }}" -srcfolder build/macos/src ${{ env.EXECUTABLE_NAME }}.dmg
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_EXECUTABLE_NAME }}.dmg
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_macOS.dmg
+          file: ${{ env.EXECUTABLE_NAME }}.dmg
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_macOS.dmg
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
@@ -101,18 +101,18 @@ jobs:
           cargo build --release
       - name: Prepare release
         run: |
-          strip target/release/${{ env.GAME_EXECUTABLE_NAME }}
-          chmod +x target/release/${{ env.GAME_EXECUTABLE_NAME }}
-          mv target/release/${{ env.GAME_EXECUTABLE_NAME }} .
+          strip target/release/${{ env.EXECUTABLE_NAME }}
+          chmod +x target/release/${{ env.EXECUTABLE_NAME }}
+          mv target/release/${{ env.EXECUTABLE_NAME }} .
       - name: Bundle release
         run: |
-          tar -czf ${{ env.GAME_EXECUTABLE_NAME }}_linux.tar.gz ${{ env.GAME_EXECUTABLE_NAME }} assets credits
+          tar -czf ${{ env.EXECUTABLE_NAME }}_linux.tar.gz ${{ env.EXECUTABLE_NAME }} assets credits
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_EXECUTABLE_NAME }}_linux.tar.gz
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_linux.tar.gz
+          file: ${{ env.EXECUTABLE_NAME }}_linux.tar.gz
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_linux.tar.gz
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
@@ -145,8 +145,8 @@ jobs:
       - name: Zip release
         uses: vimtor/action-zip@v1
         with:
-          files: target/release/assets/ target/release/credits/ target/release/${{ env.GAME_EXECUTABLE_NAME }}.exe
-          dest: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
+          files: target/release/assets/ target/release/credits/ target/release/${{ env.EXECUTABLE_NAME }}.exe
+          dest: ${{ env.EXECUTABLE_NAME }}_windows.zip
       - name: Create Installer
         if: ${{ env.BUILD_INSTALLER }}
         run: dotnet build -p:Version=1.2.3 -c Release build/windows/installer/Installer.wixproj --output installer
@@ -154,8 +154,8 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_windows.zip
+          file: ${{ env.EXECUTABLE_NAME }}_windows.zip
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_windows.zip
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload installer
@@ -164,7 +164,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: installer/en-US/installer.msi
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ steps.tag.outputs.tag }}_windows.msi
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ steps.tag.outputs.tag }}_windows.msi
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
@@ -202,18 +202,18 @@ jobs:
       - name: Make paths relative
         run: |
           sed -i 's/\/index/.\/index/g' dist/index.html
-          sed -i 's/\/${{ env.GAME_EXECUTABLE_NAME }}/.\/${{ env.GAME_EXECUTABLE_NAME }}/g' dist/index.html
+          sed -i 's/\/${{ env.EXECUTABLE_NAME }}/.\/${{ env.EXECUTABLE_NAME }}/g' dist/index.html
       - name: Zip release
         uses: vimtor/action-zip@v1
         with:
           files: dist/
-          dest: ${{ env.GAME_EXECUTABLE_NAME }}_web.zip
+          dest: ${{ env.EXECUTABLE_NAME }}_web.zip
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_EXECUTABLE_NAME }}_web.zip
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_web.zip
+          file: ${{ env.EXECUTABLE_NAME }}_web.zip
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_web.zip
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
@@ -235,14 +235,14 @@ jobs:
           make xcodebuild-iphone-release
           mkdir Payload
           mv build/Build/Products/Release-iphoneos/*.app Payload
-          zip -r ${{ env.GAME_EXECUTABLE_NAME }}.zip Payload
-          mv ${{ env.GAME_EXECUTABLE_NAME }}.zip ${{ env.GAME_EXECUTABLE_NAME }}.ipa
+          zip -r ${{ env.EXECUTABLE_NAME }}.zip Payload
+          mv ${{ env.EXECUTABLE_NAME }}.zip ${{ env.EXECUTABLE_NAME }}.ipa
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: mobile/${{ env.GAME_EXECUTABLE_NAME }}.ipa
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_unsigned_ios.ipa
+          file: mobile/${{ env.EXECUTABLE_NAME }}.ipa
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_unsigned_ios.ipa
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
@@ -271,7 +271,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/debug/apk/${{ env.GAME_OSX_APP_NAME }}.apk
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_android.apk
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_android.apk
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true

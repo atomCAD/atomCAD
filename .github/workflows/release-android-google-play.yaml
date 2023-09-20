@@ -14,7 +14,7 @@ on:
 
 env:
   # used for uploading the app to a GitHub release
-  GAME_EXECUTABLE_NAME: atomcad
+  EXECUTABLE_NAME: atomcad
   BUNDLE_PATH: "target/x/release/android/mobile.aab"
   PACKAGE_NAME: "io.atomcad.app"
   # release track; you can promote a build to "higher" tracks in the play console or publish to a different track directly
@@ -55,7 +55,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.BUNDLE_PATH }}
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ inputs.version }}_android.aab
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ inputs.version }}_android.aab
           release_name: ${{ inputs.version }}
           tag: ${{ inputs.version }}
           overwrite: true
