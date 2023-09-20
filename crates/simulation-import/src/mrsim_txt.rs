@@ -2,9 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use colored::*;
-use lazy_static::lazy_static;
-use num_cpus;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Deserializer};
 use serde_yaml;
@@ -213,19 +210,6 @@ impl Diagnostics {
     }
 }
 
-// A global thread pool
-lazy_static! {
-    static ref THREAD_POOL: rayon::ThreadPool = {
-        let num_threads = num_cpus::get() * 2 / 3;
-        println!("{}", format!("Using {} threads", num_threads).green());
-
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads)
-            .build()
-            .unwrap()
-    };
-}
-
 fn split_yaml(yaml: &str) -> (String, Vec<String>) {
     let mut non_cluster = String::new();
     let mut clusters = Vec::new();
@@ -285,15 +269,10 @@ pub fn parse(yaml: &str) -> Result<(MrSimTxt, Diagnostics), serde_yaml::Error> {
     let mut all_clusters: HashMap<usize, FrameCluster> = HashMap::new();
 
     let cluster_start = Instant::now();
-    let clusters_data: Result<Vec<HashMap<String, FrameCluster>>, serde_yaml::Error> = THREAD_POOL
-        .install(|| {
-            clusters
-                .into_par_iter()
-                .map(|cluster_yaml| {
-                    serde_yaml::from_str::<HashMap<String, FrameCluster>>(&cluster_yaml)
-                })
-                .collect::<Result<Vec<_>, _>>()
-        });
+    let clusters_data: Result<Vec<HashMap<String, FrameCluster>>, serde_yaml::Error> = clusters
+        .into_par_iter()
+        .map(|cluster_yaml| serde_yaml::from_str::<HashMap<String, FrameCluster>>(&cluster_yaml))
+        .collect::<Result<Vec<_>, _>>();
 
     let cluster_duration = cluster_start.elapsed();
 
@@ -301,6 +280,9 @@ pub fn parse(yaml: &str) -> Result<(MrSimTxt, Diagnostics), serde_yaml::Error> {
         "Parsed clusters in: {} ms",
         cluster_duration.as_millis()
     ));
+
+    let thread_count = rayon::current_num_threads();
+    diagnostics.add(format!("Using {} threads", thread_count));
 
     match clusters_data {
         Ok(cluster_maps) => {
