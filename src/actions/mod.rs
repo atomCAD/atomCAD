@@ -5,11 +5,11 @@
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
 
-use crate::actions::game_control::{get_movement, GameControl};
+use crate::actions::key_command::{get_movement, KeyCommand};
 use crate::scene::Torus;
 use crate::AppState;
 
-mod game_control;
+mod key_command;
 
 pub const FOLLOW_EPSILON: f32 = 5.;
 
@@ -39,10 +39,10 @@ pub fn set_movement_actions(
     camera: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
 ) {
     let mut torus_movement = Vec2::new(
-        get_movement(GameControl::Right, &keyboard_input)
-            - get_movement(GameControl::Left, &keyboard_input),
-        get_movement(GameControl::Up, &keyboard_input)
-            - get_movement(GameControl::Down, &keyboard_input),
+        get_movement(KeyCommand::Right, &keyboard_input)
+            - get_movement(KeyCommand::Left, &keyboard_input),
+        get_movement(KeyCommand::Up, &keyboard_input)
+            - get_movement(KeyCommand::Down, &keyboard_input),
     );
 
     if let Some(touch_position) = touch_input.first_pressed_position() {

@@ -4,33 +4,33 @@
 
 use bevy::prelude::{Input, KeyCode, Res};
 
-pub enum GameControl {
+pub enum KeyCommand {
     Up,
     Down,
     Left,
     Right,
 }
 
-impl GameControl {
+impl KeyCommand {
     pub fn pressed(&self, keyboard_input: &Res<Input<KeyCode>>) -> bool {
         match self {
-            GameControl::Up => {
+            KeyCommand::Up => {
                 keyboard_input.pressed(KeyCode::W) || keyboard_input.pressed(KeyCode::Up)
             }
-            GameControl::Down => {
+            KeyCommand::Down => {
                 keyboard_input.pressed(KeyCode::S) || keyboard_input.pressed(KeyCode::Down)
             }
-            GameControl::Left => {
+            KeyCommand::Left => {
                 keyboard_input.pressed(KeyCode::A) || keyboard_input.pressed(KeyCode::Left)
             }
-            GameControl::Right => {
+            KeyCommand::Right => {
                 keyboard_input.pressed(KeyCode::D) || keyboard_input.pressed(KeyCode::Right)
             }
         }
     }
 }
 
-pub fn get_movement(control: GameControl, input: &Res<Input<KeyCode>>) -> f32 {
+pub fn get_movement(control: KeyCommand, input: &Res<Input<KeyCode>>) -> f32 {
     if control.pressed(input) {
         1.0
     } else {
