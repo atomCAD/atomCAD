@@ -26,6 +26,11 @@ fn main() {
                 title: APP_NAME.into(),
                 // FIXME: this should be read from a persistent settings file
                 resolution: (800., 600.).into(),
+                resize_constraints: WindowResizeConstraints {
+                    min_width: 640.,
+                    min_height: 480.,
+                    ..default()
+                },
                 // Turn off vsync to maximize CPU/GPU usage and prevent the
                 // application from blocking the main thread while waiting for
                 // the screen refresh.  We may want to revisit this choice

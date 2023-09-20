@@ -41,8 +41,14 @@ fn update_canvas_size(
         let mut canvas_size = canvas_size.get_single_mut().ok()?;
         let mut window = window.get_single_mut().ok()?;
         let browser_window = web_sys::window()?;
-        let width = browser_window.inner_width().ok()?.as_f64()? as f32;
-        let height = browser_window.inner_height().ok()?.as_f64()? as f32;
+        let width = (browser_window.inner_width().ok()?.as_f64()? as f32).clamp(
+            window.resize_constraints.min_width,
+            window.resize_constraints.max_width,
+        );
+        let height = (browser_window.inner_height().ok()?.as_f64()? as f32).clamp(
+            window.resize_constraints.min_height,
+            window.resize_constraints.max_height,
+        );
         if width != canvas_size.width || height != canvas_size.height {
             window.resolution.set(width, height);
             canvas_size.width = width;
