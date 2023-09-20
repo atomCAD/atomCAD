@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::GameState;
+use crate::AppState;
 use bevy::{
     input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
     prelude::*,
@@ -17,8 +17,8 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Active), spawn_camera)
-            .add_systems(Update, pan_orbit_camera.run_if(in_state(GameState::Active)));
+        app.add_systems(OnEnter(AppState::Active), spawn_camera)
+            .add_systems(Update, pan_orbit_camera.run_if(in_state(AppState::Active)));
     }
 }
 

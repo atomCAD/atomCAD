@@ -29,7 +29,7 @@ pub const APP_NAME: &str = "atomCAD";
 // See https://bevy-cheatbook.github.io/programming/states.html
 // Or https://github.com/bevyengine/bevy/blob/main/examples/ecs/state.rs
 #[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
-enum GameState {
+enum AppState {
     // During the loading State the LoadingPlugin will load our assets
     #[default]
     Loading,
@@ -44,7 +44,7 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_state::<GameState>().add_plugins((
+        app.add_state::<AppState>().add_plugins((
             LoadingPlugin,
             MenuPlugin,
             ActionsPlugin,

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::GameState;
+use crate::AppState;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_kira_audio::AudioSource;
@@ -15,15 +15,15 @@ pub struct LoadingPlugin;
 impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         app.add_loading_state(
-            LoadingState::new(GameState::Loading).continue_to_state(GameState::Menu),
+            LoadingState::new(AppState::Loading).continue_to_state(AppState::Menu),
         )
-        .add_collection_to_loading_state::<_, FontAssets>(GameState::Loading)
-        .add_collection_to_loading_state::<_, AudioAssets>(GameState::Loading)
-        .add_collection_to_loading_state::<_, TextureAssets>(GameState::Loading);
+        .add_collection_to_loading_state::<_, FontAssets>(AppState::Loading)
+        .add_collection_to_loading_state::<_, AudioAssets>(AppState::Loading)
+        .add_collection_to_loading_state::<_, TextureAssets>(AppState::Loading);
     }
 }
 
-// the following asset collections will be loaded during the State `GameState::Loading`
+// the following asset collections will be loaded during the State `AppState::Loading`
 // when done loading, they will be inserted as resources (see <https://github.com/NiklasEi/bevy_asset_loader>)
 
 #[derive(AssetCollection, Resource)]

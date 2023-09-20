@@ -3,22 +3,22 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::loading::FontAssets;
-use crate::GameState;
+use crate::AppState;
 use bevy::prelude::*;
 
 pub struct MenuPlugin;
 
 /// This plugin is responsible for the game menu (containing only one button...)
-/// The menu is only drawn during the State `GameState::Menu` and is removed when that state is exited
+/// The menu is only drawn during the State `AppState::Menu` and is removed when that state is exited
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ButtonColors>()
-            .add_systems(OnEnter(GameState::Menu), setup_menu)
+            .add_systems(OnEnter(AppState::Menu), setup_menu)
             .add_systems(
                 Update,
-                click_load_pdb_button.run_if(in_state(GameState::Menu)),
+                click_load_pdb_button.run_if(in_state(AppState::Menu)),
             )
-            .add_systems(OnExit(GameState::Menu), cleanup_menu);
+            .add_systems(OnExit(AppState::Menu), cleanup_menu);
     }
 }
 
@@ -70,7 +70,7 @@ fn setup_menu(
 
 fn click_load_pdb_button(
     button_colors: Res<ButtonColors>,
-    mut state: ResMut<NextState<GameState>>,
+    mut state: ResMut<NextState<AppState>>,
     mut interaction_query: Query<
         (&Interaction, &mut BackgroundColor),
         (Changed<Interaction>, With<Button>),
@@ -79,7 +79,7 @@ fn click_load_pdb_button(
     for (interaction, mut color) in &mut interaction_query {
         match *interaction {
             Interaction::Pressed => {
-                state.set(GameState::Active);
+                state.set(AppState::Active);
             }
             Interaction::Hovered => {
                 *color = button_colors.hovered.into();

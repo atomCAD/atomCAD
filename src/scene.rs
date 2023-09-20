@@ -5,7 +5,7 @@
 use crate::actions::Actions;
 use crate::camera::CameraPlugin;
 use crate::loading::TextureAssets;
-use crate::GameState;
+use crate::AppState;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
@@ -16,13 +16,13 @@ pub struct ScenePlugin;
 pub struct Torus;
 
 /// This plugin handles scene related stuff
-/// Scene logic is only active during the State `GameState::Active`
+/// Scene logic is only active during the State `AppState::Active`
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((CameraPlugin, InfiniteGridPlugin));
-        app.add_systems(OnEnter(GameState::Active), spawn_scene)
-            .add_systems(Update, ui_hello_world.run_if(in_state(GameState::Active)))
-            .add_systems(Update, move_torus.run_if(in_state(GameState::Active)));
+        app.add_systems(OnEnter(AppState::Active), spawn_scene)
+            .add_systems(Update, ui_hello_world.run_if(in_state(AppState::Active)))
+            .add_systems(Update, move_torus.run_if(in_state(AppState::Active)));
     }
 }
 
