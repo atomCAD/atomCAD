@@ -2,8 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use colored::*;
+use lazy_static::lazy_static;
 use num_cpus;
-use rayon;
+use rayon::{
+    self,
+    prelude::{IntoParallelIterator, ParallelIterator},
+};
 use serde::{Deserialize, Deserializer};
 use serde_yaml;
 use std::collections::HashMap;
@@ -13,7 +18,7 @@ pub struct MrSimTxt {
     specification: Option<Vec<String>>,
     header: Header,
     metadata: Option<Metadata>,
-    #[serde(flatten, deserialize_with = "frame_clusters_deserializer")]
+    #[serde(skip)]
     clusters: HashMap<usize, FrameCluster>,
 }
 
@@ -32,11 +37,9 @@ impl MrSimTxt {
     }
 }
 
-fn frame_clusters_deserializer<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<HashMap<usize, FrameCluster>, D::Error> {
-    let map: HashMap<String, FrameCluster> = HashMap::deserialize(deserializer)?;
-
+fn frame_clusters_deserializer(
+    map: HashMap<String, FrameCluster>,
+) -> Result<HashMap<usize, FrameCluster>, serde_yaml::Error> {
     let mut ordered_map = HashMap::new();
 
     for (key, value) in map.into_iter() {
@@ -189,17 +192,84 @@ fn parse_space_separated_ints(s: &str) -> Result<Vec<i32>, std::num::ParseIntErr
         .collect()
 }
 
+// A global thread pool
+lazy_static! {
+    static ref THREAD_POOL: rayon::ThreadPool = {
+        let num_threads = num_cpus::get() * 2 / 3;
+        println!("{}", format!("Using {} threads", num_threads).green());
+
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build()
+            .unwrap()
+    };
+}
+
+fn split_yaml(yaml: &str) -> (String, Vec<String>) {
+    let mut non_cluster = String::new();
+    let mut clusters = Vec::new();
+    let mut current_cluster = String::new();
+    let mut is_inside_cluster = false;
+
+    for line in yaml.lines() {
+        if line.starts_with("frame cluster ") {
+            if !current_cluster.is_empty() {
+                clusters.push(current_cluster.clone());
+                current_cluster.clear();
+            }
+            is_inside_cluster = true;
+        }
+
+        if is_inside_cluster {
+            current_cluster.push_str(line);
+            current_cluster.push('\n');
+        } else {
+            non_cluster.push_str(line);
+            non_cluster.push('\n');
+        }
+    }
+
+    if !current_cluster.is_empty() {
+        clusters.push(current_cluster);
+    }
+
+    (non_cluster, clusters)
+}
+
 pub fn parse(yaml: &str) -> Result<MrSimTxt, serde_yaml::Error> {
-    let num_threads = num_cpus::get() / 2;
-    println!("Using {} threads", num_threads);
+    let (non_cluster, clusters) = split_yaml(yaml);
 
-    let thread_pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
-        .build()
-        .unwrap();
+    // Parse non-cluster part into a partial MrSimTxt structure
+    let mut mr_sim_txt: MrSimTxt = serde_yaml::from_str(&non_cluster)?;
 
-    let mr_sim_txt: Result<MrSimTxt, serde_yaml::Error> =
-        thread_pool.install(|| serde_yaml::from_str(yaml));
+    // This is where all parsed clusters would be stored
+    let mut all_clusters: HashMap<usize, FrameCluster> = HashMap::new();
 
-    mr_sim_txt
+    let clusters_data: Result<Vec<HashMap<String, FrameCluster>>, serde_yaml::Error> = THREAD_POOL
+        .install(|| {
+            clusters
+                .into_par_iter()
+                .map(|cluster_yaml| {
+                    serde_yaml::from_str::<HashMap<String, FrameCluster>>(&cluster_yaml)
+                })
+                .collect::<Result<Vec<_>, _>>()
+        });
+
+    match clusters_data {
+        Ok(cluster_maps) => {
+            for map in cluster_maps {
+                // Convert each cluster map into the desired format using your deserializer logic
+                let ordered_map = frame_clusters_deserializer(map)?;
+
+                // Merge the ordered_map into the all_clusters map
+                all_clusters.extend(ordered_map);
+            }
+        }
+        Err(e) => return Err(e),
+    }
+
+    // Assign the combined clusters map to the main structure
+    mr_sim_txt.clusters = all_clusters;
+
+    Ok(mr_sim_txt)
 }
