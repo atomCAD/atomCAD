@@ -15,7 +15,7 @@ env:
   # heads-up: this value is used as a pattern in an sed command as a workaround for a trunk issue
   #   if you use special characters, take a look at the 'Make paths relative' step in the 'build-web' job
   EXECUTABLE_NAME: atomcad
-  GAME_OSX_APP_NAME: atomCAD
+  OSX_APP_NAME: atomCAD
 
 permissions:
   contents: write
@@ -69,9 +69,9 @@ jobs:
           cp -r credits/ build/macos/src/atomCAD.app/Contents/MacOS/credits
           cp target/release/${{ env.EXECUTABLE_NAME }} build/macos/src/atomCAD.app/Contents/MacOS/
           strip build/macos/src/atomCAD.app/Contents/MacOS/${{ env.EXECUTABLE_NAME }}
-          mv build/macos/src/atomCAD.app build/macos/src/${{ env.GAME_OSX_APP_NAME }}.app
+          mv build/macos/src/atomCAD.app build/macos/src/${{ env.OSX_APP_NAME }}.app
           ln -s /Applications build/macos/src/
-          hdiutil create -fs HFS+ -volname "${{ env.GAME_OSX_APP_NAME }}" -srcfolder build/macos/src ${{ env.EXECUTABLE_NAME }}.dmg
+          hdiutil create -fs HFS+ -volname "${{ env.OSX_APP_NAME }}" -srcfolder build/macos/src ${{ env.EXECUTABLE_NAME }}.dmg
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -270,7 +270,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/debug/apk/${{ env.GAME_OSX_APP_NAME }}.apk
+          file: target/debug/apk/${{ env.OSX_APP_NAME }}.apk
           asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_android.apk
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
