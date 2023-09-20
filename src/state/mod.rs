@@ -8,4 +8,7 @@ pub use cadview::CadViewPlugin;
 mod loading;
 pub use loading::LoadingPlugin;
 
+mod splashscreen;
+pub use splashscreen::SplashScreenPlugin;
+
 // End of File

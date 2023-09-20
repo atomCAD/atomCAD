@@ -33,8 +33,8 @@ fn check_asset_loading(
 
     // If all assets are loaded, transition to the CadView state
     if fonts_loaded {
-        info!("Font assets loaded successfully, transitioning to CadView state");
-        next_state.set(AppState::CadView);
+        info!("Font assets loaded successfully, transitioning to SplashScreen state");
+        next_state.set(AppState::SplashScreen);
     }
 }
 
