@@ -19,7 +19,7 @@ mod tests {
         let (parsed, diagnostics) = parse(&sample_yaml_content).unwrap();
 
         for diagnostic in diagnostics.iter() {
-            println!("{}", format!("{}", diagnostic).yellow());
+            println!("{}", diagnostic.yellow());
         }
 
         println!("{:#?}", parsed);
