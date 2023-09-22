@@ -53,7 +53,7 @@ fn spawn_scene(
                 subdivisions_sides: 16,
                 ..default()
             })),
-            material: materials.add(Color::rgb(0.2, 0.8, 0.4).into()),
+            material: materials.add(Color::rgb(0.6, 2.4, 1.2).into()), // green, with slight glow
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()
         })

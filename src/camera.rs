@@ -4,6 +4,7 @@
 
 use crate::AppState;
 use bevy::{
+    core_pipeline::{bloom::BloomSettings, tonemapping::Tonemapping},
     input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
     prelude::*,
     window::PrimaryWindow,
@@ -27,9 +28,18 @@ fn spawn_camera(mut commands: Commands) {
     let target = Vec3::ZERO;
     commands.spawn((
         Camera3dBundle {
+            camera: Camera {
+                hdr: true, // HDR is required for bloom effects.
+                ..default()
+            },
+            // Using a tonemapper that desaturates to white is recommneded
+            // when using bloom effects.
+            tonemapping: Tonemapping::TonyMcMapface,
             transform: Transform::from_translation(position).looking_at(target, Vec3::Y),
             ..default()
         },
+        // Enable bloom effects with default settings.
+        BloomSettings::default(),
         PanOrbitCamera {
             radius: (position - target).length(),
             ..default()
