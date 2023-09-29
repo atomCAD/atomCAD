@@ -48,7 +48,7 @@ winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190
     "android-native-activity",
 ] }
 env_logger = "0.10.0"
-getrandom = { features = ["js"] }
+getrandom = { version="0.2.10", features = ["js"] }
 
 # android:
 [target.'cfg(target_os = "android")'.dependencies]

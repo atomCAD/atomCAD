@@ -2,20 +2,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use serde::{Deserialize, Deserializer};
-use serde_yaml;
-use std::collections::HashMap;
-use std::time::Instant;
+pub mod definitions;
+pub mod utils;
 
-#[derive(Debug, Deserialize)]
-pub struct MrSimTxt {
-    specification: Option<Vec<String>>,
-    header: Header,
-    metadata: Option<Metadata>,
-    #[serde(skip)]
-    clusters: HashMap<usize, FrameCluster>,
-}
+use crate::mrsim_txt::definitions::{
+    Atoms, Calculated, Diagnostics, FrameCluster, Header, Metadata, MrSimTxt, ParsedData,
+};
+
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use serde_yaml;
+use std::{collections::HashMap, time::Instant};
 
 impl MrSimTxt {
     pub fn specification(&self) -> Option<&Vec<String>> {
@@ -30,41 +26,100 @@ impl MrSimTxt {
     pub fn clusters(&self) -> &HashMap<usize, FrameCluster> {
         &self.clusters
     }
+    pub fn calculated(&self) -> &Calculated {
+        &self.calculated
+    }
 }
+// pub trait ParsedFormat {
+//     fn specification(&self) -> Option<&Vec<String>>;
+//     fn header(&self) -> &Header;
+//     fn metadata(&self) -> Option<&Metadata>;
+//     fn clusters(&self) -> &HashMap<usize, FrameCluster>;
+//     fn calculated(&self) -> &Calculated;
+// }
 
-fn frame_clusters_deserializer(
-    map: HashMap<String, FrameCluster>,
-) -> Result<HashMap<usize, FrameCluster>, serde_yaml::Error> {
-    let mut ordered_map = HashMap::new();
+// impl ParsedFormat for MrSimTxt {
+//     fn specification(&self) -> Option<&Vec<String>> {
+//         self.specification.as_ref()
+//     }
+//     fn header(&self) -> &Header {
+//         &self.header
+//     }
+//     fn metadata(&self) -> Option<&Metadata> {
+//         self.metadata.as_ref()
+//     }
+//     fn clusters(&self) -> &HashMap<usize, FrameCluster> {
+//         &self.clusters
+//     }
+//     fn calculated(&self) -> &Calculated {
+//         &self.calculated
+//     }
+// }
 
-    for (key, value) in map.into_iter() {
-        if let Some(cluster_idx) = key.strip_prefix("frame cluster ") {
-            if let Ok(idx) = cluster_idx.parse::<usize>() {
-                ordered_map.insert(idx, value);
-            } else {
-                return Err(serde::de::Error::custom(format!(
-                    "Unexpected frame cluster key: {}",
-                    key
-                )));
-            }
+impl ParsedData {
+    pub fn data(&self) -> &MrSimTxt {
+        &self.data
+    }
+    pub fn diagnostics(&self) -> &Diagnostics {
+        &self.diagnostics
+    }
+    pub fn new(yaml_data: &str) -> Result<Self, serde_yaml::Error> {
+        let (parsed_data, diagnostics) = parse(yaml_data)?;
+        Ok(ParsedData {
+            data: parsed_data,
+            diagnostics,
+            has_calculated_coordinates: false,
+        })
+    }
+    pub fn discard_original_clusters(&mut self) {
+        if self.has_calculated_coordinates {
+            self.data.clusters.clear();
         }
     }
+    pub fn calculate_positions(&mut self) {
+        // iterate over all frame clusters in data.clusters and calculate the positions. Each frame cluster first frame contains the absolute positions,
+        // the rest contains the deltas relative to the previous frame. The outcome of this function must be populating the calculated structure
+        // with the absolute positions for each frame cluster.
+        let first_cluster = self.data.clusters.get(&1).unwrap();
+        let atoms = first_cluster.atoms();
+        let x_coordinates = atoms.x_coordinates();
+        let y_coordinates = atoms.y_coordinates();
+        let z_coordinates = atoms.z_coordinates();
 
-    Ok(ordered_map)
-}
+        let mut x: HashMap<usize, Vec<i32>> = HashMap::new();
+        let mut y: HashMap<usize, Vec<i32>> = HashMap::new();
+        let mut z: HashMap<usize, Vec<i32>> = HashMap::new();
 
-#[derive(Debug, Deserialize)]
-pub struct Header {
-    #[serde(rename = "frame time in femtoseconds")]
-    frame_time: f64,
-    #[serde(rename = "spatial resolution in approximate picometers")]
-    spatial_resolution: f64,
-    #[serde(rename = "uses checkpoints")]
-    uses_checkpoints: bool,
-    #[serde(rename = "frame count")]
-    frame_count: usize,
-    #[serde(rename = "frame cluster size")]
-    frame_cluster_size: usize,
+        for (k, v) in x_coordinates.iter() {
+            let mut new_frame = Vec::with_capacity(v.len());
+            for i in 0..v.len() {
+                new_frame.push(v[i] + 1);
+            }
+            x.insert(*k, new_frame);
+        }
+        for (k, v) in y_coordinates.iter() {
+            let mut new_frame = Vec::with_capacity(v.len());
+            for i in 0..v.len() {
+                new_frame.push(v[i] + 2);
+            }
+            y.insert(*k, new_frame);
+        }
+        for (k, v) in z_coordinates.iter() {
+            let mut new_frame = Vec::with_capacity(v.len());
+            for i in 0..v.len() {
+                new_frame.push(v[i] + 3);
+            }
+            z.insert(*k, new_frame);
+        }
+
+        self.data.calculated.x = x;
+        self.data.calculated.y = y;
+        self.data.calculated.z = z;
+        self.data.calculated.elements = atoms.elements().clone();
+        self.data.calculated.flags = atoms.flags().clone();
+
+        self.has_calculated_coordinates = true;
+    }
 }
 
 impl Header {
@@ -85,17 +140,22 @@ impl Header {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Metadata {}
-
-#[derive(Debug, Deserialize)]
-pub struct FrameCluster {
-    #[serde(rename = "frame start")]
-    frame_start: usize,
-    #[serde(rename = "frame end")]
-    frame_end: usize,
-    metadata: Option<HashMap<String, Vec<f64>>>,
-    atoms: Atoms,
+impl Calculated {
+    pub fn x(&self) -> &HashMap<usize, Vec<i32>> {
+        &self.x
+    }
+    pub fn y(&self) -> &HashMap<usize, Vec<i32>> {
+        &self.y
+    }
+    pub fn z(&self) -> &HashMap<usize, Vec<i32>> {
+        &self.z
+    }
+    pub fn elements(&self) -> &Vec<i32> {
+        &self.elements
+    }
+    pub fn flags(&self) -> &Vec<i32> {
+        &self.flags
+    }
 }
 
 impl FrameCluster {
@@ -111,20 +171,6 @@ impl FrameCluster {
     pub fn atoms(&self) -> &Atoms {
         &self.atoms
     }
-}
-
-#[derive(Deserialize)]
-pub struct Atoms {
-    #[serde(rename = "x coordinates", deserialize_with = "parse_coordinates")]
-    x_coordinates: HashMap<usize, Vec<i32>>,
-    #[serde(rename = "y coordinates", deserialize_with = "parse_coordinates")]
-    y_coordinates: HashMap<usize, Vec<i32>>,
-    #[serde(rename = "z coordinates", deserialize_with = "parse_coordinates")]
-    z_coordinates: HashMap<usize, Vec<i32>>,
-    #[serde(deserialize_with = "deserialize_space_separated_ints")]
-    elements: Vec<i32>,
-    #[serde(deserialize_with = "deserialize_space_separated_ints")]
-    flags: Vec<i32>,
 }
 
 impl Atoms {
@@ -155,41 +201,6 @@ impl std::fmt::Debug for Atoms {
             .field("flags count", &self.flags.len())
             .finish()
     }
-}
-
-fn parse_coordinates<'de, D>(deserializer: D) -> Result<HashMap<usize, Vec<i32>>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let values: Vec<HashMap<usize, String>> = Deserialize::deserialize(deserializer)?;
-    let mut coords_map = HashMap::new();
-    for map in values {
-        for (k, v) in map {
-            let coords: Vec<i32> = parse_space_separated_ints(&v)
-                .map_err(|e| serde::de::Error::custom(format!("{}", e)))?;
-            coords_map.insert(k, coords);
-        }
-    }
-    Ok(coords_map)
-}
-
-fn deserialize_space_separated_ints<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    parse_space_separated_ints(&s).map_err(|e| serde::de::Error::custom(format!("{}", e)))
-}
-
-fn parse_space_separated_ints(s: &str) -> Result<Vec<i32>, std::num::ParseIntError> {
-    s.split_whitespace()
-        .map(|part| part.parse::<i32>())
-        .collect()
-}
-
-#[derive(Default)]
-pub struct Diagnostics {
-    messages: Vec<String>,
 }
 
 impl Diagnostics {
@@ -238,6 +249,27 @@ fn split_yaml(yaml: &str) -> (String, Vec<String>) {
     }
 
     (non_cluster, clusters)
+}
+
+fn frame_clusters_deserializer(
+    map: HashMap<String, FrameCluster>,
+) -> Result<HashMap<usize, FrameCluster>, serde_yaml::Error> {
+    let mut ordered_map = HashMap::new();
+
+    for (key, value) in map.into_iter() {
+        if let Some(cluster_idx) = key.strip_prefix("frame cluster ") {
+            if let Ok(idx) = cluster_idx.parse::<usize>() {
+                ordered_map.insert(idx, value);
+            } else {
+                return Err(serde::de::Error::custom(format!(
+                    "Unexpected frame cluster key: {}",
+                    key
+                )));
+            }
+        }
+    }
+
+    Ok(ordered_map)
 }
 
 pub fn parse(yaml: &str) -> Result<(MrSimTxt, Diagnostics), serde_yaml::Error> {

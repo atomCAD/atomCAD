@@ -5,7 +5,7 @@
 use anyhow::Result;
 use colored::*;
 use rand::Rng;
-use simulation_import::mrsim_txt::parse;
+use simulation_import::mrsim_txt::definitions::ParsedData;
 use std::env;
 use std::fs;
 use std::time::Instant;
@@ -33,8 +33,15 @@ fn main() -> Result<()> {
     let duration_load = start_load.elapsed();
 
     let start_parse = Instant::now();
-    let (parsed_result, diagnostics) = parse(&content)?;
+    let mut parsed_data = ParsedData::new(&content).unwrap();
     let duration_parse = start_parse.elapsed();
+
+    let start_calculation = Instant::now();
+    parsed_data.calculate_positions();
+    let duration_calculation = start_calculation.elapsed();
+
+    let parsed_result = parsed_data.data();
+    let diagnostics = parsed_data.diagnostics();
 
     println!(
         "{}",
@@ -43,6 +50,10 @@ fn main() -> Result<()> {
     for diagnostic in diagnostics.iter() {
         println!("{}", diagnostic.yellow());
     }
+    println!(
+        "{}",
+        format!("Calculated positions in: {:?}", duration_calculation).yellow()
+    );
     println!(
         "{}",
         format!("Total decoding time: {:?}", duration_parse).yellow()
