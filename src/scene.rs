@@ -7,7 +7,6 @@ use crate::camera::CameraPlugin;
 use crate::loading::TextureAssets;
 use crate::AppState;
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts};
 use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
 
 pub struct ScenePlugin;
@@ -21,15 +20,8 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((CameraPlugin, InfiniteGridPlugin));
         app.add_systems(OnEnter(AppState::Active), spawn_scene)
-            .add_systems(Update, ui_hello_world.run_if(in_state(AppState::Active)))
             .add_systems(Update, move_torus.run_if(in_state(AppState::Active)));
     }
-}
-
-fn ui_hello_world(mut egui_contexts: EguiContexts) {
-    egui::Window::new("Hello").show(egui_contexts.ctx_mut(), |ui| {
-        ui.label("Hello World!");
-    });
 }
 
 fn spawn_scene(
