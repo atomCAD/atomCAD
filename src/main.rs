@@ -18,7 +18,7 @@ use winit::window::Icon;
 
 fn main() {
     App::new()
-        .insert_resource(WinitSettings::desktop_app())
+        .insert_resource(WinitSettings::game())
         .insert_resource(Msaa::Off)
         .insert_resource(ClearColor(Color::BLACK))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -31,11 +31,12 @@ fn main() {
                     min_height: 480.,
                     ..default()
                 },
-                // Turn off vsync to maximize CPU/GPU usage and prevent the
-                // application from blocking the main thread while waiting for
-                // the screen refresh.  We may want to revisit this choice
-                // later, but for now it simplifies development and testing.
-                present_mode: PresentMode::AutoNoVsync,
+                // Turn on vsync to prevent maxing out the CPU/GPU, unless it
+                // is actually needed to maintain an acceptable refresh rate.
+                // This has the disadvantage of blocking the main thread while
+                // waiting for the screen refresh, however, so we may want to
+                // revisit this choice later.
+                present_mode: PresentMode::AutoVsync,
                 // Bind to canvas included in `index.html` on web
                 canvas: Some("#bevy".to_owned()),
                 // Tells wasm not to override default event handling,
