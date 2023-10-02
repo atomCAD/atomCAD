@@ -9,16 +9,16 @@
 mod actions;
 mod camera;
 mod loading;
-mod menu;
 pub mod menubar;
 pub mod platform;
 pub(crate) mod platform_impl;
 mod scene;
+mod ui;
 
 use crate::actions::ActionsPlugin;
 use crate::loading::LoadingPlugin;
-use crate::menu::MenuPlugin;
 use crate::scene::ScenePlugin;
+use crate::ui::SplashScreenPlugin;
 
 use bevy::app::App;
 use bevy::prelude::*;
@@ -36,8 +36,8 @@ enum AppState {
     // During this State the scene graph is rendered and the user can interact
     // with the camera.
     Active,
-    // Here the menu is drawn and waiting for user interaction
-    Menu,
+    // Here the "Get Started" prompt is drawn and waiting for user interaction
+    SplashScreen,
 }
 
 pub struct AppPlugin;
@@ -46,7 +46,7 @@ impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<AppState>().add_plugins((
             LoadingPlugin,
-            MenuPlugin,
+            SplashScreenPlugin,
             ActionsPlugin,
             ScenePlugin,
         ));
