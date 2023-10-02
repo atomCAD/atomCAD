@@ -16,13 +16,13 @@ pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((CameraPlugin, DefaultPickingPlugins, InfiniteGridPlugin));
-        app.add_systems(OnEnter(AppState::Active), spawn_scene)
+        app.add_systems(OnEnter(AppState::Active), setup_molecular_view)
             .add_systems(OnEnter(AppState::Active), init_molecule)
             .add_systems(Update, molecule_builder.run_if(in_state(AppState::Active)));
     }
 }
 
-fn spawn_scene(mut commands: Commands) {
+fn setup_molecular_view(mut commands: Commands) {
     // infinite grid
     commands.spawn(InfiniteGridBundle {
         transform: Transform::from_xyz(0.0, 0.0, 0.0),
