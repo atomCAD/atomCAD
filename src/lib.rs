@@ -7,7 +7,6 @@
 #![allow(clippy::type_complexity)]
 
 mod actions;
-mod audio;
 mod camera;
 mod loading;
 mod menu;
@@ -17,7 +16,6 @@ pub(crate) mod platform_impl;
 mod scene;
 
 use crate::actions::ActionsPlugin;
-use crate::audio::InternalAudioPlugin;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
 use crate::scene::ScenePlugin;
@@ -50,7 +48,6 @@ impl Plugin for AppPlugin {
             LoadingPlugin,
             MenuPlugin,
             ActionsPlugin,
-            InternalAudioPlugin,
             ScenePlugin,
         ));
     }

@@ -76,7 +76,6 @@ bevy_egui = { version = "0.21", default-features = false, features = [
     "default_fonts"
 ] }
 bevy_infinite_grid = { version = "0.8" }
-bevy_kira_audio = { version = "0.16" }
 bevy_mod_picking = { workspace = true }
 common = { workspace = true }
 molecule = { workspace = true }
