@@ -147,7 +147,7 @@ impl Element {
 }
 
 pub struct PeriodicTable {
-    pub element_reprs: Vec<ElementRepr>,
+    pub element_reprs: [ElementRepr; Element::MAX as usize],
 }
 
 impl PeriodicTable {
@@ -161,13 +161,10 @@ impl PeriodicTable {
             }
         }
 
-        let mut element_reprs = vec![
-            ElementRepr {
-                color: rgb(0, 0, 0), // black
-                radius: 1.0,
-            };
-            Element::MAX as usize
-        ];
+        let mut element_reprs = [ElementRepr {
+            color: rgb(0, 0, 0), // black
+            radius: 1.0,
+        }; Element::MAX as usize];
 
         // Main group elements
         // Colors: https://jmol.sourceforge.net/jscolors/
