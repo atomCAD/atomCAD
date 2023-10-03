@@ -68,6 +68,21 @@ pub struct PbrCache {
     atoms: HashMap<Element, PbrBundle>,
 }
 
+const ATOM_HIGHLIGHTING: Highlight<StandardMaterial> = Highlight {
+    hovered: Some(HighlightKind::new_dynamic(|orig| StandardMaterial {
+        base_color: orig.base_color * 2.,
+        ..orig.to_owned()
+    })),
+    pressed: Some(HighlightKind::new_dynamic(|orig| StandardMaterial {
+        base_color: orig.base_color * 6.,
+        ..orig.to_owned()
+    })),
+    selected: Some(HighlightKind::new_dynamic(|orig| StandardMaterial {
+        base_color: orig.base_color * 1.5,
+        ..orig.to_owned()
+    })),
+};
+
 /// The `ClickFlag` indicates that the user clicked on an `Entity`, and that
 /// this event is yet to be handled. Remove this flag if your system handled
 /// the click.
@@ -106,6 +121,9 @@ pub fn molecule_builder(
                 Atom {
                     element: Element::Carbon,
                 },
+                PickableBundle::default(),
+                RaycastPickTarget::default(),
+                ATOM_HIGHLIGHTING,
             ))
             .id();
 
@@ -117,10 +135,12 @@ pub fn molecule_builder(
         let bonding_site = commands
             .spawn((
                 bonding_site,
+                PickableBundle::default(),
                 RaycastPickTarget::default(),
                 On::<Pointer<Click>>::target_commands_mut(|_event, target_commands| {
                     target_commands.insert(ClickFlag);
                 }),
+                ATOM_HIGHLIGHTING,
             ))
             .id();
 
@@ -191,6 +211,9 @@ pub fn init_molecule(
     let initial_carbon = commands
         .spawn((
             carbon_pbr,
+            PickableBundle::default(),
+            RaycastPickTarget::default(),
+            ATOM_HIGHLIGHTING,
             Atom {
                 element: Element::Carbon,
             },
@@ -203,10 +226,12 @@ pub fn init_molecule(
     let initial_bonding_site = commands
         .spawn((
             initial_bonding_site_pbr,
+            PickableBundle::default(),
             RaycastPickTarget::default(),
             On::<Pointer<Click>>::target_commands_mut(|_event, target_commands| {
                 target_commands.insert(ClickFlag);
             }),
+            ATOM_HIGHLIGHTING,
         ))
         .id();
 
