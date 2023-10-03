@@ -166,7 +166,7 @@ impl PeriodicTable {
                 color: rgb(0, 0, 0), // black
                 radius: 1.0,
             };
-            118
+            Element::MAX as usize
         ];
 
         // Main group elements
