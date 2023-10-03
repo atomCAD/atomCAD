@@ -37,7 +37,7 @@ bevy = { version = "0.11", default-features = false, features = [
     "tonemapping_luts",
     "webgl2"
 ] }
-bevy_mod_picking = { version = "0.15.0", features = ["backend_raycast"] }
+bevy_mod_picking = { version = "0.15.0", default-features = false, features = ["backend_raycast", "backend_bevy_ui", "backend_sprite", "selection", "highlight"] }
 common = { package = "atomcad-common", path = "crates/common" }
 molecule = { package = "atomcad-molecule", path = "crates/molecule" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
