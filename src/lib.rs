@@ -17,6 +17,7 @@ mod ui;
 
 use crate::actions::ActionsPlugin;
 use crate::loading::LoadingPlugin;
+use crate::menubar::MenuBarPlugin;
 use crate::scene::ScenePlugin;
 use crate::ui::SplashScreenPlugin;
 
@@ -47,6 +48,7 @@ impl Plugin for AppPlugin {
         app.add_state::<AppState>().add_plugins((
             ActionsPlugin,
             LoadingPlugin,
+            MenuBarPlugin,
             ScenePlugin,
             SplashScreenPlugin,
         ));

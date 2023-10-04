@@ -5,6 +5,19 @@
 use crate::{platform::menubar::attach_menu, APP_NAME};
 use bevy::{prelude::*, winit::WinitWindows};
 
+/// This plugin is responsible for the initializing the application's menu
+/// bar, attaching it to the primary window, and handling any keyboard
+/// shortcut or menu selection events.
+pub struct MenuBarPlugin;
+
+impl Plugin for MenuBarPlugin {
+    fn build(&self, app: &mut App) {
+        // Setup the menu bar, and attach it to the primary window (on Windows
+        // or X11), or to the application itself (macOS).
+        app.add_systems(Startup, setup_menu_bar);
+    }
+}
+
 // A menubar is a hierarchical list of actions with attached titles and/or
 // keyboard shortcuts.  It is attached to either the application instance
 // (macOS) or the main window (Windows/Linux).
