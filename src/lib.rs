@@ -45,10 +45,10 @@ pub struct AppPlugin;
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<AppState>().add_plugins((
-            LoadingPlugin,
-            SplashScreenPlugin,
             ActionsPlugin,
+            LoadingPlugin,
             ScenePlugin,
+            SplashScreenPlugin,
         ));
     }
 }
