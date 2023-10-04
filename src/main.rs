@@ -37,10 +37,13 @@ fn main() {
                 // waiting for the screen refresh, however, so we may want to
                 // revisit this choice later.
                 present_mode: PresentMode::AutoVsync,
-                // Bind to canvas included in `index.html` on web
+                // Bind to canvas included in `index.html` on web (ignored otherwise)
                 canvas: Some("#bevy".to_owned()),
-                // Tells wasm not to override default event handling,
-                // like F5 and Ctrl+R
+                // Tells wasm not to override default event handling, like F5
+                // and Ctrl+R.  Refreshing the page would potentially lose
+                // work, and generally just waste system resources.  It's more
+                // likey that the user would do this by accident, so let's
+                // just block it off as a possibility.
                 prevent_default_event_handling: false,
                 ..default()
             }),
@@ -53,7 +56,9 @@ fn main() {
         .run();
 }
 
-// Sets the icon on windows and X11
+// Sets the icon on Windows and X11.  The icon on macOS is sourced from the
+// enclosing bundle, and is set in the Info.plist file.  That would be highly
+// platform-specific code, and handled prior to bevy startup, not here.
 fn set_window_icon(
     windows: NonSend<WinitWindows>,
     primary_window: Query<Entity, With<PrimaryWindow>>,
