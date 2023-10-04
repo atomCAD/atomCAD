@@ -178,8 +178,8 @@ pub fn init_molecule(
         bonding_site: PbrBundle {
             mesh: meshes.add(Mesh::from(shape::UVSphere {
                 radius: 0.3,
-                sectors: 8,
-                stacks: 8,
+                sectors: 24,
+                stacks: 24,
             })),
             material: materials.add(StandardMaterial::from(Color::rgb(0.6, 0.0, 0.0))),
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
@@ -193,8 +193,8 @@ pub fn init_molecule(
         PbrBundle {
             mesh: meshes.add(Mesh::from(shape::UVSphere {
                 radius: carbon.radius,
-                sectors: 8,
-                stacks: 8,
+                sectors: 60,
+                stacks: 60,
             })),
             material: materials.add(StandardMaterial::from(Color::rgb(
                 carbon.color[0],
