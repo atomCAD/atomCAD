@@ -41,3 +41,6 @@ Parsed results are available via abstraction layer of `ParsedData` struct. Upon 
 ### Benchmark utility
 
 See [src/bin/README.md](src/bin/README.md) benchmark utility for the code examples.
+
+### TODO
+- Improve testing suite to validate calculated absolute positions vs original data
