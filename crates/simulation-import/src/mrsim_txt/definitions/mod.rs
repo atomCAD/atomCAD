@@ -8,12 +8,18 @@ use std::collections::HashMap;
 use crate::mrsim_txt::utils::deserialize_space_separated_ints;
 use crate::mrsim_txt::utils::parse_coordinates;
 
+// Represents the primary parsed data structure containing the original raw data,
+// diagnostics, and a status flag to indicate whether the absolute coordinates have
+// been calculated.
 pub struct ParsedData {
     pub data: MrSimTxt,
     pub diagnostics: Diagnostics,
     pub has_calculated_coordinates: bool,
 }
 
+// The main data structure encapsulating the parsed content of a mrsim-txt file.
+// This includes specifications, headers, optional metadata, clusters.
+// Calculated values are populated on demand and will hold absolute atoms' positions.
 #[derive(Debug, Deserialize)]
 pub struct MrSimTxt {
     pub specification: Option<Vec<String>>,
@@ -25,6 +31,9 @@ pub struct MrSimTxt {
     pub calculated: Calculated,
 }
 
+// Defines the header section of a mrsim-txt file.
+// See the format documentation at
+// https://github.com/philipturner/molecular-renderer/blob/main/Documentation/MRSimulation.md
 #[derive(Debug, Deserialize)]
 pub struct Header {
     #[serde(rename = "frame time in femtoseconds")]
@@ -42,6 +51,7 @@ pub struct Header {
 #[derive(Debug, Deserialize)]
 pub struct Metadata {}
 
+// Represents post-parsing processing to capture absolute atoms positions
 #[derive(Default, Debug)]
 pub struct Calculated {
     pub x: HashMap<usize, Vec<i32>>,
@@ -75,6 +85,7 @@ pub struct Atoms {
     pub flags: Vec<i32>,
 }
 
+// A structure to capture diagnostic messages or errors generated during the parsing process.
 #[derive(Default)]
 pub struct Diagnostics {
     pub messages: Vec<String>,

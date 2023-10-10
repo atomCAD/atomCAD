@@ -10,6 +10,9 @@ mod tests {
     use super::*;
     use std::fs;
 
+    // basic test to check if the parser works
+    // can be used with `--nocapture` flag to see the output
+    // example usage: `cargo test -- --nocapture`
     #[test]
     fn test_parser() {
         let sample_yaml_path = "./tests/assets/StrainedShellBearing-15ps.mrsim-txt";

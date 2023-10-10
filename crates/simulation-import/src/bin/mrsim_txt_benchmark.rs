@@ -19,7 +19,7 @@ fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    let _program_name = args_iter.next().unwrap(); // Skip program name
+    let _program_name = args_iter.next().unwrap(); // Skip program name in argument list
     let file_path = args_iter.next().unwrap();
     println!("{}", format!("Loading file: {}...", file_path).green());
     println!();
@@ -32,10 +32,12 @@ fn main() -> Result<()> {
     let content = fs::read_to_string(file_path)?;
     let duration_load = start_load.elapsed();
 
+    // Parse the content and populate raw structures
     let start_parse = Instant::now();
     let mut parsed_data = ParsedData::new(&content).unwrap();
     let duration_parse = start_parse.elapsed();
 
+    // Calculate absolute positions
     let start_calculation = Instant::now();
     parsed_data.calculate_positions();
     let duration_calculation = start_calculation.elapsed();

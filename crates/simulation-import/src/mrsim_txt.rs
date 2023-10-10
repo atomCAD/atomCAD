@@ -30,32 +30,8 @@ impl MrSimTxt {
         &self.calculated
     }
 }
-// pub trait ParsedFormat {
-//     fn specification(&self) -> Option<&Vec<String>>;
-//     fn header(&self) -> &Header;
-//     fn metadata(&self) -> Option<&Metadata>;
-//     fn clusters(&self) -> &HashMap<usize, FrameCluster>;
-//     fn calculated(&self) -> &Calculated;
-// }
 
-// impl ParsedFormat for MrSimTxt {
-//     fn specification(&self) -> Option<&Vec<String>> {
-//         self.specification.as_ref()
-//     }
-//     fn header(&self) -> &Header {
-//         &self.header
-//     }
-//     fn metadata(&self) -> Option<&Metadata> {
-//         self.metadata.as_ref()
-//     }
-//     fn clusters(&self) -> &HashMap<usize, FrameCluster> {
-//         &self.clusters
-//     }
-//     fn calculated(&self) -> &Calculated {
-//         &self.calculated
-//     }
-// }
-
+// This is the core abstraction that should be used by any external application
 impl ParsedData {
     pub fn data(&self) -> &MrSimTxt {
         &self.data
@@ -220,6 +196,8 @@ impl Diagnostics {
     }
 }
 
+// This method splits a YAML string into non-cluster and cluster sections
+// Individual cluster sections are used later to parallelize the parsing process
 fn split_yaml(yaml: &str) -> (String, Vec<String>) {
     let mut non_cluster = String::new();
     let mut clusters = Vec::new();
@@ -272,6 +250,9 @@ fn frame_clusters_deserializer(
     Ok(ordered_map)
 }
 
+// Main parsing function
+// Converts a given YAML string into MrSimTxt and Diagnostics structures
+// It uses clusters' parallel processing for efficient parsing of large datasets
 pub fn parse(yaml: &str) -> Result<(MrSimTxt, Diagnostics), serde_yaml::Error> {
     let mut diagnostics = Diagnostics::new();
 
