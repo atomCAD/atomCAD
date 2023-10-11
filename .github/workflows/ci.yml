@@ -54,17 +54,17 @@ jobs:
             i686-pc-windows-gnu
             aarch64-pc-windows-msvc
             wasm32-unknown-unknown
+      - name: Setup Ninja
+        if: runner.os == 'windows'
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
       - uses: dtolnay/rust-toolchain@master
         if: runner.os == 'windows'
         with:
           toolchain: stable
           targets: |
             wasm32-unknown-unknown
-      - name: Setup Ninja
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          # ninja version to download. Default: 1.10.0
-          version: 1.10.0
       - name: Install alsa and udev
         if: runner.os == 'linux'
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
