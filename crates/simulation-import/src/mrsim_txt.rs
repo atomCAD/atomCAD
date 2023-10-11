@@ -68,22 +68,22 @@ impl ParsedData {
 
         for (k, v) in x_coordinates.iter() {
             let mut new_frame = Vec::with_capacity(v.len());
-            for i in 0..v.len() {
-                new_frame.push(v[i] + 1);
+            for &value in v.iter() {
+                new_frame.push(value + 1);
             }
             x.insert(*k, new_frame);
         }
         for (k, v) in y_coordinates.iter() {
             let mut new_frame = Vec::with_capacity(v.len());
-            for i in 0..v.len() {
-                new_frame.push(v[i] + 2);
+            for &value in v.iter() {
+                new_frame.push(value + 2);
             }
             y.insert(*k, new_frame);
         }
         for (k, v) in z_coordinates.iter() {
             let mut new_frame = Vec::with_capacity(v.len());
-            for i in 0..v.len() {
-                new_frame.push(v[i] + 3);
+            for &value in v.iter() {
+                new_frame.push(value + 3);
             }
             z.insert(*k, new_frame);
         }
