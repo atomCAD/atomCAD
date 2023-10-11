@@ -60,16 +60,6 @@ jobs:
         with:
           version: 1.11.1
           dest: ${{ github.workspace }}/ninja_bin
-      - name: Check Ninja Absolute Path
-        if: runner.os == 'windows'
-        run: |
-          echo "---"
-          Get-Command ninja | ForEach-Object { $_.Path }
-          echo "---"
-          $ninjaPath = (Get-Command ninja).Path
-          $ninjaDir = [System.IO.Path]::GetDirectoryName($ninjaPath)
-          echo "$ninjaDir"
-          echo "---"
       - uses: dtolnay/rust-toolchain@master
         if: runner.os == 'windows'
         with:
