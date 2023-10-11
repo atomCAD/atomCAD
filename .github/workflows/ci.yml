@@ -59,6 +59,12 @@ jobs:
         uses: ashutoshvarma/setup-ninja@master
         with:
           version: 1.11.1
+      - name: Check Ninja Installation
+        if: runner.os == 'windows'
+        run: |
+          where ninja
+          ninja --version
+          echo $Env:PATH
       - uses: dtolnay/rust-toolchain@master
         if: runner.os == 'windows'
         with:
