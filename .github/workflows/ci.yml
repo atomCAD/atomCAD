@@ -60,6 +60,11 @@ jobs:
           toolchain: stable
           targets: |
             wasm32-unknown-unknown
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          # ninja version to download. Default: 1.10.0
+          version: 1.10.0
       - name: Install alsa and udev
         if: runner.os == 'linux'
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
