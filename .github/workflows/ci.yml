@@ -59,6 +59,7 @@ jobs:
         uses: ashutoshvarma/setup-ninja@master
         with:
           version: 1.11.1
+          dest: ${{ github.workspace }}/ninja_bin
       - name: Check Ninja Absolute Path
         if: runner.os == 'windows'
         run: |
