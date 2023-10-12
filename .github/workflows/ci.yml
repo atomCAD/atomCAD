@@ -54,6 +54,12 @@ jobs:
             i686-pc-windows-gnu
             aarch64-pc-windows-msvc
             wasm32-unknown-unknown
+      - name: Setup Ninja
+        if: runner.os == 'windows'
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
+          dest: ${{ github.workspace }}/ninja_bin
       - uses: dtolnay/rust-toolchain@master
         if: runner.os == 'windows'
         with:
