@@ -4,6 +4,7 @@
 
 use bevy::{
     input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
+    input::touchpad::{TouchpadMagnify, TouchpadRotate},
     prelude::*,
 };
 // Most of the heavy lifting is accomplished by the smooth_bevy_cameras crate.
@@ -110,13 +111,17 @@ pub struct CadViewControllerSettings {
     /// current view plane.  If `alt_button` is pressed, this button is used to
     /// orbit the camera instead.
     pub pan_button: MouseButton,
-    /// The sensitivity of the mouse / touchpad when orbiting the camera.
-    pub rotate_sensitivity: Vec2,
+    /// The sensitivity of the mouse / touchpad clicks when orbiting the camera.
+    pub mouse_rotate_sensitivity: Vec2,
+    /// The sensitivity of touchpad gestures when orbiting the camera.
+    pub touchpad_rotate_sensitivity: f32,
     /// The sensitivity of the mouse / touchpad when panning the camera.
     pub translate_sensitivity: Vec2,
     /// The sensitivity of the mouse wheel / two finger touch when zooming the
     /// camera.
-    pub zoom_sensitivity: f32,
+    pub wheel_zoom_sensitivity: f32,
+    /// The sensitivity of the pinch gesture for zooming the camera.
+    pub pinch_zoom_sensitivity: f32,
     /// Some mice wheels report motion as the number of lines to scroll (in a
     /// more traditional text editor or web browser applicaiton), while others
     /// offer more granular reporting as the number of pixels to scroll.  This
@@ -141,9 +146,11 @@ impl Default for CadViewControllerSettings {
             alt_button: KeyCode::ControlLeft,
             orbit_button: MouseButton::Left,
             pan_button: MouseButton::Right,
-            rotate_sensitivity: Vec2::splat(1.),
+            mouse_rotate_sensitivity: Vec2::splat(1.),
+            touchpad_rotate_sensitivity: 4.,
             translate_sensitivity: Vec2::splat(0.15),
-            zoom_sensitivity: 0.005,
+            wheel_zoom_sensitivity: 0.005,
+            pinch_zoom_sensitivity: 4.,
             pixels_per_line: 32.0,
             min_zoom: 0.1,
             max_zoom: 1000.0,
@@ -173,10 +180,13 @@ enum CadViewControlEvent {
     Zoom(f32),
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cad_view_input_handler(
     mut events: EventWriter<CadViewControlEvent>,
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
+    mut ev_magnify: EventReader<TouchpadMagnify>,
+    mut ev_rotate: EventReader<TouchpadRotate>,
     mouse_buttons: Res<Input<MouseButton>>,
     keyboard: Res<Input<KeyCode>>,
     controllers: Query<(&CadViewController, &CadViewControllerSettings)>,
@@ -194,15 +204,19 @@ fn cad_view_input_handler(
         alt_button,
         orbit_button,
         pan_button,
-        rotate_sensitivity,
+        mouse_rotate_sensitivity,
+        touchpad_rotate_sensitivity,
         translate_sensitivity,
-        zoom_sensitivity,
+        wheel_zoom_sensitivity,
+        pinch_zoom_sensitivity,
         pixels_per_line,
         ..
     } = *settings;
 
     // How much has the mouse moved?
     let cursor_delta: Vec2 = ev_motion.iter().map(|ev| ev.delta).sum();
+    let mut orbit = Vec2::ZERO;
+    let mut pan = Vec2::ZERO;
 
     if cursor_delta.x.abs() > 0. || cursor_delta.y.abs() > 0. {
         let alt_pressed = keyboard.pressed(alt_button);
@@ -211,16 +225,29 @@ fn cad_view_input_handler(
 
         // If the orbit button is pressed, orbit the camera.
         if (!alt_pressed && orbit_pressed) || (alt_pressed && pan_pressed) {
-            events.send(CadViewControlEvent::Orbit(
-                cursor_delta * rotate_sensitivity,
-            ));
+            orbit += cursor_delta * mouse_rotate_sensitivity;
         }
         // If the pan button is pressed, translate the camera target.
         if (!alt_pressed && pan_pressed) || (alt_pressed && orbit_pressed) {
-            events.send(CadViewControlEvent::Pan(
-                cursor_delta * translate_sensitivity,
-            ));
+            pan += cursor_delta * translate_sensitivity;
         }
+    }
+
+    // Apply orbit if the user did a rotation gesture on the touchpad.
+    orbit += Vec2::X
+        * (ev_rotate
+            .iter()
+            .map(|ev| ev.0 * touchpad_rotate_sensitivity)
+            .sum::<f32>());
+
+    // Send the orbit only if it represents a change to the viewport.
+    if orbit.x.abs() > 0. || orbit.y.abs() > 0. {
+        events.send(CadViewControlEvent::Orbit(orbit));
+    }
+
+    // Send the pan event only if a translation has been applied
+    if pan.x.abs() > 0. || pan.y.abs() > 0. {
+        events.send(CadViewControlEvent::Pan(pan));
     }
 
     // How much has the scroll wheel rotated?
@@ -231,8 +258,15 @@ fn cad_view_input_handler(
             MouseScrollUnit::Line => ev.y * pixels_per_line,
             MouseScrollUnit::Pixel => ev.y,
         })
-        .map(|x| 1. - x * zoom_sensitivity)
+        .map(|x| 1. - x * wheel_zoom_sensitivity)
         .product();
+
+    // How much has the user pinched the touchpad?
+    let scroll: f32 = scroll
+        * ev_magnify
+            .iter()
+            .map(|ev| 1. - ev.0 * pinch_zoom_sensitivity)
+            .product::<f32>();
 
     // If the scroll wheel moved, zoom the camera.
     if scroll.abs() > 0. {
