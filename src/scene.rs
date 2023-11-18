@@ -8,7 +8,6 @@ use bevy::{
     core_pipeline::{bloom::BloomSettings, tonemapping::Tonemapping},
     prelude::*,
 };
-use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
 use bevy_mod_picking::prelude::*;
 use molecule::{init_molecule, molecule_builder};
 
@@ -18,7 +17,7 @@ pub struct ScenePlugin;
 /// Scene logic is only active during the State `AppState::Active`
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((CameraPlugin, DefaultPickingPlugins, InfiniteGridPlugin))
+        app.add_plugins((CameraPlugin, DefaultPickingPlugins))
             .add_systems(OnEnter(AppState::Active), setup_molecular_view)
             .add_systems(OnEnter(AppState::Active), init_molecule)
             .add_systems(Update, molecule_builder.run_if(in_state(AppState::Active)))
@@ -68,12 +67,6 @@ fn setup_molecular_view(mut commands: Commands) {
             target,
             up,
         ));
-
-    // infinite grid
-    commands.spawn(InfiniteGridBundle {
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
-        ..default()
-    });
 
     // light source
     commands.spawn((
