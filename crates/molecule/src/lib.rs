@@ -122,7 +122,6 @@ pub fn molecule_builder(
                     element: Element::Carbon,
                 },
                 PickableBundle::default(),
-                RaycastPickTarget::default(),
                 ATOM_HIGHLIGHTING,
             ))
             .id();
@@ -136,7 +135,6 @@ pub fn molecule_builder(
             .spawn((
                 bonding_site,
                 PickableBundle::default(),
-                RaycastPickTarget::default(),
                 On::<Pointer<Click>>::target_commands_mut(|_event, target_commands| {
                     target_commands.insert(ClickFlag);
                 }),
@@ -212,7 +210,6 @@ pub fn init_molecule(
         .spawn((
             carbon_pbr,
             PickableBundle::default(),
-            RaycastPickTarget::default(),
             ATOM_HIGHLIGHTING,
             Atom {
                 element: Element::Carbon,
@@ -227,7 +224,6 @@ pub fn init_molecule(
         .spawn((
             initial_bonding_site_pbr,
             PickableBundle::default(),
-            RaycastPickTarget::default(),
             On::<Pointer<Click>>::target_commands_mut(|_event, target_commands| {
                 target_commands.insert(ClickFlag);
             }),
@@ -263,7 +259,6 @@ pub fn init_molecule(
         // position themselves. There might be a name for this bundle -
         // in Godot, it would be something like `Spatial`
         Visibility::default(),
-        ComputedVisibility::default(),
         GlobalTransform::default(),
         Transform::default(),
     ));

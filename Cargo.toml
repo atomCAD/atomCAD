@@ -16,33 +16,32 @@ members = [
 ]
 
 [workspace.dependencies]
-bevy = { version = "0.11", default-features = false, features = [
+bevy = { version = "0.12", default-features = false, features = [
     "animation",
     "bevy_asset",
-    "bevy_scene",
-    "bevy_winit",
     "bevy_core_pipeline",
-    "bevy_pbr",
     "bevy_gltf",
+    "bevy_pbr",
     "bevy_render",
+    "bevy_scene",
     "bevy_sprite",
     "bevy_text",
     "bevy_ui",
-    "png",
+    "bevy_winit",
     "hdr",
-    "zstd",
-    "x11",
     "ktx2",
-    "filesystem_watcher",
+    "png",
     "tonemapping_luts",
-    "webgl2"
+    "webgl2",
+    "x11",
+    "zstd",
 ] }
-bevy_mod_picking = { version = "0.15.0", default-features = false, features = [
+bevy_mod_picking = { version = "0.17", default-features = false, features = [
     "backend_raycast",
     "backend_bevy_ui",
     "backend_sprite",
     "highlight",
-    "selection"
+    "selection",
 ] }
 common = { package = "atomcad-common", path = "crates/common" }
 molecule = { package = "atomcad-molecule", path = "crates/molecule" }
@@ -71,13 +70,14 @@ lto = "thin"
 
 [features]
 dev = [
-    "bevy/bevy_dylib",
+    "bevy/dynamic_linking",
+    "bevy/file_watcher",
 ]
 
 [dependencies]
 bevy = { workspace = true }
-bevy_asset_loader = { version = "0.17" }
-bevy_egui = { version = "0.21", default-features = false, features = [
+bevy_asset_loader = { version = "0.18" }
+bevy_egui = { version = "0.23", default-features = false, features = [
     "open_url",
     "default_fonts"
 ] }
@@ -86,7 +86,7 @@ common = { workspace = true }
 molecule = { workspace = true }
 periodic-table = { workspace = true }
 rand = { version = "0.8.3" }
-smooth-bevy-cameras = { version = "0.9" }
+smooth-bevy-cameras = { version = "0.10" }
 
 # keep the following in sync with Bevy's dependencies
 winit = { version = "0.28", default-features = false }

@@ -53,8 +53,6 @@ fn setup_molecular_view(mut commands: Commands) {
                 tonemapping: Tonemapping::TonyMcMapface,
                 ..Default::default()
             },
-            // Enable picking from this camera view.
-            RaycastPickCamera::default(),
             // Enable bloom effects with default settings.
             BloomSettings::default(),
         ))
