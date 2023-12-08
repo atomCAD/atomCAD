@@ -11,6 +11,14 @@ fn main() {
         // on windows we will set our app icon as icon for the executable
         embed_resource::compile("build/windows/icon.rc");
     }
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let profile = env::var("PROFILE").unwrap();
+    if !target_arch.contains("wasm") && profile.contains("debug") {
+        // Use dynamic linking for faster recompilation
+        println!("cargo:rustc-cfg=feature=\"bevy/dynamic_linking\"");
+        // Enable bevy's asset hot-reloading capability
+        println!("cargo:rustc-cfg=feature=\"bevy/file_watcher\"");
+    }
 }
 
 // End of File

@@ -214,7 +214,7 @@ fn cad_view_input_handler(
     } = *settings;
 
     // How much has the mouse moved?
-    let cursor_delta: Vec2 = ev_motion.iter().map(|ev| ev.delta).sum();
+    let cursor_delta: Vec2 = ev_motion.read().map(|ev| ev.delta).sum();
     let mut orbit = Vec2::ZERO;
     let mut pan = Vec2::ZERO;
 
@@ -236,7 +236,7 @@ fn cad_view_input_handler(
     // Apply orbit if the user did a rotation gesture on the touchpad.
     orbit += Vec2::X
         * (ev_rotate
-            .iter()
+            .read()
             .map(|ev| ev.0 * touchpad_rotate_sensitivity)
             .sum::<f32>());
 
@@ -252,7 +252,7 @@ fn cad_view_input_handler(
 
     // How much has the scroll wheel rotated?
     let scroll: f32 = ev_scroll
-        .iter()
+        .read()
         .map(|ev| match ev.unit {
             // Some mice report lines scrolled, some report pixels.
             MouseScrollUnit::Line => ev.y * pixels_per_line,
@@ -264,7 +264,7 @@ fn cad_view_input_handler(
     // How much has the user pinched the touchpad?
     let scroll: f32 = scroll
         * ev_magnify
-            .iter()
+            .read()
             .map(|ev| 1. - ev.0 * pinch_zoom_sensitivity)
             .product::<f32>();
 
@@ -304,7 +304,7 @@ fn cad_view_controller(
     let radius = look_transform.radius();
 
     let dt = time.delta_seconds();
-    for event in events.iter() {
+    for event in events.read() {
         match event {
             CadViewControlEvent::Orbit(delta) => {
                 look_angles.add_yaw(dt * -delta.x);
