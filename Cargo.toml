@@ -68,12 +68,6 @@ codegen-units = 1
 inherits = "release"
 lto = "thin"
 
-[features]
-dev = [
-    "bevy/dynamic_linking",
-    "bevy/file_watcher",
-]
-
 [dependencies]
 bevy = { workspace = true }
 bevy_asset_loader = { version = "0.18" }
