@@ -77,9 +77,11 @@ bevy_egui = { version = "0.23", default-features = false, features = [
 ] }
 bevy_mod_picking = { workspace = true }
 common = { workspace = true }
+directories = { version = "5" }
 molecule = { workspace = true }
 periodic-table = { workspace = true }
 rand = { version = "0.8.3" }
+rusqlite = { version = "0.30" }
 smooth-bevy-cameras = { version = "0.10" }
 
 # keep the following in sync with Bevy's dependencies
