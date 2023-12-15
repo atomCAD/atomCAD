@@ -8,7 +8,7 @@
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
 use bevy::{
     prelude::*,
-    window::{PresentMode, PrimaryWindow},
+    window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution},
     winit::{WinitSettings, WinitWindows},
     DefaultPlugins,
 };
@@ -16,7 +16,29 @@ use bevy_egui::EguiPlugin;
 use std::io::Cursor;
 use winit::window::Icon;
 
+struct AppConfig {
+    /// The resolution of the primary window, as reported by windowing system.
+    window_resolution: Vec2,
+    /// The position of the top-left corner of the primary window, as reported
+    /// by the windowing system.
+    window_position: IVec2,
+    /// Whether the primary window should be fullscreen.
+    fullscreen: bool,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            window_resolution: (-1., -1.).into(),
+            window_position: (-1, -1).into(),
+            fullscreen: false,
+        }
+    }
+}
+
 fn main() {
+    let app_config = AppConfig::default();
+
     App::new()
         .insert_resource(WinitSettings::game())
         .insert_resource(Msaa::Off)
@@ -25,7 +47,23 @@ fn main() {
             primary_window: Some(Window {
                 title: APP_NAME.into(),
                 // FIXME: this should be read from a persistent settings file
-                resolution: (800., 600.).into(),
+                resolution: if app_config.window_resolution.x < 0.
+                    || app_config.window_resolution.y < 0.
+                {
+                    WindowResolution::default()
+                } else {
+                    app_config.window_resolution.into()
+                },
+                position: if app_config.window_position.x < 0 && app_config.window_position.y < 0 {
+                    WindowPosition::Automatic
+                } else {
+                    WindowPosition::At(app_config.window_position)
+                },
+                mode: if app_config.fullscreen {
+                    WindowMode::BorderlessFullscreen
+                } else {
+                    WindowMode::Windowed
+                },
                 resize_constraints: WindowResizeConstraints {
                     min_width: 640.,
                     min_height: 480.,
