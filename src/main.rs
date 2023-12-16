@@ -7,20 +7,19 @@
 
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
 use bevy::{
-    app::AppExit,
     prelude::*,
     window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution},
     winit::{WinitSettings, WinitWindows},
     DefaultPlugins,
 };
 use bevy_egui::EguiPlugin;
-use directories::ProjectDirs;
 use std::io::Cursor;
 use winit::window::Icon;
 
 #[derive(Resource)]
 struct AppConfig {
     /// The primary key of the app_config table in the sqlite3 config database.
+    #[allow(dead_code)]
     id: i32,
     /// The resolution of the primary window, as reported by windowing system.
     window_resolution: Vec2,
@@ -43,6 +42,7 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     fn load_from_sqlite<P>(path: P) -> Self
     where
         P: AsRef<std::path::Path>,
@@ -112,6 +112,7 @@ impl AppConfig {
         }
     }
 
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     fn save_to_sqlite<P>(&self, path: P)
     where
         P: AsRef<std::path::Path>,
@@ -168,6 +169,7 @@ impl AppConfig {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn update_app_config(
     mut app_config: ResMut<AppConfig>,
     windows: NonSend<WinitWindows>,
@@ -198,18 +200,23 @@ fn update_app_config(
     };
 }
 
-fn save_app_config(app_config: ResMut<AppConfig>, app_exit_events: EventReader<AppExit>) {
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn save_app_config(
+    app_config: ResMut<AppConfig>,
+    app_exit_events: EventReader<bevy::app::AppExit>,
+) {
     // Only run when the app is exiting.
     if app_exit_events.is_empty() {
         return;
     }
 
     // Create config directory if it doesn't exist.
-    let config_dir = if let Some(project_dirs) = ProjectDirs::from("org", "atomcad", "atomCAD") {
-        project_dirs.config_dir().to_owned()
-    } else {
-        std::path::PathBuf::from(".")
-    };
+    let config_dir =
+        if let Some(project_dirs) = directories::ProjectDirs::from("org", "atomcad", "atomCAD") {
+            project_dirs.config_dir().to_owned()
+        } else {
+            std::path::PathBuf::from(".")
+        };
     if !config_dir.exists() {
         if let Err(err) = std::fs::create_dir_all(&config_dir) {
             info!(
@@ -227,16 +234,24 @@ fn save_app_config(app_config: ResMut<AppConfig>, app_exit_events: EventReader<A
 }
 
 fn main() {
-    let config_dir = if let Some(project_dirs) = ProjectDirs::from("org", "atomcad", "atomCAD") {
-        project_dirs.config_dir().to_owned()
-    } else {
-        std::path::PathBuf::from(".")
-    };
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    let config_dir =
+        if let Some(project_dirs) = directories::ProjectDirs::from("org", "atomcad", "atomCAD") {
+            project_dirs.config_dir().to_owned()
+        } else {
+            std::path::PathBuf::from(".")
+        };
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let settings_db = config_dir.join("settings.sqlite3");
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let app_config = AppConfig::load_from_sqlite(settings_db);
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    let app_config = AppConfig::default();
 
-    App::new()
-        .insert_resource(WinitSettings::game())
+    let mut app = App::new();
+
+    // Platform-independent setup code.
+    app.insert_resource(WinitSettings::game())
         .insert_resource(Msaa::Off)
         .insert_resource(ClearColor(Color::BLACK))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -285,11 +300,16 @@ fn main() {
         .add_plugins(PlatformTweaks)
         .add_plugins(EguiPlugin)
         .add_plugins(AppPlugin)
-        .add_systems(Startup, set_window_icon)
+        .add_systems(Startup, set_window_icon);
+
+    // Application settings are only persisted on desktop platforms.
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    let app = app
         .insert_resource(app_config)
         .add_systems(Update, update_app_config)
-        .add_systems(Last, save_app_config)
-        .run();
+        .add_systems(Last, save_app_config);
+
+    app.run();
 }
 
 // Sets the icon on Windows and X11.  The icon on macOS is sourced from the

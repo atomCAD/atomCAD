@@ -44,9 +44,11 @@ bevy_mod_picking = { version = "0.17", default-features = false, features = [
     "selection",
 ] }
 common = { package = "atomcad-common", path = "crates/common" }
+directories = { version = "5" }
 molecule = { package = "atomcad-molecule", path = "crates/molecule" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 petgraph = { version = "0.6.4" }
+rusqlite = { version = "0.30", features = ["bundled"] }
 serde = { version =  "1.0" }
 static_assertions = { version = "1" }
 ultraviolet = { version = "0.9" }
@@ -77,11 +79,9 @@ bevy_egui = { version = "0.23", default-features = false, features = [
 ] }
 bevy_mod_picking = { workspace = true }
 common = { workspace = true }
-directories = { version = "5" }
 molecule = { workspace = true }
 periodic-table = { workspace = true }
 rand = { version = "0.8.3" }
-rusqlite = { version = "0.30", features = ["bundled"] }
 smooth-bevy-cameras = { version = "0.10" }
 
 # keep the following in sync with Bevy's dependencies
@@ -94,8 +94,18 @@ web-sys = { version = "0.3" }
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = { version = "0.3" }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+directories = { workspace = true }
+rusqlite = { workspace = true }
+
 [target.'cfg(target_os = "macos")'.dependencies]
+directories = { workspace = true }
 objc = "0.2.7"
+rusqlite = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+directories = { workspace = true }
+rusqlite = { workspace = true }
 
 [build-dependencies]
 embed-resource = "1.4"
