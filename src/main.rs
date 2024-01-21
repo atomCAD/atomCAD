@@ -6,6 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
+use bevy::asset::AssetMetaCheck;
 use bevy::{
     prelude::*,
     window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution},
@@ -253,6 +254,7 @@ fn main() {
     // Platform-independent setup code.
     app.insert_resource(WinitSettings::game())
         .insert_resource(Msaa::Off)
+        .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
