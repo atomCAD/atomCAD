@@ -14,10 +14,11 @@ pub struct LoadingPlugin;
 impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         app.add_loading_state(
-            LoadingState::new(AppState::Loading).continue_to_state(AppState::SplashScreen),
-        )
-        .add_collection_to_loading_state::<_, FontAssets>(AppState::Loading)
-        .add_collection_to_loading_state::<_, TextureAssets>(AppState::Loading);
+            LoadingState::new(AppState::Loading)
+                .continue_to_state(AppState::SplashScreen)
+                .load_collection::<FontAssets>()
+                .load_collection::<TextureAssets>(),
+        );
     }
 }
 
