@@ -143,7 +143,7 @@ jobs:
           mkdir target/release/assets && cp -r assets target/release/assets
           mkdir target/release/credits && cp -r credits target/release/credits
       - name: Zip release
-        uses: vimtor/action-zip@v1
+        uses: vimtor/action-zip@v1.1
         with:
           files: target/release/assets/ target/release/credits/ target/release/${{ env.EXECUTABLE_NAME }}.exe
           dest: ${{ env.EXECUTABLE_NAME }}_windows.zip
@@ -184,7 +184,7 @@ jobs:
       - name: Install Dependencies
         run: sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev
       - name: Install trunk
-        uses: jetli/trunk-action@v0.1.0
+        uses: jetli/trunk-action@v0.4.0
         with:
           version: latest
       - name: Add wasm target
@@ -204,7 +204,7 @@ jobs:
           sed -i 's/\/index/.\/index/g' dist/index.html
           sed -i 's/\/${{ env.EXECUTABLE_NAME }}/.\/${{ env.EXECUTABLE_NAME }}/g' dist/index.html
       - name: Zip release
-        uses: vimtor/action-zip@v1
+        uses: vimtor/action-zip@v1.1
         with:
           files: dist/
           dest: ${{ env.EXECUTABLE_NAME }}_web.zip
