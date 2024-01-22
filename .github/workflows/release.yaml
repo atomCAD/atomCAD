@@ -122,7 +122,7 @@ jobs:
     needs: get-version
     env:
       VERSION: ${{needs.get-version.outputs.version}}
-      BUILD_INSTALLER: false
+      BUILD_INSTALLER: ${{ false }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -143,20 +143,20 @@ jobs:
           mkdir target/release/assets && cp -r assets target/release/assets
           mkdir target/release/credits && cp -r credits target/release/credits
       - name: Zip release
-        uses: vimtor/action-zip@v1
+        uses: vimtor/action-zip@v1.1
         with:
           files: target/release/assets/ target/release/credits/ target/release/${{ env.EXECUTABLE_NAME }}.exe
           dest: ${{ env.EXECUTABLE_NAME }}_windows.zip
       - name: Create Installer
         if: ${{ env.BUILD_INSTALLER }}
-        run: dotnet build -p:Version=1.2.3 -c Release build/windows/installer/Installer.wixproj --output installer
+        run: dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output installer
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.EXECUTABLE_NAME }}_windows.zip
           asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_windows.zip
-          tag: ${{ github.ref }}
+          tag: ${{ env.VERSION }}
           overwrite: true
       - name: Upload installer
         if: ${{ env.BUILD_INSTALLER }}
@@ -164,7 +164,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: installer/en-US/installer.msi
-          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ steps.tag.outputs.tag }}_windows.msi
+          asset_name: ${{ env.EXECUTABLE_NAME }}_${{ env.VERSION }}_windows.msi
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
@@ -184,7 +184,7 @@ jobs:
       - name: Install Dependencies
         run: sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev
       - name: Install trunk
-        uses: jetli/trunk-action@v0.1.0
+        uses: jetli/trunk-action@v0.4.0
         with:
           version: latest
       - name: Add wasm target
@@ -197,14 +197,8 @@ jobs:
         uses: NiklasEi/wasm-opt-action@v2
         with:
           file: dist/*.wasm
-        # Trunk cannot import assets from relative paths (see e.g. https://github.com/thedodd/trunk/issues/395)
-        # On sites like itch.io, we don't know on which base path the app gets served, so we need to rewrite all links to be relative
-      - name: Make paths relative
-        run: |
-          sed -i 's/\/index/.\/index/g' dist/index.html
-          sed -i 's/\/${{ env.EXECUTABLE_NAME }}/.\/${{ env.EXECUTABLE_NAME }}/g' dist/index.html
       - name: Zip release
-        uses: vimtor/action-zip@v1
+        uses: vimtor/action-zip@v1.1
         with:
           files: dist/
           dest: ${{ env.EXECUTABLE_NAME }}_web.zip
