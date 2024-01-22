@@ -13,57 +13,57 @@ jobs:
         platform:
           - os_name: Web Assembly w/ WebGPU
             # So we can test on Safari.
-            os: macos-latest
+            os: macos-13
             target: wasm32-unknown-unknown
             rustflags: --cfg=web_sys_unstable_apis
             run_tests: false
           - os_name: Web Assembly w/ WebGL2
-            os: macos-latest
+            os: macos-13
             target: wasm32-unknown-unknown
             run_tests: false
           - os_name: Android ARMv8-A
-            os: ubuntu-latest
+            os: ubuntu-22.04
             target: aarch64-linux-android
             run_tests: true
           - os_name: iOS A7+
-            os: macos-latest
+            os: macos-13
             target: aarch64-apple-ios
             # iOS needs a custom test runner.
             run_tests: false
           - os_name: Android x86_64
-            os: ubuntu-latest
+            os: ubuntu-22.04
             target: x86_64-linux-android
             run_tests: true
           - os_name: macOS Apple Silicon
-            os: macos-latest
+            os: macos-13
             target: aarch64-apple-darwin
             # GitHub Actions' free/open-source tier does not support
             # Apple Silicon yet.
             run_tests: false
           - os_name: macOS Intel
-            os: macos-latest
+            os: macos-13
             target: x86_64-apple-darwin
             run_tests: true
           - os_name: Windows ARMv8-A
-            os: windows-latest
+            os: windows-2022
             target: aarch64-pc-windows-msvc
             # GitHub Actions' free/open-source tier does not support
             # Windows on ARM yet.
             run_tests: false
           - os_name: Windows x86_64
-            os: windows-latest
+            os: windows-2022
             target: x86_64-pc-windows-msvc
             run_tests: true
           - os_name: Linux ARMv8-A
-            os: ubuntu-latest
+            os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             run_tests: true
           - os_name: Linux ARMv7-A
-            os: ubuntu-latest
+            os: ubuntu-22.04
             target: thumbv7neon-unknown-linux-gnueabihf
             run_tests: true
           - os_name: Linux x86_64/amd64
-            os: ubuntu-latest
+            os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             run_tests: true
         toolchain:
@@ -118,7 +118,7 @@ jobs:
         run: RUSTFLAGS="${{ matrix.platform.rustflags }}" cross clippy --workspace --target ${{ matrix.platform.target }} --all-targets --all-features -- -D warnings
   rustfmt:
     name: Formatting
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - uses: actions/cache@v3
@@ -129,7 +129,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ubuntu-latest-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
+          key: ubuntu-22.04-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
