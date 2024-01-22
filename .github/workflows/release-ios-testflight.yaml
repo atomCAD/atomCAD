@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   build-for-iOS:
-    runs-on: macos-latest
+    runs-on: macos-13
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v3

@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   get-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Get tag
         id: tag
@@ -30,7 +30,7 @@ jobs:
       version: ${{ inputs.version || steps.tag.outputs.tag }}
 
   build-macOS:
-    runs-on: macos-latest
+    runs-on: macos-13
     needs: get-version
     env:
       # macOS 11.0 Big Sur is the first version to support universal binaries
@@ -81,7 +81,7 @@ jobs:
           overwrite: true
 
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: get-version
     env:
       VERSION: ${{needs.get-version.outputs.version}}
@@ -115,7 +115,7 @@ jobs:
           overwrite: true
 
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: get-version
     env:
       VERSION: ${{needs.get-version.outputs.version}}
@@ -167,7 +167,7 @@ jobs:
           overwrite: true
 
   build-web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: get-version
     env:
       VERSION: ${{needs.get-version.outputs.version}}
@@ -210,7 +210,7 @@ jobs:
           overwrite: true
 
   build-for-iOS:
-    runs-on: macos-latest
+    runs-on: macos-13
     timeout-minutes: 30
     needs: get-version
     env:
@@ -239,7 +239,7 @@ jobs:
           overwrite: true
 
   build-for-Android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     needs: get-version
     env:
