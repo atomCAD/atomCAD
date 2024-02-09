@@ -11,8 +11,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190ef93829af080fcca046c19bc80", features = [
-    "android-native-activity",
-] }
+winit = { workspace = true }
 ultraviolet = { workspace = true }
 serde = { workspace = true }

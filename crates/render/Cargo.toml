@@ -15,9 +15,7 @@ wgpu = { version = "0.17.0", features = ["webgl"] }
 futures = "0.3.28"
 static_assertions = "1"
 log = "0.4.19"
-winit = { git = "https://github.com/rust-windowing/winit", rev = "924f3323b56190ef93829af080fcca046c19bc80", features = [
-    "android-native-activity",
-] }
+winit = { workspace = true }
 parking_lot = "0.12"
 common = { workspace = true }
 periodic-table = { workspace = true }
