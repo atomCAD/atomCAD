@@ -154,7 +154,7 @@ impl Default for CadViewControllerSettings {
             pixels_per_line: 32.0,
             min_zoom: 0.1,
             max_zoom: 1000.0,
-            smoothing_weight: 0.8,
+            smoothing_weight: 0.3,
         }
     }
 }
