@@ -253,14 +253,9 @@ pub fn init_molecule(
     // unique identifiers for each molecule
     let mut molecule = commands.spawn((
         Molecule { graph: molgraph },
-        // A Visibility and ComputedVisibility are needed to make
-        // the children of the molecule (the atoms) render. A transform
-        // and global transform are needed for the child entities to
-        // position themselves. There might be a name for this bundle -
-        // in Godot, it would be something like `Spatial`
-        Visibility::default(),
-        GlobalTransform::default(),
-        Transform::default(),
+        // The spatial bundle contains both the Bevy-required scenegraph
+        // information including view transform and visibility flags.
+        SpatialBundle::default(),
     ));
 
     // Make the displayed atom gameobjects children of the molecule, allowing
