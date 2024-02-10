@@ -254,7 +254,7 @@ fn main() {
     let mut app = App::new();
 
     // Platform-independent setup code.
-    app.insert_resource(WinitSettings::game())
+    app.insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
         .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
@@ -283,12 +283,10 @@ fn main() {
                     min_height: 480.,
                     ..default()
                 },
-                // Turn on vsync to prevent maxing out the CPU/GPU, unless it
-                // is actually needed to maintain an acceptable refresh rate.
-                // This has the disadvantage of blocking the main thread while
-                // waiting for the screen refresh, however, so we may want to
-                // revisit this choice later.
-                present_mode: PresentMode::AutoVsync,
+                // Use Immediate mode (with fallbacks) for low-latency
+                // response to input.  When inactive, the famerate will be
+                // limited in any case due to the desktop_app() settings.
+                present_mode: PresentMode::AutoNoVsync,
                 // Bind to canvas included in `index.html` on web (ignored otherwise)
                 canvas: Some("#bevy".to_owned()),
                 // Tells wasm not to override default event handling, like F5
