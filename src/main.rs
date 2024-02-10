@@ -49,7 +49,7 @@ impl AppConfig {
         P: AsRef<std::path::Path>,
     {
         let defaults = Self::default();
-        match || -> rusqlite::Result<AppConfig> {
+        let result = || -> rusqlite::Result<AppConfig> {
             let conn = match rusqlite::Connection::open(&path) {
                 Ok(conn) => conn,
                 Err(err) => {
@@ -103,7 +103,8 @@ impl AppConfig {
                     .into(),
                 fullscreen: row.get::<_, bool>(5).unwrap_or(defaults.fullscreen),
             })
-        }() {
+        }();
+        match result {
             Ok(config) => config,
             Err(err) => {
                 info!("Failed to read AppConfig settings: {}", err);
@@ -118,7 +119,7 @@ impl AppConfig {
     where
         P: AsRef<std::path::Path>,
     {
-        match || -> rusqlite::Result<()> {
+        let result = || -> rusqlite::Result<()> {
             let conn = rusqlite::Connection::open(path)?;
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS app_config (
@@ -161,7 +162,8 @@ impl AppConfig {
                 }
             };
             Ok(())
-        }() {
+        }();
+        match result {
             Ok(_) => (),
             Err(err) => {
                 info!("Failed to persist AppConfig settings: {}", err);
