@@ -12,12 +12,13 @@ use bevy::{
     window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution},
     winit::{WinitSettings, WinitWindows},
     DefaultPlugins,
+    log::LogPlugin,
 };
 use bevy_egui::EguiPlugin;
 use std::io::Cursor;
 use winit::window::Icon;
 
-#[derive(Resource)]
+#[derive(Resource, Debug)]
 struct AppConfig {
     /// The primary key of the app_config table in the sqlite3 config database.
     #[allow(dead_code)]
@@ -27,6 +28,8 @@ struct AppConfig {
     /// The position of the top-left corner of the primary window, as reported
     /// by the windowing system.
     window_position: IVec2,
+    /// Whether the primary window should be maximized.
+    maximized: bool,
     /// Whether the primary window should be fullscreen.
     fullscreen: bool,
 }
@@ -37,6 +40,7 @@ impl Default for AppConfig {
             id: 1,
             window_resolution: (-1., -1.).into(),
             window_position: (-1, -1).into(),
+            maximized: false,
             fullscreen: false,
         }
     }
@@ -53,7 +57,7 @@ impl AppConfig {
             let conn = match rusqlite::Connection::open(&path) {
                 Ok(conn) => conn,
                 Err(err) => {
-                    info!(
+                    error!(
                         "Failed to open SQLite database {}: {}",
                         path.as_ref().display(),
                         err
@@ -65,7 +69,7 @@ impl AppConfig {
             let mut stmt = match conn.prepare(SQL) {
                 Ok(stmt) => stmt,
                 Err(err) => {
-                    info!(
+                    error!(
                         "Failed to prepare SQLite statement for app_config: \"{}\", {}",
                         SQL, err
                     );
@@ -75,7 +79,7 @@ impl AppConfig {
             let mut rows = match stmt.query(()) {
                 Ok(rows) => rows,
                 Err(err) => {
-                    info!(
+                    error!(
                         "Failed to execute SQLite statement for app_config: \"{}\", {}",
                         SQL, err
                     );
@@ -83,7 +87,7 @@ impl AppConfig {
                 }
             };
             let Some(row) = rows.next()? else {
-                info!(
+                warn!(
                     "No rows returned from SQLite query for app_config: \"{}\"",
                     SQL
                 );
@@ -101,14 +105,15 @@ impl AppConfig {
                     row.get::<_, i32>(4).unwrap_or(defaults.window_position.y),
                 )
                     .into(),
-                fullscreen: row.get::<_, bool>(5).unwrap_or(defaults.fullscreen),
+                maximized: row.get::<_, bool>(5).unwrap_or(defaults.maximized),
+                fullscreen: row.get::<_, bool>(6).unwrap_or(defaults.fullscreen),
             })
         }();
         match result {
             Ok(config) => config,
             Err(err) => {
-                info!("Failed to read AppConfig settings: {}", err);
-                info!("Using default AppConfig settings");
+                error!("Failed to read AppConfig settings: {}", err);
+                warn!("Using default AppConfig settings");
                 defaults
             }
         }
@@ -128,15 +133,16 @@ impl AppConfig {
                     window_resolution_y REAL,
                     window_position_x INTEGER,
                     window_position_y INTEGER,
-                    fullscreen INTEGER
+                    maximized BOOLEAN,
+                    fullscreen BOOLEAN
                 )",
                 (),
             )?;
-            const SQL: &str = "INSERT OR REPLACE INTO app_config (id, window_resolution_x, window_resolution_y, window_position_x, window_position_y, fullscreen) VALUES (?, ?, ?, ?, ?, ?)";
+            const SQL: &str = "INSERT OR REPLACE INTO app_config (id, window_resolution_x, window_resolution_y, window_position_x, window_position_y, maximized, fullscreen) VALUES (?, ?, ?, ?, ?, ?, ?)";
             let mut stmt = match conn.prepare(SQL) {
                 Ok(stmt) => stmt,
                 Err(err) => {
-                    info!(
+                    error!(
                         "Failed to prepare SQLite statement for app_config: \"{}\", {}",
                         SQL, err
                     );
@@ -149,12 +155,19 @@ impl AppConfig {
                 self.window_resolution.y,
                 self.window_position.x,
                 self.window_position.y,
-                self.fullscreen
+                self.maximized as i32,
+                self.fullscreen as i32
             ];
+
             match stmt.execute(params) {
-                Ok(_) => (),
+                Ok(_) =>
+                    // Log the compiled statement
+                    if let Some(expanded_sql) = stmt.expanded_sql() {
+                        debug!("Save Config SQL: {}", expanded_sql);
+                    }
+                ,
                 Err(err) => {
-                    info!(
+                    error!(
                         "Failed to execute SQLite statement for app_config: \"{}\", {}",
                         SQL, err
                     );
@@ -166,7 +179,7 @@ impl AppConfig {
         match result {
             Ok(_) => (),
             Err(err) => {
-                info!("Failed to persist AppConfig settings: {}", err);
+                error!("Failed to persist AppConfig settings: {}", err);
             }
         };
     }
@@ -193,10 +206,13 @@ fn update_app_config(
 
         // Record position of primary window.
         if let Ok(window_position) = primary.outer_position() {
-            if window_position.x > 0 || window_position.y > 0 {
+            if window_position.x >= 0 && window_position.y >= 0 {
                 app_config.window_position = (window_position.x, window_position.y).into();
             }
         };
+
+        // Record maximized state of primary window.
+        app_config.maximized = primary.is_maximized();
 
         // Record fullscreen state of primary window.
         app_config.fullscreen = primary.fullscreen().is_some();
@@ -222,12 +238,12 @@ fn save_app_config(
         };
     if !config_dir.exists() {
         if let Err(err) = std::fs::create_dir_all(&config_dir) {
-            info!(
+            error!(
                 "Failed to create config directory {}: {}",
                 config_dir.display(),
                 err
             );
-            info!("AppConfig will not be persisted.");
+            warn!("AppConfig will not be persisted.");
             return;
         }
     }
@@ -244,74 +260,93 @@ fn main() {
         } else {
             std::path::PathBuf::from(".")
         };
+
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let settings_db = config_dir.join("settings.sqlite3");
+    
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let app_config = AppConfig::load_from_sqlite(settings_db);
+    
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     let app_config = AppConfig::default();
 
+    #[cfg(debug_assertions)]
+    let default_plugins = DefaultPlugins.set(LogPlugin {
+        filter: format!("warn,{}=trace", env!("CARGO_PKG_NAME")).into(),
+        ..Default::default() 
+    });
+
+    let window_plugin = WindowPlugin {
+        primary_window: Some(Window {
+            title: APP_NAME.into(),
+            resolution: if app_config.window_resolution.x < 0. || app_config.window_resolution.y < 0. {
+                WindowResolution::default()
+            } else {
+                app_config.window_resolution.into()
+            },
+            position: if app_config.window_position.x < 0 && app_config.window_position.y < 0 {
+                WindowPosition::Automatic
+            } else {
+                WindowPosition::At(app_config.window_position)
+            },
+            mode: if app_config.fullscreen {
+                WindowMode::BorderlessFullscreen
+            } else {
+                WindowMode::Windowed
+            },
+            resize_constraints: WindowResizeConstraints {
+                min_width: 640.,
+                min_height: 480.,
+                ..default()
+            },
+            present_mode: PresentMode::AutoNoVsync,
+            canvas: Some("#bevy".to_owned()),
+            prevent_default_event_handling: false,
+            ..default()
+        }),
+        ..default()
+    };
+
+    let default_plugins = default_plugins.set(window_plugin);
+
     let mut app = App::new();
 
-    // Platform-independent setup code.
     app.insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
         .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: APP_NAME.into(),
-                resolution: if app_config.window_resolution.x < 0.
-                    || app_config.window_resolution.y < 0.
-                {
-                    WindowResolution::default()
-                } else {
-                    app_config.window_resolution.into()
-                },
-                position: if app_config.window_position.x < 0 && app_config.window_position.y < 0 {
-                    WindowPosition::Automatic
-                } else {
-                    WindowPosition::At(app_config.window_position)
-                },
-                mode: if app_config.fullscreen {
-                    WindowMode::BorderlessFullscreen
-                } else {
-                    WindowMode::Windowed
-                },
-                resize_constraints: WindowResizeConstraints {
-                    min_width: 640.,
-                    min_height: 480.,
-                    ..default()
-                },
-                // Use Immediate mode (with fallbacks) for low-latency
-                // response to input.  When inactive, the famerate will be
-                // limited in any case due to the desktop_app() settings.
-                present_mode: PresentMode::AutoNoVsync,
-                // Bind to canvas included in `index.html` on web (ignored otherwise)
-                canvas: Some("#bevy".to_owned()),
-                // Tells wasm not to override default event handling, like F5
-                // and Ctrl+R.  Refreshing the page would potentially lose
-                // work, and generally just waste system resources.  It's more
-                // likey that the user would do this by accident, so let's
-                // just block it off as a possibility.
-                prevent_default_event_handling: false,
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
         .add_plugins(EguiPlugin)
         .add_plugins(AppPlugin)
-        .add_systems(Startup, set_window_icon);
+        .add_systems(Startup, set_window_icon)
+        .add_systems(Startup, set_window_maximized);
 
+    debug!("Config PATH {:?}", config_dir);
+    debug!("Loaded {:?}", app_config);
+            
     // Application settings are only persisted on desktop platforms.
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let app = app
         .insert_resource(app_config)
         .add_systems(Update, update_app_config)
         .add_systems(Last, save_app_config);
-
+        
     app.run();
+}
+
+// set window to maximized based on the config
+fn set_window_maximized(
+    windows: NonSend<WinitWindows>,
+    primary_window: Query<Entity, With<PrimaryWindow>>,
+    app_config: ResMut<AppConfig>,
+) {
+    let primary_entity = primary_window.single();
+    if let Some(primary) = windows.get_window(primary_entity) {
+        if app_config.maximized {
+            primary.set_maximized(true);
+        }
+    };
 }
 
 // Sets the icon on Windows and X11.  The icon on macOS is sourced from the
