@@ -8,7 +8,8 @@ edition = "2021"
 exclude = ["dist", "build", "assets", "credits"]
 
 [workspace]
-members = [
+members = [ 
+    "crates/app_config",
     "crates/common",
     "crates/molecule",
     "crates/periodic-table",
@@ -16,6 +17,7 @@ members = [
 ]
 
 [workspace.dependencies]
+app_config = { package = "app_config", path = "crates/app_config" }
 bevy = { version = "0.12", default-features = false, features = [
     "animation",
     "bevy_asset",
@@ -78,6 +80,7 @@ codegen-units = 1
 strip = true
 
 [dependencies]
+app_config = { workspace = true }
 bevy = { workspace = true }
 bevy_asset_loader = { version = "0.19" }
 bevy_egui = { version = "0.23", default-features = false, features = [

@@ -181,6 +181,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0952808a6c2afd1aa8947271f3a60f1a6763c7b912d210184c5149b5cf147247"
 
 [[package]]
+name = "app_config"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "directories",
+ "rusqlite",
+]
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -300,6 +309,7 @@ checksum = "fbb36e985947064623dbd357f727af08ffd077f93d696782f3c56365fa2e2799"
 name = "atomcad"
 version = "0.1.0"
 dependencies = [
+ "app_config",
  "atomcad-common",
  "atomcad-molecule",
  "atomcad-periodic-table",
