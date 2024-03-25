@@ -18,7 +18,7 @@ members = [
 
 [workspace.dependencies]
 app_config = { package = "app_config", path = "crates/app_config" }
-bevy = { version = "0.12", default-features = false, features = [
+bevy = { version = "0.13", default-features = false, features = [
     "animation",
     "bevy_asset",
     "bevy_core_pipeline",
@@ -38,7 +38,7 @@ bevy = { version = "0.12", default-features = false, features = [
     "x11",
     "zstd",
 ] }
-bevy_mod_picking = { version = "0.17", default-features = false, features = [
+bevy_mod_picking = { version = "0.18", default-features = false, features = [
     "backend_raycast",
     "backend_bevy_ui",
     "backend_sprite",
@@ -82,8 +82,8 @@ strip = true
 [dependencies]
 app_config = { workspace = true }
 bevy = { workspace = true }
-bevy_asset_loader = { version = "0.19" }
-bevy_egui = { version = "0.23", default-features = false, features = [
+bevy_asset_loader = { version = "0.20" }
+bevy_egui = { version = "0.26", default-features = false, features = [
     "open_url",
     "default_fonts"
 ] }
@@ -92,10 +92,10 @@ common = { workspace = true }
 molecule = { workspace = true }
 periodic-table = { workspace = true }
 rand = { version = "0.8.3" }
-smooth-bevy-cameras = { version = "0.10" }
+smooth-bevy-cameras = { version = "0.11" }
 
 # keep the following in sync with Bevy's dependencies
-winit = { version = "0.28", default-features = false }
+winit = { version = "0.29", default-features = false }
 image = { version = "0.24", default-features = false }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
