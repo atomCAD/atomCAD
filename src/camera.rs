@@ -187,8 +187,8 @@ fn cad_view_input_handler(
     mut ev_scroll: EventReader<MouseWheel>,
     mut ev_magnify: EventReader<TouchpadMagnify>,
     mut ev_rotate: EventReader<TouchpadRotate>,
-    mouse_buttons: Res<Input<MouseButton>>,
-    keyboard: Res<Input<KeyCode>>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     controllers: Query<(&CadViewController, &CadViewControllerSettings)>,
 ) {
     // Can only control one camera at a time.
@@ -313,7 +313,7 @@ fn cad_view_controller(
             CadViewControlEvent::Pan(delta) => {
                 let right = -transform.local_x();
                 let up = transform.local_y();
-                look_transform.target += (dt * delta.x * right + dt * delta.y * up) * radius;
+                look_transform.target += (right * (dt * delta.x) + up * (dt * delta.y)) * radius;
             }
             CadViewControlEvent::Zoom(delta) => {
                 zoom *= delta;

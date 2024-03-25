@@ -174,11 +174,7 @@ pub fn init_molecule(
         ptable: PeriodicTable::new(),
         atoms: HashMap::new(),
         bonding_site: PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::UVSphere {
-                radius: 0.3,
-                sectors: 24,
-                stacks: 24,
-            })),
+            mesh: meshes.add(Sphere::new(0.6).mesh().uv(24, 24)),
             material: materials.add(StandardMaterial::from(Color::rgb(0.6, 0.0, 0.0))),
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()
@@ -189,11 +185,7 @@ pub fn init_molecule(
     pbr_cache.atoms.insert(
         Element::Carbon,
         PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::UVSphere {
-                radius: carbon.radius,
-                sectors: 60,
-                stacks: 60,
-            })),
+            mesh: meshes.add(Sphere::new(carbon.radius).mesh().uv(60, 60)),
             material: materials.add(StandardMaterial::from(Color::rgb(
                 carbon.color[0],
                 carbon.color[1],
