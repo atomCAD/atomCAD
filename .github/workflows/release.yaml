@@ -60,7 +60,7 @@ jobs:
           SDKROOT=$(xcrun -sdk macosx --show-sdk-path) cargo build --profile dist --target=x86_64-apple-darwin
       - name: Create Universal Binary
         run: |
-        lipo -create -output target/dist/${{ env.EXECUTABLE_NAME }} target/aarch64-apple-darwin/dist/${{ env.EXECUTABLE_NAME }} target/x86_64-apple-darwin/dist/${{ env.EXECUTABLE_NAME }}
+          lipo -create -output target/dist/${{ env.EXECUTABLE_NAME }} target/aarch64-apple-darwin/dist/${{ env.EXECUTABLE_NAME }} target/x86_64-apple-darwin/dist/${{ env.EXECUTABLE_NAME }}
       - name: Create release
         run: |
           mkdir -p build/macos/src/atomCAD.app/Contents/MacOS/assets

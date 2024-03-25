@@ -1,11 +1,16 @@
-use bevy::prelude::*;
-use rusqlite::Result as SqliteResult;
-use std::path::PathBuf;
+pub mod setting_value;
+pub mod window_settings;
+
+use bevy::{prelude::*, utils::HashMap};
+
+use setting_value::{SettingRecord, SettingValue};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 pub trait AppConfigTrait {
     fn set_db_path(&mut self);
-    fn load(&mut self) -> SqliteResult<()>;
-    fn save(&self) -> SqliteResult<()>;
 }
 
 impl AppConfigTrait for AppConfig {
@@ -29,126 +34,158 @@ impl AppConfigTrait for AppConfig {
                 return;
             }
         }
-    }
 
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn load(&mut self) -> SqliteResult<()> {
-        AppConfig::load_from_sqlite(self)
-    }
-    
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    fn load(&mut self) -> SqliteResult<()> {
-        *self = AppConfig::default();
-        Ok(())
-    }
+        // create default DB table if it doesn't exist
+        if let Some(path) = &self.db_path {
+            match rusqlite::Connection::open(path) {
+                Ok(mut conn) => {
+                    conn.trace(Some(|stmt| {
+                        debug!("SQL: {:?}", stmt);
+                    }));
 
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn save(&self) -> SqliteResult<()> {
-        AppConfig::save_to_sqlite(self)
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    fn save(&self) -> SqliteResult<()> {
-        Ok(())
+                    if let Err(err) = conn.execute(
+                        "CREATE TABLE IF NOT EXISTS app_config_settings (
+                            group_name TEXT,
+                            name TEXT,
+                            title TEXT,
+                            description TEXT,
+                            value TEXT,
+                            value_type TEXT,
+                            default_value TEXT,
+                            visible BOOLEAN DEFAULT FALSE,
+                            CONSTRAINT pk_settings PRIMARY KEY (group_name, name)
+                        )",
+                        (),
+                    ) {
+                        error!("Failed to create default database table: {}", err);
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to open database connection: {}", err);
+                }
+            }
+        }
     }
 }
 
-#[derive(Resource, Debug)]
+pub fn load_group(
+    app_config: &AppConfig,
+    group_name: &str,
+) -> Result<HashMap<String, SettingValue>, String> {
+    // Fetch the settings records from the database for the given group
+    let settings_records =
+        get_settings_records(app_config, group_name).map_err(|e| e.to_string())?; // Convert the error to a String
+
+    let mut settings = HashMap::new();
+    for record in settings_records {
+        let value = match record.value_type.as_str() {
+            "bool" => SettingValue::Bool(record.value.parse::<bool>().map_err(|e| e.to_string())?),
+            "int" => SettingValue::Int(record.value.parse::<i32>().map_err(|e| e.to_string())?),
+            "float" => SettingValue::Float(record.value.parse::<f32>().map_err(|e| e.to_string())?),
+            "string" => SettingValue::String(record.value),
+            _ => return Err(format!("Unknown type for setting '{}'", record.name)),
+        };
+        settings.insert(record.name, value);
+    }
+
+    Ok(settings)
+}
+
+fn get_settings_records(
+    app_config: &AppConfig,
+    group_name: &str,
+) -> Result<Vec<SettingRecord>, rusqlite::Error> {
+    let conn = match app_config.db_path.as_ref() {
+        Some(path) => {
+            let mut conn = rusqlite::Connection::open(path)?;
+            conn.trace(Some(|stmt| {
+                debug!("SQL: {:?}", stmt);
+            }));
+            conn
+        }
+        None => {
+            let err_msg = "Abort loading, no database path set!";
+            error!("{}", err_msg);
+            return Err(rusqlite::Error::InvalidPath(err_msg.into()));
+        }
+    };
+
+    let mut stmt = conn.prepare(
+        "SELECT group_name, name, title, description, value, value_type, default_value, visible FROM app_config_settings WHERE group_name = ?"
+    )?;
+
+    let mut rows = stmt.query([&group_name])?;
+
+    let mut records = Vec::new();
+    while let Some(row) = rows.next()? {
+        records.push(SettingRecord {
+            group_name: row.get(0).unwrap_or("NONE".to_string()),
+            name: row.get(1).unwrap_or(String::new()),
+            title: row.get(2).unwrap_or(String::new()),
+            description: row.get(3).unwrap_or(String::new()),
+            value: row.get(4).unwrap(),
+            value_type: row.get(5).unwrap(),
+            default_value: row.get(6).unwrap_or(String::new()),
+            visible: row.get(7).unwrap_or(false),
+        });
+    }
+
+    Ok(records)
+}
+
+pub fn save_record_to_db(
+    app_config: &AppConfig,
+    group_name: &str,
+    key: &str,
+    value: &SettingValue,
+) -> Result<(), rusqlite::Error> {
+    let conn = match app_config.db_path.as_ref() {
+        Some(path) => {
+            let mut conn = rusqlite::Connection::open(path)?;
+            conn.trace(Some(|stmt| {
+                debug!("SQL: {:?}", stmt);
+            }));
+            conn
+        }
+        None => {
+            let err_msg = "Abort loading, no database path set!";
+            error!("{}", err_msg);
+            return Err(rusqlite::Error::InvalidPath(err_msg.into()));
+        }
+    };
+
+    let mut stmt = conn.prepare("INSERT OR REPLACE INTO app_config_settings (group_name, name, value, value_type) VALUES (?1, ?2, ?3, ?4)")?;
+    stmt.execute(rusqlite::params![
+        group_name,
+        key,
+        value.to_string(),
+        value.type_as_string()
+    ])?;
+
+    Ok(())
+}
+
+#[derive(Resource, Clone, Default)]
 pub struct AppConfig {
-    /// The primary key of the app_config table in the sqlite3 config database.
-    #[allow(dead_code)]
-    pub id: i32,
-    /// The resolution of the primary window, as reported by windowing system.
-    pub window_resolution: Vec2,
-    /// The position of the top-left corner of the primary window, as reported
-    /// by the windowing system.
-    pub window_position: IVec2,
-    /// Whether the primary window should be maximized.
-    pub maximized: bool,
-    /// Whether the primary window should be fullscreen.
-    pub fullscreen: bool,
-    /// sqlite connection path
     pub db_path: Option<std::path::PathBuf>,
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            id: 1,
-            window_resolution: (-1., -1.).into(),
-            window_position: (-1, -1).into(),
-            maximized: false,
-            fullscreen: false,
-            db_path: None,
+impl fmt::Debug for AppConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let db_path = self
+            .db_path
+            .as_ref()
+            .map(|path| Path::new(path).to_string_lossy());
+
+        match &db_path {
+            Some(filename) => f
+                .debug_struct("AppConfig")
+                .field("db_path", filename)
+                .finish(),
+            None => f
+                .debug_struct("AppConfig")
+                .field("db_path", &"None")
+                .finish(),
         }
-    }
-}
-
-impl AppConfig {
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn load_from_sqlite(&mut self) -> SqliteResult<()> {
-        let conn = match self.db_path.as_ref() {
-            Some(path) => rusqlite::Connection::open(path),
-            None => {
-                let err_msg = "Abort loading, no database path set!";
-                error!("{}", err_msg);
-                return Err(rusqlite::Error::InvalidPath(err_msg.into()));
-            },
-        }?;
-
-        const SQL: &str = "SELECT * FROM app_config LIMIT 1";
-        let mut stmt = conn.prepare(SQL)?;
-        let mut rows = stmt.query(())?;
-
-        if let Some(row) = rows.next()? {
-            self.id = row.get(0)?;
-            self.window_resolution = (row.get(1)?, row.get(2)?).into();
-            self.window_position = (row.get(3)?, row.get(4)?).into();
-            self.maximized = row.get(5)?;
-            self.fullscreen = row.get(6)?;
-        } else {
-            warn!("No rows returned from SQLite query for app_config: \"{}\"", SQL);
-            *self = Self::default();
-        }
-        Ok(())
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn save_to_sqlite(&self) -> rusqlite::Result<()> {
-        let conn = match self.db_path.as_ref() {
-            Some(path) => rusqlite::Connection::open(path),
-            None => {
-                let err_msg = "Abort saving, no database path set!";
-                error!("{}", err_msg);
-                return Err(rusqlite::Error::InvalidPath(err_msg.into()));
-            },
-        }?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS app_config (
-                id INTEGER PRIMARY KEY,
-                window_resolution_x REAL,
-                window_resolution_y REAL,
-                window_position_x INTEGER,
-                window_position_y INTEGER,
-                maximized BOOLEAN,
-                fullscreen BOOLEAN
-            )",
-            (),
-        )?;
-        const SQL: &str = "INSERT OR REPLACE INTO app_config (id, window_resolution_x, window_resolution_y, window_position_x, window_position_y, maximized, fullscreen) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        let params = rusqlite::params![
-            self.id,
-            self.window_resolution.x,
-            self.window_resolution.y,
-            self.window_position.x,
-            self.window_position.y,
-            self.maximized as i32,
-            self.fullscreen as i32
-        ];
-
-        conn.execute(SQL, params)?;
-
-        Ok(())
     }
 }

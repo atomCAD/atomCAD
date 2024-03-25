@@ -22,6 +22,7 @@ bevy = { version = "0.13", default-features = false, features = [
     "animation",
     "bevy_asset",
     "bevy_core_pipeline",
+    "bevy_debug_stepping",
     "bevy_gltf",
     "bevy_pbr",
     "bevy_render",
@@ -50,7 +51,7 @@ directories = { version = "5" }
 molecule = { package = "atomcad-molecule", path = "crates/molecule" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 petgraph = { version = "0.6.4" }
-rusqlite = { version = "0.30", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "trace"] }
 serde = { version =  "1.0" }
 static_assertions = { version = "1" }
 ultraviolet = { version = "0.9" }
@@ -118,4 +119,4 @@ directories = { workspace = true }
 rusqlite = { workspace = true }
 
 [build-dependencies]
-embed-resource = "1.4"
+embed-resource = "1"
