@@ -20,6 +20,7 @@ bevy = { version = "0.13", default-features = false, features = [
     "animation",
     "bevy_asset",
     "bevy_core_pipeline",
+    "bevy_debug_stepping",
     "bevy_gltf",
     "bevy_pbr",
     "bevy_render",
@@ -115,4 +116,4 @@ directories = { workspace = true }
 rusqlite = { workspace = true }
 
 [build-dependencies]
-embed-resource = "1.4"
+embed-resource = "1"
