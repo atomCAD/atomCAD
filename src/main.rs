@@ -9,6 +9,7 @@ use app_config::*;
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
 use bevy::asset::AssetMetaCheck;
 use bevy::{
+    app::AppExit,
     prelude::*,
     window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution},
     winit::{WinitSettings, WinitWindows},
@@ -19,15 +20,29 @@ use bevy_egui::EguiPlugin;
 use std::io::Cursor;
 use winit::window::Icon;
 
+
 fn main() {
     let mut app_config = AppConfig::default();
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     app_config.set_db_path();
-    if let Err(e) = app_config.load() {
-        error!("Failed to load app configuration: {}", e);
-        // TODO: Handle the error appropriately (e.g., use default settings, exit the application, etc.)
-    }
+    let window_settings_group = match load_group(&app_config, "primary_window") {
+        Ok(settings) => settings,
+        Err(e) => {
+            let window_defaults = WindowSettings::default();
+            error!("Failed to load window settings: {}", e);
+            vec![
+                (String::from("resolution_x"), SettingValue::Float(window_defaults.window_resolution_x)),
+                (String::from("resolution_y"), SettingValue::Float(window_defaults.window_resolution_y)),
+                (String::from("position_x"), SettingValue::Int(window_defaults.window_position_x)),
+                (String::from("position_y"), SettingValue::Int(window_defaults.window_position_y)),
+                (String::from("maximized"), SettingValue::Bool(window_defaults.maximized)),
+                (String::from("fullscreen"), SettingValue::Bool(window_defaults.fullscreen)),
+            ]
+            .into_iter()
+            .collect()
+        }
+    };
 
     #[cfg(debug_assertions)]
     let default_plugins = DefaultPlugins.set(LogPlugin {
@@ -35,20 +50,40 @@ fn main() {
         ..Default::default() 
     });
 
+    let window_resolution = match (
+        window_settings_group.get("resolution_x"),
+        window_settings_group.get("resolution_y"),
+    ) {
+        (Some(SettingValue::Float(x)), Some(SettingValue::Float(y))) if *x >= 0.0 && *y >= 0.0 => {
+            WindowResolution::new(*x, *y)
+        }
+        _ => WindowResolution::default(),
+    };
+
+    let window_position = match (
+        window_settings_group.get("position_x"),
+        window_settings_group.get("position_y"),
+    ) {
+        (Some(SettingValue::Int(x)), Some(SettingValue::Int(y))) => WindowPosition::At((*x, *y).into()),
+        _ => WindowPosition::Automatic,
+    };
+
+    let window_fullscreen: bool = match window_settings_group.get("fullscreen") {
+        Some(SettingValue::Bool(fullscreen)) => *fullscreen,
+        _ => false,
+    };
+
+    let window_maximized: bool = match window_settings_group.get("maximized") {
+        Some(SettingValue::Bool(maximized)) => *maximized,
+        _ => false,
+    };
+
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
             title: APP_NAME.into(),
-            resolution: if app_config.window_resolution.x < 0. || app_config.window_resolution.y < 0. {
-                WindowResolution::default()
-            } else {
-                app_config.window_resolution.into()
-            },
-            position: if app_config.window_position.x < 0 && app_config.window_position.y < 0 {
-                WindowPosition::Automatic
-            } else {
-                WindowPosition::At(app_config.window_position)
-            },
-            mode: if app_config.fullscreen {
+            resolution: window_resolution,
+            position: window_position,
+            mode: if window_fullscreen {
                 WindowMode::BorderlessFullscreen
             } else {
                 WindowMode::Windowed
@@ -74,37 +109,40 @@ fn main() {
         .insert_resource(Msaa::Off)
         .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(WindowMaximized(window_maximized))
         .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
         .add_plugins(EguiPlugin)
         .add_plugins(AppPlugin)
-        .add_systems(Startup, set_window_icon)
-        .add_systems(Startup, set_window_maximized);
+        .add_systems(Startup, (set_window_icon, set_window_maximized))
+        .add_event::<AppExit>();
 
-    debug!("Loaded {:?}", app_config);
+    debug!("Loaded {:?}", &app_config);
             
     // Application settings are only persisted on desktop platforms.
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let app = app
         .insert_resource(app_config)
-        .add_systems(Update, update_app_config)
-        .add_systems(Last, save_app_config);
+        .add_systems(Last, save_settings_on_exit);
+        // .add_systems(Update, update_app_config)
+        // .add_systems(Last, save_app_config);
         
     app.run();
 }
+
 
 // set window to maximized based on the config
 fn set_window_maximized(
     windows: NonSend<WinitWindows>,
     primary_window: Query<Entity, With<PrimaryWindow>>,
-    app_config: ResMut<AppConfig>,
+    window_maximized: Res<WindowMaximized>,
 ) {
     let primary_entity = primary_window.single();
     if let Some(primary) = windows.get_window(primary_entity) {
-        if app_config.maximized {
+        if window_maximized.0 {
             primary.set_maximized(true);
         }
-    };
+    }
 }
 
 // Sets the icon on Windows and X11.  The icon on macOS is sourced from the
@@ -131,55 +169,66 @@ fn set_window_icon(
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-fn update_app_config(
-    mut app_config: ResMut<AppConfig>,
-    windows: NonSend<WinitWindows>,
-    primary_window: Query<Entity, With<PrimaryWindow>>,
+fn save_settings_on_exit(
+    mut app_exit_events: EventReader<AppExit>,
+    // Add any other resources or components you need to save settings
 ) {
-    let primary_entity = primary_window.single();
-    if let Some(primary) = windows.get_window(primary_entity) {
-        // Record resolution of primary window.
-        let scale_factor = primary.scale_factor() as f32;
-        let window_resolution = primary.inner_size();
-        if window_resolution.width > 0 && window_resolution.height > 0 {
-            app_config.window_resolution = (
-                (window_resolution.width as f32) / scale_factor,
-                (window_resolution.height as f32) / scale_factor,
-            )
-                .into();
-        };
-
-        // Record position of primary window.
-        if let Ok(window_position) = primary.outer_position() {
-            if window_position.x >= 0 && window_position.y >= 0 {
-                app_config.window_position = (window_position.x, window_position.y).into();
-            }
-        };
-
-        // Record maximized state of primary window.
-        app_config.maximized = primary.is_maximized();
-
-        // Record fullscreen state of primary window.
-        app_config.fullscreen = primary.fullscreen().is_some();
-    };
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-fn save_app_config(
-    app_config: ResMut<AppConfig>,
-    app_exit_events: EventReader<bevy::app::AppExit>,
-) {
-    // Only run when the app is exiting.
-    if app_exit_events.is_empty() {
-        return;
-    }
-
-    if let Err(e) = app_config.save() {
-        error!("Failed to save app configuration: {}", e);
-        return;
-    } else {
-        debug!("Saved {:?}", app_config);
+    if app_exit_events.read().next().is_some() {
+        debug!("Saving settings before exit...");
     }
 }
 
-// End of File
+
+// #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+// fn update_app_config(
+//     mut app_config: ResMut<AppConfig>,
+//     windows: NonSend<WinitWindows>,
+//     primary_window: Query<Entity, With<PrimaryWindow>>,
+// ) {
+//     let primary_entity = primary_window.single();
+//     if let Some(primary) = windows.get_window(primary_entity) {
+//         // Record resolution of primary window.
+//         let scale_factor = primary.scale_factor() as f32;
+//         let window_resolution = primary.inner_size();
+//         if window_resolution.width > 0 && window_resolution.height > 0 {
+//             app_config.window_resolution = (
+//                 (window_resolution.width as f32) / scale_factor,
+//                 (window_resolution.height as f32) / scale_factor,
+//             )
+//                 .into();
+//         };
+
+//         // Record position of primary window.
+//         if let Ok(window_position) = primary.outer_position() {
+//             if window_position.x >= 0 && window_position.y >= 0 {
+//                 app_config.window_position = (window_position.x, window_position.y).into();
+//             }
+//         };
+
+//         // Record maximized state of primary window.
+//         app_config.maximized = primary.is_maximized();
+
+//         // Record fullscreen state of primary window.
+//         app_config.fullscreen = primary.fullscreen().is_some();
+//     };
+// }
+
+// #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+// fn save_app_config(
+//     app_config: ResMut<AppConfig>,
+//     app_exit_events: EventReader<bevy::app::AppExit>,
+// ) {
+//     // Only run when the app is exiting.
+//     if app_exit_events.is_empty() {
+//         return;
+//     }
+
+//     if let Err(e) = app_config.save() {
+//         error!("Failed to save app configuration: {}", e);
+//         return;
+//     } else {
+//         debug!("Saved {:?}", app_config);
+//     }
+// }
+
+// // End of File
