@@ -182,6 +182,7 @@ dependencies = [
  "bevy",
  "directories",
  "rusqlite",
+ "serde",
 ]
 
 [[package]]
