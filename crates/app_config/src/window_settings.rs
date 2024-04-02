@@ -87,7 +87,7 @@ impl WindowSettings {
         settings.insert("fullscreen", self.fullscreen.clone());
 
         for (key, value) in settings {
-            save_record_to_db(app_config, "primary_window", &key, &value)
+            save_record_to_db(app_config, "primary_window", key, &value)
                 .map_err(|e| e.to_string())?;
         }
 

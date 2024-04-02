@@ -67,10 +67,8 @@ pub fn apply_initial_window_settings(
 
         if window_maximized {
             primary.set_maximized(true);
-        } else {
-            if let Some(resolution) = window_resolution {
+        } else if let Some(resolution) = window_resolution {
                 primary.set_max_inner_size(Some(resolution));
-            }
         }
 
         primary.set_fullscreen(window_fullscreen);

@@ -39,7 +39,7 @@ fn main() {
 
     #[cfg(debug_assertions)]
     let default_plugins = default_plugins.set(LogPlugin {
-        filter: format!("warn,{}=trace,app_config=trace", env!("CARGO_PKG_NAME")).into(),
+        filter: format!("warn,{}=trace,app_config=trace", env!("CARGO_PKG_NAME")),
         ..Default::default()
     });
 

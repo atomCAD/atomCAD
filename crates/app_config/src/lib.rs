@@ -105,7 +105,7 @@ fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<
         "SELECT group_name, name, title, description, value, value_type, default_value, visible FROM app_config_settings WHERE group_name = ?"
     )?;
 
-    let mut rows = stmt.query(&[&group_name])?;
+    let mut rows = stmt.query([&group_name])?;
 
     let mut records = Vec::new();
     while let Some(row) = rows.next()? {
@@ -144,17 +144,9 @@ pub fn save_record_to_db(app_config: &AppConfig, group_name: &str, key: &str, va
     Ok(())
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, Default)]
 pub struct AppConfig {
     pub db_path: Option<std::path::PathBuf>,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            db_path: None,
-        }
-    }
 }
 
 impl fmt::Debug for AppConfig {
