@@ -9,21 +9,15 @@ use app_config::*;
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
 use bevy::asset::AssetMetaCheck;
 use bevy::{
-    app::AppExit,
-    prelude::*,
-    window::PresentMode,
-    winit::WinitSettings,
+    app::AppExit, log::LogPlugin, prelude::*, window::PresentMode, winit::WinitSettings,
     DefaultPlugins,
-    log::LogPlugin,
 };
 use bevy_egui::EguiPlugin;
 
 mod window_management;
 use window_management::{
-    set_window_icon,
-    apply_initial_window_settings,
+    apply_initial_window_settings, save_window_settings_on_exit, set_window_icon,
     update_window_settings,
-    save_window_settings_on_exit,
 };
 
 use window_settings::WindowSettings;
@@ -34,7 +28,7 @@ fn main() {
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     app_config.set_db_path();
-    
+
     let default_plugins = DefaultPlugins;
 
     #[cfg(debug_assertions)]
@@ -61,9 +55,9 @@ fn main() {
 
     let default_plugins = default_plugins.set(window_plugin);
     app.add_plugins(default_plugins);
-    
+
     debug!("Loaded {:?}", &app_config);
- 
+
     app.insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
         .insert_resource(AssetMetaCheck::Never)
@@ -73,10 +67,10 @@ fn main() {
         .add_plugins(AppPlugin)
         .add_systems(Startup, set_window_icon)
         .add_event::<AppExit>();
-            
+
     // Application settings are only persisted on desktop platforms.
     let window_settings = WindowSettings::load_from_storage(&app_config);
-    
+
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let app = app
         .insert_resource(app_config)
@@ -84,6 +78,6 @@ fn main() {
         .add_systems(Startup, apply_initial_window_settings)
         .add_systems(Update, update_window_settings)
         .add_systems(Last, save_window_settings_on_exit);
-        
+
     app.run();
 }

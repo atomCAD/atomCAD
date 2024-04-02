@@ -1,11 +1,8 @@
 use crate::{load_group, save_record_to_db, setting_value::SettingValue, AppConfig};
 
-use serde::{Serialize, Deserialize};
+use bevy::{prelude::*, utils::HashMap};
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use bevy::{
-    prelude::*, 
-    utils::HashMap,
-};
 
 #[derive(Clone, Serialize, Deserialize, Resource)]
 pub struct WindowSettings {
@@ -61,19 +58,36 @@ impl fmt::Debug for WindowSettings {
     }
 }
 
-
 impl WindowSettings {
     pub fn load_from_storage(app_config: &AppConfig) -> Self {
         let window_settings_group = load_group(app_config, "primary_window").unwrap_or_default();
         let default_settings = WindowSettings::default();
 
         Self {
-            window_resolution_x: window_settings_group.get("resolution_x").cloned().unwrap_or(default_settings.window_resolution_x),
-            window_resolution_y: window_settings_group.get("resolution_y").cloned().unwrap_or(default_settings.window_resolution_y),
-            window_position_x: window_settings_group.get("position_x").cloned().unwrap_or(default_settings.window_position_x),
-            window_position_y: window_settings_group.get("position_y").cloned().unwrap_or(default_settings.window_position_y),
-            maximized: window_settings_group.get("maximized").cloned().unwrap_or(default_settings.maximized),
-            fullscreen: window_settings_group.get("fullscreen").cloned().unwrap_or(default_settings.fullscreen),
+            window_resolution_x: window_settings_group
+                .get("resolution_x")
+                .cloned()
+                .unwrap_or(default_settings.window_resolution_x),
+            window_resolution_y: window_settings_group
+                .get("resolution_y")
+                .cloned()
+                .unwrap_or(default_settings.window_resolution_y),
+            window_position_x: window_settings_group
+                .get("position_x")
+                .cloned()
+                .unwrap_or(default_settings.window_position_x),
+            window_position_y: window_settings_group
+                .get("position_y")
+                .cloned()
+                .unwrap_or(default_settings.window_position_y),
+            maximized: window_settings_group
+                .get("maximized")
+                .cloned()
+                .unwrap_or(default_settings.maximized),
+            fullscreen: window_settings_group
+                .get("fullscreen")
+                .cloned()
+                .unwrap_or(default_settings.fullscreen),
         }
     }
 
@@ -94,7 +108,6 @@ impl WindowSettings {
         Ok(())
     }
 }
-
 
 #[derive(Resource, Debug, Clone)]
 pub struct WindowMaximized(pub bool);

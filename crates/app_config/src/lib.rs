@@ -1,13 +1,13 @@
 pub mod setting_value;
 pub mod window_settings;
 
-use bevy::{
-    prelude::*, 
-    utils::HashMap,
-};
+use bevy::{prelude::*, utils::HashMap};
 
 use setting_value::{SettingRecord, SettingValue};
-use std::{fmt, path::{Path, PathBuf}};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 pub trait AppConfigTrait {
     fn set_db_path(&mut self);
@@ -39,7 +39,9 @@ impl AppConfigTrait for AppConfig {
         if let Some(path) = &self.db_path {
             match rusqlite::Connection::open(path) {
                 Ok(mut conn) => {
-                    conn.trace(Some(|stmt| { debug!("SQL: {:?}", stmt);}));
+                    conn.trace(Some(|stmt| {
+                        debug!("SQL: {:?}", stmt);
+                    }));
 
                     if let Err(err) = conn.execute(
                         "CREATE TABLE IF NOT EXISTS app_config_settings (
@@ -63,14 +65,16 @@ impl AppConfigTrait for AppConfig {
                 }
             }
         }
-
     }
 }
 
-pub fn load_group(app_config: &AppConfig, group_name: &str) -> Result<HashMap<String, SettingValue>, String> {
+pub fn load_group(
+    app_config: &AppConfig,
+    group_name: &str,
+) -> Result<HashMap<String, SettingValue>, String> {
     // Fetch the settings records from the database for the given group
-    let settings_records = get_settings_records(app_config, group_name)
-        .map_err(|e| e.to_string())?; // Convert the error to a String
+    let settings_records =
+        get_settings_records(app_config, group_name).map_err(|e| e.to_string())?; // Convert the error to a String
 
     let mut settings = HashMap::new();
     for record in settings_records {
@@ -87,18 +91,23 @@ pub fn load_group(app_config: &AppConfig, group_name: &str) -> Result<HashMap<St
     Ok(settings)
 }
 
-fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<SettingRecord>, rusqlite::Error> {
+fn get_settings_records(
+    app_config: &AppConfig,
+    group_name: &str,
+) -> Result<Vec<SettingRecord>, rusqlite::Error> {
     let conn = match app_config.db_path.as_ref() {
         Some(path) => {
             let mut conn = rusqlite::Connection::open(path)?;
-            conn.trace(Some(|stmt| { debug!("SQL: {:?}", stmt);}));
+            conn.trace(Some(|stmt| {
+                debug!("SQL: {:?}", stmt);
+            }));
             conn
-        },
+        }
         None => {
             let err_msg = "Abort loading, no database path set!";
             error!("{}", err_msg);
             return Err(rusqlite::Error::InvalidPath(err_msg.into()));
-        },
+        }
     };
 
     let mut stmt = conn.prepare(
@@ -124,22 +133,34 @@ fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<
     Ok(records)
 }
 
-pub fn save_record_to_db(app_config: &AppConfig, group_name: &str, key: &str, value: &SettingValue) -> Result<(), rusqlite::Error> {
+pub fn save_record_to_db(
+    app_config: &AppConfig,
+    group_name: &str,
+    key: &str,
+    value: &SettingValue,
+) -> Result<(), rusqlite::Error> {
     let conn = match app_config.db_path.as_ref() {
         Some(path) => {
             let mut conn = rusqlite::Connection::open(path)?;
-            conn.trace(Some(|stmt| {debug!("SQL: {:?}", stmt);}));
+            conn.trace(Some(|stmt| {
+                debug!("SQL: {:?}", stmt);
+            }));
             conn
-        },
+        }
         None => {
             let err_msg = "Abort loading, no database path set!";
             error!("{}", err_msg);
             return Err(rusqlite::Error::InvalidPath(err_msg.into()));
-        },
+        }
     };
-    
+
     let mut stmt = conn.prepare("INSERT OR REPLACE INTO app_config_settings (group_name, name, value, value_type) VALUES (?1, ?2, ?3, ?4)")?;
-    stmt.execute(rusqlite::params![group_name, key, value.to_string(), value.type_as_string()])?;
+    stmt.execute(rusqlite::params![
+        group_name,
+        key,
+        value.to_string(),
+        value.type_as_string()
+    ])?;
 
     Ok(())
 }
@@ -157,10 +178,12 @@ impl fmt::Debug for AppConfig {
             .map(|path| Path::new(path).to_string_lossy());
 
         match &db_path {
-            Some(filename) => f.debug_struct("AppConfig")
+            Some(filename) => f
+                .debug_struct("AppConfig")
                 .field("db_path", filename)
                 .finish(),
-            None => f.debug_struct("AppConfig")
+            None => f
+                .debug_struct("AppConfig")
                 .field("db_path", &"None")
                 .finish(),
         }

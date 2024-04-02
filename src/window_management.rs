@@ -1,19 +1,18 @@
-use crate::AppConfig;
-use crate::window_settings::WindowSettings;
 use crate::setting_value::SettingValue;
+use crate::window_settings::WindowSettings;
+use crate::AppConfig;
 
 use bevy::{
     app::AppExit,
     prelude::*,
-    window::{PrimaryWindow, WindowResized, WindowMoved, WindowCloseRequested},
+    window::{PrimaryWindow, WindowCloseRequested, WindowMoved, WindowResized},
     winit::WinitWindows,
 };
 
 use std::io::Cursor;
 
 use winit::dpi::{LogicalSize, PhysicalPosition};
-use winit::window::{Icon, Fullscreen};
-
+use winit::window::{Fullscreen, Icon};
 
 // set window initial settings on startup
 pub fn apply_initial_window_settings(
@@ -21,7 +20,6 @@ pub fn apply_initial_window_settings(
     primary_window: Query<Entity, With<PrimaryWindow>>,
     window_settings: ResMut<WindowSettings>,
 ) {
-
     debug!("Initial {:?}", window_settings);
 
     let window_resolution = match (
@@ -38,7 +36,9 @@ pub fn apply_initial_window_settings(
         &window_settings.window_position_x,
         &window_settings.window_position_y,
     ) {
-        (SettingValue::Int(x), SettingValue::Int(y)) => Some(PhysicalPosition::new(*x as f64, *y as f64)),
+        (SettingValue::Int(x), SettingValue::Int(y)) => {
+            Some(PhysicalPosition::new(*x as f64, *y as f64))
+        }
         _ => None,
     };
 
@@ -60,7 +60,6 @@ pub fn apply_initial_window_settings(
 
     let primary_entity = primary_window.single();
     if let Some(primary) = windows.get_window(primary_entity) {
-
         if let Some(position) = window_position {
             primary.set_outer_position(position);
         }
@@ -68,7 +67,7 @@ pub fn apply_initial_window_settings(
         if window_maximized {
             primary.set_maximized(true);
         } else if let Some(resolution) = window_resolution {
-                primary.set_max_inner_size(Some(resolution));
+            primary.set_max_inner_size(Some(resolution));
         }
 
         primary.set_fullscreen(window_fullscreen);
@@ -125,23 +124,23 @@ pub fn update_window_settings(
 ) {
     let primary_entity = primary_window.single();
     if let Some(primary) = windows.get_window(primary_entity) {
-
         // handle resizing dependent settings
         if !resize_events.is_empty() {
-            
             // Handle window resize event
             let scale_factor = primary.scale_factor() as f32;
             let window_resolution = primary.inner_size();
-            window_settings.window_resolution_x = SettingValue::Float(window_resolution.width as f32 / scale_factor);
-            window_settings.window_resolution_y = SettingValue::Float(window_resolution.height as f32 / scale_factor);
-    
+            window_settings.window_resolution_x =
+                SettingValue::Float(window_resolution.width as f32 / scale_factor);
+            window_settings.window_resolution_y =
+                SettingValue::Float(window_resolution.height as f32 / scale_factor);
+
             // Check fullscreen state
             let is_fullscreen = primary.fullscreen().is_some();
             let current_fullscreen = match window_settings.fullscreen {
                 SettingValue::Bool(value) => value,
                 _ => false, // Default to false or handle appropriately if not a bool
             };
-            
+
             if current_fullscreen != is_fullscreen {
                 window_settings.fullscreen = SettingValue::Bool(is_fullscreen);
             }
@@ -166,7 +165,7 @@ pub fn update_window_settings(
             if let Ok(window_position) = primary.outer_position() {
                 window_settings.window_position_x = SettingValue::Int(window_position.x);
                 window_settings.window_position_y = SettingValue::Int(window_position.y);
-                
+
                 debug!("Updated {:?}", window_settings);
             }
         }
