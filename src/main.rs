@@ -15,10 +15,10 @@ use bevy::{
 use bevy_egui::EguiPlugin;
 
 mod window_management;
-use window_management::{
-    apply_initial_window_settings, save_window_settings_on_exit, set_window_icon,
-    update_window_settings,
-};
+use window_management::{apply_initial_window_settings, set_window_icon, update_window_settings};
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use window_management::save_window_settings_on_exit;
 
 use window_settings::WindowSettings;
 
@@ -58,25 +58,25 @@ fn main() {
 
     debug!("Loaded {:?}", &app_config);
 
+    // Application settings are only persisted on desktop platforms.
+    let window_settings = WindowSettings::load_from_storage(&app_config);
+
     app.insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
         .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(window_settings)
         .add_plugins(PlatformTweaks)
         .add_plugins(EguiPlugin)
         .add_plugins(AppPlugin)
         .add_systems(Startup, set_window_icon)
+        .add_systems(Startup, apply_initial_window_settings)
+        .add_systems(Update, update_window_settings)
         .add_event::<AppExit>();
-
-    // Application settings are only persisted on desktop platforms.
-    let window_settings = WindowSettings::load_from_storage(&app_config);
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let app = app
         .insert_resource(app_config)
-        .insert_resource(window_settings)
-        .add_systems(Startup, apply_initial_window_settings)
-        .add_systems(Update, update_window_settings)
         .add_systems(Last, save_window_settings_on_exit);
 
     app.run();

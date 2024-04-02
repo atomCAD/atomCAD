@@ -114,7 +114,6 @@ pub fn save_window_settings_on_exit(
     let _ = window_settings.save_to_storage(&app_config);
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub fn update_window_settings(
     resize_events: EventReader<WindowResized>,
     move_events: EventReader<WindowMoved>,
