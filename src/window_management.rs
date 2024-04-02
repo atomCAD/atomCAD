@@ -1,12 +1,19 @@
 use crate::setting_value::SettingValue;
 use crate::window_settings::WindowSettings;
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use crate::AppConfig;
 
 use bevy::{
-    app::AppExit,
     prelude::*,
-    window::{PrimaryWindow, WindowCloseRequested, WindowMoved, WindowResized},
+    window::{PrimaryWindow, WindowMoved, WindowResized},
     winit::WinitWindows,
+};
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use bevy::{
+    app::AppExit,
+    window::WindowCloseRequested,
 };
 
 use std::io::Cursor;

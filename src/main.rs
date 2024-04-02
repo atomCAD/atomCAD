@@ -23,6 +23,7 @@ use window_management::save_window_settings_on_exit;
 use window_settings::WindowSettings;
 
 fn main() {
+    #[allow(unused_mut)]
     let mut app_config = AppConfig::default();
     let mut app = App::new();
 
