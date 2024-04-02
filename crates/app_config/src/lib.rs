@@ -1,6 +1,9 @@
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{
+    prelude::*, 
+    utils::HashMap,
+};
 use serde::{Serialize, Deserialize};
-use std::{fmt, path::PathBuf};
+use std::{fmt, path::{Path, PathBuf}};
 
 pub trait AppConfigTrait {
     fn set_db_path(&mut self);
@@ -31,7 +34,9 @@ impl AppConfigTrait for AppConfig {
         // create default DB table if it doesn't exist
         if let Some(path) = &self.db_path {
             match rusqlite::Connection::open(path) {
-                Ok(conn) => {
+                Ok(mut conn) => {
+                    conn.trace(Some(|stmt| { debug!("SQL: {:?}", stmt);}));
+
                     if let Err(err) = conn.execute(
                         "CREATE TABLE IF NOT EXISTS app_config_settings (
                             group_name TEXT,
@@ -125,9 +130,7 @@ fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<
     let conn = match app_config.db_path.as_ref() {
         Some(path) => {
             let mut conn = rusqlite::Connection::open(path)?;
-            conn.trace(Some(|stmt| {
-                debug!("SQL: {:?}", stmt);
-            }));
+            conn.trace(Some(|stmt| { debug!("SQL: {:?}", stmt);}));
             conn
         },
         None => {
@@ -138,9 +141,9 @@ fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<
     };
 
     let mut stmt = conn.prepare(
-        "SELECT group_name, name, title, description, value, value_type, default_value, visible 
-        FROM app_config_settings WHERE group_name = ?"
+        "SELECT group_name, name, title, description, value, value_type, default_value, visible FROM app_config_settings WHERE group_name = ?"
     )?;
+
     let mut rows = stmt.query(&[&group_name])?;
 
     let mut records = Vec::new();
@@ -164,9 +167,7 @@ fn save_record_to_db(app_config: &AppConfig, group_name: &str, key: &str, value:
     let conn = match app_config.db_path.as_ref() {
         Some(path) => {
             let mut conn = rusqlite::Connection::open(path)?;
-            conn.trace(Some(|stmt| {
-                debug!("SQL: {:?}", stmt);
-            }));
+            conn.trace(Some(|stmt| {debug!("SQL: {:?}", stmt);}));
             conn
         },
         None => {
@@ -182,8 +183,7 @@ fn save_record_to_db(app_config: &AppConfig, group_name: &str, key: &str, value:
     Ok(())
 }
 
-
-#[derive(Resource, Debug, Clone)]
+#[derive(Resource, Clone)]
 pub struct AppConfig {
     pub db_path: Option<std::path::PathBuf>,
 }
@@ -196,7 +196,25 @@ impl Default for AppConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Resource)]
+impl fmt::Debug for AppConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let db_path = self
+            .db_path
+            .as_ref()
+            .map(|path| Path::new(path).to_string_lossy());
+
+        match &db_path {
+            Some(filename) => f.debug_struct("AppConfig")
+                .field("db_path", filename)
+                .finish(),
+            None => f.debug_struct("AppConfig")
+                .field("db_path", &"None")
+                .finish(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Resource)]
 pub struct WindowSettings {
     pub window_resolution_x: SettingValue,
     pub window_resolution_y: SettingValue,
@@ -218,6 +236,38 @@ impl Default for WindowSettings {
         }
     }
 }
+
+impl fmt::Debug for WindowSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let window_resolution = match (&self.window_resolution_x, &self.window_resolution_y) {
+            (SettingValue::Float(x), SettingValue::Float(y)) => format!("({}, {})", x, y),
+            _ => "Invalid".to_string(),
+        };
+
+        let window_position = match (&self.window_position_x, &self.window_position_y) {
+            (SettingValue::Int(x), SettingValue::Int(y)) => format!("({}, {})", x, y),
+            _ => "Invalid".to_string(),
+        };
+
+        let maximized = match &self.maximized {
+            SettingValue::Bool(value) => value.to_string(),
+            _ => "Invalid".to_string(),
+        };
+
+        let fullscreen = match &self.fullscreen {
+            SettingValue::Bool(value) => value.to_string(),
+            _ => "Invalid".to_string(),
+        };
+
+        f.debug_struct("WindowSettings")
+            .field("window_resolution", &window_resolution)
+            .field("window_position", &window_position)
+            .field("maximized", &maximized)
+            .field("fullscreen", &fullscreen)
+            .finish()
+    }
+}
+
 
 impl WindowSettings {
     pub fn load_from_storage(app_config: &AppConfig) -> Self {

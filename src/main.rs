@@ -11,68 +11,34 @@ use bevy::asset::AssetMetaCheck;
 use bevy::{
     app::AppExit,
     prelude::*,
-    window::{PresentMode, PrimaryWindow, WindowMode, WindowResolution, WindowResized, WindowMoved, WindowCloseRequested},
+    window::{PresentMode, PrimaryWindow, WindowResized, WindowMoved, WindowCloseRequested},
     winit::{WinitSettings, WinitWindows},
     DefaultPlugins,
     log::LogPlugin,
 };
 use bevy_egui::EguiPlugin;
+use winit::dpi::{LogicalSize, PhysicalPosition};
 use std::io::Cursor;
-use winit::window::Icon;
-
+use winit::window::{Icon, Fullscreen};
 
 fn main() {
     let mut app_config = AppConfig::default();
+    let mut app = App::new();
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     app_config.set_db_path();
-    let window_settings = WindowSettings::load_from_storage(&app_config);
+    
+    let default_plugins = DefaultPlugins;
 
     #[cfg(debug_assertions)]
-    let default_plugins = DefaultPlugins.set(LogPlugin {
+    let default_plugins = default_plugins.set(LogPlugin {
         filter: format!("warn,{}=trace,app_config=trace", env!("CARGO_PKG_NAME")).into(),
-        ..Default::default() 
+        ..Default::default()
     });
-
-    let window_resolution = match (
-        &window_settings.window_resolution_x,
-        &window_settings.window_resolution_y,
-    ) {
-        (SettingValue::Float(x), SettingValue::Float(y)) if *x >= 0.0 && *y >= 0.0 => {
-            WindowResolution::new(*x, *y)
-        }
-        _ => WindowResolution::default(),
-    };
-   
-
-    let window_position = match (
-        &window_settings.window_position_x,
-        &window_settings.window_position_y,
-    ) {
-        (SettingValue::Int(x), SettingValue::Int(y)) => WindowPosition::At((*x, *y).into()),
-        _ => WindowPosition::Automatic,
-    };
-
-    let window_fullscreen: bool = match &window_settings.fullscreen {
-        SettingValue::Bool(fullscreen) => *fullscreen,
-        _ => false,
-    };
-
-    let window_maximized: bool = match &window_settings.maximized {
-        SettingValue::Bool(maximized) => *maximized,
-        _ => false,
-    };
 
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
             title: APP_NAME.into(),
-            resolution: window_resolution,
-            position: window_position,
-            mode: if window_fullscreen {
-                WindowMode::BorderlessFullscreen
-            } else {
-                WindowMode::Windowed
-            },
             resize_constraints: WindowResizeConstraints {
                 min_width: 640.,
                 min_height: 480.,
@@ -87,46 +53,93 @@ fn main() {
     };
 
     let default_plugins = default_plugins.set(window_plugin);
-
-    let mut app = App::new();
-
+    app.add_plugins(default_plugins);
+    
+    debug!("Loaded {:?}", &app_config);
+ 
     app.insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
         .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(WindowMaximized(window_maximized))
-        .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
         .add_plugins(EguiPlugin)
         .add_plugins(AppPlugin)
-        .add_systems(Startup, (set_window_icon, set_window_maximized))
+        .add_systems(Startup, set_window_icon)
         .add_event::<AppExit>();
-
-    debug!("Loaded {:?}", &app_config);
             
     // Application settings are only persisted on desktop platforms.
+    let window_settings = WindowSettings::load_from_storage(&app_config);
+    
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     let app = app
         .insert_resource(app_config)
         .insert_resource(window_settings)
+        .add_systems(Startup, apply_initial_window_settings)
         .add_systems(Update, update_window_settings)
         .add_systems(Last, save_settings_on_exit);
         
     app.run();
 }
 
-
-// set window to maximized based on the config
-fn set_window_maximized(
+// set window initial settings on startup
+fn apply_initial_window_settings(
     windows: NonSend<WinitWindows>,
     primary_window: Query<Entity, With<PrimaryWindow>>,
-    window_maximized: Res<WindowMaximized>,
+    window_settings: ResMut<WindowSettings>,
 ) {
+
+    debug!("Initial {:?}", window_settings);
+
+    let window_resolution = match (
+        &window_settings.window_resolution_x,
+        &window_settings.window_resolution_y,
+    ) {
+        (SettingValue::Float(x), SettingValue::Float(y)) if *x > 0.0 && *y > 0.0 => {
+            Some(LogicalSize::new(*x as f64, *y as f64))
+        }
+        _ => None,
+    };
+
+    let window_position = match (
+        &window_settings.window_position_x,
+        &window_settings.window_position_y,
+    ) {
+        (SettingValue::Int(x), SettingValue::Int(y)) => Some(PhysicalPosition::new(*x as f64, *y as f64)),
+        _ => None,
+    };
+
+    let window_fullscreen = match &window_settings.fullscreen {
+        SettingValue::Bool(fullscreen) => {
+            if *fullscreen {
+                Some(Fullscreen::Borderless(None))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+
+    let window_maximized: bool = match &window_settings.maximized {
+        SettingValue::Bool(maximized) => *maximized,
+        _ => false,
+    };
+
     let primary_entity = primary_window.single();
     if let Some(primary) = windows.get_window(primary_entity) {
-        if window_maximized.0 {
-            primary.set_maximized(true);
+
+        if let Some(position) = window_position {
+            primary.set_outer_position(position);
         }
+
+        if window_maximized {
+            primary.set_maximized(true);
+        } else {
+            if let Some(resolution) = window_resolution {
+                primary.set_max_inner_size(Some(resolution));
+            }
+        }
+
+        primary.set_fullscreen(window_fullscreen);
     }
 }
 
