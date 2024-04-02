@@ -34,15 +34,15 @@ impl AppConfigTrait for AppConfig {
                 Ok(conn) => {
                     if let Err(err) = conn.execute(
                         "CREATE TABLE IF NOT EXISTS app_config_settings (
-                            id INTEGER PRIMARY KEY,
                             group_name TEXT,
-                            title TEXT,
                             name TEXT,
+                            title TEXT,
+                            description TEXT,
                             value TEXT,
                             value_type TEXT,
-                            visible BOOLEAN,
-                            description TEXT,
-                            default_value TEXT
+                            default_value TEXT,
+                            visible BOOLEAN DEFAULT FALSE,
+                            CONSTRAINT pk_settings PRIMARY KEY (group_name, name)
                         )",
                         (),
                     ) {
@@ -60,7 +60,6 @@ impl AppConfigTrait for AppConfig {
 
 #[derive(Debug, Clone)]
 pub struct SettingRecord {
-    pub id: i32,
     pub group_name: String,
     pub title: String,
     pub name: String,
@@ -124,7 +123,13 @@ pub fn load_group(app_config: &AppConfig, group_name: &str) -> Result<HashMap<St
 
 fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<SettingRecord>, rusqlite::Error> {
     let conn = match app_config.db_path.as_ref() {
-        Some(path) => rusqlite::Connection::open(path)?,
+        Some(path) => {
+            let mut conn = rusqlite::Connection::open(path)?;
+            conn.trace(Some(|stmt| {
+                debug!("SQL: {:?}", stmt);
+            }));
+            conn
+        },
         None => {
             let err_msg = "Abort loading, no database path set!";
             error!("{}", err_msg);
@@ -132,21 +137,23 @@ fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<
         },
     };
 
-    let mut stmt = conn.prepare("SELECT * FROM app_config_settings WHERE group_name = ?")?;
+    let mut stmt = conn.prepare(
+        "SELECT group_name, name, title, description, value, value_type, default_value, visible 
+        FROM app_config_settings WHERE group_name = ?"
+    )?;
     let mut rows = stmt.query(&[&group_name])?;
 
     let mut records = Vec::new();
     while let Some(row) = rows.next()? {
         records.push(SettingRecord {
-            id: row.get(0).unwrap(),
-            group_name: row.get(1).unwrap(),
-            title: row.get(2).unwrap(),
-            description: row.get(3).unwrap(),
-            name: row.get(4).unwrap(),
-            value: row.get(5).unwrap(),
-            default_value: row.get(6).unwrap(),
-            value_type: row.get(7).unwrap(),
-            visible: row.get(8).unwrap(),
+            group_name: row.get(0).unwrap_or("NONE".to_string()),
+            name: row.get(1).unwrap_or(String::new()),
+            title: row.get(2).unwrap_or(String::new()),
+            description: row.get(3).unwrap_or(String::new()),
+            value: row.get(4).unwrap(),
+            value_type: row.get(5).unwrap(),
+            default_value: row.get(6).unwrap_or(String::new()),
+            visible: row.get(7).unwrap_or(false),
         });
     }
 
@@ -155,7 +162,13 @@ fn get_settings_records(app_config: &AppConfig, group_name: &str) -> Result<Vec<
 
 fn save_record_to_db(app_config: &AppConfig, group_name: &str, key: &str, value: &SettingValue) -> Result<(), rusqlite::Error> {
     let conn = match app_config.db_path.as_ref() {
-        Some(path) => rusqlite::Connection::open(path)?,
+        Some(path) => {
+            let mut conn = rusqlite::Connection::open(path)?;
+            conn.trace(Some(|stmt| {
+                debug!("SQL: {:?}", stmt);
+            }));
+            conn
+        },
         None => {
             let err_msg = "Abort loading, no database path set!";
             error!("{}", err_msg);
@@ -198,8 +211,8 @@ impl Default for WindowSettings {
         Self {
             window_resolution_x: SettingValue::Float(-1.),
             window_resolution_y: SettingValue::Float(-1.),
-            window_position_x: SettingValue::Int(-1),
-            window_position_y: SettingValue::Int(-1),
+            window_position_x: SettingValue::Int(0),
+            window_position_y: SettingValue::Int(0),
             maximized: SettingValue::Bool(false),
             fullscreen: SettingValue::Bool(false),
         }
