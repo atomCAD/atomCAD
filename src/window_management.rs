@@ -11,10 +11,7 @@ use bevy::{
 };
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-use bevy::{
-    app::AppExit,
-    window::WindowCloseRequested,
-};
+use bevy::{app::AppExit, window::WindowCloseRequested};
 
 use std::io::Cursor;
 
