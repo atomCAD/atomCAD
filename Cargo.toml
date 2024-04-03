@@ -51,7 +51,7 @@ directories = { version = "5" }
 molecule = { package = "atomcad-molecule", path = "crates/molecule" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 petgraph = { version = "0.6.4" }
-rusqlite = { version = "0.30", features = ["bundled", "trace"] }
+rusqlite = { version = "0.31", features = ["bundled", "trace"] }
 serde = { version =  "1.0" }
 static_assertions = { version = "1" }
 ultraviolet = { version = "0.9" }
