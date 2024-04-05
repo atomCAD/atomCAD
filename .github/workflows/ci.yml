@@ -82,7 +82,7 @@ jobs:
           key: ${{ matrix.platform.os_name }}-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: stable 1 month ago
           components: rustfmt, clippy
           targets: ${{ matrix.platform.target }}
       - name: Install cross-rs
