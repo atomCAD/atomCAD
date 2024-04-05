@@ -11,3 +11,6 @@ bevy = { workspace = true }
 directories = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
+
+[features]
+sqlite-tracing = ["rusqlite/trace"]
