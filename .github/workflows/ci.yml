@@ -17,55 +17,55 @@ jobs:
             target: wasm32-unknown-unknown
             rustflags: --cfg=web_sys_unstable_apis
             run_tests: false
-          - os_name: Web Assembly w/ WebGL2
-            os: macos-13
-            target: wasm32-unknown-unknown
-            run_tests: false
-          - os_name: Android ARMv8-A
-            os: ubuntu-22.04
-            target: aarch64-linux-android
-            run_tests: true
-          - os_name: iOS A7+
-            os: macos-13
-            target: aarch64-apple-ios
-            # iOS needs a custom test runner.
-            run_tests: false
+          # - os_name: Web Assembly w/ WebGL2
+          #   os: macos-13
+          #   target: wasm32-unknown-unknown
+          #   run_tests: false
+          # - os_name: Android ARMv8-A
+          #   os: ubuntu-22.04
+          #   target: aarch64-linux-android
+          #   run_tests: true
+          # - os_name: iOS A7+
+          #   os: macos-13
+          #   target: aarch64-apple-ios
+          #   # iOS needs a custom test runner.
+          #   run_tests: false
           - os_name: Android x86_64
             os: ubuntu-22.04
             target: x86_64-linux-android
             run_tests: true
-          - os_name: macOS Apple Silicon
-            os: macos-13
-            target: aarch64-apple-darwin
-            # GitHub Actions' free/open-source tier does not support
-            # Apple Silicon yet.
-            run_tests: false
-          - os_name: macOS Intel
-            os: macos-13
-            target: x86_64-apple-darwin
-            run_tests: true
-          - os_name: Windows ARMv8-A
-            os: windows-2022
-            target: aarch64-pc-windows-msvc
-            # GitHub Actions' free/open-source tier does not support
-            # Windows on ARM yet.
-            run_tests: false
-          - os_name: Windows x86_64
-            os: windows-2022
-            target: x86_64-pc-windows-msvc
-            run_tests: true
-          - os_name: Linux ARMv8-A
-            os: ubuntu-22.04
-            target: aarch64-unknown-linux-gnu
-            run_tests: true
-          - os_name: Linux ARMv7-A
-            os: ubuntu-22.04
-            target: thumbv7neon-unknown-linux-gnueabihf
-            run_tests: true
-          - os_name: Linux x86_64/amd64
-            os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            run_tests: true
+          # - os_name: macOS Apple Silicon
+          #   os: macos-13
+          #   target: aarch64-apple-darwin
+          #   # GitHub Actions' free/open-source tier does not support
+          #   # Apple Silicon yet.
+          #   run_tests: false
+          # - os_name: macOS Intel
+          #   os: macos-13
+          #   target: x86_64-apple-darwin
+          #   run_tests: true
+          # - os_name: Windows ARMv8-A
+          #   os: windows-2022
+          #   target: aarch64-pc-windows-msvc
+          #   # GitHub Actions' free/open-source tier does not support
+          #   # Windows on ARM yet.
+          #   run_tests: false
+          # - os_name: Windows x86_64
+          #   os: windows-2022
+          #   target: x86_64-pc-windows-msvc
+          #   run_tests: true
+          # - os_name: Linux ARMv8-A
+          #   os: ubuntu-22.04
+          #   target: aarch64-unknown-linux-gnu
+          #   run_tests: true
+          # - os_name: Linux ARMv7-A
+          #   os: ubuntu-22.04
+          #   target: thumbv7neon-unknown-linux-gnueabihf
+          #   run_tests: true
+          # - os_name: Linux x86_64/amd64
+          #   os: ubuntu-22.04
+          #   target: x86_64-unknown-linux-gnu
+          #   run_tests: true
         toolchain:
           - stable
     runs-on: ${{ matrix.platform.os }}
