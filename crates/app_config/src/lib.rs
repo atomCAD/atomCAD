@@ -38,7 +38,9 @@ impl AppConfigTrait for AppConfig {
         // create default DB table if it doesn't exist
         if let Some(path) = &self.db_path {
             match rusqlite::Connection::open(path) {
+                #[allow(unused_mut)]
                 Ok(mut conn) => {
+                    #[cfg(feature = "sqlite-tracing")]
                     conn.trace(Some(|stmt| {
                         debug!("SQL: {:?}", stmt);
                     }));
@@ -97,7 +99,9 @@ fn get_settings_records(
 ) -> Result<Vec<SettingRecord>, rusqlite::Error> {
     let conn = match app_config.db_path.as_ref() {
         Some(path) => {
+            #[allow(unused_mut)]
             let mut conn = rusqlite::Connection::open(path)?;
+            #[cfg(feature = "sqlite-tracing")]
             conn.trace(Some(|stmt| {
                 debug!("SQL: {:?}", stmt);
             }));
@@ -141,7 +145,9 @@ pub fn save_record_to_db(
 ) -> Result<(), rusqlite::Error> {
     let conn = match app_config.db_path.as_ref() {
         Some(path) => {
+            #[allow(unused_mut)]
             let mut conn = rusqlite::Connection::open(path)?;
+            #[cfg(feature = "sqlite-tracing")]
             conn.trace(Some(|stmt| {
                 debug!("SQL: {:?}", stmt);
             }));
