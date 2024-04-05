@@ -80,7 +80,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ matrix.platform.os_name }}-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: rustfmt, clippy
@@ -130,7 +130,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ubuntu-22.04-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: rustfmt
