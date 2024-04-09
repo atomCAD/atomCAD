@@ -9,8 +9,10 @@ edition = "2021"
 [dependencies]
 bevy = { workspace = true }
 directories = { workspace = true }
-rusqlite = { workspace = true }
 serde = { workspace = true }
+
+[target.'cfg(all(any(target_os = "windows", target_os = "linux", target_os = "macos")))'.dependencies]
+rusqlite = { workspace = true }
 
 [features]
 sqlite-tracing = ["rusqlite/trace"]
