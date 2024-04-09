@@ -14,3 +14,7 @@ serde = { workspace = true }
 
 [features]
 sqlite-tracing = ["rusqlite/trace"]
+
+# Specificlly exclude rusqlite from android and wasm32 builds
+[target.'cfg(not(any(target_os = "android", target_os = "unknown", target_family = "wasm", target_arch = "wasm32")))'.dependencies]
+rusqlite = { workspace = true, optional = true }

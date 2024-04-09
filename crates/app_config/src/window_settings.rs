@@ -1,9 +1,5 @@
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-mod platform_specific {
-    pub use crate::load_group;
-}
-
-use platform_specific::*;
+use crate::load_group;
 use crate::{save_record_to_db, setting_value::SettingValue, AppConfig};
 
 use bevy::{prelude::*, utils::HashMap};
@@ -75,6 +71,7 @@ impl WindowSettings {
 }
 
 impl WindowSettings {
+    #[allow(unused_variables)]
     pub fn load(app_config: &AppConfig) -> Self {
         let default_settings = WindowSettings::default();
 
@@ -115,7 +112,7 @@ impl WindowSettings {
         }
     }
 
-    #[allow(unreachable_code)]
+    #[allow(unreachable_code, unused_variables)]
     pub fn save(&self, app_config: &AppConfig) -> Result<(), String> {
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         return Ok(());

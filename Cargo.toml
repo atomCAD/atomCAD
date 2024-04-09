@@ -96,7 +96,6 @@ common = { workspace = true }
 molecule = { workspace = true }
 periodic-table = { workspace = true }
 rand = { version = "0.8.3" }
-rusqlite = { workspace = true, optional = true }
 smooth-bevy-cameras = { version = "0.11" }
 
 # keep the following in sync with Bevy's dependencies
@@ -120,8 +119,8 @@ objc = "0.2.7"
 directories = { workspace = true }
 
 # Specificlly exclude rusqlite from android and wasm32 builds
-[target.'cfg(not(any(target_os = "android", target_arch = "wasm32", target = "wasm32-unknown-unknown")))'.dependencies]
-rusqlite = { workspace = true }
+[target.'cfg(not(any(target_os = "android", target_os = "unknown", target_family = "wasm", target_arch = "wasm32")))'.dependencies]
+rusqlite = { workspace = true, optional = true }
 
 [build-dependencies]
 embed-resource = "1"
