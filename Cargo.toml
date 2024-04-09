@@ -120,7 +120,7 @@ objc = "0.2.7"
 directories = { workspace = true }
 
 # Specificlly exclude rusqlite from android and wasm32 builds
-[target.'cfg(not(any(target_os = "android", target_arch = "wasm32", target = "wasm32-unknown-unknown")))'.dependencies]
+[target.'cfg(not(any(target_os = "android", target_family = "wasm")))'.dependencies]
 rusqlite = { workspace = true }
 
 [build-dependencies]
