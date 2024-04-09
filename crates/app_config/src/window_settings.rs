@@ -111,7 +111,8 @@ impl WindowSettings {
             window_min_height: default_settings.window_min_height,
         }
     }
-
+    
+    #[allow(unused_variables)]
     #[allow(unreachable_code)]
     pub fn save(&self, app_config: &AppConfig) -> Result<(), String> {
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]

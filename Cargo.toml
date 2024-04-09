@@ -121,10 +121,7 @@ directories = { workspace = true }
 
 # Specificlly exclude rusqlite from android and wasm32 builds
 [target.'cfg(not(any(target_os = "android", target_family = "wasm")))'.dependencies]
-rusqlite = { workspace = true }
-
-[target.'cfg(target_family = "wasm")'.dependencies.rusqlite]
-features = []
+rusqlite = { workspace = true, default-features = false, features = [] }
 
 [build-dependencies]
 embed-resource = "1"
