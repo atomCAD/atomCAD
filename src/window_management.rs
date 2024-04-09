@@ -115,7 +115,7 @@ pub fn save_window_settings_on_exit(
     }
 
     debug!("Saving settings before exit...");
-    let _ = window_settings.save_to_storage(&app_config);
+    let _ = window_settings.save(&app_config);
 }
 
 pub fn update_window_settings(
