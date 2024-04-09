@@ -1,9 +1,5 @@
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-mod platform_specific {
-    pub use crate::load_group;
-}
-
-use platform_specific::*;
+use crate::load_group;
 use crate::{save_record_to_db, setting_value::SettingValue, AppConfig};
 
 use bevy::{prelude::*, utils::HashMap};
