@@ -42,8 +42,8 @@ fn main() {
         primary_window: Some(Window {
             title: APP_NAME.into(),
             resize_constraints: WindowResizeConstraints {
-                min_width: 640.,
-                min_height: 480.,
+                min_width: WindowSettings::MIN_WIDTH,
+                min_height: WindowSettings::MIN_HEIGHT,
                 ..default()
             },
             present_mode: PresentMode::AutoNoVsync,
@@ -60,12 +60,13 @@ fn main() {
     debug!("Loaded {:?}", &app_config);
 
     // Application settings are only persisted on desktop platforms.
-    let window_settings = WindowSettings::load_from_storage(&app_config);
+    let window_settings = WindowSettings::load(&app_config);
 
     app.insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
         .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(app_config)
         .insert_resource(window_settings)
         .add_plugins(PlatformTweaks)
         .add_plugins(EguiPlugin)
@@ -76,9 +77,7 @@ fn main() {
         .add_event::<AppExit>();
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    let app = app
-        .insert_resource(app_config)
-        .add_systems(Last, save_window_settings_on_exit);
+    let app = app.add_systems(Last, save_window_settings_on_exit);
 
     app.run();
 }

@@ -12,6 +12,8 @@ pub struct WindowSettings {
     pub window_position_y: SettingValue,
     pub maximized: SettingValue,
     pub fullscreen: SettingValue,
+    pub window_min_width: SettingValue,
+    pub window_min_height: SettingValue,
 }
 
 impl Default for WindowSettings {
@@ -23,12 +25,14 @@ impl Default for WindowSettings {
             window_position_y: SettingValue::Int(0),
             maximized: SettingValue::Bool(false),
             fullscreen: SettingValue::Bool(false),
+            window_min_width: SettingValue::Float(Self::MIN_WIDTH),
+            window_min_height: SettingValue::Float(Self::MIN_HEIGHT),
         }
     }
 }
 
 impl fmt::Debug for WindowSettings {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let window_resolution = match (&self.window_resolution_x, &self.window_resolution_y) {
             (SettingValue::Float(x), SettingValue::Float(y)) => format!("({}, {})", x, y),
             _ => "Invalid".to_string(),
@@ -49,7 +53,8 @@ impl fmt::Debug for WindowSettings {
             _ => "Invalid".to_string(),
         };
 
-        f.debug_struct("WindowSettings")
+        formatter
+            .debug_struct("WindowSettings")
             .field("window_resolution", &window_resolution)
             .field("window_position", &window_position)
             .field("maximized", &maximized)
@@ -59,9 +64,19 @@ impl fmt::Debug for WindowSettings {
 }
 
 impl WindowSettings {
-    pub fn load_from_storage(app_config: &AppConfig) -> Self {
-        let window_settings_group = load_group(app_config, "primary_window").unwrap_or_default();
+    pub const MIN_WIDTH: f32 = 640.0;
+    pub const MIN_HEIGHT: f32 = 480.0;
+}
+
+impl WindowSettings {
+    pub fn load(app_config: &AppConfig) -> Self {
         let default_settings = WindowSettings::default();
+
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        let window_settings_group = load_group(app_config, "primary_window").unwrap_or_default();
+
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        let window_settings_group = HashMap::new();
 
         Self {
             window_resolution_x: window_settings_group
@@ -88,10 +103,15 @@ impl WindowSettings {
                 .get("fullscreen")
                 .cloned()
                 .unwrap_or(default_settings.fullscreen),
+            window_min_width: default_settings.window_min_width,
+            window_min_height: default_settings.window_min_height,
         }
     }
 
-    pub fn save_to_storage(&self, app_config: &AppConfig) -> Result<(), String> {
+    pub fn save(&self, app_config: &AppConfig) -> Result<(), String> {
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        return Ok(());
+
         let mut settings = HashMap::new();
         settings.insert("resolution_x", self.window_resolution_x.clone());
         settings.insert("resolution_y", self.window_resolution_y.clone());
