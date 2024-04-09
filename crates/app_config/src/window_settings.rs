@@ -71,6 +71,7 @@ impl WindowSettings {
 }
 
 impl WindowSettings {
+    #[allow(unused_variables)]
     pub fn load(app_config: &AppConfig) -> Self {
         let default_settings = WindowSettings::default();
 

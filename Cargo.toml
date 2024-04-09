@@ -123,5 +123,8 @@ directories = { workspace = true }
 [target.'cfg(not(any(target_os = "android", target_family = "wasm")))'.dependencies]
 rusqlite = { workspace = true }
 
+[target.'cfg(target_family = "wasm")'.dependencies.rusqlite]
+features = []
+
 [build-dependencies]
 embed-resource = "1"
