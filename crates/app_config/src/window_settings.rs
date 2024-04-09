@@ -1,4 +1,6 @@
-use crate::{load_group, save_record_to_db, setting_value::SettingValue, AppConfig};
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use crate::load_group;
+use crate::{save_record_to_db, setting_value::SettingValue, AppConfig};
 
 use bevy::{prelude::*, utils::HashMap};
 use serde::{Deserialize, Serialize};
@@ -69,14 +71,16 @@ impl WindowSettings {
 }
 
 impl WindowSettings {
+    #[allow(unused_variables)]
     pub fn load(app_config: &AppConfig) -> Self {
         let default_settings = WindowSettings::default();
 
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        let window_settings_group = load_group(app_config, "primary_window").unwrap_or_default();
+        let window_settings_group: HashMap<String, SettingValue> =
+            load_group(app_config, "primary_window").unwrap_or_default();
 
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-        let window_settings_group = HashMap::new();
+        let window_settings_group: HashMap<String, SettingValue> = HashMap::new();
 
         Self {
             window_resolution_x: window_settings_group
@@ -108,6 +112,7 @@ impl WindowSettings {
         }
     }
 
+    #[allow(unreachable_code)]
     pub fn save(&self, app_config: &AppConfig) -> Result<(), String> {
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         return Ok(());
