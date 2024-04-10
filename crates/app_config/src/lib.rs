@@ -1,9 +1,13 @@
 pub mod setting_value;
 pub mod window_settings;
 
-use bevy::{prelude::*, utils::HashMap};
+use bevy::prelude::*;
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use bevy::utils::HashMap;
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use setting_value::{SettingRecord, SettingValue};
+
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -36,6 +40,7 @@ impl AppConfigTrait for AppConfig {
         }
 
         // create default DB table if it doesn't exist
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         if let Some(path) = &self.db_path {
             match rusqlite::Connection::open(path) {
                 #[allow(unused_mut)]
@@ -70,6 +75,7 @@ impl AppConfigTrait for AppConfig {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub fn load_group(
     app_config: &AppConfig,
     group_name: &str,
@@ -93,6 +99,7 @@ pub fn load_group(
     Ok(settings)
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn get_settings_records(
     app_config: &AppConfig,
     group_name: &str,
@@ -137,6 +144,7 @@ fn get_settings_records(
     Ok(records)
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub fn save_record_to_db(
     app_config: &AppConfig,
     group_name: &str,
