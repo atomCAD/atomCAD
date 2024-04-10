@@ -35,7 +35,6 @@ impl AppConfigTrait for AppConfig {
                     err
                 );
                 warn!("AppConfig will not be persisted as no storage can be created.");
-                return;
             }
         }
 
