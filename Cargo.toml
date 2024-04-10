@@ -102,6 +102,10 @@ smooth-bevy-cameras = { version = "0.11" }
 winit = { version = "0.29", default-features = false }
 image = { version = "0.24", default-features = false }
 
+# Limit rusql availability to the following platforms only
+[target.'cfg(all(any(target_os = "windows", target_os = "linux", target_os = "macos")))'.dependencies]
+rusqlite = { workspace = true }
+
 [target.'cfg(target_family = "wasm")'.dependencies]
 web-sys = { version = "0.3" }
 
@@ -117,10 +121,6 @@ objc = "0.2.7"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 directories = { workspace = true }
-
-# Specificlly exclude rusqlite from android and wasm32 builds
-[target.'cfg(not(any(target_os = "android", target_os = "unknown", target_family = "wasm", target_arch = "wasm32")))'.dependencies]
-rusqlite = { workspace = true, optional = true }
 
 [build-dependencies]
 embed-resource = "1"

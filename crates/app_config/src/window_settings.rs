@@ -1,6 +1,6 @@
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-use crate::load_group;
-use crate::{save_record_to_db, setting_value::SettingValue, AppConfig};
+use crate::{load_group, save_record_to_db};
+use crate::{setting_value::SettingValue, AppConfig};
 
 use bevy::{prelude::*, utils::HashMap};
 use serde::{Deserialize, Serialize};
@@ -112,6 +112,7 @@ impl WindowSettings {
         }
     }
 
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[allow(unreachable_code, unused_variables)]
     pub fn save(&self, app_config: &AppConfig) -> Result<(), String> {
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
