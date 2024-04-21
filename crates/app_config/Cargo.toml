@@ -1,0 +1,18 @@
+[package]
+name = "app_config"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2021"
+
+[dependencies]
+bevy = { workspace = true }
+directories = { workspace = true }
+serde = { workspace = true }
+
+[target.'cfg(all(any(target_os = "windows", target_os = "linux", target_os = "macos")))'.dependencies]
+rusqlite = { workspace = true }
+
+[features]
+sqlite-tracing = ["rusqlite/trace"]

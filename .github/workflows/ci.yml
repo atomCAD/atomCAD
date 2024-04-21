@@ -82,17 +82,17 @@ jobs:
           key: ${{ matrix.platform.os_name }}-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: stable 1 month ago
           components: rustfmt, clippy
           targets: ${{ matrix.platform.target }}
       - name: Install cross-rs
         shell: bash
-        run: which cross && cross --version || cargo install cross --git https://github.com/cross-rs/cross --rev 3bfc6d54c817a2991f610d258f3290906c97474f --force
+        run: which cross && cross --version || cargo install cross --git https://github.com/cross-rs/cross --rev 221324fd39a857f7af954484b96296cbc8c6a65f --force
       - name: Install wasm tools
         if: ${{ matrix.platform.target == 'wasm32-unknown-unknown' }}
         shell: bash
         run: |
-          which wasm-bindgen && wasm-bindgen --version || cargo install wasm-bindgen-cli --version "0.2.87" --force
+          which wasm-bindgen && wasm-bindgen --version || cargo install wasm-bindgen-cli --version "0.2.92" --force
           which wasm-pack && wasm-pack --version || cargo install wasm-pack --version "0.12.1" --force
       - name: Install alsa and udev
         if: runner.os == 'linux'
