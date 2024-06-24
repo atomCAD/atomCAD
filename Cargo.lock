@@ -806,9 +806,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_mod_picking"
-version = "0.18.3"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cbcb08ab83764e21b725f695827b641701e34e7eff2dbffb6b343847b785873"
+checksum = "e28447667f25f229b69dcf96112d0abcff0034341e4df27e61968349d948698a"
 dependencies = [
  "bevy_app",
  "bevy_core",
@@ -877,9 +877,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_picking_core"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c168fce188e01d19f6db5bde2ca8249ec5b59720ab5ec82826c6906c6f06850c"
+checksum = "d05ea19fc3b1998d61e13320b737327f5ac5afab1b744dcda62ae52f969c184e"
 dependencies = [
  "bevy_app",
  "bevy_derive",
@@ -895,9 +895,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_picking_highlight"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46e49069da84b0fec990f9b73bb4cdb2767028c0e7e9685180cded2954e22166"
+checksum = "1e9b519416334f6ad0925a6f0d58d7d614a227c036bc2ab8ff8059870796a6b1"
 dependencies = [
  "bevy_app",
  "bevy_asset",
@@ -912,9 +912,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_picking_input"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f72c3ad25a644b19419ef4c7ec1a245bc09858b672ba33583bd17016d0ee4fcb"
+checksum = "80f656e01ce324287061983943503cc071d14ad5e371a36273b10dc527f93381"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -931,9 +931,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_picking_raycast"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "408f961c27043a39451ec0254f0b75325ced3b73d9aa1a0ef4276e43967e16fc"
+checksum = "280d5f84636f909b41b5e28d0dc699d4f0bf500f5c8305af636146f53b3b8978"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -947,9 +947,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_picking_selection"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca137648ef4ad692cf7fe4ff49b7486ed3fe41217b546cd3eeac1bce701cf235"
+checksum = "6116e8228d4149ba91eeab74f60a878c4c4e804a8eb3409b43a2f431b82d8674"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -962,9 +962,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_picking_sprite"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ee4ea0d7e7a7580e4b4ccc96266af6e5a7cd69dccb72a4b65eb99c1679a7ba3"
+checksum = "048bb85db2e16af470464baa1cb453a0791d33178d0b14a6263ac9cd3320f953"
 dependencies = [
  "bevy_app",
  "bevy_asset",
@@ -979,9 +979,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_picking_ui"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e56ce0591a420ab321c251efcacc3f5be090af1e5e576bd9790a275679f2c74"
+checksum = "e3f4957e934fe191fc9f537f7b99db4af39ee9894e5096d9b97ee1a5a5bf59da"
 dependencies = [
  "bevy_app",
  "bevy_ecs",

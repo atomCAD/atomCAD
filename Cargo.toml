@@ -39,7 +39,7 @@ bevy = { version = "0.13", default-features = false, features = [
     "x11",
     "zstd",
 ] }
-bevy_mod_picking = { version = "0.18", default-features = false, features = [
+bevy_mod_picking = { version = "0.19", default-features = false, features = [
     "backend_raycast",
     "backend_bevy_ui",
     "backend_sprite",
