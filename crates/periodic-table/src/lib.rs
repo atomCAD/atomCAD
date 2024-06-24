@@ -139,7 +139,7 @@ impl Element {
 
     pub fn from_atomic_number(n: u8) -> Option<Self> {
         if Self::MIN as u8 <= n && n <= Self::MAX as u8 {
-            Some(unsafe { mem::transmute(n) })
+            Some(unsafe { mem::transmute::<u8, Element>(n) })
         } else {
             None
         }
