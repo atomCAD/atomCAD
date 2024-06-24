@@ -32,9 +32,6 @@ pub struct FontAssets {
 }
 
 #[derive(AssetCollection, Resource)]
-pub struct TextureAssets {
-    #[asset(path = "textures/bevy.png")]
-    pub texture_bevy: Handle<Image>,
-}
+pub struct TextureAssets {}
 
 // End of File
