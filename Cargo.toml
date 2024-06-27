@@ -13,4 +13,29 @@ authors = ["Machine Phase Systems <hello@machinephase.systems>"]
 license = "MPL-2.0"
 edition = "2024"
 
+[workspace.dependencies]
+# Bevy
+bevy = "0.17"
+
+# keep the following in sync with Bevy's dependencies
+winit = { version = "0.30", default-features = false }
+image = { version = "0.25", default-features = false }
+
+# Enable a small amount of optimization for our code in debug mode:
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy):
+[profile.dev.package."*"]
+opt-level = 3
+
 [dependencies]
+bevy.workspace = true
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+# The getrandom crate requires a special feture flag to support web backends, as of version 0.3.
+# See also the configuration flag setting in .cargo/config.toml
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
