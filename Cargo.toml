@@ -14,3 +14,12 @@ license = "MPL-2.0"
 edition = "2024"
 
 [dependencies]
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+# Pin wasm-bindgen to match the wasm-bindgen-cli version installed in CI.
+# web-sys unstable APIs (needed for WebGPU) don't follow semver, and newer
+# versions rename VideoFrame methods that glow 0.16.0 depends on.
+wasm-bindgen = "=0.2.106"
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
