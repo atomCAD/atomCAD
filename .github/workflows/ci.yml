@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: ${{ matrix.platform.os_name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os_name: Web Assembly w/ WebGPU
+            slug: wasm-webgpu
+            # Use macOS so we can test on Safari.
+            os: macos-15
+            target: wasm32-unknown-unknown
+            target_upper: WASM32_UNKNOWN_UNKNOWN
+            rustflags: --cfg=web_sys_unstable_apis
+            run_tests: false
+            use_cross: false
+          - os_name: Web Assembly w/ WebGL2
+            slug: wasm-webgl2
+            # Use macOS so we can test on Safari.
+            os: macos-15
+            target: wasm32-unknown-unknown
+            target_upper: WASM32_UNKNOWN_UNKNOWN
+            run_tests: false
+            use_cross: false
+          - os_name: Android ARMv8-A
+            slug: android-armv8
+            os: ubuntu-24.04
+            target: aarch64-linux-android
+            target_upper: AARCH64_LINUX_ANDROID
+            run_tests: true
+            use_cross: true
+          - os_name: Android x86_64
+            slug: android-x86_64
+            os: ubuntu-24.04
+            target: x86_64-linux-android
+            target_upper: X86_64_LINUX_ANDROID
+            run_tests: true
+            use_cross: true
+          - os_name: iOS A7+
+            slug: ios-a7
+            os: macos-15
+            target: aarch64-apple-ios
+            # iOS needs a custom test runner.
+            run_tests: false
+            use_cross: false
+          - os_name: macOS Apple Silicon
+            slug: macos-apple-silicon
+            os: macos-15
+            target: aarch64-apple-darwin
+            run_tests: true
+            use_cross: false
+          - os_name: macOS Intel
+            slug: macos-intel
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            run_tests: true
+            use_cross: false
+          - os_name: Windows x86_64
+            slug: windows-2025
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            target_upper: X86_64_PC_WINDOWS_MSVC
+            run_tests: true
+            use_cross: false
+          - os_name: Linux ARMv8-A
+            slug: linux-armv8
+            os: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            target_upper: AARCH64_UNKNOWN_LINUX_GNU
+            run_tests: true
+            use_cross: true
+          - os_name: Linux ARMv7-A
+            slug: linux-armv7
+            os: ubuntu-24.04
+            target: armv7-unknown-linux-gnueabihf
+            target_upper: ARMV7_UNKNOWN_LINUX_GNUEABIHF
+            run_tests: true
+            use_cross: true
+          - os_name: Linux x86_64/amd64
+            slug: linux-x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            target_upper: X86_64_UNKNOWN_LINUX_GNU
+            run_tests: true
+            use_cross: false
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.platform.slug }}-cargo-build-${{ hashFiles('**/Cargo.*') }}
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable 1 month ago
+          components: rustfmt, clippy
+          targets: ${{ matrix.platform.target }}
+      - name: Install cross
+        if: ${{ matrix.platform.use_cross }}
+        shell: bash
+        run: which cross && cross --version || cargo install cross --git https://github.com/cross-rs/cross --force
+      - name: Install wasm tools
+        if: ${{ matrix.platform.target == 'wasm32-unknown-unknown' }}
+        shell: bash
+        run: |
+          which wasm-bindgen && wasm-bindgen --version || cargo install wasm-bindgen-cli --version "0.2.106" --locked --force
+          which wasm-pack && wasm-pack --version || cargo install wasm-pack --version "0.13.1" --force
+      - name: Build (native)
+        if: ${{ ! matrix.platform.use_cross }}
+        shell: bash
+        run: RUSTFLAGS='${{ matrix.platform.rustflags }}' cargo build --target ${{ matrix.platform.target }}
+      - name: Run tests (native)
+        if: ${{ ! matrix.platform.use_cross && matrix.platform.run_tests }}
+        shell: bash
+        run: RUSTFLAGS='${{ matrix.platform.rustflags }}' cargo test --target ${{ matrix.platform.target }}
+      - name: Run clippy (native)
+        if: ${{ ! matrix.platform.use_cross }}
+        shell: bash
+        run: RUSTFLAGS='${{ matrix.platform.rustflags }}' cargo clippy --target ${{ matrix.platform.target }} --workspace --all-targets --all-features -- -D warnings
+      - name: Run cargo doc (native)
+        if: ${{ ! matrix.platform.use_cross }}
+        shell: bash
+        run: RUSTFLAGS='${{ matrix.platform.rustflags }}' cargo doc --target ${{ matrix.platform.target }} --workspace --no-deps
+      - name: Build (cross)
+        if: ${{ matrix.platform.use_cross }}
+        shell: bash
+        run: CARGO_TARGET_${{ matrix.platform.target_upper }}_RUSTFLAGS='${{ matrix.platform.rustflags }}' cross build --target ${{ matrix.platform.target }}
+      - name: Run tests (cross)
+        if: ${{ matrix.platform.use_cross && matrix.platform.run_tests }}
+        shell: bash
+        run: CARGO_TARGET_${{ matrix.platform.target_upper }}_RUSTFLAGS='${{ matrix.platform.rustflags }}' cross test --target ${{ matrix.platform.target }} --workspace --all-features
+      - name: Run clippy (cross)
+        if: ${{ matrix.platform.use_cross }}
+        shell: bash
+        run: CARGO_TARGET_${{ matrix.platform.target_upper }}_RUSTFLAGS='${{ matrix.platform.rustflags }}' cross clippy --target ${{ matrix.platform.target }} --workspace --all-targets --all-features -- -D warnings
+      - name: Run cargo doc (cross)
+        if: ${{ matrix.platform.use_cross }}
+        shell: bash
+        run: CARGO_TARGET_${{ matrix.platform.target_upper }}_RUSTFLAGS='${{ matrix.platform.rustflags }}' cross doc --target ${{ matrix.platform.target }} --workspace --no-deps
+      - name: Run web tests
+        if: ${{ matrix.platform.target == 'wasm32-unknown-unknown' }}
+        shell: bash
+        run: |
+          RUSTFLAGS='${{ matrix.platform.rustflags }}' wasm-pack test --node
+          RUSTFLAGS='${{ matrix.platform.rustflags }}' wasm-pack test --headless --chrome
+          RUSTFLAGS='${{ matrix.platform.rustflags }}' wasm-pack test --headless --firefox
+          RUSTFLAGS='${{ matrix.platform.rustflags }}' wasm-pack test --headless --safari
+
+  rustfmt:
+    name: Formatting
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ubuntu-24.04-cargo-build-${{ hashFiles('**/Cargo.*') }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable 1 month ago
+          components: rustfmt
+      - name: Check format
+        shell: bash
+        run: cargo fmt --all -- --check
