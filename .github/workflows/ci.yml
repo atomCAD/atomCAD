@@ -20,7 +20,7 @@ jobs:
             os: macos-15
             target: wasm32-unknown-unknown
             target_upper: WASM32_UNKNOWN_UNKNOWN
-            rustflags: --cfg=web_sys_unstable_apis
+            rustflags: --cfg=web_sys_unstable_apis --cfg=getrandom_backend="wasm_js"
             run_tests: false
             use_cross: false
           - os_name: Web Assembly w/ WebGL2
@@ -29,6 +29,7 @@ jobs:
             os: macos-15
             target: wasm32-unknown-unknown
             target_upper: WASM32_UNKNOWN_UNKNOWN
+            rustflags: --cfg=getrandom_backend="wasm_js"
             run_tests: false
             use_cross: false
           - os_name: Android ARMv8-A
@@ -122,6 +123,23 @@ jobs:
         run: |
           which wasm-bindgen && wasm-bindgen --version || cargo install wasm-bindgen-cli --version "0.2.106" --locked --force
           which wasm-pack && wasm-pack --version || cargo install wasm-pack --version "0.13.1" --force
+      - name: Install pkg-config and Wayland (Linux)
+        if: runner.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libwayland-dev \
+            libxkbcommon-dev
+      - name: Install ALSA and udev (Linux)
+        if: runner.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev \
+            libudev-dev
       - name: Build (native)
         if: ${{ ! matrix.platform.use_cross }}
         shell: bash

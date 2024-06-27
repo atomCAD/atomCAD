@@ -2,9 +2,10 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use bevy::app::AppExit;
-fn main() -> AppExit {
-    atomcad::start()
+use bevy::prelude::*;
+
+pub fn start() -> AppExit {
+    App::new().add_plugins(DefaultPlugins).run()
 }
 
 // End of File
