@@ -3,3 +3,4 @@ public_url = "/"
 
 [serve]
 port = 8080
+no_spa = true
