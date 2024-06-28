@@ -6,6 +6,9 @@
 // There's just no getting around this, so silence clippy's protestations.
 #![allow(clippy::type_complexity)]
 
+mod app;
+pub use app::AppPlugin;
+
 mod start;
 pub use start::start;
 
