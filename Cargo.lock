@@ -260,8 +260,10 @@ dependencies = [
 name = "atomcad"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "bevy",
  "getrandom 0.3.3",
+ "ico",
  "image",
  "wasm-bindgen-test",
  "winit",
@@ -2368,6 +2370,16 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+
+[[package]]
+name = "ico"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc50b891e4acf8fe0e71ef88ec43ad82ee07b3810ad09de10f1d01f072ed4b98"
+dependencies = [
+ "byteorder",
+ "png",
+]
 
 [[package]]
 name = "image"
