@@ -4,8 +4,13 @@
 
 use bevy::prelude::*;
 
+use atomcad::AppPlugin;
+
 fn main() {
-    App::new().add_plugins(DefaultPlugins).run();
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugins(AppPlugin)
+        .run();
 }
 
 // End of File
