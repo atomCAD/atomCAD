@@ -2,14 +2,12 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::AppPlugin;
-use bevy::prelude::*;
+use bevy::{app::App, prelude::*};
 
-pub fn start() -> AppExit {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(AppPlugin)
-        .run()
+pub struct AppPlugin;
+
+impl Plugin for AppPlugin {
+    fn build(&self, _app: &mut App) {}
 }
 
 // End of File
