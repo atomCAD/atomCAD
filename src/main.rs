@@ -4,11 +4,12 @@
 
 use bevy::prelude::*;
 
-use atomcad::AppPlugin;
+use atomcad::{platform::bevy::PlatformTweaks, AppPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(PlatformTweaks)
         .add_plugins(AppPlugin)
         .run();
 }
