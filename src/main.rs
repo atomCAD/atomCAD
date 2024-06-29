@@ -4,11 +4,12 @@
 
 use bevy::prelude::*;
 
-use atomcad::{platform::bevy::PlatformTweaks, AppPlugin};
+use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
 
 fn main() {
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
+            title: APP_NAME.into(),
             canvas: Some("#bevy".to_owned()), // For web; no effect elewhere.
             ..default()
         }),

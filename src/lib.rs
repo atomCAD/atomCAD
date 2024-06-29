@@ -12,6 +12,8 @@ pub(crate) mod platform_impl;
 use bevy::app::App;
 use bevy::prelude::*;
 
+pub const APP_NAME: &str = "atomCAD";
+
 pub struct AppPlugin;
 
 impl Plugin for AppPlugin {
