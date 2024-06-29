@@ -9,6 +9,9 @@
 pub mod platform;
 pub(crate) mod platform_impl;
 
+pub mod gui;
+use gui::set_window_icon;
+
 use bevy::app::App;
 use bevy::prelude::*;
 
@@ -17,7 +20,9 @@ pub const APP_NAME: &str = "atomCAD";
 pub struct AppPlugin;
 
 impl Plugin for AppPlugin {
-    fn build(&self, _app: &mut App) {}
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, set_window_icon);
+    }
 }
 
 // End of File
