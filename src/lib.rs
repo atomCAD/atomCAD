@@ -9,6 +9,10 @@
 mod app;
 pub use app::AppPlugin;
 
+pub mod platform;
+pub(crate) mod platform_impl;
+pub use platform::bevy::PlatformTweaks;
+
 mod start;
 pub use start::start;
 
