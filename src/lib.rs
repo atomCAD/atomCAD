@@ -12,16 +12,31 @@ pub(crate) mod platform_impl;
 pub mod gui;
 use gui::set_window_icon;
 
+pub mod state;
+use state::loading::LoadingPlugin;
+
 use bevy::app::App;
 use bevy::prelude::*;
 
 pub const APP_NAME: &str = "atomCAD";
 
+// We use States to separate logic
+// See https://bevy-cheatbook.github.io/programming/states.html
+// Or https://github.com/bevyengine/bevy/blob/main/examples/ecs/state.rs
+#[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
+enum AppState {
+    // During the loading State the LoadingPlugin will load our assets
+    #[default]
+    Loading,
+}
+
 pub struct AppPlugin;
 
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, set_window_icon);
+        app.init_state::<AppState>()
+            .add_plugins(LoadingPlugin)
+            .add_systems(Startup, set_window_icon);
     }
 }
 
