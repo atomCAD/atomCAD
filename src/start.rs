@@ -2,12 +2,13 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::AppPlugin;
+use crate::{AppPlugin, PlatformTweaks};
 use bevy::prelude::*;
 
 pub fn start() -> AppExit {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(PlatformTweaks)
         .add_plugins(AppPlugin)
         .run()
 }
