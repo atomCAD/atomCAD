@@ -35,6 +35,10 @@ opt-level = 3
 
 [dependencies]
 bevy.workspace = true
+# Image
+image.workspace = true
+# Windowing
+winit.workspace = true
 
 # macOS platform support
 [target.'cfg(target_os = "macos")'.dependencies]

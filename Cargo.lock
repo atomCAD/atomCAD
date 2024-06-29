@@ -313,6 +313,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-test",
  "web-sys",
+ "winit",
 ]
 
 [[package]]

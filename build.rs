@@ -2,6 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
+use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -50,6 +51,17 @@ fn main() {
 
     // Generate a web app manifest file.
     create_web_app_manifest_file(&web_dir.join("site.webmanifest"));
+
+    // Write the full-resolution icon to the build directory.
+    let out_dir = env::var("OUT_DIR").expect("OUT_DIR must be set");
+    let icon_file = Path::new(&out_dir).join("atomCAD-icon.png");
+    source_image.save(&icon_file).expect("Failed to save icon");
+
+    // Make the icon available to Rust code.
+    println!(
+        "cargo:rustc-env=ATOMCAD_ICON_PATH={}",
+        icon_file.to_string_lossy()
+    );
 }
 
 fn create_web_app_manifest_file(path: &Path) {
