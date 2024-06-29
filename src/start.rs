@@ -2,12 +2,13 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{AppPlugin, PlatformTweaks};
+use crate::{APP_NAME, AppPlugin, PlatformTweaks};
 use bevy::prelude::*;
 
 pub fn start() -> AppExit {
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
+            title: APP_NAME.into(),
             canvas: Some("#bevy".to_owned()), // For web; no effect elewhere.
             ..default()
         }),
