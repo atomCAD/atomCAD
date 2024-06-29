@@ -2,13 +2,26 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
+use crate::LoadingPlugin;
 use bevy::{ecs::system::NonSendMarker, prelude::*};
+
+// We use States to separate logic
+// See https://bevy-cheatbook.github.io/programming/states.html
+// Or https://github.com/bevyengine/bevy/blob/main/examples/ecs/state.rs
+#[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
+pub enum AppState {
+    // During the loading State the LoadingPlugin will load our assets
+    #[default]
+    Loading,
+}
 
 pub struct AppPlugin;
 
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, set_window_icon);
+        app.init_state::<AppState>()
+            .add_plugins(LoadingPlugin)
+            .add_systems(Startup, set_window_icon);
     }
 }
 
