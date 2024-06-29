@@ -275,6 +275,7 @@ dependencies = [
  "bevy",
  "image",
  "wasm-bindgen-test",
+ "web-sys",
  "winit",
 ]
 

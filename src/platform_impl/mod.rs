@@ -29,7 +29,6 @@ pub use self::macos::*;
 #[cfg(target_family = "wasm")]
 mod web;
 #[cfg(target_family = "wasm")]
-#[allow(unused_imports)]
 pub use self::web::*;
 
 #[cfg(target_os = "windows")]

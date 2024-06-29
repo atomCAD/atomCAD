@@ -7,8 +7,18 @@ use bevy::prelude::*;
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin};
 
 fn main() {
+    let window_plugin = WindowPlugin {
+        primary_window: Some(Window {
+            canvas: Some("#bevy".to_owned()), // For web; no effect elewhere.
+            ..default()
+        }),
+        ..default()
+    };
+
+    let default_plugins = DefaultPlugins.set(window_plugin);
+
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
         .add_plugins(AppPlugin)
         .run();
