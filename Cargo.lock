@@ -295,6 +295,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "wasm-bindgen-test",
  "web-sys",
+ "winit",
 ]
 
 [[package]]
