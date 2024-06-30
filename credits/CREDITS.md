@@ -6,4 +6,6 @@ License, v. 2.0.  See [LICENSE](../LICENSE) for details.
 The following files are derived from 3rd party projects and retain their original license, in order
 to facilitate the process of upstreaming bug fixes:
 
-(No current license exceptions.)
+## Assets
+
+* Fira Sans font: [Open Font License](licenses/LICENSE-OFL.md);

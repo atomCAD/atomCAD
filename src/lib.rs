@@ -9,6 +9,9 @@
 mod app;
 pub use app::{AppPlugin, AppState};
 
+pub mod assets;
+use assets::FontAssets;
+
 pub mod platform;
 pub(crate) mod platform_impl;
 pub use platform::{bevy::PlatformTweaks, get_process_name, set_process_name};
@@ -17,7 +20,7 @@ mod start;
 pub use start::start;
 
 mod state;
-pub use state::LoadingPlugin;
+pub use state::{CadViewPlugin, LoadingPlugin};
 
 pub const APP_NAME: &str = "atomCAD";
 
