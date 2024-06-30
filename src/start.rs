@@ -3,7 +3,7 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::{APP_NAME, AppPlugin, PlatformTweaks};
-use bevy::{prelude::*, window::PresentMode};
+use bevy::{prelude::*, window::PresentMode, winit::WinitSettings};
 
 pub fn start() -> AppExit {
     let window_plugin = WindowPlugin {
@@ -20,6 +20,7 @@ pub fn start() -> AppExit {
     let default_plugins = DefaultPlugins.set(window_plugin);
 
     App::new()
+        .insert_resource(WinitSettings::desktop_app())
         .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
         .add_plugins(AppPlugin)
