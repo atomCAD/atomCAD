@@ -6,6 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::prelude::*;
+use bevy::window::PresentMode;
 
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
 
@@ -13,6 +14,7 @@ fn main() {
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
             title: APP_NAME.into(),
+            present_mode: PresentMode::AutoNoVsync,
             canvas: Some("#bevy".to_owned()), // For web; no effect elewhere.
             prevent_default_event_handling: true, // Capture browser hotkeys.
             ..default()
