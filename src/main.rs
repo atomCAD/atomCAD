@@ -6,7 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::prelude::*;
-use bevy::window::PresentMode;
+use bevy::{window::PresentMode, winit::WinitSettings};
 
 use atomcad::{platform::bevy::PlatformTweaks, AppPlugin, APP_NAME};
 
@@ -25,6 +25,7 @@ fn main() {
     let default_plugins = DefaultPlugins.set(window_plugin);
 
     App::new()
+        .insert_resource(WinitSettings::desktop_app())
         .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
         .add_plugins(AppPlugin)
