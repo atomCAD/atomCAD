@@ -9,6 +9,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use base64::prelude::*;
+use embed_resource::CompilationResult;
 use icns::{IconFamily, IconType, Image};
 use ico::{IconDir, IconImage, ResourceType};
 use image::imageops;
@@ -52,6 +53,25 @@ fn main() {
 
     // Generate a web app manifest file.
     create_web_app_manifest_file(&web_dir.join("site.webmanifest"));
+
+    // Generate the resource file for windows builds.
+    let windows_dir = Path::new("build/windows");
+    create_dir_if_not_exists(windows_dir);
+    create_ico_file(
+        &source_image,
+        &windows_dir.join("icon.ico"),
+        &[16, 32, 48, 64, 96, 128, 256, 512],
+    );
+    match embed_resource::compile(windows_dir.join("icon.rc"), embed_resource::NONE) {
+        CompilationResult::Ok => {}
+        CompilationResult::NotWindows => {}
+        CompilationResult::NotAttempted(reason) => {
+            panic!("Not attempting to compile icon: {reason}");
+        }
+        CompilationResult::Failed(e) => {
+            panic!("Failed to compile icon: {e}");
+        }
+    };
 
     // Use the build directory for files that are include!()'d into the Rust code.
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR must be set");
