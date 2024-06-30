@@ -63,6 +63,7 @@ wasm-bindgen-test = "0.3"
 
 [build-dependencies]
 base64 = "0.22"
+embed-resource = "3"
 icns = "0.4"
 ico = "0.5"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
