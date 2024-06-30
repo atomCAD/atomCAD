@@ -14,6 +14,7 @@ fn main() {
         primary_window: Some(Window {
             title: APP_NAME.into(),
             canvas: Some("#bevy".to_owned()), // For web; no effect elewhere.
+            prevent_default_event_handling: true, // Capture browser hotkeys.
             ..default()
         }),
         ..default()
