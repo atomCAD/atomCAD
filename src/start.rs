@@ -3,9 +3,16 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::{APP_NAME, AppPlugin, PlatformTweaks};
-use bevy::prelude::*;
+use bevy::{asset::AssetMetaCheck, prelude::*};
 
 pub fn start() -> AppExit {
+    let asset_plugin = AssetPlugin {
+        // Prevents the overhead of checking for meta files,
+        // which on web is an expensive 404 and clutters logs.
+        meta_check: AssetMetaCheck::Never,
+        ..default()
+    };
+
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
             title: APP_NAME.into(),
@@ -15,7 +22,7 @@ pub fn start() -> AppExit {
         ..default()
     };
 
-    let default_plugins = DefaultPlugins.set(window_plugin);
+    let default_plugins = DefaultPlugins.set(asset_plugin).set(window_plugin);
 
     App::new()
         .add_plugins(default_plugins)
