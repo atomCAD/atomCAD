@@ -3,7 +3,7 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::{APP_NAME, AppPlugin, PlatformTweaks};
-use bevy::{asset::AssetMetaCheck, prelude::*};
+use bevy::{asset::AssetMetaCheck, prelude::*, window::PresentMode};
 
 pub fn start() -> AppExit {
     let asset_plugin = AssetPlugin {
@@ -16,6 +16,7 @@ pub fn start() -> AppExit {
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
             title: APP_NAME.into(),
+            present_mode: PresentMode::AutoNoVsync,
             canvas: Some("#bevy".to_owned()), // For web; no effect elewhere.
             prevent_default_event_handling: true, // Capture browser hotkeys.
             ..default()
