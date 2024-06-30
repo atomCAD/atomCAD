@@ -2,7 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::LoadingPlugin;
+use crate::{CadViewPlugin, LoadingPlugin};
 use bevy::{ecs::system::NonSendMarker, prelude::*};
 
 // We use States to separate logic
@@ -13,6 +13,9 @@ pub enum AppState {
     // During the loading State the LoadingPlugin will load our assets
     #[default]
     Loading,
+    // During this State the scene graph is rendered and the user can interact
+    // with the camera.
+    CadView,
 }
 
 pub struct AppPlugin;
@@ -20,7 +23,7 @@ pub struct AppPlugin;
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>()
-            .add_plugins(LoadingPlugin)
+            .add_plugins((LoadingPlugin, CadViewPlugin))
             .add_systems(Startup, set_window_icon);
     }
 }
