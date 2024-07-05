@@ -71,8 +71,9 @@ use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, Event, StartCause, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
+    event::{ElementState, Event, StartCause, WindowEvent},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopWindowTarget},
+    keyboard::KeyCode,
     window::{Window, WindowBuilder},
 };
 
@@ -121,7 +122,7 @@ async fn resume_renderer(
 #[allow(clippy::too_many_arguments)]
 fn handle_event(
     event: Event<()>,
-    control_flow: &mut ControlFlow,
+    window_target: &EventLoopWindowTarget<()>,
     window: &mut Option<Window>,
     renderer: &mut Option<Renderer>,
     gpu_resources: &mut Option<Rc<GlobalRenderResources>>,
@@ -149,7 +150,7 @@ fn handle_event(
                 renderer.resize(new_size);
             }
         }
-        Event::MainEventsCleared => {
+        Event::AboutToWait => {
             // The event queue is empty, so we can safely redraw the window.
             if window.is_some() {
                 // Winit prevents sizing with CSS, so we have to set
@@ -167,7 +168,7 @@ fn handle_event(
                             (width * scale_factor) as u32,
                             (height * scale_factor) as u32,
                         );
-                        window.set_inner_size(new_size);
+                        window.request_inner_size(new_size)?;
                         if let Some(renderer) = renderer {
                             renderer.resize(new_size);
                         }
@@ -200,9 +201,9 @@ fn handle_event(
             ..
         } => {
             // The window has been destroyed, time to exit stage left.
-            *control_flow = ControlFlow::ExitWithCode(0);
+            window_target.exit();
         }
-        Event::LoopDestroyed => {
+        Event::LoopExiting => {
             // The event loop has been destroyed, so we can safely terminate
             // the application.  This is the very last event we will ever
             // receive, so we can safely perform final rites.
@@ -210,9 +211,8 @@ fn handle_event(
         Event::WindowEvent { event, .. } => {
             if let Some(renderer) = renderer {
                 match event {
-                    WindowEvent::KeyboardInput { input: key, .. } => {
-                        if key.virtual_keycode == Some(VirtualKeyCode::Space)
-                            && key.state == ElementState::Released
+                    WindowEvent::KeyboardInput { event: key, .. } => {
+                        if key.physical_key == KeyCode::Space && key.state == ElementState::Released
                         {
                             if let Some(window) = window {
                                 match renderer
@@ -278,9 +278,9 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
 
     // Run the event loop.
     let mut running = false;
-    event_loop.run(move |event, _, control_flow| {
+    if let Err(e) = event_loop.run(move |event, window_target| {
         // When we are done handling this event, suspend until the next event.
-        *control_flow = ControlFlow::Wait;
+        window_target.set_control_flow(ControlFlow::Wait);
 
         // On some platforms, namely wasm32 + webgl2, the window is not yet
         // ready to create the rendering surface when Event::Resumed is
@@ -337,7 +337,7 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
         // Handle events.
         handle_event(
             event,
-            control_flow,
+            window_target,
             &mut window,
             &mut renderer,
             &mut gpu_resources,
@@ -345,12 +345,20 @@ fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
             &mut interactions,
             &cursor_pos,
         );
-    })
+    }) {
+        eprintln!("Error during event loop: {}", e);
+    };
 }
 
 pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
     let menu = menubar::setup_menu_bar(event_loop_builder);
-    let event_loop = event_loop_builder.build();
+    let event_loop = match event_loop_builder.build() {
+        Err(e) => {
+            println!("Failed to create event loop: {}", e);
+            std::process::exit(1);
+        }
+        Ok(event_loop) => event_loop,
+    };
 
     // Create the main window.
     let window = match WindowBuilder::new().with_title(APP_NAME).build(&event_loop) {
@@ -395,7 +403,7 @@ pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
             .and_then(|h| h.as_f64())
             .unwrap_or(600.0);
         let scale_factor = window.scale_factor();
-        window.set_inner_size(PhysicalSize::new(
+        let _ = window.request_inner_size(PhysicalSize::new(
             width * scale_factor,
             height * scale_factor,
         ));
@@ -405,7 +413,7 @@ pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
             .and_then(|win| win.document())
             .and_then(|doc| doc.get_element_by_id("app-container"))
             .and_then(|dst| {
-                dst.append_child(&web_sys::Element::from(window.canvas()))
+                dst.append_child(&web_sys::Element::from(window.canvas()?))
                     .ok()
             })
             .expect("Couldn't append canvas to document body.");

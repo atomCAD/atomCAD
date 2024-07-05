@@ -29,10 +29,14 @@ pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilde
 }
 
 pub fn attach_menu(window: &Window, menu_bar: &Menu) {
-    use winit::platform::windows::WindowExtWindows;
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let hwnd = match window.window_handle().unwrap().as_raw() {
+        RawWindowHandle::Win32(handle) => handle.hwnd.get(),
+        _ => panic!("not running on Windows"),
+    };
     menu_bar
-        .init_for_hwnd(window.hwnd() as _)
-        .expect("Initializing the menubar shouldn't return an error");
+        .init_for_hwnd(hwnd)
+        .expect("Initializing the menubar shouldn't return an error.");
 }
 
 fn build_menu(menu_spec: &MenuSpec) -> Menu {

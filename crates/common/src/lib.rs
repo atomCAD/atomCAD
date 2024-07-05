@@ -11,8 +11,8 @@ pub mod ids;
 
 pub use bounding_box::BoundingBox;
 
-pub enum InputEvent<'a> {
-    Window(WindowEvent<'a>),
+pub enum InputEvent {
+    Window(WindowEvent),
     Device(DeviceEvent),
     BeginningFrame,
 }
