@@ -11,6 +11,7 @@ use crate::{bind_groups::AsBindingResource as _, buffer_vec::BufferVec};
 use common::AsBytes as _;
 use periodic_table::PeriodicTable;
 use std::rc::Rc;
+use std::sync::Arc;
 use ultraviolet::Vec2;
 use wgpu::util::DeviceExt as _;
 use winit::{dpi::PhysicalSize, window::Window};
@@ -75,7 +76,7 @@ impl MolecularVertexConsts {
 #[allow(dead_code)]
 pub struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
-    surface: wgpu::Surface,
+    surface: wgpu::Surface<'static>,
     render_resources: Rc<GlobalRenderResources>,
     size: PhysicalSize<u32>,
 
@@ -96,7 +97,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(window: &Window, options: RenderOptions) -> (Self, Rc<GlobalRenderResources>) {
+    pub async fn new(
+        window: Arc<Window>,
+        options: RenderOptions,
+    ) -> (Self, Rc<GlobalRenderResources>) {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU.
@@ -108,10 +112,8 @@ impl Renderer {
             gles_minor_version: wgpu::Gles3MinorVersion::default(),
         });
 
-        // # Safety
-        //
-        // The surface needs to live as long as the window that created it.
-        let surface = unsafe { instance.create_surface(window) }
+        let surface = instance
+            .create_surface(window)
             .expect("failed to retrieve surface for window");
 
         let adapter = instance
@@ -129,7 +131,7 @@ impl Renderer {
             | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT;
         let gpu_driven_rendering;
 
-        let requested_features =
+        let required_features =
             if options.attempt_gpu_driven && adapter.features().contains(gpu_driven_features) {
                 // we can do culling and draw calls directly on gpu
                 // Hopefully massive performance boost
@@ -144,10 +146,10 @@ impl Renderer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: requested_features,
+                    required_features,
                     // WebGL doesn't support all of wgpu's features, so if
                     // we're building for the web we'll have to disable some.
-                    limits: if cfg!(target_family = "wasm") {
+                    required_limits: if cfg!(target_family = "wasm") {
                         wgpu::Limits::downlevel_webgl2_defaults()
                     } else {
                         wgpu::Limits::default()
@@ -185,6 +187,7 @@ impl Renderer {
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::AutoVsync,
+            desired_maximum_frame_latency: 2,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![SWAPCHAIN_FORMAT],
         };

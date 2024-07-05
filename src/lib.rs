@@ -69,6 +69,7 @@ use render::{GlobalRenderResources, Interactions, RenderOptions, Renderer};
 use scene::{Assembly, Component};
 
 use std::rc::Rc;
+use std::sync::Arc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
     application::ApplicationHandler,
@@ -101,34 +102,10 @@ fn make_salt_demo_scene() -> MoleculeEditor {
     molecule
 }
 
-async fn resume_renderer(
-    window: &Window,
-) -> (Renderer, Rc<GlobalRenderResources>, Assembly, Interactions) {
-    let (renderer, gpu_resources) = Renderer::new(
-        window,
-        RenderOptions {
-            fxaa: Some(()), // placeholder
-            attempt_gpu_driven: true,
-        },
-    )
-    .await;
-
-    let molecule = make_pdb_demo_scene();
-
-    let assembly = Assembly::from_components([Component::from_molecule(molecule, Mat4::default())]);
-    let interactions = Interactions::default();
-
-    (renderer, gpu_resources, assembly, interactions)
-}
-
 #[derive(Default)]
 struct EventHandler {
     running: bool,
     menu: Menu,
-    // The event handling loop is terminated when the main window is closed.
-    // We can trigger this by dropping the window, so we wrap it in the Option
-    // type.  This is a bit of a hack, but it works.
-    window: Option<Window>,
     // On mobile platforms the window is destroyed when the application is
     // suspended, so we need to be able to drop these resources and recreate
     // as necessary.
@@ -137,6 +114,10 @@ struct EventHandler {
     world: Option<Assembly>,
     interactions: Option<Interactions>,
     cursor_pos: PhysicalPosition<f64>,
+    // The event handling loop is terminated when the main window is closed.
+    // We can trigger this by dropping the window, so we wrap it in the Option
+    // type.  This is a bit of a hack, but it works.
+    window: Option<Arc<Window>>,
 }
 
 impl EventHandler {
@@ -144,6 +125,32 @@ impl EventHandler {
         Self {
             menu,
             ..Default::default()
+        }
+    }
+
+    fn resume_renderer(&mut self) {
+        if let Some(window) = &self.window {
+            let (r, g, w, i) = futures::executor::block_on(async {
+                let (mut renderer, gpu_resources) = Renderer::new(
+                    window.clone(),
+                    RenderOptions {
+                        fxaa: Some(()), // placeholder
+                        attempt_gpu_driven: true,
+                    },
+                )
+                .await;
+                renderer.set_camera(ArcballCamera::new(Vec3::zero(), 100.0, 1.0));
+                let world = Assembly::from_components([Component::from_molecule(
+                    make_pdb_demo_scene(),
+                    Mat4::default(),
+                )]);
+                let interactions = Interactions::default();
+                (renderer, gpu_resources, world, interactions)
+            });
+            self.renderer = Some(r);
+            self.gpu_resources = Some(g);
+            self.world = Some(w);
+            self.interactions = Some(i);
         }
     }
 }
@@ -166,7 +173,7 @@ impl ApplicationHandler for EventHandler {
                 println!("Failed to create window: {}", e);
                 std::process::exit(1);
             }
-            Ok(window) => Some(window),
+            Ok(window) => Some(Arc::new(window)),
         };
 
         // Perform window customization required on web.
@@ -224,16 +231,11 @@ impl ApplicationHandler for EventHandler {
         // Check that we've received Event::Resumed, and the window's inner
         // dimensions are defined.  (Prevents a panic on wasm32 + webgl2).
         if self.running && self.renderer.is_none() {
-            let size = self.window.as_ref().unwrap().inner_size();
-            if size.width > 0 && size.height > 0 {
-                futures::executor::block_on(async {
-                    let (mut r, g, w, i) = resume_renderer(self.window.as_ref().unwrap()).await;
-                    r.set_camera(ArcballCamera::new(Vec3::zero(), 100.0, 1.0));
-                    self.renderer = Some(r);
-                    self.gpu_resources = Some(g);
-                    self.world = Some(w);
-                    self.interactions = Some(i);
-                });
+            if let Some(window) = &self.window {
+                let size = window.inner_size();
+                if size.width > 0 && size.height > 0 {
+                    self.resume_renderer();
+                }
             }
         }
 
@@ -255,6 +257,7 @@ impl ApplicationHandler for EventHandler {
             WindowEvent::CloseRequested => {
                 // The user has requested to close the window.
                 // Drop the window to fire the `Destroyed` event.
+                self.renderer = None;
                 self.window = None;
             }
             WindowEvent::Destroyed => {
