@@ -42,10 +42,12 @@ impl BlitPass {
                         b: 0.8,
                         a: 1.0,
                     }),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         rpass.execute_bundles(Some(&self.render_bundle));

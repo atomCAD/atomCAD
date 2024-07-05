@@ -130,7 +130,7 @@ impl MolecularPass {
                             b: 0.703125,
                             a: 1.000000,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }),
                 // multiple render targets
@@ -140,7 +140,7 @@ impl MolecularPass {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }),
             ],
@@ -148,10 +148,12 @@ impl MolecularPass {
                 view: &self.depth_texture,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(0.0),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
             }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         rpass.set_pipeline(&self.atom_pipeline);

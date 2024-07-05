@@ -103,7 +103,9 @@ impl Renderer {
         // Backends::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY | wgpu::Backends::GL,
+            flags: wgpu::InstanceFlags::default(),
             dx12_shader_compiler: Default::default(),
+            gles_minor_version: wgpu::Gles3MinorVersion::default(),
         });
 
         // # Safety
