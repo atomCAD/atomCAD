@@ -45,21 +45,10 @@ If your browser supports WebGPU, you can run atomCAD in your browser:
 ## Developers
 
 There is a `check.sh` script which does a similar set of checks as would be
-run by the continuous integration checker, for all supported platforms.  You
-will need to download the rust toolchain for each supported build target
-before running this script:
-
-```bash
-rustup target add aarch64-linux-android thumbv7neon-linux-androideabi \
-    x86_64-linux-android i686-linux-android aarch64-apple-ios \
-    aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin \
-    x86_64-apple-darwin x86_64-unknown-linux-gnu i686-unknown-linux-gnu \
-    riscv64gc-unknown-linux-gnu aarch64-unknown-linux-gnu \
-    thumbv7neon-unknown-linux-gnueabihf powerpc64-unknown-linux-gnu \
-    powerpc64le-unknown-linux-gnu x86_64-pc-windows-msvc x86_64-pc-windows-gnu \
-    i686-pc-windows-msvc i686-pc-windows-gnu aarch64-pc-windows-msvc \
-    wasm32-unknown-unknown
-```
+run by the continuous integration checker, but for native and web instead of
+all supported platforms.  You will need to download the rust toolchain for
+target `wasm32-unknown-unknown` before running this script (see the section
+“Web” above).
 
 ## License
 
