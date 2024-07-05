@@ -48,7 +48,7 @@ env_logger = "0.10.0"
 
 # android:
 [target.'cfg(target_os = "android")'.dependencies]
-android-activity = { version = "0.4", features = ["native-activity"] }
+android-activity = { version = "0.6", features = ["native-activity"] }
 android_logger = "0.13.1"
 
 # Windows
