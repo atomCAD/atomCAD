@@ -405,7 +405,7 @@ pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
             .and_then(|win| win.document())
             .and_then(|doc| doc.get_element_by_id("app-container"))
             .and_then(|dst| {
-                dst.append_child(&web_sys::Element::from(window.canvas()?))
+                dst.append_child(&web_sys::Element::from(window.canvas()))
                     .ok()
             })
             .expect("Couldn't append canvas to document body.");
