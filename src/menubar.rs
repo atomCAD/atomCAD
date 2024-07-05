@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::platform::menubar::{attach_menu, configure_event_loop, Menu};
+use crate::platform::menubar::{attach_menu, configure_event_loop};
 use crate::APP_NAME;
 use winit::event_loop::EventLoopBuilder;
 use winit::window::Window;
@@ -13,6 +13,8 @@ use winit::window::Window;
 //
 // Menus can also be contextual (e.g. a popup right-click menu) or accessed
 // from the system tray.
+pub use crate::platform::menubar::Menu;
+
 pub struct MenuSpec {
     pub title: String,
     pub items: Vec<MenuItem>,

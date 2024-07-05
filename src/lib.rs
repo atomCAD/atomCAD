@@ -60,6 +60,7 @@ pub const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 
 use camera::ArcballCamera;
 use common::InputEvent;
+use menubar::Menu;
 use molecule::{
     edit::{Edit, PdbData},
     MoleculeEditor,
@@ -70,11 +71,12 @@ use scene::{Assembly, Component};
 use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
+    application::ApplicationHandler,
     dpi::PhysicalPosition,
-    event::{ElementState, Event, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopWindowTarget},
+    event::{DeviceEvent, DeviceId, ElementState, StartCause, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopBuilder},
     keyboard::KeyCode,
-    window::{Window, WindowBuilder},
+    window::{Window, WindowId},
 };
 
 #[allow(dead_code)]
@@ -119,233 +121,277 @@ async fn resume_renderer(
     (renderer, gpu_resources, assembly, interactions)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn handle_event(
-    event: Event<()>,
-    window_target: &EventLoopWindowTarget<()>,
-    window: &mut Option<Window>,
-    renderer: &mut Option<Renderer>,
-    gpu_resources: &mut Option<Rc<GlobalRenderResources>>,
-    world: &mut Option<Assembly>,
-    interactions: &mut Option<Interactions>,
-    cursor_pos: &PhysicalPosition<f64>,
-) {
-    match event {
-        Event::NewEvents(StartCause::Init) => {
-            // Will be called once when the event loop starts.
-        }
-        Event::WindowEvent {
-            event: WindowEvent::Resized(new_size),
-            ..
-        } => {
-            // TODO: Remove this once we upgrade winit to a version with the fix
-            #[cfg(target_os = "macos")]
-            if new_size.width == u32::MAX || new_size.height == u32::MAX {
-                // HACK to fix a bug on Macos 14
-                // https://github.com/rust-windowing/winit/issues/2876
-                return;
-            }
+#[derive(Default)]
+struct EventHandler {
+    running: bool,
+    menu: Menu,
+    // The event handling loop is terminated when the main window is closed.
+    // We can trigger this by dropping the window, so we wrap it in the Option
+    // type.  This is a bit of a hack, but it works.
+    window: Option<Window>,
+    // On mobile platforms the window is destroyed when the application is
+    // suspended, so we need to be able to drop these resources and recreate
+    // as necessary.
+    renderer: Option<Renderer>,
+    gpu_resources: Option<Rc<GlobalRenderResources>>,
+    world: Option<Assembly>,
+    interactions: Option<Interactions>,
+    cursor_pos: PhysicalPosition<f64>,
+}
 
-            if let Some(renderer) = renderer {
-                renderer.resize(new_size);
-            }
-        }
-        Event::AboutToWait => {
-            // The event queue is empty, so we can safely redraw the window.
-            if window.is_some() {
-                // Winit prevents sizing with CSS, so we have to set
-                // the size manually when on web.
-                #[cfg(target_arch = "wasm32")]
-                (|| {
-                    use winit::dpi::PhysicalSize;
-                    log::error!("Resizing window");
-                    let win = web_sys::window()?;
-                    let width = win.inner_width().ok()?.as_f64()?;
-                    let height = win.inner_height().ok()?.as_f64()?;
-                    window.as_ref().map(|window| {
-                        let scale_factor = window.scale_factor();
-                        let new_size = PhysicalSize::new(
-                            (width * scale_factor) as u32,
-                            (height * scale_factor) as u32,
-                        );
-                        window.request_inner_size(new_size)?;
-                        if let Some(renderer) = renderer {
-                            renderer.resize(new_size);
-                        }
-                        Some(())
-                    })
-                })();
-                if let Some(renderer) = renderer {
-                    if let Some(world) = world {
-                        if let Some(_interactions) = interactions {
-                            if let Some(gpu_resources) = gpu_resources {
-                                world.synchronize_buffers(gpu_resources);
-                            }
-                            let (atoms, bonds, transforms) = world.collect_rendering_primitives();
-                            renderer.render(&atoms, &bonds, transforms);
-                        }
-                    }
-                }
-            }
-        }
-        Event::WindowEvent {
-            event: WindowEvent::CloseRequested,
-            ..
-        } => {
-            // The user has requested to close the window.
-            // Drop the window to fire the `Destroyed` event.
-            *window = None;
-        }
-        Event::WindowEvent {
-            event: WindowEvent::Destroyed,
-            ..
-        } => {
-            // The window has been destroyed, time to exit stage left.
-            window_target.exit();
-        }
-        Event::LoopExiting => {
-            // The event loop has been destroyed, so we can safely terminate
-            // the application.  This is the very last event we will ever
-            // receive, so we can safely perform final rites.
-        }
-        Event::WindowEvent { event, .. } => {
-            if let Some(renderer) = renderer {
-                match event {
-                    WindowEvent::KeyboardInput { event: key, .. } => {
-                        if key.physical_key == KeyCode::Space && key.state == ElementState::Released
-                        {
-                            if let Some(window) = window {
-                                match renderer
-                                    .camera()
-                                    .get_ray_from(cursor_pos, &window.inner_size())
-                                {
-                                    Some((ray_origin, ray_direction)) => {
-                                        world.as_mut().unwrap().walk_mut(|molecule, _| {
-                                            if let Some(hit) =
-                                                molecule.repr.get_ray_hit(ray_origin, ray_direction)
-                                            {
-                                                println!("Atom {:?} clicked!", hit);
-                                                // molecule.push_feature(AtomFeature {
-                                                //     target: hit,
-                                                //     element: periodic_table::Element::Carbon,
-                                                // });
-                                                // molecule.apply_all_features();
-                                                // molecule.reupload_atoms(
-                                                //     gpu_resources.as_ref().unwrap(),
-                                                // );
-                                            }
-                                        });
-                                    }
-                                    None => {
-                                        println!("failed to create ray!");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        renderer.camera().update(InputEvent::Window(event));
-                    }
-                }
-            }
-        }
-        Event::DeviceEvent { event, .. } => {
-            if let Some(renderer) = renderer {
-                renderer.camera().update(InputEvent::Device(event));
-            }
-        }
-        _ => {
-            // Unknown event; do nothing.
+impl EventHandler {
+    fn new(menu: Menu) -> Self {
+        Self {
+            menu,
+            ..Default::default()
         }
     }
 }
 
-fn run(event_loop: EventLoop<()>, mut window: Option<Window>) {
-    // The event handling loop is terminated when the main window is closed.
-    // We can trigger this by dropping the window, so we wrap it in the Option
-    // type.  This is a bit of a hack, but it works.  We require that we are
-    // called with a valid window, however.
-    window.as_ref().expect("window should exist");
-
-    // On mobile platforms the window is destroyed when the application is
-    // suspended, so we need to be able to drop these resources and recreate
-    // as necessary.
-    let mut renderer: Option<Renderer> = None;
-    let mut gpu_resources: Option<Rc<GlobalRenderResources>> = None;
-    let mut world: Option<Assembly> = None;
-    let mut interactions: Option<Interactions> = None;
-    let mut cursor_pos: PhysicalPosition<f64> = Default::default();
-
-    // Run the event loop.
-    let mut running = false;
-    if let Err(e) = event_loop.run(move |event, window_target| {
-        // When we are done handling this event, suspend until the next event.
-        window_target.set_control_flow(ControlFlow::Wait);
+impl ApplicationHandler for EventHandler {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // Called when the application is brought into focus.  The GPU
+        // resources need to be reallocated on resume.
 
         // On some platforms, namely wasm32 + webgl2, the window is not yet
         // ready to create the rendering surface when Event::Resumed is
         // received.  We therefore just record the fact that the we're in the
         // running state.
-        match event {
-            Event::Resumed => {
-                // Called on iOS or Android when the application is brought
-                // into focus.  The GPU resources need to be reallocated on
-                // resume.
-                running = true;
-            }
-            Event::Suspended => {
-                // Called on iOS or Android when the application is sent to
-                // the background.  We preemptively destroy the window and any
-                // used GPU resources as the system might take them from us.
-                running = false;
-                interactions = None;
-                world = None;
-                gpu_resources = None;
-                renderer = None;
-                window = None;
-            }
+        self.running = true;
 
-            // The event system does not expose the cursor position on-demand.
-            // We track all the mouse movement events to make this easier to
-            // access later.
-            Event::WindowEvent {
-                event: WindowEvent::CursorMoved { position, .. },
-                ..
-            } => {
-                cursor_pos = position;
+        // Create the main window.
+        let window_attributes = Window::default_attributes().with_title(APP_NAME);
+        self.window = match event_loop.create_window(window_attributes) {
+            Err(e) => {
+                println!("Failed to create window: {}", e);
+                std::process::exit(1);
             }
+            Ok(window) => Some(window),
+        };
 
-            _ => (),
+        // Perform window customization required on web.
+        #[cfg(target_arch = "wasm32")]
+        if let Some(window) = &mut self.window {
+            // Winit prevents sizing with CSS, so we have to set
+            // the size manually when on web.
+            use winit::dpi::PhysicalSize;
+            let width = web_sys::window()
+                .and_then(|win| win.inner_width().ok())
+                .and_then(|w| w.as_f64())
+                .unwrap_or(800.0);
+            let height = web_sys::window()
+                .and_then(|win| win.inner_height().ok())
+                .and_then(|h| h.as_f64())
+                .unwrap_or(600.0);
+            let scale_factor = window.scale_factor();
+            let _ = window.request_inner_size(PhysicalSize::new(
+                width * scale_factor,
+                height * scale_factor,
+            ));
+            // On wasm, append the canvas to the document body
+            use winit::platform::web::WindowExtWebSys;
+            web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| doc.get_element_by_id("app-container"))
+                .and_then(|dst| {
+                    dst.append_child(&web_sys::Element::from(window.canvas()?))
+                        .ok()
+                })
+                .expect("Couldn't append canvas to document body.");
+        }
+
+        // Add the menu bar to the window / application instance, using native
+        // APIs.
+        menubar::attach_menu_bar(self.window.as_ref().unwrap(), &self.menu);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        // When we are done handling this event, suspend until the next event.
+        event_loop.set_control_flow(ControlFlow::Wait);
+
+        // The event system does not expose the cursor position on-demand. We
+        // track all the mouse movement events to make this easier to access
+        // later.
+        if let WindowEvent::CursorMoved { position, .. } = event {
+            self.cursor_pos = position
         }
 
         // Check that we've received Event::Resumed, and the window's inner
         // dimensions are defined.  (Prevents a panic on wasm32 + webgl2).
-        if running && renderer.is_none() {
-            let size = window.as_ref().unwrap().inner_size();
+        if self.running && self.renderer.is_none() {
+            let size = self.window.as_ref().unwrap().inner_size();
             if size.width > 0 && size.height > 0 {
                 futures::executor::block_on(async {
-                    let (mut r, g, w, i) = resume_renderer(window.as_ref().unwrap()).await;
+                    let (mut r, g, w, i) = resume_renderer(self.window.as_ref().unwrap()).await;
                     r.set_camera(ArcballCamera::new(Vec3::zero(), 100.0, 1.0));
-                    renderer = Some(r);
-                    gpu_resources = Some(g);
-                    world = Some(w);
-                    interactions = Some(i);
+                    self.renderer = Some(r);
+                    self.gpu_resources = Some(g);
+                    self.world = Some(w);
+                    self.interactions = Some(i);
                 });
             }
         }
 
         // Handle events.
-        handle_event(
-            event,
-            window_target,
-            &mut window,
-            &mut renderer,
-            &mut gpu_resources,
-            &mut world,
-            &mut interactions,
-            &cursor_pos,
-        );
-    }) {
+        match event {
+            WindowEvent::Resized(new_size) => {
+                // TODO: Remove this once we upgrade winit to a version with the fix
+                #[cfg(target_os = "macos")]
+                if new_size.width == u32::MAX || new_size.height == u32::MAX {
+                    // HACK to fix a bug on Macos 14
+                    // https://github.com/rust-windowing/winit/issues/2876
+                    return;
+                }
+
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.resize(new_size);
+                }
+            }
+            WindowEvent::CloseRequested => {
+                // The user has requested to close the window.
+                // Drop the window to fire the `Destroyed` event.
+                self.window = None;
+            }
+            WindowEvent::Destroyed => {
+                // The window has been destroyed, time to exit stage left.
+                event_loop.exit();
+            }
+            _ => {
+                if let Some(renderer) = &mut self.renderer {
+                    match event {
+                        WindowEvent::KeyboardInput { event: key, .. } => {
+                            if key.physical_key == KeyCode::Space
+                                && key.state == ElementState::Released
+                            {
+                                if let Some(window) = &mut self.window {
+                                    match renderer
+                                        .camera()
+                                        .get_ray_from(&self.cursor_pos, &window.inner_size())
+                                    {
+                                        Some((ray_origin, ray_direction)) => {
+                                            self.world.as_mut().unwrap().walk_mut(|molecule, _| {
+                                                if let Some(hit) = molecule
+                                                    .repr
+                                                    .get_ray_hit(ray_origin, ray_direction)
+                                                {
+                                                    println!("Atom {:?} clicked!", hit);
+                                                    // molecule.push_feature(AtomFeature {
+                                                    //     target: hit,
+                                                    //     element: periodic_table::Element::Carbon,
+                                                    // });
+                                                    // molecule.apply_all_features();
+                                                    // molecule.reupload_atoms(
+                                                    //     gpu_resources.as_ref().unwrap(),
+                                                    // );
+                                                }
+                                            });
+                                        }
+                                        None => {
+                                            println!("failed to create ray!");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            renderer.camera().update(InputEvent::Window(event));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+        // Will be called once when the event loop starts.
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: ()) {}
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        if let Some(renderer) = &mut self.renderer {
+            renderer.camera().update(InputEvent::Device(event));
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        // The event queue is empty, so we can safely redraw the window.
+        if self.window.is_some() {
+            // Winit prevents sizing with CSS, so we have to set
+            // the size manually when on web.
+            #[cfg(target_arch = "wasm32")]
+            (|| {
+                use winit::dpi::PhysicalSize;
+                log::error!("Resizing window");
+                let win = web_sys::window()?;
+                let width = win.inner_width().ok()?.as_f64()?;
+                let height = win.inner_height().ok()?.as_f64()?;
+                self.window.as_ref().map(|window| {
+                    let scale_factor = window.scale_factor();
+                    let new_size = PhysicalSize::new(
+                        (width * scale_factor) as u32,
+                        (height * scale_factor) as u32,
+                    );
+                    window.request_inner_size(new_size)?;
+                    if let Some(renderer) = &mut self.renderer {
+                        renderer.resize(new_size);
+                    }
+                    Some(())
+                })
+            })();
+            if let Some(renderer) = &mut self.renderer {
+                if let Some(world) = &mut self.world {
+                    if let Some(_interactions) = &mut self.interactions {
+                        if let Some(gpu_resources) = &mut self.gpu_resources {
+                            world.synchronize_buffers(&*gpu_resources);
+                        }
+                        let (atoms, bonds, transforms) = world.collect_rendering_primitives();
+                        renderer.render(&atoms, &bonds, transforms);
+                    }
+                }
+            }
+        }
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        // Called on iOS, Android, and web when the application / browser tab
+        // is sent to the background.  We preemptively destroy the window and
+        // any used GPU resources as the system might take them from us.
+        self.running = false;
+        self.interactions = None;
+        self.world = None;
+        self.gpu_resources = None;
+        self.renderer = None;
+        self.window = None;
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        // The event loop has been destroyed, so we can safely terminate
+        // the application.  This is the very last event we will ever
+        // receive, so we can safely perform final rites.
+    }
+
+    fn memory_warning(&mut self, _event_loop: &ActiveEventLoop) {
+        // On Android and iOS, called when the device has run out of memory
+        // and the application is about to be killed.  We must free as much
+        // memory as possible or risk being terminated.
+    }
+}
+
+fn run(event_loop: EventLoop<()>, menu: Menu) {
+    // Run the event loop.
+    let mut event_handler = EventHandler::new(menu);
+    if let Err(e) = event_loop.run_app(&mut event_handler) {
         eprintln!("Error during event loop: {}", e);
     };
 }
@@ -360,19 +406,6 @@ pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
         Ok(event_loop) => event_loop,
     };
 
-    // Create the main window.
-    let window = match WindowBuilder::new().with_title(APP_NAME).build(&event_loop) {
-        Err(e) => {
-            println!("Failed to create window: {}", e);
-            std::process::exit(1);
-        }
-        Ok(window) => window,
-    };
-
-    // Add the menu bar to the window / application instance, using native
-    // APIs.
-    menubar::attach_menu_bar(&window, &menu);
-
     #[cfg(not(target_arch = "wasm32"))]
     {
         #[cfg(not(target_os = "android"))]
@@ -385,39 +418,13 @@ pub fn start(event_loop_builder: &mut EventLoopBuilder<()>) {
                 android_logger::Config::default().with_max_level(log::LevelFilter::Trace),
             );
         }
-        run(event_loop, Some(window));
+        run(event_loop, menu);
     }
     #[cfg(target_arch = "wasm32")]
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init().expect("could not initialize logger");
-        // Winit prevents sizing with CSS, so we have to set
-        // the size manually when on web.
-        use winit::dpi::PhysicalSize;
-        let width = web_sys::window()
-            .and_then(|win| win.inner_width().ok())
-            .and_then(|w| w.as_f64())
-            .unwrap_or(800.0);
-        let height = web_sys::window()
-            .and_then(|win| win.inner_height().ok())
-            .and_then(|h| h.as_f64())
-            .unwrap_or(600.0);
-        let scale_factor = window.scale_factor();
-        let _ = window.request_inner_size(PhysicalSize::new(
-            width * scale_factor,
-            height * scale_factor,
-        ));
-        // On wasm, append the canvas to the document body
-        use winit::platform::web::WindowExtWebSys;
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| doc.get_element_by_id("app-container"))
-            .and_then(|dst| {
-                dst.append_child(&web_sys::Element::from(window.canvas()?))
-                    .ok()
-            })
-            .expect("Couldn't append canvas to document body.");
-        run(event_loop, Some(window));
+        run(event_loop, menu);
     }
 }
 

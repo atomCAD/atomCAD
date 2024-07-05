@@ -4,8 +4,8 @@
 
 #[cfg(not(any(target_os = "android")))]
 pub fn main() {
-    use winit::event_loop::EventLoopBuilder;
-    atomcad::start(&mut EventLoopBuilder::new())
+    use winit::event_loop::EventLoop;
+    atomcad::start(&mut EventLoop::builder())
 }
 
 #[cfg(target_os = "android")]

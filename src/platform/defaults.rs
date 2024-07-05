@@ -10,6 +10,7 @@ pub mod menubar {
     use winit::{event_loop::EventLoopBuilder, window::Window};
 
     // Platform-specific type that handles all menu allocations.
+    #[derive(Default)]
     pub struct Menu;
 
     pub fn configure_event_loop<T: 'static>(_event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {

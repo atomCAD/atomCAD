@@ -142,6 +142,7 @@ unsafe fn build_menu(
 }
 
 // Placeholder struct to allow compilation.
+#[derive(Default)]
 pub struct Menu;
 
 pub fn configure_event_loop<T: 'static>(event_loop_builder: &mut EventLoopBuilder<T>) -> Menu {
