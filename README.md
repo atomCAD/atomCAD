@@ -16,9 +16,11 @@ files.
     - __Debian/Ubuntu__: `apt install build-essential cmake libx11-dev` 
     - __RHEL/Fedora__: `dnf groupinstall "Development Tools" && dnf install gcc-c++ cmake libX11-devel`
     - __Windows__ 
-        - [Install Git](https://git-scm.com/download/win)
-        - [Install CMake](https://cmake.org/download/)
-        - [Install Ninja](https://ninja-build.org/) - manual setup, ensure it's in your PATH
+        - `winget install -e --id Git.Git`
+        - `winget install -e --id Kitware.CMake`
+        - `winget install -e --id Ninja-build.Ninja`
+        - `winget install -e --id Python.Python.3.11`
+        - Restart your command prompt to apply changes to PATH.
 3. `git clone` this repository and navigate to it
 4. run `cargo run`
 
@@ -32,9 +34,11 @@ If your browser supports WebGPU, you can run atomCAD in your browser:
     - __Debian/Ubuntu__: `apt install build-essential cmake libx11-dev` 
     - __RHEL/Fedora__: `dnf groupinstall "Development Tools" && dnf install gcc-c++ cmake libX11-devel`
     - __Windows__ 
-        - [Install Git](https://git-scm.com/download/win)
-        - [Install CMake](https://cmake.org/download/)
-        - [Install Ninja](https://ninja-build.org/) - manual setup, ensure it's in your PATH
+        - `winget install -e --id Git.Git`
+        - `winget install -e --id Kitware.CMake`
+        - `winget install -e --id Ninja-build.Ninja`
+        - `winget install -e --id Python.Python.3.11`
+        - Restart your command prompt to apply changes to PATH.
 3. Install wasm32 target: `rustup target add wasm32-unknown-unknown`
 4. Install trunk: `cargo install --locked trunk`
 5. `git clone` this repository and navigate to it
