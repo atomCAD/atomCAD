@@ -118,7 +118,7 @@ async fn resume_renderer(
     (renderer, gpu_resources, assembly, interactions)
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
+#[allow(clippy::too_many_arguments)]
 fn handle_event(
     event: Event<()>,
     control_flow: &mut ControlFlow,

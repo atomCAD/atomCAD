@@ -1,6 +1,7 @@
 use std::f32;
 use std::f32::consts::PI;
 
+#[allow(dead_code)]
 pub struct Angles {
     // Angle from the +x axis to the projection of the target in the meridian plane, measured counterclockwise (i.e. the +y axis is at pi/2 radians)
     pub azimuthal: f32,
