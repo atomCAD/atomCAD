@@ -111,11 +111,13 @@ fn create_blit_pipeline(
         vertex: wgpu::VertexState {
             module: &vert_shader,
             entry_point: "fullscreen",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: &frag_shader,
             entry_point: "main",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(SWAPCHAIN_FORMAT.into())],
         }),
         primitive: wgpu::PrimitiveState {

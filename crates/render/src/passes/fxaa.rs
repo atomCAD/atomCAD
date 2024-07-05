@@ -142,11 +142,13 @@ fn create_fxaa_pipeline(
         vertex: wgpu::VertexState {
             module: &vert,
             entry_point: "fullscreen",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: &frag,
             entry_point: "fxaa",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format: SWAPCHAIN_FORMAT,
                 blend: None,

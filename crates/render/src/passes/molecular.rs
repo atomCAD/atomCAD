@@ -296,6 +296,7 @@ fn create_atom_render_pipeline(
         vertex: wgpu::VertexState {
             module: &atom_shader,
             entry_point: "vs_main",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: &[wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<ultraviolet::Mat4>() as _,
                 step_mode: wgpu::VertexStepMode::Instance,
@@ -311,6 +312,7 @@ fn create_atom_render_pipeline(
         fragment: Some(wgpu::FragmentState {
             module: &atom_shader,
             entry_point: "fs_main",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[
                 Some(SWAPCHAIN_FORMAT.into()),
                 Some(wgpu::TextureFormat::Rgba16Float.into()),
@@ -361,6 +363,7 @@ fn create_bond_render_pipeline(
         vertex: wgpu::VertexState {
             module: &bond_shader,
             entry_point: "vs_main",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: &[wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<ultraviolet::Mat4>() as _,
                 step_mode: wgpu::VertexStepMode::Instance,
@@ -376,6 +379,7 @@ fn create_bond_render_pipeline(
         fragment: Some(wgpu::FragmentState {
             module: &bond_shader,
             entry_point: "fs_main",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[
                 Some(SWAPCHAIN_FORMAT.into()),
                 Some(wgpu::TextureFormat::Rgba16Float.into()),
