@@ -71,9 +71,8 @@ use std::rc::Rc;
 use ultraviolet::{Mat4, Vec3};
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, Event, StartCause, WindowEvent},
+    event::{ElementState, Event, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
-    keyboard::KeyCode,
     window::{Window, WindowBuilder},
 };
 
@@ -211,8 +210,9 @@ fn handle_event(
         Event::WindowEvent { event, .. } => {
             if let Some(renderer) = renderer {
                 match event {
-                    WindowEvent::KeyboardInput { event: key, .. } => {
-                        if key.physical_key == KeyCode::Space && key.state == ElementState::Released
+                    WindowEvent::KeyboardInput { input: key, .. } => {
+                        if key.virtual_keycode == Some(VirtualKeyCode::Space)
+                            && key.state == ElementState::Released
                         {
                             if let Some(window) = window {
                                 match renderer
