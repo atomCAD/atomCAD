@@ -440,7 +440,7 @@ use winit::platform::android::activity::AndroidApp;
 #[no_mangle]
 fn android_main(app: AndroidApp) {
     use winit::platform::android::EventLoopBuilderExtAndroid;
-    start(EventLoopBuilder::with_user_event().with_android_app(app))
+    start(EventLoop::builder().with_android_app(app))
 }
 
 // End of File
