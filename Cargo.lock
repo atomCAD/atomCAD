@@ -687,8 +687,7 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 [[package]]
 name = "d3d12"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b28bfe653d79bd16c77f659305b195b82bb5ce0c0eb2a4846b82ddbd77586813"
+source = "git+https://github.com/maaku/wgpu?rev=3882af49b94cab8b334e01c909c4b9148503130f#3882af49b94cab8b334e01c909c4b9148503130f"
 dependencies = [
  "bitflags 2.6.0",
  "libloading 0.8.4",
@@ -1707,8 +1706,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e536ae46fcab0876853bd4a632ede5df4b1c2527a58f6c5a4150fe86be858231"
+source = "git+https://github.com/maaku/wgpu?rev=3882af49b94cab8b334e01c909c4b9148503130f#3882af49b94cab8b334e01c909c4b9148503130f"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -3146,9 +3144,8 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90e37c7b9921b75dfd26dd973fdcbce36f13dfa6e2dc82aece584e0ed48c355c"
+version = "0.20.2"
+source = "git+https://github.com/maaku/wgpu?rev=3882af49b94cab8b334e01c909c4b9148503130f#3882af49b94cab8b334e01c909c4b9148503130f"
 dependencies = [
  "arrayvec",
  "cfg-if",
@@ -3173,8 +3170,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d50819ab545b867d8a454d1d756b90cd5f15da1f2943334ca314af10583c9d39"
+source = "git+https://github.com/maaku/wgpu?rev=3882af49b94cab8b334e01c909c4b9148503130f#3882af49b94cab8b334e01c909c4b9148503130f"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -3200,8 +3196,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "172e490a87295564f3fcc0f165798d87386f6231b04d4548bca458cbbfd63222"
+source = "git+https://github.com/maaku/wgpu?rev=3882af49b94cab8b334e01c909c4b9148503130f#3882af49b94cab8b334e01c909c4b9148503130f"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -3245,8 +3240,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1353d9a46bff7f955a680577f34c69122628cc2076e1d6f3a9be6ef00ae793ef"
+source = "git+https://github.com/maaku/wgpu?rev=3882af49b94cab8b334e01c909c4b9148503130f#3882af49b94cab8b334e01c909c4b9148503130f"
 dependencies = [
  "bitflags 2.6.0",
  "js-sys",
