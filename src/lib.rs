@@ -338,7 +338,6 @@ impl ApplicationHandler for EventHandler {
             #[cfg(target_arch = "wasm32")]
             (|| {
                 use winit::dpi::PhysicalSize;
-                log::error!("Resizing window");
                 let win = web_sys::window()?;
                 let width = win.inner_width().ok()?.as_f64()?;
                 let height = win.inner_height().ok()?.as_f64()?;
@@ -348,9 +347,12 @@ impl ApplicationHandler for EventHandler {
                         (width * scale_factor) as u32,
                         (height * scale_factor) as u32,
                     );
-                    window.request_inner_size(new_size)?;
-                    if let Some(renderer) = &mut self.renderer {
-                        renderer.resize(new_size);
+                    if new_size != window.inner_size() {
+                        log::info!("Resizing window to {:?}", new_size);
+                        window.request_inner_size(new_size)?;
+                        if let Some(renderer) = &mut self.renderer {
+                            renderer.resize(new_size);
+                        }
                     }
                     Some(())
                 })
