@@ -6,10 +6,69 @@ on:
 
 jobs:
   test:
+    name: ${{ matrix.platform.os_name }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        platform:
+          - os_name: Web Assembly w/ WebGPU
+            # So we can test on Safari.
+            os: macos-13
+            target: wasm32-unknown-unknown
+            rustflags: --cfg=web_sys_unstable_apis
+            run_tests: false
+          - os_name: Web Assembly w/ WebGL2
+            os: macos-13
+            target: wasm32-unknown-unknown
+            run_tests: false
+          - os_name: Android ARMv8-A
+            os: ubuntu-22.04
+            target: aarch64-linux-android
+            run_tests: true
+          - os_name: iOS A7+
+            os: macos-13
+            target: aarch64-apple-ios
+            # iOS needs a custom test runner.
+            run_tests: false
+          - os_name: Android x86_64
+            os: ubuntu-22.04
+            target: x86_64-linux-android
+            run_tests: true
+          - os_name: macOS Apple Silicon
+            os: macos-13
+            target: aarch64-apple-darwin
+            # GitHub Actions' free/open-source tier does not support
+            # Apple Silicon yet.
+            run_tests: false
+          - os_name: macOS Intel
+            os: macos-13
+            target: x86_64-apple-darwin
+            run_tests: true
+          - os_name: Windows ARMv8-A
+            os: windows-2022
+            target: aarch64-pc-windows-msvc
+            # GitHub Actions' free/open-source tier does not support
+            # Windows on ARM yet.
+            run_tests: false
+          - os_name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            run_tests: true
+          - os_name: Linux ARMv8-A
+            os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            run_tests: true
+          - os_name: Linux ARMv7-A
+            os: ubuntu-22.04
+            target: thumbv7neon-unknown-linux-gnueabihf
+            run_tests: true
+          - os_name: Linux x86_64/amd64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            run_tests: true
+        toolchain:
+          - stable
+    runs-on: ${{ matrix.platform.os }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/cache@v3
@@ -20,100 +79,61 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
-      - uses: dtolnay/rust-toolchain@master
-        if: runner.os == 'macos'
-        with:
-          toolchain: stable
-          targets: |
-            aarch64-apple-ios
-            aarch64-apple-ios-sim
-            x86_64-apple-ios
-            aarch64-apple-darwin
-            x86_64-apple-darwin
-            wasm32-unknown-unknown
-      - uses: dtolnay/rust-toolchain@master
-        if: runner.os == 'linux'
-        with:
-          toolchain: stable
-          targets: |
-            aarch64-linux-android
-            thumbv7neon-linux-androideabi
-            x86_64-linux-android
-            i686-linux-android
-            x86_64-unknown-linux-gnu
-            i686-unknown-linux-gnu
-            riscv64gc-unknown-linux-gnu
-            aarch64-unknown-linux-gnu
-            thumbv7neon-unknown-linux-gnueabihf
-            powerpc64-unknown-linux-gnu
-            powerpc64le-unknown-linux-gnu
-            x86_64-pc-windows-msvc
-            x86_64-pc-windows-gnu
-            i686-pc-windows-msvc
-            i686-pc-windows-gnu
-            aarch64-pc-windows-msvc
-            wasm32-unknown-unknown
-      - name: Setup Ninja
-        if: runner.os == 'windows'
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          version: 1.11.1
-          dest: ${{ github.workspace }}/ninja_bin
-      - uses: dtolnay/rust-toolchain@master
-        if: runner.os == 'windows'
-        with:
-          toolchain: stable
-          targets: |
-            wasm32-unknown-unknown
-      - name: Install alsa and udev
-        if: runner.os == 'linux'
-        run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
-      - name: Build & run tests
-        run: cargo test
-      - name: Run cross-compiler checks
-        run: |
-          ./ci/check-${{ runner.os }}.sh
-  all-doc-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ubuntu-latest-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ matrix.platform.os_name }}-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
-      - name: Install alsa and udev
-        run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
-      - name: Run doc tests with all features (this also compiles README examples)
-        run: cargo test --doc --all-features
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ubuntu-latest-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
+          toolchain: stable 1 month ago
           components: rustfmt, clippy
+          targets: ${{ matrix.platform.target }}
+      - name: Install cross-rs
+        shell: bash
+        run: which cross && cross --version || cargo install cross --git https://github.com/cross-rs/cross --rev 221324fd39a857f7af954484b96296cbc8c6a65f --force
+      - name: Install wasm tools
+        if: ${{ matrix.platform.target == 'wasm32-unknown-unknown' }}
+        shell: bash
+        run: |
+          which wasm-bindgen && wasm-bindgen --version || cargo install wasm-bindgen-cli --version "0.2.92" --force
+          which wasm-pack && wasm-pack --version || cargo install wasm-pack --version "0.12.1" --force
       - name: Install alsa and udev
+        if: runner.os == 'linux'
+        shell: bash
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
+      - name: Build
+        shell: bash
+        run: RUSTFLAGS="${{ matrix.platform.rustflags }}" cross build --target ${{ matrix.platform.target }}
+      - name: Run native tests
+        if: ${{ matrix.platform.run_tests }}
+        shell: bash
+        run: RUSTFLAGS="${{ matrix.platform.rustflags }}" cross test --target ${{ matrix.platform.target }}
+      - name: Run web tests
+        if: ${{ matrix.platform.target == 'wasm32-unknown-unknown' }}
+        shell: bash
+        run: |
+          RUSTFLAGS="${{ matrix.platform.rustflags }}" wasm-pack test --node
+          RUSTFLAGS="${{ matrix.platform.rustflags }}" wasm-pack test --headless --chrome
+          RUSTFLAGS="${{ matrix.platform.rustflags }}" wasm-pack test --headless --firefox
+          RUSTFLAGS="${{ matrix.platform.rustflags }}" wasm-pack test --headless --safari
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features
+        shell: bash
+        run: RUSTFLAGS="${{ matrix.platform.rustflags }}" cross clippy --workspace --target ${{ matrix.platform.target }} --all-targets --all-features -- -D warnings
+  rustfmt:
+    name: Formatting
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ubuntu-22.04-cargo-build-stable-${{ hashFiles('**/Cargo.toml') }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
       - name: Check format
+        shell: bash
         run: cargo fmt --all -- --check
