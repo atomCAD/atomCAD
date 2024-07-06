@@ -160,6 +160,22 @@ impl Renderer {
             .await
             .expect("failed to create device");
 
+        let limits = device.limits();
+        if size.width > limits.max_texture_dimension_2d
+            || size.height > limits.max_texture_dimension_2d
+        {
+            log::warn!(
+                "Display size {}x{} is greater than the maximum texture dimension {}; upscaling will occur.",
+                size.width,
+                size.height,
+                limits.max_texture_dimension_2d
+            );
+        }
+        let size = PhysicalSize::new(
+            size.width.min(limits.max_texture_dimension_2d),
+            size.height.min(limits.max_texture_dimension_2d),
+        );
+
         let camera = RenderCamera::new_empty(&device, 0.7, 0.1);
 
         let periodic_table = PeriodicTable::new();
@@ -312,6 +328,30 @@ impl Renderer {
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        // We might clamp down the width or height later if it exceeds
+        // underlying device texture dimension limits, so let's update the
+        // camera view frustum based on the requested size first.
+        self.camera.resize(new_size);
+
+        // WebGL on Apple M1 has a maximum texture dimension of 2048, but even
+        // the smallest retina display is larger than that, so a fullscreen
+        // app will have to be upscaled.
+        let limits = self.render_resources.device.limits();
+        if new_size.width > limits.max_texture_dimension_2d
+            || new_size.height > limits.max_texture_dimension_2d
+        {
+            log::warn!(
+                "Display size {}x{} is greater than the maximum texture dimension {}; upscaling will occur.",
+                new_size.width,
+                new_size.height,
+                limits.max_texture_dimension_2d
+            );
+        }
+        let new_size = PhysicalSize::new(
+            new_size.width.min(limits.max_texture_dimension_2d),
+            new_size.height.min(limits.max_texture_dimension_2d),
+        );
+
         self.size = new_size;
         self.surface_config.width = new_size.width;
         self.surface_config.height = new_size.height;
@@ -325,8 +365,6 @@ impl Renderer {
             .fxaa_pass
             .update(&self.render_resources, color_texture, new_size);
         self.blit_pass.update(&self.render_resources, fxaa_texture);
-
-        self.camera.resize(new_size);
     }
 
     pub fn upload_transforms(
