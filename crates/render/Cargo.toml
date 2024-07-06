@@ -7,7 +7,6 @@ authors = [
 ]
 license = "MPL-2.0"
 edition = "2021"
-build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
@@ -20,6 +19,3 @@ static_assertions = "1"
 ultraviolet = { workspace = true }
 wgpu = { version = "0.20", features = ["webgl"] }
 winit = { workspace = true }
-
-[build-dependencies]
-shaderc = "0.8.2"
