@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use super::shaders;
 use crate::{GlobalRenderResources, SWAPCHAIN_FORMAT};
 
 pub struct BlitPass {
@@ -98,11 +99,17 @@ fn create_blit_pipeline(
         push_constant_ranges: &[],
     });
 
-    let vert_shader = device.create_shader_module(wgpu::include_wgsl!("fullscreen.wgsl"));
-    let frag_shader = device.create_shader_module(if cfg!(target_arch = "wasm32") {
-        wgpu::include_wgsl!("blit-web.wgsl")
-    } else {
-        wgpu::include_wgsl!("blit-native.wgsl")
+    let vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shaders::fullscreen::SOURCE)),
+    });
+    let frag_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(if cfg!(target_arch = "wasm32") {
+            shaders::blit::web::SOURCE
+        } else {
+            shaders::blit::native::SOURCE
+        })),
     });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

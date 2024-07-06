@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use super::shaders;
 use crate::{AtomBuffer, BondBuffer, GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
 use std::{convert::TryInto as _, mem};
 use winit::dpi::PhysicalSize;
@@ -288,7 +289,10 @@ fn create_atom_render_pipeline(
         push_constant_ranges: &[],
     });
 
-    let atom_shader = device.create_shader_module(wgpu::include_wgsl!("atom.wgsl"));
+    let atom_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shaders::atom::SOURCE)),
+    });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -355,7 +359,10 @@ fn create_bond_render_pipeline(
         push_constant_ranges: &[],
     });
 
-    let bond_shader = device.create_shader_module(wgpu::include_wgsl!("bond.wgsl"));
+    let bond_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shaders::bond::SOURCE)),
+    });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,

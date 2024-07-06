@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use super::shaders;
 use crate::{GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
 use winit::dpi::PhysicalSize;
 
@@ -133,8 +134,14 @@ fn create_fxaa_pipeline(
         push_constant_ranges: &[],
     });
 
-    let vert = device.create_shader_module(wgpu::include_wgsl!("fullscreen.wgsl"));
-    let frag = device.create_shader_module(wgpu::include_wgsl!("fxaa.wgsl"));
+    let vert = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shaders::fullscreen::SOURCE)),
+    });
+    let frag = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shaders::fxaa::SOURCE)),
+    });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
