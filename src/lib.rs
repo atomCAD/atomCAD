@@ -140,9 +140,12 @@ impl EventHandler {
                 )
                 .await;
                 renderer.set_camera(ArcballCamera::new(Vec3::zero(), 100.0, 1.0));
+                let molecule = make_pdb_demo_scene();
+                let center =
+                    0.5 * (molecule.repr.bounding_box().min + molecule.repr.bounding_box().max);
                 let world = Assembly::from_components([Component::from_molecule(
-                    make_pdb_demo_scene(),
-                    Mat4::default(),
+                    molecule,
+                    Mat4::from_translation(-center),
                 )]);
                 let interactions = Interactions::default();
                 (renderer, gpu_resources, world, interactions)
