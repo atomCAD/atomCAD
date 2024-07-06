@@ -10,41 +10,40 @@ files.
 
 ## To Run
 
-1. [Install Rust](https://rustup.rs/)
-2. Install build dependencies: 
-    - __macOS__: `brew install cmake`
-    - __Debian/Ubuntu__: `apt install build-essential cmake libx11-dev` 
-    - __RHEL/Fedora__: `dnf groupinstall "Development Tools" && dnf install gcc-c++ cmake libX11-devel`
+1. Install you OS's development tools:
+    - __macOS__: `xcode-select --install`
+    - __Debian/Ubuntu__: `apt install build-essential`
+    - __RHEL/Fedora__: `dnf groupinstall "Development Tools" && dnf install gcc-c++`
+    - __Windows__: [Install Visual Studio](https://visualstudio.microsoft.com)
+2. [Install Rust](https://rustup.rs/)
+3. Install build dependencies:
+    - __macOS__: No additional dependencies.
+    - __Debian/Ubuntu__: `apt install libx11-dev`
+    - __RHEL/Fedora__: `dnf install libX11-devel`
     - __Windows__ 
         - `winget install -e --id Git.Git`
-        - `winget install -e --id Kitware.CMake`
-        - `winget install -e --id Ninja-build.Ninja`
-        - `winget install -e --id Python.Python.3.11`
         - Restart your command prompt to apply changes to PATH.
-3. `git clone` this repository and navigate to it
-4. run `cargo run`
+4. `git clone` this repository and navigate to it
+5. Run `cargo run`
 
 ## Web
 
 If your browser supports WebGPU, you can run atomCAD in your browser:
 
-1. [Install Rust](https://rustup.rs/)
-2. Install build dependencies: 
-    - __macOS__: `brew install cmake`
-    - __Debian/Ubuntu__: `apt install build-essential cmake libx11-dev` 
-    - __RHEL/Fedora__: `dnf groupinstall "Development Tools" && dnf install gcc-c++ cmake libX11-devel`
-    - __Windows__ 
-        - `winget install -e --id Git.Git`
-        - `winget install -e --id Kitware.CMake`
-        - `winget install -e --id Ninja-build.Ninja`
-        - `winget install -e --id Python.Python.3.11`
-        - Restart your command prompt to apply changes to PATH.
-3. Install wasm32 target: `rustup target add wasm32-unknown-unknown`
-4. Install trunk: `cargo install --locked trunk`
-5. `git clone` this repository and navigate to it
-6. Run
-    - __macOS/debian/ubuntu__  `RUSTFLAGS=--cfg=web_sys_unstable_apis trunk serve --open`
-    - __Windows__ set env variable `set "RUSTFLAGS=--cfg=web_sys_unstable_apis"` and then execute  `trunk serve --open`
+1. Perform steps 1-3 from the “To Run” section above.
+2. Install wasm32 target: `rustup target add wasm32-unknown-unknown`
+3. Install trunk: `cargo install --locked trunk`
+4. `git clone` this repository and navigate to it
+5. Run
+    - __macOS/debian/ubuntu__: `RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk serve --open`
+    - __Windows__ (PowerShell):
+        - `$env:RUSTFLAGS = "--cfg=web_sys_unstable_apis"`
+        - `trunk serve --open`
+        - (optional) `Remove-Item Env:\RUSTFLAGS`
+    - __Windows__ (CMD):
+        - `set RUSTFLAGS="--cfg=web_sys_unstable_apis"`
+        - `trunk serve --open`
+        - (optional) `set RUSTFLAGS=`
 
 ## Developers
 
