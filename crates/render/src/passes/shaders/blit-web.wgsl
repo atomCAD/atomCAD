@@ -11,9 +11,9 @@ struct FullscreenVertexOutput {
 };
 
 @group(0) @binding(0)
-var linear_sampler: sampler;
-@group(0) @binding(1)
 var color_texture: texture_2d<f32>;
+@group(0) @binding(1)
+var linear_sampler: sampler;
 
 fn linear_to_srgb(input_color: vec4<f32>) -> vec4<f32> {
     let cutoff = vec3<f32>(input_color.rgb < vec3(0.0031308));

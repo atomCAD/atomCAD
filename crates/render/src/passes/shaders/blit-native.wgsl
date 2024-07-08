@@ -11,9 +11,9 @@ struct FullscreenVertexOutput {
 };
 
 @group(0) @binding(0)
-var linear_sampler: sampler;
-@group(0) @binding(1)
 var color_texture: texture_2d<f32>;
+@group(0) @binding(1)
+var linear_sampler: sampler;
 
 @fragment
 fn main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
