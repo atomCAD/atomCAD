@@ -9,11 +9,11 @@ pub mod atom {}
 pub mod bond {}
 
 pub mod blit {
-    #[include_wgsl_oil::include_wgsl_oil("blit-native.wgsl")]
+    #[include_wgsl_oil::include_wgsl_oil("blit_native.wgsl")]
     pub mod native {}
 
-    #[include_wgsl_oil::include_wgsl_oil("blit-web.wgsl")]
-    pub mod web {}
+    #[include_wgsl_oil::include_wgsl_oil("blit_srgb.wgsl")]
+    pub mod srgb {}
 }
 
 #[include_wgsl_oil::include_wgsl_oil("fullscreen.wgsl")]

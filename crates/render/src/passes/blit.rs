@@ -106,7 +106,7 @@ fn create_blit_pipeline(
     let frag_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(if cfg!(target_arch = "wasm32") {
-            shaders::blit::web::SOURCE
+            shaders::blit::srgb::SOURCE
         } else {
             shaders::blit::native::SOURCE
         })),
