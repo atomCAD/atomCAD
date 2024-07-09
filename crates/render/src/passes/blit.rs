@@ -12,14 +12,17 @@ pub struct BlitPass {
 }
 
 impl BlitPass {
-    pub fn new(render_resources: &GlobalRenderResources, input: &wgpu::TextureView) -> Self {
+    pub fn new(
+        render_resources: &GlobalRenderResources,
+        input_texture: &wgpu::TextureView,
+    ) -> Self {
         let bind_group_layout = create_bind_group_layout(&render_resources.device);
         let pipeline = create_blit_pipeline(&render_resources.device, &bind_group_layout);
         let render_bundle = create_blit_render_bundle(
             &render_resources.device,
             &bind_group_layout,
             &render_resources.linear_sampler,
-            input,
+            input_texture,
             &pipeline,
         );
 
@@ -54,12 +57,16 @@ impl BlitPass {
         rpass.execute_bundles(Some(&self.render_bundle));
     }
 
-    pub fn update(&mut self, render_resources: &GlobalRenderResources, input: &wgpu::TextureView) {
+    pub fn update(
+        &mut self,
+        render_resources: &GlobalRenderResources,
+        input_texture: &wgpu::TextureView,
+    ) {
         self.render_bundle = create_blit_render_bundle(
             &render_resources.device,
             &self.bind_group_layout,
             &render_resources.linear_sampler,
-            input,
+            input_texture,
             &self.pipeline,
         );
     }

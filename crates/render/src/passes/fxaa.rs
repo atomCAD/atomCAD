@@ -19,7 +19,7 @@ impl FxaaPass {
     pub fn new(
         render_resources: &GlobalRenderResources,
         size: PhysicalSize<u32>,
-        input: &wgpu::TextureView,
+        input_texture: &wgpu::TextureView,
     ) -> (Self, wgpu::TextureView) {
         let sampler = render_resources
             .device
@@ -42,7 +42,7 @@ impl FxaaPass {
                     &render_resources.device,
                     &bind_group_layout,
                     &sampler,
-                    input,
+                    input_texture,
                 ),
                 bind_group_layout,
                 sampler,
@@ -74,7 +74,7 @@ impl FxaaPass {
     pub fn update(
         &mut self,
         render_resources: &GlobalRenderResources,
-        input: &wgpu::TextureView,
+        input_texture: &wgpu::TextureView,
         size: PhysicalSize<u32>,
     ) -> &wgpu::TextureView {
         self.texture = create_fxaa_texture(&render_resources.device, size)
@@ -83,7 +83,7 @@ impl FxaaPass {
             &render_resources.device,
             &self.bind_group_layout,
             &self.sampler,
-            input,
+            input_texture,
         );
         self.size = ((size.width + 7) / 8, (size.height + 7) / 8);
 
