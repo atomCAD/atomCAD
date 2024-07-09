@@ -16,7 +16,7 @@ var color_texture: texture_2d<f32>;
 var linear_sampler: sampler;
 
 @fragment
-fn main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+fn blit(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     return textureSample(color_texture, linear_sampler, in.uv);
 }
 

@@ -24,7 +24,7 @@ fn linear_to_srgb(input_color: vec4<f32>) -> vec4<f32> {
 }
 
 @fragment
-fn main(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+fn blit(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // Currently, webgpu doesn't automatically convert linear rgb outputs to
     // srgb so we do it manually.
     return linear_to_srgb(textureSample(color_texture, linear_sampler, in.uv));

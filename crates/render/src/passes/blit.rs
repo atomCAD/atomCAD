@@ -130,7 +130,7 @@ fn create_blit_pipeline(
         },
         fragment: Some(wgpu::FragmentState {
             module: &frag_shader,
-            entry_point: "main",
+            entry_point: "blit",
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(SWAPCHAIN_FORMAT.into())],
         }),
