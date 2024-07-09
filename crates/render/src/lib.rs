@@ -78,7 +78,8 @@ pub struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
     surface: wgpu::Surface<'static>,
     render_resources: Rc<GlobalRenderResources>,
-    size: PhysicalSize<u32>,
+    requested_size: PhysicalSize<u32>,
+    actual_size: PhysicalSize<u32>,
 
     vertex_contants: MolecularVertexConsts,
     vertex_contants_buffer: wgpu::Buffer,
@@ -101,7 +102,7 @@ impl Renderer {
         window: Arc<Window>,
         options: RenderOptions,
     ) -> (Self, Rc<GlobalRenderResources>) {
-        let size = window.inner_size();
+        let requested_size = window.inner_size();
 
         // The instance is a handle to our GPU.
         // Backends::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
@@ -161,19 +162,19 @@ impl Renderer {
             .expect("failed to create device");
 
         let limits = device.limits();
-        if size.width > limits.max_texture_dimension_2d
-            || size.height > limits.max_texture_dimension_2d
+        if requested_size.width > limits.max_texture_dimension_2d
+            || requested_size.height > limits.max_texture_dimension_2d
         {
             log::warn!(
                 "Display size {}x{} is greater than the maximum texture dimension {}; upscaling will occur.",
-                size.width,
-                size.height,
+                requested_size.width,
+                requested_size.height,
                 limits.max_texture_dimension_2d
             );
         }
-        let size = PhysicalSize::new(
-            size.width.min(limits.max_texture_dimension_2d),
-            size.height.min(limits.max_texture_dimension_2d),
+        let actual_size = PhysicalSize::new(
+            requested_size.width.min(limits.max_texture_dimension_2d),
+            requested_size.height.min(limits.max_texture_dimension_2d),
         );
 
         let camera = RenderCamera::new_empty(&device, 0.7, 0.1);
@@ -200,8 +201,8 @@ impl Renderer {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: SWAPCHAIN_FORMAT,
-            width: size.width,
-            height: size.height,
+            width: actual_size.width,
+            height: actual_size.height,
             present_mode: wgpu::PresentMode::AutoVsync,
             desired_maximum_frame_latency: 2,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
@@ -295,10 +296,10 @@ impl Renderer {
             camera.as_binding_resource(),
             &vertex_contants_buffer,
             &periodic_table_buffer,
-            size,
+            actual_size,
         );
         let (fxaa_pass, fxaa_texture) =
-            passes::FxaaPass::new(&render_resources, size, &color_texture);
+            passes::FxaaPass::new(&render_resources, actual_size, &color_texture);
         let blit_pass = passes::BlitPass::new(&render_resources, &fxaa_texture);
 
         (
@@ -306,7 +307,8 @@ impl Renderer {
                 surface_config,
                 surface,
                 render_resources: Rc::clone(&render_resources),
-                size,
+                requested_size,
+                actual_size,
 
                 vertex_contants,
                 vertex_contants_buffer,
@@ -327,44 +329,58 @@ impl Renderer {
         )
     }
 
-    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, requested_size: PhysicalSize<u32>) -> PhysicalSize<u32> {
+        if requested_size == self.requested_size {
+            return self.actual_size;
+        }
+        self.requested_size = requested_size;
+
         // We might clamp down the width or height later if it exceeds
         // underlying device texture dimension limits, so let's update the
         // camera view frustum based on the requested size first.
-        self.camera.resize(new_size);
+        self.camera.resize(requested_size);
 
         // WebGL on Apple M1 has a maximum texture dimension of 2048, but even
         // the smallest retina display is larger than that, so a fullscreen
         // app will have to be upscaled.
         let limits = self.render_resources.device.limits();
-        if new_size.width > limits.max_texture_dimension_2d
-            || new_size.height > limits.max_texture_dimension_2d
-        {
+        let actual_size = PhysicalSize::new(
+            requested_size.width.min(limits.max_texture_dimension_2d),
+            requested_size.height.min(limits.max_texture_dimension_2d),
+        );
+
+        if actual_size == self.actual_size {
+            return actual_size;
+        }
+        self.actual_size = actual_size;
+
+        // Warn the user if upscaling is required.  This is mostly an issue on
+        // WebGL where some browsers only support up to 2048x2048 framebuffer
+        // resolution.
+        if actual_size != requested_size {
             log::warn!(
                 "Display size {}x{} is greater than the maximum texture dimension {}; upscaling will occur.",
-                new_size.width,
-                new_size.height,
+                requested_size.width,
+                requested_size.height,
                 limits.max_texture_dimension_2d
             );
         }
-        let new_size = PhysicalSize::new(
-            new_size.width.min(limits.max_texture_dimension_2d),
-            new_size.height.min(limits.max_texture_dimension_2d),
-        );
 
-        self.size = new_size;
-        self.surface_config.width = new_size.width;
-        self.surface_config.height = new_size.height;
+        self.surface_config.width = actual_size.width;
+        self.surface_config.height = actual_size.height;
 
         self.surface
             .configure(&self.render_resources.device, &self.surface_config);
 
-        let (color_texture, _normals_texture) =
-            self.molecular_pass.update(&self.render_resources, new_size);
-        let fxaa_texture = self
-            .fxaa_pass
-            .update(&self.render_resources, color_texture, new_size);
+        let (color_texture, _normals_texture) = self
+            .molecular_pass
+            .update(&self.render_resources, actual_size);
+        let fxaa_texture =
+            self.fxaa_pass
+                .update(&self.render_resources, color_texture, actual_size);
         self.blit_pass.update(&self.render_resources, fxaa_texture);
+
+        actual_size
     }
 
     pub fn upload_transforms(
@@ -522,7 +538,7 @@ impl Renderer {
 
     /// Immediately calls resize on the supplied camera.
     pub fn set_camera<C: Camera + 'static>(&mut self, camera: C) {
-        self.camera.set_camera(camera, self.size);
+        self.camera.set_camera(camera, self.requested_size);
     }
 
     pub fn camera(&mut self) -> &mut RenderCamera {
