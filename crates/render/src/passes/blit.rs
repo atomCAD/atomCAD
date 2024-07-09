@@ -158,7 +158,7 @@ fn create_blit_render_bundle(
     bind_group_layout: &wgpu::BindGroupLayout,
     linear_sampler: &wgpu::Sampler,
     input_texture: &wgpu::TextureView,
-    blit_pipeline: &wgpu::RenderPipeline,
+    pipeline: &wgpu::RenderPipeline,
 ) -> wgpu::RenderBundle {
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -183,7 +183,7 @@ fn create_blit_render_bundle(
         multiview: None,
     });
 
-    encoder.set_pipeline(blit_pipeline);
+    encoder.set_pipeline(pipeline);
     encoder.set_bind_group(0, &bind_group, &[]);
     encoder.draw(0..3, 0..1);
     encoder.finish(&wgpu::RenderBundleDescriptor { label: None })
