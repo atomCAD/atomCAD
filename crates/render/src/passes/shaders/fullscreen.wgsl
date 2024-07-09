@@ -1,4 +1,4 @@
-// Copyright 2019-2023 by various contributors (see below).
+// Copyright 2019-2024 by various contributors (see below).
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
