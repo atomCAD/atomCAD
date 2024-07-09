@@ -4,12 +4,34 @@
 
 use super::shaders;
 use crate::{GlobalRenderResources, Renderer, SWAPCHAIN_FORMAT};
+use common::AsBytes;
 use winit::dpi::PhysicalSize;
+
+#[allow(dead_code)]
+struct FxaaParams {
+    edge_threshold_min: f32,
+    edge_threshold_max: f32,
+    max_iterations: i32,
+    subpixel_quality: f32,
+}
+unsafe impl AsBytes for FxaaParams {}
+
+impl Default for FxaaParams {
+    fn default() -> Self {
+        Self {
+            edge_threshold_min: 0.0312, // HIGH
+            edge_threshold_max: 0.125,  // HIGH
+            max_iterations: 12,
+            subpixel_quality: 0.75,
+        }
+    }
+}
 
 pub struct FxaaPass {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
+    params: wgpu::Buffer,
     sampler: wgpu::Sampler,
     texture: wgpu::TextureView,
     size: (u32, u32),
@@ -21,6 +43,19 @@ impl FxaaPass {
         size: PhysicalSize<u32>,
         input_texture: &wgpu::TextureView,
     ) -> (Self, wgpu::TextureView) {
+        let params = render_resources
+            .device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: Some("fxaa_params"),
+                size: std::mem::size_of::<FxaaParams>() as u64,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+                mapped_at_creation: false,
+            });
+        // Initialize default values for FxaaParams
+        render_resources
+            .queue
+            .write_buffer(&params, 0, FxaaParams::default().as_bytes());
+
         let sampler = render_resources
             .device
             .create_sampler(&wgpu::SamplerDescriptor {
@@ -41,10 +76,12 @@ impl FxaaPass {
                 bind_group: create_fxaa_bind_group(
                     &render_resources.device,
                     &bind_group_layout,
+                    &params,
                     &sampler,
                     input_texture,
                 ),
                 bind_group_layout,
+                params,
                 sampler,
                 texture,
                 size: ((size.width + 7) / 8, (size.height + 7) / 8),
@@ -82,6 +119,7 @@ impl FxaaPass {
         self.bind_group = create_fxaa_bind_group(
             &render_resources.device,
             &self.bind_group_layout,
+            &self.params,
             &self.sampler,
             input_texture,
         );
@@ -107,6 +145,18 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: std::num::NonZeroU64::new(
+                        std::mem::size_of::<FxaaParams>() as u64
+                    ),
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
@@ -115,7 +165,7 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 1,
+                binding: 2,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
@@ -172,6 +222,7 @@ fn create_fxaa_pipeline(
 fn create_fxaa_bind_group(
     device: &wgpu::Device,
     bind_group_layout: &wgpu::BindGroupLayout,
+    params: &wgpu::Buffer,
     sampler: &wgpu::Sampler,
     input_texture: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
@@ -181,10 +232,18 @@ fn create_fxaa_bind_group(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(input_texture),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: params,
+                    offset: 0,
+                    size: std::num::NonZeroU64::new(std::mem::size_of::<FxaaParams>() as u64),
+                }),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
+                resource: wgpu::BindingResource::TextureView(input_texture),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
                 resource: wgpu::BindingResource::Sampler(sampler),
             },
         ],

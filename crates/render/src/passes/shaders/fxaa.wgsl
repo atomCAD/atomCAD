@@ -32,25 +32,23 @@
 
 #import fullscreen.wgsl as fullscreen
 
-@group(0) @binding(0) var screenTexture: texture_2d<f32>;
-@group(0) @binding(1) var samp: sampler;
+struct FxaaParams {
+    // Trims the algorithm from processing darks.
+    // low (0.0833) medium (0.0625) high (0.0312) ultra (0.0156) extreme (0.0078)
+    edge_threshold_min: f32,
+    // The minimum amount of local contrast required to apply algorithm.
+    // low (0.250) medium (0.166) high (0.125) ultra (0.063) extreme (0.031)
+    edge_threshold_max: f32,
+    // The maximum number of iterations to perform when searching for edges.
+    max_iterations: i32,
+    // The quality of the subpixel shifting.
+    subpixel_quality: f32,
+};
+@group(0) @binding(0) var<uniform> params: FxaaParams;
 
-// Trims the algorithm from processing darks.
-//const EDGE_THRESHOLD_MIN: f32 = 0.0833; // low
-//const EDGE_THRESHOLD_MIN: f32 = 0.0625; // medium
-const EDGE_THRESHOLD_MIN: f32 = 0.0312; // high
-//const EDGE_THRESHOLD_MIN: f32 = 0.0156; // ultra
-//const EDGE_THRESHOLD_MIN: f32 = 0.0078; // extreme
+@group(0) @binding(1) var screenTexture: texture_2d<f32>;
+@group(0) @binding(2) var samp: sampler;
 
-// The minimum amount of local contrast required to apply algorithm.
-//const EDGE_THRESHOLD_MAX: f32 = 0.250; // low
-//const EDGE_THRESHOLD_MAX: f32 = 0.166; // medium
-const EDGE_THRESHOLD_MAX: f32 = 0.125; // high
-//const EDGE_THRESHOLD_MAX: f32 = 0.063; // ultra
-//const EDGE_THRESHOLD_MAX: f32 = 0.031; // extreme
-
-const ITERATIONS: i32 = 12; //default is 12
-const SUBPIXEL_QUALITY: f32 = 0.75;
 // #define QUALITY(q) ((q) < 5 ? 1.0 : ((q) > 5 ? ((q) < 10 ? 2.0 : ((q) < 11 ? 4.0 : 8.0)) : 1.5))
 fn QUALITY(q: i32) -> f32 {
     switch (q) {
@@ -94,7 +92,7 @@ fn fxaa(in: fullscreen::VertexOutput) -> @location(0) vec4<f32> {
     let lumaRange = lumaMax - lumaMin;
 
     // If the luma variation is lower that a threshold (or if we are in a really dark area), we are not on an edge, don't perform any AA.
-    if (lumaRange < max(EDGE_THRESHOLD_MIN, lumaMax * EDGE_THRESHOLD_MAX)) {
+    if (lumaRange < max(params.edge_threshold_min, lumaMax * params.edge_threshold_max)) {
         return centerSample;
     }
 
@@ -186,7 +184,7 @@ fn fxaa(in: fullscreen::VertexOutput) -> @location(0) vec4<f32> {
 
     // If both sides have not been reached, continue to explore.
     if (!reachedBoth) {
-        for (var i: i32 = 2; i < ITERATIONS; i = i + 1) {
+        for (var i: i32 = 2; i < params.max_iterations; i = i + 1) {
             // If needed, read luma in 1st direction, compute delta.
             if (!reached1) { 
                 lumaEnd1 = rgb2luma(textureSampleLevel(screenTexture, samp, uv1, 0.0).rgb);
@@ -251,7 +249,7 @@ fn fxaa(in: fullscreen::VertexOutput) -> @location(0) vec4<f32> {
     let subPixelOffset1 = clamp(abs(lumaAverage - lumaCenter) / lumaRange, 0.0, 1.0);
     let subPixelOffset2 = (-2.0 * subPixelOffset1 + 3.0) * subPixelOffset1 * subPixelOffset1;
     // Compute a sub-pixel offset based on this delta.
-    let subPixelOffsetFinal = subPixelOffset2 * subPixelOffset2 * SUBPIXEL_QUALITY;
+    let subPixelOffsetFinal = subPixelOffset2 * subPixelOffset2 * params.subpixel_quality;
 
     // Pick the biggest of the two offsets.
     finalOffset = max(finalOffset, subPixelOffsetFinal);
