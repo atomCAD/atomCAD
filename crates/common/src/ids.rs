@@ -131,7 +131,7 @@ pub struct PatternInstanceId {
 /// we want to protect against N layers of patterning, we need to namespace our
 /// child counter behind N `PatternInstanceId`s.
 ///
-/// This is how we arrive at the solution that AtomCAD uses. Every time an atom is
+/// This is how we arrive at the solution that atomCAD uses. Every time an atom is
 /// copied by a edit, it's `AtomSpecifiers`'s `path` has a new `PatternInstanceId`
 /// pushed to the back, describing which edit made that copy and what the current
 /// instance index (the copy number inside that edit) is. The child index is never
