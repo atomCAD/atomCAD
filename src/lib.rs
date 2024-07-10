@@ -4,8 +4,9 @@
 
 use std::process::ExitCode;
 
-fn main() -> ExitCode {
-    atomcad::start()
+pub fn start() -> ExitCode {
+    println!("Hello, world!");
+    ExitCode::SUCCESS
 }
 
 // End of File
