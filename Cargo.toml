@@ -54,9 +54,9 @@ winit.workspace = true
 
 # macOS platform support
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = { workspace = true }
-objc2-app-kit = { workspace = true }
-objc2-foundation = { workspace = true }
+objc2.workspace = true
+objc2-app-kit.workspace = true
+objc2-foundation.workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # Pin wasm-bindgen to match the wasm-bindgen-cli version installed in CI.

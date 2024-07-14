@@ -9,3 +9,11 @@ edition = { workspace = true }
 [dependencies]
 # Bevy
 bevy = { workspace = true }
+# Input
+keyboard = { workspace = true }
+
+# macOS platform support
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true }
+objc2-foundation = { workspace = true }
