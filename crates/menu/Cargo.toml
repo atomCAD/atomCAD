@@ -11,8 +11,16 @@ edition = { workspace = true }
 app = { workspace = true }
 # Entity Component System
 ecs = { workspace = true }
+# Input
+keyboard = { workspace = true }
 # Utilities
 anyhow = { workspace = true }
 # Windowing
 winit = { workspace = true }
 winit-runner = { workspace = true }
+
+# macOS platform support
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true }
+objc2-foundation = { workspace = true }
