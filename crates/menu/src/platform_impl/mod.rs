@@ -8,8 +8,6 @@
     target_os = "ios",
     // FIXME: Should use the gtk APIs to setup the menubar for the main window(s).
     target_os = "linux",
-    // FIXME: Should use the Cocoa APIs to setup the application menubar with active window's blueprint.
-    target_os = "macos",
     // FIXME: We should investigate options for creating a menubar on web.
     target_family = "wasm",
     // FIXME: Should use the Win32 or WinUI APIs to setup the menubar for each window.
@@ -20,10 +18,14 @@ mod default;
     target_os = "android",
     target_os = "ios",
     target_os = "linux",
-    target_os = "macos",
     target_family = "wasm",
     target_os = "windows"
 ))]
 pub use self::default::*;
+
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+pub use self::macos::*;
 
 // End of File

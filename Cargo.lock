@@ -237,7 +237,11 @@ dependencies = [
  "anyhow",
  "atomcad-app",
  "atomcad-ecs",
+ "atomcad-keyboard",
  "atomcad-winit-runner",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "winit",
 ]
 

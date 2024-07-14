@@ -36,6 +36,10 @@ menu = { package = "atomcad-menu", path = "crates/menu" }
 window = { package = "atomcad-window", path = "crates/window" }
 winit = "0.30"
 winit-runner = { package = "atomcad-winit-runner", path = "crates/winit-runner" }
+# macOS platform support
+objc2 = "0.5.2"
+objc2-app-kit = "0.2.2"
+objc2-foundation = "0.2.2"
 
 [dependencies]
 # atomCAD
