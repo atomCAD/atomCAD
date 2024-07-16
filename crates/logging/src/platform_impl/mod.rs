@@ -10,9 +10,14 @@ mod desktop;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub(crate) use self::desktop::*;
 
-#[cfg(any(target_os = "android", target_os = "ios", target_family = "wasm"))]
+#[cfg(target_family = "wasm")]
+mod web;
+#[cfg(target_family = "wasm")]
+pub(crate) use self::web::*;
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
 mod default;
-#[cfg(any(target_os = "android", target_os = "ios", target_family = "wasm"))]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 pub(crate) use self::default::*;
 
 // End of File

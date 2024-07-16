@@ -15,3 +15,7 @@ log = { workspace = true }
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
 # Logging
 env_logger = "0.11"
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+# Logging
+console_log = "1.0.0"

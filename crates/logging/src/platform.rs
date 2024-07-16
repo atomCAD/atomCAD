@@ -21,7 +21,8 @@ impl LoggingPlugin {
 }
 
 /// Configures the logging framework for an [`App`] instance, enabling logs to be captured from the
-/// terminal on desktop platforms with a minimum [`log::Level`] set based on the build profile.
+/// terminal on desktop platforms or sent to the Javascript console when running in a browser, with
+/// a minimum [`log::Level`] set based on the build profile.
 impl app::Plugin for LoggingPlugin {
     /// Configure logging output to be filtered by [`Info`](log::Level::Info) in debug builds, and
     /// by [`Warn`](log::Level::Warn) in release.  This can be overridden on desktop platforms by
