@@ -6,6 +6,12 @@
 /// Platforms which do not need customization for specific features can simply re-export from this
 /// module.
 mod defaults;
+#[cfg(not(target_family = "wasm"))]
 pub(crate) use defaults::*;
+
+#[cfg(target_family = "wasm")]
+mod web;
+#[cfg(target_family = "wasm")]
+pub(crate) use web::*;
 
 // End of File
