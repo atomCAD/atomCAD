@@ -10,6 +10,8 @@ edition = { workspace = true }
 default = ["console_error_panic_hook"]
 
 [dependencies]
+# Entity Component System
+ecs = { workspace = true }
 # Rust
 anyhow = { workspace = true }
 log = { workspace = true }
