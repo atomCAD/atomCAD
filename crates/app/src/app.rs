@@ -4,6 +4,7 @@
 
 use crate::{platform::PanicHandlerPlugin, plugin::Plugin};
 use core::num::NonZero;
+use ecs::prelude::*;
 use std::{
     collections::HashSet,
     process::{ExitCode, Termination},
@@ -68,6 +69,8 @@ pub struct App {
     /// A list of plugins that have been registered with the application, stored in the order in
     /// which they were registered.
     plugins: Vec<Box<dyn Plugin>>,
+    /// The global repository of program state, managed by the [`ecs`] ECS library.
+    world: World,
 }
 
 /// The default application runner, which features no event loop.  This is useful for simple
@@ -105,6 +108,7 @@ impl App {
             runner: Box::new(run_once),
             unique_plugins: HashSet::new(),
             plugins: Vec::new(),
+            world: World::default(),
         }
     }
 
@@ -251,6 +255,20 @@ impl App {
 
         // Returns an AppExit value from the runner.
         (runner)(self)
+    }
+}
+
+impl ContainsWorld for App {
+    /// Returns a reference to the application's ECS [`World`], which contains the global repository of
+    /// program state.  The world is managed by the [`ecs`] ECS library.
+    fn world(&self) -> &World {
+        &self.world
+    }
+
+    /// Returns a mutable reference to the application's ECS [`World`], which contains the global
+    /// repository of program state.  The world is managed by the [`ecs`] ECS library.
+    fn world_mut(&mut self) -> &mut World {
+        &mut self.world
     }
 }
 
