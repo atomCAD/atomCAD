@@ -17,6 +17,7 @@ pub fn start() -> AppExit {
         .add_plugin(LoggingPlugin::new(vec![
             env!("CARGO_PKG_NAME"),
             "atomcad_app",
+            "atomcad_ecs",
             "atomcad_logging",
         ]))
         .set_runner(hello_world)
