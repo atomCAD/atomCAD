@@ -14,7 +14,7 @@ pub struct PlatformTweaks;
 impl Plugin for PlatformTweaks {
     fn build(&self, app: &mut App) {
         // Record the size of the canvas element as a persistent entity.
-        app.world.spawn(CanvasSize::default());
+        app.world_mut().spawn(CanvasSize::default());
         // Every frame, check the size of the browser window.
         // If necessary, update the canvas size to match.
         app.add_systems(Update, update_canvas_size);

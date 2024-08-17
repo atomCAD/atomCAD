@@ -68,17 +68,17 @@ pub struct PbrCache {
     atoms: HashMap<Element, PbrBundle>,
 }
 
-const ATOM_HIGHLIGHTING: Highlight<StandardMaterial> = Highlight {
+static ATOM_HIGHLIGHTING: Highlight<StandardMaterial> = Highlight {
     hovered: Some(HighlightKind::new_dynamic(|orig| StandardMaterial {
-        base_color: orig.base_color * 2.,
+        base_color: (orig.base_color.to_linear() * 2.).into(),
         ..orig.to_owned()
     })),
     pressed: Some(HighlightKind::new_dynamic(|orig| StandardMaterial {
-        base_color: orig.base_color * 6.,
+        base_color: (orig.base_color.to_linear() * 6.).into(),
         ..orig.to_owned()
     })),
     selected: Some(HighlightKind::new_dynamic(|orig| StandardMaterial {
-        base_color: orig.base_color * 1.5,
+        base_color: (orig.base_color.to_linear() * 1.5).into(),
         ..orig.to_owned()
     })),
 };
@@ -122,7 +122,7 @@ pub fn molecule_builder(
                     element: Element::Carbon,
                 },
                 PickableBundle::default(),
-                ATOM_HIGHLIGHTING,
+                ATOM_HIGHLIGHTING.clone(),
             ))
             .id();
 
@@ -138,7 +138,7 @@ pub fn molecule_builder(
                 On::<Pointer<Click>>::target_commands_mut(|_event, target_commands| {
                     target_commands.insert(ClickFlag);
                 }),
-                ATOM_HIGHLIGHTING,
+                ATOM_HIGHLIGHTING.clone(),
             ))
             .id();
 
@@ -175,7 +175,7 @@ pub fn init_molecule(
         atoms: HashMap::new(),
         bonding_site: PbrBundle {
             mesh: meshes.add(Sphere::new(0.6).mesh().uv(24, 24)),
-            material: materials.add(StandardMaterial::from(Color::rgb(0.6, 0.0, 0.0))),
+            material: materials.add(StandardMaterial::from(Color::srgb(0.6, 0.0, 0.0))),
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()
         },
@@ -186,7 +186,7 @@ pub fn init_molecule(
         Element::Carbon,
         PbrBundle {
             mesh: meshes.add(Sphere::new(carbon.radius).mesh().uv(60, 60)),
-            material: materials.add(StandardMaterial::from(Color::rgb(
+            material: materials.add(StandardMaterial::from(Color::srgb(
                 carbon.color[0],
                 carbon.color[1],
                 carbon.color[2],
@@ -202,7 +202,7 @@ pub fn init_molecule(
         .spawn((
             carbon_pbr,
             PickableBundle::default(),
-            ATOM_HIGHLIGHTING,
+            ATOM_HIGHLIGHTING.clone(),
             Atom {
                 element: Element::Carbon,
             },
@@ -219,7 +219,7 @@ pub fn init_molecule(
             On::<Pointer<Click>>::target_commands_mut(|_event, target_commands| {
                 target_commands.insert(ClickFlag);
             }),
-            ATOM_HIGHLIGHTING,
+            ATOM_HIGHLIGHTING.clone(),
         ))
         .id();
 

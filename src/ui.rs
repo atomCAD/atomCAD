@@ -31,8 +31,8 @@ struct ButtonColors {
 impl Default for ButtonColors {
     fn default() -> Self {
         ButtonColors {
-            normal: Color::rgb(0.15, 0.15, 0.15),
-            hovered: Color::rgb(0.0, 0.655, 1.0),
+            normal: Color::srgb(0.15, 0.15, 0.15),
+            hovered: Color::srgb(0.0, 0.655, 1.0),
         }
     }
 }

@@ -32,6 +32,11 @@ fn main() {
 
     let default_plugins = DefaultPlugins;
 
+    let default_plugins = default_plugins.set(AssetPlugin {
+        meta_check: AssetMetaCheck::Never,
+        ..default()
+    });
+
     #[cfg(debug_assertions)]
     let default_plugins = default_plugins.set(LogPlugin {
         filter: format!("warn,{}=trace,app_config=trace", env!("CARGO_PKG_NAME")),
@@ -64,7 +69,6 @@ fn main() {
 
     app.insert_resource(WinitSettings::desktop_app())
         .insert_resource(Msaa::Off)
-        .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(app_config)
         .insert_resource(window_settings)

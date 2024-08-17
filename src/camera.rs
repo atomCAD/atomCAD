@@ -3,8 +3,8 @@
 // You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use bevy::{
+    input::gestures::{PinchGesture, RotationGesture},
     input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
-    input::touchpad::{TouchpadMagnify, TouchpadRotate},
     prelude::*,
 };
 // Most of the heavy lifting is accomplished by the smooth_bevy_cameras crate.
@@ -185,8 +185,8 @@ fn cad_view_input_handler(
     mut events: EventWriter<CadViewControlEvent>,
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
-    mut ev_magnify: EventReader<TouchpadMagnify>,
-    mut ev_rotate: EventReader<TouchpadRotate>,
+    mut ev_magnify: EventReader<PinchGesture>,
+    mut ev_rotate: EventReader<RotationGesture>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
     controllers: Query<(&CadViewController, &CadViewControllerSettings)>,

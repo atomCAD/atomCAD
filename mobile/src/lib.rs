@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use bevy::window::WindowMode;
 
 #[bevy_main]
-fn main() {
+fn main() -> AppExit {
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
