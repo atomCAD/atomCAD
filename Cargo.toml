@@ -13,7 +13,18 @@ authors = ["Machine Phase Systems <hello@machinephase.systems>"]
 license = "MPL-2.0"
 edition = "2021"
 
+[workspace]
+members = ["crates/*"]
+
+[workspace.dependencies]
+# atomCAD
+app = { package = "atomcad-app", path = "crates/app" }
+# Rust
+readonly = "0.2.12"
+
 [dependencies]
+# atomCAD
+app = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # Web platform support
