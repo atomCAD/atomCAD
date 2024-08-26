@@ -8,8 +8,8 @@ use bevy_ecs::prelude::*;
 /// [`world_mut()`](ContainsWorld::world_mut) methods.
 ///
 /// Implementing `ContainsWorld` automatically makes default implementations of
-/// [`ResourceManager`](crate::ResourceManager) and [`NonSendManager`](crate::NonSendManager)
-/// available.
+/// [`ResourceManager`](crate::ResourceManager), [`NonSendManager`](crate::NonSendManager), and
+/// [`ScheduleManager`](crate::ScheduleManager) available.
 pub trait ContainsWorld {
     /// Gets an immutable reference to the ECS [`World`].
     fn world(&self) -> &World;

@@ -15,11 +15,13 @@
 //!   ECS [`World`](prelude::World).
 //! - [`NonSendManager`] is a similar trait for managing non-Send resources in an ECS
 //!   [`World`](prelude::World).
+//! - [`ScheduleManager`] is a trait containing the application interface for managing schedules in
+//!   an ECS [`World`](prelude::World).
 //! - [`ContainsWorld`] is a trait for objects that contain an ECS [`World`](prelude::World),
 //!   exposing the [`world()`](ContainsWorld::world) and [`world_mut()`](ContainsWorld::world_mut)
 //!   methods for getting references to the ECS [`World`](prelude::World).  Implementing
-//!   [`ContainsWorld`] automatically makes default implementations of [`ResourceManager`] and
-//!   [`NonSendManager`] available.
+//!   [`ContainsWorld`] automatically makes default implementations of [`ResourceManager`],
+//!   [`NonSendManager`], and [`ScheduleManager`] available.
 //!
 //! See [`bevy_ecs`] for more information on what an `Entity Component System` is and how to use it.
 pub use bevy_ecs::*;

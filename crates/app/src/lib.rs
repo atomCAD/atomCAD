@@ -23,7 +23,7 @@ pub mod prelude {
         app::{App, AppExit},
         plugin::Plugin,
     };
-    pub use ecs::{ContainsWorld, NonSendManager, ResourceManager};
+    pub use ecs::{ContainsWorld, NonSendManager, ResourceManager, ScheduleManager};
 }
 
 // End of File

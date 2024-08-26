@@ -4,6 +4,9 @@
 mod resource;
 pub use resource::{NonSendManager, ResourceManager};
 
+mod schedule;
+pub use schedule::ScheduleManager;
+
 mod world;
 pub use world::ContainsWorld;
 
