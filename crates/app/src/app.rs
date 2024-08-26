@@ -1,9 +1,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of
 // the MPL was not distributed with this file, You can obtain one at <http://mozilla.org/MPL/2.0/>.
 
-use crate::{platform::PanicHandlerPlugin, plugin::Plugin};
+use crate::{platform::PanicHandlerPlugin, plugin::Plugin, schedule::MainSchedulePlugin};
 use core::num::NonZero;
-use ecs::prelude::*;
+use ecs::{prelude::*, schedule::ScheduleLabel};
 use std::{
     collections::HashSet,
     process::{ExitCode, Termination},
@@ -47,11 +47,29 @@ impl Termination for AppExit {
 
 type RunnerFn = Box<dyn FnOnce(App) -> AppExit>;
 
-/// The application object, containing a global repository of program state and the application
-/// runner, the main loop of the program.  Typically no more than one application runner is
-/// instantiated in the lifetime of a process.  On some platforms and configurations, such as
-/// graphical apps on iOS or web, this is a hard requirement and the main loop of the application
-/// runner will never return.
+/// Does the necessary glue work to combine [`World`] and [`Schedule`]s to create an ECS-based
+/// application.  The [`App`] is a global repository of program state and the application runner,
+/// the main loop of the program.  Typically no more than one application runner is instantiated in
+/// the lifetime of a process.  On some platforms and configurations, such as graphical apps on iOS
+/// or web, this is a hard requirement as the main loop of the application runner must run on the
+/// main thread, and will never return.
+///
+/// # Examples
+///
+/// Here is a simple ”Hello, World!” app:
+///
+/// ```
+/// # use atomcad_app::prelude::*;
+/// fn main() {
+///     App::new("Hello World".into())
+///         .add_systems(Update, print_hello_world)
+///         .run();
+/// }
+///
+/// fn print_hello_world() {
+///     println!("Hello, World!");
+/// }
+/// ```
 #[readonly::make]
 pub struct App {
     /// The application name, as passed to [`new`](Self::new) or [`set_name`](Self::set_name), and
@@ -105,18 +123,23 @@ impl App {
     /// Depending on your platform, some platform-specific initialization may be required.  For a
     /// list of the default plugins excluded, see [`App::new`].
     pub fn empty(name: String) -> Self {
+        // Initialize the world with the [`Schedules`] resource, as otherwise [`App::add_schedule`]
+        // and such will panic.
+        let mut world = World::new();
+        world.init_resource::<Schedules>();
         Self {
             name,
             runner: Box::new(run_once),
             unique_plugins: HashSet::new(),
             plugins: Vec::new(),
-            world: World::default(),
+            world,
         }
     }
 
     /// Creates a new application runner with the given name, initialized with a sensible but
-    /// minimal list of default plugins for platform support.  To initialize a new application
-    /// runner with absolutely no default configuration behavior, use [`App::empty`].
+    /// minimal list of default plugins for platform support and running the main loop schedule.  To
+    /// initialize a new application runner with absolutely no default configuration behavior, use
+    /// [`App::empty`].
     ///
     /// The name is used to identify the application in log messages and other diagnostic output, as
     /// well as user interface elements in window managers (default window title, application menu
@@ -128,9 +151,21 @@ impl App {
     ///
     /// * [`PanicHandlerPlugin`]: Registers a panic hook that logs errors to the Javascript console
     ///   on web.  On other platforms, this plugin does nothing.
+    ///
+    /// * [`MainSchedulePlugin`]: Sets up the main schedule for the application, which runs every
+    ///   iteration of the main loop and is responsible for running the startup and update phases of
+    ///   the application:
+    ///     - [`PreStartup`](super::schedule::PreStartup), [`Startup`](super::schedule::Startup),
+    ///       and [`PostStartup`](super::schedule::PostStartup) are run once on the first iteration
+    ///       of the main loop.
+    ///     - [`First`](super::schedule::First), [`PreUpdate`](super::schedule::PreUpdate),
+    ///       [`Update`](super::schedule::Update), [`PostUpdate`](super::schedule::PostUpdate), and
+    ///       [`Last`](super::schedule::Last) are also run on the first iteration of the main loop,
+    ///       and again on every iteration thereafter.
     pub fn new(name: String) -> Self {
         let mut app = Self::empty(name);
         app.add_plugin(PanicHandlerPlugin);
+        app.add_plugin(MainSchedulePlugin);
         app
     }
 
@@ -174,6 +209,26 @@ impl App {
 
         // Add the plugin to the application's list of plugins.
         self.plugins.push(Box::new(plugin));
+
+        self
+    }
+
+    /// Adds one or more systems to the given `schedule` in this app's [`Schedules`].
+    pub fn add_systems<M>(
+        &mut self,
+        schedule: impl ScheduleLabel,
+        systems: impl IntoSystemConfigs<M>,
+    ) -> &mut Self {
+        let schedule = schedule.intern();
+        let mut schedules = self.world.resource_mut::<Schedules>();
+
+        if let Some(schedule) = schedules.get_mut(schedule) {
+            schedule.add_systems(systems);
+        } else {
+            let mut new_schedule = Schedule::new(schedule);
+            new_schedule.add_systems(systems);
+            schedules.insert(new_schedule);
+        }
 
         self
     }

@@ -17,11 +17,18 @@ pub use platform::PanicHandlerPlugin;
 mod plugin;
 pub use plugin::Plugin;
 
+mod schedule;
+pub use schedule::{
+    First, Last, MainSchedulePlugin, PostStartup, PostUpdate, PreStartup, PreUpdate, Startup,
+    Update,
+};
+
 /// Most commonly used types, suitable for glob import.
 pub mod prelude {
     pub use crate::{
         app::{App, AppExit},
         plugin::Plugin,
+        schedule::{First, Last, PostStartup, PostUpdate, PreStartup, PreUpdate, Startup, Update},
     };
     pub use ecs::{ContainsWorld, NonSendManager, ResourceManager, ScheduleManager};
 }
