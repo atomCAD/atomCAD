@@ -147,6 +147,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "atomcad-ecs",
+ "bevy_ecs",
  "console_error_panic_hook",
  "log",
 ]
