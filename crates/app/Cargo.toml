@@ -11,6 +11,7 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 # Entity Component System
+bevy_ecs = { workspace = true }
 ecs = { workspace = true }
 # Rust
 anyhow = { workspace = true }
