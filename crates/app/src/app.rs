@@ -9,7 +9,9 @@ use crate::{
 };
 use core::num::NonZero;
 use ecs::{
-    message::{MessageUpdateSystems, message_update_condition, message_update_system},
+    message::{
+        MessageCursor, MessageUpdateSystems, message_update_condition, message_update_system,
+    },
     prelude::*,
     schedule::{InternedScheduleLabel, ScheduleLabel},
     system::ScheduleSystem,
@@ -21,7 +23,7 @@ use std::{
 
 /// The status code to use when exiting the application.  It is the value returned by the
 /// application runner, and passed back to the callee of [`App::run()`].
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Message, Clone, Copy, PartialEq, Eq)]
 pub enum AppExit {
     /// The application exited successfully.  This results in a status code of 0 on POSIX systems.
     Success,
@@ -112,7 +114,7 @@ pub struct App {
 /// the default behavior of a newly initialized [`App`].
 pub fn run_once(app: &mut App) -> AppExit {
     app.update();
-    AppExit::Success
+    app.should_exit().unwrap_or(AppExit::Success)
 }
 
 /// Associated functions for initializing and manipulating [`App`] instances.  You should use
@@ -187,6 +189,7 @@ impl App {
                 .in_set(MessageUpdateSystems)
                 .run_if(message_update_condition),
         );
+        app.add_message::<AppExit>();
         app
     }
 
@@ -353,6 +356,29 @@ impl App {
 
         // Returns an AppExit value from the runner.
         (runner)(self)
+    }
+
+    pub fn should_exit(&self) -> Option<AppExit> {
+        // We manually construct an message reader to see if there are any queued AppExit messages.
+        // Returns None if there is no AppExit message queue in the world.
+        let mut reader = MessageCursor::default();
+        let messages = self.get_resource::<Messages<AppExit>>()?;
+        let mut messages = reader.read(messages);
+
+        // If there are no messages in the queue, then shutdown has not been requested.
+        if messages.len() == 0 {
+            return None;
+        }
+
+        // Otherwise *at least one* termination message has been generated.  It's possible that there
+        // is more than one, and if any one of them is an error, we return it.  Otherwise they must
+        // be AppExit::Success, and we return that.
+        Some(
+            messages
+                .find(|exit| exit.is_err())
+                .cloned()
+                .unwrap_or(AppExit::Success),
+        )
     }
 }
 
