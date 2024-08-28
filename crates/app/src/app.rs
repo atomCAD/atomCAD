@@ -2,7 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::plugin::Plugin;
+use crate::{platform::PanicHandlerPlugin, plugin::Plugin};
 use core::num::NonZero;
 use std::collections::HashSet;
 
@@ -71,18 +71,36 @@ pub fn run_once(app: &mut App) -> AppExit {
 ///     .run();
 /// ```
 impl App {
-    /// Creates a new application runner with the given name.  The name is used to identify the
-    /// application in log messages and other diagnostic output, as well as user interface elements
-    /// in window managers (default window title, application menu name on macOS, etc.).  The runner
-    /// is initialized to [`run_once`], but can be changed with [`set_runner`](Self::set_runner).
-    /// The name must be specified, but can later be changed with [`set_name`](Self::set_name).
-    pub fn new(name: String) -> Self {
+    /// Creates a new application runner with the given name, with no default configuration.
+    /// Depending on your platform, some platform-specific initialization may be required.  For a
+    /// list of the default plugins excluded, see [`App::new`].
+    pub fn empty(name: String) -> Self {
         Self {
             name,
             runner: Box::new(run_once),
             unique_plugins: HashSet::new(),
             plugins: Vec::new(),
         }
+    }
+
+    /// Creates a new application runner with the given name, initialized with a sensible but
+    /// minimal list of default plugins for platform support.  To initialize a new application
+    /// runner with absolutely no default configuration behavior, use [`App::empty`].
+    ///
+    /// The name is used to identify the application in log messages and other diagnostic output, as
+    /// well as user interface elements in window managers (default window title, application menu
+    /// name on macOS, etc.).  The runner is initialized to [`run_once`], but can be changed with
+    /// [`set_runner`](Self::set_runner).  The name must be specified, but can later be changed with
+    /// [`set_name`](Self::set_name).
+    ///
+    /// # Current Default Plugins:
+    ///
+    /// * [`PanicHandlerPlugin`]: Registers a panic hook that logs errors to the Javascript console
+    ///   on web.  On other platforms, this plugin does nothing.
+    pub fn new(name: String) -> Self {
+        let mut app = Self::empty(name);
+        app.add_plugin(PanicHandlerPlugin);
+        app
     }
 
     /// Returns the application name. This is used to identify the application in log messages
