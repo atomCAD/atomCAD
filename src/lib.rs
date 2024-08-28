@@ -11,7 +11,7 @@ fn hello_world(app: &mut App) -> AppExit {
     let _ = app;
     log::info!("Hello, World!");
     app.update();
-    AppExit::Success
+    app.should_exit().unwrap_or(AppExit::Success)
 }
 
 pub fn start() -> AppExit {
