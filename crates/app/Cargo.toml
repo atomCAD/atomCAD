@@ -7,3 +7,5 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+# Rust
+anyhow = { workspace = true }
