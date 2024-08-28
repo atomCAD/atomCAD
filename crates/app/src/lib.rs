@@ -10,6 +10,10 @@
 mod app;
 pub use app::{run_once, App, AppExit};
 
+mod platform;
+mod platform_impl;
+pub use platform::PanicHandlerPlugin;
+
 mod plugin;
 pub use plugin::Plugin;
 

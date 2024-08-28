@@ -6,7 +6,14 @@ authors = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
 
+[features]
+default = ["console_error_panic_hook"]
+
 [dependencies]
 # Rust
 anyhow = { workspace = true }
 readonly = { workspace = true }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+# Web platform support
+console_error_panic_hook = { version = "0.1.7", optional = true }
