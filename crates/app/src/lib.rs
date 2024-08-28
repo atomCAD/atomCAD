@@ -11,9 +11,15 @@
 mod app;
 pub use app::{App, AppExit, run_once};
 
+mod plugin;
+pub use plugin::Plugin;
+
 /// Most commonly used types, suitable for glob import.
 pub mod prelude {
-    pub use crate::app::{App, AppExit};
+    pub use crate::{
+        app::{App, AppExit},
+        plugin::Plugin,
+    };
 }
 
 // End of File
