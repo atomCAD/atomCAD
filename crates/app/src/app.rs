@@ -2,9 +2,14 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{platform::PanicHandlerPlugin, plugin::Plugin, schedule::MainSchedulePlugin};
+use crate::{
+    platform::PanicHandlerPlugin,
+    plugin::Plugin,
+    schedule::{First, MainSchedulePlugin},
+};
 use core::num::NonZero;
 use ecs::{
+    message::{MessageUpdateSystems, message_update_condition, message_update_system},
     prelude::*,
     schedule::{InternedScheduleLabel, ScheduleLabel},
     system::ScheduleSystem,
@@ -176,6 +181,12 @@ impl App {
         let mut app = Self::empty(name);
         app.add_plugin(PanicHandlerPlugin);
         app.add_plugin(MainSchedulePlugin);
+        app.add_systems(
+            First,
+            message_update_system
+                .in_set(MessageUpdateSystems)
+                .run_if(message_update_condition),
+        );
         app
     }
 
