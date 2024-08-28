@@ -6,9 +6,10 @@ use logging::prelude::*;
 
 pub const APP_NAME: &str = "atomCAD";
 
-fn hello_world(app: App) -> AppExit {
+fn hello_world(mut app: App) -> AppExit {
     let _ = app;
     log::info!("Hello, World!");
+    app.update();
     AppExit::Success
 }
 

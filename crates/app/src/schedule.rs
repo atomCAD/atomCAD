@@ -42,7 +42,8 @@ impl Plugin for MainSchedulePlugin {
         main.set_executor_kind(ExecutorKind::SingleThreaded);
         schedules.insert(main);
 
-        app.add_resource(main_schedule_order)
+        app.set_update_schedule(Main)
+            .add_resource(main_schedule_order)
             .add_systems(Main, Main::run_main);
     }
 }
