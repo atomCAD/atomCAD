@@ -1,9 +1,14 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of
 // the MPL was not distributed with this file, You can obtain one at <http://mozilla.org/MPL/2.0/>.
 
-use crate::{platform::PanicHandlerPlugin, plugin::Plugin, schedule::MainSchedulePlugin};
+use crate::{
+    platform::PanicHandlerPlugin,
+    plugin::Plugin,
+    schedule::{First, MainSchedulePlugin},
+};
 use core::num::NonZero;
 use ecs::{
+    event::{event_update_condition, event_update_system, EventUpdates},
     prelude::*,
     schedule::{InternedScheduleLabel, ScheduleLabel},
 };
@@ -177,6 +182,12 @@ impl App {
         let mut app = Self::empty(name);
         app.add_plugin(PanicHandlerPlugin);
         app.add_plugin(MainSchedulePlugin);
+        app.add_systems(
+            First,
+            event_update_system
+                .in_set(EventUpdates)
+                .run_if(event_update_condition),
+        );
         app
     }
 

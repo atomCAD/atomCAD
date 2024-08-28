@@ -30,7 +30,7 @@ pub mod prelude {
         plugin::Plugin,
         schedule::{First, Last, PostStartup, PostUpdate, PreStartup, PreUpdate, Startup, Update},
     };
-    pub use ecs::{ContainsWorld, NonSendManager, ResourceManager, ScheduleManager};
+    pub use ecs::{ContainsWorld, EventManager, NonSendManager, ResourceManager, ScheduleManager};
 }
 
 // End of File
