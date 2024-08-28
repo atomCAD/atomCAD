@@ -9,7 +9,7 @@ use crate::{
 };
 use core::num::NonZero;
 use ecs::{
-    event::{event_update_condition, event_update_system, EventUpdates},
+    event::{event_update_condition, event_update_system, EventCursor, EventUpdates},
     prelude::*,
     schedule::{InternedScheduleLabel, ScheduleLabel},
     system::ScheduleSystem,
@@ -21,7 +21,7 @@ use std::{
 
 /// The status code to use when exiting the application.  It is the value returned by the
 /// application runner, and passed back to the callee of [`App::run()`].
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Event, Clone, Copy, PartialEq, Eq)]
 pub enum AppExit {
     /// The application exited successfully.  This results in a status code of 0 on POSIX systems.
     Success,
@@ -112,7 +112,7 @@ pub struct App {
 /// the default behavior of a newly initialized [`App`].
 pub fn run_once(app: &mut App) -> AppExit {
     app.update();
-    AppExit::Success
+    app.should_exit().unwrap_or(AppExit::Success)
 }
 
 /// Associated functions for initializing and manipulating [`App`] instances.  You should use
@@ -187,6 +187,7 @@ impl App {
                 .in_set(EventUpdates)
                 .run_if(event_update_condition),
         );
+        app.add_event::<AppExit>();
         app
     }
 
@@ -353,6 +354,29 @@ impl App {
 
         // Returns an AppExit value from the runner.
         (runner)(self)
+    }
+
+    pub fn should_exit(&self) -> Option<AppExit> {
+        // We manually construct an event reader to see if there are any queued AppExit events.
+        // Returns None if there is no AppExit event queue in the world.
+        let mut reader = EventCursor::default();
+        let events = self.get_resource::<Events<AppExit>>()?;
+        let mut events = reader.read(events);
+
+        // If there are no events in the queue, then shutdown has not been requested.
+        if events.len() == 0 {
+            return None;
+        }
+
+        // Otherwise *at least one* termination event has been generated.  It's possible that there
+        // is more than one, and if any one of them is an error, we return it.  Otherwise they must
+        // be AppExit::Success, and we return that.
+        Some(
+            events
+                .find(|exit| exit.is_err())
+                .cloned()
+                .unwrap_or(AppExit::Success),
+        )
     }
 }
 
