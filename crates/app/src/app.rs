@@ -1,7 +1,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of
 // the MPL was not distributed with this file, You can obtain one at <http://mozilla.org/MPL/2.0/>.
 
+use crate::plugin::Plugin;
 use core::num::NonZero;
+use std::collections::HashSet;
 
 /// The status code to use when exiting the application.  It is the value returned by the
 /// application runner, and passed back to the callee of [`App::run()`].
@@ -35,6 +37,14 @@ pub struct App {
     /// the application.  This is set by [`set_runner`](Self::set_runner), and defaults to
     /// [`run_once`].
     runner: RunnerFn,
+    /// A set of plugin IDs that have already been registered with the application.  This set is
+    /// checked on each call to [`add_plugin`](Self::add_plugin) to ensure that a plugin is not
+    /// added to the same application instance more than once, unless [`Plugin::is_unique`] returns
+    /// `false`.
+    unique_plugins: HashSet<std::any::TypeId>,
+    /// A list of plugins that have been registered with the application, stored in the order in
+    /// which they were registered.
+    plugins: Vec<Box<dyn Plugin>>,
 }
 
 /// The default application runner, which features no event loop.  This is useful for simple
@@ -48,7 +58,8 @@ pub fn run_once(app: App) -> AppExit {
 /// Associated functions for initializing and manipulating [`App`] instances.  You should use
 /// [`App::new`] to initialize a new [`App`] instance, unless you really know what you are doing.
 /// The closure to use to execute the main loop of the application can be configured with
-/// [`set_runner`](Self::set_runner).  Once an [`App`] is fully configured, enter the main loop with
+/// [`set_runner`](Self::set_runner), and plugins can be added with
+/// [`add_plugin`](Self::add_plugin).  Once an [`App`] is fully configured, enter the main loop with
 /// [`run()`](Self::run).
 ///
 /// ```
@@ -71,6 +82,8 @@ impl App {
         Self {
             name,
             runner: Box::new(run_once),
+            unique_plugins: HashSet::new(),
+            plugins: Vec::new(),
         }
     }
 
@@ -86,6 +99,35 @@ impl App {
     /// where that is a possibility).
     pub fn set_runner(&mut self, runner: impl FnOnce(App) -> AppExit + 'static) -> &mut Self {
         self.runner = Box::new(runner);
+        self
+    }
+
+    /// Register a plugin with the application.  Plugins are used to configure the application and
+    /// provide additional functionality to maintain global state or service the application event
+    /// loop.  A given type of plugin can only be added to the same application instance once,
+    /// unless [`Plugin::is_unique`] returns `false`.
+    ///
+    /// # Panics
+    ///
+    /// * As must envisioned use cases involve separate plugin types for each configuration or
+    ///   feature, adding two plugins of the same type to the same application instance is generally
+    ///   disallowed, and will generally result in a panic.  See [`Plugin::is_unique`] for details.
+    pub fn add_plugin(&mut self, plugin: impl Plugin) -> &mut Self {
+        // Panic if the plugin is unique and has already been added to the application.
+        let id = plugin.id();
+        if plugin.is_unique() {
+            if self.unique_plugins.contains(&id) {
+                panic!("Attempted to add a non-unique plugin to the same App instance twice");
+            }
+            self.unique_plugins.insert(id);
+        }
+
+        // Call the plugin's initialization method, which configures the application.
+        plugin.register(self);
+
+        // Add the plugin to the application's list of plugins.
+        self.plugins.push(Box::new(plugin));
+
         self
     }
 
@@ -113,6 +155,41 @@ impl App {
     ///
     /// * Panics if not called from the main thread on platforms where this is a requirement.
     pub fn run(&mut self) -> AppExit {
+        let plugins = std::mem::take(&mut self.plugins);
+        for plugin in plugins.iter() {
+            if let Err(e) = plugin.initialize(self) {
+                panic!(".initialize failed for plugin {:?}: {}", plugin.id(), e);
+            }
+        }
+        for plugin in plugins.iter() {
+            if let Err(e) = plugin.block_until_initialized(self) {
+                panic!(
+                    ".block_until_initialized failed for plugin {:?}: {}",
+                    plugin.id(),
+                    e
+                );
+            }
+        }
+        for plugin in plugins.iter() {
+            if let Err(e) = plugin.finalize(self) {
+                panic!(".finalize failed for plugin {:?}: {}", plugin.id(), e);
+            }
+        }
+        for plugin in plugins.iter() {
+            if let Err(e) = plugin.block_until_finalized(self) {
+                panic!(
+                    ".block_until_finalized failed for plugin {:?}: {}",
+                    plugin.id(),
+                    e
+                );
+            }
+        }
+        for plugin in plugins.iter() {
+            plugin.cleanup(self)
+        }
+        drop(plugins);
+        let _ = std::mem::take(&mut self.unique_plugins);
+
         // This is a bit of a hack to get around the borrow checker.  Calling the runner directly
         // from self.runner will consume the runner while also consuming the [`App`] instance, as
         // the runner is of type `FnOnce(App)`.  But the app contains the runner!  The borrow

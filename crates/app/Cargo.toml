@@ -8,4 +8,5 @@ edition = { workspace = true }
 
 [dependencies]
 # Rust
+anyhow = { workspace = true }
 readonly = { workspace = true }

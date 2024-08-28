@@ -20,6 +20,7 @@ members = ["crates/*"]
 # atomCAD
 app = { package = "atomcad-app", path = "crates/app" }
 # Rust
+anyhow = "1"
 readonly = "0.2.12"
 
 [dependencies]
