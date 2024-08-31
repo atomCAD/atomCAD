@@ -12,6 +12,7 @@ default = ["console_error_panic_hook"]
 [dependencies]
 # Rust
 anyhow = { workspace = true }
+log = { workspace = true }
 readonly = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]

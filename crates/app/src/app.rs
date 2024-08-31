@@ -3,7 +3,10 @@
 
 use crate::{platform::PanicHandlerPlugin, plugin::Plugin};
 use core::num::NonZero;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    process::{ExitCode, Termination},
+};
 
 /// The status code to use when exiting the application.  It is the value returned by the
 /// application runner, and passed back to the callee of [`App::run()`].
@@ -17,6 +20,28 @@ pub enum AppExit {
     /// only guaranteed that the lowest 8 bits are passed to the calling shell.  A hypothetical
     /// `Error(0x100)` would thus be falsely interpreted as `Error(0)`.
     Error(NonZero<u8>),
+}
+
+impl AppExit {
+    pub const fn is_ok(&self) -> bool {
+        matches!(self, AppExit::Success)
+    }
+
+    pub const fn is_err(&self) -> bool {
+        matches!(self, AppExit::Error(_))
+    }
+}
+
+impl Termination for AppExit {
+    fn report(self) -> ExitCode {
+        match self {
+            AppExit::Success => ExitCode::SUCCESS,
+            AppExit::Error(code) => {
+                log::error!("ExitCode: {}", code.get());
+                ExitCode::from(code.get())
+            }
+        }
+    }
 }
 
 type RunnerFn = Box<dyn FnOnce(App) -> AppExit>;
