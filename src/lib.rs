@@ -4,7 +4,6 @@
 
 use app::prelude::*;
 use logging::prelude::*;
-use std::process::ExitCode;
 
 pub const APP_NAME: &str = "atomCAD";
 
@@ -14,8 +13,8 @@ fn hello_world(app: &mut App) -> AppExit {
     AppExit::Success
 }
 
-pub fn start() -> ExitCode {
-    match App::new(APP_NAME.into())
+pub fn start() -> AppExit {
+    App::new(APP_NAME.into())
         .add_plugin(LoggingPlugin::new(vec![
             env!("CARGO_PKG_NAME"),
             "atomcad_app",
@@ -23,16 +22,6 @@ pub fn start() -> ExitCode {
         ]))
         .set_runner(hello_world)
         .run()
-    {
-        AppExit::Error(code) => {
-            eprintln!("{}: ExitCode: {}", APP_NAME, code.get());
-            ExitCode::from(code.get())
-        }
-        AppExit::Success => {
-            println!("{}: Success", APP_NAME);
-            ExitCode::SUCCESS
-        }
-    }
 }
 
 // End of File
