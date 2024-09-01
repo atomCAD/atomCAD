@@ -1,0 +1,17 @@
+[package]
+name = "atomcad-window"
+description = "Cross-platform windowing functionality for atomCAD"
+version = { workspace = true }
+publish = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+# atomCAD
+app = { workspace = true }
+# Entity Component System
+bevy_ecs = { workspace = true }
+ecs = { workspace = true }
+# Logging
+log = { workspace = true }
