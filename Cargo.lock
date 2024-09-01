@@ -136,6 +136,7 @@ version = "0.1.0"
 dependencies = [
  "atomcad-app",
  "atomcad-logging",
+ "atomcad-window",
  "log",
  "wasm-bindgen",
  "wasm-bindgen-test",
@@ -174,6 +175,16 @@ dependencies = [
  "atomcad-app",
  "console_log",
  "env_logger",
+ "log",
+]
+
+[[package]]
+name = "atomcad-window"
+version = "0.1.0"
+dependencies = [
+ "atomcad-app",
+ "atomcad-ecs",
+ "bevy_ecs",
  "log",
 ]
 
