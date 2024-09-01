@@ -30,6 +30,8 @@ logging = { package = "atomcad-logging", path = "crates/logging" }
 # Rust
 anyhow = "1"
 readonly = "0.2.12"
+# Windowing
+window = { package = "atomcad-window", path = "crates/window" }
 
 [dependencies]
 # atomCAD
@@ -37,6 +39,8 @@ app = { workspace = true }
 # Logging
 log = { workspace = true }
 logging = { workspace = true }
+# Windowing
+window = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # Web platform support

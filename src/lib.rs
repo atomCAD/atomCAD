@@ -3,6 +3,7 @@
 
 use app::prelude::*;
 use logging::prelude::*;
+use window::prelude::*;
 
 pub const APP_NAME: &str = "atomCAD";
 
@@ -21,7 +22,9 @@ pub fn start() -> AppExit {
             "atomcad_ecs",
             "atomcad_keyboard",
             "atomcad_logging",
+            "atomcad_window",
         ]))
+        .add_plugin(WindowPlugin::new(ExitCondition::DoNotExit))
         .set_runner(hello_world)
         .run()
 }
