@@ -304,6 +304,7 @@ dependencies = [
 name = "atomcad"
 version = "0.1.0"
 dependencies = [
+ "atomcad-menu",
  "base64",
  "bevy",
  "embed-resource",
@@ -325,6 +326,13 @@ name = "atomcad-keyboard"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.11.0",
+]
+
+[[package]]
+name = "atomcad-menu"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

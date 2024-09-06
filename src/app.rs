@@ -2,8 +2,9 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{CadViewPlugin, LoadingPlugin};
+use crate::{APP_NAME, CadViewPlugin, LoadingPlugin};
 use bevy::{ecs::system::NonSendMarker, prelude::*};
+use menu::prelude::*;
 
 // We use States to separate logic
 // See https://bevy-cheatbook.github.io/programming/states.html
@@ -22,8 +23,60 @@ pub struct AppPlugin;
 
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
+        let menu_blueprint = Blueprint {
+            title: APP_NAME.into(),
+            items: vec![Item::SubMenu(Blueprint {
+                title: "".into(),
+                items: vec![
+                    Item::Entry {
+                        title: format!("About {}", APP_NAME),
+                        shortcut: Shortcut::None,
+                        action: Action::System(SystemAction::LaunchAboutWindow),
+                    },
+                    Item::Separator,
+                    Item::Entry {
+                        title: "Settings...".into(),
+                        shortcut: Shortcut::System(SystemShortcut::Preferences),
+                        action: Action::System(SystemAction::LaunchPreferences),
+                    },
+                    Item::Separator,
+                    Item::Entry {
+                        title: "Services".into(),
+                        shortcut: Shortcut::None,
+                        action: Action::System(SystemAction::ServicesMenu),
+                    },
+                    Item::Separator,
+                    Item::Entry {
+                        title: format!("Hide {}", APP_NAME),
+                        shortcut: Shortcut::System(SystemShortcut::HideApp),
+                        action: Action::System(SystemAction::HideApp),
+                    },
+                    Item::Entry {
+                        title: "Hide Others".into(),
+                        shortcut: Shortcut::System(SystemShortcut::HideOthers),
+                        action: Action::System(SystemAction::HideOthers),
+                    },
+                    Item::Entry {
+                        title: "Show All".into(),
+                        shortcut: Shortcut::None,
+                        action: Action::System(SystemAction::ShowAll),
+                    },
+                    Item::Separator,
+                    Item::Entry {
+                        title: format!("Quit {}", APP_NAME),
+                        shortcut: Shortcut::System(SystemShortcut::QuitApp),
+                        action: Action::System(SystemAction::Terminate),
+                    },
+                ],
+            })],
+        };
+
         app.init_state::<AppState>()
-            .add_plugins((LoadingPlugin, CadViewPlugin))
+            .add_plugins((
+                MenubarPlugin::new(menu_blueprint),
+                LoadingPlugin,
+                CadViewPlugin,
+            ))
             .add_systems(Startup, set_window_icon);
     }
 }
