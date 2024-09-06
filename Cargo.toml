@@ -32,6 +32,7 @@ anyhow = "1"
 readonly = "0.2.12"
 # Windowing
 gui = { package = "atomcad-gui", path = "crates/gui" }
+menu = { package = "atomcad-menu", path = "crates/menu" }
 window = { package = "atomcad-window", path = "crates/window" }
 winit = "0.30"
 winit-runner = { package = "atomcad-winit-runner", path = "crates/winit-runner" }
@@ -44,8 +45,11 @@ ecs = { workspace = true }
 # Logging
 log = { workspace = true }
 logging = { workspace = true }
+# Rust
+anyhow = { workspace = true }
 # Windowing
 gui = { workspace = true }
+menu = { workspace = true }
 window = { workspace = true }
 winit = { workspace = true }
 winit-runner = { workspace = true }

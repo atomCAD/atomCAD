@@ -15,14 +15,16 @@ use winit::{
 /// SplashScreen also provides a way to open or create new workspaces in their own Workspace's.
 pub struct SplashScreen {
     title: String,
+    blueprint: Option<menu::Blueprint>,
     window: Option<Arc<Window>>,
     running: bool,
 }
 
 impl SplashScreen {
-    pub fn new(title: String) -> Self {
+    pub fn new(title: String, blueprint: Option<menu::Blueprint>) -> Self {
         Self {
             title,
+            blueprint,
             window: None,
             running: false,
         }
@@ -54,6 +56,11 @@ impl WindowManager for SplashScreen {
                 }
                 Ok(window) => self.window = Some(Arc::new(window)),
             };
+
+            if let (Some(blueprint), Some(window)) = (self.blueprint.as_ref(), self.window.as_ref())
+            {
+                menu::attach_menubar_to_window(window, blueprint);
+            }
         }
 
         self.running = true;

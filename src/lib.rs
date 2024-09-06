@@ -4,6 +4,7 @@
 use app::prelude::*;
 use gui::window::{SplashScreen, WindowManager};
 use logging::prelude::*;
+use menu::MenubarPlugin;
 use window::prelude::*;
 use winit::{
     application::ApplicationHandler,
@@ -87,7 +88,7 @@ impl ApplicationHandler for Application {
             match startup_action {
                 StartupAction::FirstTime => {
                     let mut splash_screen =
-                        SplashScreen::new(format!("{} — Getting Started", self.app.name));
+                        SplashScreen::new(format!("{} — Getting Started", self.app.name), None);
                     splash_screen.resumed(event_loop);
                     self.splash_screen = Some(splash_screen);
                 }
@@ -252,11 +253,13 @@ pub fn start() -> AppExit {
             "atomcad_gui",
             "atomcad_keyboard",
             "atomcad_logging",
+            "atomcad_menu",
             "atomcad_window",
             "atomcad_winit_runner",
         ]))
         .add_plugin(WindowPlugin::new(ExitCondition::DoNotExit))
         .add_plugin(WinitPlugin::<()>::default())
+        .add_plugin(MenubarPlugin::<()>::default())
         .set_runner(runner)
         .run()
 }
