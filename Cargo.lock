@@ -169,8 +169,10 @@ checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
 name = "atomcad"
 version = "0.1.0"
 dependencies = [
+ "android-activity",
  "atomcad-app",
  "atomcad-ecs",
+ "atomcad-gui",
  "atomcad-logging",
  "atomcad-window",
  "atomcad-winit-runner",
@@ -198,6 +200,14 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "log",
+]
+
+[[package]]
+name = "atomcad-gui"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "winit",
 ]
 
 [[package]]

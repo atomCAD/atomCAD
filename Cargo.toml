@@ -31,6 +31,7 @@ logging = { package = "atomcad-logging", path = "crates/logging" }
 anyhow = "1"
 readonly = "0.2.12"
 # Windowing
+gui = { package = "atomcad-gui", path = "crates/gui" }
 window = { package = "atomcad-window", path = "crates/window" }
 winit = "0.30"
 winit-runner = { package = "atomcad-winit-runner", path = "crates/winit-runner" }
@@ -44,6 +45,7 @@ ecs = { workspace = true }
 log = { workspace = true }
 logging = { workspace = true }
 # Windowing
+gui = { workspace = true }
 window = { workspace = true }
 winit = { workspace = true }
 winit-runner = { workspace = true }
@@ -55,3 +57,7 @@ wasm-bindgen = "0.2.92"
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 # Web platform support
 wasm-bindgen-test = "0.3.42"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Android platform support
+android-activity = { version = "0.6", features = ["game-activity"] }
