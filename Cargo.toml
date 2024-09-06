@@ -23,6 +23,8 @@ bevy = "0.16"
 keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
 # Utilities
 bitflags = "2"
+# Windowing
+menu = { package = "atomcad-menu", path = "crates/menu" }
 # macOS platform support
 objc2 = "0.6"
 objc2-app-kit = "0.3"
@@ -38,6 +40,8 @@ opt-level = 3
 
 [dependencies]
 bevy = { workspace = true }
+# Windowing
+menu = { workspace = true }
 
 # keep the following in sync with Bevy's dependencies
 winit = { version = "0.30", default-features = false }
