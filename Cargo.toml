@@ -13,9 +13,16 @@ authors = ["Machine Phase Systems <hello@machinephase.systems>"]
 license = "MPL-2.0"
 edition = "2024"
 
+[workspace]
+members = ["crates/*"]
+
 [workspace.dependencies]
 # Bevy
 bevy = "0.18"
+# Input
+keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
+# Utilities
+bitflags = "2"
 # macOS platform support
 objc2 = "0.6"
 objc2-app-kit = "0.3"
