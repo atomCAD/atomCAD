@@ -22,6 +22,8 @@ app = { package = "atomcad-app", path = "crates/app" }
 # Entity Component System
 bevy_ecs = "0.18"
 ecs = { package = "atomcad-ecs", path = "crates/ecs" }
+# Input
+keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
 # Logging
 log = "0.4"
 logging = { package = "atomcad-logging", path = "crates/logging" }
