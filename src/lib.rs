@@ -20,6 +20,7 @@ pub fn start() -> AppExit {
             env!("CARGO_PKG_NAME"),
             "atomcad_app",
             "atomcad_ecs",
+            "atomcad_keyboard",
             "atomcad_logging",
         ]))
         .set_runner(hello_world)

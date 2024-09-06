@@ -149,6 +149,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-keyboard"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.13.1",
+]
+
+[[package]]
 name = "atomcad-logging"
 version = "0.1.0"
 dependencies = [
