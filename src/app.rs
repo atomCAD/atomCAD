@@ -2,6 +2,8 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
+use std::sync::{Arc, Mutex, mpsc};
+
 use crate::{APP_NAME, CadViewPlugin, LoadingPlugin};
 use bevy::{ecs::system::NonSendMarker, prelude::*};
 use menu::prelude::*;
@@ -19,64 +21,169 @@ pub enum AppState {
     CadView,
 }
 
+#[derive(Clone, Copy)]
+enum MenuAction {
+    Quit,
+}
+
 pub struct AppPlugin;
 
 impl Plugin for AppPlugin {
     fn build(&self, app: &mut App) {
-        let menu_blueprint = Blueprint {
+        // When the user interacts with the menu, the selected menu item's handler will be called.
+        // This handler will use menu_tx to send a message to the following channel, which will be
+        // processed at the next frame update.
+        let (menu_tx, menu_rx) = mpsc::channel();
+        let menu_tx = Arc::new(menu_tx);
+        let menu_rx = Mutex::new(menu_rx);
+
+        let menubar = menu::Blueprint {
             title: APP_NAME.into(),
-            items: vec![Item::SubMenu(Blueprint {
-                title: "".into(),
-                items: vec![
-                    Item::Entry {
-                        title: format!("About {}", APP_NAME),
-                        shortcut: Shortcut::None,
-                        action: Action::System(SystemAction::LaunchAboutWindow),
-                    },
-                    Item::Separator,
-                    Item::Entry {
-                        title: "Settings...".into(),
-                        shortcut: Shortcut::System(SystemShortcut::Preferences),
-                        action: Action::System(SystemAction::LaunchPreferences),
-                    },
-                    Item::Separator,
-                    Item::Entry {
-                        title: "Services".into(),
-                        shortcut: Shortcut::None,
-                        action: Action::System(SystemAction::ServicesMenu),
-                    },
-                    Item::Separator,
-                    Item::Entry {
-                        title: format!("Hide {}", APP_NAME),
-                        shortcut: Shortcut::System(SystemShortcut::HideApp),
-                        action: Action::System(SystemAction::HideApp),
-                    },
-                    Item::Entry {
-                        title: "Hide Others".into(),
-                        shortcut: Shortcut::System(SystemShortcut::HideOthers),
-                        action: Action::System(SystemAction::HideOthers),
-                    },
-                    Item::Entry {
-                        title: "Show All".into(),
-                        shortcut: Shortcut::None,
-                        action: Action::System(SystemAction::ShowAll),
-                    },
-                    Item::Separator,
-                    Item::Entry {
-                        title: format!("Quit {}", APP_NAME),
-                        shortcut: Shortcut::System(SystemShortcut::QuitApp),
-                        action: Action::System(SystemAction::Terminate),
-                    },
-                ],
-            })],
+            items: vec![
+                menu::Item::SubMenu(menu::Blueprint {
+                    title: "".into(),
+                    items: vec![
+                        menu::Item::Entry {
+                            title: format!("About {}", APP_NAME),
+                            shortcut: menu::Shortcut::None,
+                            action: menu::Action::System(menu::SystemAction::LaunchAboutWindow),
+                        },
+                        menu::Item::Separator,
+                        menu::Item::Entry {
+                            title: "Settings...".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::Preferences),
+                            action: menu::Action::System(menu::SystemAction::LaunchPreferences),
+                        },
+                        menu::Item::Separator,
+                        menu::Item::Entry {
+                            title: "Services".into(),
+                            shortcut: menu::Shortcut::None,
+                            action: menu::Action::System(menu::SystemAction::ServicesMenu),
+                        },
+                        menu::Item::Separator,
+                        menu::Item::Entry {
+                            title: format!("Hide {}", APP_NAME),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::HideApp),
+                            action: menu::Action::System(menu::SystemAction::HideApp),
+                        },
+                        menu::Item::Entry {
+                            title: "Hide Others".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::HideOthers),
+                            action: menu::Action::System(menu::SystemAction::HideOthers),
+                        },
+                        menu::Item::Entry {
+                            title: "Show All".into(),
+                            shortcut: menu::Shortcut::None,
+                            action: menu::Action::System(menu::SystemAction::ShowAll),
+                        },
+                        menu::Item::Separator,
+                        {
+                            let menu_tx = menu_tx.clone();
+                            menu::Item::Entry {
+                                title: format!("Quit {}", APP_NAME),
+                                shortcut: menu::Shortcut::System(menu::SystemShortcut::QuitApp),
+                                action: menu::Action::User(Arc::new(move || {
+                                    if menu_tx.send(MenuAction::Quit).is_err() {
+                                        error!("Failed to send quit message; exiting.");
+                                        std::process::exit(-1);
+                                    };
+                                    info!("Quit requested by menu selection.");
+                                })),
+                            }
+                        },
+                    ],
+                }),
+                menu::Item::SubMenu(menu::Blueprint {
+                    title: "File".into(),
+                    items: vec![],
+                }),
+                menu::Item::SubMenu(menu::Blueprint {
+                    title: "Edit".into(),
+                    items: vec![
+                        menu::Item::Entry {
+                            title: "Undo".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::Undo),
+                            action: menu::Action::User(Arc::new(|| {
+                                info!("Undo requested by menu selection.");
+                            })),
+                        },
+                        menu::Item::Entry {
+                            title: "Redo".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::Redo),
+                            action: menu::Action::User(Arc::new(|| {
+                                info!("Redo requested by menu selection.");
+                            })),
+                        },
+                        menu::Item::Separator,
+                        menu::Item::Entry {
+                            title: "Cut".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::Cut),
+                            action: menu::Action::User(Arc::new(|| {
+                                info!("Cut requested by menu selection.");
+                            })),
+                        },
+                        menu::Item::Entry {
+                            title: "Copy".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::Copy),
+                            action: menu::Action::User(Arc::new(|| {
+                                info!("Copy requested by menu selection.");
+                            })),
+                        },
+                        menu::Item::Entry {
+                            title: "Paste".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::Paste),
+                            action: menu::Action::User(Arc::new(|| {
+                                info!("Paste requested by menu selection.");
+                            })),
+                        },
+                        menu::Item::Entry {
+                            title: "Delete".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::Delete),
+                            action: menu::Action::User(Arc::new(|| {
+                                info!("Delete requested by menu selection.");
+                            })),
+                        },
+                        menu::Item::Entry {
+                            title: "Select All".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::SelectAll),
+                            action: menu::Action::User(Arc::new(|| {
+                                info!("Select All requested by menu selection.");
+                            })),
+                        },
+                    ],
+                }),
+                menu::Item::SubMenu(menu::Blueprint {
+                    title: "Go".into(),
+                    items: vec![],
+                }),
+                menu::Item::SubMenu(menu::Blueprint {
+                    title: "View".into(),
+                    items: vec![],
+                }),
+                menu::Item::SubMenu(menu::Blueprint {
+                    title: "Window".into(),
+                    items: vec![],
+                }),
+                menu::Item::SubMenu(menu::Blueprint {
+                    title: "Help".into(),
+                    items: vec![],
+                }),
+            ],
         };
 
         app.init_state::<AppState>()
-            .add_plugins((
-                MenubarPlugin::new(menu_blueprint),
-                LoadingPlugin,
-                CadViewPlugin,
-            ))
+            .add_systems(First, move |mut ev_app_exit: MessageWriter<AppExit>| {
+                if let Ok(receiver) = menu_rx.try_lock()
+                    && let Ok(action) = receiver.try_recv()
+                {
+                    match action {
+                        MenuAction::Quit => {
+                            ev_app_exit.write(AppExit::Success);
+                        }
+                    }
+                }
+            })
+            .add_plugins((MenubarPlugin::new(menubar), LoadingPlugin, CadViewPlugin))
             .add_systems(Startup, set_window_icon);
     }
 }
