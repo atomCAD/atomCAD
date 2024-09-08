@@ -4,6 +4,9 @@
 
 use bevy::{prelude::*, window::PrimaryWindow};
 
+/// “Process name” doesn't really have meaning on web platforms.
+pub(crate) use super::defaults::{get_process_name, set_process_name};
+
 /// Updates the canvas size to match the browser window size.  As the user resizes the browser
 /// window, the canvas element also needs to be resized to match.
 pub(crate) fn tweak_bevy_app(app: &mut App) {
