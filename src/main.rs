@@ -3,8 +3,12 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use app::AppExit;
+use std::ffi::OsString;
 
 fn main() -> AppExit {
+    // This fixes the application name in the "About" dialog box.
+    atomcad::platform::set_process_name(&OsString::from(atomcad::APP_NAME));
+
     atomcad::start()
 }
 
