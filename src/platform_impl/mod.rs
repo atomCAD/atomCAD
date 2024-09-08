@@ -6,8 +6,13 @@
 /// Platforms which do not need customization for specific features can simply re-export from this
 /// module.
 mod defaults;
-#[cfg(not(target_family = "wasm"))]
+#[cfg(not(any(target_os = "macos", target_family = "wasm")))]
 pub(crate) use defaults::*;
+
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+pub(crate) use macos::*;
 
 #[cfg(target_family = "wasm")]
 mod web;

@@ -16,6 +16,9 @@ edition = "2024"
 [workspace.dependencies]
 # Bevy
 bevy = "0.18"
+# macOS platform support
+objc2-foundation = "0.3"
+
 # keep the following in sync with Bevy's dependencies
 # bevyengine/bevy: crates/bevy_winit/Cargo.toml
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
@@ -32,6 +35,10 @@ opt-level = 3
 
 [dependencies]
 bevy.workspace = true
+
+# macOS platform support
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # Pin wasm-bindgen to match the wasm-bindgen-cli version installed in CI.
