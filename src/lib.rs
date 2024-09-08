@@ -11,9 +11,11 @@ pub use app::AppPlugin;
 
 pub mod platform;
 pub(crate) mod platform_impl;
-pub use platform::bevy::PlatformTweaks;
+pub use platform::{bevy::PlatformTweaks, get_process_name, set_process_name};
 
 mod start;
 pub use start::start;
+
+pub const APP_NAME: &str = "atomCAD";
 
 // End of File
