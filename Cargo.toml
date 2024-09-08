@@ -16,6 +16,8 @@ edition = "2024"
 [workspace.dependencies]
 # Bevy
 bevy = "0.17"
+# macOS platform support
+objc2-foundation = "0.3"
 
 # keep the following in sync with Bevy's dependencies
 winit = { version = "0.30", default-features = false }
@@ -31,6 +33,10 @@ opt-level = 3
 
 [dependencies]
 bevy.workspace = true
+
+# macOS platform support
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # The getrandom crate requires a special feture flag to support web backends, as of version 0.3.
