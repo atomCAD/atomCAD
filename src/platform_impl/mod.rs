@@ -5,7 +5,6 @@
     target_os = "android",
     target_os = "ios",
     target_os = "linux",
-    target_os = "macos",
     target_family = "wasm",
     target_os = "windows"
 ))]
@@ -14,10 +13,14 @@ mod default;
     target_os = "android",
     target_os = "ios",
     target_os = "linux",
-    target_os = "macos",
     target_family = "wasm",
     target_os = "windows"
 ))]
 pub use default::*;
+
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+pub use macos::*;
 
 // End of File
