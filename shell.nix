@@ -1,9 +1,25 @@
-{ pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/8f6cd53206e2d4cc783a7df6f72d311ffc544c8f.tar.gz") {} }:
+{ pkgs ? import <nixpkgs> { } }:
 
-pkgs.mkShell {
-  packages = with pkgs; [
+with pkgs;
+
+mkShell rec {
+  packages = [
     rustup
     cmake
     libiconv
   ];
+  nativeBuildInputs = [
+    pkg-config
+  ];
+  buildInputs = [
+    udev
+    alsa-lib
+    vulkan-loader
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXi
+    xorg.libXrandr # To use the x11 feature
+    libxkbcommon wayland # To use the wayland feature
+  ];
+  LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
 }
