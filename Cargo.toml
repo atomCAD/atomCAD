@@ -17,6 +17,8 @@ edition = "2024"
 # Bevy
 bevy = "0.16"
 # macOS platform support
+objc2 = "0.6"
+objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
 
 # Enable a small amount of optimization for our code in debug mode:
@@ -36,6 +38,8 @@ image = { version = "0.25", default-features = false }
 
 # macOS platform support
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true }
 objc2-foundation = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
@@ -49,5 +53,6 @@ wasm-bindgen-test = { version = "0.3" }
 
 [build-dependencies]
 base64 = "0.22"
+icns = "0.3"
 ico = "0.4"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }

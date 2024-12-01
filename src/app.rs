@@ -2,7 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use bevy::{prelude::*, window::PrimaryWindow, winit::WinitWindows};
+use bevy::prelude::*;
 
 pub struct AppPlugin;
 
@@ -15,9 +15,10 @@ impl Plugin for AppPlugin {
 /// Sets the icon on Windows and X11.  The icon on macOS is sourced from the enclosing bundle, and
 /// is set in the Info.plist file.  That would be highly platform-specific code, and handled prior
 /// to bevy startup, not here.
+#[cfg(not(target_os = "macos"))]
 pub fn set_window_icon(
-    windows: NonSend<WinitWindows>,
-    primary_window: Query<Entity, With<PrimaryWindow>>,
+    windows: NonSend<bevy::winit::WinitWindows>,
+    primary_window: Query<Entity, With<bevy::window::PrimaryWindow>>,
 ) {
     use std::io::Cursor;
     use winit::window::Icon;
@@ -37,6 +38,28 @@ pub fn set_window_icon(
         let icon = Icon::from_rgba(rgba, width, height).unwrap();
         primary.set_window_icon(Some(icon));
     };
+}
+
+#[cfg(target_os = "macos")]
+pub fn set_window_icon(_: Option<NonSend<NonSendMarker>>) {
+    static ICON_DATA: &[u8] = include_bytes!(env!("ATOMCAD_ICNS_PATH"));
+    use objc2::AllocAnyThread;
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::{MainThreadMarker, NSData};
+    use std::{os::raw::c_void, ptr::NonNull};
+    let data = unsafe {
+        NSData::dataWithBytesNoCopy_length(
+            NonNull::new_unchecked(ICON_DATA.as_ptr() as *mut c_void),
+            ICON_DATA.len(),
+        )
+    };
+    let image = NSImage::alloc();
+    let image = NSImage::initWithData(image, &data).expect("Failed to create NSImage from data.");
+    let mtm = MainThreadMarker::new().expect("Must run on main thread.");
+    let app = NSApplication::sharedApplication(mtm);
+    unsafe {
+        app.setApplicationIconImage(Some(&image));
+    }
 }
 
 // End of File
