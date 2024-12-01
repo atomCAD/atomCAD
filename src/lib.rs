@@ -24,6 +24,29 @@ use winit_runner::{WinitEventLoop, WinitPlugin};
 
 pub const APP_NAME: &str = "atomCAD";
 
+#[cfg(target_os = "macos")]
+fn set_app_icon() {
+    static ICON_DATA: &[u8] =
+        include_bytes!("../build/macos/src/atomCAD.app/Contents/Resources/AppIcon.icns");
+    use objc2::AllocAnyThread;
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::{MainThreadMarker, NSData};
+    use std::{os::raw::c_void, ptr::NonNull};
+    let data = unsafe {
+        NSData::dataWithBytesNoCopy_length(
+            NonNull::new_unchecked(ICON_DATA.as_ptr() as *mut c_void),
+            ICON_DATA.len(),
+        )
+    };
+    let image = NSImage::alloc();
+    let image = NSImage::initWithData(image, &data).expect("Failed to create NSImage from data.");
+    let mtm = MainThreadMarker::new().expect("Must run on main thread.");
+    let app = NSApplication::sharedApplication(mtm);
+    unsafe {
+        app.setApplicationIconImage(Some(&image));
+    }
+}
+
 #[derive(Default)]
 enum StartupAction {
     /// The application is starting up for the first time, in a fresh state.  The splash screen is
@@ -129,6 +152,9 @@ impl ApplicationHandler for Application<'_> {
         if let Some(startup_action) = self.startup_action.take() {
             match startup_action {
                 StartupAction::FirstTime => {
+                    #[cfg(target_os = "macos")]
+                    set_app_icon();
+
                     let menubar = menu::Blueprint {
                         title: APP_NAME.into(),
                         items: vec![
