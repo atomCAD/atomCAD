@@ -79,4 +79,6 @@ android-activity = { version = "0.6", features = ["game-activity"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # macOS platform support
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true }
 objc2-foundation = { workspace = true }
