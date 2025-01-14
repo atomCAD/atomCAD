@@ -12,6 +12,8 @@ dlopen = "0.1.8"
 lazy_static = "1.4.0"
 wgpu = "23.0.1"
 tokio = { version = "1", features = ["full"] }
+bytemuck = { version = "1.16", features = [ "derive" ] }
+
 
 
 

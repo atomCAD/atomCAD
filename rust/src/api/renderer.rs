@@ -1,4 +1,13 @@
 use wgpu::*;
+use bytemuck;
+use std::time::Instant;
+use wgpu::util::DeviceExt;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct UniformData {
+    time: f32,
+}
 
 pub struct Renderer {
     device: Device,
@@ -8,10 +17,15 @@ pub struct Renderer {
     texture_view: TextureView,
     output_buffer: Buffer,
     texture_size: Extent3d,
+    uniform_buffer: Buffer,
+    uniform_bind_group: BindGroup,
+    start_time: Instant,
 }
 
 impl Renderer {
     pub async fn new(width: u32, height: u32) -> Self {
+        let start_time = Instant::now();
+
         // Initialize GPU
         let instance = Instance::default();
         let adapter = instance
@@ -53,16 +67,51 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
+        // Uniform buffer for time
+        let initial_uniform_data = UniformData { time: 0.0 };
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+          label: Some("Uniform Buffer"),
+          contents: bytemuck::cast_slice(&[initial_uniform_data]),
+          usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         // Shader module
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Triangle Shader"),
             source: ShaderSource::Wgsl(include_str!("triangle_shader.wgsl").into()),
         });
 
+        let uniform_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+          label: Some("Uniform Bind Group Layout"),
+          entries: &[
+              wgpu::BindGroupLayoutEntry {
+                  binding: 0,
+                  visibility: wgpu::ShaderStages::VERTEX,
+                  ty: wgpu::BindingType::Buffer {
+                      ty: wgpu::BufferBindingType::Uniform,
+                      has_dynamic_offset: false,
+                      min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<UniformData>() as _),
+                  },
+                  count: None,
+              }
+          ],
+        });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+          layout: &uniform_bind_group_layout, // Use the layout defined above
+          entries: &[
+              wgpu::BindGroupEntry {
+                  binding: 0, // Must match the bind group layout and shader binding
+                  resource: uniform_buffer.as_entire_binding(),
+              },
+          ],
+          label: Some("Uniform Bind Group"),
+        });
+
         // Pipeline setup
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&uniform_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -100,10 +149,18 @@ impl Renderer {
             texture_view,
             output_buffer,
             texture_size,
+            uniform_buffer,
+            uniform_bind_group,
+            start_time,
         }
     }
 
     pub fn render(&mut self) -> Vec<u8> {
+
+        let t = (&self).start_time.elapsed().as_secs_f32();
+        let uniform_data = UniformData { time: t };
+
+        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform_data]));
 
         // Create a new command encoder
         let mut encoder = self
@@ -135,6 +192,7 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]); // Bind the uniforms
             render_pass.draw(0..3, 0..1);
         }
 
