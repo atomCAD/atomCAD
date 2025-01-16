@@ -1,0 +1,17 @@
+[package]
+name = "atomcad-logging"
+version = { workspace = true }
+publish = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+# atomCAD
+app = { workspace = true }
+# Logging
+log = { workspace = true }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+# Logging
+env_logger = "0.11"
