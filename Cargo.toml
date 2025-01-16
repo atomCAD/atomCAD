@@ -13,7 +13,16 @@ authors = ["Elementa <hello@elementa.inc>"]
 license = "MPL-2.0"
 edition = "2024"
 
+[workspace]
+members = ["crates/*"]
+
+[workspace.dependencies]
+# atomCAD
+app = { package = "atomcad-app", path = "crates/app" }
+
 [dependencies]
+# atomCAD
+app = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # Pin wasm-bindgen to match the wasm-bindgen-cli version installed in CI.
