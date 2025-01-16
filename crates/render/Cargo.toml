@@ -17,5 +17,5 @@ parking_lot = "0.12"
 periodic-table = { workspace = true }
 static_assertions = "1"
 ultraviolet = { workspace = true }
-wgpu = { version = "22", features = ["webgl"] }
+wgpu = { version = "23", features = ["webgl"] }
 winit = { workspace = true }

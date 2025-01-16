@@ -198,13 +198,13 @@ fn create_fxaa_pipeline(
         layout: Some(&layout),
         vertex: wgpu::VertexState {
             module: &vert,
-            entry_point: "fullscreen",
+            entry_point: Some("fullscreen"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: &frag,
-            entry_point: "fxaa",
+            entry_point: Some("fxaa"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format: SWAPCHAIN_FORMAT,
