@@ -44,13 +44,6 @@ serde_json = { workspace = true }
 ultraviolet = { workspace = true }
 winit = { workspace = true }
 
-[patch.crates-io]
-# Temporary until wgpu's next release.
-# Contains cherry-picked fixes for webgl backend.
-# If updated, keep naga and wgpu hashes in sync.
-naga = { git = "https://github.com/maaku/wgpu", rev = "3882af49b94cab8b334e01c909c4b9148503130f" }
-wgpu = { git = "https://github.com/maaku/wgpu", rev = "3882af49b94cab8b334e01c909c4b9148503130f" }
-
 # android:
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6", features = ["native-activity"] }
