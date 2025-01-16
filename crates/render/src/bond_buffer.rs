@@ -115,14 +115,14 @@ impl BondBuffer {
                 view_formats: &[],
             });
 
-        let data_layout = wgpu::ImageDataLayout {
+        let data_layout = wgpu::TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(size.width * 4 * mem::size_of::<f32>() as u32),
             rows_per_image: Some(size.height),
         };
 
         gpu_resources.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &bond_a1_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
@@ -134,7 +134,7 @@ impl BondBuffer {
         );
 
         gpu_resources.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &bond_a2_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
@@ -146,7 +146,7 @@ impl BondBuffer {
         );
 
         gpu_resources.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &bond_order_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,

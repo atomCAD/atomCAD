@@ -111,14 +111,14 @@ impl AtomBuffer {
             });
 
         gpu_resources.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &pos_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             &atom_pos,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(size.width * 4 * mem::size_of::<f32>() as u32),
                 rows_per_image: Some(size.height),
@@ -140,14 +140,14 @@ impl AtomBuffer {
             });
 
         gpu_resources.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &kind_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             &atom_kind,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(size.width * mem::size_of::<u8>() as u32),
                 rows_per_image: Some(size.height),
