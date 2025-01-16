@@ -21,7 +21,7 @@ pub type EditId = usize;
 /// see `AtomSpecifier` to understand its role in that context.
 ///
 /// * The "identity pattern' mentioned would be identified as `PatternInstanceId { owner_id: 0, instance: 0}`
-/// in this example.
+///   in this example.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct PatternInstanceId {
     pub owner_id: EditId,

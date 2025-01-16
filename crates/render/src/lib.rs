@@ -551,6 +551,7 @@ impl Renderer {
 }
 
 impl Renderer {
+    #[allow(clippy::empty_line_after_doc_comments)]
     /// Render selected objects to the stencil buffer so they can be outlined post-process.
     // fn render_fragments_to_stencil(
     //     &self,
