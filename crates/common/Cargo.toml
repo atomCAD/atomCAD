@@ -1,0 +1,10 @@
+[package]
+name = "atomcad-common"
+version = { workspace = true }
+publish = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+ultraviolet = { workspace = true }
