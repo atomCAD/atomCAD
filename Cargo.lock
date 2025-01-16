@@ -6,9 +6,14 @@ version = 4
 name = "atomcad"
 version = "0.1.0"
 dependencies = [
+ "atomcad-app",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
+
+[[package]]
+name = "atomcad-app"
+version = "0.1.0"
 
 [[package]]
 name = "bumpalo"
