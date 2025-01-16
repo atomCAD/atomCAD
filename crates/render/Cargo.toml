@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 common = { workspace = true }
 futures = { workspace = true }
-include-wgsl-oil = "0.2.6"
+include-wgsl-oil = "=0.2.7"
 log = { workspace = true }
 naga_oil = "0.14.0"
 parking_lot = "0.12"
