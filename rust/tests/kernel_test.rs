@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::api::kernel::kernel::Kernel;
+use rust_lib_flutter_cad::kernel::kernel::Kernel;
 use glam::f32::Vec3;
 
 // cmd: cargo test

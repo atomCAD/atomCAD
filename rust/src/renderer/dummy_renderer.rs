@@ -9,7 +9,7 @@ struct UniformData {
     time: f32,
 }
 
-pub struct Renderer {
+pub struct DummyRenderer {
     device: Device,
     queue: Queue,
     pipeline: RenderPipeline,
@@ -22,7 +22,7 @@ pub struct Renderer {
     start_time: Instant,
 }
 
-impl Renderer {
+impl DummyRenderer {
     pub async fn new(width: u32, height: u32) -> Self {
         let start_time = Instant::now();
 

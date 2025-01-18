@@ -1,7 +1,7 @@
 use std::ffi::{c_int, c_void};
 use dlopen::{symbor::{Library, Symbol}, Error as LibError};
 use std::time::Instant;
-use super::renderer;
+use super::super::renderer::dummy_renderer;
 
 const IMAGE_WIDTH : u32 = 1280;
 const IMAGE_HEIGHT : u32 = 704;
@@ -43,11 +43,11 @@ lazy_static::lazy_static! {
   };
 }
 
-static mut RENDERER: Option<renderer::Renderer> = None;
+static mut RENDERER: Option<dummy_renderer::DummyRenderer> = None;
 
 async fn initialize_renderer_async() {
   unsafe {
-    RENDERER = Some(renderer::Renderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await);
+    RENDERER = Some(dummy_renderer::DummyRenderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await);
   }
 }
 
