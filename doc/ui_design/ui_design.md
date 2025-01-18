@@ -41,7 +41,7 @@ There are the following panels on the UI:
 
 Available actions are represented by icons on the left part of the viewport.
 
-The available actions presented to the user is adaptive, depends on the selection. For tools that are only available when something is selected I denoted with *(S)*.
+The available actions presented to the user is adaptive, depends on the selection. For actions that are only available when something is selected I denoted with *(S)*.
 
 Here is a list of actions:
 
@@ -50,9 +50,9 @@ Here is a list of actions:
 - Copy *(S)*
 - Create group *(S)* (creates a group from the selection)
 
-Most actions just one-off actions that do something upon pressing the icon. For actions a modal configuration panel may be presented before performing actions. Some actions can be so-called tools. If an action is a tool, pressing its icon it is highlighted and the tool becomes the active tool. When in a tool, the viewport UI interaction is different that when in a no-tool state.  When getting out of a tool, the user gets back to this 'no active tool' state.
+Most actions are just one-off actions that do something upon pressing the icon. For actions a modal configuration panel may be presented before performing actions. Some actions can be so-called tools. If an action is a tool, pressing its icon it is highlighted and the tool becomes the active tool. When in a tool, the viewport UI interaction is different that when in a no-tool state.  When getting out of a tool, the user gets back to this 'no active tool' state.
 
-As a design philosophy I tend to make most things available in the default state of the application in a simple intuitive way and only use tool-states where the task is either rare or is complicated and would complicate the default behavior of the application.
+As a design philosophy we tend to make most things available in the default state of the application in a simple intuitive way and only use tool-states where the task is either rare or is complicated and would complicate the default behavior of the application.
 
 ## Default state (no tool selected)
 
@@ -72,9 +72,7 @@ You can add an atom the following ways:
 - Left click somewhere
 - Drag with left click on an existing atom and release the button somewhere. This way a bond is also created.
 
-also add an atom by dragging from an atom an releasing at an empty space  (creating a bond and an atom at the same time)
-
-The atom to be added can be set on the editor properties panel. 
+The atom type to be added can be set on the editor properties panel. 
 
 ### Adding bonds
 
