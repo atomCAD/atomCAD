@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.7.0"
@@ -13,8 +13,4 @@ lazy_static = "1.4.0"
 wgpu = "23.0.1"
 tokio = { version = "1", features = ["full"] }
 bytemuck = { version = "1.16", features = [ "derive" ] }
-
-
-
-
-
+glam = "0.29.2"
