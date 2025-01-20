@@ -19,7 +19,7 @@ futures = "0.3.28"
 log = "0.4.19"
 molecule = { package = "atomcad-molecule", path = "crates/molecule" }
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
-petgraph = { version = "0.6.3", features = ["serde-1"] }
+petgraph = { version = "0.7", features = ["serde-1"] }
 render = { package = "atomcad-render", path = "crates/render" }
 scene = { package = "atomcad-scene", path = "crates/scene" }
 serde = { version = "1.0.188", features = ["derive"] }
