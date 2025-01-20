@@ -23,13 +23,6 @@ mod buffer_vec;
 mod camera;
 mod passes;
 
-#[macro_export]
-macro_rules! include_spirv {
-    ($name:literal) => {
-        wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shaders/", $name))
-    };
-}
-
 const SWAPCHAIN_FORMAT: wgpu::TextureFormat =
     if cfg!(any(target_os = "android", target_arch = "wasm32")) {
         wgpu::TextureFormat::Rgba8UnormSrgb
