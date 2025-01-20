@@ -30,7 +30,13 @@
 //
 // Still further tweaks by the atomCAD developers.
 
-#import fullscreen.wgsl as fullscreen
+// See fullscreen.wgsl
+struct FullScreenVertexOutput {
+    @builtin(position)
+    position: vec4<f32>,
+    @location(0)
+    uv: vec2<f32>,
+};
 
 struct FxaaParams {
     // Trims the algorithm from processing darks.
@@ -67,7 +73,7 @@ fn rgb2luma(rgb: vec3<f32>) -> f32 {
 
 // Performs FXAA post-process anti-aliasing as described in the Nvidia FXAA white paper and the associated shader code.
 @fragment
-fn fxaa(in: fullscreen::VertexOutput) -> @location(0) vec4<f32> {
+fn fxaa(in: FullScreenVertexOutput) -> @location(0) vec4<f32> {
     let resolution = vec2<f32>(textureDimensions(screenTexture));
     let inverseScreenSize = 1.0 / resolution.xy;
     let texCoord = in.position.xy * inverseScreenSize;

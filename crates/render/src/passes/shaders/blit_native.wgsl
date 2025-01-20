@@ -3,7 +3,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 // See fullscreen.wgsl
-#import fullscreen.wgsl as Fullscreen
+struct FullScreenVertexOutput {
+    @builtin(position)
+    position: vec4<f32>,
+    @location(0)
+    uv: vec2<f32>,
+};
 
 @group(0) @binding(0)
 var color_texture: texture_2d<f32>;
@@ -11,7 +16,7 @@ var color_texture: texture_2d<f32>;
 var linear_sampler: sampler;
 
 @fragment
-fn blit(in: Fullscreen::VertexOutput) -> @location(0) vec4<f32> {
+fn blit(in: FullScreenVertexOutput) -> @location(0) vec4<f32> {
     return textureSample(color_texture, linear_sampler, in.uv);
 }
 

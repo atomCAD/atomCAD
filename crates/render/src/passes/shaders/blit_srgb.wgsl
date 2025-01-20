@@ -3,8 +3,18 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 // See fullscreen.wgsl
-#import fullscreen.wgsl as Fullscreen
-#import blit_native.wgsl as blit_native
+struct FullScreenVertexOutput {
+    @builtin(position)
+    position: vec4<f32>,
+    @location(0)
+    uv: vec2<f32>,
+};
+
+// See blit_native.wgsl
+@group(0) @binding(0)
+var color_texture: texture_2d<f32>;
+@group(0) @binding(1)
+var linear_sampler: sampler;
 
 fn linear_to_srgb(input_color: vec4<f32>) -> vec4<f32> {
     let cutoff = vec3<f32>(input_color.rgb < vec3(0.0031308));
@@ -15,10 +25,10 @@ fn linear_to_srgb(input_color: vec4<f32>) -> vec4<f32> {
 }
 
 @fragment
-fn blit(in: Fullscreen::VertexOutput) -> @location(0) vec4<f32> {
+fn blit(in: FullScreenVertexOutput) -> @location(0) vec4<f32> {
     // Currently, webgpu doesn't automatically convert linear rgb outputs to
     // srgb so we do it manually.
-    return linear_to_srgb(blit_native::blit(in));
+    return linear_to_srgb(textureSample(color_texture, linear_sampler, in.uv));
 }
 
 // End of File

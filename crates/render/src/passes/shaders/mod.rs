@@ -2,24 +2,30 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#[include_wgsl_oil::include_wgsl_oil("atom.wgsl")]
-pub mod atom {}
-
-#[include_wgsl_oil::include_wgsl_oil("bond.wgsl")]
-pub mod bond {}
-
-pub mod blit {
-    #[include_wgsl_oil::include_wgsl_oil("blit_native.wgsl")]
-    pub mod native {}
-
-    #[include_wgsl_oil::include_wgsl_oil("blit_srgb.wgsl")]
-    pub mod srgb {}
+pub mod atom {
+    pub const SOURCE: &str = include_str!("atom.wgsl");
 }
 
-#[include_wgsl_oil::include_wgsl_oil("fullscreen.wgsl")]
-pub mod fullscreen {}
+pub mod bond {
+    pub const SOURCE: &str = include_str!("bond.wgsl");
+}
 
-#[include_wgsl_oil::include_wgsl_oil("fxaa.wgsl")]
-pub mod fxaa {}
+pub mod blit {
+    pub mod native {
+        pub const SOURCE: &str = include_str!("blit_native.wgsl");
+    }
+
+    pub mod srgb {
+        pub const SOURCE: &str = include_str!("blit_srgb.wgsl");
+    }
+}
+
+pub mod fullscreen {
+    pub const SOURCE: &str = include_str!("fullscreen.wgsl");
+}
+
+pub mod fxaa {
+    pub const SOURCE: &str = include_str!("fxaa.wgsl");
+}
 
 // End of File
