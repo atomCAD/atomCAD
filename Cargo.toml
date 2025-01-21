@@ -51,7 +51,7 @@ android_logger = "0.14"
 
 # Windows
 [target.'cfg(target_os = "windows")'.dependencies]
-muda = "0.9.1"
+muda = "0.10"
 windows-sys = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging"] }
 
 # macOS:
