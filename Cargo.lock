@@ -237,7 +237,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
  "winit",
 ]
 
