@@ -34,9 +34,11 @@ pub fn attach_menu(window: &Window, menu_bar: &Menu) {
         RawWindowHandle::Win32(handle) => handle.hwnd.get(),
         _ => panic!("not running on Windows"),
     };
-    menu_bar
-        .init_for_hwnd(hwnd)
-        .expect("Initializing the menubar shouldn't return an error.");
+    unsafe {
+        menu_bar
+            .init_for_hwnd(hwnd)
+            .expect("Initializing the menubar shouldn't return an error.");
+    }
 }
 
 fn build_menu(menu_spec: &MenuSpec) -> Menu {
