@@ -5,19 +5,31 @@ use wgpu::util::DeviceExt;
 use crate::kernel::model::Model;
 use super::mesh::Mesh;
 use super::mesh::Vertex;
+use super::tessellator::Tessellator;
+use super::camera::Camera;
+use glam::f32::Vec3;
+use glam::f32::Mat4;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct UniformData {
-    time: f32,
+struct CameraUniform {
+    view_proj: [[f32; 4]; 4],
+}
+
+impl CameraUniform {
+  fn new() -> Self {
+      Self {
+        view_proj: Mat4::IDENTITY.to_cols_array_2d(),
+      }
+  }
 }
 
 const VERTICES: &[Vertex] = &[
-  Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [0.5, 0.0, 0.5] }, // A
-  Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.0, 0.5] }, // B
-  Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.5, 0.0, 0.5] }, // C
-  Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.0, 0.5] }, // D
-  Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.5, 0.0, 0.5] }, // E
+  Vertex { position: [-0.0868241, 0.49240386, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // A
+  Vertex { position: [-0.49513406, 0.06958647, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // B
+  Vertex { position: [-0.21918549, -0.44939706, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // C
+  Vertex { position: [0.35966998, -0.3473291, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // D
+  Vertex { position: [0.44147372, 0.2347359, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // E
 ];
 
 const INDICES: &[u32] = &[
@@ -37,14 +49,28 @@ pub struct Renderer  {
     texture_view: TextureView,
     output_buffer: Buffer,
     texture_size: Extent3d,
-    uniform_buffer: Buffer,
-    uniform_bind_group: BindGroup,
-    start_time: Instant,
+    camera: Camera,
+    camera_buffer: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
 }
 
 impl Renderer {
     pub async fn new(width: u32, height: u32) -> Self {
         let start_time = Instant::now();
+
+        let camera = Camera {
+          // position the camera 1 unit up and 2 units back
+          // +z is out of the screen
+          eye: Vec3::new(0.0, 1.0, 2.0),
+          // have it look at the origin
+          target: Vec3::new(0.0, 0.0, 0.0),
+          // which way is "up"
+          up: Vec3::new(0.0, 1.0, 0.0),
+          aspect: width as f32 / height as f32,
+          fovy: std::f32::consts::PI * 0.25,
+          znear: 0.1,
+          zfar: 100.0,
+        };
 
         // Initialize GPU
         let instance = Instance::default();
@@ -104,13 +130,15 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        // Uniform buffer for time
-        let initial_uniform_data = UniformData { time: 0.0 };
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-          label: Some("Uniform Buffer"),
-          contents: bytemuck::cast_slice(&[initial_uniform_data]),
-          usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.view_proj = camera.build_view_projection_matrix().to_cols_array_2d();
+        let camera_buffer = device.create_buffer_init(
+          &wgpu::util::BufferInitDescriptor {
+              label: Some("Camera Buffer"),
+              contents: bytemuck::cast_slice(&[camera_uniform]),
+              usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+          }
+        );
 
         // Shader module
         let shader = device.create_shader_module(ShaderModuleDescriptor {
@@ -118,8 +146,7 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("triangle_shader.wgsl").into()),
         });
 
-        let uniform_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-          label: Some("Uniform Bind Group Layout"),
+        let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
           entries: &[
               wgpu::BindGroupLayoutEntry {
                   binding: 0,
@@ -127,28 +154,29 @@ impl Renderer {
                   ty: wgpu::BindingType::Buffer {
                       ty: wgpu::BufferBindingType::Uniform,
                       has_dynamic_offset: false,
-                      min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<UniformData>() as _),
+                      min_binding_size: None,
                   },
                   count: None,
               }
           ],
+          label: Some("camera_bind_group_layout"),
         });
 
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-          layout: &uniform_bind_group_layout, // Use the layout defined above
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+          layout: &camera_bind_group_layout,
           entries: &[
               wgpu::BindGroupEntry {
-                  binding: 0, // Must match the bind group layout and shader binding
-                  resource: uniform_buffer.as_entire_binding(),
-              },
+                  binding: 0,
+                  resource: camera_buffer.as_entire_binding(),
+              }
           ],
-          label: Some("Uniform Bind Group"),
+          label: Some("camera_bind_group"),
         });
 
         // Pipeline setup
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[&uniform_bind_group_layout],
+            bind_group_layouts: &[&camera_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -191,22 +219,49 @@ impl Renderer {
             texture_view,
             output_buffer,
             texture_size,
-            uniform_buffer,
-            uniform_bind_group,
-            start_time,
+            camera,
+            camera_buffer,
+            camera_bind_group,
         }
     }
 
-    pub fn refresh(model: &Model) {
-      //TODO: tessellate everythin into the vertex buffer for now
+    pub fn refresh(&mut self, model: &Model) {
+
+      // We tessellate everything into one mesh for now
+
+      let mut tessellator = Tessellator::new();
+      for (id, atom) in model.atoms.iter() {
+        tessellator.add_atom(model, &atom);
+      }
+      for (id, bond) in model.bonds.iter() {
+        tessellator.add_bond(model, &bond);
+      }
+
+      //TODO: do not replace the buffers, just copy the data.
+
+      self.vertex_buffer = self.device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(tessellator.output_mesh.vertices.as_slice()),
+            usage: wgpu::BufferUsages::VERTEX,
+        }
+      );
+
+      self.index_buffer = self.device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(tessellator.output_mesh.indices.as_slice()),
+            usage: wgpu::BufferUsages::INDEX,
+        }
+      );
+      self.num_indices = tessellator.output_mesh.vertices.len() as u32;
     }
 
     pub fn render(&mut self) -> Vec<u8> {
 
-        let t = (&self).start_time.elapsed().as_secs_f32();
-        let uniform_data = UniformData { time: t };
-
-        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform_data]));
+        //let t = (&self).start_time.elapsed().as_secs_f32();
+        //let uniform_data = UniformData { time: t };
+        //self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform_data]));
 
         // Create a new command encoder
         let mut encoder = self
@@ -238,7 +293,7 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]); // Bind the uniforms
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);

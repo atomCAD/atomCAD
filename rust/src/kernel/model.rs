@@ -19,10 +19,10 @@ pub struct Atom {
 }
 
 pub struct Model {
-  next_id: u64,
-  atoms: HashMap<u64, Atom>,
-  bonds: HashMap<u64, Bond>,
-  dirty_atom_ids: HashSet<u64>,
+  pub next_id: u64,
+  pub atoms: HashMap<u64, Atom>,
+  pub bonds: HashMap<u64, Bond>,
+  pub dirty_atom_ids: HashSet<u64>,
 }
 
 impl Model {
