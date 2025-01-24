@@ -59,9 +59,9 @@ impl Renderer {
         let start_time = Instant::now();
 
         let camera = Camera {
-          // position the camera 1 unit up and 2 units back
+          // position the camera 1 unit up and 10 units back
           // +z is out of the screen
-          eye: Vec3::new(0.0, 1.0, 2.0),
+          eye: Vec3::new(0.0, 1.0, 10.0),
           // have it look at the origin
           target: Vec3::new(0.0, 0.0, 0.0),
           // which way is "up"
@@ -143,7 +143,7 @@ impl Renderer {
         // Shader module
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Triangle Shader"),
-            source: ShaderSource::Wgsl(include_str!("triangle_shader.wgsl").into()),
+            source: ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
         });
 
         let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -185,7 +185,7 @@ impl Renderer {
             layout: Some(&pipeline_layout),
             vertex: VertexState {
                 module: &shader,
-                entry_point: Some("vs"),
+                entry_point: Some("vs_main"),
                 buffers: &[
                   Vertex::desc(),
                 ],
@@ -193,7 +193,7 @@ impl Renderer {
             },
             fragment: Some(FragmentState {
                 module: &shader,
-                entry_point: Some("fs"),
+                entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Rgba8Unorm,
                     blend: Some(BlendState::REPLACE),
@@ -237,6 +237,8 @@ impl Renderer {
         tessellator.add_bond(model, &bond);
       }
 
+      //println!("tessellated {} vertices and {} indices", tessellator.output_mesh.vertices.len(), tessellator.output_mesh.indices.len());
+
       //TODO: do not replace the buffers, just copy the data.
 
       self.vertex_buffer = self.device.create_buffer_init(
@@ -254,7 +256,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::INDEX,
         }
       );
-      self.num_indices = tessellator.output_mesh.vertices.len() as u32;
+      self.num_indices = tessellator.output_mesh.indices.len() as u32;
     }
 
     pub fn render(&mut self) -> Vec<u8> {

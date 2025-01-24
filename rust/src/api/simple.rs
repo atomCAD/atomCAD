@@ -1,10 +1,18 @@
 use std::ffi::{c_int, c_void};
 use dlopen::{symbor::{Library, Symbol}, Error as LibError};
 use std::time::Instant;
-use super::super::renderer::dummy_renderer;
+use crate::renderer::dummy_renderer;
+use crate::renderer::renderer::Renderer;
+use crate::kernel::kernel::Kernel;
+use glam::f32::Vec3;
 
 const IMAGE_WIDTH : u32 = 1280;
 const IMAGE_HEIGHT : u32 = 704;
+
+pub struct CADInstance {
+  kernel: Kernel,
+  renderer: Renderer,
+}
 
 pub type FlutterRgbaRendererPluginOnRgba = unsafe extern "C" fn(
   texture_rgba: *mut c_void,
@@ -43,12 +51,27 @@ lazy_static::lazy_static! {
   };
 }
 
-static mut RENDERER: Option<dummy_renderer::DummyRenderer> = None;
+static mut CAD_INSTANCE: Option<CADInstance> = None;
 
-async fn initialize_renderer_async() {
+async fn initialize_cad_instance_async() {
   unsafe {
-    RENDERER = Some(dummy_renderer::DummyRenderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await);
+    CAD_INSTANCE = Some(
+      CADInstance {
+        kernel: Kernel::new(),
+        renderer: Renderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await
+      }
+    );
+
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      add_sample_model(&mut cad_instance.kernel);
+      cad_instance.renderer.refresh(cad_instance.kernel.get_model())
+    }
   }
+}
+
+fn add_sample_model(kernel: &mut Kernel) {
+  kernel.add_atom(6, Vec3::new(-1.0, 0.0, 0.0));
+  kernel.add_atom(6, Vec3::new(1.0, 0.0, 0.0));
 }
 
 fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {
@@ -82,9 +105,9 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
 
   let start = Instant::now(); // Record the start time
 
-  match unsafe { &mut RENDERER } {
-    Some(renderer) => {
-      let v = renderer.render();
+  match unsafe { &mut CAD_INSTANCE } {
+    Some(cad_instance) => {
+      let v = cad_instance.renderer.render();
       send_texture(texture_ptr, IMAGE_WIDTH, IMAGE_HEIGHT, v);
     }
     None => {
@@ -113,5 +136,5 @@ pub fn init_app() {
     .enable_all()
     .build()
     .unwrap()
-    .block_on(initialize_renderer_async());
+    .block_on(initialize_cad_instance_async());
 }

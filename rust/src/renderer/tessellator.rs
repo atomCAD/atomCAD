@@ -109,7 +109,7 @@ impl Tessellator {
 
     // Add quads
     for y in 1..(self.sphere_vertical_divisions - 1) {
-      let offset = non_pole_index_start + y * self.sphere_horizontal_divisions;
+      let offset = non_pole_index_start + (y - 1) * self.sphere_horizontal_divisions;
       for x in 0..self.sphere_horizontal_divisions {
         self.output_mesh.add_quad(
           offset + (x + 1) % self.sphere_horizontal_divisions,
