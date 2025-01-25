@@ -245,14 +245,6 @@ impl ApplicationHandler for EventHandler {
         // Handle events.
         match event {
             WindowEvent::Resized(new_size) => {
-                // TODO: Remove this once we upgrade winit to a version with the fix
-                #[cfg(target_os = "macos")]
-                if new_size.width == u32::MAX || new_size.height == u32::MAX {
-                    // HACK to fix a bug on Macos 14
-                    // https://github.com/rust-windowing/winit/issues/2876
-                    return;
-                }
-
                 if let Some(renderer) = &mut self.renderer {
                     renderer.resize(new_size);
                 }
