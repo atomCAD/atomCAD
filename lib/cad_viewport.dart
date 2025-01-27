@@ -151,37 +151,36 @@ class _CadViewportState extends State<CadViewport> {
   void _startRotateCamera(Offset pointerPos) {
     _dragState = ViewportDragState.rotate;
     _dragStartPointerPos = pointerPos;
-    _dragStartCameraTransform = getCameraTransform(getCamera());
-
-   //_pivotPoint - _dragStartCameraTransform!.eye
   }
 
   void _rotateCamera(Offset pointerPos) {
     var relPointerPos = pointerPos - _dragStartPointerPos;
     
-    // Horizontal component
-    // Rotate around pivot axis
+    final cameraTransform = getCameraTransform(getCamera());
 
-    final pivotAxisPos = vector_math.Vector3(_pivotPoint.x, 0.0, _pivotPoint.z);
+    // Horizontal component
+    // Rotate around up vector
+
     final horizAngle = relPointerPos.dx * 0.05;
-    final vertAxis = vector_math.Vector3(0.0, 1.0, 0.0);
-    var newEye = rotatePointAroundAxis(pivotAxisPos, vertAxis, horizAngle, _dragStartCameraTransform!.eye);
-    var newTarget = rotatePointAroundAxis(pivotAxisPos, vertAxis, horizAngle, _dragStartCameraTransform!.target);
+    final vertAxis = cameraTransform!.up;
+    var newEye = rotatePointAroundAxis(_pivotPoint, vertAxis, horizAngle, cameraTransform.eye);
+    var newTarget = rotatePointAroundAxis(_pivotPoint, vertAxis, horizAngle, cameraTransform.target);
 
     final newForward = (newTarget - newEye).normalized();
-    final newRight = newForward.cross(_dragStartCameraTransform!.up);
+    final newRight = newForward.cross(cameraTransform.up).normalized();
 
     // Vertical component
-    // Rotate around a horizontal axis that is a horizonal projection of our right vector
+    // Rotate around our right vector
     final vertAngle = relPointerPos.dy * 0.05;
-    // TODO: handle a possible vertical right vector
-    final horizAxis = vector_math.Vector3(newRight.x, 0.0, newRight.z).normalized();
+    final horizAxis = newRight;
 
     newEye = rotatePointAroundAxis(_pivotPoint, horizAxis, vertAngle, newEye);
     newTarget = rotatePointAroundAxis(_pivotPoint, horizAxis, vertAngle, newTarget);
-    final newUp = vector_math.Quaternion.axisAngle(horizAxis, vertAngle).rotated(_dragStartCameraTransform!.up);
+    final newUp = vector_math.Quaternion.axisAngle(horizAxis, vertAngle).rotated(cameraTransform.up);
 
     moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(newUp));
+
+    _dragStartPointerPos = pointerPos;
   }
 
   void _startPrimaryDrag(Offset pointerPos) {
