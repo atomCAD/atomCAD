@@ -103,9 +103,10 @@ async fn initialize_cad_instance_async() {
 }
 
 fn add_sample_model(kernel: &mut Kernel) {
-  kernel.add_atom(6, Vec3::new(-1.0, 0.0, 0.0));
-  kernel.add_atom(6, Vec3::new(1.0, 0.0, 0.0));
-  kernel.add_atom(6, Vec3::new(1.0, 3.0, 0.0));
+  let atom_id1 = kernel.add_atom(6, Vec3::new(-1.3, 0.0, 0.0));
+  let atom_id2 = kernel.add_atom(6, Vec3::new(1.3, 0.0, 0.0));
+  kernel.add_atom(6, Vec3::new(1.3, 3.0, 0.0));
+  kernel.add_bond(atom_id1, atom_id2, 1);
 }
 
 fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {

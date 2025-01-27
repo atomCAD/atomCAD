@@ -59,6 +59,8 @@ const INDICES: &[u32] = &[
     2, 3, 4,
 ];
 
+const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
+
 pub struct Renderer  {
     device: Device,
     queue: Queue,
@@ -68,6 +70,8 @@ pub struct Renderer  {
     num_indices: u32,
     texture: Texture,
     texture_view: TextureView,
+    depth_texture: Texture,
+    depth_texture_view: TextureView,
     output_buffer: Buffer,
     texture_size: Extent3d,
     pub camera: Camera,
@@ -142,6 +146,21 @@ impl Renderer {
 
         // Texture view
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
+
+        // Create depth texture
+        let depth_texture = device.create_texture(&TextureDescriptor {
+          label: Some("Depth Buffer"),
+          size: texture_size,
+          mip_level_count: 1,
+          sample_count: 1,
+          dimension: TextureDimension::D2,
+          format: DEPTH_FORMAT,
+          usage: TextureUsages::RENDER_ATTACHMENT, // Only needs RENDER_ATTACHMENT usage
+          view_formats: &[],
+        });
+      
+        // Create depth texture view
+        let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
 
         // Create output buffer for readback
         let output_buffer = device.create_buffer(&BufferDescriptor {
@@ -234,7 +253,13 @@ impl Renderer {
               // Requires Features::CONSERVATIVE_RASTERIZATION
               conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+              format: DEPTH_FORMAT,
+              depth_write_enabled: true,
+              depth_compare: wgpu::CompareFunction::Less, // Typical for 3D rendering
+              stencil: wgpu::StencilState::default(),
+              bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
               count: 1, // 2.
               mask: !0, // 3.
@@ -253,6 +278,8 @@ impl Renderer {
             num_indices,
             texture,
             texture_view,
+            depth_texture,
+            depth_texture_view,        
             output_buffer,
             texture_size,
             camera,
@@ -338,7 +365,14 @@ impl Renderer {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                  view: &self.depth_texture_view,
+                  depth_ops: Some(wgpu::Operations {
+                      load: wgpu::LoadOp::Clear(1.0), // Clear depth to the farthest value
+                      store: wgpu::StoreOp::Store,
+                  }),
+                  stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });

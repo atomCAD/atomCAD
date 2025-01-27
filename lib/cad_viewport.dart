@@ -21,6 +21,47 @@ enum ViewportDragState {
   rotate
 }
 
+class CameraTransform {
+  vector_math.Vector3 eye;
+  vector_math.Vector3 target;
+  vector_math.Vector3 forward;
+  vector_math.Vector3 up;
+  vector_math.Vector3 right;
+
+  CameraTransform({
+    required this.eye,
+    required this.target,
+    required this.forward,
+    required this.up,
+    required this.right,
+  });
+}
+
+CameraTransform? getCameraTransform(APICamera? camera) {
+  if (camera == null) {
+    return null;
+  }
+  final eye = APIVec3ToVector3(camera.eye);
+  final target = APIVec3ToVector3(camera.target);
+  final forward = (target - eye).normalized();
+  final up = APIVec3ToVector3(camera.up);
+  final right = forward.cross(up);
+
+  return CameraTransform(
+    eye: eye,
+    target: target,
+    forward: forward,
+    up: up,
+    right: right,
+  );
+}
+
+// Axis is a normal vector
+vector_math.Vector3 rotatePointAroundAxis(vector_math.Vector3 axisPos, vector_math.Vector3 axis, double angle, vector_math.Vector3 point) {
+    final rotation = vector_math.Quaternion.axisAngle(axis, angle);
+    return rotation.rotated(point - axisPos) + axisPos;
+} 
+
 class CadViewport extends StatefulWidget {
   const CadViewport({super.key});
 
@@ -30,9 +71,12 @@ class CadViewport extends StatefulWidget {
 
 class _CadViewportState extends State<CadViewport> {
 
-
   static const double _clickThreshold = 4.0;
   static const double _addAtomPlaneDistance = 20.0;
+
+  //TODO: viewport should be resizable.
+  static const double VIEWPORT_WIDTH = 1280.0;
+  static const double VIEWPORT_HEIGHT = 704.0;
 
   TextureRgbaRenderer? _textureRenderer;
 
@@ -44,7 +88,7 @@ class _CadViewportState extends State<CadViewport> {
   ViewportDragState _dragState = ViewportDragState.noDrag;
   Offset _dragStartPointerPos = Offset(0.0, 0.0);
   vector_math.Vector3 _pivotPoint = vector_math.Vector3(0.0, 0.0, 0.0);
-  APICamera? _dragStartCamera;
+  CameraTransform? _dragStartCameraTransform;
   double _cameraMovePerPixel = 0.0; 
 
   void initTexture() async {
@@ -70,8 +114,6 @@ class _CadViewportState extends State<CadViewport> {
   }
 
   void _handlePostFrame(Duration timeStamp) {
-    //print("_handlePostFrame $_frameId");
-
     if(_continuousRendering) {
       SchedulerBinding.instance.scheduleFrame();
       if(_texturePtr != null) {
@@ -86,46 +128,60 @@ class _CadViewportState extends State<CadViewport> {
   void _startMoveCamera(Offset pointerPos) {
     _dragState = ViewportDragState.move;
     _dragStartPointerPos = pointerPos;
-    _dragStartCamera = getCamera();
+    final camera = getCamera();
+    _dragStartCameraTransform = getCameraTransform(camera);
 
-    var movePlaneDistance = (_pivotPoint - APIVec3ToVector3(_dragStartCamera!.eye)).dot(
-    (APIVec3ToVector3(_dragStartCamera!.target) - APIVec3ToVector3(_dragStartCamera!.eye)).normalized());
-    _cameraMovePerPixel = 2.0 * movePlaneDistance * tan(_dragStartCamera!.fovy * 0.5) / 704.0; // TODO***: 704 should not be hardcoded
+    var movePlaneDistance = (_pivotPoint - _dragStartCameraTransform!.eye).dot(_dragStartCameraTransform!.forward);
+    _cameraMovePerPixel = 2.0 * movePlaneDistance * tan(camera!.fovy * 0.5) / VIEWPORT_HEIGHT;
   }
 
   void _moveCamera(Offset pointerPos) {
-    if (_dragStartCamera == null) {
+    if (_dragStartCameraTransform == null) {
       return;
     }
     var relPointerPos = pointerPos - _dragStartPointerPos;
-    //_cameraMovePerPixel * relPointerPos
 
-//pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
+    var newEye = _dragStartCameraTransform!.eye + _dragStartCameraTransform!.right * ((-_cameraMovePerPixel) * relPointerPos.dx)
+      + _dragStartCameraTransform!.up * (_cameraMovePerPixel * relPointerPos.dy);
+    var newTarget = newEye + _dragStartCameraTransform!.forward;
 
-    var eye = APIVec3ToVector3(_dragStartCamera!.eye);
-    var target = APIVec3ToVector3(_dragStartCamera!.target);
-    var forward = (target - eye).normalized();
-    var up = APIVec3ToVector3(_dragStartCamera!.up);
-    var right = forward.cross(up);
-
-    var newEye = eye + right * ((-_cameraMovePerPixel) * relPointerPos.dx) + up * (_cameraMovePerPixel * relPointerPos.dy);
-    var newTarget = newEye + forward;
-
-    moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(up));
-
-    //print('camera up: ${camera?.up.x} ${camera?.up.y} ${camera?.up.z}');
-
+    moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(_dragStartCameraTransform!.up));
   }
 
   void _startRotateCamera(Offset pointerPos) {
     _dragState = ViewportDragState.rotate;
     _dragStartPointerPos = pointerPos;
-    _dragStartCamera = getCamera();
+    _dragStartCameraTransform = getCameraTransform(getCamera());
+
+   //_pivotPoint - _dragStartCameraTransform!.eye
   }
 
   void _rotateCamera(Offset pointerPos) {
     var relPointerPos = pointerPos - _dragStartPointerPos;
-    //TODO***
+    
+    // Horizontal component
+    // Rotate around pivot axis
+
+    final pivotAxisPos = vector_math.Vector3(_pivotPoint.x, 0.0, _pivotPoint.z);
+    final horizAngle = relPointerPos.dx * 0.05;
+    final vertAxis = vector_math.Vector3(0.0, 1.0, 0.0);
+    var newEye = rotatePointAroundAxis(pivotAxisPos, vertAxis, horizAngle, _dragStartCameraTransform!.eye);
+    var newTarget = rotatePointAroundAxis(pivotAxisPos, vertAxis, horizAngle, _dragStartCameraTransform!.target);
+
+    final newForward = (newTarget - newEye).normalized();
+    final newRight = newForward.cross(_dragStartCameraTransform!.up);
+
+    // Vertical component
+    // Rotate around a horizontal axis that is a horizonal projection of our right vector
+    final vertAngle = relPointerPos.dy * 0.05;
+    // TODO: handle a possible vertical right vector
+    final horizAxis = vector_math.Vector3(newRight.x, 0.0, newRight.z).normalized();
+
+    newEye = rotatePointAroundAxis(_pivotPoint, horizAxis, vertAngle, newEye);
+    newTarget = rotatePointAroundAxis(_pivotPoint, horizAxis, vertAngle, newTarget);
+    final newUp = vector_math.Quaternion.axisAngle(horizAxis, vertAngle).rotated(_dragStartCameraTransform!.up);
+
+    moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(newUp));
   }
 
   void _startPrimaryDrag(Offset pointerPos) {
@@ -148,17 +204,16 @@ class _CadViewportState extends State<CadViewport> {
   }
 
   void _onPrimaryClick(Offset pointerPos) {
-    print('primary click at ${pointerPos}');
+    //print('primary click at ${pointerPos}');
 
     //TODO: raycast into the model.
-    // if not hit an atom, do the add atom stuff.
-    // add the atom at a fix distance from the camera eye.
+    // if do not hit an atom, do the add atom stuff..
     // for now immediately invoke _addAtom
     _addAtom(pointerPos);
   }
 
+  // Add an atom at a fix distance from the camera eye
   void _addAtom(Offset pointerPos) {
-    //TODO***
     // First determine the position of the atom to be placed.
     var camera = getCamera();
     var eye = APIVec3ToVector3(camera!.eye);
@@ -167,9 +222,9 @@ class _CadViewportState extends State<CadViewport> {
     var up = APIVec3ToVector3(camera.up);
     var right = forward.cross(up);
 
-    var offsetPerPixel = 2.0 * _addAtomPlaneDistance * tan(camera.fovy * 0.5) / 704.0; // TODO***: 704 should not be hardcoded
+    var offsetPerPixel = 2.0 * _addAtomPlaneDistance * tan(camera.fovy * 0.5) / VIEWPORT_HEIGHT;
 
-    var centeredPointerPos = pointerPos - Offset(1280.0 * 0.5, 704.0 * 0.5); // TODO: should not be hardcoded
+    var centeredPointerPos = pointerPos - Offset(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5);
 
     var atomPos = eye + forward * _addAtomPlaneDistance + right * (offsetPerPixel * centeredPointerPos.dx) + up * (offsetPerPixel * (-centeredPointerPos.dy));
 
@@ -194,22 +249,22 @@ class _CadViewportState extends State<CadViewport> {
         _textureId != null
       ? Center(
           child: SizedBox(
-            width: 1280,
-            height: 704,
+            width: VIEWPORT_WIDTH,
+            height: VIEWPORT_HEIGHT,
             child: Listener(
               onPointerDown: (PointerDownEvent event) {
                 if (event.kind == PointerDeviceKind.mouse) {
                   switch (event.buttons) {
                     case kPrimaryMouseButton:
-                      print('Left mouse button pressed at ${event.position}');
+                      //print('Left mouse button pressed at ${event.position}');
                       _startPrimaryDrag(event.position);                      
                       break;
                     case kSecondaryMouseButton:
-                      print('Right mouse button pressed at ${event.position}');
+                      //print('Right mouse button pressed at ${event.position}');
                       _startRotateCamera(event.position);
                       break;
                     case kMiddleMouseButton:
-                      print('Middle mouse button pressed at ${event.position}');
+                      //print('Middle mouse button pressed at ${event.position}');
                       _startMoveCamera(event.position);
                       break;
                   }
@@ -217,7 +272,7 @@ class _CadViewportState extends State<CadViewport> {
               },
               onPointerMove: (PointerMoveEvent event) {
                 if (event.kind == PointerDeviceKind.mouse) {
-                  print('Mouse moved to ${event.position}');
+                  //print('Mouse moved to ${event.position}');
                   switch(_dragState) {
                     case  ViewportDragState.move:
                       _moveCamera(event.position);
@@ -231,7 +286,7 @@ class _CadViewportState extends State<CadViewport> {
               },
               onPointerUp: (PointerUpEvent event) {
                 if (event.kind == PointerDeviceKind.mouse) {
-                  print('Mouse button released at ${event.position}');
+                  //print('Mouse button released at ${event.position}');
                   _endDrag(event.position);
                 }
               },

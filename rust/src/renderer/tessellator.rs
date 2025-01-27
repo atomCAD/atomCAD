@@ -45,9 +45,9 @@ impl Tessellator {
 
   pub fn add_bond(&mut self, model: &Model, bond: &Bond) {
     let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
-    let atom_pos2 = model.get_atom(bond.atom_id1).unwrap().position;
+    let atom_pos2 = model.get_atom(bond.atom_id2).unwrap().position;
     // TODO: radius
-    self.add_cylinder(&atom_pos2, &atom_pos1, 0.5, &Vec3::new(1.0, 1.0, 1.0), 0.5, 1.0);
+    self.add_cylinder(&atom_pos2, &atom_pos1, 0.3, &Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8);
   }
 
   fn add_sphere(&mut self, center: &Vec3, radius: f32, albedo: &Vec3, roughness: f32, metallic: f32) {
@@ -138,8 +138,8 @@ impl Tessellator {
       let theta = u * 2.0 * std::f32::consts::PI; // From 0 to 2*PI
 
       let normal = Vec3::new(theta.sin(), 0.0, theta.cos());
-      let bottom_position = center + Vec3::new(0.0, -length * 0.5, 0.0) + normal * radius;
-      let top_position = center + Vec3::new(0.0, length * 0.5, 0.0) + normal * radius;
+      let bottom_position = center + rotation.mul_vec3(Vec3::new(0.0, -length * 0.5, 0.0) + normal * radius);
+      let top_position = center + rotation.mul_vec3(Vec3::new(0.0, length * 0.5, 0.0) + normal * radius);
 
       self.output_mesh.add_vertex(Vertex::new(
         &bottom_position,
