@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => -2040920856;
+  int get rustContentHash => 263365073;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,9 +79,17 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  void crateApiSimpleAddAtom(
+      {required int atomicNumber, required APIVec3 position});
+
+  APICamera? crateApiSimpleGetCamera();
+
   String crateApiSimpleGreet({required String name});
 
   Future<void> crateApiSimpleInitApp();
+
+  void crateApiSimpleMoveCamera(
+      {required APIVec3 eye, required APIVec3 target, required APIVec3 up});
 
   double crateApiSimpleProvideTexture({required int texturePtr});
 }
@@ -95,12 +103,59 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  void crateApiSimpleAddAtom(
+      {required int atomicNumber, required APIVec3 position}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_i_32(atomicNumber, serializer);
+        sse_encode_box_autoadd_api_vec_3(position, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleAddAtomConstMeta,
+      argValues: [atomicNumber, position],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleAddAtomConstMeta => const TaskConstMeta(
+        debugName: "add_atom",
+        argNames: ["atomicNumber", "position"],
+      );
+
+  @override
+  APICamera? crateApiSimpleGetCamera() {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_box_autoadd_api_camera,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleGetCameraConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleGetCameraConstMeta => const TaskConstMeta(
+        debugName: "get_camera",
+        argNames: [],
+      );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -123,7 +178,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 2, port: port_);
+            funcId: 4, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -141,12 +196,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiSimpleMoveCamera(
+      {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_box_autoadd_api_vec_3(eye, serializer);
+        sse_encode_box_autoadd_api_vec_3(target, serializer);
+        sse_encode_box_autoadd_api_vec_3(up, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleMoveCameraConstMeta,
+      argValues: [eye, target, up],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleMoveCameraConstMeta => const TaskConstMeta(
+        debugName: "move_camera",
+        argNames: ["eye", "target", "up"],
+      );
+
+  @override
   double crateApiSimpleProvideTexture({required int texturePtr}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_CastedPrimitive_u_64(texturePtr, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_f_64,
@@ -178,15 +259,75 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APICamera dco_decode_api_camera(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return APICamera(
+      eye: dco_decode_api_vec_3(arr[0]),
+      target: dco_decode_api_vec_3(arr[1]),
+      up: dco_decode_api_vec_3(arr[2]),
+      aspect: dco_decode_f_32(arr[3]),
+      fovy: dco_decode_f_32(arr[4]),
+      znear: dco_decode_f_32(arr[5]),
+      zfar: dco_decode_f_32(arr[6]),
+    );
+  }
+
+  @protected
+  APIVec3 dco_decode_api_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return APIVec3(
+      x: dco_decode_f_32(arr[0]),
+      y: dco_decode_f_32(arr[1]),
+      z: dco_decode_f_32(arr[2]),
+    );
+  }
+
+  @protected
+  APICamera dco_decode_box_autoadd_api_camera(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_camera(raw);
+  }
+
+  @protected
+  APIVec3 dco_decode_box_autoadd_api_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_vec_3(raw);
+  }
+
+  @protected
+  double dco_decode_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
   }
 
   @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  APICamera? dco_decode_opt_box_autoadd_api_camera(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_camera(raw);
   }
 
   @protected
@@ -222,9 +363,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APICamera sse_decode_api_camera(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_eye = sse_decode_api_vec_3(deserializer);
+    var var_target = sse_decode_api_vec_3(deserializer);
+    var var_up = sse_decode_api_vec_3(deserializer);
+    var var_aspect = sse_decode_f_32(deserializer);
+    var var_fovy = sse_decode_f_32(deserializer);
+    var var_znear = sse_decode_f_32(deserializer);
+    var var_zfar = sse_decode_f_32(deserializer);
+    return APICamera(
+        eye: var_eye,
+        target: var_target,
+        up: var_up,
+        aspect: var_aspect,
+        fovy: var_fovy,
+        znear: var_znear,
+        zfar: var_zfar);
+  }
+
+  @protected
+  APIVec3 sse_decode_api_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_x = sse_decode_f_32(deserializer);
+    var var_y = sse_decode_f_32(deserializer);
+    var var_z = sse_decode_f_32(deserializer);
+    return APIVec3(x: var_x, y: var_y, z: var_z);
+  }
+
+  @protected
+  APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_camera(deserializer));
+  }
+
+  @protected
+  APIVec3 sse_decode_box_autoadd_api_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_vec_3(deserializer));
+  }
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat32();
+  }
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -232,6 +426,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  APICamera? sse_decode_opt_box_autoadd_api_camera(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_camera(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -249,12 +455,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_decode_unit(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -276,9 +476,55 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_camera(APICamera self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_vec_3(self.eye, serializer);
+    sse_encode_api_vec_3(self.target, serializer);
+    sse_encode_api_vec_3(self.up, serializer);
+    sse_encode_f_32(self.aspect, serializer);
+    sse_encode_f_32(self.fovy, serializer);
+    sse_encode_f_32(self.znear, serializer);
+    sse_encode_f_32(self.zfar, serializer);
+  }
+
+  @protected
+  void sse_encode_api_vec_3(APIVec3 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self.x, serializer);
+    sse_encode_f_32(self.y, serializer);
+    sse_encode_f_32(self.z, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_camera(
+      APICamera self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_camera(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_vec_3(
+      APIVec3 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_vec_3(self, serializer);
+  }
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat32(self);
+  }
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
   }
 
   @protected
@@ -287,6 +533,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_camera(
+      APICamera? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_camera(self, serializer);
+    }
   }
 
   @protected
@@ -304,12 +561,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
   }
 
   @protected

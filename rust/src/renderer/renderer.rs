@@ -14,22 +14,43 @@ use glam::f32::Mat4;
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
     view_proj: [[f32; 4]; 4],
+
+    camera_position: [f32; 3],
+
+    // Due to uniforms requiring 16 byte (4 float) spacing, we need to use padding fields
+    _padding0: u32,
+
+    // There is a directional light 'attached' to the camera.
+    // It behaves as a 'head light', so it always shines slightly 'from above'.
+    head_light_dir: [f32; 3],
+
+    _padding1: u32,
 }
 
 impl CameraUniform {
   fn new() -> Self {
       Self {
         view_proj: Mat4::IDENTITY.to_cols_array_2d(),
+        camera_position: Vec3::new(0.0, 0.0, 0.0).to_array(),
+        _padding0: 0,
+        head_light_dir: Vec3::new(0.0, -1.0, 0.0).to_array(),
+        _padding1: 0,
       }
+  }
+
+  fn refresh(&mut self, camera: &Camera) {
+    self.view_proj = camera.build_view_projection_matrix().to_cols_array_2d();
+    self.camera_position = camera.eye.to_array();
+    self.head_light_dir = camera.calc_headlight_direction().to_array();
   }
 }
 
 const VERTICES: &[Vertex] = &[
-  Vertex { position: [-0.0868241, 0.49240386, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // A
-  Vertex { position: [-0.49513406, 0.06958647, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // B
-  Vertex { position: [-0.21918549, -0.44939706, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // C
-  Vertex { position: [0.35966998, -0.3473291, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // D
-  Vertex { position: [0.44147372, 0.2347359, 0.0], normal: [0.0, 0.0, 1.0], color: [0.5, 0.0, 0.5] }, // E
+  Vertex { position: [-0.0868241, 0.49240386, 0.0], normal: [0.0, 0.0, 1.0], albedo: [0.5, 0.0, 0.5], roughness: 1.0, metallic: 0.0, }, // A
+  Vertex { position: [-0.49513406, 0.06958647, 0.0], normal: [0.0, 0.0, 1.0], albedo: [0.5, 0.0, 0.5], roughness: 1.0, metallic: 0.0, }, // B
+  Vertex { position: [-0.21918549, -0.44939706, 0.0], normal: [0.0, 0.0, 1.0], albedo: [0.5, 0.0, 0.5], roughness: 1.0, metallic: 0.0, }, // C
+  Vertex { position: [0.35966998, -0.3473291, 0.0], normal: [0.0, 0.0, 1.0], albedo: [0.5, 0.0, 0.5], roughness: 1.0, metallic: 0.0, }, // D
+  Vertex { position: [0.44147372, 0.2347359, 0.0], normal: [0.0, 0.0, 1.0], albedo: [0.5, 0.0, 0.5], roughness: 1.0, metallic: 0.0, }, // E
 ];
 
 const INDICES: &[u32] = &[
@@ -49,7 +70,7 @@ pub struct Renderer  {
     texture_view: TextureView,
     output_buffer: Buffer,
     texture_size: Extent3d,
-    camera: Camera,
+    pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 }
@@ -59,17 +80,17 @@ impl Renderer {
         let start_time = Instant::now();
 
         let camera = Camera {
-          // position the camera 1 unit up and 10 units back
+          // position the camera 20 units back
           // +z is out of the screen
-          eye: Vec3::new(0.0, 1.0, 10.0),
+          eye: Vec3::new(0.0, 0.0, 20.0),
           // have it look at the origin
           target: Vec3::new(0.0, 0.0, 0.0),
           // which way is "up"
           up: Vec3::new(0.0, 1.0, 0.0),
           aspect: width as f32 / height as f32,
-          fovy: std::f32::consts::PI * 0.25,
+          fovy: std::f32::consts::PI * 0.15,
           znear: 0.1,
-          zfar: 100.0,
+          zfar: 200.0,
         };
 
         // Initialize GPU
@@ -114,7 +135,7 @@ impl Renderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
+            format: TextureFormat::Bgra8Unorm,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
             view_formats: &[],
         });
@@ -131,7 +152,7 @@ impl Renderer {
         });
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.view_proj = camera.build_view_projection_matrix().to_cols_array_2d();
+        camera_uniform.refresh(&camera);
         let camera_buffer = device.create_buffer_init(
           &wgpu::util::BufferInitDescriptor {
               label: Some("Camera Buffer"),
@@ -150,7 +171,7 @@ impl Renderer {
           entries: &[
               wgpu::BindGroupLayoutEntry {
                   binding: 0,
-                  visibility: wgpu::ShaderStages::VERTEX,
+                  visibility: wgpu::ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                   ty: wgpu::BindingType::Buffer {
                       ty: wgpu::BufferBindingType::Uniform,
                       has_dynamic_offset: false,
@@ -195,15 +216,30 @@ impl Renderer {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Rgba8Unorm,
+                    format: TextureFormat::Bgra8Unorm,
                     blend: Some(BlendState::REPLACE),
                     write_mask: ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
-            primitive: PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+              topology: wgpu::PrimitiveTopology::TriangleList,
+              strip_index_format: None,
+              front_face: wgpu::FrontFace::Ccw,
+              cull_mode: Some(wgpu::Face::Back),
+              // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+              polygon_mode: wgpu::PolygonMode::Fill,
+              // Requires Features::DEPTH_CLIP_CONTROL
+              unclipped_depth: false,
+              // Requires Features::CONSERVATIVE_RASTERIZATION
+              conservative: false,
+            },
             depth_stencil: None,
-            multisample: MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+              count: 1, // 2.
+              mask: !0, // 3.
+              alpha_to_coverage_enabled: false, // 4.
+            },
             multiview: None,
             cache: None,
         });
@@ -225,11 +261,24 @@ impl Renderer {
         }
     }
 
+    pub fn move_camera(&mut self, eye: &Vec3, target: &Vec3, up: &Vec3) {
+      self.camera.eye = *eye;
+      self.camera.target = *target;
+      self.camera.up = *up;
+
+      let mut camera_uniform = CameraUniform::new();
+      camera_uniform.refresh(&self.camera);
+
+      self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
+    }
+
     pub fn refresh(&mut self, model: &Model) {
 
       // We tessellate everything into one mesh for now
 
       let mut tessellator = Tessellator::new();
+      tessellator.set_sphere_divisions(10, 20);
+
       for (id, atom) in model.atoms.iter() {
         tessellator.add_atom(model, &atom);
       }

@@ -5,6 +5,14 @@
 
 ## Camera movement
 
+Camera movement operations are the following:
+
+- Moving
+- Rotating
+- Zooming
+
+There are parameters to all 3 operations. When moving the camera parallel with the camera plane, the question is how sensitive this movement should be to mouse movement or touch movement. When rotating, the question is what is the pivot point. When zooming, the question is what to zoom on. The answer to all of this is that we use the mouse position or touch position to determine a pivot point, and we can do the camera movement operation based on the pivot point. The pivot point is the center of the first atom hit by the ray cast based on mouse position. If there is no hit then it is the center of the atom which is closest to the ray. If the scene is empty then the pivot point is where the ray hits the base plane. If the ray do not hit the plane in a specific distance then the pivot point is the point on the ray with that distance.
+
 The means of camera movement can be input device and platform dependent. We will implement it to be easily changeable.
 
 I just describe some sensible default settings:

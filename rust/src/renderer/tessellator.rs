@@ -40,30 +40,34 @@ impl Tessellator {
   pub fn add_atom(&mut self, model: &Model, atom: &Atom) {
     // TODO: atomic radii. also enum for view type (atomic radii depend on that too)
     // TODO: color depends on atomic number and selection
-    self.add_sphere(&atom.position, 1.0, &Vec3::new(1.0, 0.0, 0.0));
+    self.add_sphere(&atom.position, 1.0, &Vec3::new(0.8, 0.0, 0.0), 0.3, 0.0);
   }
 
   pub fn add_bond(&mut self, model: &Model, bond: &Bond) {
     let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
     let atom_pos2 = model.get_atom(bond.atom_id1).unwrap().position;
     // TODO: radius
-    self.add_cylinder(&atom_pos2, &atom_pos1, 0.5, &Vec3::new(0.5, 0.5, 0.5));
+    self.add_cylinder(&atom_pos2, &atom_pos1, 0.5, &Vec3::new(1.0, 1.0, 1.0), 0.5, 1.0);
   }
 
-  fn add_sphere(&mut self, center: &Vec3, radius: f32, color: &Vec3) {
+  fn add_sphere(&mut self, center: &Vec3, radius: f32, albedo: &Vec3, roughness: f32, metallic: f32) {
 
     // ---------- Add vertices ----------
 
     let north_pole_index = self.output_mesh.add_vertex(Vertex::new(
       &Vec3::new(center.x, center.y + radius, center.z),
       &Vec3::new(0.0, 1.0, 0.0),
-      color
+      albedo,
+      roughness,
+      metallic,
     ));
 
     let south_pole_index = self.output_mesh.add_vertex(Vertex::new(
       &Vec3::new(center.x, center.y - radius, center.z),
       &Vec3::new(0.0, -1.0, 0.0),
-      color
+      albedo,
+      roughness,
+      metallic,
     ));
 
     let non_pole_index_start = self.output_mesh.vertices.len() as u32;
@@ -81,7 +85,9 @@ impl Tessellator {
         self.output_mesh.add_vertex(Vertex::new(
           &position,
           &normal,
-          color
+          albedo,
+          roughness,
+          metallic,
         ));
       } // end of for x
     } // end of for y
@@ -121,7 +127,7 @@ impl Tessellator {
     }
   }
 
-  fn add_cylinder(&mut self, top_center: &Vec3, bottom_center: &Vec3, radius: f32, color: &Vec3) {
+  fn add_cylinder(&mut self, top_center: &Vec3, bottom_center: &Vec3, radius: f32, albedo: &Vec3, roughness: f32, metallic: f32) {
     let center = (top_center + bottom_center) * 0.5;
     let dir = (top_center - bottom_center).normalize();
     let length = (top_center - bottom_center).length();
@@ -138,13 +144,17 @@ impl Tessellator {
       self.output_mesh.add_vertex(Vertex::new(
         &bottom_position,
         &normal,
-        color
+        albedo,
+        roughness,
+        metallic,
       ));
 
       self.output_mesh.add_vertex(Vertex::new(
         &top_position,
         &normal,
-        color
+        albedo,
+        roughness,
+        metallic,
       ));
 
       let offset = index_start + 2 * x;

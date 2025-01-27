@@ -6,37 +6,21 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_vec3`, `vec3_to_api`
-// These types are ignored because they are not used by any `pub` functions: `CADInstance`, `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`
 
-double provideTexture({required int texturePtr}) =>
-    RustLib.instance.api.crateApiSimpleProvideTexture(texturePtr: texturePtr);
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Mat4>>
+abstract class Mat4 implements RustOpaqueInterface {}
 
-APICamera? getCamera() => RustLib.instance.api.crateApiSimpleGetCamera();
-
-void moveCamera(
-        {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) =>
-    RustLib.instance.api
-        .crateApiSimpleMoveCamera(eye: eye, target: target, up: up);
-
-void addAtom({required int atomicNumber, required APIVec3 position}) =>
-    RustLib.instance.api
-        .crateApiSimpleAddAtom(atomicNumber: atomicNumber, position: position);
-
-String greet({required String name}) =>
-    RustLib.instance.api.crateApiSimpleGreet(name: name);
-
-class APICamera {
-  final APIVec3 eye;
-  final APIVec3 target;
-  final APIVec3 up;
+class Camera {
+  final Vec3 eye;
+  final Vec3 target;
+  final Vec3 up;
   final double aspect;
   final double fovy;
   final double znear;
   final double zfar;
 
-  const APICamera({
+  const Camera({
     required this.eye,
     required this.target,
     required this.up,
@@ -45,6 +29,11 @@ class APICamera {
     required this.znear,
     required this.zfar,
   });
+
+  Future<Mat4> buildViewProjectionMatrix() =>
+      RustLib.instance.api.crateRendererCameraCameraBuildViewProjectionMatrix(
+        that: this,
+      );
 
   @override
   int get hashCode =>
@@ -59,7 +48,7 @@ class APICamera {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is APICamera &&
+      other is Camera &&
           runtimeType == other.runtimeType &&
           eye == other.eye &&
           target == other.target &&
@@ -70,12 +59,12 @@ class APICamera {
           zfar == other.zfar;
 }
 
-class APIVec3 {
+class Vec3 {
   final double x;
   final double y;
   final double z;
 
-  const APIVec3({
+  const Vec3({
     required this.x,
     required this.y,
     required this.z,
@@ -87,7 +76,7 @@ class APIVec3 {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is APIVec3 &&
+      other is Vec3 &&
           runtimeType == other.runtimeType &&
           x == other.x &&
           y == other.y &&

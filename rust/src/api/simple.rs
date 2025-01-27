@@ -3,8 +3,41 @@ use dlopen::{symbor::{Library, Symbol}, Error as LibError};
 use std::time::Instant;
 use crate::renderer::dummy_renderer;
 use crate::renderer::renderer::Renderer;
+use crate::renderer::camera::Camera;
 use crate::kernel::kernel::Kernel;
 use glam::f32::Vec3;
+
+pub struct APIVec3 {
+  pub x: f32,
+  pub y: f32,
+  pub z: f32,
+}
+
+fn to_api_vec3(v: &Vec3) -> APIVec3 {
+  return APIVec3{
+    x: v.x,
+    y: v.y,
+    z: v.z
+  }
+}
+
+fn vec3_to_api(v: &APIVec3) -> Vec3 {
+  return Vec3{
+    x: v.x,
+    y: v.y,
+    z: v.z
+  }
+}
+
+pub struct APICamera {
+  pub eye: APIVec3,
+  pub target: APIVec3,
+  pub up: APIVec3,
+  pub aspect: f32,
+  pub fovy: f32, // in radians
+  pub znear: f32,
+  pub zfar: f32,
+}
 
 const IMAGE_WIDTH : u32 = 1280;
 const IMAGE_HEIGHT : u32 = 704;
@@ -72,6 +105,7 @@ async fn initialize_cad_instance_async() {
 fn add_sample_model(kernel: &mut Kernel) {
   kernel.add_atom(6, Vec3::new(-1.0, 0.0, 0.0));
   kernel.add_atom(6, Vec3::new(1.0, 0.0, 0.0));
+  kernel.add_atom(6, Vec3::new(1.0, 3.0, 0.0));
 }
 
 fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {
@@ -120,6 +154,45 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
   //println!("Provide texture time: {:?}", duration);
 
   return duration.as_secs_f64();
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_camera() -> Option<APICamera> {
+  unsafe {
+    if let Some(cad_instance) = &CAD_INSTANCE {
+      let camera = &cad_instance.renderer.camera;
+      return Some(APICamera {
+        eye: to_api_vec3(&camera.eye),
+        target: to_api_vec3(&camera.target),
+        up: to_api_vec3(&camera.up),
+        aspect: camera.aspect,
+        fovy: camera.fovy,
+        znear: camera.znear,
+        zfar: camera.zfar,      
+      });
+    } else {
+      return None;
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.renderer.move_camera(&vec3_to_api(&eye), &vec3_to_api(&target), &vec3_to_api(&up));
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_atom(atomic_number: i32, position: APIVec3) {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.kernel.add_atom(atomic_number, vec3_to_api(&position));
+      cad_instance.renderer.refresh(cad_instance.kernel.get_model());
+    }
+  }
 }
 
 #[flutter_rust_bridge::frb(sync)]

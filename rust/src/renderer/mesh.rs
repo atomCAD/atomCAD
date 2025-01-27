@@ -7,15 +7,19 @@ use glam::f32::Vec3;
 pub struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
-    pub color: [f32; 3],
+    pub albedo: [f32; 3],
+    pub roughness: f32,
+    pub metallic: f32,
 }
 
 impl Vertex {
-  pub fn new(position: &Vec3, normal: &Vec3, color: &Vec3) -> Self {
+  pub fn new(position: &Vec3, normal: &Vec3, albedo: &Vec3, roughness: f32, metallic: f32) -> Self {
     Self {
       position: [position.x, position.y, position.z],
       normal: [normal.x, normal.y, normal.z],
-      color: [color.x, color.y, color.z],
+      albedo: [albedo.x, albedo.y, albedo.z],
+      roughness,
+      metallic,
     }
   }
 
@@ -38,7 +42,17 @@ impl Vertex {
                   offset: std::mem::size_of::<[f32; 6]>() as wgpu::BufferAddress,
                   shader_location: 2,
                   format: wgpu::VertexFormat::Float32x3,
-              }
+              },
+              wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 9]>() as wgpu::BufferAddress,
+                shader_location: 3,
+                format: wgpu::VertexFormat::Float32,
+              },
+              wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 10]>() as wgpu::BufferAddress,
+                shader_location: 4,
+                format: wgpu::VertexFormat::Float32,
+              },
           ]
       }
   }

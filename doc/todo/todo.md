@@ -1,0 +1,1 @@
+- Make rendering better looking: Either add IBL or add multiple light sources. Current ambient approximation is visibly bad quality where direct light is not contributing. 
