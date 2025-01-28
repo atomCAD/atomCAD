@@ -1,5 +1,7 @@
 ## Features
 
+At first we implement an atom-by-atom editing workflow. Later we intend to support a specialized workflow of editing diamond crystal structures. Its design is [here](../crystal/crystal.md).
+
 ### Basic features
 
 - Add atom quickly

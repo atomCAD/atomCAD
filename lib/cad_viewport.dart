@@ -88,14 +88,20 @@ class _CadViewportState extends State<CadViewport> {
 
   int? _textureId;
   int? _texturePtr;
-  double? _elapsedInSec;
-  int _frameId = 0;
-  bool _continuousRendering = false;
   ViewportDragState _dragState = ViewportDragState.noDrag;
   Offset _dragStartPointerPos = Offset(0.0, 0.0);
   vector_math.Vector3 _pivotPoint = vector_math.Vector3(0.0, 0.0, 0.0);
   CameraTransform? _dragStartCameraTransform;
   double _cameraMovePerPixel = 0.0; 
+
+  void _renderingNeeded() {
+      SchedulerBinding.instance.scheduleFrame();
+  }
+
+  void _moveCameraAndRender({required APIVec3 eye, required APIVec3 target, required APIVec3 up}) {
+    moveCamera(eye: eye, target: target, up: up);
+    _renderingNeeded();
+  }
 
   void initTexture() async {
     _textureRenderer = TextureRgbaRenderer();
@@ -115,19 +121,8 @@ class _CadViewportState extends State<CadViewport> {
   }
 
   void _handlePersistentFrame(Duration timeStamp) {
-    _frameId++;
-    SchedulerBinding.instance.addPostFrameCallback(_handlePostFrame);
-  }
-
-  void _handlePostFrame(Duration timeStamp) {
-    if(_continuousRendering) {
-      SchedulerBinding.instance.scheduleFrame();
-      if(_texturePtr != null) {
-        var elapsedInSec = provideTexture(texturePtr: _texturePtr!);
-        setState(() {
-          _elapsedInSec = elapsedInSec;
-        });
-      }
+    if(_texturePtr != null) {
+      provideTexture(texturePtr: _texturePtr!);
     }
   }
 
@@ -152,7 +147,7 @@ class _CadViewportState extends State<CadViewport> {
       + _dragStartCameraTransform!.up * (_cameraMovePerPixel * relPointerPos.dy);
     var newTarget = newEye + _dragStartCameraTransform!.forward;
 
-    moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(_dragStartCameraTransform!.up));
+    _moveCameraAndRender(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(_dragStartCameraTransform!.up));
   }
 
   void determinePivotPoint(Offset pointerPos) {
@@ -202,7 +197,7 @@ class _CadViewportState extends State<CadViewport> {
     newTarget = rotatePointAroundAxis(_pivotPoint, horizAxis, vertAngle, newTarget);
     final newUp = vector_math.Quaternion.axisAngle(horizAxis, vertAngle).rotated(cameraTransform.up);
 
-    moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(newUp));
+    _moveCameraAndRender(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(newUp));
 
     _dragStartPointerPos = pointerPos;
   }
@@ -248,6 +243,7 @@ class _CadViewportState extends State<CadViewport> {
     var atomPos = cameraTransform!.eye + cameraTransform.forward * _addAtomPlaneDistance + cameraTransform.right * (offsetPerPixel * centeredPointerPos.dx) + cameraTransform.up * (offsetPerPixel * (-centeredPointerPos.dy));
 
     addAtom(atomicNumber: 6, position: Vector3ToAPIVec3(atomPos));
+    _renderingNeeded();
   }
 
   void _scroll(Offset pointerPos, double scrollDeltaY) {
@@ -266,7 +262,7 @@ class _CadViewportState extends State<CadViewport> {
     final newEye = cameraTransform.eye + moveVec;
     final newTarget = cameraTransform.target + moveVec;
 
-    moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(cameraTransform.up));
+    _moveCameraAndRender(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(cameraTransform.up));
   }
 
   @override
@@ -292,8 +288,7 @@ class _CadViewportState extends State<CadViewport> {
             child: Listener(
               onPointerSignal: (pointerSignal){
                 if (pointerSignal is PointerScrollEvent) {
-                  final scrollEvent = pointerSignal as PointerScrollEvent;
-                  _scroll(scrollEvent.position, scrollEvent.scrollDelta.dy);
+                  _scroll(pointerSignal.localPosition, pointerSignal.scrollDelta.dy);
                   //print('Scrolled: ${scrollEvent.scrollDelta}');
                 }
               },
@@ -302,15 +297,15 @@ class _CadViewportState extends State<CadViewport> {
                   switch (event.buttons) {
                     case kPrimaryMouseButton:
                       //print('Left mouse button pressed at ${event.position}');
-                      _startPrimaryDrag(event.position);                      
+                      _startPrimaryDrag(event.localPosition);                      
                       break;
                     case kSecondaryMouseButton:
                       //print('Right mouse button pressed at ${event.position}');
-                      _startRotateCamera(event.position);
+                      _startRotateCamera(event.localPosition);
                       break;
                     case kMiddleMouseButton:
                       //print('Middle mouse button pressed at ${event.position}');
-                      _startMoveCamera(event.position);
+                      _startMoveCamera(event.localPosition);
                       break;
                   }
                 }
@@ -320,10 +315,10 @@ class _CadViewportState extends State<CadViewport> {
                   //print('Mouse moved to ${event.position}');
                   switch(_dragState) {
                     case  ViewportDragState.move:
-                      _moveCamera(event.position);
+                      _moveCamera(event.localPosition);
                       break;
                     case ViewportDragState.rotate:
-                      _rotateCamera(event.position);
+                      _rotateCamera(event.localPosition);
                       break;
                     default:
                   }
@@ -332,7 +327,7 @@ class _CadViewportState extends State<CadViewport> {
               onPointerUp: (PointerUpEvent event) {
                 if (event.kind == PointerDeviceKind.mouse) {
                   //print('Mouse button released at ${event.position}');
-                  _endDrag(event.position);
+                  _endDrag(event.localPosition);
                 }
               },
               child: Texture(
@@ -343,31 +338,6 @@ class _CadViewportState extends State<CadViewport> {
         )
       : Container(
           color: Colors.grey,
-        ),
-        Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min, // Ensure the Row's size wraps its children
-            children: [
-              ElevatedButton(
-                onPressed: () {
-                  _continuousRendering = true;
-                  SchedulerBinding.instance.scheduleFrame();
-                },
-                child: Text("Start anim"),
-              ),
-              SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  _continuousRendering = false;
-                },
-                child: Text("Stop"),
-              ),
-              SizedBox(width: 8), // Small gap between the button and the label
-              Text(_elapsedInSec == null ? 'no texture yet' : 'texture provided in ${(_elapsedInSec! * 1000.0).toStringAsFixed(2)} milliseconds',
-                style: TextStyle(color: Colors.white)
-              ), // Text label to the right of the button
-            ],
-          ),
         ),
       ],
     );

@@ -1,4 +1,6 @@
 # flutter_cad
 
-This project is testing Rust wgpu rendering inside a Flutter application.
+atomCAD with a Flutter UI.
+
+[Design Overview](./doc/design_overview/design_overview.md)
 

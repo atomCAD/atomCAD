@@ -6,7 +6,7 @@ For simplicity we will only support cubic diamond in the beginning.
 
 ## Crystal representation vs. atomic representation
 
-Besides the atoms and bonds there will be a possibility to design small diamond crystals in the software. These are separate representations, which we will discuss later but for now it can be thought of as a space with a special polygonal boundary where the polygons have restrictions on vertex coordinates and face orientations.
+Besides the atoms and bonds there will be a possibility to design small diamond crystals in the software. These are separate representations which can be thought of as a space with a special polygonal boundary where the polygons have restrictions on face positions and orientations.
 
 When a crystal is 'ready', it can be converted to an atomic representation with the **build crystal** command. After this point it can be edited atom-by-atom as any regular atomic model.
 
@@ -15,13 +15,19 @@ When a crystal is 'ready', it can be converted to an atomic representation with 
 The following must be always true for a crystal representation:
 
 - All the  faces of the crystal must be on a plane with a restricted Miller index. The supported Miller indices are in the form of (ABC) where A<=2, B<=2, C<=2. These planes also need to fit on the lattice grid (going through grid points according to their Miller index). It can be easily seen that the operations we will discuss below do not change theses plane properties.
-- Vertex coordinates are a more complicated issue. When possible we restrict the vertices on the polygonal boundary of a crystal on a position with integer lattice coordinates. For example this will be true for initially generates shapes vertices. This invariant cannot be consistently maintained when doing unrestricted CSG diff operations though, because planes can sometimes cross each other resulting in a non-integer coordinate vertex. So this will probably not be an invariant, and need not necessarily be an invariant. Optionally though we can experiment with a strict CSG mode, where we only allow a CSG if it results in only integer-coordinate vertices. Thoughtful designers may want to maintain this invariant as well.
+- Vertex coordinates are a more complicated issue. When possible we restrict the vertices on the polygonal boundary of a crystal on a position with integer lattice coordinates. For example this will be true for initially generates shapes vertices. This invariant cannot be consistently maintained when doing unrestricted CSG diff operations though, because planes can cross each other resulting in a non-integer coordinate vertex. So this will not be an invariant. Optionally though we can experiment with a strict CSG mode, where we only allow a CSG if it results in only integer-coordinate vertices. Thoughtful designers may want to maintain this invariant as well.
+
+![Illustration](C:\machine_phase_systems\flutter_cad\doc\crystal\crystal_illustration.png)
+
+In the above illustration it can be seen that even if the cutter planes are valid, one of the vertices do not have integer lattice coordinates.
+
+
 
 ## Basic operations
 
 All the operations must guarantee that the crystal representation invariants defined above remain satisfied after the operation.
 
-The following are basic operations that can be implemented with a simple a CSG tree representation and simple UX:
+As the restrictions are on the planes and not the vertices, we support workflows that are not based on vertices. To create convex crystals we support cutting planes, and to support concave ones we support CSG (Constructive Solid Geometry) unions and diff operations.  The following are the basic operations in detail. These operations that can be implemented with a simple a CSG tree representation and simple UX:
 
 - A crystal can be created from thin air. A dozen simple crystal geometries should be created, like cube, cuboid, tetrahedron, hexagonal prism etc...
 - Crystal geometries can be imported as a simple .OBJ file. (3d geometry file). This is supported so that users can create advanced geometries in polygonal editors which would be difficult to model in an early atomCAD version for some reason. The drawback is that the user must satisfy the constraints in the third party editor, which might be difficult in complex cases.  
@@ -30,7 +36,7 @@ The following are basic operations that can be implemented with a simple a CSG t
 
 - It should be possible to rotate a crystal by 90 degree along any axis direction.
 
-- It is possible to cut away material along a plane. The plane center must fit on a lattice point and the MiIller index of the plane should be constrained according to the crystal constraints. Cutting away material with a plane is good for designing convex crystals.
+- It is possible to cut away material along a plane. The plane center must fit on a lattice point and the Miller index of the plane should be constrained according to the crystal constraints. Cutting away material with a plane is good for designing convex crystals.
 
 - It is possible to do CSG (constructive solid geometry) operations on 2 crystals and create one resulting crystal. The two sub possibilities are:
 
