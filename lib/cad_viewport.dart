@@ -128,6 +128,7 @@ class _CadViewportState extends State<CadViewport> {
   void _startMoveCamera(Offset pointerPos) {
     _dragState = ViewportDragState.move;
     _dragStartPointerPos = pointerPos;
+    determinePivotPoint(pointerPos);
     final camera = getCamera();
     _dragStartCameraTransform = getCameraTransform(camera);
 
@@ -148,9 +149,26 @@ class _CadViewportState extends State<CadViewport> {
     moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(_dragStartCameraTransform!.up));
   }
 
+  void determinePivotPoint(Offset pointerPos) {
+
+    var camera = getCamera();
+    final cameraTransform = getCameraTransform(camera);
+
+    final centeredPointerPos = pointerPos - Offset(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5);
+
+    final d = VIEWPORT_HEIGHT * 0.5 / tan(camera!.fovy * 0.5);
+
+    final rayDir = (cameraTransform!.right * centeredPointerPos.dx
+      - cameraTransform.up * centeredPointerPos.dy
+      + cameraTransform.forward * d).normalized();
+
+    _pivotPoint = APIVec3ToVector3(findPivotPoint(rayStart: Vector3ToAPIVec3(cameraTransform.eye), rayDir: Vector3ToAPIVec3(rayDir)));
+  }
+
   void _startRotateCamera(Offset pointerPos) {
     _dragState = ViewportDragState.rotate;
     _dragStartPointerPos = pointerPos;
+    determinePivotPoint(pointerPos);
   }
 
   void _rotateCamera(Offset pointerPos) {
@@ -215,17 +233,13 @@ class _CadViewportState extends State<CadViewport> {
   void _addAtom(Offset pointerPos) {
     // First determine the position of the atom to be placed.
     var camera = getCamera();
-    var eye = APIVec3ToVector3(camera!.eye);
-    var target = APIVec3ToVector3(camera.target);
-    var forward = (target - eye).normalized();
-    var up = APIVec3ToVector3(camera.up);
-    var right = forward.cross(up);
+    final cameraTransform = getCameraTransform(camera);
 
-    var offsetPerPixel = 2.0 * _addAtomPlaneDistance * tan(camera.fovy * 0.5) / VIEWPORT_HEIGHT;
+    var offsetPerPixel = 2.0 * _addAtomPlaneDistance * tan(camera!.fovy * 0.5) / VIEWPORT_HEIGHT;
 
     var centeredPointerPos = pointerPos - Offset(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5);
 
-    var atomPos = eye + forward * _addAtomPlaneDistance + right * (offsetPerPixel * centeredPointerPos.dx) + up * (offsetPerPixel * (-centeredPointerPos.dy));
+    var atomPos = cameraTransform!.eye + cameraTransform.forward * _addAtomPlaneDistance + cameraTransform.right * (offsetPerPixel * centeredPointerPos.dx) + cameraTransform.up * (offsetPerPixel * (-centeredPointerPos.dy));
 
     addAtom(atomicNumber: 6, position: Vector3ToAPIVec3(atomPos));
   }

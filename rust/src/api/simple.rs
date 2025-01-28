@@ -21,7 +21,7 @@ fn to_api_vec3(v: &Vec3) -> APIVec3 {
   }
 }
 
-fn vec3_to_api(v: &APIVec3) -> Vec3 {
+fn from_api_vec3(v: &APIVec3) -> Vec3 {
   return Vec3{
     x: v.x,
     y: v.y,
@@ -181,7 +181,7 @@ pub fn get_camera() -> Option<APICamera> {
 pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
-      cad_instance.renderer.move_camera(&vec3_to_api(&eye), &vec3_to_api(&target), &vec3_to_api(&up));
+      cad_instance.renderer.move_camera(&from_api_vec3(&eye), &from_api_vec3(&target), &from_api_vec3(&up));
     }
   }
 }
@@ -190,8 +190,24 @@ pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
 pub fn add_atom(atomic_number: i32, position: APIVec3) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
-      cad_instance.kernel.add_atom(atomic_number, vec3_to_api(&position));
+      cad_instance.kernel.add_atom(atomic_number, from_api_vec3(&position));
       cad_instance.renderer.refresh(cad_instance.kernel.get_model());
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
+  unsafe {
+    if let Some(cad_instance) = &CAD_INSTANCE {
+      let model = cad_instance.kernel.get_model();
+      return to_api_vec3(&model.find_pivot_point(&from_api_vec3(&ray_start), &from_api_vec3(&ray_dir)));
+    } else {
+      return APIVec3{
+        x: 0.0,
+        y: 0.0,
+        z: 0.0
+      }
     }
   }
 }

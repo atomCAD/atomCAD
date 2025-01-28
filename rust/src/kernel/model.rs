@@ -144,6 +144,44 @@ impl Model {
     }
   }
 
+  pub fn find_pivot_point(&self, ray_start: &Vec3, ray_dir: &Vec3) -> Vec3 {
+    // Find closest atom to ray.
+    // Linear search for now. We will use space partitioning later.
+    
+    let mut closest_distance_squared = f32::MAX;
+    let mut closest_atom_position = Vec3::ZERO;
+
+    for atom in self.atoms.values() {
+        // Vector from ray start to atom center.
+        let to_atom = atom.position - ray_start;
+
+        // Project `to_atom` onto `ray_dir` to get the closest point on the ray.
+        let projection_length = to_atom.dot(*ray_dir);
+
+        // If the projection length is negative, the closest point on the ray is behind the ray start.
+        if projection_length < 0.0 {
+            continue;
+        }
+
+        let closest_point = ray_start + ray_dir * projection_length;
+
+        // Compute squared distance from the atom center to the closest point on the ray.
+        let distance_squared = (atom.position - closest_point).length_squared();
+
+        if distance_squared < closest_distance_squared {
+            closest_distance_squared = distance_squared;
+            closest_atom_position = atom.position;
+        }
+    }
+
+    // If no atom was found, return the ray origin.
+    if closest_distance_squared == f32::MAX {
+        return Vec3::new(0.0, 0.0, 0.0);
+    }
+
+    return closest_atom_position;
+  }
+
   fn remove_from_bond_arr(&mut self, atom_id: u64, bond_id: u64) {
     let bond_ids = &mut self.atoms.get_mut(&atom_id).unwrap().bond_ids;
     if let Some(pos) = bond_ids.iter().position(|&x| x == bond_id) {

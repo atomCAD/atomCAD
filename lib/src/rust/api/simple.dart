@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_vec3`, `vec3_to_api`
+// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_vec3`
 // These types are ignored because they are not used by any `pub` functions: `CADInstance`, `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
@@ -23,6 +23,10 @@ void moveCamera(
 void addAtom({required int atomicNumber, required APIVec3 position}) =>
     RustLib.instance.api
         .crateApiSimpleAddAtom(atomicNumber: atomicNumber, position: position);
+
+APIVec3 findPivotPoint({required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api
+        .crateApiSimpleFindPivotPoint(rayStart: rayStart, rayDir: rayDir);
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
