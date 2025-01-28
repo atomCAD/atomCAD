@@ -17,7 +17,7 @@ The following must be always true for a crystal representation:
 - All the  faces of the crystal must be on a plane with a restricted Miller index. The supported Miller indices are in the form of (ABC) where A<=2, B<=2, C<=2. These planes also need to fit on the lattice grid (going through grid points according to their Miller index). It can be easily seen that the operations we will discuss below do not change theses plane properties.
 - Vertex coordinates are a more complicated issue. When possible we restrict the vertices on the polygonal boundary of a crystal on a position with integer lattice coordinates. For example this will be true for initially generates shapes vertices. This invariant cannot be consistently maintained when doing unrestricted CSG diff operations though, because planes can cross each other resulting in a non-integer coordinate vertex. So this will not be an invariant. Optionally though we can experiment with a strict CSG mode, where we only allow a CSG if it results in only integer-coordinate vertices. Thoughtful designers may want to maintain this invariant as well.
 
-![Illustration](C:\machine_phase_systems\flutter_cad\doc\crystal\crystal_illustration.png)
+![Illustration](./crystal_illustration.png)
 
 In the above illustration it can be seen that even if the cutter planes are valid, one of the vertices do not have integer lattice coordinates.
 
