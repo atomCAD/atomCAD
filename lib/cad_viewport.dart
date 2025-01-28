@@ -78,6 +78,12 @@ class _CadViewportState extends State<CadViewport> {
   static const double VIEWPORT_WIDTH = 1280.0;
   static const double VIEWPORT_HEIGHT = 704.0;
 
+  // Rotation per pixel in radian
+  static const double ROT_PER_PIXEL = 0.02; 
+
+  // amount of relative zoom to the zoom target per reported zoom delta.
+  static const double ZOOM_PER_ZOOM_DELTA = 0.0015;
+
   TextureRgbaRenderer? _textureRenderer;
 
   int? _textureId;
@@ -179,7 +185,7 @@ class _CadViewportState extends State<CadViewport> {
     // Horizontal component
     // Rotate around up vector
 
-    final horizAngle = relPointerPos.dx * 0.05;
+    final horizAngle = relPointerPos.dx * ROT_PER_PIXEL;
     final vertAxis = cameraTransform!.up;
     var newEye = rotatePointAroundAxis(_pivotPoint, vertAxis, horizAngle, cameraTransform.eye);
     var newTarget = rotatePointAroundAxis(_pivotPoint, vertAxis, horizAngle, cameraTransform.target);
@@ -189,7 +195,7 @@ class _CadViewportState extends State<CadViewport> {
 
     // Vertical component
     // Rotate around our right vector
-    final vertAngle = relPointerPos.dy * 0.05;
+    final vertAngle = relPointerPos.dy * ROT_PER_PIXEL;
     final horizAxis = newRight;
 
     newEye = rotatePointAroundAxis(_pivotPoint, horizAxis, vertAngle, newEye);
@@ -244,6 +250,25 @@ class _CadViewportState extends State<CadViewport> {
     addAtom(atomicNumber: 6, position: Vector3ToAPIVec3(atomPos));
   }
 
+  void _scroll(Offset pointerPos, double scrollDeltaY) {
+    if (_dragState != ViewportDragState.noDrag) { // Do not interfere with move or rotate
+      return;
+    }
+
+    determinePivotPoint(pointerPos);
+    final camera = getCamera();
+    final cameraTransform = getCameraTransform(camera);
+
+    final zoomTargetPlaneDistance = (_pivotPoint - cameraTransform!.eye).dot(cameraTransform.forward);
+
+    final moveVec = cameraTransform.forward * (ZOOM_PER_ZOOM_DELTA * ( - scrollDeltaY) * zoomTargetPlaneDistance);
+
+    final newEye = cameraTransform.eye + moveVec;
+    final newTarget = cameraTransform.target + moveVec;
+
+    moveCamera(eye: Vector3ToAPIVec3(newEye), target: Vector3ToAPIVec3(newTarget), up: Vector3ToAPIVec3(cameraTransform.up));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -265,6 +290,13 @@ class _CadViewportState extends State<CadViewport> {
             width: VIEWPORT_WIDTH,
             height: VIEWPORT_HEIGHT,
             child: Listener(
+              onPointerSignal: (pointerSignal){
+                if (pointerSignal is PointerScrollEvent) {
+                  final scrollEvent = pointerSignal as PointerScrollEvent;
+                  _scroll(scrollEvent.position, scrollEvent.scrollDelta.dy);
+                  //print('Scrolled: ${scrollEvent.scrollDelta}');
+                }
+              },
               onPointerDown: (PointerDownEvent event) {
                 if (event.kind == PointerDeviceKind.mouse) {
                   switch (event.buttons) {
