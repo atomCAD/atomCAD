@@ -37,11 +37,33 @@ At first I thought that a tree of operations would be a good compromise for the 
 
 In the future we will probably support the full programming language approach for entities beyond SDFs too (to procedurally create *anything* in atomCAD), but I think we need the operator stack approach there for ease of editability in most cases for most users.
 
+### An example
+
+Let's see a concrete example. The user wants to create an atomic gear. Chances are that this problem is solved before, and indeed they find an SDF function in their function library with the following signature:
+
+`double generic_gear(Vec3 pos, int radius, int width, int num_of_teeth);`
+The user creates their own SDF function:
+
+```
+double my_gear(Vec3 pos) {
+	return generic_gear(pos, 10, 2, 12);
+}
+```
+
+The user then creates a new empty atomic entity. Then presses the 'add operation' button beside the entity and choses to add an 'Build atoms from SDF operator.'. The user can set the operator parameters on the screen which are related to surface fixing. Accepts the default options and adds the operation. The gear appears in the viewport with 12 teeth.
+
+Now the user goes back to edit my_gear, and changes it to:
+
+double my_gear(Vec3 pos) {
+	return generic_gear(pos, 10, 2, 16);
+}
+The gear is refreshed to have 16 teeth. The user might even click on the gear parameters and use a slider to change them, and experiment with them.
+
 ## SDF functions in atomCAD
 
 In its simplest form an SDF is simply a function that takes a 3 dimensional vector as a parameter and produces a floating point number:
 
-`double my_sdf(Vec3 vec);`
+`double my_sdf(Vec3 pos);`
 
 It is easy to see how such an SDF function can be meaningfully reused in another SDF function. We might want to instantiate the shape defined in my_sdf inside my_other_sdf but translated along a translation vector of (1,2,3). This can be achieved this way:
 
@@ -104,13 +126,13 @@ Supports operator overloading. It is interpreted, so there is no compilation: ed
 
 #### Possible problem with intuitive editing
 
-There can be a problem with an intuitive editing workflow vs. a completely generic SDF. The problem is that even if we provide an intuitive way to edit something (like edit  plane intuitively), in SDF there can be a function applied to it which transforms it completely. So the user will not directly edit the final shape in this case. (But at least the final shape is also displayed as an immediate feedback). This cannot be completely avoided, but a partial solution is that users can edit a reusable SDF function and then use its transformed version in another function. When editing the reusable function (the 'component', or the 'part'), the user edits in-place.
+There can be a problem with an intuitive editing workflow combined with a completely generic SDF. The problem is that even if we provide an intuitive way to edit something (like edit  plane intuitively), in SDF there can be a function applied to it which transforms it completely. So the user will not directly edit the final shape in this case. (But at least the final shape is also displayed as an immediate feedback). This cannot be completely avoided, but a partial solution is that users can edit a reusable SDF function and then use its transformed version in another function. When editing the reusable function (the 'component', or the 'part'), the user edits in-place.
 
 
 
  ### 'Build atoms from SDF' operator
 
-This operator creates an atomic entity from an SDF. The operator can have several parameters for example regarding how to fix certain planes and edges. Please not that at SDF evaluation time there is no explicit notion of planes and edges: We should work from whatever evaluations we do in the SDF (value evaluations and gradient evaluations). Plane and edge fixing algorithms can use SDF values and gradients at certain atoms and other crystal points for their heuristics. 
+This operator creates an atomic entity from an SDF. The operator can have several parameters for example regarding how to fix certain planes and edges. Please note that at SDF evaluation time there is no explicit notion of planes and edges: We should work from whatever evaluations we do in the SDF (value evaluations and gradient evaluations). Plane and edge fixing algorithms can use SDF values and gradients at certain atoms and other crystal points for their heuristics. 
 
 ## Version control
 
