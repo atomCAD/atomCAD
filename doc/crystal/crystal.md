@@ -51,7 +51,7 @@ double my_gear(Vec3 pos) {
 }
 ```
 
-The user then creates a new empty atomic entity. Then presses the 'add operation' button beside the entity and choses to add a 'Build atoms from SDF' operator. The user can set the operator parameters on the screen which is the name of the SDF function to use and parameters related to surface fixing. Choses the `my_gear` SDF function and accepts the default options for surface fixing and adds the operation. The entity now has one operator on thir operator stack. The gear appears in the viewport with 12 teeth.
+The user then creates a new empty atomic entity. Then presses the 'add operation' button beside the entity and choses to add a 'Build atoms from SDF' operator. The user can set the operator parameters on the screen which is the name of the SDF function to use and parameters related to surface fixing. Choses the `my_gear` SDF function and accepts the default options for surface fixing and adds the operation. The entity now has one operator on its operator stack. The gear appears in the viewport with 12 teeth.
 
 Now the user goes back to edit the SDF function `my_gear`, and changes it to:
 
