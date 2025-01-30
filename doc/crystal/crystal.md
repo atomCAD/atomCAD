@@ -42,6 +42,7 @@ In the future we will probably support the full programming language approach fo
 Let's see a concrete example. The user wants to create an atomic gear. Chances are that this problem has been solved before, and indeed they find an SDF function in their function library with the following signature:
 
 `double generic_gear(Vec3 pos, int radius, int width, int num_of_teeth);`
+
 The user creates their own SDF function:
 
 ```
