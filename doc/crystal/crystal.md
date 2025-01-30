@@ -39,7 +39,7 @@ In the future we will probably support the full programming language approach fo
 
 ### An example
 
-Let's see a concrete example. The user wants to create an atomic gear. Chances are that this problem is solved before, and indeed they find an SDF function in their function library with the following signature:
+Let's see a concrete example. The user wants to create an atomic gear. Chances are that this problem has been solved before, and indeed they find an SDF function in their function library with the following signature:
 
 `double generic_gear(Vec3 pos, int radius, int width, int num_of_teeth);`
 The user creates their own SDF function:
@@ -50,14 +50,17 @@ double my_gear(Vec3 pos) {
 }
 ```
 
-The user then creates a new empty atomic entity. Then presses the 'add operation' button beside the entity and choses to add an 'Build atoms from SDF operator.'. The user can set the operator parameters on the screen which are related to surface fixing. Accepts the default options and adds the operation. The gear appears in the viewport with 12 teeth.
+The user then creates a new empty atomic entity. Then presses the 'add operation' button beside the entity and choses to add a 'Build atoms from SDF' operator. The user can set the operator parameters on the screen which are related to surface fixing. Accepts the default options and adds the operation. The entity now has one operator on thir operator stack. The gear appears in the viewport with 12 teeth.
 
-Now the user goes back to edit my_gear, and changes it to:
+Now the user goes back to edit the SDF function `my_gear`, and changes it to:
 
+```
 double my_gear(Vec3 pos) {
 	return generic_gear(pos, 10, 2, 16);
 }
-The gear is refreshed to have 16 teeth. The user might even click on the gear parameters and use a slider to change them, and experiment with them.
+```
+
+The gear is refreshed to have 16 teeth. The user might even click on the gear parameters and use a slider to change them and experiment with them.
 
 ## SDF functions in atomCAD
 
