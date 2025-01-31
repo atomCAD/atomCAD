@@ -148,9 +148,9 @@ branch
     	- delete selected atoms 
 	end branch    
 end branch
-start_branch
+branch
 	- select some other atoms
-    - move selected atoms	
+	- move selected atoms	
 end branch
 ```
 
