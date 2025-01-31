@@ -140,17 +140,17 @@ Example:
 ```
 - Build atoms from SDF my_gear
 branch 
-    - select some atoms
-    branch
-    	- move selected atoms
-    end branch
-    branch
-    	- delete selected atoms 
-	end branch    
+  - select some atoms
+  branch
+    - move selected atoms
+  end branch
+  branch
+    - delete selected atoms 
+  end branch    
 end branch
 branch
-	- select some other atoms
-	- move selected atoms	
+  - select some other atoms
+  - move selected atoms	
 end branch
 ```
 
