@@ -10,32 +10,31 @@ The design philosophy behind the concept described in this document is the follo
 I propose that an atomCAD model representation consist of 2 relatively well separated things:
 
 - **SDF function libraries**
-- and **atomic entities** where an atomic entity is a stack of operations.
+- and **atomic entities** where an atomic entity is a tree of operations (the tree is a stack modified to have alternative branches).
 
 ### Overview
 
 * About SDF: We plan to use SDF (Signed Distance Field) to express solid geometry in atomCAD. SDF functions is a very elegant and composable way to achieve interesting solid geometries. In atomCAD we have a strong need for supporting CSG (Constructive Solid Geometry) from primitives like cutter planes with specified Miller indices along crystal lattice points. Fortunately CSG is just a special use-case for SDFs: unions and intersections being min and max functions in an SDF.
 
-- Defining a geometry as an SDF can be already seen as non-destructive editing. In atomCAD generally we would like to support non-destructive operations where possible even outside of SDFs too. For this reason I propose that an atomic entity is a stack of operations. This proposed operation stack is very similar to the modifier stack in Blender. (The term 'operation' is used instead of 'modifier' because even the first operation in the stack is not special.) Most of the time the first operation in the stack will be the 'build atoms from SDF' operation which builds an atomic representation from an SDF geometry non-destructively using plane and edge fixes. Non-destructive means that you can change the SDF anytime, and the resulting built atomic representation will change implicitly too.
+- Defining a geometry as an SDF can be already seen as non-destructive editing. In atomCAD generally we would like to support non-destructive operations where possible even outside of SDFs too. For this reason I propose that an atomic entity is a stack of operations. This proposed operation stack is very similar to the modifier stack in Blender. (The term 'operation' is used instead of 'modifier' because even the first operation in the stack is not special.) Most of the time the first operation in the stack will be the 'build atoms from SDF' operation which builds an atomic representation from an SDF geometry non-destructively using plane and edge fixes. Non-destructive means that you can change the SDF anytime, and the resulting built atomic representation will change implicitly too. We would like to support to user to create alternative branches starting from certain elements in the operation stack, for this reason what can be casually called the operation stack is more precisely an operation tree. (Operations can be arranged into trees for different purposes, in our case the tree exists strictly for enabling branches for alternatives.)
 
 - We would like to support structure reuse where possible. We support the creation of SDF function libraries. An entity does not define its SDF geometry: It just refers to an SDF function in a 'build atoms from SDF' operation.
-- We might find that in some cases we do not find an elegant way to support some operations non-destructively. The user might want to do atom-by-atom operations. We will support this, but we record these direct operations into the operation stack of the entity too. Replaying these modifications upon significant SDF changes can make these modifications non-applicable. We will work on ways to make these cases as rare as possible, but in these cases we will warn the user that some steps will be lost if they proceed. ('Lost' in the sense of not applicable for the new entity. Ideally nothing should be lost forever, the questions is just on what level is version control achieved. We will discuss version control later.) 
+- We might find that in some cases we do not find an elegant way to support some operations non-destructively. The user might want to do atom-by-atom operations. We will support this, but we record these direct operations into the operation tree of the entity too. Replaying these modifications upon significant SDF changes can make these modifications non-applicable. We will work on ways to make these cases as rare as possible, but in these cases we will warn the user that some steps will be lost if they proceed. ('Lost' in the sense of not applicable for the new entity. We do not delete them, they will just be on a dead branch.) 
 
-### Why SDF functions + operation stacks?
+### Why SDF functions + operation tree?
 
 When designing non-destructive representations, there is a continuum of ways to arrange operations from the less powerful but easily understandable and managable to the very powerful and procedural but more complicated ones. In the order of expressing power:
 
-- a stack of operations
-- a tree of operations
-- a graph of operations (a. k. a. node graph)
-- a general Turing complete programming language
+- a stack of operations (or a tree with branches)
+- a graph of operations (a. k. a. node graph) with multiple inputs to nodes, but possibly still not Turing complete
+- a general Turing complete programming language, possibly with textual representation
 
-At first I thought that a tree of operations would be a good compromise for the whole atomCAD, but it turned out that:
+At first I thought that a unified simple graph of operations would be a good compromise for the whole atomCAD, but it turned out that:
 
 - It might bee too restrictive to define interesting geometries elegantly. I prefer the full power of a programming language when expressing an SDF.
-- On the other hand a tree is too cumbersome in most other cases. Most of the time operations with only one argument would result in unnecessarily deep trees where a stack of operations would suffice. 
+- On the other hand it may be too cumbersome in most other cases. Most of the time a stack of operations would suffice, with the ability to have branches for alternatives (operation tree). 
 
-In the future we will probably support the full programming language approach for entities beyond SDFs too (to procedurally create *anything* in atomCAD), but I think we need the operator stack approach there for ease of editability in most cases for most users.
+In the future we will probably support the full programming language approach for entities beyond SDFs too (to procedurally create *anything* in atomCAD), but I think we need the operator tree approach there for ease of editability in most cases for most users. I think designing a full procedural system up-front is too hard to do well and is risky. Full proceduralism on the SDF side on the other hand seem to be managable.
 
 ### An example
 
@@ -51,7 +50,7 @@ double my_gear(Vec3 pos) {
 }
 ```
 
-The user then creates a new empty atomic entity. Then presses the 'add operation' button beside the entity and choses to add a 'Build atoms from SDF' operator. The user can set the operator parameters on the screen which is the name of the SDF function to use and parameters related to surface fixing. Choses the `my_gear` SDF function and accepts the default options for surface fixing and adds the operation. The entity now has one operator on its operator stack. The gear appears in the viewport with 12 teeth.
+The user then creates a new empty atomic entity. Then presses the 'add operation' button beside the entity and choses to add a 'Build atoms from SDF' operator. The user can set the operator parameters on the screen which is the name of the SDF function to use and parameters related to surface fixing. Choses the `my_gear` SDF function and accepts the default options for surface fixing and adds the operation. The entity now has one operator on its operator tree. The gear appears in the viewport with 12 teeth.
 
 Now the user goes back to edit the SDF function `my_gear`, and changes it to:
 
@@ -132,18 +131,39 @@ Supports operator overloading. It is interpreted, so there is no compilation: ed
 
 There can be a problem with an intuitive editing workflow combined with a completely generic SDF. The problem is that even if we provide an intuitive way to edit something (like edit  plane intuitively), in SDF there can be a function applied to it which transforms it completely. So the user will not directly edit the final shape in this case. (But at least the final shape is also displayed as an immediate feedback). This cannot be completely avoided, but a partial solution is that users can edit a reusable SDF function and then use its transformed version in another function. When editing the reusable function (the 'component', or the 'part'), the user edits in-place.
 
+## Operator Tree
 
+The operator tree represents the operations applied on top of each other with occasional branches.
+
+Example:
+
+```
+- Build atoms from SDF my_gear
+branch 
+    - select some atoms
+    branch
+    	- move selected atoms
+    end branch
+    branch
+    	- delete selected atoms 
+	end branch    
+end branch
+start_branch
+	- select some other atoms
+    - move selected atoms	
+end branch
+```
+
+On the UI this will be presented as a stack, but at branching points the user will be able to select a different alternative. If the user do not use branching often the branching aspect will not make the UX more complicated for them. 
 
  ### 'Build atoms from SDF' operator
 
 This operator creates an atomic entity from an SDF. The operator can have several parameters for example regarding how to fix certain planes and edges. Please note that at SDF evaluation time there is no explicit notion of planes and edges: We should work from whatever evaluations we do in the SDF (value evaluations and gradient evaluations). Plane and edge fixing algorithms can use SDF values and gradients at certain atoms and other crystal points for their heuristics. 
 
+## Undo-redo
+
+What would be an undo history in a direct editing program is already embedded into the representation itself (in the form of non-destructible operations both in the SDF functions as function calls and in atomic entities as operators on the stack), so changes in our representation (like SDF function source code changes, rearranging operations in the operation tree, changing parameters in an operator) are 'meta changes' in this sense, so any version control on a representation which itself contains 'operation history' in itself seem to be a bit redundant, but still a necessity mainly because we want the users not to lose previous versions of their model. We will simply do a full global undo stack for anything the user does on this non-destructive model. This is an elegant solution it seems that Houdini does this successfully on top of its fully non-destructive representation.
+
 ## Version control
 
-What would be an undo history in a direct editing program is already embedded into the representation itself (in the form of non-destructible operations both in the SDF functions as function calls and in atomic entities as operators on the stack), so changes in our representation (like SDF function source code changes) are 'meta changes' in this sense. Any version control on a representation which itself contains 'operation history' in itself seem to be a bit redundant, but still a necessity mainly because we want the users not to lose previous versions of their model.
-
-### Simple and crude version control
-
-We should probably develop our version control on top of our representation in the long term. In the short term a simple and crude method would be to store a model as a sensible file hierarchy and let `git` do the version control work. This is much better than nothing but has drawbacks. The main drawback is that git cannot interpret and handle diffs in binary files. If we represent even atomic operators as well-designed textual files (designed with diffing in mind) or at least separate each operation into a separate file, we can achieve better diffs.
-
-TODO: The topic of version control needs to be investigated in more detail. 
+Besides having a fully non-destructive base model + applying a global undo on it, we still have an almost independent problem: how different designers can cooperate, how merge conflicts are resolved. The global undo stack should not mess with this, so the task is to do version control for the fully non-destructive representation. I think it would be just too much detail to be planned up-front. I like to think of this task as trying to serialize down the representation into well mergeable text files, and do the version control in git. It is still possible to create a custom version control later, but it should not be planned up-front, it is enough to conceptually know that it can be done reasonably well.
