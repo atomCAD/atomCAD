@@ -32,13 +32,21 @@ I find that a very elegant way to implement a non-destructive editing system is 
 - Blender geometry nodes, shader editor, compositor
 - Davinci resolve
 
+To get a feel on how a node network works in a geometry editing context you can watch into this video:
+
+https://www.youtube.com/watch?v=2oC9TOgQ3KE
+
+The 'Introduction to Houdini' page is also a good start:
+
+https://www.sidefx.com/docs/houdini/basics/intro.html 
+
 I considered somewhat simpler UX paradigms, but gaining a little simplicity we would lose too much power. I also think that the usage of node networks is quite common among technically savvy users. Some of the above software is complex not necessarily because of the node network paradigm but because of the complexity of the domain they operate in.
 
-## Node network in AtomCAD
+## Node network in atomCAD
 
 A Node can have any number of input pins (including zero) and a positive number of output pins (usually one).
 
-Each input and output pin has a type. You can connect an output pin with an input pin if their type match. The network should be a DAG: should not contain a circle.
+Each input and output pin has a type. You can connect an output pin with an input pin with a directed edge if their type match. The network should be a DAG: should not contain a circle.
 
 Most important pin types:
 
@@ -54,6 +62,12 @@ Input pins values for certain types (integer, iVec3, float, Vec3) can be set on 
 
 Additionally nodes can have any number of parameters. Parameters can be filled only on the UI.
 
+On the User interface there is always a 'displayed node'. The output of that node is displayed in the editor viewport. The displayed node is not necessarily the same as the selected node. The parameters of the selected node is displayed on the UI, and if there are gizmos associated with the selected node they are displayed and available for interaction. This means that for example if you select a cutter plane node, you can mode that intuitively in the viewport while the displayed node might be their parent diff node which shows the geometry after the cut.
+
+![Node Network](./node_network.png)
+
+In the above example a plane cut away from a cuboid minus a sphere is displayed. There is also an unused experiment cutter plane on the picture which is currently not connected. In this case the user experiments with different cutter planes while not changing other parts of the node network.
+
 ## Supported nodes
 
 There will be several nodes that create geometry from scratch based on some parameters. I list only the Cuboid node in this category now.
@@ -65,6 +79,14 @@ Creates a cuboid geometry.
 *Inputs:*
 
 **extent**: Vec3
+
+*output type*: SDF
+
+### Cutter plane
+
+A half space defined by a plane which is usually used to cut away parts from a geometry with the Diff node.
+
+*Parameters:* Miller index and offset of the plane
 
 *output type*: SDF
 
@@ -165,16 +187,6 @@ Edits an atomic entity atom by atom. Encapsulates multiple edits which can be in
 **atoms**: atomic
 
 *Params*: Several parameters related to fixing faces and edges.
-
-*output type*: atomic
-
-### Transform atomic
-
-Transforms (rotates and translates) an atomic entity
-
-*Inputs:*
-
-**atoms**: atomic
 
 *output type*: atomic
 
