@@ -44,7 +44,7 @@ The meaning of these operator is self explanatory.
 
 Please note that the above operators are meant in a purely abstract way: as an algebra upon 3D shapes (infinite point sets).
 
-We examine a tree in the above language and it we will know exactly what infinite set of 3D points it refers to without knowing how it is treated in a computer. 
+We examine a tree in the above language and we will know exactly what infinite set of 3D points it refers to without knowing how it is treated in a computer. 
 
 There are different *implementing models* that can implement such a shape algebra under the hood. Perhaps the word *implement* is not accurate as we are still talking about mathematical concepts and not concrete programs in concrete programming languages, but I use this word as nothing better comes to mind.
 
