@@ -54,7 +54,7 @@ I list here 3 implementing models for the above algebra. Each implementing model
 
 ### Implicits
 
-In this implementation for each operator we give an implicit function. The implicit function's parameters are the position in space and the parameters and inputs of the operator, the output is  bigger than zero if the point is out of the shape and smaller than or equal to zero if in the shape. Deciding whether a point is in the space can be done by calling the functions of the tree recursively. An implicit function for all the above defined operators is very simple.   
+In this implementation for each operator we give an implicit function. The implicit function's parameters are the position in space, the parameters and inputs of the operator. If the output is bigger than zero the point is out of the shape and if smaller than or equal to zero it is in the shape. Deciding whether a point is in the space can be done by calling the functions of the tree recursively. An implicit function for all the above defined operators are very simple.   
 
 ### Polygon mesh (approximation)
 
