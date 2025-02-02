@@ -26,12 +26,12 @@ If an operator do not have parameters I omit the `<` and `>` signs, and if the o
 
 Each operator has one output. Inputs and outputs of the operators are 3D shapes (infinite sets of points in 3D space).
 
-Parameters are numbers.
+Parameters are numbers or vectors of numbers.
 
 Basic operators:
 
 ```
-half_plane<miller_index, offset>()
+half_space<miller_index, offset>() // a.k.a. cutter plane
 union(a, b)
 intersection(a, b)
 neg(a)
