@@ -2,25 +2,21 @@
 
 ## Design philosophy
 
-The design philosophy behind the concept described in this document is the following:
-
 - We would like to use non-destructive editing where possible
-- We would like to enable structure/code reuse as much as possible. The user should be able to distill useful parts of the design into a reusable representation. In the long run the possibility of an ecosystem of part libraries should be achievable.
+- We would like to enable structure reuse as much as possible. The user should be able to distill useful parts of the design into a reusable representation. In the long run the possibility of an ecosystem of part libraries should be achievable.
 - Balance power and simple UX as much as possible. (This is very hard, some tradeoff is needed here.) 
 
-## Supported design paradigms
+## Design paradigms
 
 Before thinking about the architecture and UX of our software, let's first think about what design paradigms we support. By design paradigm I mean the way the user primarily thinks about their design and would like to interact with their design, and also how the design is fundamentally represented. We might support more paradigms later but let's review what we would like to support in the near future: 
 
 - We want the user to be able to create geometry separately and create an atomic representation from a geometry separately in a non-destructive way.
-- There are some ways to represent geometry that fundamentally changes what can be done with that geometry or have fundamental restrictions on that geometry. BRep models, polygonal models and implicit surfaces a 3 very different ways which require a radically different set of operations with a radically different effort needed to create kernels for. We assume in the short term that we support only implicit surfaces. Supporting polygonal models in addition to implicit models would require some plus effort and would make our software internally more complicated, but this can be considered even in the short term. Supporting BReps would make the software much more complicated and should be done only if really needed.
+- The most important way users create geometry is CSG (constructive Solid Geometry). 
 - We would like to enable the user to do as much as possible by creating geometry and creating atoms from the geometry in a non-destructive way, but sometimes editing atom by atom is unavoidable and we would like to support this as well.
 
-## Implicit surfaces
+## Model representation
 
-We plan to use implicit surfaces, more specifically SDF (Signed Distance Field) to express solid geometry in atomCAD. SDF functions is a very elegant and composable way to achieve interesting solid geometries. In atomCAD we have a strong need for supporting CSG (Constructive Solid Geometry) from primitives like cutter planes with specified Miller indices along crystal lattice points. Fortunately CSG is just a special use-case for SDFs: unions and intersections being min and max functions in an SDF.
-
-It is a hard question whether to enable the creation of complex parametrized procedural SDFs procedurally in a general purpose programming language or concentrate on providing a simple workflow to create simpler SDFs. Fortunately it is not hard to support both so I decided to do that. As we will see SDFs are supported through SDF function libraries and through simple nodes like cutter plane nodes, boolean union, diff and intersection nodes.
+I created a separate, little more theoretical document about the model representation:  [Shape Algebra](./shapre_algebra)
 
 ## Node networks
 
@@ -48,21 +44,14 @@ A Node can have any number of input pins (including zero) and a positive number 
 
 Each input and output pin has a type. You can connect an output pin with an input pin with a directed edge if their type match. The network should be a DAG: should not contain a circle.
 
-Most important pin types:
+Currently we develop an MVP, in which there are only 2 pin types:
 
-- integer
-- iVec3
-- float
-- Vec3
-- sdf: SDF geometry
-- atomic: atoms and bonds
-- string
+- Geometry
+- Atomic: atoms and bonds
 
-Input pins values for certain types (integer, iVec3, float, Vec3) can be set on the UI without connecting a wire into the pin.
+Additionally nodes can have any number of parameters. Parameters can be filled only on the UI. There are parameters that may be promoted to pins in later version when we might plan more procedural nodes that can be utilized to fill these pins.
 
-Additionally nodes can have any number of parameters. Parameters can be filled only on the UI.
-
-On the User interface there is always a 'displayed node'. The output of that node is displayed in the editor viewport. The displayed node is not necessarily the same as the selected node. The parameters of the selected node is displayed on the UI, and if there are gizmos associated with the selected node they are displayed and available for interaction. This means that for example if you select a cutter plane node, you can mode that intuitively in the viewport while the displayed node might be their parent diff node which shows the geometry after the cut.
+On the User interface there is always a 'displayed node'. The output of that node is displayed in the editor viewport. The displayed node is not necessarily the same as the selected node. The parameters of the selected node is displayed on the UI, and if there are gizmos associated with the selected node they are displayed and available for interaction. This means that for example if you select a cutter plane node, you can move that intuitively in the viewport while the displayed node might be their parent diff node which shows the geometry after the cut.
 
 ![Node Network](./node_network.png)
 
@@ -76,11 +65,11 @@ There will be several nodes that create geometry from scratch based on some para
 
 Creates a cuboid geometry.
 
-*Inputs:*
+*Parameters:*
 
 **extent**: Vec3
 
-*output type*: SDF
+*output type*: Geometry
 
 ### Cutter plane
 
@@ -92,51 +81,53 @@ A half space defined by a plane which is usually used to cut away parts from a g
 
 ### Union
 
-Creates a CSG union from its inputs. More precisely it performs a **min** operation on its SDF inputs.
+Creates a CSG union from its inputs.
 
 *Inputs:*
 
-**geo1**: SDF
+**geo1**: Geometry
 
-**geo2**: SDF
+**geo2**: Geometry
 
-*output type*: SDF 
+*output type*: Geometry 
 
 ### Intersection
 
-Creates a CSG intersection from its inputs. More precisely it performs a **max** operation on its SDF inputs.
+Creates a CSG intersection from its inputs.
 
 *Inputs:*
 
-**geo1**: SDF
+**geo1**: Geometry
 
-**geo2**: SDF
+**geo2**: Geometry
 
-*output type*: SDF
+*output type*: Geometry
 
 ### Negation
 
-Creates a CSG negation from its input. More precisely it performs a **multiply by (-1)** operation on its SDF input.
+Creates a CSG negation from its input.
 
 *Inputs:*
 
-**geo**: SDF
+**geo**: Geometry
 
-*output type*: SDF
+*output type*: Geometry
 
 ### Diff
 
-Creates a CSG diff from its inputs. This is equivalent of creating an intersection of geo1 with negated geo2.
+Creates a CSG diff from its inputs.
 
 *Inputs:*
 
-**geo1**: SDF
+**geo1**: Geometry
 
-**geo2**: SDF
+**geo2**: Geometry
 
-*output type*: SDF
+*output type*: Geometry
 
 ### SDF Function
+
+*This node will be implemented only after the MVP. Please note that while other nodes are independent of the underlying implementation discussed in the shape algebra document, this node only works if implicits are used.*
 
 Creates an SDF programmatically in a scripting language.
 
@@ -162,21 +153,19 @@ Embeddable into Rust, supports operator overloading. It is interpreted, so there
 
 parameters (or maybe even inputs) are automatically created based on the function parameters.
 
-*output type*: SDF
+*output type*: Geometry
 
-### Atomic from SDF
+### Atomic from Geometry
 
-Creates an atomic entity from an SDF.
-
-Please note that at SDF evaluation time there is no explicit notion of planes and edges: We should work from whatever evaluations we do in the SDF (value evaluations and gradient evaluations). Plane and edge fixing algorithms can use SDF values and gradients at certain atoms and other crystal points for their heuristics. 
+Creates an atomic entity from a Geometry.
 
 *Inputs:*
 
-**geo1**: SDF
+**geo1**: Geometry
 
 *Params*: Several parameters related to fixing faces and edges.
 
-*output type*: atomic
+*output type*: Atomic
 
 ### Edit atomic
 
@@ -184,7 +173,7 @@ Edits an atomic entity atom by atom. Encapsulates multiple edits which can be in
 
 *Inputs:*
 
-**atoms**: atomic
+**atoms**: Atomic
 
 *Params*: Several parameters related to fixing faces and edges.
 
@@ -192,7 +181,7 @@ Edits an atomic entity atom by atom. Encapsulates multiple edits which can be in
 
 ## Undo-redo
 
-What would be an undo history in a direct editing program is already embedded into the node network itself, so changes in our representation (like SDF function source code changes, creating nodes, rewiring nodes, changing parameters) are 'meta changes' in this sense, so any version control on a representation which itself contains 'operation history' in itself seem to be a bit redundant, but still a necessity mainly because we want the users not to lose previous versions of their model. We will simply use a full global undo stack for anything the user does on the whole node network.
+What would be an undo history in a direct editing program is already embedded into the node network itself, so changes in our representation (like creating nodes, rewiring nodes, changing parameters) are 'meta changes' in this sense, so any version control on a representation which itself contains 'operation history' in itself seem to be a bit redundant, but still a necessity mainly because we want the users not to lose previous versions of their model. We will simply use a full global undo stack for anything the user does on the whole node network.
 
 ## Version control
 

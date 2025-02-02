@@ -4,20 +4,20 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 enum DataType {
-  SDF,
+  Geometry,
   Atomic
 }
 
 enum NodeType {
   Cuboid,
+  HalfSpace,
   Union,
   Intersection,
   Negation,
   Diff,
-  SDFFunction,
-  AtomicFromSDF,
+  TransformGeometry,
+  AtomicFromGeometry,
   EditAtomic,
-  TransformAtomic
 }
 
 pub struct PinType {
@@ -70,15 +70,3 @@ impl NodeNetwork {
     ret
   }
 }
-
-/*
-  Cuboid,
-  Union,
-  Intersection,
-  Negation,
-  Diff,
-  SDFFunction,
-  AtomicFromSDF,
-  EditAtomic,
-  TransformAtomic
-*/
