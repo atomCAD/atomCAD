@@ -10,7 +10,7 @@ An operator has:
 
 - some number of inputs: 0 (literal), 1 (unary), 2 (binary)
 - an output
-- and some parameters, which are different for each kind of operator and defined by the user. Example: the plane operator has for numbers as parameters: its miller index and an offset.
+- and some parameters, which are different for each kind of operator and defined by the user. Example: the half_space operator (a.k.a cutter plane) has for numbers as parameters: its miller index and an offset.
 
 In this document I want to examine a subset of these operators that only deal with the geometry, so this document does not address operators dealing with the atomic representation.
 
