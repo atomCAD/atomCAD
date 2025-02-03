@@ -63,7 +63,7 @@ let VALUE = mynetwork(cuboid<10,10,10>, [cuboid<5,5,5>]);
 
 
 
-The fact theat there are multiple node network is just equivalent with having multiple functions in a source code.
+The fact that there are multiple node networks is just equivalent with having multiple functions in a source code.
 
 When developing the operators of the history tree, this just means that there is one more parameter to the operators: node_network_id:
 
