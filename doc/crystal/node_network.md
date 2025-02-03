@@ -27,13 +27,13 @@ The above code can be made a function definition with parameters. Correspondingl
 
 
 ```
-                  [sphere<2>]---->|---------|     
-                                  |intersect|---+
-[input<1,"arg1">]----->|----|    +-->|---------|   |
+                  [sphere<2>]------>|---------|     
+                                    |intersect|---+
+[input<1,"arg1">]----->|----|   +-->|---------|   |
                        |diff|---+                 |-->[output] 
-[input<2,"arg2">]----->|----|    +-->|---------|   | 
-                                  |intersect|---|
-                  [sphere<3>]---->|---------|     
+[input<2,"arg2">]----->|----|   +-->|---------|   | 
+                                    |intersect|---|
+                  [sphere<3>]------>|---------|     
 ```
 
 Equivalent code:
