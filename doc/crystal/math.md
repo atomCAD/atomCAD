@@ -24,6 +24,8 @@ The history graph, which is also a DAG can be defined also as a DAG on an algebr
 
 Operations in this algebraic structure are the edit operations the user makes on the document. Using a DAG to represent history is common, version control systems a represented this way. Unary operations are simple changes, binary operations are merges.
 
+While the structure DAG is meant to be edited, our history DAG is strictly append-only: the past cannot be changed.
+
 As it happens that our underlying document is a DAG itself, we are very lucky because we can work with a very few simple unary operations in the history DAG.
 
 Calling the defined functions in our document the non-mathematical way 'node networks', and operations as nodes, using this nomenclature here are the history DAG unary operations:
