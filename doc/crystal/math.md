@@ -16,7 +16,7 @@ We extend this model by extending our underlying set: instead of it being the se
 
 ## Discussion
 
-The structure DAG is very important because the user manipulates it directly. Where things get a little confusing at first is whether is this DAG the structure or the history of our model?  Any expression in any algebra could be seen as the edit history of the leaf values passed into the expression, but I suggest the term history at this level. The definition of a non-destructive editor in my opinion is that the document in the editor, which the user directly edits contains some operations that were traditionally considered history operations. In our case the document in the editor is basically an algebraic expression. (An extension of that: a set of functions which are all defined as algebraic expressions, and expressions are not trees but DAGs.)
+The structure DAG is very important because the user manipulates it directly. Where things get a little confusing at first is whether is this DAG the structure or the history of our model?  Any expression in any algebra could be seen as the edit history of the leaf values passed into the expression, but I suggest to avoid the term history at this level. The definition of a non-destructive editor in my opinion is that the document in the editor, which the user directly edits contains some operations that were traditionally considered history operations. In our case the document in the editor is basically an algebraic expression. (An extension of that: a set of functions which are all defined as algebraic expressions, and expressions are not trees but DAGs.)
 
 ## History
 
