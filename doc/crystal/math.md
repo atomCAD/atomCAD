@@ -32,3 +32,12 @@ Calling the defined functions in our document the non-mathematical way 'node net
 - create_node(node_network_id, node_id, node_type)
 - delete_node(node_network_id, node_id)
 - update_node(node_network_id, node_id, {prop_name1: prop_value1, prop_name2: prop_value2, ...})
+
+## User's mental model
+
+I think that everything that the user is explicitly thinking about minute-to-minute should be captured in the document he/she edits: in the structure DAG. In a non-destructive editor these things can be some things that are traditionally operation-like. In fact in our case the editor is purely non-destructive as the whole document is an operation DAG.
+
+An then occasionally the user takes the "let's do version control" hat, and thinks on a different level temporarily, which is way more complicated, but they do not have to think in this mode constantly as it would be too tiring.
+
+I think this is the mental model of programmers that use version control, and this can be the mental model of our users too.
+
