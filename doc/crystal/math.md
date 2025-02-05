@@ -1,4 +1,4 @@
-## Mathemtaical definition of the Structure DAG
+## Mathematical definition of the Structure DAG
 
 So the node network that the user edits (the structure DAG) can be mathematically defined this way:
 

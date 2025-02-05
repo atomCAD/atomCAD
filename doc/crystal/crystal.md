@@ -4,11 +4,7 @@
 
 - We would like to use non-destructive editing where possible
 - We would like to enable structure reuse as much as possible. The user should be able to distill useful parts of the design into a reusable representation. In the long run the possibility of an ecosystem of part libraries should be achievable.
-- Balance power and simple UX as much as possible. (This is very hard, some tradeoff is needed here.) 
-
-## Design paradigms
-
-Before thinking about the architecture and UX of our software, let's first think about what design paradigms we support. By design paradigm I mean the way the user primarily thinks about their design and would like to interact with their design, and also how the design is fundamentally represented. We might support more paradigms later but let's review what we would like to support in the near future: 
+- Balance power and simple UX as much as possible. (This is very hard, some tradeoff is needed here.)  
 
 - We want the user to be able to create geometry separately and create an atomic representation from a geometry separately in a non-destructive way.
 - The most important way users create geometry is CSG (constructive Solid Geometry). 
@@ -16,7 +12,7 @@ Before thinking about the architecture and UX of our software, let's first think
 
 ## Model representation
 
-I created a separate, little more theoretical document about the model representation:  [Shape Algebra](./shapre_algebra)
+I created a separate, little more theoretical document about the model representation:  [Shape Algebra](./shapre_algebra.md) Another document with a little different focus, and even more mathematically precise:  [Math](./math.md)
 
 ## Node networks
 
@@ -36,22 +32,20 @@ The 'Introduction to Houdini' page is also a good start:
 
 https://www.sidefx.com/docs/houdini/basics/intro.html 
 
-I considered somewhat simpler UX paradigms, but gaining a little simplicity we would lose too much power. I also think that the usage of node networks is quite common among technically savvy users. Some of the above software is complex not necessarily because of the node network paradigm but because of the complexity of the domain they operate in.
-
 ## Node network in atomCAD
 
-A Node can have any number of input pins (including zero) and a positive number of output pins (usually one).
+A **node** can have any number of (including zero) parameters. These can be also called **input pins**. A node has exactly one **output pin**.
 
-Each input and output pin has a type. You can connect an output pin with an input pin with a directed edge if their type match. The network should be a DAG: should not contain a circle.
+Each input and the output pin of the node has a **data type**. You can connect an output pin with an input pin with a directed edge if their type match. We call these directed edges, which always go from an output pin to an input pin a **wire**. The network should be a DAG: should not contain a circle.
 
-Currently we develop an MVP, in which there are only 2 pin types:
+Currently we develop an MVP, in which there are only 2 data types:
 
-- Geometry
-- Atomic: atoms and bonds
+- **geometry** (2D shape)
+- **atomic**: atoms and bonds
 
-Additionally nodes can have any number of parameters. Parameters can be filled only on the UI. There are parameters that may be promoted to pins in later version when we might plan more procedural nodes that can be utilized to fill these pins.
+Additionally nodes can have any amount of node data. Node data can be filled only on the UI. Node data usually consist of so called node **properties**. There are properties in the node data that may be promoted to input pins (a.k.a parameters) in later versions when we might plan more procedural nodes that can be utilized to fill these pins.
 
-On the User interface there is always a 'displayed node'. The output of that node is displayed in the editor viewport. The displayed node is not necessarily the same as the selected node. The parameters of the selected node is displayed on the UI, and if there are gizmos associated with the selected node they are displayed and available for interaction. This means that for example if you select a cutter plane node, you can move that intuitively in the viewport while the displayed node might be their parent diff node which shows the geometry after the cut.
+On the User interface there is always a **displayed node**. The output of that node is displayed in the editor viewport. The displayed node is not necessarily the same as the **selected node**. The properties of the selected node is displayed on the UI, and if there are gizmos associated with the selected node they are displayed and available for interaction. This means that for example if you select a cutter plane node, you can move that intuitively in the viewport while the displayed node might be their parent diff node which shows the geometry after the cut.
 
 ![Node Network](./node_network.png)
 
@@ -59,71 +53,69 @@ In the above example a plane cut away from a cuboid minus a sphere is displayed.
 
 ## Supported nodes
 
+I use the following syntax to document the node types here:
+
+`node_type_name<properties of the node>(parameters of the node) -> output pin data type`
+
+If there are no properties of a node we omit the angle brackets.
+
+In some cases a parameter can receive a set of values instead of just one value. In this case we denote the data type with an asterisk (see union node for example).   
+
 There will be several nodes that create geometry from scratch based on some parameters. I list only the Cuboid node in this category now.
 
-### Cuboid
+### cuboid
+
+`cuboid<extent: Vec3>() -> geometry`
 
 Creates a cuboid geometry.
 
-*Parameters:*
+### half_space
 
-**extent**: Vec3
+`half_space<miller indices, offset>() -> geometry`
 
-*output type*: Geometry
+A half space defined by a plane which is usually used to cut away parts from a geometry with the `diff` node.
 
-### Cutter plane
+### union
 
-A half space defined by a plane which is usually used to cut away parts from a geometry with the Diff node.
+`union(shapes: geometry*) -> geometry`
 
-*Parameters:* Miller index and offset of the plane
+Creates a CSG union from the input shapes.
 
-*output type*: SDF
+### intersect
 
-### Union
+`intersect(shapes: geometry*) -> geometry`
 
-Creates a CSG union from its inputs.
+Creates a CSG intersection from its input shapes.
 
-*Inputs:*
+### negate
 
-**geo1**: Geometry
+`negate(shape: geometry) -> geometry`
 
-**geo2**: Geometry
+Creates a CSG negation from its input shape.
 
-*output type*: Geometry 
+### diff
 
-### Intersection
+`diff(base: geometry*, sub: geometry*) -> geometry
 
-Creates a CSG intersection from its inputs.
+Creates a CSG diff from its input shapes. For convenience multiple shapes can be given as a **base**, these are unioned. Multiple shapes can be given as **sub**, all these shapes are subtracted. 
 
-*Inputs:*
+### geo_transform
 
-**geo1**: Geometry
+`geo_transform<translation, rotation>(shape: geometry) -> geometry`
 
-**geo2**: Geometry
+Transforms a geometry in lattice space.
 
-*output type*: Geometry
+### geo_to_atomic
 
-### Negation
+`geo_to_atomic<crystal related parameters, e.g. passivation fixing>(shape: geometry) -> atomic`
 
-Creates a CSG negation from its input.
+Creates an atomic entity from a Geometry.
 
-*Inputs:*
+### edit_atomic
 
-**geo**: Geometry
+`edit_atomic(atomic: atomic)-> atomic`
 
-*output type*: Geometry
-
-### Diff
-
-Creates a CSG diff from its inputs.
-
-*Inputs:*
-
-**geo1**: Geometry
-
-**geo2**: Geometry
-
-*output type*: Geometry
+Edits an atomic entity atom by atom. Encapsulates multiple edits which can be inspected one-by-one. 
 
 ### SDF Function
 
@@ -155,34 +147,6 @@ parameters (or maybe even inputs) are automatically created based on the functio
 
 *output type*: Geometry
 
-### Atomic from Geometry
-
-Creates an atomic entity from a Geometry.
-
-*Inputs:*
-
-**geo1**: Geometry
-
-*Params*: Several parameters related to fixing faces and edges.
-
-*output type*: Atomic
-
-### Edit atomic
-
-Edits an atomic entity atom by atom. Encapsulates multiple edits which can be inspected one-by-one. 
-
-*Inputs:*
-
-**atoms**: Atomic
-
-*Params*: Several parameters related to fixing faces and edges.
-
-*output type*: atomic
-
-## Undo-redo
-
-What would be an undo history in a direct editing program is already embedded into the node network itself, so changes in our representation (like creating nodes, rewiring nodes, changing parameters) are 'meta changes' in this sense, so any version control on a representation which itself contains 'operation history' in itself seem to be a bit redundant, but still a necessity mainly because we want the users not to lose previous versions of their model. We will simply use a full global undo stack for anything the user does on the whole node network.
-
 ## Version control
 
-Besides having a fully non-destructive base model + applying a global undo on it, we still have an almost independent problem: how different designers can cooperate, how merge conflicts are resolved. The global undo stack should not mess with this, so the task is to do version control for the fully non-destructive representation. I think it would be just too much detail to be planned up-front. I like to think of this task as trying to serialize down the representation into well mergeable text files, and do the version control in git. It is still possible to create a custom version control later, but it should not be planned up-front, it is enough to conceptually know that it can be done reasonably well.
+This is mostly covered in [Math](./math.md).

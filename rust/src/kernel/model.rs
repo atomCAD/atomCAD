@@ -1,4 +1,4 @@
-use glam::f32::Vec3;
+use glam::f32::Vec3 as Vec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
 

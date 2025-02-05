@@ -1,0 +1,43 @@
+use glam::f32::Vec2;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use super::node_type::NodeType;
+
+pub struct Argument {
+  // A set of argument values as parameters can have the 'multiple' flag set.
+  pub argument_values: HashSet<u64>, // Set of node ids for which the output is referenced
+}
+
+pub struct Node {
+  pub id: u64,
+  pub node_type: NodeType,
+  pub position: Vec2,
+  pub arguments: Vec<Argument>,
+}
+
+/*
+ * A node network is a network of nodes used by users to create geometries and atomic structures.
+ * A node network can also be an implementation of a non-built-in node type. In this case it might or might not have parameters.
+ */
+pub struct NodeNetwork {
+  pub next_node_id: u64,
+  pub node_type: NodeType, // This is the node type when this node network is used as a node in another network. (analog to a function header in programming)
+  pub nodes: HashMap<u64, Node>,
+  pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
+  pub parameter_node_ids: Vec<u64>, // ids of the nodes that represent the parameter
+}
+
+impl NodeNetwork {
+
+  pub fn new(node_type: NodeType) -> Self {
+    let ret = Self {
+      next_node_id: 1,
+      node_type,
+      nodes: HashMap::new(),
+      return_node_id: None,
+      parameter_node_ids: Vec::new(),
+    };
+
+    return ret;
+  }
+}
