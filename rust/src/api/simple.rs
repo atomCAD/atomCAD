@@ -1,9 +1,7 @@
 use std::ffi::{c_int, c_void};
 use dlopen::{symbor::{Library, Symbol}, Error as LibError};
 use std::time::Instant;
-use crate::renderer::dummy_renderer;
 use crate::renderer::renderer::Renderer;
-use crate::renderer::camera::Camera;
 use crate::kernel::kernel::Kernel;
 use glam::f32::Vec3;
 

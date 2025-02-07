@@ -1,9 +1,7 @@
 use wgpu::*;
 use bytemuck;
-use std::time::Instant;
 use wgpu::util::DeviceExt;
 use crate::kernel::model::Model;
-use super::mesh::Mesh;
 use super::mesh::Vertex;
 use super::tessellator::Tessellator;
 use super::camera::Camera;
@@ -81,7 +79,7 @@ pub struct Renderer  {
 
 impl Renderer {
     pub async fn new(width: u32, height: u32) -> Self {
-        let start_time = Instant::now();
+        //let start_time = Instant::now();
 
         let camera = Camera {
           // position the camera 20 units back
@@ -306,10 +304,10 @@ impl Renderer {
       let mut tessellator = Tessellator::new();
       tessellator.set_sphere_divisions(10, 20);
 
-      for (id, atom) in model.atoms.iter() {
+      for (_id, atom) in model.atoms.iter() {
         tessellator.add_atom(model, &atom);
       }
-      for (id, bond) in model.bonds.iter() {
+      for (_id, bond) in model.bonds.iter() {
         tessellator.add_bond(model, &bond);
       }
 

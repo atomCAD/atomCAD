@@ -8,3 +8,12 @@ pub struct SurfacePoint {
 pub struct SurfacePointCloud {
   pub points: Vec<SurfacePoint>,
 }
+
+impl SurfacePointCloud {
+
+  pub fn new() -> Self {
+    Self {
+      points: Vec::new(),
+    }
+  }
+}

@@ -4,7 +4,6 @@ use crate::kernel::model::Model;
 use crate::kernel::model::Atom;
 use crate::kernel::model::Bond;
 use glam::f32::Vec3;
-use glam::f32::Vec2;
 use glam::f32::Quat;
 
 /*

@@ -31,6 +31,12 @@ impl NodeTypeRegistry {
     });
 
     ret.add_node_type(NodeType {
+      name: "sphere".to_string(),
+      parameters: Vec::new(),
+      output_type: DataType::Geometry,
+    });
+
+    ret.add_node_type(NodeType {
       name: "half_space".to_string(),
       parameters: Vec::new(),
       output_type: DataType::Geometry,

@@ -5,4 +5,6 @@ pub mod commands;
 pub mod node_type;
 pub mod node_network;
 pub mod node_type_registry;
+pub mod implicit_network_evaluator;
 pub mod surface_point_cloud;
+pub mod as_any;
