@@ -1,10 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/cad_viewport.dart';
+import 'package:flutter_cad/node_network.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 
 Future<void> main() async {
   await RustLib.init();
-  runApp(const MyApp());
+  //runApp(const MyApp());
+
+  final graphModel = GraphModel(
+    nodes: [
+      NodeModel(id: 1, position: Offset(100, 100)),
+      NodeModel(id: 2, position: Offset(250, 200)),
+    ],
+  );
+
+  runApp(MaterialApp(
+    home: Scaffold(
+      body: NodeNetwork(graphModel: graphModel),
+    ),
+  ));
 }
 
 class MyApp extends StatelessWidget {
