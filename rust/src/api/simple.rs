@@ -4,12 +4,10 @@ use std::time::Instant;
 use crate::renderer::renderer::Renderer;
 use crate::kernel::kernel::Kernel;
 use glam::f32::Vec3;
-
-pub struct APIVec3 {
-  pub x: f32,
-  pub y: f32,
-  pub z: f32,
-}
+use super::api_types::APIVec3;
+use super::api_types::APICamera;
+use super::api_types::NodeNetworkView;
+use super::api_types::NodeView;
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
   return APIVec3{
@@ -25,16 +23,6 @@ fn from_api_vec3(v: &APIVec3) -> Vec3 {
     y: v.y,
     z: v.z
   }
-}
-
-pub struct APICamera {
-  pub eye: APIVec3,
-  pub target: APIVec3,
-  pub up: APIVec3,
-  pub aspect: f32,
-  pub fovy: f32, // in radians
-  pub znear: f32,
-  pub zfar: f32,
 }
 
 const IMAGE_WIDTH : u32 = 1280;
@@ -207,6 +195,21 @@ pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
         z: 0.0
       }
     }
+  }
+}
+
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkView> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_network = cad_instance.kernel.node_type_registry.node_networks.get(&node_network_name)?;
+
+    let mut node_network_view = NodeNetworkView {
+      nodes: Vec::new()
+    };
+
+    return Some(node_network_view);
   }
 }
 

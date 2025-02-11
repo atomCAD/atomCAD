@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use super::node_type::NodeType;
 use super::node_type::NodeData;
+use super::node_type::NoData;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
@@ -11,7 +12,7 @@ pub struct Argument {
 
 pub struct Node {
   pub id: u64,
-  pub node_type: NodeType,
+  pub node_type_name: String,
   pub position: Vec2,
   pub arguments: Vec<Argument>,
   pub data: Box<dyn NodeData>,
@@ -40,5 +41,17 @@ impl NodeNetwork {
     };
 
     return ret;
+  }
+
+  pub fn add_node(&mut self, node_type_name: &str, position: Vec2) {
+    let node = Node {
+      id: self.next_node_id,
+      node_type_name: node_type_name.to_string(),
+      position,
+      arguments: Vec::new(),
+      data: Box::new(NoData{}),
+    };
+    self.next_node_id += 1;
+    self.nodes.insert(node.id, node);
   }
 }

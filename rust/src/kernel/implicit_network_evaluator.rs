@@ -157,15 +157,15 @@ impl ImplicitNetworkEvaluator {
       args.push(arg_values);
     }
 
-    if node.node_type.name == "parameter" {
+    if node.node_type_name == "parameter" {
       let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
       return network_args[param_data.param_index].clone();
     }
-    if let Some(built_in_function) = self.built_in_functions.get(&node.node_type.name) {
+    if let Some(built_in_function) = self.built_in_functions.get(&node.node_type_name) {
       let ret = built_in_function(&(*node.data), args, sample_point);
       return vec![ret];
     }
-    if let Some(child_network) = self.node_type_registry.node_networks.get(&node.node_type.name) {
+    if let Some(child_network) = self.node_type_registry.node_networks.get(&node.node_type_name) {
       return self.implicit_eval(child_network, &args, child_network.return_node_id.unwrap(), sample_point);
     }
     return vec![0.0];

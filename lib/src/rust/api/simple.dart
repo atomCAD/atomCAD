@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `add_sample_model`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_vec3`
@@ -28,72 +29,9 @@ APIVec3 findPivotPoint({required APIVec3 rayStart, required APIVec3 rayDir}) =>
     RustLib.instance.api
         .crateApiSimpleFindPivotPoint(rayStart: rayStart, rayDir: rayDir);
 
+NodeNetworkView? getNodeNetworkView({required String nodeNetworkName}) =>
+    RustLib.instance.api
+        .crateApiSimpleGetNodeNetworkView(nodeNetworkName: nodeNetworkName);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
-
-class APICamera {
-  final APIVec3 eye;
-  final APIVec3 target;
-  final APIVec3 up;
-  final double aspect;
-  final double fovy;
-  final double znear;
-  final double zfar;
-
-  const APICamera({
-    required this.eye,
-    required this.target,
-    required this.up,
-    required this.aspect,
-    required this.fovy,
-    required this.znear,
-    required this.zfar,
-  });
-
-  @override
-  int get hashCode =>
-      eye.hashCode ^
-      target.hashCode ^
-      up.hashCode ^
-      aspect.hashCode ^
-      fovy.hashCode ^
-      znear.hashCode ^
-      zfar.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APICamera &&
-          runtimeType == other.runtimeType &&
-          eye == other.eye &&
-          target == other.target &&
-          up == other.up &&
-          aspect == other.aspect &&
-          fovy == other.fovy &&
-          znear == other.znear &&
-          zfar == other.zfar;
-}
-
-class APIVec3 {
-  final double x;
-  final double y;
-  final double z;
-
-  const APIVec3({
-    required this.x,
-    required this.y,
-    required this.z,
-  });
-
-  @override
-  int get hashCode => x.hashCode ^ y.hashCode ^ z.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIVec3 &&
-          runtimeType == other.runtimeType &&
-          x == other.x &&
-          y == other.y &&
-          z == other.z;
-}

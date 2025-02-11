@@ -6,6 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/api_types.dart';
 import 'api/simple.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -30,6 +31,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera dco_decode_api_camera(dynamic raw);
 
   @protected
+  APIVec2 dco_decode_api_vec_2(dynamic raw);
+
+  @protected
   APIVec3 dco_decode_api_vec_3(dynamic raw);
 
   @protected
@@ -37,6 +41,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3 dco_decode_box_autoadd_api_vec_3(dynamic raw);
+
+  @protected
+  NodeNetworkView dco_decode_box_autoadd_node_network_view(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -48,10 +55,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  List<NodeView> dco_decode_list_node_view(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  NodeNetworkView dco_decode_node_network_view(dynamic raw);
+
+  @protected
+  NodeView dco_decode_node_view(dynamic raw);
+
+  @protected
   APICamera? dco_decode_opt_box_autoadd_api_camera(dynamic raw);
+
+  @protected
+  NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
 
   @protected
   BigInt dco_decode_u_64(dynamic raw);
@@ -72,6 +91,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera sse_decode_api_camera(SseDeserializer deserializer);
 
   @protected
+  APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
+
+  @protected
   APIVec3 sse_decode_api_vec_3(SseDeserializer deserializer);
 
   @protected
@@ -79,6 +101,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3 sse_decode_box_autoadd_api_vec_3(SseDeserializer deserializer);
+
+  @protected
+  NodeNetworkView sse_decode_box_autoadd_node_network_view(
+      SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -90,10 +116,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  List<NodeView> sse_decode_list_node_view(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer);
+
+  @protected
+  NodeView sse_decode_node_view(SseDeserializer deserializer);
+
+  @protected
   APICamera? sse_decode_opt_box_autoadd_api_camera(
+      SseDeserializer deserializer);
+
+  @protected
+  NodeNetworkView? sse_decode_opt_box_autoadd_node_network_view(
       SseDeserializer deserializer);
 
   @protected
@@ -118,6 +157,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_camera(APICamera self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_vec_3(APIVec3 self, SseSerializer serializer);
 
   @protected
@@ -126,6 +168,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_api_vec_3(APIVec3 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_node_network_view(
+      NodeNetworkView self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
@@ -137,12 +183,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_node_view(List<NodeView> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_node_network_view(
+      NodeNetworkView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_node_view(NodeView self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_camera(
       APICamera? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_node_network_view(
+      NodeNetworkView? self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_64(BigInt self, SseSerializer serializer);

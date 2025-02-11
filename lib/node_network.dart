@@ -49,7 +49,7 @@ class NodeNetwork extends StatelessWidget {
 class NodeWidget extends StatelessWidget {
   final NodeModel node;
 
-  const NodeWidget({super.key, required this.node});
+  NodeWidget({required this.node}) : super(key: ValueKey(node.id));
 
   @override
   Widget build(BuildContext context) {

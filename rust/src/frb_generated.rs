@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 799308923;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1038688933;
 
 // Section: executor
 
@@ -67,7 +67,7 @@ fn wire__crate__api__simple__add_atom_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_atomic_number = <i32>::sse_decode(&mut deserializer);
-            let api_position = <crate::api::simple::APIVec3>::sse_decode(&mut deserializer);
+            let api_position = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
@@ -99,8 +99,8 @@ fn wire__crate__api__simple__find_pivot_point_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_ray_start = <crate::api::simple::APIVec3>::sse_decode(&mut deserializer);
-            let api_ray_dir = <crate::api::simple::APIVec3>::sse_decode(&mut deserializer);
+            let api_ray_start = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_ray_dir = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(crate::api::simple::find_pivot_point(
@@ -136,6 +136,38 @@ fn wire__crate__api__simple__get_camera_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(crate::api::simple::get_camera())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__get_node_network_view_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_node_network_view",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::get_node_network_view(
+                    api_node_network_name,
+                ))?;
                 Ok(output_ok)
             })())
         },
@@ -226,9 +258,9 @@ fn wire__crate__api__simple__move_camera_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_eye = <crate::api::simple::APIVec3>::sse_decode(&mut deserializer);
-            let api_target = <crate::api::simple::APIVec3>::sse_decode(&mut deserializer);
-            let api_up = <crate::api::simple::APIVec3>::sse_decode(&mut deserializer);
+            let api_eye = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_target = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_up = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
@@ -281,17 +313,17 @@ impl SseDecode for String {
     }
 }
 
-impl SseDecode for crate::api::simple::APICamera {
+impl SseDecode for crate::api::api_types::APICamera {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_eye = <crate::api::simple::APIVec3>::sse_decode(deserializer);
-        let mut var_target = <crate::api::simple::APIVec3>::sse_decode(deserializer);
-        let mut var_up = <crate::api::simple::APIVec3>::sse_decode(deserializer);
+        let mut var_eye = <crate::api::api_types::APIVec3>::sse_decode(deserializer);
+        let mut var_target = <crate::api::api_types::APIVec3>::sse_decode(deserializer);
+        let mut var_up = <crate::api::api_types::APIVec3>::sse_decode(deserializer);
         let mut var_aspect = <f32>::sse_decode(deserializer);
         let mut var_fovy = <f32>::sse_decode(deserializer);
         let mut var_znear = <f32>::sse_decode(deserializer);
         let mut var_zfar = <f32>::sse_decode(deserializer);
-        return crate::api::simple::APICamera {
+        return crate::api::api_types::APICamera {
             eye: var_eye,
             target: var_target,
             up: var_up,
@@ -303,13 +335,22 @@ impl SseDecode for crate::api::simple::APICamera {
     }
 }
 
-impl SseDecode for crate::api::simple::APIVec3 {
+impl SseDecode for crate::api::api_types::APIVec2 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_x = <f32>::sse_decode(deserializer);
+        let mut var_y = <f32>::sse_decode(deserializer);
+        return crate::api::api_types::APIVec2 { x: var_x, y: var_y };
+    }
+}
+
+impl SseDecode for crate::api::api_types::APIVec3 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_x = <f32>::sse_decode(deserializer);
         let mut var_y = <f32>::sse_decode(deserializer);
         let mut var_z = <f32>::sse_decode(deserializer);
-        return crate::api::simple::APIVec3 {
+        return crate::api::api_types::APIVec3 {
             x: var_x,
             y: var_y,
             z: var_z,
@@ -338,6 +379,18 @@ impl SseDecode for i32 {
     }
 }
 
+impl SseDecode for Vec<crate::api::api_types::NodeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::api_types::NodeView>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -350,11 +403,46 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for Option<crate::api::simple::APICamera> {
+impl SseDecode for crate::api::api_types::NodeNetworkView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_nodes = <Vec<crate::api::api_types::NodeView>>::sse_decode(deserializer);
+        return crate::api::api_types::NodeNetworkView { nodes: var_nodes };
+    }
+}
+
+impl SseDecode for crate::api::api_types::NodeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <u64>::sse_decode(deserializer);
+        let mut var_nodeTypeName = <String>::sse_decode(deserializer);
+        let mut var_position = <crate::api::api_types::APIVec2>::sse_decode(deserializer);
+        return crate::api::api_types::NodeView {
+            id: var_id,
+            node_type_name: var_nodeTypeName,
+            position: var_position,
+        };
+    }
+}
+
+impl SseDecode for Option<crate::api::api_types::APICamera> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::simple::APICamera>::sse_decode(deserializer));
+            return Some(<crate::api::api_types::APICamera>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::api_types::NodeNetworkView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::api_types::NodeNetworkView>::sse_decode(
+                deserializer,
+            ));
         } else {
             return None;
         }
@@ -396,7 +484,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        5 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -412,9 +500,10 @@ fn pde_ffi_dispatcher_sync_impl(
         1 => wire__crate__api__simple__add_atom_impl(ptr, rust_vec_len, data_len),
         2 => wire__crate__api__simple__find_pivot_point_impl(ptr, rust_vec_len, data_len),
         3 => wire__crate__api__simple__get_camera_impl(ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__simple__get_node_network_view_impl(ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -422,7 +511,7 @@ fn pde_ffi_dispatcher_sync_impl(
 // Section: rust2dart
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::simple::APICamera {
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::APICamera {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.eye.into_into_dart().into_dart(),
@@ -436,16 +525,40 @@ impl flutter_rust_bridge::IntoDart for crate::api::simple::APICamera {
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::simple::APICamera {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::APICamera>
-    for crate::api::simple::APICamera
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::APICamera
 {
-    fn into_into_dart(self) -> crate::api::simple::APICamera {
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APICamera>
+    for crate::api::api_types::APICamera
+{
+    fn into_into_dart(self) -> crate::api::api_types::APICamera {
         self
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::simple::APIVec3 {
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::APIVec2 {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::APIVec2
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APIVec2>
+    for crate::api::api_types::APIVec2
+{
+    fn into_into_dart(self) -> crate::api::api_types::APIVec2 {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::APIVec3 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.x.into_into_dart().into_dart(),
@@ -455,11 +568,53 @@ impl flutter_rust_bridge::IntoDart for crate::api::simple::APIVec3 {
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::simple::APIVec3 {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::APIVec3>
-    for crate::api::simple::APIVec3
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::APIVec3
 {
-    fn into_into_dart(self) -> crate::api::simple::APIVec3 {
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APIVec3>
+    for crate::api::api_types::APIVec3
+{
+    fn into_into_dart(self) -> crate::api::api_types::APIVec3 {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::NodeNetworkView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [self.nodes.into_into_dart().into_dart()].into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::NodeNetworkView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::NodeNetworkView>
+    for crate::api::api_types::NodeNetworkView
+{
+    fn into_into_dart(self) -> crate::api::api_types::NodeNetworkView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::NodeView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.node_type_name.into_into_dart().into_dart(),
+            self.position.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::NodeView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::NodeView>
+    for crate::api::api_types::NodeView
+{
+    fn into_into_dart(self) -> crate::api::api_types::NodeView {
         self
     }
 }
@@ -471,12 +626,12 @@ impl SseEncode for String {
     }
 }
 
-impl SseEncode for crate::api::simple::APICamera {
+impl SseEncode for crate::api::api_types::APICamera {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <crate::api::simple::APIVec3>::sse_encode(self.eye, serializer);
-        <crate::api::simple::APIVec3>::sse_encode(self.target, serializer);
-        <crate::api::simple::APIVec3>::sse_encode(self.up, serializer);
+        <crate::api::api_types::APIVec3>::sse_encode(self.eye, serializer);
+        <crate::api::api_types::APIVec3>::sse_encode(self.target, serializer);
+        <crate::api::api_types::APIVec3>::sse_encode(self.up, serializer);
         <f32>::sse_encode(self.aspect, serializer);
         <f32>::sse_encode(self.fovy, serializer);
         <f32>::sse_encode(self.znear, serializer);
@@ -484,7 +639,15 @@ impl SseEncode for crate::api::simple::APICamera {
     }
 }
 
-impl SseEncode for crate::api::simple::APIVec3 {
+impl SseEncode for crate::api::api_types::APIVec2 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f32>::sse_encode(self.x, serializer);
+        <f32>::sse_encode(self.y, serializer);
+    }
+}
+
+impl SseEncode for crate::api::api_types::APIVec3 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <f32>::sse_encode(self.x, serializer);
@@ -514,6 +677,16 @@ impl SseEncode for i32 {
     }
 }
 
+impl SseEncode for Vec<crate::api::api_types::NodeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::api_types::NodeView>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -524,12 +697,38 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for Option<crate::api::simple::APICamera> {
+impl SseEncode for crate::api::api_types::NodeNetworkView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::api_types::NodeView>>::sse_encode(self.nodes, serializer);
+    }
+}
+
+impl SseEncode for crate::api::api_types::NodeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.node_type_name, serializer);
+        <crate::api::api_types::APIVec2>::sse_encode(self.position, serializer);
+    }
+}
+
+impl SseEncode for Option<crate::api::api_types::APICamera> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <crate::api::simple::APICamera>::sse_encode(value, serializer);
+            <crate::api::api_types::APICamera>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::api_types::NodeNetworkView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::api_types::NodeNetworkView>::sse_encode(value, serializer);
         }
     }
 }

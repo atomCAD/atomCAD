@@ -134,6 +134,10 @@ impl NodeTypeRegistry {
     return ret;
   }
 
+  pub fn add_node_network(&mut self, node_network: NodeNetwork) {
+    self.node_networks.insert(node_network.node_type.name.clone(), node_network);
+  }
+
   fn add_node_type(&mut self, node_type: NodeType) {
     self.built_in_node_types.insert(node_type.name.clone(), node_type);
   }

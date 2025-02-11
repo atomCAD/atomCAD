@@ -1,24 +1,32 @@
 use super::model::Model;
 use super::command::Command;
 use glam::f32::Vec3;
+use glam::f32::Vec2;
 use super::commands::add_atom_command::AddAtomCommand;
 use super::commands::add_bond_command::AddBondCommand;
 use super::commands::select_command::SelectCommand;
+use super::node_type_registry::NodeTypeRegistry;
+use super::node_network::NodeNetwork;
+use super::node_type::DataType;
+use super::node_type::NodeType;
 use std::ops::Deref;
 
 pub struct Kernel {
-  model: Model,
-  history: Vec<Box<dyn Command>>,
-  next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
+  pub model: Model,
+  pub history: Vec<Box<dyn Command>>,
+  pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
+  pub node_type_registry: NodeTypeRegistry,
 }
 
 impl Kernel {
 
   pub fn new() -> Self {
+
     Self {
       model: Model::new(),
       history: Vec::new(),
       next_history_index: 0,
+      node_type_registry: NodeTypeRegistry::new(),
     }
   }
 
@@ -79,5 +87,23 @@ impl Kernel {
   // Issue a SelectCommand
   pub fn select(&mut self, atom_ids: Vec<u64>, bond_ids: Vec<u64>, unselect: bool) {
     self.execute_command(Box::new(SelectCommand::new(atom_ids, bond_ids, unselect)));
+  }
+
+  // node network methods
+
+  pub fn add_node_network(&mut self, node_network_name: &str) {
+    self.node_type_registry.add_node_network(NodeNetwork::new(
+      NodeType {
+        name: node_network_name.to_string(),
+        parameters: Vec::new(),
+        output_type: DataType::Geometry // TODO: change this
+      }
+    ));
+  }
+
+  pub fn add_node(&mut self, node_network_name: &str, node_type_name: &str, position: Vec2) {
+    if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
+      node_network.add_node(node_type_name, position);
+    }
   }
 }
