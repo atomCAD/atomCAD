@@ -63,8 +63,11 @@ class NodeWidget extends StatelessWidget {
       left: node.position.x,
       top: node.position.y,
       child: Draggable(
-        feedback: NodeViewWidget(),
-        childWhenDragging: Opacity(opacity: 0.5, child: NodeViewWidget()),
+        feedback: DefaultTextStyle(
+          style: DefaultTextStyle.of(context).style, // Preserve text style
+          child: NodeViewWidget(),
+        ),
+        childWhenDragging: SizedBox.shrink(), //Opacity(opacity: 0.5, child: NodeViewWidget()),
         onDragEnd: (details) {
           Provider.of<GraphModel>(context, listen: false)
               .updateNodePosition(node.id, details.offset);
@@ -77,21 +80,88 @@ class NodeWidget extends StatelessWidget {
 
 /// Visual representation of a node.
 class NodeViewWidget extends StatelessWidget {
-  const NodeViewWidget({super.key});
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 80,
-      height: 40,
-      alignment: Alignment.center,
+      width: 160,
       decoration: BoxDecoration(
-        color: Colors.blue,
+        color: Colors.grey[900],
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blueAccent, width: 2),
       ),
-      child: Text(
-        "Node",
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Title Bar
+          Container(
+            padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.blueGrey[800],
+              borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
+            ),
+            child: Text(
+              "Node Title",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          // Main Body
+          Padding(
+            padding: EdgeInsets.all(8),
+            child: Row(
+              children: [
+                // Left Side (Inputs)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInputPin("Input 1"),
+                    _buildInputPin("Input 2"),
+                    _buildInputPin("Input 3"),
+                  ],
+                ),
+                Spacer(),
+                // Right Side (Output)
+                _buildOutputPin(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Creates a labeled input pin.
+  Widget _buildInputPin(String label) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: Colors.blue,
+            shape: BoxShape.circle,
+          ),
+        ),
+        SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(color: Colors.white, fontSize: 15),
+        ),
+      ],
+    );
+  }
+
+  /// Creates an output pin without a label.
+  Widget _buildOutputPin() {
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(
+        color: Colors.orange,
+        shape: BoxShape.circle,
       ),
     );
   }
