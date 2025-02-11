@@ -95,20 +95,23 @@ class APIVec3 {
 }
 
 class NodeNetworkView {
+  final String name;
   final List<NodeView> nodes;
 
   const NodeNetworkView({
+    required this.name,
     required this.nodes,
   });
 
   @override
-  int get hashCode => nodes.hashCode;
+  int get hashCode => name.hashCode ^ nodes.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is NodeNetworkView &&
           runtimeType == other.runtimeType &&
+          name == other.name &&
           nodes == other.nodes;
 }
 

@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => -1038688933;
+  int get rustContentHash => 508513072;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -97,6 +97,11 @@ abstract class RustLibApi extends BaseApi {
 
   void crateApiSimpleMoveCamera(
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up});
+
+  void crateApiSimpleMoveNode(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APIVec2 position});
 
   double crateApiSimpleProvideTexture({required int texturePtr});
 }
@@ -280,12 +285,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiSimpleMoveNode(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APIVec2 position}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_box_autoadd_api_vec_2(position, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleMoveNodeConstMeta,
+      argValues: [nodeNetworkName, nodeId, position],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleMoveNodeConstMeta => const TaskConstMeta(
+        debugName: "move_node",
+        argNames: ["nodeNetworkName", "nodeId", "position"],
+      );
+
+  @override
   double crateApiSimpleProvideTexture({required int texturePtr}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_CastedPrimitive_u_64(texturePtr, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_f_64,
@@ -365,6 +398,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_vec_2(raw);
+  }
+
+  @protected
   APIVec3 dco_decode_box_autoadd_api_vec_3(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_vec_3(raw);
@@ -410,10 +449,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeNetworkView dco_decode_node_network_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return NodeNetworkView(
-      nodes: dco_decode_list_node_view(arr[0]),
+      name: dco_decode_String(arr[0]),
+      nodes: dco_decode_list_node_view(arr[1]),
     );
   }
 
@@ -518,6 +558,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIVec2 sse_decode_box_autoadd_api_vec_2(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_vec_2(deserializer));
+  }
+
+  @protected
   APIVec3 sse_decode_box_autoadd_api_vec_3(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_vec_3(deserializer));
@@ -570,8 +616,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
     var var_nodes = sse_decode_list_node_view(deserializer);
-    return NodeNetworkView(nodes: var_nodes);
+    return NodeNetworkView(name: var_name, nodes: var_nodes);
   }
 
   @protected
@@ -678,6 +725,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_api_vec_2(
+      APIVec2 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_vec_2(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_api_vec_3(
       APIVec3 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -731,6 +785,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_node_network_view(
       NodeNetworkView self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
     sse_encode_list_node_view(self.nodes, serializer);
   }
 

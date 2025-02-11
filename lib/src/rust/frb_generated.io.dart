@@ -38,6 +38,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw);
 
   @protected
+  APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
+
+  @protected
   APIVec3 dco_decode_box_autoadd_api_vec_3(dynamic raw);
 
   @protected
@@ -96,6 +99,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer);
+
+  @protected
+  APIVec2 sse_decode_box_autoadd_api_vec_2(SseDeserializer deserializer);
 
   @protected
   APIVec3 sse_decode_box_autoadd_api_vec_3(SseDeserializer deserializer);
@@ -163,6 +169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_camera(
       APICamera self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_vec_3(APIVec3 self, SseSerializer serializer);

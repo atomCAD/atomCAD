@@ -54,4 +54,10 @@ impl NodeNetwork {
     self.next_node_id += 1;
     self.nodes.insert(node.id, node);
   }
+
+  pub fn move_node(&mut self, node_id: u64, position: Vec2) {
+    if let Some(node) = self.nodes.get_mut(&node_id) {
+      node.position = position;
+    }
+  }
 }

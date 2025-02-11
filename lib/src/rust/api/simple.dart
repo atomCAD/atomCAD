@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_vec3`
+// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `add_sample_network`, `from_api_vec2`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_vec2`, `to_api_vec3`
 // These types are ignored because they are not used by any `pub` functions: `CADInstance`, `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
@@ -32,6 +32,13 @@ APIVec3 findPivotPoint({required APIVec3 rayStart, required APIVec3 rayDir}) =>
 NodeNetworkView? getNodeNetworkView({required String nodeNetworkName}) =>
     RustLib.instance.api
         .crateApiSimpleGetNodeNetworkView(nodeNetworkName: nodeNetworkName);
+
+void moveNode(
+        {required String nodeNetworkName,
+        required BigInt nodeId,
+        required APIVec2 position}) =>
+    RustLib.instance.api.crateApiSimpleMoveNode(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId, position: position);
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

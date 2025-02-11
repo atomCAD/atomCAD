@@ -106,4 +106,10 @@ impl Kernel {
       node_network.add_node(node_type_name, position);
     }
   }
+
+  pub fn move_node(&mut self, node_network_name: &str, node_id: u64, position: Vec2) {
+    if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
+      node_network.move_node(node_id, position);
+    }
+  }
 }

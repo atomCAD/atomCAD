@@ -28,5 +28,6 @@ pub struct NodeView {
 }
 
 pub struct NodeNetworkView {
+  pub name: String,
   pub nodes: Vec<NodeView>,
 }

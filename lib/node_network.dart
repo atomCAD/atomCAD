@@ -15,10 +15,18 @@ class GraphModel extends ChangeNotifier {
 
   /// Updates a node's position and notifies listeners.
   void updateNodePosition(BigInt nodeId, Offset newPosition) {
-    print('updateNodePosition nodeId: ${nodeId} newPosition: ${newPosition}');
-    //final node = nodes.firstWhere((n) => n.id == nodeId);
-    //node.position = newPosition;
-    notifyListeners();
+    //print('updateNodePosition nodeId: ${nodeId} newPosition: ${newPosition}');
+    if (nodeNetworkView != null) {
+      moveNode(nodeNetworkName: nodeNetworkView!.name, nodeId: nodeId, position: APIVec2(x: newPosition.dx, y: newPosition.dy));
+      _refresh();
+    }
+  }
+
+  void _refresh() {
+    if (nodeNetworkView != null) {
+      nodeNetworkView = getNodeNetworkView(nodeNetworkName: nodeNetworkView!.name);
+      notifyListeners();
+    }
   }
 }
 
@@ -35,8 +43,7 @@ class NodeNetwork extends StatelessWidget {
       child: Consumer<GraphModel>(
         builder: (context, model, child) {
           return Stack(
-            // TODO: get rid of !
-            children: model.nodeNetworkView!.nodes.map((node) => NodeWidget(node: node)).toList(),
+            children: (model.nodeNetworkView == null) ? [] : model.nodeNetworkView!.nodes.map((node) => NodeWidget(node: node)).toList(),
           );
         },
       ),

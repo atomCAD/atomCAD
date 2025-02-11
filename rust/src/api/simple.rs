@@ -229,6 +229,7 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
     let node_network = cad_instance.kernel.node_type_registry.node_networks.get(&node_network_name)?;
 
     let mut node_network_view = NodeNetworkView {
+      name: node_network.node_type.name.clone(),
       nodes: Vec::new()
     };
 
@@ -241,6 +242,15 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
     }
 
     return Some(node_network_view);
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn move_node(node_network_name: &str, node_id: u64, position: APIVec2) {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.kernel.move_node(node_network_name, node_id, from_api_vec2(&position));
+    }
   }
 }
 
