@@ -1,25 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-/// Represents a single node in the graph.
-class NodeModel {
-  final int id;
-  Offset position;
-
-  NodeModel({required this.id, required this.position});
-}
+import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/simple.dart';
 
 /// Manages the entire node graph.
 class GraphModel extends ChangeNotifier {
-  final List<NodeModel> nodes;
+  NodeNetworkView? nodeNetworkView;
 
-  GraphModel({required this.nodes});
+  GraphModel();
+
+  void init(String nodeNetworkName) {
+    nodeNetworkView = getNodeNetworkView(nodeNetworkName: nodeNetworkName);
+  }
 
   /// Updates a node's position and notifies listeners.
-  void updateNodePosition(int nodeId, Offset newPosition) {
+  void updateNodePosition(BigInt nodeId, Offset newPosition) {
     print('updateNodePosition nodeId: ${nodeId} newPosition: ${newPosition}');
-    final node = nodes.firstWhere((n) => n.id == nodeId);
-    node.position = newPosition;
+    //final node = nodes.firstWhere((n) => n.id == nodeId);
+    //node.position = newPosition;
     notifyListeners();
   }
 }
@@ -37,7 +35,8 @@ class NodeNetwork extends StatelessWidget {
       child: Consumer<GraphModel>(
         builder: (context, model, child) {
           return Stack(
-            children: model.nodes.map((node) => NodeWidget(node: node)).toList(),
+            // TODO: get rid of !
+            children: model.nodeNetworkView!.nodes.map((node) => NodeWidget(node: node)).toList(),
           );
         },
       ),
@@ -47,31 +46,31 @@ class NodeNetwork extends StatelessWidget {
 
 /// Widget representing a single draggable node.
 class NodeWidget extends StatelessWidget {
-  final NodeModel node;
+  final NodeView node;
 
   NodeWidget({required this.node}) : super(key: ValueKey(node.id));
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: node.position.dx,
-      top: node.position.dy,
+      left: node.position.x,
+      top: node.position.y,
       child: Draggable(
-        feedback: NodeView(),
-        childWhenDragging: Opacity(opacity: 0.5, child: NodeView()),
+        feedback: NodeViewWidget(),
+        childWhenDragging: Opacity(opacity: 0.5, child: NodeViewWidget()),
         onDragEnd: (details) {
           Provider.of<GraphModel>(context, listen: false)
               .updateNodePosition(node.id, details.offset);
         },
-        child: NodeView(),
+        child: NodeViewWidget(),
       ),
     );
   }
 }
 
 /// Visual representation of a node.
-class NodeView extends StatelessWidget {
-  const NodeView({super.key});
+class NodeViewWidget extends StatelessWidget {
+  const NodeViewWidget({super.key});
 
   @override
   Widget build(BuildContext context) {

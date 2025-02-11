@@ -3,11 +3,13 @@ use dlopen::{symbor::{Library, Symbol}, Error as LibError};
 use std::time::Instant;
 use crate::renderer::renderer::Renderer;
 use crate::kernel::kernel::Kernel;
+use glam::f32::Vec2;
 use glam::f32::Vec3;
+use super::api_types::APIVec2;
 use super::api_types::APIVec3;
 use super::api_types::APICamera;
-use super::api_types::NodeNetworkView;
 use super::api_types::NodeView;
+use super::api_types::NodeNetworkView;
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
   return APIVec3{
@@ -22,6 +24,20 @@ fn from_api_vec3(v: &APIVec3) -> Vec3 {
     x: v.x,
     y: v.y,
     z: v.z
+  }
+}
+
+fn to_api_vec2(v: &Vec2) -> APIVec2 {
+  return APIVec2{
+    x: v.x,
+    y: v.y,
+  }
+}
+
+fn from_api_vec2(v: &APIVec2) -> Vec2 {
+  return Vec2 {
+    x: v.x,
+    y: v.y,
   }
 }
 
@@ -83,6 +99,7 @@ async fn initialize_cad_instance_async() {
 
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       add_sample_model(&mut cad_instance.kernel);
+      add_sample_network(&mut cad_instance.kernel);
       cad_instance.renderer.refresh(cad_instance.kernel.get_model())
     }
   }
@@ -93,6 +110,12 @@ fn add_sample_model(kernel: &mut Kernel) {
   let atom_id2 = kernel.add_atom(6, Vec3::new(1.3, 0.0, 0.0));
   kernel.add_atom(6, Vec3::new(1.3, 3.0, 0.0));
   kernel.add_bond(atom_id1, atom_id2, 1);
+}
+
+fn add_sample_network(kernel: &mut Kernel) {
+  kernel.add_node_network("sample");
+  kernel.add_node("sample", "cuboid", Vec2::new(30.0, 30.0));
+  kernel.add_node("sample", "sphere", Vec2::new(300.0, 80.0));
 }
 
 fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {
@@ -208,6 +231,14 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
     let mut node_network_view = NodeNetworkView {
       nodes: Vec::new()
     };
+
+    for (_id, node) in node_network.nodes.iter() {
+      node_network_view.nodes.push(NodeView {
+        id: node.id,
+        node_type_name: node.node_type_name.clone(),
+        position: to_api_vec2(&node.position),
+      });
+    }
 
     return Some(node_network_view);
   }

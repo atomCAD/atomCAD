@@ -7,12 +7,8 @@ Future<void> main() async {
   await RustLib.init();
   //runApp(const MyApp());
 
-  final graphModel = GraphModel(
-    nodes: [
-      NodeModel(id: 1, position: Offset(100, 100)),
-      NodeModel(id: 2, position: Offset(250, 200)),
-    ],
-  );
+  final graphModel = GraphModel();
+  graphModel.init("sample");
 
   runApp(MaterialApp(
     home: Scaffold(
