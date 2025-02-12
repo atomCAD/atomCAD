@@ -101,15 +101,37 @@ impl Kernel {
     ));
   }
 
-  pub fn add_node(&mut self, node_network_name: &str, node_type_name: &str, position: Vec2) {
-    if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
-      node_network.add_node(node_type_name, position);
+  pub fn add_node(&mut self, node_network_name: &str, node_type_name: &str, position: Vec2) -> u64 {
+    if let Some(node_type) = self.node_type_registry.get_node_type(node_type_name) {
+      let num_of_parameters = node_type.parameters.len();
+      if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
+        return node_network.add_node(node_type_name, position, num_of_parameters);
+      }
     }
+    return 0;
   }
 
   pub fn move_node(&mut self, node_network_name: &str, node_id: u64, position: Vec2) {
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.move_node(node_id, position);
+    }
+  }
+
+  pub fn connect_nodes(&mut self, node_network_name: &str, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
+    if let Some(node_network) = self.node_type_registry.node_networks.get(node_network_name) {
+      if let Some(dest_node) = node_network.nodes.get(&dest_node_id) {
+        if let Some(dest_node_type) = self.node_type_registry.get_node_type(&dest_node.node_type_name) {
+          let dest_param_is_multi = dest_node_type.parameters[dest_param_index].multi;
+          if let Some(mut_node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
+            mut_node_network.connect_nodes(
+              source_node_id,
+              dest_node_id,
+              dest_param_index, 
+              dest_param_is_multi,
+            );
+          }
+        }  
+      }
     }
   }
 }

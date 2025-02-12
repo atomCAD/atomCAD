@@ -5,11 +5,13 @@ use crate::renderer::renderer::Renderer;
 use crate::kernel::kernel::Kernel;
 use glam::f32::Vec2;
 use glam::f32::Vec3;
+use std::collections::HashMap;
 use super::api_types::APIVec2;
 use super::api_types::APIVec3;
 use super::api_types::APICamera;
 use super::api_types::InputPinView;
 use super::api_types::NodeView;
+use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
@@ -115,9 +117,12 @@ fn add_sample_model(kernel: &mut Kernel) {
 
 fn add_sample_network(kernel: &mut Kernel) {
   kernel.add_node_network("sample");
-  kernel.add_node("sample", "cuboid", Vec2::new(30.0, 30.0));
-  kernel.add_node("sample", "sphere", Vec2::new(100.0, 100.0));
-  kernel.add_node("sample", "diff", Vec2::new(300.0, 80.0));
+  let cuboid_id = kernel.add_node("sample", "cuboid", Vec2::new(30.0, 30.0));
+  let sphere_id = kernel.add_node("sample", "sphere", Vec2::new(100.0, 100.0));
+  let diff_id = kernel.add_node("sample", "diff", Vec2::new(300.0, 80.0));
+
+  kernel.connect_nodes("sample", cuboid_id, diff_id, 0);
+  kernel.connect_nodes("sample", sphere_id, diff_id, 1);
 }
 
 fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {
@@ -223,7 +228,6 @@ pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
   }
 }
 
-
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkView> {
   unsafe {
@@ -232,7 +236,8 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
 
     let mut node_network_view = NodeNetworkView {
       name: node_network.node_type.name.clone(),
-      nodes: Vec::new()
+      nodes: HashMap::new(),
+      wires: Vec::new(),
     };
 
     for (_id, node) in node_network.nodes.iter() {
@@ -247,12 +252,22 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
         }
       }
 
-      node_network_view.nodes.push(NodeView {
+      node_network_view.nodes.insert(node.id, NodeView {
         id: node.id,
         node_type_name: node.node_type_name.clone(),
         position: to_api_vec2(&node.position),
         input_pins,
       });
+
+      for (index, argument) in node.arguments.iter().enumerate() {
+        for argument_node_id in argument.argument_node_ids.iter() {
+          node_network_view.wires.push(WireView {
+            source_node_id: *argument_node_id,
+            dest_node_id: node.id,
+            dest_param_index: index,
+          });
+        }
+      }
     }
 
     return Some(node_network_view);

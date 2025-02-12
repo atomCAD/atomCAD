@@ -43,7 +43,7 @@ class NodeNetwork extends StatelessWidget {
       child: Consumer<GraphModel>(
         builder: (context, model, child) {
           return Stack(
-            children: (model.nodeNetworkView == null) ? [] : model.nodeNetworkView!.nodes.map((node) => NodeWidget(node: node)).toList(),
+            children: (model.nodeNetworkView == null) ? [] : model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(node: entry.value)).toList(),
           );
         },
       ),

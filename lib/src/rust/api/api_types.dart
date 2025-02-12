@@ -114,15 +114,17 @@ class InputPinView {
 
 class NodeNetworkView {
   final String name;
-  final List<NodeView> nodes;
+  final Map<BigInt, NodeView> nodes;
+  final List<WireView> wires;
 
   const NodeNetworkView({
     required this.name,
     required this.nodes,
+    required this.wires,
   });
 
   @override
-  int get hashCode => name.hashCode ^ nodes.hashCode;
+  int get hashCode => name.hashCode ^ nodes.hashCode ^ wires.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -130,7 +132,8 @@ class NodeNetworkView {
       other is NodeNetworkView &&
           runtimeType == other.runtimeType &&
           name == other.name &&
-          nodes == other.nodes;
+          nodes == other.nodes &&
+          wires == other.wires;
 }
 
 class NodeView {
@@ -162,4 +165,29 @@ class NodeView {
           nodeTypeName == other.nodeTypeName &&
           position == other.position &&
           inputPins == other.inputPins;
+}
+
+class WireView {
+  final BigInt sourceNodeId;
+  final BigInt destNodeId;
+  final BigInt destParamIndex;
+
+  const WireView({
+    required this.sourceNodeId,
+    required this.destNodeId,
+    required this.destParamIndex,
+  });
+
+  @override
+  int get hashCode =>
+      sourceNodeId.hashCode ^ destNodeId.hashCode ^ destParamIndex.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WireView &&
+          runtimeType == other.runtimeType &&
+          sourceNodeId == other.sourceNodeId &&
+          destNodeId == other.destNodeId &&
+          destParamIndex == other.destParamIndex;
 }

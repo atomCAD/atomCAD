@@ -1,4 +1,4 @@
-use glam::f32::Vec3;
+use std::collections::HashMap;
 
 pub struct APIVec2 {
   pub x: f32,
@@ -32,7 +32,14 @@ pub struct NodeView {
   pub input_pins: Vec<InputPinView>,
 }
 
+pub struct WireView {
+  pub source_node_id: u64,
+  pub dest_node_id: u64,
+  pub dest_param_index: usize,
+}
+
 pub struct NodeNetworkView {
   pub name: String,
-  pub nodes: Vec<NodeView>,
+  pub nodes: HashMap<u64, NodeView>,
+  pub wires: Vec<WireView>,
 }

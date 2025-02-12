@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use super::node_type::NodeType;
 use super::node_type::NodeData;
 use super::node_type::NoData;
+use super::node_type_registry::NodeTypeRegistry;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
@@ -43,16 +44,22 @@ impl NodeNetwork {
     return ret;
   }
 
-  pub fn add_node(&mut self, node_type_name: &str, position: Vec2) {
+  pub fn add_node(&mut self, node_type_name: &str, position: Vec2, num_of_parameters: usize) -> u64 {
+    let node_id = self.next_node_id;
+    let mut arguments: Vec<Argument> = Vec::new();
+    for _i in 0..num_of_parameters {
+      arguments.push(Argument { argument_node_ids: HashSet::new() });
+    }
     let node = Node {
-      id: self.next_node_id,
+      id: node_id,
       node_type_name: node_type_name.to_string(),
       position,
-      arguments: Vec::new(),
+      arguments,
       data: Box::new(NoData{}),
     };
     self.next_node_id += 1;
-    self.nodes.insert(node.id, node);
+    self.nodes.insert(node_id, node);
+    return node_id;
   }
 
   pub fn move_node(&mut self, node_id: u64, position: Vec2) {
@@ -60,4 +67,16 @@ impl NodeNetwork {
       node.position = position;
     }
   }
+
+  pub fn connect_nodes(&mut self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize, dest_param_is_multi: bool) {
+    if let Some(dest_node) = self.nodes.get_mut(&dest_node_id) {
+      let argument = &mut dest_node.arguments[dest_param_index];
+      // In case of single parameters we need to disconnect the existing parameter first
+      if (!dest_param_is_multi) && (!argument.argument_node_ids.is_empty()) {
+        argument.argument_node_ids.clear();
+      }
+      argument.argument_node_ids.insert(source_node_id);
+    }
+  }
+
 }

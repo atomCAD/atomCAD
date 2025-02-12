@@ -25,6 +25,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_CastedPrimitive_u_64(dynamic raw);
 
   @protected
+  Map<BigInt, NodeView> dco_decode_Map_u_64_node_view(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -64,10 +67,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<InputPinView> dco_decode_list_input_pin_view(dynamic raw);
 
   @protected
-  List<NodeView> dco_decode_list_node_view(dynamic raw);
+  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+  List<(BigInt, NodeView)> dco_decode_list_record_u_64_node_view(dynamic raw);
+
+  @protected
+  List<WireView> dco_decode_list_wire_view(dynamic raw);
 
   @protected
   NodeNetworkView dco_decode_node_network_view(dynamic raw);
@@ -82,6 +88,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
+
+  @protected
   BigInt dco_decode_u_64(dynamic raw);
 
   @protected
@@ -91,7 +100,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  WireView dco_decode_wire_view(dynamic raw);
+
+  @protected
   int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
+
+  @protected
+  Map<BigInt, NodeView> sse_decode_Map_u_64_node_view(
+      SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -135,10 +154,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  List<NodeView> sse_decode_list_node_view(SseDeserializer deserializer);
+  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
-  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+  List<(BigInt, NodeView)> sse_decode_list_record_u_64_node_view(
+      SseDeserializer deserializer);
+
+  @protected
+  List<WireView> sse_decode_list_wire_view(SseDeserializer deserializer);
 
   @protected
   NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer);
@@ -155,6 +178,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  (BigInt, NodeView) sse_decode_record_u_64_node_view(
+      SseDeserializer deserializer);
+
+  @protected
   BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
@@ -164,10 +191,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  WireView sse_decode_wire_view(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_Map_u_64_node_view(
+      Map<BigInt, NodeView> self, SseSerializer serializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -212,11 +249,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<InputPinView> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_node_view(List<NodeView> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_record_u_64_node_view(
+      List<(BigInt, NodeView)> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_wire_view(List<WireView> self, SseSerializer serializer);
 
   @protected
   void sse_encode_node_network_view(
@@ -234,6 +275,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_record_u_64_node_view(
+      (BigInt, NodeView) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
@@ -241,6 +286,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_wire_view(WireView self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
