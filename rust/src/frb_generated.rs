@@ -417,6 +417,28 @@ impl SseDecode for i32 {
     }
 }
 
+impl SseDecode for crate::api::api_types::InputPinView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        return crate::api::api_types::InputPinView { name: var_name };
+    }
+}
+
+impl SseDecode for Vec<crate::api::api_types::InputPinView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::api_types::InputPinView>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::api_types::NodeView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -459,10 +481,13 @@ impl SseDecode for crate::api::api_types::NodeView {
         let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_nodeTypeName = <String>::sse_decode(deserializer);
         let mut var_position = <crate::api::api_types::APIVec2>::sse_decode(deserializer);
+        let mut var_inputPins =
+            <Vec<crate::api::api_types::InputPinView>>::sse_decode(deserializer);
         return crate::api::api_types::NodeView {
             id: var_id,
             node_type_name: var_nodeTypeName,
             position: var_position,
+            input_pins: var_inputPins,
         };
     }
 }
@@ -623,6 +648,23 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APIVec3>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::InputPinView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [self.name.into_into_dart().into_dart()].into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::InputPinView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::InputPinView>
+    for crate::api::api_types::InputPinView
+{
+    fn into_into_dart(self) -> crate::api::api_types::InputPinView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::api_types::NodeNetworkView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -650,6 +692,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::api_types::NodeView {
             self.id.into_into_dart().into_dart(),
             self.node_type_name.into_into_dart().into_dart(),
             self.position.into_into_dart().into_dart(),
+            self.input_pins.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -724,6 +767,23 @@ impl SseEncode for i32 {
     }
 }
 
+impl SseEncode for crate::api::api_types::InputPinView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+    }
+}
+
+impl SseEncode for Vec<crate::api::api_types::InputPinView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::api_types::InputPinView>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::api_types::NodeView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -758,6 +818,7 @@ impl SseEncode for crate::api::api_types::NodeView {
         <u64>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.node_type_name, serializer);
         <crate::api::api_types::APIVec2>::sse_encode(self.position, serializer);
+        <Vec<crate::api::api_types::InputPinView>>::sse_encode(self.input_pins, serializer);
     }
 }
 

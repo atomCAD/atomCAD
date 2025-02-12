@@ -8,6 +8,7 @@ use glam::f32::Vec3;
 use super::api_types::APIVec2;
 use super::api_types::APIVec3;
 use super::api_types::APICamera;
+use super::api_types::InputPinView;
 use super::api_types::NodeView;
 use super::api_types::NodeNetworkView;
 
@@ -115,7 +116,8 @@ fn add_sample_model(kernel: &mut Kernel) {
 fn add_sample_network(kernel: &mut Kernel) {
   kernel.add_node_network("sample");
   kernel.add_node("sample", "cuboid", Vec2::new(30.0, 30.0));
-  kernel.add_node("sample", "sphere", Vec2::new(300.0, 80.0));
+  kernel.add_node("sample", "sphere", Vec2::new(100.0, 100.0));
+  kernel.add_node("sample", "diff", Vec2::new(300.0, 80.0));
 }
 
 fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {
@@ -234,10 +236,22 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
     };
 
     for (_id, node) in node_network.nodes.iter() {
+      let mut input_pins: Vec<InputPinView> = Vec::new();
+      if let Some(node_type) = cad_instance.kernel.node_type_registry.get_node_type(&node.node_type_name) {
+        let num_of_params = node_type.parameters.len();
+        for i in 0..num_of_params {
+          let param = &node_type.parameters[i];
+          input_pins.push(InputPinView {
+            name: param.name.clone(),
+          });
+        }
+      }
+
       node_network_view.nodes.push(NodeView {
         id: node.id,
         node_type_name: node.node_type_name.clone(),
         position: to_api_vec2(&node.position),
+        input_pins,
       });
     }
 

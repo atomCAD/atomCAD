@@ -134,6 +134,15 @@ impl NodeTypeRegistry {
     return ret;
   }
 
+  pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {
+    let node_type = self.built_in_node_types.get(node_type_name);
+    if let Some(_nt) = node_type {
+      return node_type;
+    }
+    let node_network = self.node_networks.get(node_type_name)?;
+    return Some(&node_network.node_type);
+  }
+
   pub fn add_node_network(&mut self, node_network: NodeNetwork) {
     self.node_networks.insert(node_network.node_type.name.clone(), node_network);
   }

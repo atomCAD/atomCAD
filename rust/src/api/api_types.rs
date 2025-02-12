@@ -21,10 +21,15 @@ pub struct APICamera {
   pub zfar: f32,
 }
 
+pub struct InputPinView {
+  pub name: String,
+}
+
 pub struct NodeView {
   pub id: u64,
   pub node_type_name: String,
-  pub position: APIVec2,   
+  pub position: APIVec2,
+  pub input_pins: Vec<InputPinView>,
 }
 
 pub struct NodeNetworkView {

@@ -65,14 +65,14 @@ class NodeWidget extends StatelessWidget {
       child: Draggable(
         feedback: DefaultTextStyle(
           style: DefaultTextStyle.of(context).style, // Preserve text style
-          child: NodeViewWidget(),
+          child: NodeViewWidget(node: node),
         ),
         childWhenDragging: SizedBox.shrink(), //Opacity(opacity: 0.5, child: NodeViewWidget()),
         onDragEnd: (details) {
           Provider.of<GraphModel>(context, listen: false)
               .updateNodePosition(node.id, details.offset);
         },
-        child: NodeViewWidget(),
+        child: NodeViewWidget(node: node),
       ),
     );
   }
@@ -80,6 +80,10 @@ class NodeWidget extends StatelessWidget {
 
 /// Visual representation of a node.
 class NodeViewWidget extends StatelessWidget {
+  final NodeView node;
+
+  const NodeViewWidget({required this.node, super.key});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -100,7 +104,7 @@ class NodeViewWidget extends StatelessWidget {
               borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
             ),
             child: Text(
-              "Node Title",
+              node.nodeTypeName,
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -116,11 +120,7 @@ class NodeViewWidget extends StatelessWidget {
                 // Left Side (Inputs)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildInputPin("Input 1"),
-                    _buildInputPin("Input 2"),
-                    _buildInputPin("Input 3"),
-                  ],
+                  children: node.inputPins.map((inputPin) => _buildInputPin(inputPin.name)).toList(),
                 ),
                 Spacer(),
                 // Right Side (Output)
