@@ -119,10 +119,12 @@ fn add_sample_network(kernel: &mut Kernel) {
   kernel.add_node_network("sample");
   let cuboid_id = kernel.add_node("sample", "cuboid", Vec2::new(30.0, 30.0));
   let sphere_id = kernel.add_node("sample", "sphere", Vec2::new(100.0, 100.0));
-  let diff_id = kernel.add_node("sample", "diff", Vec2::new(300.0, 80.0));
+  let diff_id_1 = kernel.add_node("sample", "diff", Vec2::new(300.0, 80.0));
+  let diff_id_2 = kernel.add_node("sample", "diff", Vec2::new(500.0, 80.0));
 
-  kernel.connect_nodes("sample", cuboid_id, diff_id, 0);
-  kernel.connect_nodes("sample", sphere_id, diff_id, 1);
+  kernel.connect_nodes("sample", cuboid_id, diff_id_1, 0);
+  kernel.connect_nodes("sample", sphere_id, diff_id_1, 1);
+  kernel.connect_nodes("sample", diff_id_1, diff_id_2, 1);
 }
 
 fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {

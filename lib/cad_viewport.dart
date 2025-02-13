@@ -3,17 +3,10 @@ import 'package:flutter/gestures.dart';
 import 'package:texture_rgba_renderer/texture_rgba_renderer.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/api_utils.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:vector_math/vector_math.dart' as vector_math;
 import 'dart:math';
-
-vector_math.Vector3 APIVec3ToVector3(APIVec3 v) {
-  return vector_math.Vector3(v.x, v.y, v.z);
-}
-
-APIVec3 Vector3ToAPIVec3(vector_math.Vector3 v) {
-  return APIVec3(x: v.x, y: v.y, z: v.z);
-}
 
 enum ViewportDragState {
   noDrag,

@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
+import 'package:flutter_cad/api_utils.dart';
+import 'dart:math';
+
+const double NODE_WIDTH = 160.0;
+const double NODE_VERT_WIRE_OFFSET = 39.0;
+const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
+const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
 
 /// Manages the entire node graph.
 class GraphModel extends ChangeNotifier {
@@ -43,7 +50,12 @@ class NodeNetwork extends StatelessWidget {
       child: Consumer<GraphModel>(
         builder: (context, model, child) {
           return Stack(
-            children: (model.nodeNetworkView == null) ? [] : model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(node: entry.value)).toList(),
+            children: (model.nodeNetworkView == null) ? [] : [
+              CustomPaint(
+                painter: WirePainter(model),
+                child: Container(),
+              ), ...(model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(node: entry.value)).toList())
+            ],
           );
         },
       ),
@@ -87,7 +99,7 @@ class NodeViewWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 160,
+      width: NODE_WIDTH,
       decoration: BoxDecoration(
         color: Colors.grey[900],
         borderRadius: BorderRadius.circular(8),
@@ -165,4 +177,49 @@ class NodeViewWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+class WirePainter extends CustomPainter {
+  final GraphModel graphModel;
+
+  WirePainter(this.graphModel);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (graphModel.nodeNetworkView == null) {
+      return;
+    }
+
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    for (var wire in graphModel.nodeNetworkView!.wires) {
+      final sourceNode = graphModel.nodeNetworkView!.nodes[wire.sourceNodeId];
+      final destNode = graphModel.nodeNetworkView!.nodes[wire.destNodeId];
+
+      
+      final sourceVertOffset = sourceNode!.inputPins.length == 0 ? NODE_VERT_WIRE_OFFSET_EMPTY : NODE_VERT_WIRE_OFFSET + sourceNode.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM * 0.5;
+      final destVertOffset = NODE_VERT_WIRE_OFFSET + (wire.destParamIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+      final sourcePos = APIVec2ToOffset(sourceNode!.position) + Offset(NODE_WIDTH, sourceVertOffset);
+      final destPos = APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
+
+      final controlPoint1 = sourcePos + Offset(50, 0);
+      final controlPoint2 = destPos - Offset(50, 0);
+
+      final path = Path()
+        ..moveTo(sourcePos.dx, sourcePos.dy)
+        ..cubicTo(
+          controlPoint1.dx, controlPoint1.dy,
+          controlPoint2.dx, controlPoint2.dy,
+          destPos.dx, destPos.dy,
+        );
+
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(WirePainter oldDelegate) => true;
 }
