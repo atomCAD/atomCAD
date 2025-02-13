@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/api_utils.dart';
-import 'dart:math';
 
 const double NODE_WIDTH = 160.0;
 const double NODE_VERT_WIRE_OFFSET = 39.0;
@@ -20,17 +19,20 @@ class GraphModel extends ChangeNotifier {
     nodeNetworkView = getNodeNetworkView(nodeNetworkName: nodeNetworkName);
   }
 
+  // Called on each small update when dragging a node
+  // Works only on the UI: do not update the position in the kernel
   void dragNodePosition(BigInt nodeId, Offset delta) {
       final node = nodeNetworkView!.nodes[nodeId]!;
       node.position = APIVec2(x: node.position.x + delta.dx, y: node.position.y + delta.dy);
       notifyListeners();    
   }
 
-  /// Updates a node's position and notifies listeners.
-  void updateNodePosition(BigInt nodeId, Offset newPosition) {
+  /// Updates a node's position in the kernel and notifies listeners.
+  void updateNodePosition(BigInt nodeId) {
     //print('updateNodePosition nodeId: ${nodeId} newPosition: ${newPosition}');
     if (nodeNetworkView != null) {
-      moveNode(nodeNetworkName: nodeNetworkView!.name, nodeId: nodeId, position: APIVec2(x: newPosition.dx, y: newPosition.dy));
+      final node = nodeNetworkView!.nodes[nodeId]!;
+      moveNode(nodeNetworkName: nodeNetworkView!.name, nodeId: nodeId, position: APIVec2(x: node.position.x, y: node.position.y));
       _refreshFromKernel();
     }
   }
@@ -80,83 +82,69 @@ class NodeWidget extends StatelessWidget {
     return Positioned(
       left: node.position.x,
       top: node.position.y,
-      child: Draggable(
-        feedback: DefaultTextStyle(
-          style: DefaultTextStyle.of(context).style, // Preserve text style
-          child: NodeViewWidget(node: node),
+      child:  Container(
+        width: NODE_WIDTH,
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blueAccent, width: 2),
         ),
-        childWhenDragging: SizedBox.shrink(), //Opacity(opacity: 0.5, child: NodeViewWidget()),
-        onDragUpdate: (details) {
-          Provider.of<GraphModel>(context, listen: false)
-              .dragNodePosition(node.id, details.delta);
-        },
-        onDragEnd: (details) {
-          Provider.of<GraphModel>(context, listen: false)
-              .updateNodePosition(node.id, details.offset);
-        },
-        child: NodeViewWidget(node: node),
-      ),
-    );
-  }
-}
-
-/// Visual representation of a node.
-class NodeViewWidget extends StatelessWidget {
-  final NodeView node;
-
-  const NodeViewWidget({required this.node, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: NODE_WIDTH,
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blueAccent, width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Title Bar
-          Container(
-            padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            decoration: BoxDecoration(
-              color: Colors.blueGrey[800],
-              borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
-            ),
-            child: Text(
-              node.nodeTypeName,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Title Bar
+            GestureDetector(
+              onPanStart: (details) {
+              },
+              onPanUpdate: (details) {
+                Provider.of<GraphModel>(context, listen: false)
+                .dragNodePosition(node.id, details.delta);
+              },
+              onPanEnd: (details) {
+                Provider.of<GraphModel>(context, listen: false)
+                  .updateNodePosition(node.id);
+              },
+              child: Container(
+                padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey[800],
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
+                ),
+                child: Text(
+                  node.nodeTypeName,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
               ),
             ),
-          ),
-          // Main Body
-          Padding(
-            padding: EdgeInsets.all(8),
-            child: Row(
-              children: [
-                // Left Side (Inputs)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: node.inputPins.map((inputPin) => _buildInputPin(inputPin.name)).toList(),
-                ),
-                Spacer(),
-                // Right Side (Output)
-                _buildOutputPin(),
-              ],
+            // Main Body
+            Padding(
+              padding: EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  // Left Side (Inputs)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: node.inputPins.map((inputPin) => _buildInputPin(inputPin.name)).toList(),
+                  ),
+                  Spacer(),
+                  // Right Side (Output)
+                  _buildOutputPin(),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      )
     );
   }
 
   /// Creates a labeled input pin.
   Widget _buildInputPin(String label) {
+
     return Row(
       children: [
         Container(
