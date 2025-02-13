@@ -9,6 +9,18 @@ const double NODE_VERT_WIRE_OFFSET = 39.0;
 const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
 const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
 
+class PinReference {
+  BigInt nodeId;
+  int pinIndex;
+
+  PinReference(this.nodeId, this.pinIndex);
+
+  @override
+  String toString() {
+    return 'PinReference(nodeId: $nodeId, pinIndex: $pinIndex)';
+  }
+}
+
 /// Manages the entire node graph.
 class GraphModel extends ChangeNotifier {
   NodeNetworkView? nodeNetworkView;
@@ -71,6 +83,50 @@ class NodeNetwork extends StatelessWidget {
   }
 }
 
+class PinViewWidget extends StatelessWidget {
+  final Color color;
+
+  PinViewWidget({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class PinWidget extends StatelessWidget {
+  final PinReference pinReference;
+  PinWidget({required this.pinReference}) : super(key: ValueKey(pinReference.pinIndex));
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<PinReference>(
+      builder: (context, candidateData, rejectedData) {
+        Color pinColor = pinReference.pinIndex < 0 ? Colors.orange : Colors.blue;
+        return Draggable<PinReference>(
+          data: pinReference,
+          feedback: SizedBox.shrink(),
+          childWhenDragging: PinViewWidget(color: pinColor),
+          child: PinViewWidget(color: pinColor),
+        );
+      },
+      onWillAcceptWithDetails: (details) => details.data != pinReference, // Prevent dragging onto itself
+      onAcceptWithDetails: (details) {
+        print("Connected pin ${details.data} to pin $pinReference");
+      },
+    );
+  }    
+}
+
 /// Widget representing a single draggable node.
 class NodeWidget extends StatelessWidget {
   final NodeView node;
@@ -128,11 +184,13 @@ class NodeWidget extends StatelessWidget {
                   // Left Side (Inputs)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: node.inputPins.map((inputPin) => _buildInputPin(inputPin.name)).toList(),
+                    children: node.inputPins.asMap().entries.map((entry) => _buildInputPin(entry.value.name, PinReference(node.id, entry.key))).toList(),
                   ),
                   Spacer(),
                   // Right Side (Output)
-                  _buildOutputPin(),
+                  PinWidget(
+                    pinReference: PinReference(node.id, -1)
+                  ),
                 ],
               ),
             ),
@@ -143,36 +201,16 @@ class NodeWidget extends StatelessWidget {
   }
 
   /// Creates a labeled input pin.
-  Widget _buildInputPin(String label) {
-
+  Widget _buildInputPin(String label, PinReference pinReference) {
     return Row(
       children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: Colors.blue,
-            shape: BoxShape.circle,
-          ),
-        ),
+        PinWidget(pinReference: pinReference),
         SizedBox(width: 6),
         Text(
           label,
           style: TextStyle(color: Colors.white, fontSize: 15),
         ),
       ],
-    );
-  }
-
-  /// Creates an output pin without a label.
-  Widget _buildOutputPin() {
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(
-        color: Colors.orange,
-        shape: BoxShape.circle,
-      ),
     );
   }
 }
