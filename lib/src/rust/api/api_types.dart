@@ -139,10 +139,10 @@ class NodeNetworkView {
 class NodeView {
   final BigInt id;
   final String nodeTypeName;
-  final APIVec2 position;
+  APIVec2 position;
   final List<InputPinView> inputPins;
 
-  const NodeView({
+  NodeView({
     required this.id,
     required this.nodeTypeName,
     required this.position,

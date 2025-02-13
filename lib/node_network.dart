@@ -20,16 +20,22 @@ class GraphModel extends ChangeNotifier {
     nodeNetworkView = getNodeNetworkView(nodeNetworkName: nodeNetworkName);
   }
 
+  void dragNodePosition(BigInt nodeId, Offset delta) {
+      final node = nodeNetworkView!.nodes[nodeId]!;
+      node.position = APIVec2(x: node.position.x + delta.dx, y: node.position.y + delta.dy);
+      notifyListeners();    
+  }
+
   /// Updates a node's position and notifies listeners.
   void updateNodePosition(BigInt nodeId, Offset newPosition) {
     //print('updateNodePosition nodeId: ${nodeId} newPosition: ${newPosition}');
     if (nodeNetworkView != null) {
       moveNode(nodeNetworkName: nodeNetworkView!.name, nodeId: nodeId, position: APIVec2(x: newPosition.dx, y: newPosition.dy));
-      _refresh();
+      _refreshFromKernel();
     }
   }
 
-  void _refresh() {
+  void _refreshFromKernel() {
     if (nodeNetworkView != null) {
       nodeNetworkView = getNodeNetworkView(nodeNetworkName: nodeNetworkView!.name);
       notifyListeners();
@@ -80,6 +86,10 @@ class NodeWidget extends StatelessWidget {
           child: NodeViewWidget(node: node),
         ),
         childWhenDragging: SizedBox.shrink(), //Opacity(opacity: 0.5, child: NodeViewWidget()),
+        onDragUpdate: (details) {
+          Provider.of<GraphModel>(context, listen: false)
+              .dragNodePosition(node.id, details.delta);
+        },
         onDragEnd: (details) {
           Provider.of<GraphModel>(context, listen: false)
               .updateNodePosition(node.id, details.offset);

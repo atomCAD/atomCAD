@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use flutter_rust_bridge::frb;
+
 pub struct APIVec2 {
   pub x: f32,
   pub y: f32,
@@ -25,9 +27,11 @@ pub struct InputPinView {
   pub name: String,
 }
 
+#[frb]
 pub struct NodeView {
   pub id: u64,
   pub node_type_name: String,
+  #[frb(non_final)]
   pub position: APIVec2,
   pub input_pins: Vec<InputPinView>,
 }
