@@ -40,5 +40,16 @@ void moveNode(
     RustLib.instance.api.crateApiSimpleMoveNode(
         nodeNetworkName: nodeNetworkName, nodeId: nodeId, position: position);
 
+void connectNodes(
+        {required String nodeNetworkName,
+        required BigInt sourceNodeId,
+        required BigInt destNodeId,
+        required BigInt destParamIndex}) =>
+    RustLib.instance.api.crateApiSimpleConnectNodes(
+        nodeNetworkName: nodeNetworkName,
+        sourceNodeId: sourceNodeId,
+        destNodeId: destNodeId,
+        destParamIndex: destParamIndex);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

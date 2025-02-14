@@ -286,6 +286,15 @@ pub fn move_node(node_network_name: &str, node_id: u64, position: APIVec2) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn connect_nodes(node_network_name: &str, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.kernel.connect_nodes(node_network_name, source_node_id, dest_node_id, dest_param_index);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn greet(name: String) -> String {
     format!("Hello, {name}!")
 }

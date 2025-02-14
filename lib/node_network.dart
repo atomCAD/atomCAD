@@ -8,6 +8,7 @@ const double NODE_WIDTH = 160.0;
 const double NODE_VERT_WIRE_OFFSET = 39.0;
 const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
 const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
+const double CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
 
 class PinReference {
   BigInt nodeId;
@@ -21,9 +22,17 @@ class PinReference {
   }
 }
 
+class DraggedWire {
+  PinReference startPin;
+  Offset wireEndPosition;
+
+  DraggedWire(this.startPin, this.wireEndPosition);
+}
+
 /// Manages the entire node graph.
 class GraphModel extends ChangeNotifier {
   NodeNetworkView? nodeNetworkView;
+  DraggedWire? draggedWire; // not null if there is a wire dragging in progress
 
   GraphModel();
 
@@ -47,6 +56,35 @@ class GraphModel extends ChangeNotifier {
       moveNode(nodeNetworkName: nodeNetworkView!.name, nodeId: nodeId, position: APIVec2(x: node.position.x, y: node.position.y));
       _refreshFromKernel();
     }
+  }
+
+  void dragWire(PinReference startPin, Offset wireEndPosition) {
+    draggedWire ??= DraggedWire(startPin, wireEndPosition);
+    draggedWire!.wireEndPosition = wireEndPosition;
+    notifyListeners();
+  }
+
+  void cancelDragWire() {
+    if (draggedWire != null) {
+      draggedWire = null;
+      notifyListeners();
+    }
+  }
+
+  void connectPins(PinReference pin1, PinReference pin2) {
+    final outPin = pin1.pinIndex < 0 ? pin1 : pin2;
+    final inPin = pin1.pinIndex < 0 ? pin2 : pin1;
+
+    connectNodes(
+      nodeNetworkName: nodeNetworkView!.name,
+      sourceNodeId: outPin.nodeId,
+      destNodeId: inPin.nodeId,
+      destParamIndex: BigInt.from(inPin.pinIndex),
+    );
+
+    draggedWire = null;
+
+    _refreshFromKernel();
   }
 
   void _refreshFromKernel() {
@@ -86,7 +124,7 @@ class NodeNetwork extends StatelessWidget {
 class PinViewWidget extends StatelessWidget {
   final Color color;
 
-  PinViewWidget({required this.color});
+  const PinViewWidget({super.key, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -117,11 +155,21 @@ class PinWidget extends StatelessWidget {
           feedback: SizedBox.shrink(),
           childWhenDragging: PinViewWidget(color: pinColor),
           child: PinViewWidget(color: pinColor),
+          onDragUpdate: (details) {
+            Provider.of<GraphModel>(context, listen: false)
+              .dragWire(pinReference, details.globalPosition);            
+          },
+          onDragEnd: (details) {
+            Provider.of<GraphModel>(context, listen: false)
+              .cancelDragWire();
+          },
         );
       },
       onWillAcceptWithDetails: (details) => details.data != pinReference, // Prevent dragging onto itself
       onAcceptWithDetails: (details) {
-        print("Connected pin ${details.data} to pin $pinReference");
+        //print("Connected pin ${details.data} to pin $pinReference");
+        Provider.of<GraphModel>(context, listen: false)
+          .connectPins(details.data, pinReference);
       },
     );
   }    
@@ -232,28 +280,49 @@ class WirePainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final sourceNode = graphModel.nodeNetworkView!.nodes[wire.sourceNodeId];
-      final destNode = graphModel.nodeNetworkView!.nodes[wire.destNodeId];
-
-      
-      final sourceVertOffset = sourceNode!.inputPins.length == 0 ? NODE_VERT_WIRE_OFFSET_EMPTY : NODE_VERT_WIRE_OFFSET + sourceNode.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM * 0.5;
-      final destVertOffset = NODE_VERT_WIRE_OFFSET + (wire.destParamIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-      final sourcePos = APIVec2ToOffset(sourceNode!.position) + Offset(NODE_WIDTH, sourceVertOffset);
-      final destPos = APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
-
-      final controlPoint1 = sourcePos + Offset(50, 0);
-      final controlPoint2 = destPos - Offset(50, 0);
-
-      final path = Path()
-        ..moveTo(sourcePos.dx, sourcePos.dy)
-        ..cubicTo(
-          controlPoint1.dx, controlPoint1.dy,
-          controlPoint2.dx, controlPoint2.dy,
-          destPos.dx, destPos.dy,
-        );
-
-      canvas.drawPath(path, paint);
+      final sourcePos = _getPinPosition(PinReference(wire.sourceNodeId, -1));
+      final destPos = _getPinPosition(PinReference(wire.destNodeId, wire.destParamIndex.toInt()));
+      _drawWire(sourcePos, destPos, canvas, paint);
     }
+
+    if (graphModel.draggedWire != null) {
+      final wireStartPos = _getPinPosition(graphModel.draggedWire!.startPin);
+      final wireEndPos = graphModel.draggedWire!.wireEndPosition;
+      if (graphModel.draggedWire!.startPin.pinIndex < 0) { // start is source
+        _drawWire(wireStartPos, wireEndPos, canvas, paint); 
+      } else { // start is dest
+        _drawWire(wireEndPos, wireStartPos, canvas, paint); 
+      }
+    }    
+  }
+
+  _getPinPosition(PinReference pinReference) {
+    // Now this is is a bit of a hacky solution.
+    // We should probably use the real positions of the pin widgets instead of this logic to
+    // approximate it independently.
+    if (pinReference.pinIndex < 0) { // output pin (source pin)
+      final sourceNode = graphModel.nodeNetworkView!.nodes[pinReference.nodeId];
+      final sourceVertOffset = sourceNode!.inputPins.isEmpty ? NODE_VERT_WIRE_OFFSET_EMPTY : NODE_VERT_WIRE_OFFSET + sourceNode.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM * 0.5;
+      return APIVec2ToOffset(sourceNode.position) + Offset(NODE_WIDTH, sourceVertOffset);
+    } else { // input pin (dest pin)
+      final destNode = graphModel.nodeNetworkView!.nodes[pinReference.nodeId];
+      final destVertOffset = NODE_VERT_WIRE_OFFSET + (pinReference.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+      return APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
+    }
+  }
+
+  _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint) {
+    final controlPoint1 = sourcePos + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
+    final controlPoint2 = destPos - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
+
+    final path = Path()
+      ..moveTo(sourcePos.dx, sourcePos.dy)
+      ..cubicTo(
+        controlPoint1.dx, controlPoint1.dy,
+        controlPoint2.dx, controlPoint2.dy,
+        destPos.dx, destPos.dy,
+      );
+    canvas.drawPath(path, paint);
   }
 
   @override
