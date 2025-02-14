@@ -25,6 +25,8 @@ pub struct APICamera {
 
 pub struct InputPinView {
   pub name: String,
+  pub data_type: String,
+  pub multi: bool, 
 }
 
 #[frb]
@@ -34,6 +36,7 @@ pub struct NodeView {
   #[frb(non_final)]
   pub position: APIVec2,
   pub input_pins: Vec<InputPinView>,
+  pub output_type: String,
 }
 
 pub struct WireView {

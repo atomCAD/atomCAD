@@ -7,6 +7,13 @@ pub enum DataType {
   Atomic
 }
 
+pub fn data_type_to_str(data_type: &DataType) -> String {
+  match data_type {
+    DataType::Geometry => "Geometry".to_string(),
+    DataType::Atomic => "Atomic".to_string(),
+  }
+}
+
 pub struct Parameter {
   pub name: String,
   pub data_type: DataType,

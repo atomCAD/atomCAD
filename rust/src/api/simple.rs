@@ -13,6 +13,7 @@ use super::api_types::InputPinView;
 use super::api_types::NodeView;
 use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
+use crate::kernel::node_type::data_type_to_str;
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
   return APIVec3{
@@ -250,16 +251,19 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
           let param = &node_type.parameters[i];
           input_pins.push(InputPinView {
             name: param.name.clone(),
+            data_type: data_type_to_str(&param.data_type),
+            multi: param.multi,
           });
         }
-      }
 
-      node_network_view.nodes.insert(node.id, NodeView {
-        id: node.id,
-        node_type_name: node.node_type_name.clone(),
-        position: to_api_vec2(&node.position),
-        input_pins,
-      });
+        node_network_view.nodes.insert(node.id, NodeView {
+          id: node.id,
+          node_type_name: node.node_type_name.clone(),
+          position: to_api_vec2(&node.position),
+          input_pins,
+          output_type: data_type_to_str(&node_type.output_type),
+        });
+      }
 
       for (index, argument) in node.arguments.iter().enumerate() {
         for argument_node_id in argument.argument_node_ids.iter() {

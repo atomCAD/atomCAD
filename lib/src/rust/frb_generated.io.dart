@@ -38,6 +38,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3 dco_decode_api_vec_3(dynamic raw);
 
   @protected
+  bool dco_decode_bool(dynamic raw);
+
+  @protected
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw);
 
   @protected
@@ -123,6 +126,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3 sse_decode_api_vec_3(SseDeserializer deserializer);
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
   APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer);
 
   @protected
@@ -195,9 +201,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WireView sse_decode_wire_view(SseDeserializer deserializer);
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
 
   @protected
@@ -215,6 +218,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_vec_3(APIVec3 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_camera(
@@ -290,9 +296,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_wire_view(WireView self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
 }
 
 // Section: wire_class

@@ -4,22 +4,46 @@ import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/api_utils.dart';
 
-const double NODE_WIDTH = 160.0;
+const double NODE_WIDTH = 120.0;
 const double NODE_VERT_WIRE_OFFSET = 39.0;
 const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
 const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
 const double CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
 
+Color getDataTypeColor(String dataType) {
+  switch (dataType) {
+    case 'Geometry':
+      return Colors.blue;
+    case 'Atomic':
+      return Colors.orange;
+    default:
+      return Colors.grey; // Default color for unknown types
+  }
+}
+
 class PinReference {
   BigInt nodeId;
   int pinIndex;
+  String dataType;
 
-  PinReference(this.nodeId, this.pinIndex);
+  PinReference(this.nodeId, this.pinIndex, this.dataType);
 
   @override
   String toString() {
-    return 'PinReference(nodeId: $nodeId, pinIndex: $pinIndex)';
+    return 'PinReference(nodeId: $nodeId, pinIndex: $pinIndex dataType: $dataType)';
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! PinReference) return false;
+    return nodeId == other.nodeId &&
+        pinIndex == other.pinIndex &&
+        dataType == other.dataType;
+  }
+
+  @override
+  int get hashCode => Object.hash(nodeId, pinIndex, dataType);
 }
 
 class DraggedWire {
@@ -122,20 +146,31 @@ class NodeNetwork extends StatelessWidget {
 }
 
 class PinViewWidget extends StatelessWidget {
-  final Color color;
+  final String dataType;
+  final bool multi;
 
-  const PinViewWidget({super.key, required this.color});
+  const PinViewWidget({super.key, required this.dataType, required this.multi});
 
   @override
   Widget build(BuildContext context) {
+
+    final color = getDataTypeColor(dataType);
+
     return Center(
       child: Container(
-        width: 12,
-        height: 12,
-        decoration: BoxDecoration(
+        width: 14,
+        height: 14,
+        decoration: multi ? BoxDecoration(
+          border: Border.all(
+            color: color, // Set the border color
+            width: 5.0,        // Set the border width
+          ),
+          shape: BoxShape.circle,
+          color: Colors.black,
+        ) : BoxDecoration(
           shape: BoxShape.circle,
           color: color,
-        ),
+        )
       ),
     );
   }
@@ -143,18 +178,19 @@ class PinViewWidget extends StatelessWidget {
 
 class PinWidget extends StatelessWidget {
   final PinReference pinReference;
-  PinWidget({required this.pinReference}) : super(key: ValueKey(pinReference.pinIndex));
+  final bool multi;
+  PinWidget({required this.pinReference, required this.multi})
+    : super(key: ValueKey(pinReference.pinIndex));
 
   @override
   Widget build(BuildContext context) {
     return DragTarget<PinReference>(
       builder: (context, candidateData, rejectedData) {
-        Color pinColor = pinReference.pinIndex < 0 ? Colors.orange : Colors.blue;
         return Draggable<PinReference>(
           data: pinReference,
           feedback: SizedBox.shrink(),
-          childWhenDragging: PinViewWidget(color: pinColor),
-          child: PinViewWidget(color: pinColor),
+          childWhenDragging: PinViewWidget(dataType: pinReference.dataType, multi: multi),
+          child: PinViewWidget(dataType: pinReference.dataType, multi: multi),
           onDragUpdate: (details) {
             Provider.of<GraphModel>(context, listen: false)
               .dragWire(pinReference, details.globalPosition);            
@@ -165,7 +201,11 @@ class PinWidget extends StatelessWidget {
           },
         );
       },
-      onWillAcceptWithDetails: (details) => details.data != pinReference, // Prevent dragging onto itself
+      onWillAcceptWithDetails: (details) {
+        return 
+          details.data.dataType == pinReference.dataType && // same data type
+          (details.data.pinIndex < 0) != (pinReference.pinIndex < 0); // output to input
+      },
       onAcceptWithDetails: (details) {
         //print("Connected pin ${details.data} to pin $pinReference");
         Provider.of<GraphModel>(context, listen: false)
@@ -232,12 +272,19 @@ class NodeWidget extends StatelessWidget {
                   // Left Side (Inputs)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: node.inputPins.asMap().entries.map((entry) => _buildInputPin(entry.value.name, PinReference(node.id, entry.key))).toList(),
+                    children: node.inputPins.asMap().entries.map(
+                      (entry) => _buildInputPin(
+                        entry.value.name,
+                        PinReference(node.id, entry.key, entry.value.dataType),
+                        entry.value.multi
+                      )
+                    ).toList(),
                   ),
                   Spacer(),
                   // Right Side (Output)
                   PinWidget(
-                    pinReference: PinReference(node.id, -1)
+                    pinReference: PinReference(node.id, -1, node.outputType),
+                    multi: false,
                   ),
                 ],
               ),
@@ -249,10 +296,10 @@ class NodeWidget extends StatelessWidget {
   }
 
   /// Creates a labeled input pin.
-  Widget _buildInputPin(String label, PinReference pinReference) {
+  Widget _buildInputPin(String label, PinReference pinReference, bool multi) {
     return Row(
       children: [
-        PinWidget(pinReference: pinReference),
+        PinWidget(pinReference: pinReference, multi: multi),
         SizedBox(width: 6),
         Text(
           label,
@@ -274,44 +321,46 @@ class WirePainter extends CustomPainter {
       return;
     }
 
-    final paint = Paint()
+    Paint paint = Paint()
       ..color = Colors.black
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final sourcePos = _getPinPosition(PinReference(wire.sourceNodeId, -1));
-      final destPos = _getPinPosition(PinReference(wire.destNodeId, wire.destParamIndex.toInt()));
-      _drawWire(sourcePos, destPos, canvas, paint);
+      final source = _getPinPositionAndDataType(wire.sourceNodeId, -1);
+      final dest = _getPinPositionAndDataType(wire.destNodeId, wire.destParamIndex.toInt());
+      _drawWire(source.$1, dest.$1, canvas, paint, source.$2);
     }
 
     if (graphModel.draggedWire != null) {
-      final wireStartPos = _getPinPosition(graphModel.draggedWire!.startPin);
+      final wireStart = _getPinPositionAndDataType(graphModel.draggedWire!.startPin.nodeId, graphModel.draggedWire!.startPin.pinIndex);
       final wireEndPos = graphModel.draggedWire!.wireEndPosition;
       if (graphModel.draggedWire!.startPin.pinIndex < 0) { // start is source
-        _drawWire(wireStartPos, wireEndPos, canvas, paint); 
+        _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2); 
       } else { // start is dest
-        _drawWire(wireEndPos, wireStartPos, canvas, paint); 
+        _drawWire(wireEndPos, wireStart.$1, canvas, paint, wireStart.$2); 
       }
     }    
   }
 
-  _getPinPosition(PinReference pinReference) {
+  (Offset, String) _getPinPositionAndDataType(BigInt nodeId, int pinIndex) {
     // Now this is is a bit of a hacky solution.
     // We should probably use the real positions of the pin widgets instead of this logic to
     // approximate it independently.
-    if (pinReference.pinIndex < 0) { // output pin (source pin)
-      final sourceNode = graphModel.nodeNetworkView!.nodes[pinReference.nodeId];
+    if (pinIndex < 0) { // output pin (source pin)
+      final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId];
       final sourceVertOffset = sourceNode!.inputPins.isEmpty ? NODE_VERT_WIRE_OFFSET_EMPTY : NODE_VERT_WIRE_OFFSET + sourceNode.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM * 0.5;
-      return APIVec2ToOffset(sourceNode.position) + Offset(NODE_WIDTH, sourceVertOffset);
+      return (APIVec2ToOffset(sourceNode.position) + Offset(NODE_WIDTH, sourceVertOffset), sourceNode.outputType);
     } else { // input pin (dest pin)
-      final destNode = graphModel.nodeNetworkView!.nodes[pinReference.nodeId];
-      final destVertOffset = NODE_VERT_WIRE_OFFSET + (pinReference.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-      return APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
+      final destNode = graphModel.nodeNetworkView!.nodes[nodeId];
+      final destVertOffset = NODE_VERT_WIRE_OFFSET + (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+      return (APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset), destNode.inputPins[pinIndex].dataType);
     }
   }
 
-  _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint) {
+  _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint, String dataType) {
+    paint.color = getDataTypeColor(dataType);
+
     final controlPoint1 = sourcePos + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
     final controlPoint2 = destPos - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
 

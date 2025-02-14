@@ -96,20 +96,26 @@ class APIVec3 {
 
 class InputPinView {
   final String name;
+  final String dataType;
+  final bool multi;
 
   const InputPinView({
     required this.name,
+    required this.dataType,
+    required this.multi,
   });
 
   @override
-  int get hashCode => name.hashCode;
+  int get hashCode => name.hashCode ^ dataType.hashCode ^ multi.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is InputPinView &&
           runtimeType == other.runtimeType &&
-          name == other.name;
+          name == other.name &&
+          dataType == other.dataType &&
+          multi == other.multi;
 }
 
 class NodeNetworkView {
@@ -141,12 +147,14 @@ class NodeView {
   final String nodeTypeName;
   APIVec2 position;
   final List<InputPinView> inputPins;
+  final String outputType;
 
   NodeView({
     required this.id,
     required this.nodeTypeName,
     required this.position,
     required this.inputPins,
+    required this.outputType,
   });
 
   @override
@@ -154,7 +162,8 @@ class NodeView {
       id.hashCode ^
       nodeTypeName.hashCode ^
       position.hashCode ^
-      inputPins.hashCode;
+      inputPins.hashCode ^
+      outputType.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -164,7 +173,8 @@ class NodeView {
           id == other.id &&
           nodeTypeName == other.nodeTypeName &&
           position == other.position &&
-          inputPins == other.inputPins;
+          inputPins == other.inputPins &&
+          outputType == other.outputType;
 }
 
 class WireView {
