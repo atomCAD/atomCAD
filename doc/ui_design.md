@@ -1,7 +1,10 @@
 # UI Design
 
 - Made in Flutter
+- Node Network-based
 - Adaptive, selection-based action bar
+
+TODO: some of this document were writteen before the introduction of the node network based UI, and needs to be reconciled with it. These are related to direct editing of atomic structures, which will be present, but in the context of the 'edit atomic structure' node.
 
 ## Camera movement
 
@@ -38,11 +41,11 @@ TODO
 There are the following panels on the UI:
 
 - Menu bar
-
 - 3D viewport
+- Node networks list
+- Node network editor
 - Action icons panel
 - Editor properties panel.  When no tool is active these are just some basic settings for editing molecular structures. When a tool is active this becomes a tool properties panel and displays the properties of the active tool.
-- Scene outline (hierarchy of groups and atoms)
 - Item properties panel (atom properties or bond properties or group properties based on selection)
 
 ## Actions and tools

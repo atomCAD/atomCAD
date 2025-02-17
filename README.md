@@ -1,9 +1,8 @@
-# flutter_cad
+# atomCAD
 
-atomCAD with a Flutter UI.
+atomCAD with a Rust kernel and renderer and a Flutter UI.
 
-[Design Overview](./doc/design_overview/design_overview.md)
+[System Design](./doc/system_design.md)
 
 [Video demonstration of the current state](https://youtu.be/k4YCaMKSNzo)
 
- 
