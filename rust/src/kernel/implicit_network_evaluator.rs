@@ -51,8 +51,7 @@ fn eval_intersect(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &
 }
 
 pub struct ImplicitNetworkEvaluator {
-  pub node_type_registry: Rc<RefCell<NodeTypeRegistry>>,
-  pub built_in_functions: HashMap<String,fn(&dyn NodeData, Vec<Vec<f32>>, &Vec3) -> f32>,
+  built_in_functions: HashMap<String,fn(&dyn NodeData, Vec<Vec<f32>>, &Vec3) -> f32>,
 }
 
 /*
@@ -66,9 +65,8 @@ pub struct ImplicitNetworkEvaluator {
  */
 impl ImplicitNetworkEvaluator {
 
-  pub fn new(node_type_registry: Rc<RefCell<NodeTypeRegistry>>) -> Self {
+  pub fn new() -> Self {
     let mut ret = Self {
-      node_type_registry,
       built_in_functions: HashMap::new(),    
     };
 
@@ -85,10 +83,9 @@ impl ImplicitNetworkEvaluator {
   // Currently creates it from scratch, no caching is used.
   // TODO: Currently just supports geometry nodes and creates SurfacePointCloud. Should be refaactored
   // to be able to support generating atomic models too
-  pub fn generate_displayable(&self, network_name: &str, node_id: u64) -> SurfacePointCloud {
+  pub fn generate_displayable(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> SurfacePointCloud {
     let mut point_cloud = SurfacePointCloud::new();
 
-    let registry = self.node_type_registry.borrow();
     let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
       None => return point_cloud,
@@ -113,7 +110,7 @@ impl ImplicitNetworkEvaluator {
           // each corner is sampled 8 times!
           let network_args: Vec<Vec<f32>> = Vec::new();
           let signs: Vec<f32> = corner_points.iter().map(
-            |p| self.implicit_eval(network, &network_args, node_id, p)[0]
+            |p| self.implicit_eval(network, &network_args, node_id, p, registry)[0]
           ).collect();
           if signs.iter().any(|&s| s > 0.0) && signs.iter().any(|&s| s < 0.0) {
             point_cloud.points.push(
@@ -145,13 +142,13 @@ impl ImplicitNetworkEvaluator {
    * Not all optimizations fit all use cases or even compatible with each other, so we might use multiple approaches
    * in different cases.
    */
-  pub fn implicit_eval(&self, network: &NodeNetwork, network_args: &Vec<Vec<f32>>, node_id: u64, sample_point: &Vec3) -> Vec<f32> {
+  pub fn implicit_eval(&self, network: &NodeNetwork, network_args: &Vec<Vec<f32>>, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec<f32> {
     let node = network.nodes.get(&node_id).unwrap();
     let mut args: Vec<Vec<f32>> = Vec::new();
     for argument in  &node.arguments {
       let mut arg_values : Vec<f32> = Vec::new();
       for argument_node_id in &argument.argument_node_ids {
-        arg_values.append(& mut self.implicit_eval(network, network_args, *argument_node_id, sample_point));
+        arg_values.append(& mut self.implicit_eval(network, network_args, *argument_node_id, sample_point, registry));
       }
       args.push(arg_values);
     }
@@ -164,8 +161,8 @@ impl ImplicitNetworkEvaluator {
       let ret = built_in_function(&(*node.data), args, sample_point);
       return vec![ret];
     }
-    if let Some(child_network) = self.node_type_registry.borrow().node_networks.get(&node.node_type_name) {
-      return self.implicit_eval(child_network, &args, child_network.return_node_id.unwrap(), sample_point);
+    if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
+      return self.implicit_eval(child_network, &args, child_network.return_node_id.unwrap(), sample_point, registry);
     }
     return vec![0.0];
   }

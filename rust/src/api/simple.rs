@@ -235,9 +235,7 @@ pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
 pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkView> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    // First create a longer-lived borrow
-    let registry_ref = cad_instance.kernel.node_type_registry.borrow();
-    let node_network = registry_ref.node_networks.get(&node_network_name)?;
+    let node_network = cad_instance.kernel.node_type_registry.node_networks.get(&node_network_name)?;
 
     let mut node_network_view = NodeNetworkView {
       name: node_network.node_type.name.clone(),
@@ -247,27 +245,27 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
 
     for (_id, node) in node_network.nodes.iter() {
       let mut input_pins: Vec<InputPinView> = Vec::new();
-      // Use the same borrow for node_type lookup
-      if let Some(node_type) = registry_ref.get_node_type(&node.node_type_name) {
-        let num_of_params = node_type.parameters.len();
-        for i in 0..num_of_params {
-          let param = &node_type.parameters[i];
-          input_pins.push(InputPinView {
-            name: param.name.clone(),
-            data_type: data_type_to_str(&param.data_type),
-            multi: param.multi,
-          });
-        }
-
-        node_network_view.nodes.insert(node.id, NodeView {
-          id: node.id,
-          node_type_name: node.node_type_name.clone(),
-          position: to_api_vec2(&node.position),
-          input_pins,
-          output_type: data_type_to_str(&node_type.output_type),
+      let node_type = cad_instance.kernel.node_type_registry.get_node_type(&node.node_type_name)?;
+      let num_of_params = node_type.parameters.len();
+      for i in 0..num_of_params {
+        let param = &node_type.parameters[i];
+        input_pins.push(InputPinView {
+          name: param.name.clone(),
+          data_type: data_type_to_str(&param.data_type),
+          multi: param.multi,
         });
       }
 
+      node_network_view.nodes.insert(node.id, NodeView {
+        id: node.id,
+        node_type_name: node.node_type_name.clone(),
+        position: to_api_vec2(&node.position),
+        input_pins,
+        output_type: data_type_to_str(&node_type.output_type),
+      });
+    }
+
+    for (_id, node) in node_network.nodes.iter() {
       for (index, argument) in node.arguments.iter().enumerate() {
         for argument_node_id in argument.argument_node_ids.iter() {
           node_network_view.wires.push(WireView {
@@ -305,7 +303,7 @@ pub fn connect_nodes(node_network_name: &str, source_node_id: u64, dest_node_id:
 pub fn get_node_type_names() -> Option<Vec<String>> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    return Some(cad_instance.kernel.node_type_registry.borrow().get_node_type_names());
+    return Some(cad_instance.kernel.node_type_registry.get_node_type_names());
   }
 }
 
