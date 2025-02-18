@@ -149,6 +149,19 @@ class GraphModel extends ChangeNotifier {
     }
   }
 
+  void setSelectedWire(
+      BigInt sourceNodeId, BigInt destNodeId, BigInt destParamIndex) {
+    if (nodeNetworkView != null) {
+      selectWire(
+        nodeNetworkName: nodeNetworkView!.name,
+        sourceNodeId: sourceNodeId,
+        destinationNodeId: destNodeId,
+        destinationArgumentIndex: destParamIndex,
+      );
+      _refreshFromKernel();
+    }
+  }
+
   void _refreshFromKernel() {
     if (nodeNetworkView != null) {
       nodeNetworkView =
@@ -185,7 +198,22 @@ class NodeNetwork extends StatelessWidget {
                     : [
                         CustomPaint(
                           painter: WirePainter(model),
-                          child: Container(),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTapDown: (details) {
+                              final painter = WirePainter(model);
+                              final hit = painter
+                                  .findWireAtPosition(details.localPosition);
+                              if (hit != null) {
+                                model.setSelectedWire(
+                                  hit.sourceNodeId,
+                                  hit.destNodeId,
+                                  hit.destParamIndex,
+                                );
+                              }
+                            },
+                            child: Container(),
+                          ),
                         ),
                         ...(model.nodeNetworkView!.nodes.entries
                             .map((entry) => NodeWidget(node: entry.value))
@@ -385,6 +413,14 @@ class NodeWidget extends StatelessWidget {
   }
 }
 
+class WireHitResult {
+  final BigInt sourceNodeId;
+  final BigInt destNodeId;
+  final BigInt destParamIndex;
+
+  WireHitResult(this.sourceNodeId, this.destNodeId, this.destParamIndex);
+}
+
 class WirePainter extends CustomPainter {
   final GraphModel graphModel;
 
@@ -489,6 +525,46 @@ class WirePainter extends CustomPainter {
         destPos.dy,
       );
     canvas.drawPath(path, paint);
+  }
+
+  WireHitResult? findWireAtPosition(Offset position) {
+    if (graphModel.nodeNetworkView == null) return null;
+
+    for (var wire in graphModel.nodeNetworkView!.wires) {
+      final (sourcePos, _) = _getPinPositionAndDataType(wire.sourceNodeId, -1);
+      final (destPos, _) = _getPinPositionAndDataType(
+          wire.destNodeId, wire.destParamIndex.toInt());
+
+      // Create a path for hit testing with some padding for easier clicking
+      final hitTestPath = Path();
+
+      // Add the main path
+
+      final controlPoint1 = sourcePos + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
+      final controlPoint2 = destPos - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
+
+      hitTestPath.moveTo(sourcePos.dx, sourcePos.dy);
+      hitTestPath.cubicTo(
+        controlPoint1.dx,
+        controlPoint1.dy,
+        controlPoint2.dx,
+        controlPoint2.dy,
+        destPos.dx,
+        destPos.dy,
+      );
+
+      // Add parallel paths above and below for wider hit area
+      final hitArea = Path.combine(PathOperation.union, hitTestPath,
+          hitTestPath.shift(const Offset(0, 5)));
+      final finalHitArea = Path.combine(
+          PathOperation.union, hitArea, hitTestPath.shift(const Offset(0, -5)));
+
+      if (finalHitArea.contains(position)) {
+        return WireHitResult(
+            wire.sourceNodeId, wire.destNodeId, wire.destParamIndex);
+      }
+    }
+    return null;
   }
 
   @override
