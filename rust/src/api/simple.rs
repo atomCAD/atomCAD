@@ -104,7 +104,7 @@ async fn initialize_cad_instance_async() {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       add_sample_model(&mut cad_instance.kernel);
       add_sample_network(&mut cad_instance.kernel);
-      cad_instance.renderer.refresh(cad_instance.kernel.get_model())
+      cad_instance.renderer.refresh(cad_instance.kernel.get_atomic_structure())
     }
   }
 }
@@ -210,7 +210,7 @@ pub fn add_atom(atomic_number: i32, position: APIVec3) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.kernel.add_atom(atomic_number, from_api_vec3(&position));
-      cad_instance.renderer.refresh(cad_instance.kernel.get_model());
+      cad_instance.renderer.refresh(cad_instance.kernel.get_atomic_structure());
     }
   }
 }
@@ -219,7 +219,7 @@ pub fn add_atom(atomic_number: i32, position: APIVec3) {
 pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
   unsafe {
     if let Some(cad_instance) = &CAD_INSTANCE {
-      let model = cad_instance.kernel.get_model();
+      let model = cad_instance.kernel.get_atomic_structure();
       return to_api_vec3(&model.find_pivot_point(&from_api_vec3(&ray_start), &from_api_vec3(&ray_dir)));
     } else {
       return APIVec3{
@@ -235,7 +235,9 @@ pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
 pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkView> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    let node_network = cad_instance.kernel.node_type_registry.node_networks.get(&node_network_name)?;
+    // First create a longer-lived borrow
+    let registry_ref = cad_instance.kernel.node_type_registry.borrow();
+    let node_network = registry_ref.node_networks.get(&node_network_name)?;
 
     let mut node_network_view = NodeNetworkView {
       name: node_network.node_type.name.clone(),
@@ -245,7 +247,8 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
 
     for (_id, node) in node_network.nodes.iter() {
       let mut input_pins: Vec<InputPinView> = Vec::new();
-      if let Some(node_type) = cad_instance.kernel.node_type_registry.get_node_type(&node.node_type_name) {
+      // Use the same borrow for node_type lookup
+      if let Some(node_type) = registry_ref.get_node_type(&node.node_type_name) {
         let num_of_params = node_type.parameters.len();
         for i in 0..num_of_params {
           let param = &node_type.parameters[i];
@@ -295,6 +298,14 @@ pub fn connect_nodes(node_network_name: &str, source_node_id: u64, dest_node_id:
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.kernel.connect_nodes(node_network_name, source_node_id, dest_node_id, dest_param_index);
     }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_node_type_names() -> Option<Vec<String>> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    return Some(cad_instance.kernel.node_type_registry.borrow().get_node_type_names());
   }
 }
 

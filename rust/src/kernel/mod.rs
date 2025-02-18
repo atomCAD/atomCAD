@@ -1,5 +1,5 @@
 pub mod kernel;
-pub mod model;
+pub mod atomic_structure;
 pub mod command;
 pub mod commands;
 pub mod node_type;

@@ -51,5 +51,8 @@ void connectNodes(
         destNodeId: destNodeId,
         destParamIndex: destParamIndex);
 
+List<String>? getNodeTypeNames() =>
+    RustLib.instance.api.crateApiSimpleGetNodeTypeNames();
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

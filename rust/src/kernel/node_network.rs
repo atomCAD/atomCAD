@@ -1,9 +1,13 @@
 use glam::f32::Vec2;
+use glam::i32::IVec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use super::node_type::NodeType;
 use super::node_type::NodeData;
 use super::node_type::NoData;
+use super::node_type::SphereData;
+use super::node_type::CuboidData;
+use super::node_type::HalfSpaceData;
 use super::node_type_registry::NodeTypeRegistry;
 
 pub struct Argument {
@@ -50,13 +54,32 @@ impl NodeNetwork {
     for _i in 0..num_of_parameters {
       arguments.push(Argument { argument_node_ids: HashSet::new() });
     }
+    
+    // Create default node data based on node type
+    let default_data: Box<dyn NodeData> = match node_type_name {
+      "sphere" => Box::new(SphereData {
+        center: IVec3::new(0, 0, 0),
+        radius: 1,
+      }),
+      "cuboid" => Box::new(CuboidData {
+        min_corner: IVec3::new(-1, -1, -1),
+        extent: IVec3::new(2, 2, 2),
+      }),
+      "half_space" => Box::new(HalfSpaceData {
+        miller_index: IVec3::new(1, 0, 0), // Default normal along x-axis
+        shift: 0,
+      }),
+      _ => Box::new(NoData{}),
+    };
+
     let node = Node {
       id: node_id,
       node_type_name: node_type_name.to_string(),
       position,
       arguments,
-      data: Box::new(NoData{}),
+      data: default_data,
     };
+    
     self.next_node_id += 1;
     self.nodes.insert(node_id, node);
     return node_id;
@@ -76,6 +99,12 @@ impl NodeNetwork {
         argument.argument_node_ids.clear();
       }
       argument.argument_node_ids.insert(source_node_id);
+    }
+  }
+
+  pub fn set_node_network_data(&mut self, node_id: u64, data: Box<dyn NodeData>) {
+    if let Some(node) = self.nodes.get_mut(&node_id) {
+      node.data = data;
     }
   }
 

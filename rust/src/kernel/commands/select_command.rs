@@ -1,5 +1,5 @@
 use super::super::command::Command;
-use super::super::model::Model;
+use super::super::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 
 /*
@@ -23,7 +23,7 @@ impl SelectCommand {
 }
 
 impl Command for SelectCommand {
-  fn execute(&mut self, model: &mut Model, is_redo: bool) {
+  fn execute(&mut self, model: &mut AtomicStructure, is_redo: bool) {
     if !is_redo {
       // Gather the original selection information for the specified atoms and bonds
       for atom_id in self.atom_ids.iter() {
@@ -40,7 +40,7 @@ impl Command for SelectCommand {
     model.select(&self.atom_ids, &self.bond_ids, self.unselect);
   }
 
-  fn undo(&mut self, model: &mut Model) {
+  fn undo(&mut self, model: &mut AtomicStructure) {
     model.select_by_maps(&self.original_atom_selection, &self.original_bond_selection);
   }
 }

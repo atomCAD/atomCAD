@@ -1,8 +1,8 @@
 use super::mesh::Mesh;
 use super::mesh::Vertex;
-use crate::kernel::model::Model;
-use crate::kernel::model::Atom;
-use crate::kernel::model::Bond;
+use crate::kernel::atomic_structure::AtomicStructure;
+use crate::kernel::atomic_structure::Atom;
+use crate::kernel::atomic_structure::Bond;
 use glam::f32::Vec3;
 use glam::f32::Quat;
 
@@ -36,13 +36,13 @@ impl Tessellator {
     self.cylinder_divisions = arg_cylinder_divisions;
   }
 
-  pub fn add_atom(&mut self, model: &Model, atom: &Atom) {
+  pub fn add_atom(&mut self, model: &AtomicStructure, atom: &Atom) {
     // TODO: atomic radii. also enum for view type (atomic radii depend on that too)
     // TODO: color depends on atomic number and selection
     self.add_sphere(&atom.position, 1.0, &Vec3::new(0.8, 0.0, 0.0), 0.3, 0.0);
   }
 
-  pub fn add_bond(&mut self, model: &Model, bond: &Bond) {
+  pub fn add_bond(&mut self, model: &AtomicStructure, bond: &Bond) {
     let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
     let atom_pos2 = model.get_atom(bond.atom_id2).unwrap().position;
     // TODO: radius

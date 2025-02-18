@@ -1,7 +1,7 @@
 use wgpu::*;
 use bytemuck;
 use wgpu::util::DeviceExt;
-use crate::kernel::model::Model;
+use crate::kernel::atomic_structure::AtomicStructure;
 use super::mesh::Vertex;
 use super::tessellator::Tessellator;
 use super::camera::Camera;
@@ -297,7 +297,7 @@ impl Renderer {
       self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
 
-    pub fn refresh(&mut self, model: &Model) {
+    pub fn refresh(&mut self, model: &AtomicStructure) {
 
       // We tessellate everything into one mesh for now
 

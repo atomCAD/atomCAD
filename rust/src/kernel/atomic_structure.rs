@@ -18,14 +18,14 @@ pub struct Atom {
   pub selected: bool,
 }
 
-pub struct Model {
+pub struct AtomicStructure {
   pub next_id: u64,
   pub atoms: HashMap<u64, Atom>,
   pub bonds: HashMap<u64, Bond>,
   pub dirty_atom_ids: HashSet<u64>,
 }
 
-impl Model {
+impl AtomicStructure {
 
   pub fn new() -> Self {
     Self {

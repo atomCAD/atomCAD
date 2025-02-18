@@ -9,7 +9,8 @@ use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
 use super::node_type_registry::NodeTypeRegistry;
-use std::sync::Arc;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 // TODO: these will not be constant, will be set by the user
@@ -50,7 +51,7 @@ fn eval_intersect(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &
 }
 
 pub struct ImplicitNetworkEvaluator {
-  pub node_type_registry: Arc<NodeTypeRegistry>,
+  pub node_type_registry: Rc<RefCell<NodeTypeRegistry>>,
   pub built_in_functions: HashMap<String,fn(&dyn NodeData, Vec<Vec<f32>>, &Vec3) -> f32>,
 }
 
@@ -60,14 +61,12 @@ pub struct ImplicitNetworkEvaluator {
  * does this by treating the abstract operators (nodes) in the node network as implicit geometry functions. 
  * Currently this is the only network evaluator in our codebase, but it should be possible to create other evaluators
  * (like evaluator based on polygon meshes or evaluator based on voxels.)
- * On a discussion of the distinction of the abstract shape algebra and a concrete implementation see:
- * /doc/crystal/shapre_algebra.md
  * TODO: probably should be refactored into an Evaluator and an ImplicitGeometry evaluator,
  * as nodes related to atomic representation is not specific to implicits. 
  */
 impl ImplicitNetworkEvaluator {
 
-  pub fn new(node_type_registry: Arc<NodeTypeRegistry>) -> Self {
+  pub fn new(node_type_registry: Rc<RefCell<NodeTypeRegistry>>) -> Self {
     let mut ret = Self {
       node_type_registry,
       built_in_functions: HashMap::new(),    
@@ -87,10 +86,10 @@ impl ImplicitNetworkEvaluator {
   // TODO: Currently just supports geometry nodes and creates SurfacePointCloud. Should be refaactored
   // to be able to support generating atomic models too
   pub fn generate_displayable(&self, network_name: &str, node_id: u64) -> SurfacePointCloud {
-
     let mut point_cloud = SurfacePointCloud::new();
 
-    let network = match self.node_type_registry.node_networks.get(network_name) {
+    let registry = self.node_type_registry.borrow();
+    let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
       None => return point_cloud,
     };
@@ -146,7 +145,7 @@ impl ImplicitNetworkEvaluator {
    * Not all optimizations fit all use cases or even compatible with each other, so we might use multiple approaches
    * in different cases.
    */
-  fn implicit_eval(&self, network: &NodeNetwork, network_args: &Vec<Vec<f32>>, node_id: u64, sample_point: &Vec3) -> Vec<f32> {
+  pub fn implicit_eval(&self, network: &NodeNetwork, network_args: &Vec<Vec<f32>>, node_id: u64, sample_point: &Vec3) -> Vec<f32> {
     let node = network.nodes.get(&node_id).unwrap();
     let mut args: Vec<Vec<f32>> = Vec::new();
     for argument in  &node.arguments {
@@ -165,10 +164,9 @@ impl ImplicitNetworkEvaluator {
       let ret = built_in_function(&(*node.data), args, sample_point);
       return vec![ret];
     }
-    if let Some(child_network) = self.node_type_registry.node_networks.get(&node.node_type_name) {
+    if let Some(child_network) = self.node_type_registry.borrow().node_networks.get(&node.node_type_name) {
       return self.implicit_eval(child_network, &args, child_network.return_node_id.unwrap(), sample_point);
     }
     return vec![0.0];
   }
 }
-

@@ -1,5 +1,5 @@
 use super::super::command::Command;
-use super::super::model::Model;
+use super::super::atomic_structure::AtomicStructure;
 
 /*
  * Command to add a bond between the given atoms with the given multiplicity (1-3).
@@ -20,14 +20,14 @@ impl AddBondCommand {
 }
 
 impl Command for AddBondCommand {
-  fn execute(&mut self, model: &mut Model, is_redo: bool) {
+  fn execute(&mut self, model: &mut AtomicStructure, is_redo: bool) {
     if !is_redo {
       self.bond_id = model.obtain_next_id();
     }
     model.add_bond(self.bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
   }
 
-  fn undo(&mut self, model: &mut Model) {
+  fn undo(&mut self, model: &mut AtomicStructure) {
     model.delete_bond(self.bond_id);
   }
 }

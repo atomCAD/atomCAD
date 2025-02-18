@@ -134,6 +134,22 @@ impl NodeTypeRegistry {
     return ret;
   }
 
+  pub fn get_node_type_names(&self) -> Vec<String> {
+    let mut names: Vec<String> = self
+        .built_in_node_types
+        .values()
+        .map(|node| node.name.clone())
+        .collect();
+
+    names.extend(
+        self.node_networks
+            .values()
+            .map(|network| network.node_type.name.clone()),
+    );
+
+    names
+}
+
   pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {
     let node_type = self.built_in_node_types.get(node_type_name);
     if let Some(_nt) = node_type {

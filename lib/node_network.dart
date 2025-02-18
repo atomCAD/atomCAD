@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/api_utils.dart';
+import 'package:flutter_cad/add_node_popup.dart';
 
 const double NODE_WIDTH = 120.0;
 const double NODE_VERT_WIRE_OFFSET = 39.0;
@@ -131,13 +132,22 @@ class NodeNetwork extends StatelessWidget {
       value: graphModel,
       child: Consumer<GraphModel>(
         builder: (context, model, child) {
-          return Stack(
-            children: (model.nodeNetworkView == null) ? [] : [
-              CustomPaint(
-                painter: WirePainter(model),
-                child: Container(),
-              ), ...(model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(node: entry.value)).toList())
-            ],
+          return GestureDetector(
+            onSecondaryTapDown: (details) async {
+              String? selectedNode = await showAddNodePopup(context);
+              if (selectedNode != null) {
+                // Handle adding the selected node at the clicked position
+                print("Node added: $selectedNode at ${details.localPosition}");
+              }
+            },
+            child: Stack(
+              children: (model.nodeNetworkView == null) ? [] : [
+                CustomPaint(
+                  painter: WirePainter(model),
+                  child: Container(),
+                ), ...(model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(node: entry.value)).toList())
+              ],
+            )
           );
         },
       ),

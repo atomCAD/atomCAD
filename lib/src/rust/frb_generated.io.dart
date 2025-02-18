@@ -65,6 +65,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   InputPinView dco_decode_input_pin_view(dynamic raw);
 
   @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
   List<InputPinView> dco_decode_list_input_pin_view(dynamic raw);
 
   @protected
@@ -87,6 +90,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
+
+  @protected
+  List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
@@ -154,6 +160,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   InputPinView sse_decode_input_pin_view(SseDeserializer deserializer);
 
   @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
   List<InputPinView> sse_decode_list_input_pin_view(
       SseDeserializer deserializer);
 
@@ -180,6 +189,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   NodeNetworkView? sse_decode_opt_box_autoadd_node_network_view(
       SseDeserializer deserializer);
+
+  @protected
+  List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
@@ -249,6 +261,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_input_pin_view(InputPinView self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_input_pin_view(
       List<InputPinView> self, SseSerializer serializer);
 
@@ -277,6 +292,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_node_network_view(
       NodeNetworkView? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_u_64_node_view(
