@@ -139,6 +139,16 @@ class GraphModel extends ChangeNotifier {
     _refreshFromKernel();
   }
 
+  void setSelectedNode(BigInt nodeId) {
+    if (nodeNetworkView != null) {
+      selectNode(
+        nodeNetworkName: nodeNetworkView!.name,
+        nodeId: nodeId,
+      );
+      _refreshFromKernel();
+    }
+  }
+
   void _refreshFromKernel() {
     if (nodeNetworkView != null) {
       nodeNetworkView =
@@ -278,7 +288,7 @@ class NodeWidget extends StatelessWidget {
             border: Border.all(
                 color: node.selected
                     ? NODE_BORDER_COLOR_SELECTED
-                    : NODE_BORDER_NORMAL,
+                    : NODE_BORDER_COLOR_NORMAL,
                 width: node.selected
                     ? NODE_BORDER_WIDTH_SELECTED
                     : NODE_BORDER_WIDTH_NORMAL),
@@ -297,7 +307,10 @@ class NodeWidget extends StatelessWidget {
             children: [
               // Title Bar
               GestureDetector(
-                onPanStart: (details) {},
+                onPanStart: (details) {
+                  final model = Provider.of<GraphModel>(context, listen: false);
+                  model.setSelectedNode(node.id);
+                },
                 onPanUpdate: (details) {
                   Provider.of<GraphModel>(context, listen: false)
                       .dragNodePosition(node.id, details.delta);
