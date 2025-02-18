@@ -148,6 +148,7 @@ class NodeView {
   APIVec2 position;
   final List<InputPinView> inputPins;
   final String outputType;
+  final bool selected;
 
   NodeView({
     required this.id,
@@ -155,6 +156,7 @@ class NodeView {
     required this.position,
     required this.inputPins,
     required this.outputType,
+    required this.selected,
   });
 
   @override
@@ -163,7 +165,8 @@ class NodeView {
       nodeTypeName.hashCode ^
       position.hashCode ^
       inputPins.hashCode ^
-      outputType.hashCode;
+      outputType.hashCode ^
+      selected.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -174,23 +177,29 @@ class NodeView {
           nodeTypeName == other.nodeTypeName &&
           position == other.position &&
           inputPins == other.inputPins &&
-          outputType == other.outputType;
+          outputType == other.outputType &&
+          selected == other.selected;
 }
 
 class WireView {
   final BigInt sourceNodeId;
   final BigInt destNodeId;
   final BigInt destParamIndex;
+  final bool selected;
 
   const WireView({
     required this.sourceNodeId,
     required this.destNodeId,
     required this.destParamIndex,
+    required this.selected,
   });
 
   @override
   int get hashCode =>
-      sourceNodeId.hashCode ^ destNodeId.hashCode ^ destParamIndex.hashCode;
+      sourceNodeId.hashCode ^
+      destNodeId.hashCode ^
+      destParamIndex.hashCode ^
+      selected.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -199,5 +208,6 @@ class WireView {
           runtimeType == other.runtimeType &&
           sourceNodeId == other.sourceNodeId &&
           destNodeId == other.destNodeId &&
-          destParamIndex == other.destParamIndex;
+          destParamIndex == other.destParamIndex &&
+          selected == other.selected;
 }

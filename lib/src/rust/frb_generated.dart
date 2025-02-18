@@ -708,14 +708,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
       position: dco_decode_api_vec_2(arr[2]),
       inputPins: dco_decode_list_input_pin_view(arr[3]),
       outputType: dco_decode_String(arr[4]),
+      selected: dco_decode_bool(arr[5]),
     );
   }
 
@@ -778,12 +779,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   WireView dco_decode_wire_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return WireView(
       sourceNodeId: dco_decode_u_64(arr[0]),
       destNodeId: dco_decode_u_64(arr[1]),
       destParamIndex: dco_decode_usize(arr[2]),
+      selected: dco_decode_bool(arr[3]),
     );
   }
 
@@ -979,12 +981,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_position = sse_decode_api_vec_2(deserializer);
     var var_inputPins = sse_decode_list_input_pin_view(deserializer);
     var var_outputType = sse_decode_String(deserializer);
+    var var_selected = sse_decode_bool(deserializer);
     return NodeView(
         id: var_id,
         nodeTypeName: var_nodeTypeName,
         position: var_position,
         inputPins: var_inputPins,
-        outputType: var_outputType);
+        outputType: var_outputType,
+        selected: var_selected);
   }
 
   @protected
@@ -1060,10 +1064,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sourceNodeId = sse_decode_u_64(deserializer);
     var var_destNodeId = sse_decode_u_64(deserializer);
     var var_destParamIndex = sse_decode_usize(deserializer);
+    var var_selected = sse_decode_bool(deserializer);
     return WireView(
         sourceNodeId: var_sourceNodeId,
         destNodeId: var_destNodeId,
-        destParamIndex: var_destParamIndex);
+        destParamIndex: var_destParamIndex,
+        selected: var_selected);
   }
 
   @protected
@@ -1237,6 +1243,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_vec_2(self.position, serializer);
     sse_encode_list_input_pin_view(self.inputPins, serializer);
     sse_encode_String(self.outputType, serializer);
+    sse_encode_bool(self.selected, serializer);
   }
 
   @protected
@@ -1309,5 +1316,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.sourceNodeId, serializer);
     sse_encode_u_64(self.destNodeId, serializer);
     sse_encode_usize(self.destParamIndex, serializer);
+    sse_encode_bool(self.selected, serializer);
   }
 }

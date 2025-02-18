@@ -262,6 +262,7 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
         position: to_api_vec2(&node.position),
         input_pins,
         output_type: data_type_to_str(&node_type.output_type),
+        selected: node_network.selected_node_id == Some(node.id),
       });
     }
 
@@ -272,6 +273,11 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
             source_node_id: *argument_node_id,
             dest_node_id: node.id,
             dest_param_index: index,
+            selected: node_network.selected_wire.as_ref().map_or(false, |wire| 
+              wire.source_node_id == *argument_node_id && 
+              wire.destination_node_id == node.id && 
+              wire.destination_argument_index == index
+            ),
           });
         }
       }

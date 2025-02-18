@@ -37,12 +37,14 @@ pub struct NodeView {
   pub position: APIVec2,
   pub input_pins: Vec<InputPinView>,
   pub output_type: String,
+  pub selected: bool,
 }
 
 pub struct WireView {
   pub source_node_id: u64,
   pub dest_node_id: u64,
   pub dest_param_index: usize,
+  pub selected: bool,
 }
 
 pub struct NodeNetworkView {
