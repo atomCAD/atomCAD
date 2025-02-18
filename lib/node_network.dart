@@ -252,7 +252,8 @@ class NodeWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.grey[900],
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blueAccent, width: 2),
+            border: Border.all(color: node.selected ? Colors.orange : Colors.blueAccent, width: node.selected ? 3 : 2),
+            boxShadow: node.selected ? [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 8, spreadRadius: 2)] : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -271,7 +272,7 @@ class NodeWidget extends StatelessWidget {
                 child: Container(
                   padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: Colors.blueGrey[800],
+                    color: node.selected ? Colors.orange[800] : Colors.blueGrey[800],
                     borderRadius:
                         BorderRadius.vertical(top: Radius.circular(6)),
                   ),
