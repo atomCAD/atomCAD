@@ -5,21 +5,44 @@ import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/api_utils.dart';
 import 'package:flutter_cad/add_node_popup.dart';
 
+// Node dimensions and layout constants
 const double NODE_WIDTH = 120.0;
 const double NODE_VERT_WIRE_OFFSET = 39.0;
 const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
 const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
 const double CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
 
+// Pin appearance constants
+const double PIN_SIZE = 14.0;
+const double PIN_BORDER_WIDTH = 5.0;
+
+// Node appearance constants
+const Color NODE_BACKGROUND_COLOR = Color(0xFF212121); // Colors.grey[900]
+const Color NODE_BORDER_COLOR_SELECTED = Colors.orange;
+const Color NODE_BORDER_COLOR_NORMAL = Colors.blueAccent;
+const double NODE_BORDER_WIDTH_SELECTED = 3.0;
+const double NODE_BORDER_WIDTH_NORMAL = 2.0;
+const double NODE_BORDER_RADIUS = 8.0;
+const Color NODE_TITLE_COLOR_SELECTED = Color(0xFFD84315); // Colors.orange[800]
+const Color NODE_TITLE_COLOR_NORMAL = Color(0xFF37474F); // Colors.blueGrey[800]
+
+// Wire appearance constants
+const double WIRE_WIDTH_SELECTED = 4.0;
+const double WIRE_WIDTH_NORMAL = 2.0;
+const double WIRE_GLOW_BLUR_RADIUS = 8.0;
+const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
+const double WIRE_GLOW_OPACITY = 0.3;
+
+// Colors
+const Color DEFAULT_DATA_TYPE_COLOR = Colors.grey;
+const Map<String, Color> DATA_TYPE_COLORS = {
+  'Geometry': Colors.blue,
+  'Atomic': Color.fromARGB(255, 160, 40, 40),
+};
+const Color WIRE_COLOR_SELECTED = Colors.orange;
+
 Color getDataTypeColor(String dataType) {
-  switch (dataType) {
-    case 'Geometry':
-      return Colors.blue;
-    case 'Atomic':
-      return Colors.orange;
-    default:
-      return Colors.grey; // Default color for unknown types
-  }
+  return DATA_TYPE_COLORS[dataType] ?? DEFAULT_DATA_TYPE_COLOR;
 }
 
 class PinReference {
@@ -177,13 +200,13 @@ class PinViewWidget extends StatelessWidget {
 
     return Center(
       child: Container(
-          width: 14,
-          height: 14,
+          width: PIN_SIZE,
+          height: PIN_SIZE,
           decoration: multi
               ? BoxDecoration(
                   border: Border.all(
                     color: color, // Set the border color
-                    width: 5.0, // Set the border width
+                    width: PIN_BORDER_WIDTH, // Set the border width
                   ),
                   shape: BoxShape.circle,
                   color: Colors.black,
@@ -250,17 +273,22 @@ class NodeWidget extends StatelessWidget {
         child: Container(
           width: NODE_WIDTH,
           decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: BorderRadius.circular(8),
+            color: NODE_BACKGROUND_COLOR,
+            borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
             border: Border.all(
-                color: node.selected ? Colors.orange : Colors.blueAccent,
-                width: node.selected ? 3 : 2),
+                color: node.selected
+                    ? NODE_BORDER_COLOR_SELECTED
+                    : NODE_BORDER_NORMAL,
+                width: node.selected
+                    ? NODE_BORDER_WIDTH_SELECTED
+                    : NODE_BORDER_WIDTH_NORMAL),
             boxShadow: node.selected
                 ? [
                     BoxShadow(
-                        color: Colors.orange.withOpacity(0.3),
-                        blurRadius: 8,
-                        spreadRadius: 2)
+                        color: NODE_BORDER_COLOR_SELECTED
+                            .withOpacity(WIRE_GLOW_OPACITY),
+                        blurRadius: WIRE_GLOW_BLUR_RADIUS,
+                        spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
                   ]
                 : null,
           ),
@@ -282,10 +310,10 @@ class NodeWidget extends StatelessWidget {
                   padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                   decoration: BoxDecoration(
                     color: node.selected
-                        ? Colors.orange[800]
-                        : Colors.blueGrey[800],
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(6)),
+                        ? NODE_TITLE_COLOR_SELECTED
+                        : NODE_TITLE_COLOR_NORMAL,
+                    borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(NODE_BORDER_RADIUS - 2)),
                   ),
                   child: Text(
                     node.nodeTypeName,
@@ -357,7 +385,7 @@ class WirePainter extends CustomPainter {
 
     Paint paint = Paint()
       ..color = Colors.black
-      ..strokeWidth = 2
+      ..strokeWidth = WIRE_WIDTH_NORMAL
       ..style = PaintingStyle.stroke;
 
     // Draw regular wires first
@@ -365,8 +393,7 @@ class WirePainter extends CustomPainter {
       final source = _getPinPositionAndDataType(wire.sourceNodeId, -1);
       final dest = _getPinPositionAndDataType(
           wire.destNodeId, wire.destParamIndex.toInt());
-      _drawWire(
-          source.$1, dest.$1, canvas, paint, source.$2, true); //wire.selected);
+      _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected);
     }
 
     // Draw dragged wire on top
@@ -418,13 +445,13 @@ class WirePainter extends CustomPainter {
   _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint,
       String dataType, bool selected) {
     paint.color = getDataTypeColor(dataType);
-    paint.strokeWidth = selected ? 4 : 2;
+    paint.strokeWidth = selected ? WIRE_WIDTH_SELECTED : WIRE_WIDTH_NORMAL;
 
     if (selected) {
       // Draw glow effect for selected wire
       final glowPaint = Paint()
-        ..color = paint.color.withOpacity(0.3)
-        ..strokeWidth = 8
+        ..color = WIRE_COLOR_SELECTED.withOpacity(WIRE_GLOW_OPACITY)
+        ..strokeWidth = paint.strokeWidth * 2
         ..style = PaintingStyle.stroke;
 
       _drawWirePath(sourcePos, destPos, canvas, glowPaint);
