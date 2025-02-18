@@ -252,8 +252,17 @@ class NodeWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.grey[900],
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: node.selected ? Colors.orange : Colors.blueAccent, width: node.selected ? 3 : 2),
-            boxShadow: node.selected ? [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 8, spreadRadius: 2)] : null,
+            border: Border.all(
+                color: node.selected ? Colors.orange : Colors.blueAccent,
+                width: node.selected ? 3 : 2),
+            boxShadow: node.selected
+                ? [
+                    BoxShadow(
+                        color: Colors.orange.withOpacity(0.3),
+                        blurRadius: 8,
+                        spreadRadius: 2)
+                  ]
+                : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -272,7 +281,9 @@ class NodeWidget extends StatelessWidget {
                 child: Container(
                   padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: node.selected ? Colors.orange[800] : Colors.blueGrey[800],
+                    color: node.selected
+                        ? Colors.orange[800]
+                        : Colors.blueGrey[800],
                     borderRadius:
                         BorderRadius.vertical(top: Radius.circular(6)),
                   ),
@@ -349,13 +360,16 @@ class WirePainter extends CustomPainter {
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
+    // Draw regular wires first
     for (var wire in graphModel.nodeNetworkView!.wires) {
       final source = _getPinPositionAndDataType(wire.sourceNodeId, -1);
       final dest = _getPinPositionAndDataType(
           wire.destNodeId, wire.destParamIndex.toInt());
-      _drawWire(source.$1, dest.$1, canvas, paint, source.$2);
+      _drawWire(
+          source.$1, dest.$1, canvas, paint, source.$2, true); //wire.selected);
     }
 
+    // Draw dragged wire on top
     if (graphModel.draggedWire != null) {
       final wireStart = _getPinPositionAndDataType(
           graphModel.draggedWire!.startPin.nodeId,
@@ -363,10 +377,10 @@ class WirePainter extends CustomPainter {
       final wireEndPos = graphModel.draggedWire!.wireEndPosition;
       if (graphModel.draggedWire!.startPin.pinIndex < 0) {
         // start is source
-        _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2);
+        _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2, false);
       } else {
         // start is dest
-        _drawWire(wireEndPos, wireStart.$1, canvas, paint, wireStart.$2);
+        _drawWire(wireEndPos, wireStart.$1, canvas, paint, wireStart.$2, false);
       }
     }
   }
@@ -402,9 +416,25 @@ class WirePainter extends CustomPainter {
   }
 
   _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint,
-      String dataType) {
+      String dataType, bool selected) {
     paint.color = getDataTypeColor(dataType);
+    paint.strokeWidth = selected ? 4 : 2;
 
+    if (selected) {
+      // Draw glow effect for selected wire
+      final glowPaint = Paint()
+        ..color = paint.color.withOpacity(0.3)
+        ..strokeWidth = 8
+        ..style = PaintingStyle.stroke;
+
+      _drawWirePath(sourcePos, destPos, canvas, glowPaint);
+    }
+
+    _drawWirePath(sourcePos, destPos, canvas, paint);
+  }
+
+  void _drawWirePath(
+      Offset sourcePos, Offset destPos, Canvas canvas, Paint paint) {
     final controlPoint1 = sourcePos + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
     final controlPoint2 = destPos - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
 
