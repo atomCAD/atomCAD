@@ -263,6 +263,7 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
         input_pins,
         output_type: data_type_to_str(&node_type.output_type),
         selected: node_network.selected_node_id == Some(node.id),
+        displayed: node_network.displayed_node_ids.contains(&node.id),
       });
     }
 

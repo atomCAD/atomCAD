@@ -149,6 +149,7 @@ class NodeView {
   final List<InputPinView> inputPins;
   final String outputType;
   final bool selected;
+  final bool displayed;
 
   NodeView({
     required this.id,
@@ -157,6 +158,7 @@ class NodeView {
     required this.inputPins,
     required this.outputType,
     required this.selected,
+    required this.displayed,
   });
 
   @override
@@ -166,7 +168,8 @@ class NodeView {
       position.hashCode ^
       inputPins.hashCode ^
       outputType.hashCode ^
-      selected.hashCode;
+      selected.hashCode ^
+      displayed.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -178,7 +181,8 @@ class NodeView {
           position == other.position &&
           inputPins == other.inputPins &&
           outputType == other.outputType &&
-          selected == other.selected;
+          selected == other.selected &&
+          displayed == other.displayed;
 }
 
 class WireView {

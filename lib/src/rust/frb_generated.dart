@@ -708,8 +708,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -717,6 +717,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       inputPins: dco_decode_list_input_pin_view(arr[3]),
       outputType: dco_decode_String(arr[4]),
       selected: dco_decode_bool(arr[5]),
+      displayed: dco_decode_bool(arr[6]),
     );
   }
 
@@ -982,13 +983,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_inputPins = sse_decode_list_input_pin_view(deserializer);
     var var_outputType = sse_decode_String(deserializer);
     var var_selected = sse_decode_bool(deserializer);
+    var var_displayed = sse_decode_bool(deserializer);
     return NodeView(
         id: var_id,
         nodeTypeName: var_nodeTypeName,
         position: var_position,
         inputPins: var_inputPins,
         outputType: var_outputType,
-        selected: var_selected);
+        selected: var_selected,
+        displayed: var_displayed);
   }
 
   @protected
@@ -1244,6 +1247,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_input_pin_view(self.inputPins, serializer);
     sse_encode_String(self.outputType, serializer);
     sse_encode_bool(self.selected, serializer);
+    sse_encode_bool(self.displayed, serializer);
   }
 
   @protected

@@ -748,6 +748,7 @@ impl SseDecode for crate::api::api_types::NodeView {
             <Vec<crate::api::api_types::InputPinView>>::sse_decode(deserializer);
         let mut var_outputType = <String>::sse_decode(deserializer);
         let mut var_selected = <bool>::sse_decode(deserializer);
+        let mut var_displayed = <bool>::sse_decode(deserializer);
         return crate::api::api_types::NodeView {
             id: var_id,
             node_type_name: var_nodeTypeName,
@@ -755,6 +756,7 @@ impl SseDecode for crate::api::api_types::NodeView {
             input_pins: var_inputPins,
             output_type: var_outputType,
             selected: var_selected,
+            displayed: var_displayed,
         };
     }
 }
@@ -1010,6 +1012,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::api_types::NodeView {
             self.input_pins.into_into_dart().into_dart(),
             self.output_type.into_into_dart().into_dart(),
             self.selected.into_into_dart().into_dart(),
+            self.displayed.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1203,6 +1206,7 @@ impl SseEncode for crate::api::api_types::NodeView {
         <Vec<crate::api::api_types::InputPinView>>::sse_encode(self.input_pins, serializer);
         <String>::sse_encode(self.output_type, serializer);
         <bool>::sse_encode(self.selected, serializer);
+        <bool>::sse_encode(self.displayed, serializer);
     }
 }
 

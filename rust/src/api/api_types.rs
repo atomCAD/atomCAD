@@ -38,6 +38,7 @@ pub struct NodeView {
   pub input_pins: Vec<InputPinView>,
   pub output_type: String,
   pub selected: bool,
+  pub displayed: bool,
 }
 
 pub struct WireView {
