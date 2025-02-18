@@ -54,5 +54,14 @@ void connectNodes(
 List<String>? getNodeTypeNames() =>
     RustLib.instance.api.crateApiSimpleGetNodeTypeNames();
 
+void setNodeDisplay(
+        {required String nodeNetworkName,
+        required BigInt nodeId,
+        required bool isDisplayed}) =>
+    RustLib.instance.api.crateApiSimpleSetNodeDisplay(
+        nodeNetworkName: nodeNetworkName,
+        nodeId: nodeId,
+        isDisplayed: isDisplayed);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

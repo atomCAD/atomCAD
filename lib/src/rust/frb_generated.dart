@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => 991598034;
+  int get rustContentHash => -1576316361;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -112,6 +112,11 @@ abstract class RustLibApi extends BaseApi {
       required APIVec2 position});
 
   double crateApiSimpleProvideTexture({required int texturePtr});
+
+  void crateApiSimpleSetNodeDisplay(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required bool isDisplayed});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -400,6 +405,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "provide_texture",
         argNames: ["texturePtr"],
+      );
+
+  @override
+  void crateApiSimpleSetNodeDisplay(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required bool isDisplayed}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_bool(isDisplayed, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleSetNodeDisplayConstMeta,
+      argValues: [nodeNetworkName, nodeId, isDisplayed],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetNodeDisplayConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_node_display",
+        argNames: ["nodeNetworkName", "nodeId", "isDisplayed"],
       );
 
   @protected

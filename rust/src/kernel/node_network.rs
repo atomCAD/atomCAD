@@ -33,6 +33,7 @@ pub struct NodeNetwork {
   pub node_type: NodeType, // This is the node type when this node network is used as a node in another network. (analog to a function header in programming)
   pub nodes: HashMap<u64, Node>,
   pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
+  pub displayed_node_ids: HashSet<u64>, // Set of nodes that are currently displayed
 }
 
 impl NodeNetwork {
@@ -43,6 +44,7 @@ impl NodeNetwork {
       node_type,
       nodes: HashMap::new(),
       return_node_id: None,
+      displayed_node_ids: HashSet::new(),
     };
 
     return ret;
@@ -108,4 +110,13 @@ impl NodeNetwork {
     }
   }
 
+  pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
+    if self.nodes.contains_key(&node_id) {
+      if is_displayed {
+        self.displayed_node_ids.insert(node_id);
+      } else {
+        self.displayed_node_ids.remove(&node_id);
+      }
+    }
+  }
 }

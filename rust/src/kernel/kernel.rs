@@ -182,4 +182,10 @@ impl Kernel {
   pub fn get_network_evaluator(&self) -> &ImplicitNetworkEvaluator {
     &self.network_evaluator
   }
+
+  pub fn set_node_display(&mut self, network_name: &str, node_id: u64, is_displayed: bool) {
+    if let Some(network) = self.network_evaluator.get_network_mut(network_name) {
+      network.set_node_display(node_id, is_displayed);
+    }
+  }
 }

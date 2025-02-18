@@ -308,6 +308,13 @@ pub fn get_node_type_names() -> Option<Vec<String>> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn set_node_display(node_network_name: String, node_id: u64, is_displayed: bool) {
+    if let Some(instance) = &mut CAD_INSTANCE {
+        instance.kernel.set_node_display(&node_network_name, node_id, is_displayed);
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn greet(name: String) -> String {
     format!("Hello, {name}!")
 }
