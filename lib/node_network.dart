@@ -155,15 +155,26 @@ class GraphModel extends ChangeNotifier {
 
   void setSelectedWire(
       BigInt sourceNodeId, BigInt destNodeId, BigInt destParamIndex) {
-    if (nodeNetworkView != null) {
-      selectWire(
+    if (nodeNetworkView == null) return;
+    selectWire(
         nodeNetworkName: nodeNetworkView!.name,
         sourceNodeId: sourceNodeId,
         destinationNodeId: destNodeId,
-        destinationArgumentIndex: destParamIndex,
-      );
-      _refreshFromKernel();
-    }
+        destinationArgumentIndex: destParamIndex);
+    _refreshFromKernel();
+  }
+
+  void toggleNodeDisplay(BigInt nodeId) {
+    if (nodeNetworkView == null) return;
+    final node = nodeNetworkView!.nodes[nodeId];
+    if (node == null) return;
+    
+    setNodeDisplay(
+      nodeNetworkName: nodeNetworkView!.name,
+      nodeId: nodeId,
+      isDisplayed: !node.displayed,
+    );
+    _refreshFromKernel();
   }
 
   void _refreshFromKernel() {
@@ -360,13 +371,29 @@ class NodeWidget extends StatelessWidget {
                     borderRadius: BorderRadius.vertical(
                         top: Radius.circular(NODE_BORDER_RADIUS - 2)),
                   ),
-                  child: Text(
-                    node.nodeTypeName,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        node.nodeTypeName,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          final model = Provider.of<GraphModel>(context, listen: false);
+                          model.toggleNodeDisplay(node.id);
+                        },
+                        child: Icon(
+                          node.displayed ? Icons.visibility : Icons.visibility_off,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
