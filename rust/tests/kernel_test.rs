@@ -1,7 +1,6 @@
 use rust_lib_flutter_cad::kernel::kernel::Kernel;
 use rust_lib_flutter_cad::kernel::node_type::SphereData;
 use rust_lib_flutter_cad::kernel::node_type::CuboidData;
-use rust_lib_flutter_cad::kernel::node_type::HalfSpaceData;
 use glam::f32::Vec2;
 use glam::f32::Vec3;
 use glam::i32::IVec3;

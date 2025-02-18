@@ -309,9 +309,42 @@ pub fn get_node_type_names() -> Option<Vec<String>> {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_node_display(node_network_name: String, node_id: u64, is_displayed: bool) {
+  unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
         instance.kernel.set_node_display(&node_network_name, node_id, is_displayed);
     }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_node(node_network_name: String, node_id: u64) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.kernel.select_node(&node_network_name, node_id)
+    } else {
+      false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_wire(node_network_name: String, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.kernel.select_wire(&node_network_name, source_node_id, destination_node_id, destination_argument_index)
+    } else {
+      false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_selection(node_network_name: String) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.kernel.clear_selection(&node_network_name);
+    }
+  }
 }
 
 #[flutter_rust_bridge::frb(sync)]

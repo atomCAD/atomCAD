@@ -63,5 +63,23 @@ void setNodeDisplay(
         nodeId: nodeId,
         isDisplayed: isDisplayed);
 
+bool selectNode({required String nodeNetworkName, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleSelectNode(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+
+bool selectWire(
+        {required String nodeNetworkName,
+        required BigInt sourceNodeId,
+        required BigInt destinationNodeId,
+        required BigInt destinationArgumentIndex}) =>
+    RustLib.instance.api.crateApiSimpleSelectWire(
+        nodeNetworkName: nodeNetworkName,
+        sourceNodeId: sourceNodeId,
+        destinationNodeId: destinationNodeId,
+        destinationArgumentIndex: destinationArgumentIndex);
+
+void clearSelection({required String nodeNetworkName}) => RustLib.instance.api
+    .crateApiSimpleClearSelection(nodeNetworkName: nodeNetworkName);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

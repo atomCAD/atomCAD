@@ -184,8 +184,30 @@ impl Kernel {
   }
 
   pub fn set_node_display(&mut self, network_name: &str, node_id: u64, is_displayed: bool) {
-    if let Some(network) = self.network_evaluator.get_network_mut(network_name) {
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_display(node_id, is_displayed);
+    }
+  }
+
+  pub fn select_node(&mut self, network_name: &str, node_id: u64) -> bool {
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      network.select_node(node_id)
+    } else {
+      false
+    }
+  }
+
+  pub fn select_wire(&mut self, network_name: &str, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      network.select_wire(source_node_id, destination_node_id, destination_argument_index)
+    } else {
+      false
+    }
+  }
+
+  pub fn clear_selection(&mut self, network_name: &str) {
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      network.clear_selection();
     }
   }
 }

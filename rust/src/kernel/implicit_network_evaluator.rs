@@ -9,8 +9,6 @@ use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
 use super::node_type_registry::NodeTypeRegistry;
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 // TODO: these will not be constant, will be set by the user

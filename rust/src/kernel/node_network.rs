@@ -8,11 +8,16 @@ use super::node_type::NoData;
 use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
-use super::node_type_registry::NodeTypeRegistry;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
   pub argument_node_ids: HashSet<u64>, // Set of node ids for which the output is referenced
+}
+
+pub struct Wire {
+    pub source_node_id: u64,
+    pub destination_node_id: u64,
+    pub destination_argument_index: usize,
 }
 
 pub struct Node {
@@ -34,6 +39,8 @@ pub struct NodeNetwork {
   pub nodes: HashMap<u64, Node>,
   pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
   pub displayed_node_ids: HashSet<u64>, // Set of nodes that are currently displayed
+  pub selected_node_id: Option<u64>, // Currently selected node, if any
+  pub selected_wire: Option<Wire>, // Currently selected wire
 }
 
 impl NodeNetwork {
@@ -45,6 +52,8 @@ impl NodeNetwork {
       nodes: HashMap::new(),
       return_node_id: None,
       displayed_node_ids: HashSet::new(),
+      selected_node_id: None,
+      selected_wire: None,
     };
 
     return ret;
@@ -118,5 +127,39 @@ impl NodeNetwork {
         self.displayed_node_ids.remove(&node_id);
       }
     }
+  }
+
+  /// Selects a node and clears any existing wire selection.
+  /// Returns true if the node exists and was selected, false otherwise.
+  pub fn select_node(&mut self, node_id: u64) -> bool {
+    if self.nodes.contains_key(&node_id) {
+      self.selected_wire = None;
+      self.selected_node_id = Some(node_id);
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Selects a wire and clears any existing node selection.
+  /// Returns true if both nodes exist and the wire was selected, false otherwise.
+  pub fn select_wire(&mut self, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    if self.nodes.contains_key(&source_node_id) && self.nodes.contains_key(&destination_node_id) {
+      self.selected_node_id = None;
+      self.selected_wire = Some(Wire {
+        source_node_id,
+        destination_node_id,
+        destination_argument_index,
+      });
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Clears any existing selection (both node and wire).
+  pub fn clear_selection(&mut self) {
+    self.selected_node_id = None;
+    self.selected_wire = None;
   }
 }
