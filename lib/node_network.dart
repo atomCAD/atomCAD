@@ -1,3 +1,5 @@
+import 'dart:ui' show PathMetrics, PathMetric, Tangent;
+import 'dart:math' show sqrt;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
@@ -33,13 +35,15 @@ const double WIRE_GLOW_BLUR_RADIUS = 8.0;
 const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
 const double WIRE_GLOW_OPACITY = 0.3;
 
+const double HIT_TEST_WIRE_WIDTH = 12.0;
+
 // Colors
 const Color DEFAULT_DATA_TYPE_COLOR = Colors.grey;
 const Map<String, Color> DATA_TYPE_COLORS = {
   'Geometry': Colors.blue,
-  'Atomic': Color.fromARGB(255, 160, 40, 40),
+  'Atomic': Color.fromARGB(255, 30, 160, 30),
 };
-const Color WIRE_COLOR_SELECTED = Colors.orange;
+const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
 Color getDataTypeColor(String dataType) {
   return DATA_TYPE_COLORS[dataType] ?? DEFAULT_DATA_TYPE_COLOR;
@@ -497,24 +501,25 @@ class WirePainter extends CustomPainter {
     paint.strokeWidth = selected ? WIRE_WIDTH_SELECTED : WIRE_WIDTH_NORMAL;
 
     if (selected) {
+      paint.color = WIRE_COLOR_SELECTED;
+
       // Draw glow effect for selected wire
       final glowPaint = Paint()
         ..color = WIRE_COLOR_SELECTED.withOpacity(WIRE_GLOW_OPACITY)
         ..strokeWidth = paint.strokeWidth * 2
         ..style = PaintingStyle.stroke;
 
-      _drawWirePath(sourcePos, destPos, canvas, glowPaint);
+      canvas.drawPath(_getPath(sourcePos, destPos), glowPaint);
     }
 
-    _drawWirePath(sourcePos, destPos, canvas, paint);
+    canvas.drawPath(_getPath(sourcePos, destPos), paint);
   }
 
-  void _drawWirePath(
-      Offset sourcePos, Offset destPos, Canvas canvas, Paint paint) {
+  Path _getPath(Offset sourcePos, Offset destPos) {
     final controlPoint1 = sourcePos + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
     final controlPoint2 = destPos - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
 
-    final path = Path()
+    return Path()
       ..moveTo(sourcePos.dx, sourcePos.dy)
       ..cubicTo(
         controlPoint1.dx,
@@ -524,7 +529,46 @@ class WirePainter extends CustomPainter {
         destPos.dx,
         destPos.dy,
       );
-    canvas.drawPath(path, paint);
+  }
+
+  Path _getBand(Offset sourcePos, Offset destPos, double width) {
+    final hw = width * 0.5;
+    final off = destPos.dx > sourcePos.dx ? width : (-width);
+
+    final sourcePos1 = Offset(sourcePos.dx, sourcePos.dy + hw);
+    final sourcePos2 = Offset(sourcePos.dx, sourcePos.dy - hw);
+    final destPos1 = Offset(destPos.dx, destPos.dy + hw);
+    final destPos2 = Offset(destPos.dx, destPos.dy - hw);
+
+    final controlPointStart1 =
+        sourcePos1 + Offset(CUBIC_SPLINE_HORIZ_OFFSET - off, 0);
+    final controlPointEnd1 = destPos1 - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
+
+    final controlPointStart2 =
+        sourcePos2 + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
+    final controlPointEnd2 =
+        destPos2 - Offset(CUBIC_SPLINE_HORIZ_OFFSET - off, 0);
+
+    return Path()
+      ..moveTo(sourcePos1.dx, sourcePos1.dy)
+      ..cubicTo(
+        controlPointStart1.dx,
+        controlPointStart1.dy,
+        controlPointEnd1.dx,
+        controlPointEnd1.dy,
+        destPos1.dx,
+        destPos1.dy,
+      )
+      ..lineTo(destPos2.dx, destPos2.dy)
+      ..cubicTo(
+        controlPointEnd2.dx,
+        controlPointEnd2.dy,
+        controlPointStart2.dx,
+        controlPointStart2.dy,
+        sourcePos2.dx,
+        sourcePos2.dy,
+      )
+      ..close();
   }
 
   WireHitResult? findWireAtPosition(Offset position) {
@@ -535,31 +579,8 @@ class WirePainter extends CustomPainter {
       final (destPos, _) = _getPinPositionAndDataType(
           wire.destNodeId, wire.destParamIndex.toInt());
 
-      // Create a path for hit testing with some padding for easier clicking
-      final hitTestPath = Path();
-
-      // Add the main path
-
-      final controlPoint1 = sourcePos + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
-      final controlPoint2 = destPos - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
-
-      hitTestPath.moveTo(sourcePos.dx, sourcePos.dy);
-      hitTestPath.cubicTo(
-        controlPoint1.dx,
-        controlPoint1.dy,
-        controlPoint2.dx,
-        controlPoint2.dy,
-        destPos.dx,
-        destPos.dy,
-      );
-
-      // Add parallel paths above and below for wider hit area
-      final hitArea = Path.combine(PathOperation.union, hitTestPath,
-          hitTestPath.shift(const Offset(0, 5)));
-      final finalHitArea = Path.combine(
-          PathOperation.union, hitArea, hitTestPath.shift(const Offset(0, -5)));
-
-      if (finalHitArea.contains(position)) {
+      final hitTestPath = _getBand(sourcePos, destPos, HIT_TEST_WIRE_WIDTH);
+      if (hitTestPath.contains(position)) {
         return WireHitResult(
             wire.sourceNodeId, wire.destNodeId, wire.destParamIndex);
       }
