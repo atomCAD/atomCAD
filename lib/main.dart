@@ -5,16 +5,7 @@ import 'package:flutter_cad/src/rust/frb_generated.dart';
 
 Future<void> main() async {
   await RustLib.init();
-  //runApp(const MyApp());
-
-  final graphModel = GraphModel();
-  graphModel.init("sample");
-
-  runApp(MaterialApp(
-    home: Scaffold(
-      body: NodeNetwork(graphModel: graphModel),
-    ),
-  ));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -22,13 +13,21 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final graphModel = GraphModel()..init("sample");
+    
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: const Text('flutter atomCAD test')),
-        body: Center(
-          //child: Text(
-          //    'Action: Call Rust `greet("Tom")`\nResult: `${greet(name: "Tom")}`'),
-          child: CadViewport(),
+        body: Column(
+          children: [
+            Expanded(
+              flex: 2,
+              child: CadViewport(),
+            ),
+            Expanded(
+              flex: 1,
+              child: NodeNetwork(graphModel: graphModel),
+            ),
+          ],
         ),
       ),
     );

@@ -312,7 +312,7 @@ impl Renderer {
         self.tessellate_surface_point_cloud(&mut tessellator, surface_point_cloud);
       }
 
-      //println!("tessellated {} vertices and {} indices", tessellator.output_mesh.vertices.len(), tessellator.output_mesh.indices.len());
+      println!("tessellated {} vertices and {} indices", tessellator.output_mesh.vertices.len(), tessellator.output_mesh.indices.len());
 
       //TODO: do not replace the buffers, just copy the data.
 
@@ -396,9 +396,13 @@ impl Renderer {
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            
+            // Only draw if we have indices
+            if self.num_indices > 0 {
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            }
         }
 
         // Copy texture to output buffer

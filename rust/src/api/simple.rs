@@ -109,6 +109,11 @@ async fn initialize_cad_instance_async() {
   }
 }
 
+fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str) {
+  let scene = cad_instance.kernel.generate_scene(node_network_name);
+  cad_instance.renderer.refresh(&scene);
+}
+
 fn add_sample_model(kernel: &mut Kernel) {
   let atom_id1 = kernel.add_atom(6, Vec3::new(-1.3, 0.0, 0.0));
   let atom_id2 = kernel.add_atom(6, Vec3::new(1.3, 0.0, 0.0));
@@ -318,7 +323,8 @@ pub fn get_node_type_names() -> Option<Vec<String>> {
 pub fn set_node_display(node_network_name: String, node_id: u64, is_displayed: bool) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-        instance.kernel.set_node_display(&node_network_name, node_id, is_displayed);
+      instance.kernel.set_node_display(&node_network_name, node_id, is_displayed);
+      refresh_renderer(instance, &node_network_name);
     }
   }
 }
