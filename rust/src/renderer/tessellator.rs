@@ -54,7 +54,7 @@ impl Tessellator {
     let rotator = Quat::from_rotation_arc(Vec3::Y, point.normal);
 
     // Create vertices for cuboid
-    let half_size = Vec3::new(0.2, 0.05, 0.2); // x, y, z extents
+    let half_size = Vec3::new(0.1, 0.03, 0.1); // x, y, z extents
     let vertices = [
         // Top face vertices
         point.position + rotator.mul_vec3(Vec3::new(-half_size.x, 0.0, -half_size.z)),

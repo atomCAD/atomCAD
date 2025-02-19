@@ -12,8 +12,9 @@ use super::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
 
 // TODO: these will not be constant, will be set by the user
-const NETWORK_EVAL_VOLUME_MIN: IVec3 = IVec3::new(-16, -16, -16);
-const NETWORK_EVAL_VOLUME_MAX: IVec3 = IVec3::new(16, 16, 16);
+const NETWORK_EVAL_VOLUME_MIN: IVec3 = IVec3::new(-4, -4, -4);
+const NETWORK_EVAL_VOLUME_MAX: IVec3 = IVec3::new(4, 4, 4);
+const SAMPLES_PER_UNIT: i32 = 4;
 
 fn eval_cuboid(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
   let cuboid_data = &node_data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
@@ -90,18 +91,19 @@ impl ImplicitNetworkEvaluator {
     };
 
     // Iterate over voxel grid
-    for x in NETWORK_EVAL_VOLUME_MIN.x..NETWORK_EVAL_VOLUME_MAX.x {
-      for y in NETWORK_EVAL_VOLUME_MIN.y..NETWORK_EVAL_VOLUME_MAX.y {
-        for z in NETWORK_EVAL_VOLUME_MIN.z..NETWORK_EVAL_VOLUME_MAX.z {
+    for x in NETWORK_EVAL_VOLUME_MIN.x*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.x*SAMPLES_PER_UNIT {
+      for y in NETWORK_EVAL_VOLUME_MIN.y*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.y*SAMPLES_PER_UNIT {
+        for z in NETWORK_EVAL_VOLUME_MIN.z*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.z*SAMPLES_PER_UNIT {
+          let spu = SAMPLES_PER_UNIT as f32;
           let corner_points = [
-            Vec3::new(x as f32, y as f32, z as f32),
-            Vec3::new((x + 1) as f32, y as f32, z as f32),
-            Vec3::new(x as f32, (y + 1) as f32, z as f32),
-            Vec3::new(x as f32, y as f32, (z + 1) as f32),
-            Vec3::new((x + 1) as f32, (y + 1) as f32, z as f32),
-            Vec3::new((x + 1) as f32, y as f32, (z + 1) as f32),
-            Vec3::new(x as f32, (y + 1) as f32, (z + 1) as f32),
-            Vec3::new((x + 1) as f32, (y + 1) as f32, (z + 1) as f32),
+            Vec3::new(x as f32, y as f32, z as f32) / spu,
+            Vec3::new((x + 1) as f32, y as f32, z as f32) / spu,
+            Vec3::new(x as f32, (y + 1) as f32, z as f32) / spu,
+            Vec3::new(x as f32, y as f32, (z + 1) as f32) / spu,
+            Vec3::new((x + 1) as f32, (y + 1) as f32, z as f32) / spu,
+            Vec3::new((x + 1) as f32, y as f32, (z + 1) as f32) / spu,
+            Vec3::new(x as f32, (y + 1) as f32, (z + 1) as f32) / spu,
+            Vec3::new((x + 1) as f32, (y + 1) as f32, (z + 1) as f32) / spu,
           ];
 
           // TODO: Optimize this by caching parts of the implicit function, because this way
@@ -113,7 +115,7 @@ impl ImplicitNetworkEvaluator {
           if signs.iter().any(|&s| s > 0.0) && signs.iter().any(|&s| s < 0.0) {
             point_cloud.points.push(
               SurfacePoint {
-                position: corner_points[0] + 0.5,
+                position: corner_points[0] + (0.5 / spu),
                 normal: Vec3::new(0.0, 1.0, 0.0),
               }
             ); // Start at cell center

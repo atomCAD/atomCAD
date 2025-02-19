@@ -46,7 +46,7 @@ fn from_api_vec2(v: &APIVec2) -> Vec2 {
 }
 
 const IMAGE_WIDTH : u32 = 1280;
-const IMAGE_HEIGHT : u32 = 704;
+const IMAGE_HEIGHT : u32 = 544;
 
 pub struct CADInstance {
   kernel: Kernel,

@@ -14,17 +14,19 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final graphModel = GraphModel()..init("sample");
-    
+
     return MaterialApp(
       home: Scaffold(
         body: Column(
           children: [
-            Expanded(
-              flex: 2,
-              child: CadViewport(),
+            Center(
+              child: SizedBox(
+                width: 1280,
+                height: 544,
+                child: CadViewport(),
+              ),
             ),
             Expanded(
-              flex: 1,
               child: NodeNetwork(graphModel: graphModel),
             ),
           ],
