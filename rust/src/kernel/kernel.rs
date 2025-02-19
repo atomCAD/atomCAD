@@ -12,6 +12,7 @@ use super::node_type::NodeType;
 use super::node_type::NodeData;
 use super::implicit_network_evaluator::ImplicitNetworkEvaluator;
 use super::surface_point_cloud::SurfacePointCloud;
+use super::scene::Scene;
 use std::ops::Deref;
 
 pub struct Kernel {
@@ -72,6 +73,20 @@ impl Kernel {
     }
     self.history[self.next_history_index].execute(&mut self.model, true);
     return true;
+  }
+
+  // Generates the scene to be rendered according to the displayed nodes of the given node network
+  pub fn generate_scene(&mut self, node_network_name: &str) -> Scene {
+    let network = match self.node_type_registry.node_networks.get(node_network_name) {
+      Some(network) => network,
+      None => return Scene::new(),
+    };
+    let mut scene: Scene = Scene::new();
+    for node_id in &network.displayed_node_ids {
+      let point_cloud = self.network_evaluator.generate_displayable(node_network_name, *node_id, &self.node_type_registry);
+      scene.surface_point_clouds.push(point_cloud);
+    }
+    return scene;
   }
 
   // -------------------------------------------------------------------------------------------------------------------------

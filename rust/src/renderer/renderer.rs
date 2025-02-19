@@ -7,6 +7,8 @@ use super::tessellator::Tessellator;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
+use crate::kernel::scene::Scene;
+use crate::kernel::surface_point_cloud::SurfacePointCloud;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -297,18 +299,17 @@ impl Renderer {
       self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
 
-    pub fn refresh(&mut self, model: &AtomicStructure) {
+    pub fn refresh(&mut self, scene: &Scene) {
 
       // We tessellate everything into one mesh for now
 
       let mut tessellator = Tessellator::new();
-      tessellator.set_sphere_divisions(10, 20);
 
-      for (_id, atom) in model.atoms.iter() {
-        tessellator.add_atom(model, &atom);
+      for atomic_structure in scene.atomic_structures.iter() {
+        self.tessellate_atomic_structure(&mut tessellator, atomic_structure);
       }
-      for (_id, bond) in model.bonds.iter() {
-        tessellator.add_bond(model, &bond);
+      for surface_point_cloud in scene.surface_point_clouds.iter() {
+        self.tessellate_surface_point_cloud(&mut tessellator, surface_point_cloud);
       }
 
       //println!("tessellated {} vertices and {} indices", tessellator.output_mesh.vertices.len(), tessellator.output_mesh.indices.len());
@@ -331,6 +332,24 @@ impl Renderer {
         }
       );
       self.num_indices = tessellator.output_mesh.indices.len() as u32;
+    }
+
+    fn tessellate_atomic_structure(&mut self, tessellator: &mut Tessellator, atomic_structure: &AtomicStructure) {
+      tessellator.set_sphere_divisions(10, 20);
+
+      for (_id, atom) in atomic_structure.atoms.iter() {
+        tessellator.add_atom(atomic_structure, &atom);
+      }
+      for (_id, bond) in atomic_structure.bonds.iter() {
+        tessellator.add_bond(atomic_structure, &bond);
+      }
+    }
+
+    fn tessellate_surface_point_cloud(&mut self, tessellator: &mut Tessellator, surface_point_cloud: &SurfacePointCloud) {
+      // Iterate through all surface points and add them to the tessellator
+      for point in &surface_point_cloud.points {
+        tessellator.add_surface_point(point);
+      }
     }
 
     pub fn render(&mut self) -> Vec<u8> {

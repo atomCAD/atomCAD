@@ -3,11 +3,12 @@ use super::mesh::Vertex;
 use crate::kernel::atomic_structure::AtomicStructure;
 use crate::kernel::atomic_structure::Atom;
 use crate::kernel::atomic_structure::Bond;
+use crate::kernel::surface_point_cloud::SurfacePoint;
 use glam::f32::Vec3;
 use glam::f32::Quat;
 
 /*
- * Tessellator is able to tessellate atoms and bonds into a triangle mesh
+ * Tessellator is able to tessellate atoms, bonds and surface points into a triangle mesh
  */
 pub struct Tessellator {
   pub output_mesh: Mesh,
@@ -42,9 +43,98 @@ impl Tessellator {
     self.add_sphere(&atom.position, 1.0, &Vec3::new(0.8, 0.0, 0.0), 0.3, 0.0);
   }
 
+  pub fn add_surface_point(&mut self, point: &SurfacePoint) {
+    let roughness: f32 = 0.5;
+    let metallic: f32 = 0.0;
+    let outside_albedo = Vec3::new(0.0, 0.0, 1.0);
+    let inside_albedo = Vec3::new(1.0, 0.0, 0.0);
+    let side_albedo = Vec3::new(0.5, 0.5, 0.5);
+
+    // Create rotation quaternion from surface normal to align cuboid
+    let rotator = Quat::from_rotation_arc(Vec3::Y, point.normal);
+
+    // Create vertices for cuboid
+    let half_size = Vec3::new(0.2, 0.05, 0.2); // x, y, z extents
+    let vertices = [
+        // Top face vertices
+        point.position + rotator.mul_vec3(Vec3::new(-half_size.x, 0.0, -half_size.z)),
+        point.position + rotator.mul_vec3(Vec3::new(half_size.x, 0.0, -half_size.z)),
+        point.position + rotator.mul_vec3(Vec3::new(half_size.x, 0.0, half_size.z)),
+        point.position + rotator.mul_vec3(Vec3::new(-half_size.x, 0.0, half_size.z)),
+        // Bottom face vertices
+        point.position + rotator.mul_vec3(Vec3::new(-half_size.x, - 2.0 * half_size.y, -half_size.z)),
+        point.position + rotator.mul_vec3(Vec3::new(half_size.x, - 2.0 * half_size.y, -half_size.z)),
+        point.position + rotator.mul_vec3(Vec3::new(half_size.x, - 2.0 * half_size.y, half_size.z)),
+        point.position + rotator.mul_vec3(Vec3::new(-half_size.x, - 2.0 * half_size.y, half_size.z)),
+    ];
+
+    // Add the six faces of the cuboid
+    // Top face
+    self.add_quad(
+        &vertices[3], &vertices[2], &vertices[1], &vertices[0],
+        &rotator.mul_vec3(Vec3::Y),
+        &outside_albedo, roughness, metallic
+    );
+
+    // Bottom face
+    self.add_quad(
+        &vertices[4], &vertices[5], &vertices[6], &vertices[7],
+        &rotator.mul_vec3(-Vec3::Y),
+        &inside_albedo, roughness, metallic
+    );
+
+    // Front face
+    self.add_quad(
+        &vertices[2], &vertices[3], &vertices[7], &vertices[6],
+        &rotator.mul_vec3(Vec3::Z),
+        &side_albedo, roughness, metallic
+    );
+
+    // Back face
+    self.add_quad(
+        &vertices[0], &vertices[1], &vertices[5], &vertices[4],
+        &rotator.mul_vec3(-Vec3::Z),
+        &side_albedo, roughness, metallic
+    );
+
+    // Right face
+    self.add_quad(
+        &vertices[1], &vertices[2], &vertices[6], &vertices[5],
+        &rotator.mul_vec3(Vec3::X),
+        &side_albedo, roughness, metallic
+    );
+
+    // Left face
+    self.add_quad(
+        &vertices[3], &vertices[0], &vertices[4], &vertices[7],
+        &rotator.mul_vec3(-Vec3::X),
+        &side_albedo, roughness, metallic
+    );
+  }
+
+  // provide the positions in counter clockwise order
+  fn add_quad(
+    &mut self,
+    pos0: &Vec3,
+    pos1: &Vec3,
+    pos2: &Vec3,
+    pos3: &Vec3,
+    normal: &Vec3,
+    albedo: &Vec3,
+    roughness: f32,
+    metallic: f32,
+  ) {
+    let index0 = self.output_mesh.add_vertex(Vertex::new(pos0, normal, albedo, roughness, metallic));
+    let index1 = self.output_mesh.add_vertex(Vertex::new(pos1, normal, albedo, roughness, metallic));
+    let index2 = self.output_mesh.add_vertex(Vertex::new(pos2, normal, albedo, roughness, metallic));
+    let index3 = self.output_mesh.add_vertex(Vertex::new(pos3, normal, albedo, roughness, metallic));
+    self.output_mesh.add_quad(index0, index1, index2, index3);
+  }
+
   pub fn add_bond(&mut self, model: &AtomicStructure, bond: &Bond) {
     let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
     let atom_pos2 = model.get_atom(bond.atom_id2).unwrap().position;
+    // TODO: radius
     // TODO: radius
     self.add_cylinder(&atom_pos2, &atom_pos1, 0.3, &Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8);
   }

@@ -102,9 +102,9 @@ async fn initialize_cad_instance_async() {
     );
 
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
-      add_sample_model(&mut cad_instance.kernel);
       add_sample_network(&mut cad_instance.kernel);
-      cad_instance.renderer.refresh(cad_instance.kernel.get_atomic_structure())
+      let scene = cad_instance.kernel.generate_scene("sample");
+      cad_instance.renderer.refresh(&scene);
     }
   }
 }
@@ -210,7 +210,7 @@ pub fn add_atom(atomic_number: i32, position: APIVec3) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.kernel.add_atom(atomic_number, from_api_vec3(&position));
-      cad_instance.renderer.refresh(cad_instance.kernel.get_atomic_structure());
+      //cad_instance.renderer.refresh(cad_instance.kernel.get_atomic_structure());
     }
   }
 }
