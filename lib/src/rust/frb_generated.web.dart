@@ -34,16 +34,37 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera dco_decode_api_camera(dynamic raw);
 
   @protected
+  APICuboidData dco_decode_api_cuboid_data(dynamic raw);
+
+  @protected
+  APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
+
+  @protected
+  APISphereData dco_decode_api_sphere_data(dynamic raw);
+
+  @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw);
 
   @protected
   APIVec3 dco_decode_api_vec_3(dynamic raw);
 
   @protected
+  APIIVec3 dco_decode_apii_vec_3(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw);
+
+  @protected
+  APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw);
+
+  @protected
+  APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw);
 
   @protected
   APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
@@ -91,6 +112,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera? dco_decode_opt_box_autoadd_api_camera(dynamic raw);
 
   @protected
+  APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw);
+
+  @protected
+  APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw);
+
+  @protected
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
 
   @protected
@@ -128,16 +158,40 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera sse_decode_api_camera(SseDeserializer deserializer);
 
   @protected
+  APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer);
+
+  @protected
+  APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
+
+  @protected
+  APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
+
+  @protected
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
 
   @protected
   APIVec3 sse_decode_api_vec_3(SseDeserializer deserializer);
 
   @protected
+  APIIVec3 sse_decode_apii_vec_3(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
   APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer);
+
+  @protected
+  APICuboidData sse_decode_box_autoadd_api_cuboid_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIHalfSpaceData sse_decode_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APISphereData sse_decode_box_autoadd_api_sphere_data(
+      SseDeserializer deserializer);
 
   @protected
   APIVec2 sse_decode_box_autoadd_api_vec_2(SseDeserializer deserializer);
@@ -189,6 +243,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICuboidData? sse_decode_opt_box_autoadd_api_cuboid_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIHalfSpaceData? sse_decode_opt_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APISphereData? sse_decode_opt_box_autoadd_api_sphere_data(
+      SseDeserializer deserializer);
+
+  @protected
   NodeNetworkView? sse_decode_opt_box_autoadd_node_network_view(
       SseDeserializer deserializer);
 
@@ -228,10 +294,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_camera(APICamera self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_cuboid_data(APICuboidData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_half_space_data(
+      APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_vec_3(APIVec3 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_apii_vec_3(APIIVec3 self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -239,6 +318,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_camera(
       APICamera self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_cuboid_data(
+      APICuboidData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_half_space_data(
+      APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_sphere_data(
+      APISphereData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -290,6 +381,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_camera(
       APICamera? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_cuboid_data(
+      APICuboidData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_half_space_data(
+      APIHalfSpaceData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_sphere_data(
+      APISphereData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_node_network_view(

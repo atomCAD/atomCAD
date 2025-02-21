@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -144003663;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -306413380;
 
 // Section: executor
 
@@ -213,6 +213,74 @@ fn wire__crate__api__simple__get_camera_impl(
         },
     )
 }
+fn wire__crate__api__simple__get_cuboid_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_cuboid_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::get_cuboid_data(
+                    api_node_network_name,
+                    api_node_id,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__get_half_space_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_half_space_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::get_half_space_data(
+                    api_node_network_name,
+                    api_node_id,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__get_node_network_view_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -269,6 +337,40 @@ fn wire__crate__api__simple__get_node_type_names_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(crate::api::simple::get_node_type_names())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__get_sphere_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_sphere_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::get_sphere_data(
+                    api_node_network_name,
+                    api_node_id,
+                ))?;
                 Ok(output_ok)
             })())
         },
@@ -513,6 +615,82 @@ fn wire__crate__api__simple__select_wire_impl(
         },
     )
 }
+fn wire__crate__api__simple__set_cuboid_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_cuboid_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_data = <crate::api::api_types::APICuboidData>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::set_cuboid_data(
+                        api_node_network_name,
+                        api_node_id,
+                        api_data,
+                    );
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_half_space_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_half_space_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_data = <crate::api::api_types::APIHalfSpaceData>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::set_half_space_data(
+                        api_node_network_name,
+                        api_node_id,
+                        api_data,
+                    );
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__set_node_display_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -544,6 +722,44 @@ fn wire__crate__api__simple__set_node_display_impl(
                         api_node_network_name,
                         api_node_id,
                         api_is_displayed,
+                    );
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_sphere_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sphere_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_data = <crate::api::api_types::APISphereData>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::set_sphere_data(
+                        api_node_network_name,
+                        api_node_id,
+                        api_data,
                     );
                 })?;
                 Ok(output_ok)
@@ -592,6 +808,42 @@ impl SseDecode for crate::api::api_types::APICamera {
     }
 }
 
+impl SseDecode for crate::api::api_types::APICuboidData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_minCorner = <crate::api::api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_extent = <crate::api::api_types::APIIVec3>::sse_decode(deserializer);
+        return crate::api::api_types::APICuboidData {
+            min_corner: var_minCorner,
+            extent: var_extent,
+        };
+    }
+}
+
+impl SseDecode for crate::api::api_types::APIHalfSpaceData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_millerIndex = <crate::api::api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_shift = <i32>::sse_decode(deserializer);
+        return crate::api::api_types::APIHalfSpaceData {
+            miller_index: var_millerIndex,
+            shift: var_shift,
+        };
+    }
+}
+
+impl SseDecode for crate::api::api_types::APISphereData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_center = <crate::api::api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_radius = <i32>::sse_decode(deserializer);
+        return crate::api::api_types::APISphereData {
+            center: var_center,
+            radius: var_radius,
+        };
+    }
+}
+
 impl SseDecode for crate::api::api_types::APIVec2 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -608,6 +860,20 @@ impl SseDecode for crate::api::api_types::APIVec3 {
         let mut var_y = <f32>::sse_decode(deserializer);
         let mut var_z = <f32>::sse_decode(deserializer);
         return crate::api::api_types::APIVec3 {
+            x: var_x,
+            y: var_y,
+            z: var_z,
+        };
+    }
+}
+
+impl SseDecode for crate::api::api_types::APIIVec3 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_x = <i32>::sse_decode(deserializer);
+        let mut var_y = <i32>::sse_decode(deserializer);
+        let mut var_z = <i32>::sse_decode(deserializer);
+        return crate::api::api_types::APIIVec3 {
             x: var_x,
             y: var_y,
             z: var_z,
@@ -772,6 +1038,45 @@ impl SseDecode for Option<crate::api::api_types::APICamera> {
     }
 }
 
+impl SseDecode for Option<crate::api::api_types::APICuboidData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::api_types::APICuboidData>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::api_types::APIHalfSpaceData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::api_types::APIHalfSpaceData>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::api_types::APISphereData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::api_types::APISphereData>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::api_types::NodeNetworkView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -856,7 +1161,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        9 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -874,15 +1179,21 @@ fn pde_ffi_dispatcher_sync_impl(
         3 => wire__crate__api__simple__connect_nodes_impl(ptr, rust_vec_len, data_len),
         4 => wire__crate__api__simple__find_pivot_point_impl(ptr, rust_vec_len, data_len),
         5 => wire__crate__api__simple__get_camera_impl(ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__simple__get_node_network_view_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__simple__get_node_type_names_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__simple__get_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__simple__get_half_space_data_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__simple__get_node_network_view_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__simple__get_node_type_names_impl(ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__simple__get_sphere_data_impl(ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -912,6 +1223,69 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APICamera>
     for crate::api::api_types::APICamera
 {
     fn into_into_dart(self) -> crate::api::api_types::APICamera {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::APICuboidData {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.min_corner.into_into_dart().into_dart(),
+            self.extent.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::APICuboidData
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APICuboidData>
+    for crate::api::api_types::APICuboidData
+{
+    fn into_into_dart(self) -> crate::api::api_types::APICuboidData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::APIHalfSpaceData {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.miller_index.into_into_dart().into_dart(),
+            self.shift.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::APIHalfSpaceData
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APIHalfSpaceData>
+    for crate::api::api_types::APIHalfSpaceData
+{
+    fn into_into_dart(self) -> crate::api::api_types::APIHalfSpaceData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::APISphereData {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.center.into_into_dart().into_dart(),
+            self.radius.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::APISphereData
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APISphereData>
+    for crate::api::api_types::APISphereData
+{
+    fn into_into_dart(self) -> crate::api::api_types::APISphereData {
         self
     }
 }
@@ -955,6 +1329,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APIVec3>
     for crate::api::api_types::APIVec3
 {
     fn into_into_dart(self) -> crate::api::api_types::APIVec3 {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::APIIVec3 {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+            self.z.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::api_types::APIIVec3
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APIIVec3>
+    for crate::api::api_types::APIIVec3
+{
+    fn into_into_dart(self) -> crate::api::api_types::APIIVec3 {
         self
     }
 }
@@ -1082,6 +1478,30 @@ impl SseEncode for crate::api::api_types::APICamera {
     }
 }
 
+impl SseEncode for crate::api::api_types::APICuboidData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::api_types::APIIVec3>::sse_encode(self.min_corner, serializer);
+        <crate::api::api_types::APIIVec3>::sse_encode(self.extent, serializer);
+    }
+}
+
+impl SseEncode for crate::api::api_types::APIHalfSpaceData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::api_types::APIIVec3>::sse_encode(self.miller_index, serializer);
+        <i32>::sse_encode(self.shift, serializer);
+    }
+}
+
+impl SseEncode for crate::api::api_types::APISphereData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::api_types::APIIVec3>::sse_encode(self.center, serializer);
+        <i32>::sse_encode(self.radius, serializer);
+    }
+}
+
 impl SseEncode for crate::api::api_types::APIVec2 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1096,6 +1516,15 @@ impl SseEncode for crate::api::api_types::APIVec3 {
         <f32>::sse_encode(self.x, serializer);
         <f32>::sse_encode(self.y, serializer);
         <f32>::sse_encode(self.z, serializer);
+    }
+}
+
+impl SseEncode for crate::api::api_types::APIIVec3 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.x, serializer);
+        <i32>::sse_encode(self.y, serializer);
+        <i32>::sse_encode(self.z, serializer);
     }
 }
 
@@ -1216,6 +1645,36 @@ impl SseEncode for Option<crate::api::api_types::APICamera> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::api_types::APICamera>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::api_types::APICuboidData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::api_types::APICuboidData>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::api_types::APIHalfSpaceData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::api_types::APIHalfSpaceData>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::api_types::APISphereData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::api_types::APISphereData>::sse_encode(value, serializer);
         }
     }
 }

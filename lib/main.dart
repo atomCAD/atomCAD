@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/cad_viewport.dart';
 import 'package:flutter_cad/node_network.dart';
+import 'package:flutter_cad/graph_model.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 
 Future<void> main() async {

@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => -144003663;
+  int get rustContentHash => -306413380;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -96,10 +96,19 @@ abstract class RustLibApi extends BaseApi {
 
   APICamera? crateApiSimpleGetCamera();
 
+  APICuboidData? crateApiSimpleGetCuboidData(
+      {required String nodeNetworkName, required BigInt nodeId});
+
+  APIHalfSpaceData? crateApiSimpleGetHalfSpaceData(
+      {required String nodeNetworkName, required BigInt nodeId});
+
   NodeNetworkView? crateApiSimpleGetNodeNetworkView(
       {required String nodeNetworkName});
 
   List<String>? crateApiSimpleGetNodeTypeNames();
+
+  APISphereData? crateApiSimpleGetSphereData(
+      {required String nodeNetworkName, required BigInt nodeId});
 
   String crateApiSimpleGreet({required String name});
 
@@ -124,10 +133,25 @@ abstract class RustLibApi extends BaseApi {
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex});
 
+  void crateApiSimpleSetCuboidData(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APICuboidData data});
+
+  void crateApiSimpleSetHalfSpaceData(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APIHalfSpaceData data});
+
   void crateApiSimpleSetNodeDisplay(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required bool isDisplayed});
+
+  void crateApiSimpleSetSphereData(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APISphereData data});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -271,13 +295,65 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  APICuboidData? crateApiSimpleGetCuboidData(
+      {required String nodeNetworkName, required BigInt nodeId}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_box_autoadd_api_cuboid_data,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleGetCuboidDataConstMeta,
+      argValues: [nodeNetworkName, nodeId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleGetCuboidDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_cuboid_data",
+        argNames: ["nodeNetworkName", "nodeId"],
+      );
+
+  @override
+  APIHalfSpaceData? crateApiSimpleGetHalfSpaceData(
+      {required String nodeNetworkName, required BigInt nodeId}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_box_autoadd_api_half_space_data,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleGetHalfSpaceDataConstMeta,
+      argValues: [nodeNetworkName, nodeId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleGetHalfSpaceDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_half_space_data",
+        argNames: ["nodeNetworkName", "nodeId"],
+      );
+
+  @override
   NodeNetworkView? crateApiSimpleGetNodeNetworkView(
       {required String nodeNetworkName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(nodeNetworkName, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_box_autoadd_node_network_view,
@@ -300,7 +376,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_list_String,
@@ -319,12 +395,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  APISphereData? crateApiSimpleGetSphereData(
+      {required String nodeNetworkName, required BigInt nodeId}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_box_autoadd_api_sphere_data,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleGetSphereDataConstMeta,
+      argValues: [nodeNetworkName, nodeId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleGetSphereDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_sphere_data",
+        argNames: ["nodeNetworkName", "nodeId"],
+      );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -347,7 +449,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 9, port: port_);
+            funcId: 12, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -373,7 +475,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_box_autoadd_api_vec_3(eye, serializer);
         sse_encode_box_autoadd_api_vec_3(target, serializer);
         sse_encode_box_autoadd_api_vec_3(up, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -401,7 +503,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_vec_2(position, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -424,7 +526,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_CastedPrimitive_u_64(texturePtr, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_f_64,
@@ -450,7 +552,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -480,7 +582,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_64(sourceNodeId, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
         sse_encode_usize(destinationArgumentIndex, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -508,6 +610,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiSimpleSetCuboidData(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APICuboidData data}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_box_autoadd_api_cuboid_data(data, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleSetCuboidDataConstMeta,
+      argValues: [nodeNetworkName, nodeId, data],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetCuboidDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_cuboid_data",
+        argNames: ["nodeNetworkName", "nodeId", "data"],
+      );
+
+  @override
+  void crateApiSimpleSetHalfSpaceData(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APIHalfSpaceData data}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_box_autoadd_api_half_space_data(data, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleSetHalfSpaceDataConstMeta,
+      argValues: [nodeNetworkName, nodeId, data],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetHalfSpaceDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_half_space_data",
+        argNames: ["nodeNetworkName", "nodeId", "data"],
+      );
+
+  @override
   void crateApiSimpleSetNodeDisplay(
       {required String nodeNetworkName,
       required BigInt nodeId,
@@ -518,7 +678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_bool(isDisplayed, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -534,6 +694,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "set_node_display",
         argNames: ["nodeNetworkName", "nodeId", "isDisplayed"],
+      );
+
+  @override
+  void crateApiSimpleSetSphereData(
+      {required String nodeNetworkName,
+      required BigInt nodeId,
+      required APISphereData data}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_box_autoadd_api_sphere_data(data, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleSetSphereDataConstMeta,
+      argValues: [nodeNetworkName, nodeId, data],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSphereDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sphere_data",
+        argNames: ["nodeNetworkName", "nodeId", "data"],
       );
 
   @protected
@@ -574,6 +763,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APICuboidData dco_decode_api_cuboid_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APICuboidData(
+      minCorner: dco_decode_apii_vec_3(arr[0]),
+      extent: dco_decode_apii_vec_3(arr[1]),
+    );
+  }
+
+  @protected
+  APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIHalfSpaceData(
+      millerIndex: dco_decode_apii_vec_3(arr[0]),
+      shift: dco_decode_i_32(arr[1]),
+    );
+  }
+
+  @protected
+  APISphereData dco_decode_api_sphere_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APISphereData(
+      center: dco_decode_apii_vec_3(arr[0]),
+      radius: dco_decode_i_32(arr[1]),
+    );
+  }
+
+  @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -599,6 +824,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIIVec3 dco_decode_apii_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return APIIVec3(
+      x: dco_decode_i_32(arr[0]),
+      y: dco_decode_i_32(arr[1]),
+      z: dco_decode_i_32(arr[2]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -608,6 +846,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_camera(raw);
+  }
+
+  @protected
+  APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_cuboid_data(raw);
+  }
+
+  @protected
+  APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_half_space_data(raw);
+  }
+
+  @protected
+  APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_sphere_data(raw);
   }
 
   @protected
@@ -728,6 +984,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_cuboid_data(raw);
+  }
+
+  @protected
+  APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_half_space_data(raw);
+  }
+
+  @protected
+  APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_sphere_data(raw);
+  }
+
+  @protected
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_node_network_view(raw);
@@ -833,6 +1108,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_minCorner = sse_decode_apii_vec_3(deserializer);
+    var var_extent = sse_decode_apii_vec_3(deserializer);
+    return APICuboidData(minCorner: var_minCorner, extent: var_extent);
+  }
+
+  @protected
+  APIHalfSpaceData sse_decode_api_half_space_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_millerIndex = sse_decode_apii_vec_3(deserializer);
+    var var_shift = sse_decode_i_32(deserializer);
+    return APIHalfSpaceData(millerIndex: var_millerIndex, shift: var_shift);
+  }
+
+  @protected
+  APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_center = sse_decode_apii_vec_3(deserializer);
+    var var_radius = sse_decode_i_32(deserializer);
+    return APISphereData(center: var_center, radius: var_radius);
+  }
+
+  @protected
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_x = sse_decode_f_32(deserializer);
@@ -850,6 +1150,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIIVec3 sse_decode_apii_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_x = sse_decode_i_32(deserializer);
+    var var_y = sse_decode_i_32(deserializer);
+    var var_z = sse_decode_i_32(deserializer);
+    return APIIVec3(x: var_x, y: var_y, z: var_z);
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
@@ -859,6 +1168,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_camera(deserializer));
+  }
+
+  @protected
+  APICuboidData sse_decode_box_autoadd_api_cuboid_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_cuboid_data(deserializer));
+  }
+
+  @protected
+  APIHalfSpaceData sse_decode_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_half_space_data(deserializer));
+  }
+
+  @protected
+  APISphereData sse_decode_box_autoadd_api_sphere_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_sphere_data(deserializer));
   }
 
   @protected
@@ -1007,6 +1337,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APICuboidData? sse_decode_opt_box_autoadd_api_cuboid_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_cuboid_data(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIHalfSpaceData? sse_decode_opt_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_half_space_data(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APISphereData? sse_decode_opt_box_autoadd_api_sphere_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_sphere_data(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   NodeNetworkView? sse_decode_opt_box_autoadd_node_network_view(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1108,6 +1474,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_cuboid_data(
+      APICuboidData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_apii_vec_3(self.minCorner, serializer);
+    sse_encode_apii_vec_3(self.extent, serializer);
+  }
+
+  @protected
+  void sse_encode_api_half_space_data(
+      APIHalfSpaceData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_apii_vec_3(self.millerIndex, serializer);
+    sse_encode_i_32(self.shift, serializer);
+  }
+
+  @protected
+  void sse_encode_api_sphere_data(
+      APISphereData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_apii_vec_3(self.center, serializer);
+    sse_encode_i_32(self.radius, serializer);
+  }
+
+  @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_32(self.x, serializer);
@@ -1123,6 +1513,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_apii_vec_3(APIIVec3 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.x, serializer);
+    sse_encode_i_32(self.y, serializer);
+    sse_encode_i_32(self.z, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
@@ -1133,6 +1531,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APICamera self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_camera(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_cuboid_data(
+      APICuboidData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_cuboid_data(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_half_space_data(
+      APIHalfSpaceData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_half_space_data(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_sphere_data(
+      APISphereData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_sphere_data(self, serializer);
   }
 
   @protected
@@ -1258,6 +1677,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_camera(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_cuboid_data(
+      APICuboidData? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_cuboid_data(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_half_space_data(
+      APIHalfSpaceData? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_half_space_data(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_sphere_data(
+      APISphereData? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_sphere_data(self, serializer);
     }
   }
 

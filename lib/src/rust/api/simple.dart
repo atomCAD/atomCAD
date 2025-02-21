@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `add_sample_network`, `from_api_vec2`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_vec2`, `to_api_vec3`
+// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `add_sample_network`, `from_api_ivec3`, `from_api_vec2`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `refresh_renderer`, `send_texture`, `to_api_ivec3`, `to_api_vec2`, `to_api_vec3`
 // These types are ignored because they are not used by any `pub` functions: `CADInstance`, `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
@@ -80,6 +80,42 @@ bool selectWire(
 
 void clearSelection({required String nodeNetworkName}) => RustLib.instance.api
     .crateApiSimpleClearSelection(nodeNetworkName: nodeNetworkName);
+
+APICuboidData? getCuboidData(
+        {required String nodeNetworkName, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleGetCuboidData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+
+APISphereData? getSphereData(
+        {required String nodeNetworkName, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleGetSphereData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+
+APIHalfSpaceData? getHalfSpaceData(
+        {required String nodeNetworkName, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleGetHalfSpaceData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+
+void setCuboidData(
+        {required String nodeNetworkName,
+        required BigInt nodeId,
+        required APICuboidData data}) =>
+    RustLib.instance.api.crateApiSimpleSetCuboidData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+
+void setSphereData(
+        {required String nodeNetworkName,
+        required BigInt nodeId,
+        required APISphereData data}) =>
+    RustLib.instance.api.crateApiSimpleSetSphereData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+
+void setHalfSpaceData(
+        {required String nodeNetworkName,
+        required BigInt nodeId,
+        required APIHalfSpaceData data}) =>
+    RustLib.instance.api.crateApiSimpleSetHalfSpaceData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

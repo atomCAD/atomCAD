@@ -49,6 +49,69 @@ class APICamera {
           zfar == other.zfar;
 }
 
+class APICuboidData {
+  final APIIVec3 minCorner;
+  final APIIVec3 extent;
+
+  const APICuboidData({
+    required this.minCorner,
+    required this.extent,
+  });
+
+  @override
+  int get hashCode => minCorner.hashCode ^ extent.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICuboidData &&
+          runtimeType == other.runtimeType &&
+          minCorner == other.minCorner &&
+          extent == other.extent;
+}
+
+class APIHalfSpaceData {
+  final APIIVec3 millerIndex;
+  final int shift;
+
+  const APIHalfSpaceData({
+    required this.millerIndex,
+    required this.shift,
+  });
+
+  @override
+  int get hashCode => millerIndex.hashCode ^ shift.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIHalfSpaceData &&
+          runtimeType == other.runtimeType &&
+          millerIndex == other.millerIndex &&
+          shift == other.shift;
+}
+
+class APISphereData {
+  final APIIVec3 center;
+  final int radius;
+
+  const APISphereData({
+    required this.center,
+    required this.radius,
+  });
+
+  @override
+  int get hashCode => center.hashCode ^ radius.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISphereData &&
+          runtimeType == other.runtimeType &&
+          center == other.center &&
+          radius == other.radius;
+}
+
 class APIVec2 {
   final double x;
   final double y;
@@ -88,6 +151,30 @@ class APIVec3 {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIVec3 &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y &&
+          z == other.z;
+}
+
+class APIIVec3 {
+  final int x;
+  final int y;
+  final int z;
+
+  const APIIVec3({
+    required this.x,
+    required this.y,
+    required this.z,
+  });
+
+  @override
+  int get hashCode => x.hashCode ^ y.hashCode ^ z.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIVec3 &&
           runtimeType == other.runtimeType &&
           x == other.x &&
           y == other.y &&
