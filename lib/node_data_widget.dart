@@ -81,6 +81,7 @@ class _CuboidEditor extends StatefulWidget {
 
 class _CuboidEditorState extends State<_CuboidEditor> {
   APICuboidData? _data;
+  APICuboidData? _stagedData;
 
   @override
   void initState() {
@@ -94,55 +95,82 @@ class _CuboidEditorState extends State<_CuboidEditor> {
       nodeId: widget.nodeId,
     );
     if (mounted) {
-      setState(() => _data = data);
+      setState(() {
+        _data = data;
+        _stagedData = data;
+      });
     }
   }
 
-  void _updateData(APICuboidData newData) {
-    setCuboidData(
-      nodeNetworkName: widget.nodeNetworkName,
-      nodeId: widget.nodeId,
-      data: newData,
-    );
-    setState(() => _data = newData);
+  void _updateStagedData(APICuboidData newData) {
+    setState(() => _stagedData = newData);
+  }
+
+  void _applyChanges() {
+    if (_stagedData != null) {
+      setCuboidData(
+        nodeNetworkName: widget.nodeNetworkName,
+        nodeId: widget.nodeId,
+        data: _stagedData!,
+      );
+      setState(() => _data = _stagedData);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_data == null) {
+    if (_stagedData == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Cuboid Properties',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          _Vec3Input(
-            label: 'Min Corner',
-            value: _data!.minCorner,
-            onChanged: (newValue) {
-              _updateData(APICuboidData(
-                minCorner: newValue,
-                extent: _data!.extent,
-              ));
-            },
-          ),
-          const SizedBox(height: 8),
-          _Vec3Input(
-            label: 'Extent',
-            value: _data!.extent,
-            onChanged: (newValue) {
-              _updateData(APICuboidData(
-                minCorner: _data!.minCorner,
-                extent: newValue,
-              ));
-            },
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Cuboid Properties', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            _Vec3Input(
+              label: 'Min Corner',
+              value: _stagedData!.minCorner,
+              onChanged: (newValue) {
+                _updateStagedData(APICuboidData(
+                  minCorner: newValue,
+                  extent: _stagedData!.extent,
+                ));
+              },
+            ),
+            const SizedBox(height: 8),
+            _Vec3Input(
+              label: 'Extent',
+              value: _stagedData!.extent,
+              onChanged: (newValue) {
+                _updateStagedData(APICuboidData(
+                  minCorner: _stagedData!.minCorner,
+                  extent: newValue,
+                ));
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _data == _stagedData ? null : () {
+                    setState(() => _stagedData = _data);
+                  },
+                  child: const Text('Reset'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _data == _stagedData ? null : _applyChanges,
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -164,6 +192,7 @@ class _SphereEditor extends StatefulWidget {
 
 class _SphereEditorState extends State<_SphereEditor> {
   APISphereData? _data;
+  APISphereData? _stagedData;
 
   @override
   void initState() {
@@ -177,55 +206,82 @@ class _SphereEditorState extends State<_SphereEditor> {
       nodeId: widget.nodeId,
     );
     if (mounted) {
-      setState(() => _data = data);
+      setState(() {
+        _data = data;
+        _stagedData = data;
+      });
     }
   }
 
-  void _updateData(APISphereData newData) {
-    setSphereData(
-      nodeNetworkName: widget.nodeNetworkName,
-      nodeId: widget.nodeId,
-      data: newData,
-    );
-    setState(() => _data = newData);
+  void _updateStagedData(APISphereData newData) {
+    setState(() => _stagedData = newData);
+  }
+
+  void _applyChanges() {
+    if (_stagedData != null) {
+      setSphereData(
+        nodeNetworkName: widget.nodeNetworkName,
+        nodeId: widget.nodeId,
+        data: _stagedData!,
+      );
+      setState(() => _data = _stagedData);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_data == null) {
+    if (_stagedData == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Sphere Properties',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          _Vec3Input(
-            label: 'Center',
-            value: _data!.center,
-            onChanged: (newValue) {
-              _updateData(APISphereData(
-                center: newValue,
-                radius: _data!.radius,
-              ));
-            },
-          ),
-          const SizedBox(height: 8),
-          _IntInput(
-            label: 'Radius',
-            value: _data!.radius,
-            onChanged: (newValue) {
-              _updateData(APISphereData(
-                center: _data!.center,
-                radius: newValue,
-              ));
-            },
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Sphere Properties', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            _Vec3Input(
+              label: 'Center',
+              value: _stagedData!.center,
+              onChanged: (newValue) {
+                _updateStagedData(APISphereData(
+                  center: newValue,
+                  radius: _stagedData!.radius,
+                ));
+              },
+            ),
+            const SizedBox(height: 8),
+            _IntInput(
+              label: 'Radius',
+              value: _stagedData!.radius,
+              onChanged: (newValue) {
+                _updateStagedData(APISphereData(
+                  center: _stagedData!.center,
+                  radius: newValue,
+                ));
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _data == _stagedData ? null : () {
+                    setState(() => _stagedData = _data);
+                  },
+                  child: const Text('Reset'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _data == _stagedData ? null : _applyChanges,
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -247,6 +303,7 @@ class _HalfSpaceEditor extends StatefulWidget {
 
 class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
   APIHalfSpaceData? _data;
+  APIHalfSpaceData? _stagedData;
 
   @override
   void initState() {
@@ -260,55 +317,82 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
       nodeId: widget.nodeId,
     );
     if (mounted) {
-      setState(() => _data = data);
+      setState(() {
+        _data = data;
+        _stagedData = data;
+      });
     }
   }
 
-  void _updateData(APIHalfSpaceData newData) {
-    setHalfSpaceData(
-      nodeNetworkName: widget.nodeNetworkName,
-      nodeId: widget.nodeId,
-      data: newData,
-    );
-    setState(() => _data = newData);
+  void _updateStagedData(APIHalfSpaceData newData) {
+    setState(() => _stagedData = newData);
+  }
+
+  void _applyChanges() {
+    if (_stagedData != null) {
+      setHalfSpaceData(
+        nodeNetworkName: widget.nodeNetworkName,
+        nodeId: widget.nodeId,
+        data: _stagedData!,
+      );
+      setState(() => _data = _stagedData);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_data == null) {
+    if (_stagedData == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Half Space Properties',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          _Vec3Input(
-            label: 'Miller Index',
-            value: _data!.millerIndex,
-            onChanged: (newValue) {
-              _updateData(APIHalfSpaceData(
-                millerIndex: newValue,
-                shift: _data!.shift,
-              ));
-            },
-          ),
-          const SizedBox(height: 8),
-          _IntInput(
-            label: 'Shift',
-            value: _data!.shift,
-            onChanged: (newValue) {
-              _updateData(APIHalfSpaceData(
-                millerIndex: _data!.millerIndex,
-                shift: newValue,
-              ));
-            },
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Half Space Properties', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            _Vec3Input(
+              label: 'Miller Index',
+              value: _stagedData!.millerIndex,
+              onChanged: (newValue) {
+                _updateStagedData(APIHalfSpaceData(
+                  millerIndex: newValue,
+                  shift: _stagedData!.shift,
+                ));
+              },
+            ),
+            const SizedBox(height: 8),
+            _IntInput(
+              label: 'Shift',
+              value: _stagedData!.shift,
+              onChanged: (newValue) {
+                _updateStagedData(APIHalfSpaceData(
+                  millerIndex: _stagedData!.millerIndex,
+                  shift: newValue,
+                ));
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _data == _stagedData ? null : () {
+                    setState(() => _stagedData = _data);
+                  },
+                  child: const Text('Reset'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _data == _stagedData ? null : _applyChanges,
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
