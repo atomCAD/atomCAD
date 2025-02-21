@@ -189,6 +189,13 @@ impl Kernel {
     }
   }
 
+  pub fn get_node_network_data(&self, network_name: &str, node_id: u64) -> Option<&dyn NodeData> {
+    self.node_type_registry
+      .node_networks
+      .get(network_name)
+      .and_then(|network| network.get_node_network_data(node_id))
+  }
+
   // Generates displayable representation for a node in a network
   pub fn generate_displayable(&self, network_name: &str, node_id: u64) -> SurfacePointCloud {
     self.network_evaluator.generate_displayable(network_name, node_id, &self.node_type_registry)

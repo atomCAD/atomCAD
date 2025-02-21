@@ -5,15 +5,17 @@ use crate::renderer::renderer::Renderer;
 use crate::kernel::kernel::Kernel;
 use glam::f32::Vec2;
 use glam::f32::Vec3;
+use glam::i32::IVec3;
 use std::collections::HashMap;
-use super::api_types::APIVec2;
+use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData};
 use super::api_types::APIVec3;
+use super::api_types::APIIVec3;
 use super::api_types::APICamera;
 use super::api_types::InputPinView;
 use super::api_types::NodeView;
 use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
-use crate::kernel::node_type::data_type_to_str;
+use crate::kernel::node_type::{data_type_to_str, CuboidData, SphereData, HalfSpaceData};
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
   return APIVec3{
@@ -25,6 +27,22 @@ fn to_api_vec3(v: &Vec3) -> APIVec3 {
 
 fn from_api_vec3(v: &APIVec3) -> Vec3 {
   return Vec3{
+    x: v.x,
+    y: v.y,
+    z: v.z
+  }
+}
+
+fn to_api_ivec3(v: &IVec3) -> APIIVec3 {
+  return APIIVec3{
+    x: v.x,
+    y: v.y,
+    z: v.z
+  }
+}
+
+fn from_api_ivec3(v: &APIIVec3) -> IVec3 {
+  return IVec3{
     x: v.x,
     y: v.y,
     z: v.z
@@ -356,6 +374,84 @@ pub fn clear_selection(node_network_name: String) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.kernel.clear_selection(&node_network_name);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_cuboid_data(node_network_name: String, node_id: u64) -> Option<APICuboidData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.kernel.get_node_network_data(&node_network_name, node_id)?;
+    let cuboid_data = node_data.as_any_ref().downcast_ref::<CuboidData>()?;
+    return Some(APICuboidData {
+      min_corner: to_api_ivec3(&cuboid_data.min_corner),
+      extent: to_api_ivec3(&cuboid_data.extent),
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_sphere_data(node_network_name: String, node_id: u64) -> Option<APISphereData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.kernel.get_node_network_data(&node_network_name, node_id)?;
+    let sphere_data = node_data.as_any_ref().downcast_ref::<SphereData>()?;
+    return Some(APISphereData {
+      center: to_api_ivec3(&sphere_data.center),
+      radius: sphere_data.radius,
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_half_space_data(node_network_name: String, node_id: u64) -> Option<APIHalfSpaceData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.kernel.get_node_network_data(&node_network_name, node_id)?;
+    let half_space_data = node_data.as_any_ref().downcast_ref::<HalfSpaceData>()?;
+    return Some(APIHalfSpaceData {
+      miller_index: to_api_ivec3(&half_space_data.miller_index),
+      shift: half_space_data.shift,
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_cuboid_data(node_network_name: String, node_id: u64, data: APICuboidData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let cuboid_data = Box::new(CuboidData {
+        min_corner: from_api_ivec3(&data.min_corner),
+        extent: from_api_ivec3(&data.extent),
+      });
+      instance.kernel.set_node_network_data(&node_network_name, node_id, cuboid_data);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sphere_data(node_network_name: String, node_id: u64, data: APISphereData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let sphere_data = Box::new(SphereData {
+        center: from_api_ivec3(&data.center),
+        radius: data.radius,
+      });
+      instance.kernel.set_node_network_data(&node_network_name, node_id, sphere_data);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_half_space_data(node_network_name: String, node_id: u64, data: APIHalfSpaceData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let half_space_data = Box::new(HalfSpaceData {
+        miller_index: from_api_ivec3(&data.miller_index),
+        shift: data.shift,
+      });
+      instance.kernel.set_node_network_data(&node_network_name, node_id, half_space_data);
     }
   }
 }

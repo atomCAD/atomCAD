@@ -13,6 +13,12 @@ pub struct APIVec3 {
   pub z: f32,
 }
 
+pub struct APIIVec3 {
+  pub x: i32,
+  pub y: i32,
+  pub z: i32,
+}
+
 pub struct APICamera {
   pub eye: APIVec3,
   pub target: APIVec3,
@@ -52,4 +58,19 @@ pub struct NodeNetworkView {
   pub name: String,
   pub nodes: HashMap<u64, NodeView>,
   pub wires: Vec<WireView>,
+}
+
+pub struct APICuboidData {
+  pub min_corner: APIIVec3,
+  pub extent: APIIVec3,
+}
+
+pub struct APISphereData {
+  pub center: APIIVec3,
+  pub radius: i32,
+}
+
+pub struct APIHalfSpaceData {
+  pub miller_index: APIIVec3,
+  pub shift: i32,
 }
