@@ -114,10 +114,19 @@ impl ImplicitNetworkEvaluator {
           ).collect();
           if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
             let center_point = corner_points[0] + (0.5 / spu);
+            let value = self.implicit_eval(network, &network_args, node_id, &center_point, registry)[0];
+            let gradient = self.get_gradient(network, &network_args, node_id, &center_point, registry);
+            let gradient_magnitude_sq = gradient.length_squared();
+            // Avoid division by very small numbers
+            let step = if gradient_magnitude_sq > 1e-10 {
+                value * gradient / gradient_magnitude_sq
+            } else {
+                value * gradient // Fallback to SDF assumption if gradient is nearly zero
+            };
             point_cloud.points.push(
               SurfacePoint {
-                position: center_point,
-                normal: self.get_gradient(network, &network_args, node_id, &center_point, registry).normalize(),
+                position: center_point - step,
+                normal: gradient.normalize(),
               }
             ); // Start at cell center
           }
