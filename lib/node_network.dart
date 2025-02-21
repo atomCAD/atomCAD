@@ -1,5 +1,3 @@
-import 'dart:ui' show PathMetrics, PathMetric, Tangent;
-import 'dart:math' show sqrt;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
@@ -168,7 +166,7 @@ class GraphModel extends ChangeNotifier {
     if (nodeNetworkView == null) return;
     final node = nodeNetworkView!.nodes[nodeId];
     if (node == null) return;
-    
+
     setNodeDisplay(
       nodeNetworkName: nodeNetworkView!.name,
       nodeId: nodeId,
@@ -278,6 +276,18 @@ class PinWidget extends StatelessWidget {
   PinWidget({required this.pinReference, required this.multi})
       : super(key: ValueKey(pinReference.pinIndex));
 
+  RenderBox? _findNodeNetworkRenderBox(BuildContext context) {
+    RenderBox? result;
+    context.visitAncestorElements((element) {
+      if (element.widget is NodeNetwork) {
+        result = element.renderObject as RenderBox?;
+        return false; // Stop visiting
+      }
+      return true; // Continue visiting
+    });
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     return DragTarget<PinReference>(
@@ -289,8 +299,12 @@ class PinWidget extends StatelessWidget {
               PinViewWidget(dataType: pinReference.dataType, multi: multi),
           child: PinViewWidget(dataType: pinReference.dataType, multi: multi),
           onDragUpdate: (details) {
-            Provider.of<GraphModel>(context, listen: false)
-                .dragWire(pinReference, details.globalPosition);
+            final nodeNetworkBox = _findNodeNetworkRenderBox(context);
+            if (nodeNetworkBox != null) {
+              final position = nodeNetworkBox.globalToLocal(details.globalPosition);
+              Provider.of<GraphModel>(context, listen: false)
+                  .dragWire(pinReference, position);
+            }
           },
           onDragEnd: (details) {
             Provider.of<GraphModel>(context, listen: false).cancelDragWire();
@@ -384,11 +398,14 @@ class NodeWidget extends StatelessWidget {
                       ),
                       GestureDetector(
                         onTap: () {
-                          final model = Provider.of<GraphModel>(context, listen: false);
+                          final model =
+                              Provider.of<GraphModel>(context, listen: false);
                           model.toggleNodeDisplay(node.id);
                         },
                         child: Icon(
-                          node.displayed ? Icons.visibility : Icons.visibility_off,
+                          node.displayed
+                              ? Icons.visibility
+                              : Icons.visibility_off,
                           color: Colors.white,
                           size: 20,
                         ),

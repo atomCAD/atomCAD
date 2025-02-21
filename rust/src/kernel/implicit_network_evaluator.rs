@@ -109,14 +109,15 @@ impl ImplicitNetworkEvaluator {
           // TODO: Optimize this by caching parts of the implicit function, because this way
           // each corner is sampled 8 times!
           let network_args: Vec<Vec<f32>> = Vec::new();
-          let signs: Vec<f32> = corner_points.iter().map(
+          let values: Vec<f32> = corner_points.iter().map(
             |p| self.implicit_eval(network, &network_args, node_id, p, registry)[0]
           ).collect();
-          if signs.iter().any(|&s| s > 0.0) && signs.iter().any(|&s| s < 0.0) {
+          if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
+            let center_point = corner_points[0] + (0.5 / spu);
             point_cloud.points.push(
               SurfacePoint {
-                position: corner_points[0] + (0.5 / spu),
-                normal: Vec3::new(0.0, 1.0, 0.0),
+                position: center_point,
+                normal: self.get_gradient(network, &network_args, node_id, &center_point, registry).normalize(),
               }
             ); // Start at cell center
           }
@@ -125,6 +126,35 @@ impl ImplicitNetworkEvaluator {
     }
 
     return point_cloud;
+  }
+
+  pub fn get_gradient(&self, network: &NodeNetwork, network_args: &Vec<Vec<f32>>, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec3 {
+    let epsilon = 0.0001; // Small value for finite difference approximation
+    
+    // Calculate partial derivatives using central differences
+    let dx = (
+      self.implicit_eval(network, network_args, node_id, &(sample_point + Vec3::new(epsilon, 0.0, 0.0)), registry)[0] -
+      self.implicit_eval(network, network_args, node_id, &(sample_point - Vec3::new(epsilon, 0.0, 0.0)), registry)[0]
+    ) / (2.0 * epsilon);
+    
+    let dy = (
+      self.implicit_eval(network, network_args, node_id, &(sample_point + Vec3::new(0.0, epsilon, 0.0)), registry)[0] -
+      self.implicit_eval(network, network_args, node_id, &(sample_point - Vec3::new(0.0, epsilon, 0.0)), registry)[0]
+    ) / (2.0 * epsilon);
+    
+    let dz = (
+      self.implicit_eval(network, network_args, node_id, &(sample_point + Vec3::new(0.0, 0.0, epsilon)), registry)[0] -
+      self.implicit_eval(network, network_args, node_id, &(sample_point - Vec3::new(0.0, 0.0, epsilon)), registry)[0]
+    ) / (2.0 * epsilon);
+
+    let gradient = Vec3::new(dx, dy, dz);
+    
+    // Normalize the gradient vector
+    if gradient.length_squared() > 0.0 {
+      gradient.normalize()
+    } else {
+      gradient
+    }
   }
 
   /*

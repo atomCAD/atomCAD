@@ -163,6 +163,38 @@ fn test_kernel_sphere_evaluation() {
 }
 
 #[test]
+fn test_kernel_cuboid_evaluation() {
+    let mut k = Kernel::new();
+    
+    // Create a test network
+    k.add_node_network("test_network");
+    
+    // Add a cuboid node (default: start at (-1, -1, -1), size: (2, 2, 2))
+    let cuboid_node = k.add_node("test_network", "cuboid", Vec2::new(0.0, 0.0));
+
+    // Get the evaluator and test evaluation
+    let evaluator = k.get_network_evaluator();
+    let registry = &k.node_type_registry;
+    let network = registry.node_networks.get("test_network").unwrap();
+    
+    // Test points:
+    // 1. Point on surface (should be 0)
+    let surface_point = Vec3::new(1.0, 0.0, 0.0);
+    let surface_result = evaluator.implicit_eval(network, &vec![], cuboid_node, &surface_point, registry);
+    assert!((surface_result[0]).abs() < EPSILON);
+    
+    // 2. Point inside cuboid (should be negative)
+    let inside_point = Vec3::new(0.5, 0.0, 0.0);
+    let inside_result = evaluator.implicit_eval(network, &vec![], cuboid_node, &inside_point, registry);
+    assert!(inside_result[0] < -EPSILON);
+    
+    // 3. Point outside sphere (should be positive)
+    let outside_point = Vec3::new(2.0, 0.0, 0.0);
+    let outside_result = evaluator.implicit_eval(network, &vec![], cuboid_node, &outside_point, registry);
+    assert!(outside_result[0] > EPSILON);
+}
+
+#[test]
 fn test_kernel_union_of_spheres() {
     let mut k = Kernel::new();
     
