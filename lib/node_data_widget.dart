@@ -399,7 +399,7 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
 }
 
 /// A reusable widget for editing Vec3 values
-class _Vec3Input extends StatelessWidget {
+class _Vec3Input extends StatefulWidget {
   final String label;
   final APIIVec3 value;
   final ValueChanged<APIIVec3> onChanged;
@@ -411,21 +411,60 @@ class _Vec3Input extends StatelessWidget {
   });
 
   @override
+  State<_Vec3Input> createState() => _Vec3InputState();
+}
+
+class _Vec3InputState extends State<_Vec3Input> {
+  late TextEditingController _xController;
+  late TextEditingController _yController;
+  late TextEditingController _zController;
+
+  @override
+  void initState() {
+    super.initState();
+    _xController = TextEditingController(text: widget.value.x.toString());
+    _yController = TextEditingController(text: widget.value.y.toString());
+    _zController = TextEditingController(text: widget.value.z.toString());
+  }
+
+  @override
+  void didUpdateWidget(_Vec3Input oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value.x.toString() != _xController.text) {
+      _xController.text = widget.value.x.toString();
+    }
+    if (widget.value.y.toString() != _yController.text) {
+      _yController.text = widget.value.y.toString();
+    }
+    if (widget.value.z.toString() != _zController.text) {
+      _zController.text = widget.value.z.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _xController.dispose();
+    _yController.dispose();
+    _zController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label),
+        Text(widget.label),
         Row(
           children: [
             Expanded(
               child: TextField(
                 decoration: const InputDecoration(labelText: 'X'),
-                controller: TextEditingController(text: value.x.toString()),
+                controller: _xController,
                 keyboardType: TextInputType.number,
                 onChanged: (text) {
-                  final newValue = int.tryParse(text) ?? value.x;
-                  onChanged(APIIVec3(x: newValue, y: value.y, z: value.z));
+                  final newValue = int.tryParse(text) ?? widget.value.x;
+                  widget.onChanged(APIIVec3(x: newValue, y: widget.value.y, z: widget.value.z));
                 },
               ),
             ),
@@ -433,11 +472,11 @@ class _Vec3Input extends StatelessWidget {
             Expanded(
               child: TextField(
                 decoration: const InputDecoration(labelText: 'Y'),
-                controller: TextEditingController(text: value.y.toString()),
+                controller: _yController,
                 keyboardType: TextInputType.number,
                 onChanged: (text) {
-                  final newValue = int.tryParse(text) ?? value.y;
-                  onChanged(APIIVec3(x: value.x, y: newValue, z: value.z));
+                  final newValue = int.tryParse(text) ?? widget.value.y;
+                  widget.onChanged(APIIVec3(x: widget.value.x, y: newValue, z: widget.value.z));
                 },
               ),
             ),
@@ -445,11 +484,11 @@ class _Vec3Input extends StatelessWidget {
             Expanded(
               child: TextField(
                 decoration: const InputDecoration(labelText: 'Z'),
-                controller: TextEditingController(text: value.z.toString()),
+                controller: _zController,
                 keyboardType: TextInputType.number,
                 onChanged: (text) {
-                  final newValue = int.tryParse(text) ?? value.z;
-                  onChanged(APIIVec3(x: value.x, y: value.y, z: newValue));
+                  final newValue = int.tryParse(text) ?? widget.value.z;
+                  widget.onChanged(APIIVec3(x: widget.value.x, y: widget.value.y, z: newValue));
                 },
               ),
             ),
