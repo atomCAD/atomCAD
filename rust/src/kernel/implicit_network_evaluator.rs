@@ -49,6 +49,14 @@ fn eval_intersect(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &
   return args[0].iter().copied().reduce(f32::max).unwrap_or(f32::MIN);
 }
 
+fn eval_diff(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+  let base = &args[0];
+  let sub = &args[1];
+  let ubase= base.iter().copied().reduce(f32::min).unwrap_or(f32::MAX);
+  let usub = sub.iter().copied().reduce(f32::min).unwrap_or(f32::MAX);
+  return f32::max(ubase, -usub)
+}
+
 pub struct ImplicitNetworkEvaluator {
   built_in_functions: HashMap<String,fn(&dyn NodeData, Vec<Vec<f32>>, &Vec3) -> f32>,
 }
@@ -74,6 +82,7 @@ impl ImplicitNetworkEvaluator {
     ret.built_in_functions.insert("half_space".to_string(), eval_half_space);
     ret.built_in_functions.insert("union".to_string(), eval_union);
     ret.built_in_functions.insert("intersect".to_string(), eval_intersect);
+    ret.built_in_functions.insert("diff".to_string(), eval_diff);
 
     return ret;
   }
