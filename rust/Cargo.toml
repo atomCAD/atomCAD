@@ -14,3 +14,4 @@ wgpu = "23.0.1"
 tokio = { version = "1", features = ["full"] }
 bytemuck = { version = "1.16", features = [ "derive" ] }
 glam = "0.29.2"
+lru = "0.12.1"

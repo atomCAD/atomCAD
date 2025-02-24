@@ -11,6 +11,7 @@ use super::node_type::HalfSpaceData;
 use super::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
 use std::time::Instant;
+use lru::LruCache;
 
 // TODO: these will not be constant, will be set by the user
 const NETWORK_EVAL_VOLUME_MIN: IVec3 = IVec3::new(-4, -4, -4);
@@ -95,36 +96,46 @@ impl ImplicitNetworkEvaluator {
   pub fn generate_displayable(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> SurfacePointCloud {
     let start_time = Instant::now();
     let mut point_cloud = SurfacePointCloud::new();
+    let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(2048).unwrap());
 
     let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
       None => return point_cloud,
     };
 
+    let spu = SAMPLES_PER_UNIT as f32;
+    let network_args: Vec<Vec<f32>> = Vec::new();
+
     // Iterate over voxel grid
     for x in NETWORK_EVAL_VOLUME_MIN.x*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.x*SAMPLES_PER_UNIT {
       for y in NETWORK_EVAL_VOLUME_MIN.y*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.y*SAMPLES_PER_UNIT {
         for z in NETWORK_EVAL_VOLUME_MIN.z*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.z*SAMPLES_PER_UNIT {
-          let spu = SAMPLES_PER_UNIT as f32;
+          // Define the corner points for the current cube
           let corner_points = [
-            Vec3::new(x as f32, y as f32, z as f32) / spu,
-            Vec3::new((x + 1) as f32, y as f32, z as f32) / spu,
-            Vec3::new(x as f32, (y + 1) as f32, z as f32) / spu,
-            Vec3::new(x as f32, y as f32, (z + 1) as f32) / spu,
-            Vec3::new((x + 1) as f32, (y + 1) as f32, z as f32) / spu,
-            Vec3::new((x + 1) as f32, y as f32, (z + 1) as f32) / spu,
-            Vec3::new(x as f32, (y + 1) as f32, (z + 1) as f32) / spu,
-            Vec3::new((x + 1) as f32, (y + 1) as f32, (z + 1) as f32) / spu,
+            IVec3::new(x, y, z),
+            IVec3::new(x + 1, y, z),
+            IVec3::new(x, y + 1, z),
+            IVec3::new(x, y, z + 1),
+            IVec3::new(x + 1, y + 1, z),
+            IVec3::new(x + 1, y, z + 1),
+            IVec3::new(x, y + 1, z + 1),
+            IVec3::new(x + 1, y + 1, z + 1),
           ];
 
-          // TODO: Optimize this by caching parts of the implicit function, because this way
-          // each corner is sampled 8 times!
-          let network_args: Vec<Vec<f32>> = Vec::new();
-          let values: Vec<f32> = corner_points.iter().map(
-            |p| self.implicit_eval(network, &network_args, node_id, p, registry)[0]
-          ).collect();
+          // Evaluate corner points using cache
+          let values: Vec<f32> = corner_points.iter().map(|ip| {
+            if let Some(&cached_value) = eval_cache.get(ip) {
+              cached_value
+            } else {
+              let p = ip.as_vec3() / spu;
+              let value = self.implicit_eval(network, &network_args, node_id, &p, registry)[0];
+              eval_cache.put(*ip, value);
+              value
+            }
+          }).collect();
+
           if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
-            let center_point = corner_points[0] + (0.5 / spu);
+            let center_point = (corner_points[0].as_vec3() + 0.5) / spu;
             let value = self.implicit_eval(network, &network_args, node_id, &center_point, registry)[0];
             let gradient = self.get_gradient(network, &network_args, node_id, &center_point, registry);
             let gradient_magnitude_sq = gradient.length_squared();
@@ -139,7 +150,7 @@ impl ImplicitNetworkEvaluator {
                 position: center_point - step,
                 normal: gradient.normalize(),
               }
-            ); // Start at cell center
+            );
           }
         }
       }
