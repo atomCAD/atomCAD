@@ -426,6 +426,7 @@ pub fn set_cuboid_data(node_network_name: String, node_id: u64, data: APICuboidD
         extent: from_api_ivec3(&data.extent),
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, cuboid_data);
+      refresh_renderer(instance, &node_network_name);
     }
   }
 }
@@ -439,6 +440,7 @@ pub fn set_sphere_data(node_network_name: String, node_id: u64, data: APISphereD
         radius: data.radius,
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, sphere_data);
+      refresh_renderer(instance, &node_network_name);
     }
   }
 }
@@ -452,6 +454,7 @@ pub fn set_half_space_data(node_network_name: String, node_id: u64, data: APIHal
         shift: data.shift,
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, half_space_data);
+      refresh_renderer(instance, &node_network_name);
     }
   }
 }
