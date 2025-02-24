@@ -40,6 +40,15 @@ void moveNode(
     RustLib.instance.api.crateApiSimpleMoveNode(
         nodeNetworkName: nodeNetworkName, nodeId: nodeId, position: position);
 
+BigInt addNode(
+        {required String nodeNetworkName,
+        required String nodeTypeName,
+        required APIVec2 position}) =>
+    RustLib.instance.api.crateApiSimpleAddNode(
+        nodeNetworkName: nodeNetworkName,
+        nodeTypeName: nodeTypeName,
+        position: position);
+
 void connectNodes(
         {required String nodeNetworkName,
         required BigInt sourceNodeId,
@@ -116,6 +125,9 @@ void setHalfSpaceData(
         required APIHalfSpaceData data}) =>
     RustLib.instance.api.crateApiSimpleSetHalfSpaceData(
         nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+
+void deleteSelected({required String nodeNetworkName}) => RustLib.instance.api
+    .crateApiSimpleDeleteSelected(nodeNetworkName: nodeNetworkName);
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

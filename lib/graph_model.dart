@@ -130,6 +130,12 @@ class GraphModel extends ChangeNotifier {
     _refreshFromKernel();
   }
 
+  void removeSelected() {
+    if (nodeNetworkView == null) return;
+    deleteSelected(nodeNetworkName: nodeNetworkView!.name);
+    _refreshFromKernel();
+  }
+
   void _refreshFromKernel() {
     if (nodeNetworkView != null) {
       nodeNetworkView =

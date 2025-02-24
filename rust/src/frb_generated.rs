@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -306413380;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1608336912;
 
 // Section: executor
 
@@ -73,6 +73,42 @@ fn wire__crate__api__simple__add_atom_impl(
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::simple::add_atom(api_atomic_number, api_position);
                 })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__add_node_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "add_node",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_node_type_name = <String>::sse_decode(&mut deserializer);
+            let api_position = <crate::api::api_types::APIVec2>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::add_node(
+                    &api_node_network_name,
+                    &api_node_type_name,
+                    api_position,
+                ))?;
                 Ok(output_ok)
             })())
         },
@@ -144,6 +180,38 @@ fn wire__crate__api__simple__connect_nodes_impl(
                         api_dest_node_id,
                         api_dest_param_index,
                     );
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__delete_selected_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "delete_selected",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::delete_selected(api_node_network_name);
                 })?;
                 Ok(output_ok)
             })())
@@ -1161,7 +1229,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        12 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1175,25 +1243,27 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__simple__add_atom_impl(ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__simple__clear_selection_impl(ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__simple__connect_nodes_impl(ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__simple__find_pivot_point_impl(ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__simple__get_camera_impl(ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__simple__get_cuboid_data_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__simple__get_half_space_data_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__simple__get_node_network_view_impl(ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__simple__get_node_type_names_impl(ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__simple__get_sphere_data_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__simple__add_node_impl(ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__simple__clear_selection_impl(ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__simple__connect_nodes_impl(ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__simple__delete_selected_impl(ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__simple__find_pivot_point_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__simple__get_camera_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__simple__get_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__simple__get_half_space_data_impl(ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__simple__get_node_network_view_impl(ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__simple__get_node_type_names_impl(ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__simple__get_sphere_data_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

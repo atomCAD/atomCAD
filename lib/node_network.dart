@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/api_utils.dart';
@@ -59,7 +60,16 @@ class NodeNetwork extends StatelessWidget {
       value: graphModel,
       child: Consumer<GraphModel>(
         builder: (context, model, child) {
-          return GestureDetector(
+          return Focus(
+            autofocus: true,
+            onKeyEvent: (node, event) {
+              if (event.logicalKey == LogicalKeyboardKey.delete) {
+                model.removeSelected();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: GestureDetector(
               onSecondaryTapDown: (details) async {
                 String? selectedNode = await showAddNodePopup(context);
                 if (selectedNode != null) {
@@ -95,7 +105,9 @@ class NodeNetwork extends StatelessWidget {
                             .map((entry) => NodeWidget(node: entry.value))
                             .toList())
                       ],
-              ));
+              ),
+            ),
+          );
         },
       ),
     );

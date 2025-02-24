@@ -232,4 +232,10 @@ impl Kernel {
       network.clear_selection();
     }
   }
+
+  pub fn delete_selected(&mut self, node_network_name: &str) {
+    if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
+      node_network.delete_selected();
+    }
+  }
 }

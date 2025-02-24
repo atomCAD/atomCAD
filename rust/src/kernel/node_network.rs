@@ -166,4 +166,39 @@ impl NodeNetwork {
     self.selected_node_id = None;
     self.selected_wire = None;
   }
+
+  pub fn delete_selected(&mut self) {
+    // Handle selected node
+    if let Some(node_id) = self.selected_node_id {
+      // First remove any references to this node from all other nodes' arguments
+      let nodes_to_process: Vec<u64> = self.nodes.keys().cloned().collect();
+      for other_node_id in nodes_to_process {
+        if let Some(node) = self.nodes.get_mut(&other_node_id) {
+          for argument in node.arguments.iter_mut() {
+            argument.argument_node_ids.remove(&node_id);
+          }
+        }
+      }
+
+      // If this was the return node, clear that reference
+      if self.return_node_id == Some(node_id) {
+        self.return_node_id = None;
+      }
+
+      // Remove from displayed nodes if present
+      self.displayed_node_ids.remove(&node_id);
+
+      // Remove the node itself
+      self.nodes.remove(&node_id);
+      self.selected_node_id = None;
+    }
+    // Handle selected wire
+    else if let Some(wire) = self.selected_wire.take() {
+      if let Some(dest_node) = self.nodes.get_mut(&wire.destination_node_id) {
+        if let Some(argument) = dest_node.arguments.get_mut(wire.destination_argument_index) {
+          argument.argument_node_ids.remove(&wire.source_node_id);
+        }
+      }
+    }
+  }
 }

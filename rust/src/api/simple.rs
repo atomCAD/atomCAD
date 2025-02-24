@@ -321,6 +321,16 @@ pub fn move_node(node_network_name: &str, node_id: u64, position: APIVec2) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn add_node(node_network_name: &str, node_type_name: &str, position: APIVec2) -> u64 {
+    unsafe {
+        if let Some(cad_instance) = &mut CAD_INSTANCE {
+            return cad_instance.kernel.add_node(node_network_name, node_type_name, from_api_vec2(&position));
+        }
+    }
+    0
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn connect_nodes(node_network_name: &str, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
@@ -455,6 +465,16 @@ pub fn set_half_space_data(node_network_name: String, node_id: u64, data: APIHal
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, half_space_data);
       refresh_renderer(instance, &node_network_name);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn delete_selected(node_network_name: String) {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      cad_instance.kernel.delete_selected(&node_network_name);
+      refresh_renderer(cad_instance, &node_network_name);
     }
   }
 }
