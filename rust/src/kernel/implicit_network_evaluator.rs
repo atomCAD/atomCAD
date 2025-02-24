@@ -96,7 +96,12 @@ impl ImplicitNetworkEvaluator {
   pub fn generate_displayable(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> SurfacePointCloud {
     let start_time = Instant::now();
     let mut point_cloud = SurfacePointCloud::new();
-    let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(2048).unwrap());
+
+    let cache_size = (NETWORK_EVAL_VOLUME_MAX.z - NETWORK_EVAL_VOLUME_MIN.z + 1) *
+    (NETWORK_EVAL_VOLUME_MAX.y - NETWORK_EVAL_VOLUME_MIN.y + 1) *
+    SAMPLES_PER_UNIT * SAMPLES_PER_UNIT * 2;
+
+    let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
     let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
