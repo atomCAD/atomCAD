@@ -119,8 +119,48 @@ impl ImplicitNetworkEvaluator {
     return Scene::new();
   }
 
+  // generates diamond molecule from geometry
   pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node: &Node) -> Scene {
     let mut scene = Scene::new();
+
+    // id:0 means there is not atom there
+    let atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
+
+    // relative in-cell positions of the carbon atoms that are part of a cell
+    // a position can be part of multiple cells (corner positions are part of 8 cells,
+    // face center positions are part of 2 cells, other positions are part of 1 cell).
+    // in one cell coordinates go from 0 to 4. (a cell can be thought of 4x4x4 mini cells)
+    let in_cell_carbon_positions = [
+      // corner positions
+      IVec3::new(0, 0, 0),
+      IVec3::new(4, 0, 0),
+      IVec3::new(0, 4, 0),
+      IVec3::new(0, 0, 4),
+      IVec3::new(4, 4, 0),
+      IVec3::new(4, 0, 4),
+      IVec3::new(0, 4, 4),
+      IVec3::new(4, 4, 4),
+
+      // face center positions
+      IVec3::new(2, 2, 0),
+      IVec3::new(2, 2, 4),
+      IVec3::new(2, 0, 2),
+      IVec3::new(2, 4, 2),
+      IVec3::new(0, 2, 2),
+      IVec3::new(4, 2, 2),
+
+      // other positions
+
+    ];
+
+    // Iterate over voxel grid
+    for x in NETWORK_EVAL_VOLUME_MIN.x..NETWORK_EVAL_VOLUME_MAX.x {
+      for y in NETWORK_EVAL_VOLUME_MIN.y..NETWORK_EVAL_VOLUME_MAX.y {
+        for z in NETWORK_EVAL_VOLUME_MIN.z..NETWORK_EVAL_VOLUME_MAX.z {
+        }
+      }
+    }
+
     return scene;
   }
 
