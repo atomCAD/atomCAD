@@ -3,6 +3,8 @@ import 'package:flutter_cad/graph_model.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cad/inputs/ivec3_input.dart';
+import 'package:flutter_cad/inputs/int_input.dart';
 
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.
@@ -129,9 +131,10 @@ class _CuboidEditorState extends State<_CuboidEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Cuboid Properties', style: Theme.of(context).textTheme.titleMedium),
+            Text('Cuboid Properties',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            _Vec3Input(
+            IVec3Input(
               label: 'Min Corner',
               value: _stagedData!.minCorner,
               onChanged: (newValue) {
@@ -142,7 +145,7 @@ class _CuboidEditorState extends State<_CuboidEditor> {
               },
             ),
             const SizedBox(height: 8),
-            _Vec3Input(
+            IVec3Input(
               label: 'Extent',
               value: _stagedData!.extent,
               onChanged: (newValue) {
@@ -157,9 +160,11 @@ class _CuboidEditorState extends State<_CuboidEditor> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _data == _stagedData ? null : () {
-                    setState(() => _stagedData = _data);
-                  },
+                  onPressed: _data == _stagedData
+                      ? null
+                      : () {
+                          setState(() => _stagedData = _data);
+                        },
                   child: const Text('Reset'),
                 ),
                 const SizedBox(width: 8),
@@ -240,9 +245,10 @@ class _SphereEditorState extends State<_SphereEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Sphere Properties', style: Theme.of(context).textTheme.titleMedium),
+            Text('Sphere Properties',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            _Vec3Input(
+            IVec3Input(
               label: 'Center',
               value: _stagedData!.center,
               onChanged: (newValue) {
@@ -253,7 +259,7 @@ class _SphereEditorState extends State<_SphereEditor> {
               },
             ),
             const SizedBox(height: 8),
-            _IntInput(
+            IntInput(
               label: 'Radius',
               value: _stagedData!.radius,
               onChanged: (newValue) {
@@ -268,9 +274,11 @@ class _SphereEditorState extends State<_SphereEditor> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _data == _stagedData ? null : () {
-                    setState(() => _stagedData = _data);
-                  },
+                  onPressed: _data == _stagedData
+                      ? null
+                      : () {
+                          setState(() => _stagedData = _data);
+                        },
                   child: const Text('Reset'),
                 ),
                 const SizedBox(width: 8),
@@ -351,9 +359,10 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Half Space Properties', style: Theme.of(context).textTheme.titleMedium),
+            Text('Half Space Properties',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            _Vec3Input(
+            IVec3Input(
               label: 'Miller Index',
               value: _stagedData!.millerIndex,
               onChanged: (newValue) {
@@ -364,7 +373,7 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
               },
             ),
             const SizedBox(height: 8),
-            _IntInput(
+            IntInput(
               label: 'Shift',
               value: _stagedData!.shift,
               onChanged: (newValue) {
@@ -379,9 +388,11 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _data == _stagedData ? null : () {
-                    setState(() => _stagedData = _data);
-                  },
+                  onPressed: _data == _stagedData
+                      ? null
+                      : () {
+                          setState(() => _stagedData = _data);
+                        },
                   child: const Text('Reset'),
                 ),
                 const SizedBox(width: 8),
@@ -394,143 +405,6 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// A reusable widget for editing Vec3 values
-class _Vec3Input extends StatefulWidget {
-  final String label;
-  final APIIVec3 value;
-  final ValueChanged<APIIVec3> onChanged;
-
-  const _Vec3Input({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  State<_Vec3Input> createState() => _Vec3InputState();
-}
-
-class _Vec3InputState extends State<_Vec3Input> {
-  late TextEditingController _xController;
-  late TextEditingController _yController;
-  late TextEditingController _zController;
-
-  @override
-  void initState() {
-    super.initState();
-    _xController = TextEditingController(text: widget.value.x.toString());
-    _yController = TextEditingController(text: widget.value.y.toString());
-    _zController = TextEditingController(text: widget.value.z.toString());
-  }
-
-  @override
-  void didUpdateWidget(_Vec3Input oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.value.x.toString() != _xController.text) {
-      _xController.text = widget.value.x.toString();
-    }
-    if (widget.value.y.toString() != _yController.text) {
-      _yController.text = widget.value.y.toString();
-    }
-    if (widget.value.z.toString() != _zController.text) {
-      _zController.text = widget.value.z.toString();
-    }
-  }
-
-  @override
-  void dispose() {
-    _xController.dispose();
-    _yController.dispose();
-    _zController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.label),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                decoration: const InputDecoration(labelText: 'X'),
-                controller: _xController,
-                keyboardType: TextInputType.number,
-                onChanged: (text) {
-                  final newValue = int.tryParse(text) ?? widget.value.x;
-                  widget.onChanged(APIIVec3(x: newValue, y: widget.value.y, z: widget.value.z));
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                decoration: const InputDecoration(labelText: 'Y'),
-                controller: _yController,
-                keyboardType: TextInputType.number,
-                onChanged: (text) {
-                  final newValue = int.tryParse(text) ?? widget.value.y;
-                  widget.onChanged(APIIVec3(x: widget.value.x, y: newValue, z: widget.value.z));
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                decoration: const InputDecoration(labelText: 'Z'),
-                controller: _zController,
-                keyboardType: TextInputType.number,
-                onChanged: (text) {
-                  final newValue = int.tryParse(text) ?? widget.value.z;
-                  widget.onChanged(APIIVec3(x: widget.value.x, y: widget.value.y, z: newValue));
-                },
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// A reusable widget for editing integer values
-class _IntInput extends StatelessWidget {
-  final String label;
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  const _IntInput({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label),
-        TextField(
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-          ),
-          controller: TextEditingController(text: value.toString()),
-          keyboardType: TextInputType.number,
-          onChanged: (text) {
-            final newValue = int.tryParse(text);
-            if (newValue != null) {
-              onChanged(newValue);
-            }
-          },
-        ),
-      ],
     );
   }
 }
