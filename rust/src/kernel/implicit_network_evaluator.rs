@@ -12,6 +12,7 @@ use super::node_type::HalfSpaceData;
 use super::node_type::DataType;
 use super::node_type_registry::NodeTypeRegistry;
 use super::scene::Scene;
+use super::atomic_structure::AtomicStructure;
 use super::super::util::timer::Timer;
 use std::collections::HashMap;
 use lru::LruCache;
@@ -20,6 +21,9 @@ use lru::LruCache;
 const NETWORK_EVAL_VOLUME_MIN: IVec3 = IVec3::new(-4, -4, -4);
 const NETWORK_EVAL_VOLUME_MAX: IVec3 = IVec3::new(4, 4, 4);
 const SAMPLES_PER_UNIT: i32 = 4;
+const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f32 = 3.567;  // Size of one complete unit cell (4x4x4) in Ångströms
+const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
+const CARBON: i32 = 6;
 
 fn eval_cuboid(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
   let cuboid_data = &node_data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
@@ -110,7 +114,7 @@ impl ImplicitNetworkEvaluator {
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
 
     if node.node_type_name == "geo_to_atomic" {
-      return self.generate_geo_to_atomic_scene(network, node);
+      return self.generate_geo_to_atomic_scene(network, node_id, registry);
     }
     if node_type.output_type == DataType::Geometry {
       return self.generate_point_cloud_scene(network, node_id, registry);
@@ -120,11 +124,11 @@ impl ImplicitNetworkEvaluator {
   }
 
   // generates diamond molecule from geometry
-  pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node: &Node) -> Scene {
-    let mut scene = Scene::new();
+  pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
+    let mut atomic_structure = AtomicStructure::new();
 
     // id:0 means there is not atom there
-    let atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
+    let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
 
     // relative in-cell positions of the carbon atoms that are part of a cell
     // a position can be part of multiple cells (corner positions are part of 8 cells,
@@ -150,17 +154,45 @@ impl ImplicitNetworkEvaluator {
       IVec3::new(4, 2, 2),
 
       // other positions
-
+      IVec3::new(1, 1, 1),
+      IVec3::new(1, 3, 3),
+      IVec3::new(3, 1, 3),
+      IVec3::new(3, 3, 1),
     ];
+
+    let network_args: Vec<Vec<f32>> = Vec::new();
 
     // Iterate over voxel grid
     for x in NETWORK_EVAL_VOLUME_MIN.x..NETWORK_EVAL_VOLUME_MAX.x {
       for y in NETWORK_EVAL_VOLUME_MIN.y..NETWORK_EVAL_VOLUME_MAX.y {
         for z in NETWORK_EVAL_VOLUME_MIN.z..NETWORK_EVAL_VOLUME_MAX.z {
+          let cell_start_position = IVec3::new(x, y, z) * 4;
+
+          let mut carbon_atom_ids = Vec::new();
+          for pos in &in_cell_carbon_positions {
+            let absolute_pos = cell_start_position + *pos;
+            if let Some(id) = atom_pos_to_id.get(&absolute_pos) {
+              carbon_atom_ids.push(*id);
+            } else {
+              let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
+              let value = self.implicit_eval(network, &network_args, node_id, &crystal_space_pos, registry)[0];
+              let atom_id = if value < DIAMOND_SAMPLE_THRESHOLD {
+                let id = atomic_structure.obtain_next_id();
+                atomic_structure.add_atom(id, CARBON, crystal_space_pos * DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+                atom_pos_to_id.insert(absolute_pos, id);
+                id
+              } else { 0 };
+              carbon_atom_ids.push(atom_id);
+            }
+          }
+
+          //TODO: add the bonds
         }
       }
     }
 
+    let mut scene = Scene::new();
+    scene.atomic_structures.push(atomic_structure);
     return scene;
   }
 
