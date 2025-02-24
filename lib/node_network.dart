@@ -73,9 +73,7 @@ class NodeNetwork extends StatelessWidget {
               onSecondaryTapDown: (details) async {
                 String? selectedNode = await showAddNodePopup(context);
                 if (selectedNode != null) {
-                  // Handle adding the selected node at the clicked position
-                  print(
-                      "Node added: $selectedNode at ${details.localPosition}");
+                  model.createNode(selectedNode, details.localPosition);
                 }
               },
               child: Stack(

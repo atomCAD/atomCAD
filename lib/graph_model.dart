@@ -136,6 +136,17 @@ class GraphModel extends ChangeNotifier {
     _refreshFromKernel();
   }
 
+  BigInt createNode(String nodeTypeName, Offset position) {
+    if (nodeNetworkView == null) return BigInt.zero;
+    final nodeId = addNode(
+      nodeNetworkName: nodeNetworkView!.name,
+      nodeTypeName: nodeTypeName,
+      position: APIVec2(x: position.dx, y: position.dy),
+    );
+    _refreshFromKernel();
+    return nodeId;
+  }
+
   void _refreshFromKernel() {
     if (nodeNetworkView != null) {
       nodeNetworkView =
