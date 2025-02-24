@@ -83,8 +83,7 @@ impl Kernel {
     };
     let mut scene: Scene = Scene::new();
     for node_id in &network.displayed_node_ids {
-      let point_cloud = self.network_evaluator.generate_displayable(node_network_name, *node_id, &self.node_type_registry);
-      scene.surface_point_clouds.push(point_cloud);
+      scene.merge(self.network_evaluator.generate_scene(node_network_name, *node_id, &self.node_type_registry));
     }
     return scene;
   }
@@ -194,11 +193,6 @@ impl Kernel {
       .node_networks
       .get(network_name)
       .and_then(|network| network.get_node_network_data(node_id))
-  }
-
-  // Generates displayable representation for a node in a network
-  pub fn generate_displayable(&self, network_name: &str, node_id: u64) -> SurfacePointCloud {
-    self.network_evaluator.generate_displayable(network_name, node_id, &self.node_type_registry)
   }
 
   pub fn get_network_evaluator(&self) -> &ImplicitNetworkEvaluator {

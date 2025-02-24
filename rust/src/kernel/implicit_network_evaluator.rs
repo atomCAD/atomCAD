@@ -3,14 +3,17 @@ use glam::f32::Vec3;
 use super::surface_point_cloud::SurfacePoint;
 use super::surface_point_cloud::SurfacePointCloud;
 use super::node_network::NodeNetwork;
+use super::node_network::Node;
 use super::node_type::NodeData;
 use super::node_type::ParameterData;
 use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
+use super::node_type::DataType;
 use super::node_type_registry::NodeTypeRegistry;
+use super::scene::Scene;
+use super::super::util::timer::Timer;
 use std::collections::HashMap;
-use std::time::Instant;
 use lru::LruCache;
 
 // TODO: these will not be constant, will be set by the user
@@ -89,24 +92,45 @@ impl ImplicitNetworkEvaluator {
     return ret;
   }
 
-  // Creates the display representation that will be displayed for the given node
+  // Creates the Scene that will be displayed for the given node
   // Currently creates it from scratch, no caching is used.
-  // TODO: Currently just supports geometry nodes and creates SurfacePointCloud. Should be refaactored
-  // to be able to support generating atomic models too
-  pub fn generate_displayable(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> SurfacePointCloud {
-    let start_time = Instant::now();
-    let mut point_cloud = SurfacePointCloud::new();
+  pub fn generate_scene(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
+    let _timer = Timer::new("generate_scene");
 
+    let network = match registry.node_networks.get(network_name) {
+      Some(network) => network,
+      None => return Scene::new(),
+    };
+
+    let node = match network.nodes.get(&node_id) {
+      Some(node) => node,
+      None => return Scene::new(),
+    };
+
+    let node_type = registry.get_node_type(&node.node_type_name).unwrap();
+
+    if node.node_type_name == "geo_to_atomic" {
+      return self.generate_geo_to_atomic_scene(network, node);
+    }
+    if node_type.output_type == DataType::Geometry {
+      return self.generate_point_cloud_scene(network, node_id, registry);
+    }
+
+    return Scene::new();
+  }
+
+  pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node: &Node) -> Scene {
+    let mut scene = Scene::new();
+    return scene;
+  }
+
+  pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
+    let mut point_cloud = SurfacePointCloud::new();
     let cache_size = (NETWORK_EVAL_VOLUME_MAX.z - NETWORK_EVAL_VOLUME_MIN.z + 1) *
     (NETWORK_EVAL_VOLUME_MAX.y - NETWORK_EVAL_VOLUME_MIN.y + 1) *
     SAMPLES_PER_UNIT * SAMPLES_PER_UNIT * 2;
 
     let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
-
-    let network = match registry.node_networks.get(network_name) {
-      Some(network) => network,
-      None => return point_cloud,
-    };
 
     let spu = SAMPLES_PER_UNIT as f32;
     let network_args: Vec<Vec<f32>> = Vec::new();
@@ -160,9 +184,9 @@ impl ImplicitNetworkEvaluator {
         }
       }
     }
-
-    println!("generate_displayable took: {:?}", start_time.elapsed());
-    return point_cloud;
+    let mut scene = Scene::new();
+    scene.surface_point_clouds.push(point_cloud);
+    scene
   }
 
   pub fn get_gradient(&self, network: &NodeNetwork, network_args: &Vec<Vec<f32>>, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec3 {

@@ -13,4 +13,9 @@ impl Scene {
             surface_point_clouds: Vec::new(),
         }
     }
+
+    pub fn merge(&mut self, other: Scene) {
+        self.atomic_structures.extend(other.atomic_structures);
+        self.surface_point_clouds.extend(other.surface_point_clouds);
+    }
 }

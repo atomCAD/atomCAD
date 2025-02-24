@@ -2,6 +2,7 @@ use glam::i32::IVec3;
 use std::any::Any;
 use super::as_any::AsAny;
 
+#[derive(PartialEq)]
 pub enum DataType {
   Geometry,
   Atomic
