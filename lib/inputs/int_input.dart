@@ -30,7 +30,9 @@ class _IntInputState extends State<IntInput> {
   void didUpdateWidget(IntInput oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
+      final selection = _controller.selection;
       _controller.text = widget.value.toString();
+      _controller.selection = selection;
     }
   }
 
