@@ -9,6 +9,7 @@ use glam::f32::Vec3;
 use glam::f32::Mat4;
 use crate::kernel::scene::Scene;
 use crate::kernel::surface_point_cloud::SurfacePointCloud;
+use std::time::Instant;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -300,38 +301,40 @@ impl Renderer {
     }
 
     pub fn refresh(&mut self, scene: &Scene) {
+        let start_time = Instant::now();
 
-      // We tessellate everything into one mesh for now
+        // We tessellate everything into one mesh for now
 
-      let mut tessellator = Tessellator::new();
+        let mut tessellator = Tessellator::new();
 
-      for atomic_structure in scene.atomic_structures.iter() {
-        self.tessellate_atomic_structure(&mut tessellator, atomic_structure);
-      }
-      for surface_point_cloud in scene.surface_point_clouds.iter() {
-        self.tessellate_surface_point_cloud(&mut tessellator, surface_point_cloud);
-      }
-
-      println!("tessellated {} vertices and {} indices", tessellator.output_mesh.vertices.len(), tessellator.output_mesh.indices.len());
-
-      //TODO: do not replace the buffers, just copy the data.
-
-      self.vertex_buffer = self.device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(tessellator.output_mesh.vertices.as_slice()),
-            usage: wgpu::BufferUsages::VERTEX,
+        for atomic_structure in scene.atomic_structures.iter() {
+            self.tessellate_atomic_structure(&mut tessellator, atomic_structure);
         }
-      );
-
-      self.index_buffer = self.device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(tessellator.output_mesh.indices.as_slice()),
-            usage: wgpu::BufferUsages::INDEX,
+        for surface_point_cloud in scene.surface_point_clouds.iter() {
+            self.tessellate_surface_point_cloud(&mut tessellator, surface_point_cloud);
         }
-      );
-      self.num_indices = tessellator.output_mesh.indices.len() as u32;
+
+        println!("tessellated {} vertices and {} indices", tessellator.output_mesh.vertices.len(), tessellator.output_mesh.indices.len());
+
+        //TODO: do not replace the buffers, just copy the data.
+
+        self.vertex_buffer = self.device.create_buffer_init(
+          &wgpu::util::BufferInitDescriptor {
+              label: Some("Vertex Buffer"),
+              contents: bytemuck::cast_slice(tessellator.output_mesh.vertices.as_slice()),
+              usage: wgpu::BufferUsages::VERTEX,
+          }
+        );
+
+        self.index_buffer = self.device.create_buffer_init(
+          &wgpu::util::BufferInitDescriptor {
+              label: Some("Index Buffer"),
+              contents: bytemuck::cast_slice(tessellator.output_mesh.indices.as_slice()),
+              usage: wgpu::BufferUsages::INDEX,
+          }
+        );
+        self.num_indices = tessellator.output_mesh.indices.len() as u32;
+        println!("refresh took: {:?}", start_time.elapsed());
     }
 
     fn tessellate_atomic_structure(&mut self, tessellator: &mut Tessellator, atomic_structure: &AtomicStructure) {

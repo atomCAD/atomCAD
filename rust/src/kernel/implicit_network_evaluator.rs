@@ -10,6 +10,7 @@ use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
 use super::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
+use std::time::Instant;
 
 // TODO: these will not be constant, will be set by the user
 const NETWORK_EVAL_VOLUME_MIN: IVec3 = IVec3::new(-4, -4, -4);
@@ -92,6 +93,7 @@ impl ImplicitNetworkEvaluator {
   // TODO: Currently just supports geometry nodes and creates SurfacePointCloud. Should be refaactored
   // to be able to support generating atomic models too
   pub fn generate_displayable(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> SurfacePointCloud {
+    let start_time = Instant::now();
     let mut point_cloud = SurfacePointCloud::new();
 
     let network = match registry.node_networks.get(network_name) {
@@ -143,6 +145,7 @@ impl ImplicitNetworkEvaluator {
       }
     }
 
+    println!("generate_displayable took: {:?}", start_time.elapsed());
     return point_cloud;
   }
 
