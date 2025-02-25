@@ -3,6 +3,7 @@ use glam::f32::Vec3;
 use super::surface_point_cloud::SurfacePoint;
 use super::surface_point_cloud::SurfacePointCloud;
 use super::node_network::NodeNetwork;
+use super::node_network::Node;
 use super::node_type::NodeData;
 use super::node_type::ParameterData;
 use super::node_type::SphereData;
@@ -113,7 +114,7 @@ impl ImplicitNetworkEvaluator {
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
 
     if node.node_type_name == "geo_to_atom" {
-      return self.generate_geo_to_atomic_scene(network, node_id, registry);
+      return self.generate_geo_to_atomic_scene(network, node, registry);
     }
     if node_type.output_type == DataType::Geometry {
       return self.generate_point_cloud_scene(network, node_id, registry);
@@ -122,11 +123,28 @@ impl ImplicitNetworkEvaluator {
     return Scene::new();
   }
 
+  fn add_bond(
+    &self,
+    atomic_structure: &mut AtomicStructure,
+    atom_ids: &Vec<u64>,
+    atom_index_1: usize,
+    atom_index_2: usize) {
+      if atom_ids[atom_index_1] == 0 || atom_ids[atom_index_2] == 0 { return; }
+      atomic_structure.add_bond(atom_ids[atom_index_1], atom_ids[atom_index_2], 1);    
+  }
+
   // generates diamond molecule from geometry
-  pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
+  pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> Scene {
+
+    if node.arguments[0].argument_node_ids.is_empty() {
+      return Scene::new();
+    }
+
+    let geo_node_id = *node.arguments[0].argument_node_ids.iter().next().unwrap();
+
     let mut atomic_structure = AtomicStructure::new();
 
-    // id:0 means there is not atom there
+    // id:0 means there is no atom there
     let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
 
     // relative in-cell positions of the carbon atoms that are part of a cell
@@ -174,7 +192,7 @@ impl ImplicitNetworkEvaluator {
               carbon_atom_ids.push(*id);
             } else {
               let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
-              let value = self.implicit_eval(network, &network_args, node_id, &crystal_space_pos, registry)[0];
+              let value = self.implicit_eval(network, &network_args, geo_node_id, &crystal_space_pos, registry)[0];
               let atom_id = if value < DIAMOND_SAMPLE_THRESHOLD {
                 let id = atomic_structure.add_atom(CARBON, crystal_space_pos * DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
                 atom_pos_to_id.insert(absolute_pos, id);
@@ -184,26 +202,25 @@ impl ImplicitNetworkEvaluator {
             }
           }
 
-          //TODO: add the bonds
-          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[0], 1);
-          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[8], 1);
-          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[10], 1);
-          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[12], 1);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 0);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 8);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 10);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 12);
 
-          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[6], 1);
-          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[9], 1);
-          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[11], 1);
-          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[12], 1);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 6);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 9);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 11);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 12);
 
-          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[5], 1);
-          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[9], 1);
-          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[10], 1);
-          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[13], 1);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 5);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 9);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 10);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 13);
 
-          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[4], 1);
-          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[8], 1);
-          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[11], 1);
-          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[13], 1);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 4);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 8);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 11);
+          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 13);
         }
       }
     }
