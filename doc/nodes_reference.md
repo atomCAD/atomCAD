@@ -46,27 +46,27 @@ Creates a CSG negation from its input shape.
 
 Creates a CSG diff from its input shapes. For convenience multiple shapes can be given as a **base**, these are unioned. Multiple shapes can be given as **sub**, all these shapes are subtracted. 
 
-## geo_transform
+## geo_trans
 
-`geo_transform<translation, rotation>(shape: geometry) -> geometry`
+`geo_trans<translation, rotation>(shape: geometry) -> geometry`
 
 Transforms a geometry in lattice space.
 
-## geo_to_atomic
+## geo_to_atom
 
-`geo_to_atomic<crystal related parameters, e.g. passivation fixing>(shape: geometry) -> atomic`
+`geo_to_atom<crystal related parameters, e.g. passivation fixing>(shape: geometry) -> atomic`
 
 Creates an atomic entity from a Geometry.
 
-## edit_atomic
+## edit_atom
 
-`edit_atomic(molecule: atomic)-> atomic`
+`edit_atom(molecule: atomic)-> atomic`
 
 Edits an atomic entity atom by atom. Encapsulates multiple edits which can be inspected one-by-one.
 
-## merge_atomic
+## merge_atom
 
-`merge_atomic(molecules: atomic*)-> atomic`
+`merge_atom(molecules: atomic*)-> atomic`
 
 This node serves 2 purposes. First it merges any number of atomic representations into one.
 
@@ -76,9 +76,9 @@ Later when knowing user needs better we can design complex bonding rules too. An
 
 https://www.daylight.com/dayhtml/doc/theory/theory.smarts.html 
 
-## atomic_transform
+## atom_trans
 
-`atomic_transform<translation, rotation>(molecule: atomic) -> atomic`
+`atom_trans<translation, rotation>(molecule: atomic) -> atomic`
 
 Transforms an atomic representation.
 

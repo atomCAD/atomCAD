@@ -96,7 +96,7 @@ impl NodeTypeRegistry {
     });
 
     ret.add_node_type(NodeType {
-      name: "geo_transform".to_string(),
+      name: "geo_trans".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -108,7 +108,7 @@ impl NodeTypeRegistry {
     });
 
     ret.add_node_type(NodeType {
-      name: "geo_to_atomic".to_string(),
+      name: "geo_to_atom".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -120,7 +120,7 @@ impl NodeTypeRegistry {
     });
 
     ret.add_node_type(NodeType {
-      name: "edit_atomic".to_string(),
+      name: "edit_atom".to_string(),
       parameters: vec![
           Parameter {
               name: "atomic".to_string(),

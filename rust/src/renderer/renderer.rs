@@ -94,8 +94,8 @@ impl Renderer {
           up: Vec3::new(0.0, 1.0, 0.0),
           aspect: width as f32 / height as f32,
           fovy: std::f32::consts::PI * 0.15,
-          znear: 0.1,
-          zfar: 200.0,
+          znear: 0.5,
+          zfar: 600.0,
         };
 
         // Initialize GPU

@@ -112,7 +112,7 @@ impl ImplicitNetworkEvaluator {
 
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
 
-    if node.node_type_name == "geo_to_atomic" {
+    if node.node_type_name == "geo_to_atom" {
       return self.generate_geo_to_atomic_scene(network, node_id, registry);
     }
     if node_type.output_type == DataType::Geometry {

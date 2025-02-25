@@ -7,7 +7,7 @@ import 'package:flutter_cad/add_node_popup.dart';
 import 'package:flutter_cad/graph_model.dart';
 
 // Node dimensions and layout constants
-const double NODE_WIDTH = 120.0;
+const double NODE_WIDTH = 130.0;
 const double NODE_VERT_WIRE_OFFSET = 39.0;
 const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
 const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
@@ -267,7 +267,7 @@ class NodeWidget extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 15,
+                          fontSize: 14,
                         ),
                       ),
                       GestureDetector(
@@ -328,7 +328,7 @@ class NodeWidget extends StatelessWidget {
         SizedBox(width: 6),
         Text(
           label,
-          style: TextStyle(color: Colors.white, fontSize: 15),
+          style: TextStyle(color: Colors.white, fontSize: 14),
         ),
       ],
     );
