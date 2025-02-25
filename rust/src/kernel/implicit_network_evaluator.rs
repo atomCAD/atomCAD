@@ -3,7 +3,6 @@ use glam::f32::Vec3;
 use super::surface_point_cloud::SurfacePoint;
 use super::surface_point_cloud::SurfacePointCloud;
 use super::node_network::NodeNetwork;
-use super::node_network::Node;
 use super::node_type::NodeData;
 use super::node_type::ParameterData;
 use super::node_type::SphereData;
@@ -177,8 +176,7 @@ impl ImplicitNetworkEvaluator {
               let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
               let value = self.implicit_eval(network, &network_args, node_id, &crystal_space_pos, registry)[0];
               let atom_id = if value < DIAMOND_SAMPLE_THRESHOLD {
-                let id = atomic_structure.obtain_next_id();
-                atomic_structure.add_atom(id, CARBON, crystal_space_pos * DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+                let id = atomic_structure.add_atom(CARBON, crystal_space_pos * DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
                 atom_pos_to_id.insert(absolute_pos, id);
                 id
               } else { 0 };
@@ -187,6 +185,25 @@ impl ImplicitNetworkEvaluator {
           }
 
           //TODO: add the bonds
+          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[0], 1);
+          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[8], 1);
+          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[10], 1);
+          atomic_structure.add_bond(carbon_atom_ids[14], carbon_atom_ids[12], 1);
+
+          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[6], 1);
+          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[9], 1);
+          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[11], 1);
+          atomic_structure.add_bond(carbon_atom_ids[15], carbon_atom_ids[12], 1);
+
+          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[5], 1);
+          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[9], 1);
+          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[10], 1);
+          atomic_structure.add_bond(carbon_atom_ids[16], carbon_atom_ids[13], 1);
+
+          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[4], 1);
+          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[8], 1);
+          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[11], 1);
+          atomic_structure.add_bond(carbon_atom_ids[17], carbon_atom_ids[13], 1);
         }
       }
     }

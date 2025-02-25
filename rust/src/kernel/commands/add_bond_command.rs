@@ -24,7 +24,7 @@ impl Command for AddBondCommand {
     if !is_redo {
       self.bond_id = model.obtain_next_id();
     }
-    model.add_bond(self.bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
+    model.add_bond_with_id(self.bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
   }
 
   fn undo(&mut self, model: &mut AtomicStructure) {

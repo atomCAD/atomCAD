@@ -66,7 +66,13 @@ impl AtomicStructure {
     return ret;
   }
 
-  pub fn add_atom(&mut self, id: u64, atomic_number: i32, position: Vec3) {
+  pub fn add_atom(&mut self, atomic_number: i32, position: Vec3) -> u64 {
+    let id = self.obtain_next_id();
+    self.add_atom_with_id(id, atomic_number, position);
+    id
+  }
+
+  pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: Vec3) {
     self.atoms.insert(id, Atom {
       id,
       atomic_number,
@@ -85,9 +91,15 @@ impl AtomicStructure {
     self.make_atom_dirty(id);
   }
 
+  pub fn add_bond(&mut self, atom_id1: u64, atom_id2: u64, multiplicity: i32) -> u64 {
+    let id = self.obtain_next_id();
+    self.add_bond_with_id(id, atom_id1, atom_id2, multiplicity);
+    id
+  }
+
   // Right now this can only be called if no bond exist between the two atoms but both atoms exist
   // TODO: handle the case when a bond already exist
-  pub fn add_bond(&mut self, id: u64, atom_id1: u64, atom_id2: u64, multiplicity: i32) {
+  pub fn add_bond_with_id(&mut self, id: u64, atom_id1: u64, atom_id2: u64, multiplicity: i32) {
     self.bonds.insert(id, Bond {
       id,
       atom_id1,
