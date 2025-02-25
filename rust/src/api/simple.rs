@@ -335,6 +335,7 @@ pub fn connect_nodes(node_network_name: &str, source_node_id: u64, dest_node_id:
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.kernel.connect_nodes(node_network_name, source_node_id, dest_node_id, dest_param_index);
+      refresh_renderer(cad_instance, &node_network_name);
     }
   }
 }
