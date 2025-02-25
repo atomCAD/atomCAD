@@ -51,8 +51,9 @@ Color getDataTypeColor(String dataType) {
 /// The main node network widget.
 class NodeNetwork extends StatelessWidget {
   final GraphModel graphModel;
+  final focusNode = FocusNode();
 
-  const NodeNetwork({super.key, required this.graphModel});
+  NodeNetwork({super.key, required this.graphModel});
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +62,7 @@ class NodeNetwork extends StatelessWidget {
       child: Consumer<GraphModel>(
         builder: (context, model, child) {
           return Focus(
+            focusNode: focusNode,
             autofocus: true,
             onKeyEvent: (node, event) {
               if (event.logicalKey == LogicalKeyboardKey.delete) {
@@ -69,40 +71,51 @@ class NodeNetwork extends StatelessWidget {
               }
               return KeyEventResult.ignored;
             },
-            child: GestureDetector(
-              onSecondaryTapDown: (details) async {
-                String? selectedNode = await showAddNodePopup(context);
-                if (selectedNode != null) {
-                  model.createNode(selectedNode, details.localPosition);
+            child: MouseRegion(
+              onEnter: (event) {
+                if (!focusNode.hasFocus) {
+                  focusNode.requestFocus();
                 }
               },
-              child: Stack(
-                children: (model.nodeNetworkView == null)
-                    ? []
-                    : [
-                        CustomPaint(
-                          painter: WirePainter(model),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onTapDown: (details) {
-                              final painter = WirePainter(model);
-                              final hit = painter
-                                  .findWireAtPosition(details.localPosition);
-                              if (hit != null) {
-                                model.setSelectedWire(
-                                  hit.sourceNodeId,
-                                  hit.destNodeId,
-                                  hit.destParamIndex,
-                                );
-                              }
-                            },
-                            child: Container(),
+              child: GestureDetector(
+                onTapDown: (details) {
+                  focusNode.requestFocus();
+                },
+                onSecondaryTapDown: (details) async {
+                  String? selectedNode = await showAddNodePopup(context);
+                  if (selectedNode != null) {
+                    model.createNode(selectedNode, details.localPosition);
+                  }
+                  focusNode.requestFocus();
+                },
+                child: Stack(
+                  children: (model.nodeNetworkView == null)
+                      ? []
+                      : [
+                          CustomPaint(
+                            painter: WirePainter(model),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTapDown: (details) {
+                                final painter = WirePainter(model);
+                                final hit = painter
+                                    .findWireAtPosition(details.localPosition);
+                                if (hit != null) {
+                                  model.setSelectedWire(
+                                    hit.sourceNodeId,
+                                    hit.destNodeId,
+                                    hit.destParamIndex,
+                                  );
+                                }
+                              },
+                              child: Container(),
+                            ),
                           ),
-                        ),
-                        ...(model.nodeNetworkView!.nodes.entries
-                            .map((entry) => NodeWidget(node: entry.value))
-                            .toList())
-                      ],
+                          ...(model.nodeNetworkView!.nodes.entries
+                              .map((entry) => NodeWidget(node: entry.value))
+                              .toList())
+                        ],
+                ),
               ),
             ),
           );
@@ -238,6 +251,10 @@ class NodeWidget extends StatelessWidget {
             children: [
               // Title Bar
               GestureDetector(
+                onTapDown: (details) {
+                  final model = Provider.of<GraphModel>(context, listen: false);
+                  model.setSelectedNode(node.id);
+                },
                 onPanStart: (details) {
                   final model = Provider.of<GraphModel>(context, listen: false);
                   model.setSelectedNode(node.id);
