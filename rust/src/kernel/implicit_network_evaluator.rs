@@ -224,6 +224,7 @@ impl ImplicitNetworkEvaluator {
         }
       }
     }
+    atomic_structure.remove_lone_atoms();
 
     let mut scene = Scene::new();
     scene.atomic_structures.push(atomic_structure);
@@ -282,7 +283,7 @@ impl ImplicitNetworkEvaluator {
             };
             point_cloud.points.push(
               SurfacePoint {
-                position: center_point - step,
+                position: (center_point - step) * DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
                 normal: gradient.normalize(),
               }
             );

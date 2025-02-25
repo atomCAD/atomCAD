@@ -201,4 +201,16 @@ impl AtomicStructure {
     }
   }
 
+  pub fn remove_lone_atoms(&mut self) {
+    let lone_atom_ids: Vec<u64> = self.atoms
+      .iter()
+      .filter(|(_, atom)| atom.bond_ids.is_empty())
+      .map(|(id, _)| *id)
+      .collect();
+
+    for atom_id in lone_atom_ids {
+      self.delete_atom(atom_id);
+    }
+  }
+
 }
