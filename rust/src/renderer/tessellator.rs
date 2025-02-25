@@ -6,6 +6,8 @@ use crate::kernel::atomic_structure::Bond;
 use crate::kernel::surface_point_cloud::SurfacePoint;
 use glam::f32::Vec3;
 use glam::f32::Quat;
+use std::collections::HashMap;
+use lazy_static::lazy_static;
 
 /*
  * Tessellator is able to tessellate atoms, bonds and surface points into a triangle mesh
@@ -15,6 +17,35 @@ pub struct Tessellator {
   sphere_horizontal_divisions: u32, // number sections when dividing by horizontal lines
   sphere_vertical_divisions: u32, // number of sections when dividing by vertical lines
   cylinder_divisions: u32,
+}
+
+#[derive(Clone)]
+pub struct AtomInfo {
+    radius: f32,
+    color: Vec3,
+}
+
+// atom radius factor for the 'balls and sticks' view
+const BAS_ATOM_RADIUS_FACTOR: f32 = 0.5;
+
+// radius of a bond cylinder (stick) in the 'balls and sticks' view
+const BAS_STICK_RADIUS: f32 = 0.1; 
+
+lazy_static! {
+    static ref DEFAULT_ATOM_INFO: AtomInfo = AtomInfo {
+        radius: 0.7,
+        color: Vec3::new(0.5, 0.5, 0.5)  // Default gray for unknown atoms
+    };
+
+    static ref ATOM_INFO: HashMap<i32, AtomInfo> = {
+        let mut m = HashMap::new();
+        // Values based on common atomic radii (in Angstroms) and typical visualization colors
+        m.insert(1, AtomInfo { radius: 0.25, color: Vec3::new(1.0, 1.0, 1.0) });  // Hydrogen - white
+        m.insert(6, AtomInfo { radius: 0.70, color: Vec3::new(0.1, 1.0, 0.1) });  // Carbon - dark grey
+        m.insert(7, AtomInfo { radius: 0.65, color: Vec3::new(0.2, 0.2, 1.0) });  // Nitrogen - blue
+        m.insert(8, AtomInfo { radius: 0.60, color: Vec3::new(1.0, 0.0, 0.0) });  // Oxygen - red
+        m
+    };
 }
 
 impl Tessellator {
@@ -37,10 +68,12 @@ impl Tessellator {
     self.cylinder_divisions = arg_cylinder_divisions;
   }
 
-  pub fn add_atom(&mut self, model: &AtomicStructure, atom: &Atom) {
-    // TODO: atomic radii. also enum for view type (atomic radii depend on that too)
-    // TODO: color depends on atomic number and selection
-    self.add_sphere(&atom.position, 1.0, &Vec3::new(0.8, 0.0, 0.0), 0.3, 0.0);
+  pub fn add_atom(&mut self, _model: &AtomicStructure, atom: &Atom) {
+    let atom_info = ATOM_INFO.get(&atom.atomic_number)
+        .unwrap_or(&DEFAULT_ATOM_INFO);
+        
+    let scaled_radius = atom_info.radius * BAS_ATOM_RADIUS_FACTOR;
+    self.add_sphere(&atom.position, scaled_radius, &atom_info.color, 0.3, 0.0);
   }
 
   pub fn add_surface_point(&mut self, point: &SurfacePoint) {
@@ -134,9 +167,7 @@ impl Tessellator {
   pub fn add_bond(&mut self, model: &AtomicStructure, bond: &Bond) {
     let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
     let atom_pos2 = model.get_atom(bond.atom_id2).unwrap().position;
-    // TODO: radius
-    // TODO: radius
-    self.add_cylinder(&atom_pos2, &atom_pos1, 0.3, &Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8);
+    self.add_cylinder(&atom_pos2, &atom_pos1, BAS_STICK_RADIUS, &Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8);
   }
 
   fn add_sphere(&mut self, center: &Vec3, radius: f32, albedo: &Vec3, roughness: f32, metallic: f32) {
