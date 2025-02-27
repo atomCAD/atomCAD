@@ -1,4 +1,4 @@
-use super::super::mesh::Mesh;
+use crate::renderer::mesh::Mesh;
 use crate::kernel::atomic_structure::AtomicStructure;
 use crate::kernel::atomic_structure::Atom;
 use crate::kernel::atomic_structure::Bond;
@@ -80,6 +80,7 @@ pub fn tessellate_bond(output_mesh: &mut Mesh, model: &AtomicStructure, bond: &B
     &Vec3::new(0.95, 0.93, 0.88),
     0.4,
     0.8,
+    false,
   );
 }
 

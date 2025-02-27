@@ -21,7 +21,7 @@ use lru::LruCache;
 const NETWORK_EVAL_VOLUME_MIN: IVec3 = IVec3::new(-4, -4, -4);
 const NETWORK_EVAL_VOLUME_MAX: IVec3 = IVec3::new(4, 4, 4);
 const SAMPLES_PER_UNIT: i32 = 4;
-const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f32 = 3.567;  // Size of one complete unit cell (4x4x4) in Ångströms
+pub const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f32 = 3.567;  // Size of one complete unit cell (4x4x4) in Ångströms
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
 const CARBON: i32 = 6;
 

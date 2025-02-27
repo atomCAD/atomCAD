@@ -1,4 +1,4 @@
-use super::super::mesh::Mesh;
+use crate::renderer::mesh::Mesh;
 use crate::kernel::surface_point_cloud::SurfacePoint;
 use crate::kernel::surface_point_cloud::SurfacePointCloud;
 use super::tessellator;

@@ -22,6 +22,51 @@ use glam::f32::Quat;
     output_mesh.add_quad(index0, index1, index2, index3);
 }
 
+pub fn tessellate_circle_sheet (
+    output_mesh: &mut Mesh,
+    center: &Vec3,
+    normal: &Vec3,
+    radius: f32,
+    divisions: u32,
+    albedo: &Vec3,
+    roughness: f32,
+    metallic: f32
+) 
+{
+  let rotation = Quat::from_rotation_arc(Vec3::new(0.0, 1.0, 0.0), *normal);
+
+  let center_index = output_mesh.add_vertex(Vertex::new(
+    &center,
+    &normal,
+    albedo,
+    roughness,
+    metallic,
+  ));
+
+  let index_start = output_mesh.vertices.len() as u32;
+
+  for x in 0..divisions {
+    let u = (x as f32) / (divisions as f32); // u runs from 0 to 1
+    let theta = u * 2.0 * std::f32::consts::PI; // From 0 to 2*PI
+    let out_normal = Vec3::new(theta.sin(), 0.0, theta.cos());
+
+    let position = center + rotation.mul_vec3(out_normal * radius);
+    
+    output_mesh.add_vertex(Vertex::new(
+      &position,
+      &normal,
+      albedo,
+      roughness,
+      metallic,
+    ));
+
+    let offset = index_start + x;
+    let next_offset = index_start + (x + 1) % divisions;
+    
+    output_mesh.add_triangle(center_index, offset, next_offset);
+  }
+}
+
 pub fn tessellate_sphere(
     output_mesh: &mut Mesh,
     center: &Vec3,
@@ -115,11 +160,15 @@ pub fn tessellate_cylinder(
     divisions: u32,
     albedo: &Vec3,
     roughness: f32,
-    metallic: f32) {
+    metallic: f32,
+    include_top_and_bottom: bool) {
   let center = (top_center + bottom_center) * 0.5;
   let dir = (top_center - bottom_center).normalize();
+  let up = dir;
+  let down = dir * -1.0;
   let length = (top_center - bottom_center).length();
   let rotation = Quat::from_rotation_arc(Vec3::new(0.0, 1.0, 0.0), dir);
+  
   let index_start = output_mesh.vertices.len() as u32;
   for x in 0..divisions {
     let u = (x as f32) / (divisions as f32); // u runs from 0 to 1
@@ -155,4 +204,29 @@ pub fn tessellate_cylinder(
       offset + 1 // top
     );
   }
+
+  if include_top_and_bottom {
+    tessellate_circle_sheet (
+      output_mesh,
+      &top_center,
+      &up,
+      radius,
+      divisions,
+      albedo,
+      roughness,
+      metallic,
+    );
+
+    tessellate_circle_sheet (
+      output_mesh,
+      &bottom_center,
+      &down,
+      radius,
+      divisions,
+      albedo,
+      roughness,
+      metallic,
+    );
+  }
 }
+
