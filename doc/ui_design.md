@@ -94,3 +94,13 @@ The multiplicity of the bond can be set on the editor properties panel.
 ## Tools
 
 No tool is planned at the moment, but down the line there will be some.
+
+## Node gadgets
+
+For certain nodes, when selected, a gadget is displayed on the viewport which helps
+the user to manipulate node properties.
+
+### half_space node gadget
+
+There will be a gadget for a cutter plane to manipulate its orientation and offset.
+The gadget will be a line with a visually indicated start point and with a handle at its end point. The end point handle will be a small cube. The user can drag the end point handle to change the plane's orientation. It will snap to integer miller index equivalents, where the absolute value of each index cannot be larger than a 'k' number. This 'k' number will be displayed as a label near the gadget like 'k: 5'. The value of 'k' can be adjusted by holding shift while dragging the endpoint: this way the length of the line is adjusted which adjusts 'k'. The bigger 'k' is, the smoother it is possible to define the plane orientation (as the possible miller index combinations increase with the increase of 'k'). There will be another handle at the start of the line. This handle will form a  sphere and dragging this will define the offset. The reason we have the 'k' value is that unconstrained miller indices would result in huge miller indices and basically no snapping during the normal vector manipulation.
