@@ -1,14 +1,14 @@
 use wgpu::*;
 use bytemuck;
 use wgpu::util::DeviceExt;
-use crate::kernel::atomic_structure::AtomicStructure;
 use super::mesh::Vertex;
-use super::tessellator::Tessellator;
+use super::mesh::Mesh;
+use super::tessellator::atomic_tessellator;
+use super::tessellator::surface_point_tessellator;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
 use crate::kernel::scene::Scene;
-use crate::kernel::surface_point_cloud::SurfacePointCloud;
 use std::time::Instant;
 
 #[repr(C)]
@@ -304,24 +304,29 @@ impl Renderer {
         let start_time = Instant::now();
 
         // We tessellate everything into one mesh for now
+        let mut mesh = Mesh::new();
 
-        let mut tessellator = Tessellator::new();
+        let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
+          sphere_horizontal_divisions: 10,
+          sphere_vertical_divisions: 20,
+          cylinder_divisions: 16,
+        };
 
         for atomic_structure in scene.atomic_structures.iter() {
-            self.tessellate_atomic_structure(&mut tessellator, atomic_structure);
+            atomic_tessellator::tessellate_atomic_structure(&mut mesh, atomic_structure, &atomic_tessellation_params);
         }
         for surface_point_cloud in scene.surface_point_clouds.iter() {
-            self.tessellate_surface_point_cloud(&mut tessellator, surface_point_cloud);
+            surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
         }
 
-        println!("tessellated {} vertices and {} indices", tessellator.output_mesh.vertices.len(), tessellator.output_mesh.indices.len());
+        println!("tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
 
         //TODO: do not replace the buffers, just copy the data.
 
         self.vertex_buffer = self.device.create_buffer_init(
           &wgpu::util::BufferInitDescriptor {
               label: Some("Vertex Buffer"),
-              contents: bytemuck::cast_slice(tessellator.output_mesh.vertices.as_slice()),
+              contents: bytemuck::cast_slice(mesh.vertices.as_slice()),
               usage: wgpu::BufferUsages::VERTEX,
           }
         );
@@ -329,30 +334,12 @@ impl Renderer {
         self.index_buffer = self.device.create_buffer_init(
           &wgpu::util::BufferInitDescriptor {
               label: Some("Index Buffer"),
-              contents: bytemuck::cast_slice(tessellator.output_mesh.indices.as_slice()),
+              contents: bytemuck::cast_slice(mesh.indices.as_slice()),
               usage: wgpu::BufferUsages::INDEX,
           }
         );
-        self.num_indices = tessellator.output_mesh.indices.len() as u32;
+        self.num_indices = mesh.indices.len() as u32;
         println!("refresh took: {:?}", start_time.elapsed());
-    }
-
-    fn tessellate_atomic_structure(&mut self, tessellator: &mut Tessellator, atomic_structure: &AtomicStructure) {
-      tessellator.set_sphere_divisions(10, 20);
-
-      for (_id, atom) in atomic_structure.atoms.iter() {
-        tessellator.add_atom(atomic_structure, &atom);
-      }
-      for (_id, bond) in atomic_structure.bonds.iter() {
-        tessellator.add_bond(atomic_structure, &bond);
-      }
-    }
-
-    fn tessellate_surface_point_cloud(&mut self, tessellator: &mut Tessellator, surface_point_cloud: &SurfacePointCloud) {
-      // Iterate through all surface points and add them to the tessellator
-      for point in &surface_point_cloud.points {
-        tessellator.add_surface_point(point);
-      }
     }
 
     pub fn render(&mut self) -> Vec<u8> {
