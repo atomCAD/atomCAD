@@ -13,6 +13,7 @@ use super::node_type::NodeData;
 use super::implicit_network_evaluator::ImplicitNetworkEvaluator;
 use super::surface_point_cloud::SurfacePointCloud;
 use super::scene::Scene;
+use super::gadget_state::GadgetState;
 use std::ops::Deref;
 
 pub struct Kernel {
@@ -21,6 +22,7 @@ pub struct Kernel {
   pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: ImplicitNetworkEvaluator,
+  pub gadget_state: GadgetState,
 }
 
 impl Kernel {
@@ -36,6 +38,7 @@ impl Kernel {
       next_history_index: 0,
       node_type_registry,
       network_evaluator,
+      gadget_state: GadgetState::Empty,
     }
   }
 
@@ -85,6 +88,7 @@ impl Kernel {
     for node_id in &network.displayed_node_ids {
       scene.merge(self.network_evaluator.generate_scene(node_network_name, *node_id, &self.node_type_registry));
     }
+    scene.gadget_state = self.gadget_state.clone();
     return scene;
   }
 
@@ -207,7 +211,9 @@ impl Kernel {
 
   pub fn select_node(&mut self, network_name: &str, node_id: u64) -> bool {
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      network.select_node(node_id)
+      let ret = network.select_node(node_id);
+      self.gadget_state = network.provide_gadget_state();
+      ret
     } else {
       false
     }
@@ -215,7 +221,9 @@ impl Kernel {
 
   pub fn select_wire(&mut self, network_name: &str, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      network.select_wire(source_node_id, destination_node_id, destination_argument_index)
+      let ret = network.select_wire(source_node_id, destination_node_id, destination_argument_index);
+      self.gadget_state = network.provide_gadget_state();
+      ret
     } else {
       false
     }
@@ -224,6 +232,7 @@ impl Kernel {
   pub fn clear_selection(&mut self, network_name: &str) {
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.clear_selection();
+      self.gadget_state = network.provide_gadget_state();
     }
   }
 

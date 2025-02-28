@@ -1,4 +1,5 @@
 use glam::f32::Vec2;
+use glam::f32::Vec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -8,6 +9,8 @@ use super::node_type::NoData;
 use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
+use super::gadget_state::GadgetState;
+use super::gadget_state::HalfSpaceGadgetState;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
@@ -165,6 +168,22 @@ impl NodeNetwork {
   pub fn clear_selection(&mut self) {
     self.selected_node_id = None;
     self.selected_wire = None;
+  }
+
+  pub fn provide_gadget_state(&self) -> GadgetState {
+    if let Some(node_id) = self.selected_node_id {
+      let node = self.nodes.get(&node_id).unwrap();
+      if node.node_type_name == "half_space" {
+        let node_data = &(*node.data).as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
+        return GadgetState::HalfSpace(HalfSpaceGadgetState {
+          dir: node_data.miller_index.as_vec3().normalize() * 6.0, // TODO: implement this correctly
+          miller_index: node_data.miller_index,
+          int_shift: node_data.shift,
+          shift: node_data.shift as f32,
+        });
+      }
+    }
+    GadgetState::Empty
   }
 
   pub fn delete_selected(&mut self) {
