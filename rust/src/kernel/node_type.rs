@@ -1,6 +1,8 @@
 use glam::i32::IVec3;
 use std::any::Any;
 use super::as_any::AsAny;
+use super::gadgets::gadget::Gadget;
+use super::gadgets::half_space_gadget::HalfSpaceGadget;
 
 #[derive(PartialEq)]
 pub enum DataType {
@@ -57,10 +59,43 @@ pub struct HalfSpaceData {
   pub shift: i32,
 }
 
-pub trait NodeData: std::fmt::Debug + Any + AsAny  {}
+pub trait NodeData: std::fmt::Debug + Any + AsAny  {
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>>;
+}
 
-impl NodeData for NoData {}
-impl NodeData for ParameterData {}
-impl NodeData for CuboidData {}
-impl NodeData for SphereData {}
-impl NodeData for HalfSpaceData {}
+impl NodeData for NoData {
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+    None
+  }
+}
+
+impl NodeData for ParameterData {
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+    None
+  }
+}
+
+impl NodeData for CuboidData {
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+    None
+  }
+}
+
+impl NodeData for SphereData {
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+    None
+  }
+}
+
+impl NodeData for HalfSpaceData {
+
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+    return Some(Box::new(HalfSpaceGadget {
+      dir: self.miller_index.as_vec3().normalize() * 6.0, // TODO: implement this correctly
+      miller_index: self.miller_index,
+      int_shift: self.shift,
+      shift: self.shift as f32,
+    }));
+  }
+
+}

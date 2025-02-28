@@ -9,8 +9,8 @@ use super::node_type::NoData;
 use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
-use super::gadget_state::GadgetState;
-use super::gadget_state::HalfSpaceGadgetState;
+use super::gadgets::gadget::Gadget;
+use super::gadgets::half_space_gadget::HalfSpaceGadget;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
@@ -170,20 +170,12 @@ impl NodeNetwork {
     self.selected_wire = None;
   }
 
-  pub fn provide_gadget_state(&self) -> GadgetState {
+  pub fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
     if let Some(node_id) = self.selected_node_id {
       let node = self.nodes.get(&node_id).unwrap();
-      if node.node_type_name == "half_space" {
-        let node_data = &(*node.data).as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
-        return GadgetState::HalfSpace(HalfSpaceGadgetState {
-          dir: node_data.miller_index.as_vec3().normalize() * 6.0, // TODO: implement this correctly
-          miller_index: node_data.miller_index,
-          int_shift: node_data.shift,
-          shift: node_data.shift as f32,
-        });
-      }
+      return node.data.provide_gadget();
     }
-    GadgetState::Empty
+    None
   }
 
   pub fn delete_selected(&mut self) {
