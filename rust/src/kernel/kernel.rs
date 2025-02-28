@@ -244,4 +244,33 @@ impl Kernel {
       node_network.delete_selected();
     }
   }
+
+  // -------------------------------------------------------------------------------------------------------------------------
+  // --- Gadget delegation methods                                                                                        ---
+  // -------------------------------------------------------------------------------------------------------------------------
+
+  pub fn gadget_hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<i32> {
+    if let Some(gadget) = &self.gadget {
+      return gadget.hit_test(ray_origin, ray_direction);
+    }
+    None
+  }
+
+  pub fn gadget_start_drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
+    if let Some(gadget) = &mut self.gadget {
+      gadget.start_drag(handle_index, ray_origin, ray_direction);
+    }
+  }
+
+  pub fn gadget_drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
+    if let Some(gadget) = &mut self.gadget {
+      gadget.drag(handle_index, ray_origin, ray_direction);
+    }
+  }
+
+  pub fn gadget_end_drag(&mut self) {
+    if let Some(gadget) = &mut self.gadget {
+      gadget.end_drag();
+    }
+  }
 }

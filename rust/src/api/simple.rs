@@ -481,6 +481,41 @@ pub fn delete_selected(node_network_name: String) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i32> {
+  unsafe {
+    let instance = CAD_INSTANCE.as_ref()?;
+    instance.kernel.gadget_hit_test(from_api_vec3(&ray_origin), from_api_vec3(&ray_direction))
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn gadget_start_drag(node_network_name: String, handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
+  unsafe {
+    let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
+    instance.kernel.gadget_start_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+    refresh_renderer(instance, &node_network_name);
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
+  unsafe {
+    let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
+    instance.kernel.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+    refresh_renderer(instance, &node_network_name);
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn gadget_end_drag(node_network_name: String) {
+  unsafe {
+    let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
+    instance.kernel.gadget_end_drag();
+    refresh_renderer(instance, &node_network_name);
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn greet(name: String) -> String {
     format!("Hello, {name}!")
 }

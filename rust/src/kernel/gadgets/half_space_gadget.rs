@@ -63,8 +63,8 @@ impl Gadget for HalfSpaceGadget {
               &Vec3::new(0.0, 0.0, 0.95), // number of sections when dividing by vertical lines
               0.3, 0.0, true);
     }
-    
-    fn hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<f32> {
+
+    fn hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<i32> {
         // Implement hit testing logic
         None // placeholder
     }
@@ -72,4 +72,17 @@ impl Gadget for HalfSpaceGadget {
     fn clone_box(&self) -> Box<dyn Gadget> {
         Box::new(self.clone())
     }
+
+    fn start_drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
+
+    }
+
+    fn drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
+
+    }
+
+    fn end_drag(&mut self) {
+
+    }
+
 }
