@@ -5,7 +5,7 @@ use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::tessellator::atomic_tessellator;
 use super::tessellator::surface_point_tessellator;
-use super::tessellator::half_space_gadget_tessellator;
+use super::tessellator::gadget_tessellator;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
@@ -321,9 +321,7 @@ impl Renderer {
             surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
         }
 
-        if let Some(half_space_gadget_state) = &scene.half_space_gadget_state {
-            half_space_gadget_tessellator::tessellate_half_space_gadget(&mut mesh, half_space_gadget_state);
-        }
+        gadget_tessellator::tessellate_gadget(&mut mesh, &scene.gadget_state);
 
         println!("tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
 

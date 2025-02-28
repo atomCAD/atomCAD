@@ -1,4 +1,5 @@
 use crate::renderer::mesh::Mesh;
+use crate::kernel::gadget_state::GadgetState;
 use crate::kernel::gadget_state::HalfSpaceGadgetState;
 use crate::kernel::implicit_network_evaluator::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use super::tessellator;
@@ -16,10 +17,23 @@ pub const DIRECTION_HANDLE_RADIUS: f32 = 0.5;
 pub const DIRECTION_HANDLE_DIVISIONS: u32 = 16;
 pub const DIRECTION_HANDLE_LENGTH: f32 = 1.0;
 
+pub fn tessellate_gadget(output_mesh: &mut Mesh, gadget_state: &GadgetState) {
+    match gadget_state {
+        GadgetState::Empty => {
+            // Nothing to tessellate for empty state
+        },
+        GadgetState::HalfSpace(half_space_state) => {
+            tessellate_half_space_gadget(output_mesh, half_space_state);
+        },
+        // Add more variants here as they are added to GadgetState enum
+    }
+}
+
 pub fn tessellate_half_space_gadget(output_mesh: &mut Mesh, half_space_gadget_state: &HalfSpaceGadgetState) {
-  let gadget_dir = half_space_gadget_state.int_dir.as_vec3();
+
+  let gadget_dir = half_space_gadget_state.dir;
   let gadget_normal = gadget_dir.normalize();
-  let gadget_shift = half_space_gadget_state.int_shift as f32;
+  let gadget_shift = half_space_gadget_state.shift;
   let gadget_miller_index = half_space_gadget_state.miller_index.as_vec3();
   let gadget_offset = gadget_shift / gadget_miller_index.length();
   let gadget_diamond_cell_size = DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32;
