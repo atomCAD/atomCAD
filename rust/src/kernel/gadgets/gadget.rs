@@ -10,4 +10,3 @@ pub trait Gadget {
     fn end_drag(&mut self);
     fn clone_box(&self) -> Box<dyn Gadget>;
 }
-

@@ -4,6 +4,8 @@ use super::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
 use crate::kernel::implicit_network_evaluator::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::renderer::tessellator::tessellator;
+use crate::util::hit_test_utils::sphere_hit_test;
+use crate::util::hit_test_utils::cylinder_hit_test;
 
 pub const HALF_SPACE_DIR_MANIPULATION_CELL_SIZE: f32 = 1.0;
 pub const AXIS_RADIUS: f32 = 0.2;
@@ -24,22 +26,20 @@ pub struct HalfSpaceGadget {
     pub shift: f32,
 }
 
+struct HalfSpaceGadgetCalculated {
+    start_point: Vec3,
+    end_point: Vec3,
+    normal: Vec3,
+}
+
 impl Gadget for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
-        let gadget_dir = self.dir;
-        let gadget_normal = gadget_dir.normalize();
-        let gadget_shift = self.shift;
-        let gadget_miller_index = self.miller_index.as_vec3();
-        let gadget_offset = gadget_shift / gadget_miller_index.length();
-        let gadget_diamond_cell_size = DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32;
-      
-        let gadget_start_point = gadget_normal * gadget_offset * gadget_diamond_cell_size;
-        let gadget_end_point = gadget_start_point + gadget_dir * HALF_SPACE_DIR_MANIPULATION_CELL_SIZE;
+        let calculated = self.calculate_gadget();
       
         tessellator::tessellate_cylinder(
           output_mesh,
-          &gadget_start_point,
-          &gadget_end_point,
+          &calculated.start_point,
+          &calculated.end_point,
           AXIS_RADIUS,
           AXIS_DIVISIONS,
           &Vec3::new(0.95, 0.93, 0.88),
@@ -47,7 +47,7 @@ impl Gadget for HalfSpaceGadget {
       
           tessellator::tessellate_sphere(
               output_mesh,
-              &gadget_start_point,
+              &calculated.start_point,
               SHIFT_HANDLE_RADIUS,
               SHIFT_HANDLE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
               SHIFT_HANDLE_VERTICAL_DIVISIONS,
@@ -56,19 +56,47 @@ impl Gadget for HalfSpaceGadget {
       
           tessellator::tessellate_cylinder(
               output_mesh,
-              &(gadget_end_point - gadget_normal * DIRECTION_HANDLE_LENGTH),
-              &(gadget_end_point + gadget_normal * DIRECTION_HANDLE_LENGTH),
+              &(calculated.end_point - calculated.normal * DIRECTION_HANDLE_LENGTH),
+              &(calculated.end_point + calculated.normal * DIRECTION_HANDLE_LENGTH),
               DIRECTION_HANDLE_RADIUS,
               DIRECTION_HANDLE_DIVISIONS,
               &Vec3::new(0.0, 0.0, 0.95), // number of sections when dividing by vertical lines
               0.3, 0.0, true);
     }
 
+    // Returns the index of the handle that was hit, or None if no handle was hit
+    // handle 0: shift handle
+    // handle 1: direction handle
     fn hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<i32> {
-        // Implement hit testing logic
-        None // placeholder
+        let calculated = self.calculate_gadget();
+        
+        // Test shift handle (sphere at gadget_start_point)
+        if let Some(_t) = sphere_hit_test(
+            &calculated.start_point,
+            SHIFT_HANDLE_RADIUS,
+            &ray_origin,
+            &ray_direction
+        ) {
+            return Some(0); // Shift handle hit
+        }
+        
+        // Test direction handle (cylinder centered at gadget_end_point)
+        let direction_handle_start = calculated.end_point - calculated.normal * DIRECTION_HANDLE_LENGTH;
+        let direction_handle_end = calculated.end_point + calculated.normal * DIRECTION_HANDLE_LENGTH;
+        
+        if let Some(_t) = cylinder_hit_test(
+            &direction_handle_end,
+            &direction_handle_start,
+            DIRECTION_HANDLE_RADIUS,
+            &ray_origin,
+            &ray_direction
+        ) {
+            return Some(1); // Direction handle hit
+        }
+        
+        None // No handle was hit
     }
-    
+
     fn clone_box(&self) -> Box<dyn Gadget> {
         Box::new(self.clone())
     }
@@ -78,11 +106,43 @@ impl Gadget for HalfSpaceGadget {
     }
 
     fn drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
-
+        let calculated = self.calculate_gadget();
+        
+        if handle_index == 1 {
+            // Direction handle drag
+            if let Some(t) = sphere_hit_test(
+                &calculated.start_point,
+                self.dir.length(),
+                &ray_origin,
+                &ray_direction
+            ) {
+                let new_end_point = ray_origin + ray_direction * t;
+                self.dir = (new_end_point - calculated.start_point).normalize() * 6.0; // TODO: implement this correctly
+            }
+        }
     }
 
     fn end_drag(&mut self) {
 
     }
 
+}
+
+impl HalfSpaceGadget {
+    fn calculate_gadget(&self) -> HalfSpaceGadgetCalculated {
+        let gadget_dir = self.dir;
+        let gadget_normal = gadget_dir.normalize();
+        let gadget_shift = self.shift;
+        let gadget_miller_index = self.miller_index.as_vec3();
+        let gadget_offset = gadget_shift / gadget_miller_index.length();
+        let gadget_diamond_cell_size = DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32;
+
+        let gadget_start_point = gadget_normal * gadget_offset * gadget_diamond_cell_size;
+
+        return HalfSpaceGadgetCalculated {
+            start_point: gadget_start_point,
+            end_point: gadget_start_point + gadget_dir * HALF_SPACE_DIR_MANIPULATION_CELL_SIZE,
+            normal: gadget_normal,
+        }       
+    }
 }
