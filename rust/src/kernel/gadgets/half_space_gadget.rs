@@ -6,6 +6,7 @@ use crate::kernel::implicit_network_evaluator::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::renderer::tessellator::tessellator;
 use crate::util::hit_test_utils::sphere_hit_test;
 use crate::util::hit_test_utils::cylinder_hit_test;
+use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 
 pub const HALF_SPACE_DIR_MANIPULATION_CELL_SIZE: f32 = 1.0;
 pub const AXIS_RADIUS: f32 = 0.2;
@@ -110,6 +111,13 @@ impl Gadget for HalfSpaceGadget {
         let calculated = self.calculate_gadget();
         
         if handle_index == 0 {
+            // Shift handle drag
+            let dt = get_closest_point_on_first_ray(
+                &calculated.start_point,
+                &calculated.normal,
+                &ray_origin,
+                &ray_direction);
+            self.shift += dt * (self.miller_index.as_vec3().length()) / (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32);
         }
         else if handle_index == 1 {
             // Direction handle drag
@@ -124,6 +132,14 @@ impl Gadget for HalfSpaceGadget {
             }
         }
     }
+
+/*
+get_closest_point_on_first_ray(
+    ray1_origin: &Vec3,
+    ray1_direction: &Vec3,
+    ray2_origin: &Vec3,
+    ray2_direction: &Vec3)
+ */
 
     fn end_drag(&mut self) {
 

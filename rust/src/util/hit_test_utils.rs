@@ -45,6 +45,43 @@ pub fn sphere_hit_test(
     }
 }
 
+pub fn get_closest_point_on_first_ray(
+    ray1_origin: &Vec3,
+    ray1_direction: &Vec3,
+    ray2_origin: &Vec3,
+    ray2_direction: &Vec3) -> f32 {
+    // This function calculates the parameter 't' on ray1 where the two rays are closest to each other.
+    // Based on the formula for distance between two skew lines.
+    
+    // Normalize directions to ensure proper calculations
+    let dir1 = ray1_direction.normalize();
+    let dir2 = ray2_direction.normalize();
+    
+    // Compute the difference between origins
+    let r = *ray1_origin - *ray2_origin;
+    
+    // Calculate dot products needed for the formula
+    let a = dir1.dot(dir1); // Always 1 since we normalized
+    let b = dir1.dot(dir2);
+    let c = dir2.dot(dir2); // Always 1 since we normalized
+    let d = dir1.dot(r);
+    let e = dir2.dot(r);
+    
+    // Compute denominator
+    let denominator = a * c - b * b;
+    
+    // If rays are parallel (or nearly parallel), use a different approach
+    if denominator.abs() < 1e-6 {
+        // When parallel, just project r onto the first direction
+        return -d / a;
+    }
+    
+    // Calculate the parameter 't' for the first ray
+    let t = (b * e - c * d) / denominator;
+    
+    return t;
+}
+
 pub fn cylinder_hit_test(
     cylinder_top_center: &Vec3,
     cylinder_bottom_center: &Vec3,
