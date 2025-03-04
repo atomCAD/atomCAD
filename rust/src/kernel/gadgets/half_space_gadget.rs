@@ -9,7 +9,7 @@ use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 
 pub const HALF_SPACE_DIR_MANIPULATION_CELL_SIZE: f32 = 1.0;
-pub const AXIS_RADIUS: f32 = 0.2;
+pub const AXIS_RADIUS: f32 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;
 pub const SHIFT_HANDLE_RADIUS: f32 = 0.5;
 pub const SHIFT_HANDLE_HORIZONTAL_DIVISIONS: u32 = 16;
@@ -31,6 +31,8 @@ struct HalfSpaceGadgetCalculated {
     start_point: Vec3,
     end_point: Vec3,
     normal: Vec3,
+    quantized_start_point: Vec3,
+    quantized_end_point: Vec3,
 }
 
 impl Gadget for HalfSpaceGadget {
@@ -47,6 +49,7 @@ impl Gadget for HalfSpaceGadget {
           &Vec3::new(0.95, 0.93, 0.88),
           0.4, 0.8, false);
       
+        // shift handle
         tessellator::tessellate_sphere(
             output_mesh,
             &calculated.start_point,
@@ -56,14 +59,26 @@ impl Gadget for HalfSpaceGadget {
             &Vec3::new(0.95, 0.0, 0.0), // number of sections when dividing by vertical lines
             0.3, 0.0);
       
+        // direction handle
         tessellator::tessellate_cylinder(
             output_mesh,
-            &(calculated.end_point - calculated.normal * DIRECTION_HANDLE_LENGTH),
-            &(calculated.end_point + calculated.normal * DIRECTION_HANDLE_LENGTH),
+            &(calculated.end_point - calculated.normal * 0.5 * DIRECTION_HANDLE_LENGTH),
+            &(calculated.end_point + calculated.normal * 0.5 * DIRECTION_HANDLE_LENGTH),
             DIRECTION_HANDLE_RADIUS,
             DIRECTION_HANDLE_DIVISIONS,
             &Vec3::new(0.0, 0.0, 0.95), // number of sections when dividing by vertical lines
             0.3, 0.0, true);
+
+        // Axis representing the quantized shift and miller index
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &calculated.quantized_start_point,
+            &calculated.quantized_end_point,
+            AXIS_RADIUS,
+            AXIS_DIVISIONS,
+            &Vec3::new(1.0, 1.0, 1.0),
+            0.3, 0.0, true);
+
     }
 
     // Returns the index of the handle that was hit, or None if no handle was hit
@@ -133,14 +148,6 @@ impl Gadget for HalfSpaceGadget {
         }
     }
 
-/*
-get_closest_point_on_first_ray(
-    ray1_origin: &Vec3,
-    ray1_direction: &Vec3,
-    ray2_origin: &Vec3,
-    ray2_direction: &Vec3)
- */
-
     fn end_drag(&mut self) {
 
     }
@@ -158,10 +165,19 @@ impl HalfSpaceGadget {
 
         let gadget_start_point = gadget_normal * gadget_offset * gadget_diamond_cell_size;
 
+        let quantized_normal = gadget_miller_index.normalize();
+        let quantized_shift = self.int_shift as f32;
+        let quantized_offset = quantized_shift / gadget_miller_index.length();
+
+        let quantized_start_point = quantized_normal * quantized_offset * gadget_diamond_cell_size; 
+        let quantized_end_point = quantized_start_point + quantized_normal * (gadget_dir.length() + 2.0) * HALF_SPACE_DIR_MANIPULATION_CELL_SIZE;    
+
         return HalfSpaceGadgetCalculated {
             start_point: gadget_start_point,
             end_point: gadget_start_point + gadget_dir * HALF_SPACE_DIR_MANIPULATION_CELL_SIZE,
             normal: gadget_normal,
+            quantized_start_point,
+            quantized_end_point,
         }       
     }
 }
