@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1608336912;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1396011658;
 
 // Section: executor
 
@@ -247,6 +247,152 @@ fn wire__crate__api__simple__find_pivot_point_impl(
                     api_ray_start,
                     api_ray_dir,
                 ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__gadget_drag_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "gadget_drag",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_handle_index = <i32>::sse_decode(&mut deserializer);
+            let api_ray_origin = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_ray_direction = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::gadget_drag(
+                        api_node_network_name,
+                        api_handle_index,
+                        api_ray_origin,
+                        api_ray_direction,
+                    );
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__gadget_end_drag_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "gadget_end_drag",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::gadget_end_drag(api_node_network_name);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__gadget_hit_test_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "gadget_hit_test",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ray_origin = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_ray_direction = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::gadget_hit_test(
+                    api_ray_origin,
+                    api_ray_direction,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__gadget_start_drag_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "gadget_start_drag",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_network_name = <String>::sse_decode(&mut deserializer);
+            let api_handle_index = <i32>::sse_decode(&mut deserializer);
+            let api_ray_origin = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_ray_direction = <crate::api::api_types::APIVec3>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::gadget_start_drag(
+                        api_node_network_name,
+                        api_handle_index,
+                        api_ray_origin,
+                        api_ray_direction,
+                    );
+                })?;
                 Ok(output_ok)
             })())
         },
@@ -1145,6 +1291,17 @@ impl SseDecode for Option<crate::api::api_types::APISphereData> {
     }
 }
 
+impl SseDecode for Option<i32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<i32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::api_types::NodeNetworkView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1229,7 +1386,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        14 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1248,22 +1405,26 @@ fn pde_ffi_dispatcher_sync_impl(
         4 => wire__crate__api__simple__connect_nodes_impl(ptr, rust_vec_len, data_len),
         5 => wire__crate__api__simple__delete_selected_impl(ptr, rust_vec_len, data_len),
         6 => wire__crate__api__simple__find_pivot_point_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__simple__get_camera_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__simple__get_cuboid_data_impl(ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__simple__get_half_space_data_impl(ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__simple__get_node_network_view_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__simple__get_node_type_names_impl(ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__simple__get_sphere_data_impl(ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__simple__gadget_drag_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__simple__gadget_end_drag_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__simple__gadget_hit_test_impl(ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__simple__gadget_start_drag_impl(ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__simple__get_camera_impl(ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__simple__get_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__simple__get_half_space_data_impl(ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__simple__get_node_network_view_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__simple__get_node_type_names_impl(ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__simple__get_sphere_data_impl(ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1745,6 +1906,16 @@ impl SseEncode for Option<crate::api::api_types::APISphereData> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::api_types::APISphereData>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<i32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <i32>::sse_encode(value, serializer);
         }
     }
 }

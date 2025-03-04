@@ -71,6 +71,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3 dco_decode_box_autoadd_api_vec_3(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_i_32(dynamic raw);
+
+  @protected
   NodeNetworkView dco_decode_box_autoadd_node_network_view(dynamic raw);
 
   @protected
@@ -117,6 +120,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
   @protected
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
@@ -198,6 +204,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3 sse_decode_box_autoadd_api_vec_3(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
   NodeNetworkView sse_decode_box_autoadd_node_network_view(
       SseDeserializer deserializer);
 
@@ -251,6 +260,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APISphereData? sse_decode_opt_box_autoadd_api_sphere_data(
       SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
   NodeNetworkView? sse_decode_opt_box_autoadd_node_network_view(
@@ -336,6 +348,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_api_vec_3(APIVec3 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_node_network_view(
       NodeNetworkView self, SseSerializer serializer);
 
@@ -391,6 +406,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_sphere_data(
       APISphereData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_node_network_view(

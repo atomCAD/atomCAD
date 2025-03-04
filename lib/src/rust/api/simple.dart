@@ -129,5 +129,35 @@ void setHalfSpaceData(
 void deleteSelected({required String nodeNetworkName}) => RustLib.instance.api
     .crateApiSimpleDeleteSelected(nodeNetworkName: nodeNetworkName);
 
+int? gadgetHitTest(
+        {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
+    RustLib.instance.api.crateApiSimpleGadgetHitTest(
+        rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+void gadgetStartDrag(
+        {required String nodeNetworkName,
+        required int handleIndex,
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection}) =>
+    RustLib.instance.api.crateApiSimpleGadgetStartDrag(
+        nodeNetworkName: nodeNetworkName,
+        handleIndex: handleIndex,
+        rayOrigin: rayOrigin,
+        rayDirection: rayDirection);
+
+void gadgetDrag(
+        {required String nodeNetworkName,
+        required int handleIndex,
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection}) =>
+    RustLib.instance.api.crateApiSimpleGadgetDrag(
+        nodeNetworkName: nodeNetworkName,
+        handleIndex: handleIndex,
+        rayOrigin: rayOrigin,
+        rayDirection: rayDirection);
+
+void gadgetEndDrag({required String nodeNetworkName}) => RustLib.instance.api
+    .crateApiSimpleGadgetEndDrag(nodeNetworkName: nodeNetworkName);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

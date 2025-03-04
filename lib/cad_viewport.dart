@@ -10,11 +10,13 @@ import 'dart:math';
 
 enum ViewportDragState {
   noDrag,
-  primaryDrag, // drag with primary key (left click on windows). Used for click detection, rectangular select, bond creation, etc...
+  defaultDrag, // drag with primary key (left click on windows). Used for click detection, rectangular select, bond creation, etc...
+  gadgetDrag,
   move,
   rotate
 }
 
+// Flutter-side camera transform
 class CameraTransform {
   vector_math.Vector3 eye;
   vector_math.Vector3 target;
@@ -29,6 +31,12 @@ class CameraTransform {
     required this.up,
     required this.right,
   });
+}
+
+class Ray {
+  vector_math.Vector3 start;
+  vector_math.Vector3 direction;
+  Ray({required this.start, required this.direction});
 }
 
 CameraTransform? getCameraTransform(APICamera? camera) {
@@ -87,6 +95,8 @@ class _CadViewportState extends State<CadViewport> {
   vector_math.Vector3 _pivotPoint = vector_math.Vector3(0.0, 0.0, 0.0);
   CameraTransform? _dragStartCameraTransform;
   double _cameraMovePerPixel = 0.0;
+  int draggedGadgetHandle =
+      -1; // Relevant when _dragState == ViewportDragState.gadgetDrag
 
   void _renderingNeeded() {
     SchedulerBinding.instance.scheduleFrame();
@@ -96,6 +106,23 @@ class _CadViewportState extends State<CadViewport> {
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) {
     moveCamera(eye: eye, target: target, up: up);
     _renderingNeeded();
+  }
+
+  Ray getRayFromPointerPos(Offset pointerPos) {
+    var camera = getCamera();
+    final cameraTransform = getCameraTransform(camera);
+
+    final centeredPointerPos =
+        pointerPos - Offset(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5);
+
+    final d = VIEWPORT_HEIGHT * 0.5 / tan(camera!.fovy * 0.5);
+
+    final rayDir = (cameraTransform!.right * centeredPointerPos.dx -
+            cameraTransform.up * centeredPointerPos.dy +
+            cameraTransform.forward * d)
+        .normalized();
+
+    return Ray(start: cameraTransform.eye, direction: rayDir);
   }
 
   void initTexture() async {
@@ -155,22 +182,11 @@ class _CadViewportState extends State<CadViewport> {
   }
 
   void determinePivotPoint(Offset pointerPos) {
-    var camera = getCamera();
-    final cameraTransform = getCameraTransform(camera);
-
-    final centeredPointerPos =
-        pointerPos - Offset(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5);
-
-    final d = VIEWPORT_HEIGHT * 0.5 / tan(camera!.fovy * 0.5);
-
-    final rayDir = (cameraTransform!.right * centeredPointerPos.dx -
-            cameraTransform.up * centeredPointerPos.dy +
-            cameraTransform.forward * d)
-        .normalized();
+    final ray = getRayFromPointerPos(pointerPos);
 
     _pivotPoint = APIVec3ToVector3(findPivotPoint(
-        rayStart: Vector3ToAPIVec3(cameraTransform.eye),
-        rayDir: Vector3ToAPIVec3(rayDir)));
+        rayStart: Vector3ToAPIVec3(ray.start),
+        rayDir: Vector3ToAPIVec3(ray.direction)));
   }
 
   void _startRotateCamera(Offset pointerPos) {
@@ -216,8 +232,35 @@ class _CadViewportState extends State<CadViewport> {
     _dragStartPointerPos = pointerPos;
   }
 
+  void _dragGadget(Offset pointerPos) {
+    final ray = getRayFromPointerPos(pointerPos);
+    gadgetDrag(
+        nodeNetworkName: "sample", // TODO: this should not be needed
+        handleIndex: draggedGadgetHandle,
+        rayOrigin: Vector3ToAPIVec3(ray.start),
+        rayDirection: Vector3ToAPIVec3(ray.direction));
+    _renderingNeeded();
+  }
+
   void _startPrimaryDrag(Offset pointerPos) {
-    _dragState = ViewportDragState.primaryDrag;
+    final ray = getRayFromPointerPos(pointerPos);
+
+    final hitResult = gadgetHitTest(
+        rayOrigin: Vector3ToAPIVec3(ray.start),
+        rayDirection: Vector3ToAPIVec3(ray.direction));
+
+    if (hitResult != null) {
+      _dragState = ViewportDragState.gadgetDrag;
+      draggedGadgetHandle = hitResult;
+      gadgetStartDrag(
+          nodeNetworkName: "sample", // TODO: this should not be needed
+          handleIndex: draggedGadgetHandle,
+          rayOrigin: Vector3ToAPIVec3(ray.start),
+          rayDirection: Vector3ToAPIVec3(ray.direction));
+      _renderingNeeded();
+    } else {
+      _dragState = ViewportDragState.defaultDrag;
+    }
     _dragStartPointerPos = pointerPos;
   }
 
@@ -227,22 +270,27 @@ class _CadViewportState extends State<CadViewport> {
     if (wasClick) {
       _onClick(pointerPos);
     }
-    _dragState = ViewportDragState.noDrag;
-  }
 
-  void _onClick(Offset pointerPos) {
-    if (_dragState == ViewportDragState.primaryDrag) {
-      _onPrimaryClick(pointerPos);
+    if (_dragState == ViewportDragState.gadgetDrag) {
+      gadgetEndDrag(
+          nodeNetworkName: "sample"); // TODO: this should not be needed
+      _renderingNeeded();
     }
   }
 
-  void _onPrimaryClick(Offset pointerPos) {
+  void _onClick(Offset pointerPos) {
+    if (_dragState == ViewportDragState.defaultDrag) {
+      _onDefaultClick(pointerPos);
+    }
+  }
+
+  void _onDefaultClick(Offset pointerPos) {
     //print('primary click at ${pointerPos}');
 
     //TODO: raycast into the model.
     // if do not hit an atom, do the add atom stuff..
     // for now immediately invoke _addAtom
-    _addAtom(pointerPos);
+    //_addAtom(pointerPos);
   }
 
   // Add an atom at a fix distance from the camera eye
@@ -346,6 +394,9 @@ class _CadViewportState extends State<CadViewport> {
                           break;
                         case ViewportDragState.rotate:
                           _rotateCamera(event.localPosition);
+                          break;
+                        case ViewportDragState.gadgetDrag:
+                          _dragGadget(event.localPosition);
                           break;
                         default:
                       }
