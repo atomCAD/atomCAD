@@ -362,7 +362,9 @@ pub fn set_node_display(node_network_name: String, node_id: u64, is_displayed: b
 pub fn select_node(node_network_name: String, node_id: u64) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      instance.kernel.select_node(&node_network_name, node_id)
+      let ret = instance.kernel.select_node(&node_network_name, node_id);
+      refresh_renderer(instance, &node_network_name);
+      ret
     } else {
       false
     }
@@ -373,7 +375,9 @@ pub fn select_node(node_network_name: String, node_id: u64) -> bool {
 pub fn select_wire(node_network_name: String, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      instance.kernel.select_wire(&node_network_name, source_node_id, destination_node_id, destination_argument_index)
+      let ret = instance.kernel.select_wire(&node_network_name, source_node_id, destination_node_id, destination_argument_index);
+      refresh_renderer(instance, &node_network_name);
+      ret
     } else {
       false
     }
@@ -385,6 +389,7 @@ pub fn clear_selection(node_network_name: String) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.kernel.clear_selection(&node_network_name);
+      refresh_renderer(instance, &node_network_name);
     }
   }
 }

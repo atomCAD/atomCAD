@@ -36,6 +36,7 @@ impl Gadget for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
         let calculated = self.calculate_gadget();
       
+        // axis of the gadget
         tessellator::tessellate_cylinder(
           output_mesh,
           &calculated.start_point,
@@ -45,23 +46,23 @@ impl Gadget for HalfSpaceGadget {
           &Vec3::new(0.95, 0.93, 0.88),
           0.4, 0.8, false);
       
-          tessellator::tessellate_sphere(
-              output_mesh,
-              &calculated.start_point,
-              SHIFT_HANDLE_RADIUS,
-              SHIFT_HANDLE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
-              SHIFT_HANDLE_VERTICAL_DIVISIONS,
-              &Vec3::new(0.95, 0.0, 0.0), // number of sections when dividing by vertical lines
-              0.3, 0.0);
+        tessellator::tessellate_sphere(
+            output_mesh,
+            &calculated.start_point,
+            SHIFT_HANDLE_RADIUS,
+            SHIFT_HANDLE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
+            SHIFT_HANDLE_VERTICAL_DIVISIONS,
+            &Vec3::new(0.95, 0.0, 0.0), // number of sections when dividing by vertical lines
+            0.3, 0.0);
       
-          tessellator::tessellate_cylinder(
-              output_mesh,
-              &(calculated.end_point - calculated.normal * DIRECTION_HANDLE_LENGTH),
-              &(calculated.end_point + calculated.normal * DIRECTION_HANDLE_LENGTH),
-              DIRECTION_HANDLE_RADIUS,
-              DIRECTION_HANDLE_DIVISIONS,
-              &Vec3::new(0.0, 0.0, 0.95), // number of sections when dividing by vertical lines
-              0.3, 0.0, true);
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &(calculated.end_point - calculated.normal * DIRECTION_HANDLE_LENGTH),
+            &(calculated.end_point + calculated.normal * DIRECTION_HANDLE_LENGTH),
+            DIRECTION_HANDLE_RADIUS,
+            DIRECTION_HANDLE_DIVISIONS,
+            &Vec3::new(0.0, 0.0, 0.95), // number of sections when dividing by vertical lines
+            0.3, 0.0, true);
     }
 
     // Returns the index of the handle that was hit, or None if no handle was hit
@@ -108,7 +109,9 @@ impl Gadget for HalfSpaceGadget {
     fn drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
         let calculated = self.calculate_gadget();
         
-        if handle_index == 1 {
+        if handle_index == 0 {
+        }
+        else if handle_index == 1 {
             // Direction handle drag
             if let Some(t) = sphere_hit_test(
                 &calculated.start_point,

@@ -98,10 +98,12 @@ class GraphModel extends ChangeNotifier {
 
   void setSelectedNode(BigInt nodeId) {
     if (nodeNetworkView != null) {
-      selectNode(
-        nodeNetworkName: nodeNetworkView!.name,
-        nodeId: nodeId,
-      );
+      if (!nodeNetworkView!.nodes[nodeId]!.selected) {
+        selectNode(
+          nodeNetworkName: nodeNetworkView!.name,
+          nodeId: nodeId,
+        );
+      }
       _refreshFromKernel();
     }
   }
@@ -109,6 +111,7 @@ class GraphModel extends ChangeNotifier {
   void setSelectedWire(
       BigInt sourceNodeId, BigInt destNodeId, BigInt destParamIndex) {
     if (nodeNetworkView == null) return;
+    //TODO: only select a wire if not already selected.
     selectWire(
         nodeNetworkName: nodeNetworkView!.name,
         sourceNodeId: sourceNodeId,

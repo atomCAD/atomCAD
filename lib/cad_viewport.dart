@@ -276,6 +276,8 @@ class _CadViewportState extends State<CadViewport> {
           nodeNetworkName: "sample"); // TODO: this should not be needed
       _renderingNeeded();
     }
+
+    _dragState = ViewportDragState.noDrag;
   }
 
   void _onClick(Offset pointerPos) {
