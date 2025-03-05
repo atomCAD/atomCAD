@@ -2,6 +2,22 @@ use wgpu::*;
 use bytemuck;
 use glam::f32::Vec3;
 
+pub struct Material {
+  albedo: Vec3,
+  roughness: f32,
+  metallic: f32,
+}
+
+impl Material {
+  pub fn new(albedo: &Vec3, roughness: f32, metallic: f32) -> Self {
+    Self {
+      albedo: *albedo,
+      roughness,
+      metallic,
+    }
+  }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
@@ -13,13 +29,13 @@ pub struct Vertex {
 }
 
 impl Vertex {
-  pub fn new(position: &Vec3, normal: &Vec3, albedo: &Vec3, roughness: f32, metallic: f32) -> Self {
+  pub fn new(position: &Vec3, normal: &Vec3, material: &Material) -> Self {
     Self {
       position: [position.x, position.y, position.z],
       normal: [normal.x, normal.y, normal.z],
-      albedo: [albedo.x, albedo.y, albedo.z],
-      roughness,
-      metallic,
+      albedo: [material.albedo.x, material.albedo.y, material.albedo.z],
+      roughness: material.roughness,
+      metallic: material.metallic,
     }
   }
 

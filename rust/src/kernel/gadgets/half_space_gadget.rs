@@ -2,6 +2,7 @@ use glam::i32::IVec3;
 use glam::f32::Vec3;
 use super::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
+use crate::renderer::mesh::Material;
 use crate::kernel::implicit_network_evaluator::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::renderer::tessellator::tessellator;
 use crate::util::hit_test_utils::sphere_hit_test;
@@ -48,8 +49,8 @@ impl Gadget for HalfSpaceGadget {
           &end_point,
           AXIS_RADIUS,
           AXIS_DIVISIONS,
-          &Vec3::new(0.95, 0.93, 0.88),
-          0.4, 0.8, false);
+          &Material::new(&Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8), 
+          false);
 
         // center sphere
         tessellator::tessellate_sphere(
@@ -57,9 +58,8 @@ impl Gadget for HalfSpaceGadget {
             &Vec3::new(0.0, 0.0, 0.0),
             CENTER_SPHERE_RADIUS,
             CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
-            CENTER_SPHERE_VERTICAL_DIVISIONS,
-            &Vec3::new(0.95, 0.0, 0.0), // number of sections when dividing by vertical lines
-            0.3, 0.0);
+            CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
+            &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
       
         // direction handle
         tessellator::tessellate_cylinder(
@@ -68,8 +68,8 @@ impl Gadget for HalfSpaceGadget {
             &(end_point + self.dir * 0.5 * DIRECTION_HANDLE_LENGTH),
             DIRECTION_HANDLE_RADIUS,
             DIRECTION_HANDLE_DIVISIONS,
-            &Vec3::new(0.0, 0.0, 0.95), // number of sections when dividing by vertical lines
-            0.3, 0.0, true);
+            &Material::new(&Vec3::new(0.0, 0.0, 0.95), 0.3, 0.0), 
+            true);
 
         // Axis representing the quantized miller index
         tessellator::tessellate_cylinder(
@@ -78,8 +78,8 @@ impl Gadget for HalfSpaceGadget {
             &(calculated.quantized_dir * calculated.quantized_end_offset),
             AXIS_RADIUS,
             AXIS_DIVISIONS,
-            &Vec3::new(1.0, 1.0, 1.0),
-            0.3, 0.0, true);
+            &Material::new(&Vec3::new(1.0, 1.0, 1.0), 0.3, 0.0), 
+            true);
 
         // A grid representing the plane
         

@@ -1,5 +1,6 @@
 use super::super::mesh::Mesh;
 use super::super::mesh::Vertex;
+use super::super::mesh::Material;
 use glam::f32::Vec3;
 use glam::f32::Quat;
 
@@ -11,15 +12,87 @@ use glam::f32::Quat;
     pos2: &Vec3,
     pos3: &Vec3,
     normal: &Vec3,
-    albedo: &Vec3,
-    roughness: f32,
-    metallic: f32,
+    material: &Material,
   ) {
-    let index0 = output_mesh.add_vertex(Vertex::new(pos0, normal, albedo, roughness, metallic));
-    let index1 = output_mesh.add_vertex(Vertex::new(pos1, normal, albedo, roughness, metallic));
-    let index2 = output_mesh.add_vertex(Vertex::new(pos2, normal, albedo, roughness, metallic));
-    let index3 = output_mesh.add_vertex(Vertex::new(pos3, normal, albedo, roughness, metallic));
+    let index0 = output_mesh.add_vertex(Vertex::new(pos0, normal, material));
+    let index1 = output_mesh.add_vertex(Vertex::new(pos1, normal, material));
+    let index2 = output_mesh.add_vertex(Vertex::new(pos2, normal, material));
+    let index3 = output_mesh.add_vertex(Vertex::new(pos3, normal, material));
     output_mesh.add_quad(index0, index1, index2, index3);
+}
+
+pub fn tessellate_cuboid(
+  output_mesh: &mut Mesh,
+  center: &Vec3,
+  size: &Vec3,
+  rotator: &Quat,
+  top_material: &Material,
+  bottom_material: &Material,
+  side_material: &Material,
+) {
+  // Create vertices for cuboid
+  let half_size = size * 0.5;
+  let vertices = [
+    // Top face vertices
+    center + rotator.mul_vec3(Vec3::new(-half_size.x, half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(Vec3::new(half_size.x, half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(Vec3::new(half_size.x, half_size.y, half_size.z)),
+    center + rotator.mul_vec3(Vec3::new(-half_size.x, half_size.y, half_size.z)),
+    // Bottom face vertices
+    center + rotator.mul_vec3(Vec3::new(-half_size.x, - half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(Vec3::new(half_size.x, - half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(Vec3::new(half_size.x, - half_size.y, half_size.z)),
+    center + rotator.mul_vec3(Vec3::new(-half_size.x, - half_size.y, half_size.z)),
+  ];
+
+  // Add the six faces of the cuboid
+  // Top face
+  tessellate_quad(
+    output_mesh,
+    &vertices[3], &vertices[2], &vertices[1], &vertices[0],
+    &rotator.mul_vec3(Vec3::Y),
+    &top_material
+  );
+
+  // Bottom face
+  tessellate_quad(
+    output_mesh,
+    &vertices[4], &vertices[5], &vertices[6], &vertices[7],
+    &rotator.mul_vec3(-Vec3::Y),
+    &bottom_material
+  );
+
+  // Front face
+  tessellate_quad(
+    output_mesh,
+    &vertices[2], &vertices[3], &vertices[7], &vertices[6],
+    &rotator.mul_vec3(Vec3::Z),
+    &side_material
+  );
+
+  // Back face
+  tessellate_quad(
+    output_mesh,
+    &vertices[0], &vertices[1], &vertices[5], &vertices[4],
+    &rotator.mul_vec3(-Vec3::Z),
+    &side_material
+  );
+
+  // Right face
+  tessellate_quad(
+    output_mesh,
+    &vertices[1], &vertices[2], &vertices[6], &vertices[5],
+    &rotator.mul_vec3(Vec3::X),
+    &side_material
+  );
+
+  // Left face
+  tessellate_quad(
+    output_mesh,
+    &vertices[3], &vertices[0], &vertices[4], &vertices[7],
+    &rotator.mul_vec3(-Vec3::X),
+    &side_material
+  );
 }
 
 pub fn tessellate_circle_sheet (
@@ -28,9 +101,7 @@ pub fn tessellate_circle_sheet (
     normal: &Vec3,
     radius: f32,
     divisions: u32,
-    albedo: &Vec3,
-    roughness: f32,
-    metallic: f32
+    material: &Material,
 ) 
 {
   let rotation = Quat::from_rotation_arc(Vec3::new(0.0, 1.0, 0.0), *normal);
@@ -38,9 +109,7 @@ pub fn tessellate_circle_sheet (
   let center_index = output_mesh.add_vertex(Vertex::new(
     &center,
     &normal,
-    albedo,
-    roughness,
-    metallic,
+    material,
   ));
 
   let index_start = output_mesh.vertices.len() as u32;
@@ -55,9 +124,7 @@ pub fn tessellate_circle_sheet (
     output_mesh.add_vertex(Vertex::new(
       &position,
       &normal,
-      albedo,
-      roughness,
-      metallic,
+      material,
     ));
 
     let offset = index_start + x;
@@ -73,26 +140,21 @@ pub fn tessellate_sphere(
     radius: f32,
     horizontal_divisions: u32, // number sections when dividing by horizontal lines
     vertical_divisions: u32, // number of sections when dividing by vertical lines
-    albedo: &Vec3,
-    roughness: f32,
-    metallic: f32) {
+    material: &Material,
+) {
 
   // ---------- Add vertices ----------
 
   let north_pole_index = output_mesh.add_vertex(Vertex::new(
     &Vec3::new(center.x, center.y + radius, center.z),
     &Vec3::new(0.0, 1.0, 0.0),
-    albedo,
-    roughness,
-    metallic,
+    material,
   ));
 
   let south_pole_index = output_mesh.add_vertex(Vertex::new(
     &Vec3::new(center.x, center.y - radius, center.z),
     &Vec3::new(0.0, -1.0, 0.0),
-    albedo,
-    roughness,
-    metallic,
+    material,
   ));
 
   let non_pole_index_start = output_mesh.vertices.len() as u32;
@@ -110,9 +172,7 @@ pub fn tessellate_sphere(
       output_mesh.add_vertex(Vertex::new(
         &position,
         &normal,
-        albedo,
-        roughness,
-        metallic,
+        material,
       ));
     } // end of for x
   } // end of for y
@@ -158,9 +218,7 @@ pub fn tessellate_cylinder(
     bottom_center: &Vec3,
     radius: f32,
     divisions: u32,
-    albedo: &Vec3,
-    roughness: f32,
-    metallic: f32,
+    material: &Material,
     include_top_and_bottom: bool) {
   let center = (top_center + bottom_center) * 0.5;
   let dir = (top_center - bottom_center).normalize();
@@ -181,17 +239,13 @@ pub fn tessellate_cylinder(
     output_mesh.add_vertex(Vertex::new(
       &bottom_position,
       &normal,
-      albedo,
-      roughness,
-      metallic,
+      material,
     ));
 
     output_mesh.add_vertex(Vertex::new(
       &top_position,
       &normal,
-      albedo,
-      roughness,
-      metallic,
+      material,
     ));
 
     let offset = index_start + 2 * x;
@@ -212,9 +266,7 @@ pub fn tessellate_cylinder(
       &up,
       radius,
       divisions,
-      albedo,
-      roughness,
-      metallic,
+      material,
     );
 
     tessellate_circle_sheet (
@@ -223,9 +275,7 @@ pub fn tessellate_cylinder(
       &down,
       radius,
       divisions,
-      albedo,
-      roughness,
-      metallic,
+      material,
     );
   }
 }

@@ -1,4 +1,5 @@
 use crate::renderer::mesh::Mesh;
+use crate::renderer::mesh::Material;
 use crate::kernel::surface_point_cloud::SurfacePoint;
 use crate::kernel::surface_point_cloud::SurfacePointCloud;
 use super::tessellator;
@@ -15,74 +16,22 @@ pub fn tessellate_surface_point_cloud(output_mesh: &mut Mesh, surface_point_clou
 pub fn tessellate_surface_point(output_mesh: &mut Mesh, point: &SurfacePoint) {
   let roughness: f32 = 0.5;
   let metallic: f32 = 0.0;
-  let outside_albedo = Vec3::new(0.0, 0.0, 1.0);
-  let inside_albedo = Vec3::new(1.0, 0.0, 0.0);
-  let side_albedo = Vec3::new(0.5, 0.5, 0.5);
+  let outside_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
+  let inside_material = Material::new(&Vec3::new(1.0, 0.0, 0.0), roughness, metallic);
+  let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
 
   // Create rotation quaternion from surface normal to align cuboid
   let rotator = Quat::from_rotation_arc(Vec3::Y, point.normal);
 
-  // Create vertices for cuboid
-  let half_size = Vec3::new(0.15, 0.04, 0.15); // x, y, z extents
-  let vertices = [
-    // Top face vertices
-    point.position + rotator.mul_vec3(Vec3::new(-half_size.x, 0.0, -half_size.z)),
-    point.position + rotator.mul_vec3(Vec3::new(half_size.x, 0.0, -half_size.z)),
-    point.position + rotator.mul_vec3(Vec3::new(half_size.x, 0.0, half_size.z)),
-    point.position + rotator.mul_vec3(Vec3::new(-half_size.x, 0.0, half_size.z)),
-    // Bottom face vertices
-    point.position + rotator.mul_vec3(Vec3::new(-half_size.x, - 2.0 * half_size.y, -half_size.z)),
-    point.position + rotator.mul_vec3(Vec3::new(half_size.x, - 2.0 * half_size.y, -half_size.z)),
-    point.position + rotator.mul_vec3(Vec3::new(half_size.x, - 2.0 * half_size.y, half_size.z)),
-    point.position + rotator.mul_vec3(Vec3::new(-half_size.x, - 2.0 * half_size.y, half_size.z)),
-  ];
+  let size = Vec3::new(0.3, 0.08, 0.3); // x, y, z extents
 
-  // Add the six faces of the cuboid
-  // Top face
-  tessellator::tessellate_quad(
+  tessellator::tessellate_cuboid(
     output_mesh,
-    &vertices[3], &vertices[2], &vertices[1], &vertices[0],
-    &rotator.mul_vec3(Vec3::Y),
-    &outside_albedo, roughness, metallic
-  );
-
-  // Bottom face
-  tessellator::tessellate_quad(
-    output_mesh,
-    &vertices[4], &vertices[5], &vertices[6], &vertices[7],
-    &rotator.mul_vec3(-Vec3::Y),
-    &inside_albedo, roughness, metallic
-  );
-
-  // Front face
-  tessellator::tessellate_quad(
-    output_mesh,
-    &vertices[2], &vertices[3], &vertices[7], &vertices[6],
-    &rotator.mul_vec3(Vec3::Z),
-    &side_albedo, roughness, metallic
-  );
-
-  // Back face
-  tessellator::tessellate_quad(
-    output_mesh,
-    &vertices[0], &vertices[1], &vertices[5], &vertices[4],
-    &rotator.mul_vec3(-Vec3::Z),
-    &side_albedo, roughness, metallic
-  );
-
-  // Right face
-  tessellator::tessellate_quad(
-    output_mesh,
-    &vertices[1], &vertices[2], &vertices[6], &vertices[5],
-    &rotator.mul_vec3(Vec3::X),
-    &side_albedo, roughness, metallic
-  );
-
-  // Left face
-  tessellator::tessellate_quad(
-    output_mesh,
-    &vertices[3], &vertices[0], &vertices[4], &vertices[7],
-    &rotator.mul_vec3(-Vec3::X),
-    &side_albedo, roughness, metallic
+    &(point.position - point.normal * size.y * 0.5),
+    &size,
+    &rotator,
+    &outside_material,
+    &inside_material,
+    &side_material,
   );
 }

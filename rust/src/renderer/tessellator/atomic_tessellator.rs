@@ -1,4 +1,5 @@
 use crate::renderer::mesh::Mesh;
+use crate::renderer::mesh::Material;
 use crate::kernel::atomic_structure::AtomicStructure;
 use crate::kernel::atomic_structure::Atom;
 use crate::kernel::atomic_structure::Bond;
@@ -62,9 +63,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &
     scaled_radius,
     params.sphere_horizontal_divisions,
     params.sphere_vertical_divisions,
-    &atom_info.color,
-    0.3,
-    0.0
+    &Material::new(&atom_info.color, 0.3, 0.0),
   );
 }
 
@@ -77,9 +76,7 @@ pub fn tessellate_bond(output_mesh: &mut Mesh, model: &AtomicStructure, bond: &B
     &atom_pos1,
     BAS_STICK_RADIUS,
     params.cylinder_divisions,
-    &Vec3::new(0.95, 0.93, 0.88),
-    0.4,
-    0.8,
+    &Material::new(&Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8),
     false,
   );
 }
