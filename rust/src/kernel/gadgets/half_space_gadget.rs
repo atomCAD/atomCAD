@@ -36,22 +36,19 @@ pub struct HalfSpaceGadget {
 }
 
 struct HalfSpaceGadgetCalculated {
-    shift_handle_offset: f32,
     plane_offset: f32,
-    start_offset: f32,
-    end_offset: f32,
 }
 
 impl Gadget for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
         let calculated = self.calculate_gadget();
         let end_point = self.dir * GADGET_LENGTH;
-      
+
         // axis of the gadget
         tessellator::tessellate_cylinder(
           output_mesh,
-          &(self.dir * calculated.start_offset),
-          &(self.dir * calculated.end_offset),
+          &(self.dir * f32::min(self.shift_handle_offset, 0.0)),
+          &(self.dir * f32::max(self.shift_handle_offset, GADGET_LENGTH)),
           AXIS_RADIUS,
           AXIS_DIVISIONS,
           &Material::new(&Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8), 
@@ -67,7 +64,7 @@ impl Gadget for HalfSpaceGadget {
             &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
 
         
-        let shift_handle_center = self.dir * calculated.shift_handle_offset;
+        let shift_handle_center = self.dir * self.shift_handle_offset;
 
         // shift handle
         tessellator::tessellate_cylinder(
@@ -123,7 +120,7 @@ impl Gadget for HalfSpaceGadget {
         let calculated = self.calculate_gadget();
 
         // Test shift handle
-        let shift_handle_center = self.dir * calculated.shift_handle_offset;
+        let shift_handle_center = self.dir * self.shift_handle_offset;
         let shift_handle_start = shift_handle_center - self.dir * 0.5 * SHIFT_HANDLE_LENGTH;
         let shift_handle_end = shift_handle_center + self.dir * 0.5 * SHIFT_HANDLE_LENGTH;
 
@@ -215,17 +212,10 @@ impl HalfSpaceGadget {
 
     fn calculate_gadget(&self) -> HalfSpaceGadgetCalculated {
         let gadget_miller_index = self.miller_index.as_vec3();
-        let shift_handle_offset = self.shift_handle_offset;
         let plane_offset = ((self.int_shift as f32) / gadget_miller_index.length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32);
 
-        let start_offset = f32::min(shift_handle_offset, 0.0);
-        let end_offset = f32::max(shift_handle_offset, GADGET_LENGTH);
-
         return HalfSpaceGadgetCalculated {
-            shift_handle_offset,
             plane_offset,
-            start_offset,
-            end_offset,
         }       
     }
 
