@@ -15,13 +15,17 @@ use std::collections::HashSet;
 pub const GADGET_LENGTH: f32 = 6.0;
 pub const AXIS_RADIUS: f32 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;
-pub const CENTER_SPHERE_RADIUS: f32 = 0.5;
+pub const CENTER_SPHERE_RADIUS: f32 = 0.35;
 pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
 pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 32;
 
 pub const DIRECTION_HANDLE_RADIUS: f32 = 0.5;
 pub const DIRECTION_HANDLE_DIVISIONS: u32 = 16;
-pub const DIRECTION_HANDLE_LENGTH: f32 = 1.0;
+pub const DIRECTION_HANDLE_LENGTH: f32 = 0.6;
+
+pub const SHIFT_HANDLE_RADIUS: f32 = 0.4;
+pub const SHIFT_HANDLE_DIVISIONS: u32 = 16;
+pub const SHIFT_HANDLE_LENGTH: f32 = 1.2;
 
 #[derive(Clone)]
 pub struct HalfSpaceGadget {
@@ -34,8 +38,8 @@ pub struct HalfSpaceGadget {
 struct HalfSpaceGadgetCalculated {
     quantized_dir: Vec3,
     offset: f32,
-    quantized_start_offset: f32,
-    quantized_end_offset: f32,
+    start_offset: f32,
+    end_offset: f32,
 }
 
 impl Gadget for HalfSpaceGadget {
@@ -46,8 +50,8 @@ impl Gadget for HalfSpaceGadget {
         // axis of the gadget
         tessellator::tessellate_cylinder(
           output_mesh,
-          &Vec3::new(0.0, 0.0, 0.0),
-          &end_point,
+          &(self.dir * calculated.start_offset),
+          &(self.dir * calculated.end_offset),
           AXIS_RADIUS,
           AXIS_DIVISIONS,
           &Material::new(&Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8), 
@@ -61,6 +65,19 @@ impl Gadget for HalfSpaceGadget {
             CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
             CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
             &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
+
+        
+        let shift_handle_center = self.dir * calculated.offset;
+
+        // shift handle
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &(shift_handle_center - self.dir * 0.5 * SHIFT_HANDLE_LENGTH),
+            &(shift_handle_center + self.dir * 0.5 * SHIFT_HANDLE_LENGTH),
+            SHIFT_HANDLE_RADIUS,
+            SHIFT_HANDLE_DIVISIONS,
+            &Material::new(&Vec3::new(1.0, 1.0, 0.0), 0.3, 0.0), 
+            true);
       
         // direction handle
         tessellator::tessellate_cylinder(
@@ -70,16 +87,6 @@ impl Gadget for HalfSpaceGadget {
             DIRECTION_HANDLE_RADIUS,
             DIRECTION_HANDLE_DIVISIONS,
             &Material::new(&Vec3::new(0.0, 0.0, 0.95), 0.3, 0.0), 
-            true);
-
-        // Axis representing the quantized miller index
-        tessellator::tessellate_cylinder(
-            output_mesh,
-            &(calculated.quantized_dir * calculated.quantized_start_offset),
-            &(calculated.quantized_dir * calculated.quantized_end_offset),
-            AXIS_RADIUS,
-            AXIS_DIVISIONS,
-            &Material::new(&Vec3::new(1.0, 1.0, 1.0), 0.3, 0.0), 
             true);
 
         let plane_normal = self.miller_index.as_vec3().normalize();
@@ -196,14 +203,14 @@ impl HalfSpaceGadget {
         let quantized_dir = self.miller_index.as_vec3().normalize();
         let gadget_miller_index = self.miller_index.as_vec3();
         let offset = self.shift / gadget_miller_index.length();
-        let quantized_start_offset = f32::min(offset, 0.0);
-        let quantized_end_offset = f32::max(offset, GADGET_LENGTH + 2.0);
+        let start_offset = f32::min(offset, 0.0);
+        let end_offset = f32::max(offset, GADGET_LENGTH + 2.0);
 
         return HalfSpaceGadgetCalculated {
             quantized_dir,
             offset,
-            quantized_start_offset,
-            quantized_end_offset,
+            start_offset,
+            end_offset,
         }       
     }
 
