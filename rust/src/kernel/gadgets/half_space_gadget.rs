@@ -12,6 +12,7 @@ use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 use crate::util::hit_test_utils::get_point_distance_to_ray;
 use std::collections::HashSet;
 
+pub const MAX_MILLER_INDEX: f32 = 6.0;
 pub const GADGET_LENGTH: f32 = 6.0;
 pub const AXIS_RADIUS: f32 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;
@@ -29,20 +30,15 @@ pub const SHIFT_HANDLE_LENGTH: f32 = 1.2;
 
 #[derive(Clone)]
 pub struct HalfSpaceGadget {
-    pub dir: Vec3, // normalized
     pub miller_index: IVec3,
-    pub int_shift: i32,
+    pub shift: i32,
+    pub dir: Vec3, // normalized
     pub shift_handle_offset: f32,
-}
-
-struct HalfSpaceGadgetCalculated {
-    plane_offset: f32,
 }
 
 impl Gadget for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
-        let calculated = self.calculate_gadget();
-        let end_point = self.dir * GADGET_LENGTH;
+        let direction_handle_center = self.dir * GADGET_LENGTH;
 
         // axis of the gadget
         tessellator::tessellate_cylinder(
@@ -79,15 +75,15 @@ impl Gadget for HalfSpaceGadget {
         // direction handle
         tessellator::tessellate_cylinder(
             output_mesh,
-            &(end_point - self.dir * 0.5 * DIRECTION_HANDLE_LENGTH),
-            &(end_point + self.dir * 0.5 * DIRECTION_HANDLE_LENGTH),
+            &(direction_handle_center - self.dir * 0.5 * DIRECTION_HANDLE_LENGTH),
+            &(direction_handle_center + self.dir * 0.5 * DIRECTION_HANDLE_LENGTH),
             DIRECTION_HANDLE_RADIUS,
             DIRECTION_HANDLE_DIVISIONS,
             &Material::new(&Vec3::new(0.0, 0.0, 0.95), 0.3, 0.0), 
             true);
 
         let plane_normal = self.miller_index.as_vec3().normalize();
-        let rotator = Quat::from_rotation_arc(Vec3::Y, plane_normal);
+        let plane_rotator = Quat::from_rotation_arc(Vec3::Y, plane_normal);
 
         let roughness: f32 = 0.5;
         let metallic: f32 = 0.0;
@@ -97,11 +93,13 @@ impl Gadget for HalfSpaceGadget {
 
         let thickness = 0.06;
 
+        let plane_offset = ((self.shift as f32) / self.miller_index.as_vec3().length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32);
+
         // A grid representing the plane
         tessellator::tessellate_grid(
             output_mesh,
-            &(plane_normal * (calculated.plane_offset - thickness * 0.5)),
-            &rotator,
+            &(plane_normal * (plane_offset - thickness * 0.5)),
+            &plane_rotator,
             thickness,
             40.0,
             40.0,
@@ -117,8 +115,6 @@ impl Gadget for HalfSpaceGadget {
     // handle 0: shift handle
     // handle 1: direction handle
     fn hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<i32> {
-        let calculated = self.calculate_gadget();
-
         // Test shift handle
         let shift_handle_center = self.dir * self.shift_handle_offset;
         let shift_handle_start = shift_handle_center - self.dir * 0.5 * SHIFT_HANDLE_LENGTH;
@@ -134,11 +130,11 @@ impl Gadget for HalfSpaceGadget {
             return Some(0); // Shift handle hit
         }
 
-        let end_point = self.dir * GADGET_LENGTH;
+        let direction_handle_center = self.dir * GADGET_LENGTH;
    
         // Test direction handle (cylinder centered at gadget_end_point)
-        let direction_handle_start = end_point - self.dir * 0.5 * DIRECTION_HANDLE_LENGTH;
-        let direction_handle_end = end_point + self.dir * 0.5 * DIRECTION_HANDLE_LENGTH;
+        let direction_handle_start = direction_handle_center - self.dir * 0.5 * DIRECTION_HANDLE_LENGTH;
+        let direction_handle_end = direction_handle_center + self.dir * 0.5 * DIRECTION_HANDLE_LENGTH;
         
         if let Some(_t) = cylinder_hit_test(
             &direction_handle_end,
@@ -162,8 +158,6 @@ impl Gadget for HalfSpaceGadget {
     }
 
     fn drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
-        let calculated = self.calculate_gadget();
-
         if handle_index == 0 {
             // Shift handle drag
             let t = get_closest_point_on_first_ray(
@@ -172,7 +166,7 @@ impl Gadget for HalfSpaceGadget {
                 &ray_origin,
                 &ray_direction);
             self.shift_handle_offset = t;
-            self.int_shift = self.offset_to_quantized_shift(self.shift_handle_offset);
+            self.shift = self.offset_to_quantized_shift(self.shift_handle_offset);
         }
         else if handle_index == 1 {
             // Direction handle drag
@@ -185,45 +179,36 @@ impl Gadget for HalfSpaceGadget {
                 let new_end_point = ray_origin + ray_direction * t;
                 self.dir = new_end_point.normalize();
                 self.miller_index = self.quantize_dir(&self.dir);
-                self.int_shift = self.offset_to_quantized_shift(self.shift_handle_offset);
+                self.shift = self.offset_to_quantized_shift(self.shift_handle_offset);
             }
         }
     }
 
     fn end_drag(&mut self) {
         self.dir = self.miller_index.as_vec3().normalize();
-        self.shift_handle_offset = ((self.int_shift as f32) / self.miller_index.as_vec3().length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32)
+        self.shift_handle_offset = ((self.shift as f32) / self.miller_index.as_vec3().length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32)
     }
 
 }
 
 impl HalfSpaceGadget {
 
-    pub fn new(miller_index: &IVec3, int_shift: i32) -> Self {
+    pub fn new(miller_index: &IVec3, shift: i32) -> Self {
         let ret = Self {
-            dir: miller_index.as_vec3().normalize(),
             miller_index: *miller_index,
-            int_shift,
-            shift_handle_offset: ((int_shift as f32) / miller_index.as_vec3().length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32)
+            shift,
+            dir: miller_index.as_vec3().normalize(),
+            shift_handle_offset: ((shift as f32) / miller_index.as_vec3().length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32)
         };
 
         return ret;
-      }
-
-    fn calculate_gadget(&self) -> HalfSpaceGadgetCalculated {
-        let gadget_miller_index = self.miller_index.as_vec3();
-        let plane_offset = ((self.int_shift as f32) / gadget_miller_index.length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32);
-
-        return HalfSpaceGadgetCalculated {
-            plane_offset,
-        }       
     }
 
     // Returns a miller index
     fn quantize_dir(&self, dir: &Vec3) -> IVec3 {
         let mut candidate_points: HashSet<IVec3> = HashSet::new();
-        let mut t = 3.0;
-        while t <= 6.0 {
+        let mut t = MAX_MILLER_INDEX * 0.5;
+        while t <= MAX_MILLER_INDEX {
             let p = dir * t;
 
             // Calculate floor and ceiling for each component to get unit cell corners
