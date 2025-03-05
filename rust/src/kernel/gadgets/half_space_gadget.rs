@@ -99,9 +99,10 @@ impl Gadget for HalfSpaceGadget {
             &(plane_normal * (calculated.offset - thickness * 0.5)),
             &rotator,
             thickness,
-            20.0,
-            20.0,
+            40.0,
+            40.0,
             0.1,
+            1.0,
             &outside_material,
             &inside_material,
             &side_material);
@@ -184,7 +185,8 @@ impl Gadget for HalfSpaceGadget {
     }
 
     fn end_drag(&mut self) {
-
+        self.dir = self.miller_index.as_vec3().normalize();
+        self.shift = self.int_shift as f32;
     }
 
 }

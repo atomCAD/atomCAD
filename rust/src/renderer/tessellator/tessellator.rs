@@ -288,9 +288,47 @@ pub fn tessellate_grid(
     width: f32,
     height: f32,
     line_width: f32,
+    grid_unit: f32,
     top_material: &Material,
     bottom_material: &Material,
-    side_material: &Material) {
+    side_material: &Material,
+) {
+
+  let horiz_divisions = (width / grid_unit).ceil() as u32;
+  let vert_divisions = (height / grid_unit).ceil() as u32;
+
+  let start_x =  (- width * 0.5);
+  let start_z =  (- height * 0.5);
+  for x in 0..horiz_divisions {
+
+    let cuboid_center = center + rotator.mul_vec3(Vec3::new(start_x + (x as f32) * grid_unit, -thickness * 0.5, 0.0));
+
+    tessellate_cuboid(
+      output_mesh,
+      &cuboid_center,
+      &(Vec3::new(line_width, thickness, height)),
+      rotator,
+      top_material,
+      bottom_material,
+      side_material,
+    );    
+  }
+  for z in 0..vert_divisions {
+
+    let cuboid_center = center + rotator.mul_vec3(Vec3::new(0.0, -thickness * 0.5, start_z + (z as f32) * grid_unit));
+
+    tessellate_cuboid(
+      output_mesh,
+      &cuboid_center,
+      &(Vec3::new(width, thickness, line_width)),
+      rotator,
+      top_material,
+      bottom_material,
+      side_material,
+    );
+  }
+
+      /*
   tessellate_cuboid(
     output_mesh,
     center,
@@ -300,4 +338,5 @@ pub fn tessellate_grid(
     bottom_material,
     side_material,
   );
+  */
 }
