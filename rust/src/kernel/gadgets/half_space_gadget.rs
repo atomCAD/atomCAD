@@ -243,7 +243,30 @@ impl HalfSpaceGadget {
             }
         }
 
-        closest_point.unwrap_or(IVec3::new(1, 2, 3))
+        self.simplify_miller_index(closest_point.unwrap_or(IVec3::new(1, 0, 0)))
+    }
+
+    fn simplify_miller_index(&self, miller_index: IVec3) -> IVec3 {
+        // Get absolute values for checking divisibility
+        let abs_x = miller_index.x.abs();
+        let abs_y = miller_index.y.abs();
+        let abs_z = miller_index.z.abs();
+
+        // Try divisions from MAX_MILLER_INDEX down to 2
+        let max_divisor = MAX_MILLER_INDEX.ceil() as i32;
+        for divisor in (2..=max_divisor).rev() {
+            // Check if all components are divisible by the divisor
+            if abs_x % divisor == 0 && abs_y % divisor == 0 && abs_z % divisor == 0 {
+                return IVec3::new(
+                    miller_index.x / divisor,
+                    miller_index.y / divisor,
+                    miller_index.z / divisor,
+                );
+            }
+        }
+
+        // If no common divisor found, return the original miller index
+        miller_index
     }
 
     fn offset_to_quantized_shift(&self, offset: f32) -> i32 {
