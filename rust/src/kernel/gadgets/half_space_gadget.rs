@@ -1,5 +1,6 @@
 use glam::i32::IVec3;
 use glam::f32::Vec3;
+use glam::f32::Quat;
 use super::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
@@ -32,7 +33,7 @@ pub struct HalfSpaceGadget {
 
 struct HalfSpaceGadgetCalculated {
     quantized_dir: Vec3,
-    shift_handle_offset: f32,
+    offset: f32,
     quantized_start_offset: f32,
     quantized_end_offset: f32,
 }
@@ -81,8 +82,29 @@ impl Gadget for HalfSpaceGadget {
             &Material::new(&Vec3::new(1.0, 1.0, 1.0), 0.3, 0.0), 
             true);
 
+        let plane_normal = self.miller_index.as_vec3().normalize();
+        let rotator = Quat::from_rotation_arc(Vec3::Y, plane_normal);
+
+        let roughness: f32 = 0.5;
+        let metallic: f32 = 0.0;
+        let outside_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
+        let inside_material = Material::new(&Vec3::new(1.0, 0.0, 0.0), roughness, metallic);
+        let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);      
+
+        let thickness = 0.06;
+
         // A grid representing the plane
-        
+        tessellator::tessellate_grid(
+            output_mesh,
+            &(plane_normal * (calculated.offset - thickness * 0.5)),
+            &rotator,
+            thickness,
+            20.0,
+            20.0,
+            0.1,
+            &outside_material,
+            &inside_material,
+            &side_material);
 
     }
 
@@ -171,13 +193,13 @@ impl HalfSpaceGadget {
     fn calculate_gadget(&self) -> HalfSpaceGadgetCalculated {
         let quantized_dir = self.miller_index.as_vec3().normalize();
         let gadget_miller_index = self.miller_index.as_vec3();
-        let shift_handle_offset = self.shift / gadget_miller_index.length();
-        let quantized_start_offset = f32::min(shift_handle_offset, 0.0);
-        let quantized_end_offset = f32::max(shift_handle_offset, GADGET_LENGTH + 2.0);
+        let offset = self.shift / gadget_miller_index.length();
+        let quantized_start_offset = f32::min(offset, 0.0);
+        let quantized_end_offset = f32::max(offset, GADGET_LENGTH + 2.0);
 
         return HalfSpaceGadgetCalculated {
             quantized_dir,
-            shift_handle_offset,
+            offset,
             quantized_start_offset,
             quantized_end_offset,
         }       
@@ -189,7 +211,7 @@ impl HalfSpaceGadget {
         let mut t = 3.0;
         while t <= 6.0 {
             let p = dir * t;
-            
+
             // Calculate floor and ceiling for each component to get unit cell corners
             let x_floor = p.x.floor() as i32;
             let y_floor = p.y.floor() as i32;

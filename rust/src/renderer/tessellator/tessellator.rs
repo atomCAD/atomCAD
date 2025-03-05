@@ -280,17 +280,24 @@ pub fn tessellate_cylinder(
   }
 }
 
-/*
 pub fn tessellate_grid(
-  output_mesh: &mut Mesh,
-  center: &Vec3,
-  rotation: &Quat,
-  thickness: f32,
-  width: f32,
-  height: f32,
-  albedo: &Vec3,
-  roughness: f32,
-  metallic: f32) {
-
-  }
-*/
+    output_mesh: &mut Mesh,
+    center: &Vec3,
+    rotator: &Quat,
+    thickness: f32,
+    width: f32,
+    height: f32,
+    line_width: f32,
+    top_material: &Material,
+    bottom_material: &Material,
+    side_material: &Material) {
+  tessellate_cuboid(
+    output_mesh,
+    center,
+    &(Vec3::new(width, thickness, height)),
+    rotator,
+    top_material,
+    bottom_material,
+    side_material,
+  );
+}
