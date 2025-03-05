@@ -82,6 +82,23 @@ pub fn get_closest_point_on_first_ray(
     return t;
 }
 
+pub fn get_point_distance_to_ray(
+    ray_origin: &Vec3,
+    ray_direction: &Vec3,
+    point: &Vec3) -> f32 {
+    // Vector from ray origin to the point
+    let v = *point - *ray_origin;
+    
+    // Project v onto the ray direction
+    let proj = v.dot(*ray_direction);
+    
+    // Calculate the closest point on the ray to the given point
+    let closest_point = *ray_origin + *ray_direction * proj;
+    
+    // Return the distance between the point and the closest point on the ray
+    (*point - closest_point).length()
+}
+
 pub fn cylinder_hit_test(
     cylinder_top_center: &Vec3,
     cylinder_bottom_center: &Vec3,

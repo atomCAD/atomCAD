@@ -91,7 +91,7 @@ impl NodeData for HalfSpaceData {
 
   fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
     return Some(Box::new(HalfSpaceGadget {
-      dir: self.miller_index.as_vec3().normalize() * 6.0, // TODO: implement this correctly
+      dir: self.miller_index.as_vec3().normalize(),
       miller_index: self.miller_index,
       int_shift: self.shift,
       shift: self.shift as f32,

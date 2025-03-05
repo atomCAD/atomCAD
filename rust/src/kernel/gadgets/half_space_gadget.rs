@@ -7,13 +7,15 @@ use crate::renderer::tessellator::tessellator;
 use crate::util::hit_test_utils::sphere_hit_test;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
+use crate::util::hit_test_utils::get_point_distance_to_ray;
+use std::collections::HashSet;
 
-pub const HALF_SPACE_DIR_MANIPULATION_CELL_SIZE: f32 = 1.0;
+pub const GADGET_LENGTH: f32 = 6.0;
 pub const AXIS_RADIUS: f32 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;
-pub const SHIFT_HANDLE_RADIUS: f32 = 0.5;
-pub const SHIFT_HANDLE_HORIZONTAL_DIVISIONS: u32 = 16;
-pub const SHIFT_HANDLE_VERTICAL_DIVISIONS: u32 = 32;
+pub const CENTER_SPHERE_RADIUS: f32 = 0.5;
+pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
+pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 32;
 
 pub const DIRECTION_HANDLE_RADIUS: f32 = 0.5;
 pub const DIRECTION_HANDLE_DIVISIONS: u32 = 16;
@@ -21,63 +23,66 @@ pub const DIRECTION_HANDLE_LENGTH: f32 = 1.0;
 
 #[derive(Clone)]
 pub struct HalfSpaceGadget {
-    pub dir: Vec3,
+    pub dir: Vec3, // normalized
     pub miller_index: IVec3,
     pub int_shift: i32,
     pub shift: f32,
 }
 
 struct HalfSpaceGadgetCalculated {
-    start_point: Vec3,
-    end_point: Vec3,
-    normal: Vec3,
-    quantized_start_point: Vec3,
-    quantized_end_point: Vec3,
+    quantized_dir: Vec3,
+    shift_handle_offset: f32,
+    quantized_start_offset: f32,
+    quantized_end_offset: f32,
 }
 
 impl Gadget for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
         let calculated = self.calculate_gadget();
+        let end_point = self.dir * GADGET_LENGTH;
       
         // axis of the gadget
         tessellator::tessellate_cylinder(
           output_mesh,
-          &calculated.start_point,
-          &calculated.end_point,
+          &Vec3::new(0.0, 0.0, 0.0),
+          &end_point,
           AXIS_RADIUS,
           AXIS_DIVISIONS,
           &Vec3::new(0.95, 0.93, 0.88),
           0.4, 0.8, false);
-      
-        // shift handle
+
+        // center sphere
         tessellator::tessellate_sphere(
             output_mesh,
-            &calculated.start_point,
-            SHIFT_HANDLE_RADIUS,
-            SHIFT_HANDLE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
-            SHIFT_HANDLE_VERTICAL_DIVISIONS,
+            &Vec3::new(0.0, 0.0, 0.0),
+            CENTER_SPHERE_RADIUS,
+            CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
+            CENTER_SPHERE_VERTICAL_DIVISIONS,
             &Vec3::new(0.95, 0.0, 0.0), // number of sections when dividing by vertical lines
             0.3, 0.0);
       
         // direction handle
         tessellator::tessellate_cylinder(
             output_mesh,
-            &(calculated.end_point - calculated.normal * 0.5 * DIRECTION_HANDLE_LENGTH),
-            &(calculated.end_point + calculated.normal * 0.5 * DIRECTION_HANDLE_LENGTH),
+            &(end_point - self.dir * 0.5 * DIRECTION_HANDLE_LENGTH),
+            &(end_point + self.dir * 0.5 * DIRECTION_HANDLE_LENGTH),
             DIRECTION_HANDLE_RADIUS,
             DIRECTION_HANDLE_DIVISIONS,
             &Vec3::new(0.0, 0.0, 0.95), // number of sections when dividing by vertical lines
             0.3, 0.0, true);
 
-        // Axis representing the quantized shift and miller index
+        // Axis representing the quantized miller index
         tessellator::tessellate_cylinder(
             output_mesh,
-            &calculated.quantized_start_point,
-            &calculated.quantized_end_point,
+            &(calculated.quantized_dir * calculated.quantized_start_offset),
+            &(calculated.quantized_dir * calculated.quantized_end_offset),
             AXIS_RADIUS,
             AXIS_DIVISIONS,
             &Vec3::new(1.0, 1.0, 1.0),
             0.3, 0.0, true);
+
+        // A grid representing the plane
+        
 
     }
 
@@ -86,20 +91,22 @@ impl Gadget for HalfSpaceGadget {
     // handle 1: direction handle
     fn hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<i32> {
         let calculated = self.calculate_gadget();
-        
+        let end_point = self.dir * GADGET_LENGTH;
+        /*
         // Test shift handle (sphere at gadget_start_point)
         if let Some(_t) = sphere_hit_test(
             &calculated.start_point,
-            SHIFT_HANDLE_RADIUS,
+            CENTER_SPHERE_RADIUS,
             &ray_origin,
             &ray_direction
         ) {
             return Some(0); // Shift handle hit
         }
+        */
         
         // Test direction handle (cylinder centered at gadget_end_point)
-        let direction_handle_start = calculated.end_point - calculated.normal * DIRECTION_HANDLE_LENGTH;
-        let direction_handle_end = calculated.end_point + calculated.normal * DIRECTION_HANDLE_LENGTH;
+        let direction_handle_start = end_point - self.dir * 0.5 * DIRECTION_HANDLE_LENGTH;
+        let direction_handle_end = end_point + self.dir * 0.5 * DIRECTION_HANDLE_LENGTH;
         
         if let Some(_t) = cylinder_hit_test(
             &direction_handle_end,
@@ -126,6 +133,7 @@ impl Gadget for HalfSpaceGadget {
         let calculated = self.calculate_gadget();
         
         if handle_index == 0 {
+            /*
             // Shift handle drag
             let dt = get_closest_point_on_first_ray(
                 &calculated.start_point,
@@ -133,17 +141,22 @@ impl Gadget for HalfSpaceGadget {
                 &ray_origin,
                 &ray_direction);
             self.shift += dt * (self.miller_index.as_vec3().length()) / (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32);
+            */
         }
         else if handle_index == 1 {
             // Direction handle drag
             if let Some(t) = sphere_hit_test(
-                &calculated.start_point,
-                self.dir.length(),
+                &Vec3::new(0.0, 0.0, 0.0),
+                GADGET_LENGTH,
                 &ray_origin,
                 &ray_direction
             ) {
                 let new_end_point = ray_origin + ray_direction * t;
-                self.dir = (new_end_point - calculated.start_point).normalize() * 6.0; // TODO: implement this correctly
+                self.dir = new_end_point.normalize();
+
+                let plane_params = self.quantize_plane_params(&self.dir, self.shift);
+                self.miller_index = plane_params.0;
+                self.int_shift = plane_params.1;
             }
         }
     }
@@ -156,28 +169,61 @@ impl Gadget for HalfSpaceGadget {
 
 impl HalfSpaceGadget {
     fn calculate_gadget(&self) -> HalfSpaceGadgetCalculated {
-        let gadget_dir = self.dir;
-        let gadget_normal = gadget_dir.normalize();
-        let gadget_shift = self.shift;
+        let quantized_dir = self.miller_index.as_vec3().normalize();
         let gadget_miller_index = self.miller_index.as_vec3();
-        let gadget_offset = gadget_shift / gadget_miller_index.length();
-        let gadget_diamond_cell_size = DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32;
-
-        let gadget_start_point = gadget_normal * gadget_offset * gadget_diamond_cell_size;
-
-        let quantized_normal = gadget_miller_index.normalize();
-        let quantized_shift = self.int_shift as f32;
-        let quantized_offset = quantized_shift / gadget_miller_index.length();
-
-        let quantized_start_point = quantized_normal * quantized_offset * gadget_diamond_cell_size; 
-        let quantized_end_point = quantized_start_point + quantized_normal * (gadget_dir.length() + 2.0) * HALF_SPACE_DIR_MANIPULATION_CELL_SIZE;    
+        let shift_handle_offset = self.shift / gadget_miller_index.length();
+        let quantized_start_offset = f32::min(shift_handle_offset, 0.0);
+        let quantized_end_offset = f32::max(shift_handle_offset, GADGET_LENGTH + 2.0);
 
         return HalfSpaceGadgetCalculated {
-            start_point: gadget_start_point,
-            end_point: gadget_start_point + gadget_dir * HALF_SPACE_DIR_MANIPULATION_CELL_SIZE,
-            normal: gadget_normal,
-            quantized_start_point,
-            quantized_end_point,
+            quantized_dir,
+            shift_handle_offset,
+            quantized_start_offset,
+            quantized_end_offset,
         }       
+    }
+
+    // Returns a tuple of miller index and shift.
+    fn quantize_plane_params(&self, dir: &Vec3, shift: f32) -> (IVec3, i32) {
+        let mut candidate_points: HashSet<IVec3> = HashSet::new();
+        let mut t = 3.0;
+        while t <= 6.0 {
+            let p = dir * t;
+            
+            // Calculate floor and ceiling for each component to get unit cell corners
+            let x_floor = p.x.floor() as i32;
+            let y_floor = p.y.floor() as i32;
+            let z_floor = p.z.floor() as i32;
+            let x_ceil = p.x.ceil() as i32;
+            let y_ceil = p.y.ceil() as i32;
+            let z_ceil = p.z.ceil() as i32;
+            
+            // Add all 8 corners of the unit cell to candidate_points
+            candidate_points.insert(IVec3::new(x_floor, y_floor, z_floor));
+            candidate_points.insert(IVec3::new(x_floor, y_floor, z_ceil));
+            candidate_points.insert(IVec3::new(x_floor, y_ceil, z_floor));
+            candidate_points.insert(IVec3::new(x_floor, y_ceil, z_ceil));
+            candidate_points.insert(IVec3::new(x_ceil, y_floor, z_floor));
+            candidate_points.insert(IVec3::new(x_ceil, y_floor, z_ceil));
+            candidate_points.insert(IVec3::new(x_ceil, y_ceil, z_floor));
+            candidate_points.insert(IVec3::new(x_ceil, y_ceil, z_ceil));
+            
+            t += 0.5;
+        }
+                
+        let mut closest_point = None;
+        let mut min_distance = f32::MAX;
+
+        for point in &candidate_points {
+            let distance = get_point_distance_to_ray(&Vec3::ZERO, dir, &point.as_vec3());
+            if distance < min_distance {
+                min_distance = distance;
+                closest_point = Some(*point);
+            }
+        }
+
+        let vec = closest_point.unwrap_or(IVec3::new(1, 2, 3));
+
+        (vec, 0)
     }
 }

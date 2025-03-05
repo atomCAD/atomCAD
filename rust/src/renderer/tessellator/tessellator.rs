@@ -230,3 +230,17 @@ pub fn tessellate_cylinder(
   }
 }
 
+/*
+pub fn tessellate_grid(
+  output_mesh: &mut Mesh,
+  center: &Vec3,
+  rotation: &Quat,
+  thickness: f32,
+  width: f32,
+  height: f32,
+  albedo: &Vec3,
+  roughness: f32,
+  metallic: f32) {
+
+  }
+*/
