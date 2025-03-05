@@ -90,12 +90,7 @@ impl NodeData for SphereData {
 impl NodeData for HalfSpaceData {
 
   fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
-    return Some(Box::new(HalfSpaceGadget {
-      dir: self.miller_index.as_vec3().normalize(),
-      miller_index: self.miller_index,
-      int_shift: self.shift,
-      shift: self.shift as f32,
-    }));
+    return Some(Box::new(HalfSpaceGadget::new(&self.miller_index, self.shift)));
   }
 
 }
