@@ -122,14 +122,14 @@ async fn initialize_cad_instance_async() {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       add_sample_network(&mut cad_instance.kernel);
       let scene = cad_instance.kernel.generate_scene("sample");
-      cad_instance.renderer.refresh(&scene);
+      cad_instance.renderer.refresh(&scene, false);
     }
   }
 }
 
 fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str) {
   let scene = cad_instance.kernel.generate_scene(node_network_name);
-  cad_instance.renderer.refresh(&scene);
+  cad_instance.renderer.refresh(&scene, false);
 }
 
 fn add_sample_model(kernel: &mut Kernel) {

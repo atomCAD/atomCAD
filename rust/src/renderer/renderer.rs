@@ -65,10 +65,14 @@ const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 pub struct Renderer  {
     device: Device,
     queue: Queue,
-    pipeline: RenderPipeline,
+    pipeline: RenderPipeline,  
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer, 
     num_indices: u32,
+    // Lightweight buffers for gadget rendering
+    lightweight_vertex_buffer: wgpu::Buffer,
+    lightweight_index_buffer: wgpu::Buffer,
+    lightweight_num_indices: u32,
     texture: Texture,
     texture_view: TextureView,
     depth_texture: Texture,
@@ -125,6 +129,24 @@ impl Renderer {
           }
         );
         let num_indices = INDICES.len() as u32;
+
+        // Initialize lightweight buffers (empty at first)
+        let lightweight_vertex_buffer = device.create_buffer_init(
+          &wgpu::util::BufferInitDescriptor {
+              label: Some("Lightweight Vertex Buffer"),
+              contents: bytemuck::cast_slice(&[] as &[Vertex]),
+              usage: wgpu::BufferUsages::VERTEX,
+          }
+        );
+
+        let lightweight_index_buffer = device.create_buffer_init(
+          &wgpu::util::BufferInitDescriptor {
+              label: Some("Lightweight Index Buffer"),
+              contents: bytemuck::cast_slice(&[] as &[u32]),
+              usage: wgpu::BufferUsages::INDEX,
+          }
+        );
+        let lightweight_num_indices = 0;
 
         // Texture size
         let texture_size = Extent3d {
@@ -277,6 +299,9 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             num_indices,
+            lightweight_vertex_buffer,
+            lightweight_index_buffer,
+            lightweight_num_indices,
             texture,
             texture_view,
             depth_texture,
@@ -300,50 +325,76 @@ impl Renderer {
       self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
 
-    pub fn refresh(&mut self, scene: &Scene) {
+    pub fn refresh(&mut self, scene: &Scene, lightweight: bool) {
         let start_time = Instant::now();
 
-        // We tessellate everything into one mesh for now
-        let mut mesh = Mesh::new();
-
-        let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
-          sphere_horizontal_divisions: 10,
-          sphere_vertical_divisions: 20,
-          cylinder_divisions: 16,
-        };
-
-        for atomic_structure in scene.atomic_structures.iter() {
-            atomic_tessellator::tessellate_atomic_structure(&mut mesh, atomic_structure, &atomic_tessellation_params);
-        }
-
-        for surface_point_cloud in scene.surface_point_clouds.iter() {
-            surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
-        }
-
+        // Always refresh lightweight buffers with gadget data
+        let mut lightweight_mesh = Mesh::new();
         if let Some(gadget) = &scene.gadget {
-            gadget.tessellate(&mut mesh);
+            gadget.tessellate(&mut lightweight_mesh);
+        }
+        
+        println!("lightweight tessellated {} vertices and {} indices", 
+                 lightweight_mesh.vertices.len(), lightweight_mesh.indices.len());
+
+        // Update lightweight buffers
+        self.lightweight_vertex_buffer = self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Lightweight Vertex Buffer"),
+                contents: bytemuck::cast_slice(lightweight_mesh.vertices.as_slice()),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
+        self.lightweight_index_buffer = self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Lightweight Index Buffer"),
+                contents: bytemuck::cast_slice(lightweight_mesh.indices.as_slice()),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
+        self.lightweight_num_indices = lightweight_mesh.indices.len() as u32;
+
+        // Only refresh main buffers when not in lightweight mode
+        if !lightweight {
+            // Tessellate everything except gadget into main buffers
+            let mut mesh = Mesh::new();
+
+            let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
+                sphere_horizontal_divisions: 10,
+                sphere_vertical_divisions: 20,
+                cylinder_divisions: 16,
+            };
+
+            for atomic_structure in scene.atomic_structures.iter() {
+                atomic_tessellator::tessellate_atomic_structure(&mut mesh, atomic_structure, &atomic_tessellation_params);
+            }
+
+            for surface_point_cloud in scene.surface_point_clouds.iter() {
+                surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
+            }
+
+            println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
+
+            //TODO: do not replace the buffers, just copy the data.
+            self.vertex_buffer = self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(mesh.vertices.as_slice()),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }
+            );
+
+            self.index_buffer = self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(mesh.indices.as_slice()),
+                    usage: wgpu::BufferUsages::INDEX,
+                }
+            );
+            self.num_indices = mesh.indices.len() as u32;
         }
 
-        println!("tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
-
-        //TODO: do not replace the buffers, just copy the data.
-
-        self.vertex_buffer = self.device.create_buffer_init(
-          &wgpu::util::BufferInitDescriptor {
-              label: Some("Vertex Buffer"),
-              contents: bytemuck::cast_slice(mesh.vertices.as_slice()),
-              usage: wgpu::BufferUsages::VERTEX,
-          }
-        );
-
-        self.index_buffer = self.device.create_buffer_init(
-          &wgpu::util::BufferInitDescriptor {
-              label: Some("Index Buffer"),
-              contents: bytemuck::cast_slice(mesh.indices.as_slice()),
-              usage: wgpu::BufferUsages::INDEX,
-          }
-        );
-        self.num_indices = mesh.indices.len() as u32;
         println!("refresh took: {:?}", start_time.elapsed());
     }
 
@@ -392,11 +443,18 @@ impl Renderer {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
-            // Only draw if we have indices
+            // Draw main buffers if we have indices
             if self.num_indices > 0 {
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                 render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            }
+            
+            // Draw lightweight buffers if we have indices
+            if self.lightweight_num_indices > 0 {
+                render_pass.set_vertex_buffer(0, self.lightweight_vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.lightweight_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..self.lightweight_num_indices, 0, 0..1);
             }
         }
 
