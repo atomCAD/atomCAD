@@ -6,6 +6,7 @@ import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/api_utils.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:vector_math/vector_math.dart' as vector_math;
+import 'package:flutter_cad/graph_model.dart';
 import 'dart:math';
 
 enum ViewportDragState {
@@ -66,7 +67,12 @@ vector_math.Vector3 rotatePointAroundAxis(vector_math.Vector3 axisPos,
 }
 
 class CadViewport extends StatefulWidget {
-  const CadViewport({super.key});
+  final GraphModel graphModel;
+  
+  const CadViewport({
+    super.key,
+    required this.graphModel,
+  });
 
   @override
   _CadViewportState createState() => _CadViewportState();
@@ -240,6 +246,7 @@ class _CadViewportState extends State<CadViewport> {
         rayOrigin: Vector3ToAPIVec3(ray.start),
         rayDirection: Vector3ToAPIVec3(ray.direction));
     _renderingNeeded();
+    widget.graphModel.refreshFromKernel(); // Refresh other widgets when dragging a gadget
   }
 
   void _startPrimaryDrag(Offset pointerPos) {

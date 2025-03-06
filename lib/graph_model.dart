@@ -63,7 +63,7 @@ class GraphModel extends ChangeNotifier {
           nodeNetworkName: nodeNetworkView!.name,
           nodeId: nodeId,
           position: APIVec2(x: node.position.x, y: node.position.y));
-      _refreshFromKernel();
+      refreshFromKernel();
     }
   }
 
@@ -93,7 +93,7 @@ class GraphModel extends ChangeNotifier {
 
     draggedWire = null;
 
-    _refreshFromKernel();
+    refreshFromKernel();
   }
 
   void setSelectedNode(BigInt nodeId) {
@@ -104,7 +104,7 @@ class GraphModel extends ChangeNotifier {
           nodeId: nodeId,
         );
       }
-      _refreshFromKernel();
+      refreshFromKernel();
     }
   }
 
@@ -117,7 +117,7 @@ class GraphModel extends ChangeNotifier {
         sourceNodeId: sourceNodeId,
         destinationNodeId: destNodeId,
         destinationArgumentIndex: destParamIndex);
-    _refreshFromKernel();
+    refreshFromKernel();
   }
 
   void toggleNodeDisplay(BigInt nodeId) {
@@ -130,13 +130,13 @@ class GraphModel extends ChangeNotifier {
       nodeId: nodeId,
       isDisplayed: !node.displayed,
     );
-    _refreshFromKernel();
+    refreshFromKernel();
   }
 
   void removeSelected() {
     if (nodeNetworkView == null) return;
     deleteSelected(nodeNetworkName: nodeNetworkView!.name);
-    _refreshFromKernel();
+    refreshFromKernel();
   }
 
   BigInt createNode(String nodeTypeName, Offset position) {
@@ -146,11 +146,11 @@ class GraphModel extends ChangeNotifier {
       nodeTypeName: nodeTypeName,
       position: APIVec2(x: position.dx, y: position.dy),
     );
-    _refreshFromKernel();
+    refreshFromKernel();
     return nodeId;
   }
 
-  void _refreshFromKernel() {
+  void refreshFromKernel() {
     if (nodeNetworkView != null) {
       nodeNetworkView =
           getNodeNetworkView(nodeNetworkName: nodeNetworkView!.name);

@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
               child: SizedBox(
                 width: 1280,
                 height: 544,
-                child: CadViewport(),
+                child: CadViewport(graphModel: graphModel),
               ),
             ),
             Expanded(
