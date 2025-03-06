@@ -1,4 +1,4 @@
-use wgpu::{Buffer, BufferUsages, Device, util::DeviceExt};
+use wgpu::{BufferUsages, Device, util::DeviceExt};
 use bytemuck;
 use super::mesh::Mesh;
 
