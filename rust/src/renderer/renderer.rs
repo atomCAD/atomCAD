@@ -3,6 +3,7 @@ use bytemuck;
 use wgpu::util::DeviceExt;
 use super::mesh::Vertex;
 use super::mesh::Mesh;
+use super::gpu_mesh::GPUMesh;
 use super::tessellator::atomic_tessellator;
 use super::tessellator::surface_point_tessellator;
 use super::camera::Camera;
@@ -66,13 +67,8 @@ pub struct Renderer  {
     device: Device,
     queue: Queue,
     pipeline: RenderPipeline,  
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer, 
-    num_indices: u32,
-    // Lightweight buffers for gadget rendering
-    lightweight_vertex_buffer: wgpu::Buffer,
-    lightweight_index_buffer: wgpu::Buffer,
-    lightweight_num_indices: u32,
+    main_mesh: GPUMesh,
+    lightweight_mesh: GPUMesh,
     texture: Texture,
     texture_view: TextureView,
     depth_texture: Texture,
@@ -113,42 +109,9 @@ impl Renderer {
             .await
             .expect("Failed to create device");
 
-        let vertex_buffer = device.create_buffer_init(
-          &wgpu::util::BufferInitDescriptor {
-              label: Some("Vertex Buffer"),
-              contents: bytemuck::cast_slice(VERTICES),
-              usage: wgpu::BufferUsages::VERTEX,
-          }
-        );
+        let main_mesh = GPUMesh::new_empty(&device);
+        let lightweight_mesh = GPUMesh::new_empty(&device);
 
-        let index_buffer = device.create_buffer_init(
-          &wgpu::util::BufferInitDescriptor {
-              label: Some("Index Buffer"),
-              contents: bytemuck::cast_slice(INDICES),
-              usage: wgpu::BufferUsages::INDEX,
-          }
-        );
-        let num_indices = INDICES.len() as u32;
-
-        // Initialize lightweight buffers (empty at first)
-        let lightweight_vertex_buffer = device.create_buffer_init(
-          &wgpu::util::BufferInitDescriptor {
-              label: Some("Lightweight Vertex Buffer"),
-              contents: bytemuck::cast_slice(&[] as &[Vertex]),
-              usage: wgpu::BufferUsages::VERTEX,
-          }
-        );
-
-        let lightweight_index_buffer = device.create_buffer_init(
-          &wgpu::util::BufferInitDescriptor {
-              label: Some("Lightweight Index Buffer"),
-              contents: bytemuck::cast_slice(&[] as &[u32]),
-              usage: wgpu::BufferUsages::INDEX,
-          }
-        );
-        let lightweight_num_indices = 0;
-
-        // Texture size
         let texture_size = Extent3d {
             width: width,
             height: height,
@@ -296,16 +259,12 @@ impl Renderer {
             device,
             queue,
             pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
-            lightweight_vertex_buffer,
-            lightweight_index_buffer,
-            lightweight_num_indices,
+            main_mesh,
+            lightweight_mesh,
             texture,
             texture_view,
             depth_texture,
-            depth_texture_view,        
+            depth_texture_view,
             output_buffer,
             texture_size,
             camera,
@@ -337,23 +296,8 @@ impl Renderer {
         println!("lightweight tessellated {} vertices and {} indices", 
                  lightweight_mesh.vertices.len(), lightweight_mesh.indices.len());
 
-        // Update lightweight buffers
-        self.lightweight_vertex_buffer = self.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Lightweight Vertex Buffer"),
-                contents: bytemuck::cast_slice(lightweight_mesh.vertices.as_slice()),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
-
-        self.lightweight_index_buffer = self.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Lightweight Index Buffer"),
-                contents: bytemuck::cast_slice(lightweight_mesh.indices.as_slice()),
-                usage: wgpu::BufferUsages::INDEX,
-            }
-        );
-        self.lightweight_num_indices = lightweight_mesh.indices.len() as u32;
+        // Update lightweight GPU mesh
+        self.lightweight_mesh.update_from_mesh(&self.device, &lightweight_mesh, "Lightweight");
 
         // Only refresh main buffers when not in lightweight mode
         if !lightweight {
@@ -376,23 +320,8 @@ impl Renderer {
 
             println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
 
-            //TODO: do not replace the buffers, just copy the data.
-            self.vertex_buffer = self.device.create_buffer_init(
-                &wgpu::util::BufferInitDescriptor {
-                    label: Some("Vertex Buffer"),
-                    contents: bytemuck::cast_slice(mesh.vertices.as_slice()),
-                    usage: wgpu::BufferUsages::VERTEX,
-                }
-            );
-
-            self.index_buffer = self.device.create_buffer_init(
-                &wgpu::util::BufferInitDescriptor {
-                    label: Some("Index Buffer"),
-                    contents: bytemuck::cast_slice(mesh.indices.as_slice()),
-                    usage: wgpu::BufferUsages::INDEX,
-                }
-            );
-            self.num_indices = mesh.indices.len() as u32;
+            // Update main GPU mesh
+            self.main_mesh.update_from_mesh(&self.device, &mesh, "Main");
         }
 
         println!("refresh took: {:?}", start_time.elapsed());
@@ -443,18 +372,18 @@ impl Renderer {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
-            // Draw main buffers if we have indices
-            if self.num_indices > 0 {
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            // Draw main mesh if it has indices
+            if self.main_mesh.num_indices > 0 {
+                render_pass.set_vertex_buffer(0, self.main_mesh.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.main_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..self.main_mesh.num_indices, 0, 0..1);
             }
             
-            // Draw lightweight buffers if we have indices
-            if self.lightweight_num_indices > 0 {
-                render_pass.set_vertex_buffer(0, self.lightweight_vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.lightweight_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.lightweight_num_indices, 0, 0..1);
+            // Draw lightweight mesh if it has indices
+            if self.lightweight_mesh.num_indices > 0 {
+                render_pass.set_vertex_buffer(0, self.lightweight_mesh.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.lightweight_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..self.lightweight_mesh.num_indices, 0, 0..1);
             }
         }
 
