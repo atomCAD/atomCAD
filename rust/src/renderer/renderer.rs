@@ -328,11 +328,6 @@ impl Renderer {
     }
 
     pub fn render(&mut self) -> Vec<u8> {
-
-        //let t = (&self).start_time.elapsed().as_secs_f32();
-        //let uniform_data = UniformData { time: t };
-        //self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform_data]));
-
         // Create a new command encoder
         let mut encoder = self
             .device
@@ -372,19 +367,11 @@ impl Renderer {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
-            // Draw main mesh if it has indices
-            if self.main_mesh.num_indices > 0 {
-                render_pass.set_vertex_buffer(0, self.main_mesh.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.main_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.main_mesh.num_indices, 0, 0..1);
-            }
+            // Draw main mesh
+            self.render_mesh(&mut render_pass, &self.main_mesh);
             
-            // Draw lightweight mesh if it has indices
-            if self.lightweight_mesh.num_indices > 0 {
-                render_pass.set_vertex_buffer(0, self.lightweight_mesh.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.lightweight_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.lightweight_mesh.num_indices, 0, 0..1);
-            }
+            // Draw lightweight mesh
+            self.render_mesh(&mut render_pass, &self.lightweight_mesh);
         }
 
         // Copy texture to output buffer
@@ -420,5 +407,14 @@ impl Renderer {
         self.output_buffer.unmap();
 
         data
+    }
+
+    // Private helper method to render a GPU mesh
+    fn render_mesh<'a>(&self, render_pass: &mut RenderPass<'a>, mesh: &GPUMesh) {
+        if mesh.num_indices > 0 {
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+        }
     }
 }
