@@ -41,19 +41,39 @@ class NodeDataWidget extends StatelessWidget {
           // Based on the node type, show the appropriate editor
           switch (selectedNode.nodeTypeName) {
             case 'cuboid':
+              // Fetch the cuboid data here in the parent widget
+              final cuboidData = getCuboidData(
+                nodeNetworkName: nodeNetworkView.name,
+                nodeId: selectedNode.id,
+              );
+              
               return _CuboidEditor(
                 nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
+                data: cuboidData,
               );
             case 'sphere':
+              // Fetch the sphere data here in the parent widget
+              final sphereData = getSphereData(
+                nodeNetworkName: nodeNetworkView.name,
+                nodeId: selectedNode.id,
+              );
               return _SphereEditor(
                 nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
+                data: sphereData,
               );
             case 'half_space':
+              // Fetch the half space data here in the parent widget
+              final halfSpaceData = getHalfSpaceData(
+                nodeNetworkName: nodeNetworkView.name,
+                nodeId: selectedNode.id,
+              );
+              
               return _HalfSpaceEditor(
                 nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
+                data: halfSpaceData,
               );
             default:
               return Center(
@@ -71,10 +91,12 @@ class NodeDataWidget extends StatelessWidget {
 class _CuboidEditor extends StatefulWidget {
   final String nodeNetworkName;
   final BigInt nodeId;
+  final APICuboidData? data;
 
   const _CuboidEditor({
     required this.nodeNetworkName,
     required this.nodeId,
+    required this.data,
   });
 
   @override
@@ -82,24 +104,22 @@ class _CuboidEditor extends StatefulWidget {
 }
 
 class _CuboidEditorState extends State<_CuboidEditor> {
-  APICuboidData? _data;
   APICuboidData? _stagedData;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    setState(() {
+      _stagedData = widget.data;
+    });
   }
 
-  Future<void> _loadData() async {
-    final data = getCuboidData(
-      nodeNetworkName: widget.nodeNetworkName,
-      nodeId: widget.nodeId,
-    );
-    if (mounted) {
+  @override
+  void didUpdateWidget(_CuboidEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
       setState(() {
-        _data = data;
-        _stagedData = data;
+        _stagedData = widget.data;
       });
     }
   }
@@ -115,7 +135,7 @@ class _CuboidEditorState extends State<_CuboidEditor> {
         nodeId: widget.nodeId,
         data: _stagedData!,
       );
-      setState(() => _data = _stagedData);
+      // No need to update _data here as it will be updated in the parent widget
     }
   }
 
@@ -160,16 +180,16 @@ class _CuboidEditorState extends State<_CuboidEditor> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _data == _stagedData
-                      ? null
-                      : () {
-                          setState(() => _stagedData = _data);
-                        },
+                  onPressed: _stagedData != widget.data
+                      ? () {
+                          setState(() => _stagedData = widget.data);
+                        }
+                      : null,
                   child: const Text('Reset'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _data == _stagedData ? null : _applyChanges,
+                  onPressed: _stagedData != widget.data ? _applyChanges : null,
                   child: const Text('Apply'),
                 ),
               ],
@@ -185,10 +205,12 @@ class _CuboidEditorState extends State<_CuboidEditor> {
 class _SphereEditor extends StatefulWidget {
   final String nodeNetworkName;
   final BigInt nodeId;
+  final APISphereData? data;
 
   const _SphereEditor({
     required this.nodeNetworkName,
     required this.nodeId,
+    required this.data,
   });
 
   @override
@@ -196,24 +218,22 @@ class _SphereEditor extends StatefulWidget {
 }
 
 class _SphereEditorState extends State<_SphereEditor> {
-  APISphereData? _data;
   APISphereData? _stagedData;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    setState(() {
+      _stagedData = widget.data;
+    });
   }
 
-  Future<void> _loadData() async {
-    final data = getSphereData(
-      nodeNetworkName: widget.nodeNetworkName,
-      nodeId: widget.nodeId,
-    );
-    if (mounted) {
+  @override
+  void didUpdateWidget(_SphereEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
       setState(() {
-        _data = data;
-        _stagedData = data;
+        _stagedData = widget.data;
       });
     }
   }
@@ -229,7 +249,7 @@ class _SphereEditorState extends State<_SphereEditor> {
         nodeId: widget.nodeId,
         data: _stagedData!,
       );
-      setState(() => _data = _stagedData);
+      // No need to update _data here as it will be updated in the parent widget
     }
   }
 
@@ -274,16 +294,16 @@ class _SphereEditorState extends State<_SphereEditor> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _data == _stagedData
-                      ? null
-                      : () {
-                          setState(() => _stagedData = _data);
-                        },
+                  onPressed: _stagedData != widget.data
+                      ? () {
+                          setState(() => _stagedData = widget.data);
+                        }
+                      : null,
                   child: const Text('Reset'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _data == _stagedData ? null : _applyChanges,
+                  onPressed: _stagedData != widget.data ? _applyChanges : null,
                   child: const Text('Apply'),
                 ),
               ],
@@ -299,10 +319,12 @@ class _SphereEditorState extends State<_SphereEditor> {
 class _HalfSpaceEditor extends StatefulWidget {
   final String nodeNetworkName;
   final BigInt nodeId;
+  final APIHalfSpaceData? data;
 
   const _HalfSpaceEditor({
     required this.nodeNetworkName,
     required this.nodeId,
+    required this.data,
   });
 
   @override
@@ -310,24 +332,22 @@ class _HalfSpaceEditor extends StatefulWidget {
 }
 
 class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
-  APIHalfSpaceData? _data;
   APIHalfSpaceData? _stagedData;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    setState(() {
+      _stagedData = widget.data;
+    });
   }
 
-  Future<void> _loadData() async {
-    final data = getHalfSpaceData(
-      nodeNetworkName: widget.nodeNetworkName,
-      nodeId: widget.nodeId,
-    );
-    if (mounted) {
+  @override
+  void didUpdateWidget(_HalfSpaceEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
       setState(() {
-        _data = data;
-        _stagedData = data;
+        _stagedData = widget.data;
       });
     }
   }
@@ -343,7 +363,7 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
         nodeId: widget.nodeId,
         data: _stagedData!,
       );
-      setState(() => _data = _stagedData);
+      // No need to update _data here as it will be updated in the parent widget
     }
   }
 
@@ -388,16 +408,16 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _data == _stagedData
-                      ? null
-                      : () {
-                          setState(() => _stagedData = _data);
-                        },
+                  onPressed: _stagedData != widget.data
+                      ? () {
+                          setState(() => _stagedData = widget.data);
+                        }
+                      : null,
                   child: const Text('Reset'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _data == _stagedData ? null : _applyChanges,
+                  onPressed: _stagedData != widget.data ? _applyChanges : null,
                   child: const Text('Apply'),
                 ),
               ],
