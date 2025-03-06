@@ -79,14 +79,18 @@ impl Kernel {
   }
 
   // Generates the scene to be rendered according to the displayed nodes of the given node network
-  pub fn generate_scene(&mut self, node_network_name: &str) -> Scene {
-    let network = match self.node_type_registry.node_networks.get(node_network_name) {
-      Some(network) => network,
-      None => return Scene::new(),
-    };
+  pub fn generate_scene(&mut self, node_network_name: &str, lightweight: bool) -> Scene {
+
     let mut scene: Scene = Scene::new();
-    for node_id in &network.displayed_node_ids {
-      scene.merge(self.network_evaluator.generate_scene(node_network_name, *node_id, &self.node_type_registry));
+
+    if !lightweight {
+      let network = match self.node_type_registry.node_networks.get(node_network_name) {
+        Some(network) => network,
+        None => return Scene::new(),
+      };
+      for node_id in &network.displayed_node_ids {
+        scene.merge(self.network_evaluator.generate_scene(node_network_name, *node_id, &self.node_type_registry));
+      }
     }
 
     if let Some(gadget) = &self.gadget {

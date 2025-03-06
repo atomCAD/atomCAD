@@ -121,15 +121,15 @@ async fn initialize_cad_instance_async() {
 
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       add_sample_network(&mut cad_instance.kernel);
-      let scene = cad_instance.kernel.generate_scene("sample");
+      let scene = cad_instance.kernel.generate_scene("sample", false);
       cad_instance.renderer.refresh(&scene, false);
     }
   }
 }
 
-fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str) {
-  let scene = cad_instance.kernel.generate_scene(node_network_name);
-  cad_instance.renderer.refresh(&scene, false);
+fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str, lightweight: bool) {
+  let scene = cad_instance.kernel.generate_scene(node_network_name, lightweight);
+  cad_instance.renderer.refresh(&scene, lightweight);
 }
 
 fn add_sample_model(kernel: &mut Kernel) {
@@ -335,7 +335,7 @@ pub fn connect_nodes(node_network_name: &str, source_node_id: u64, dest_node_id:
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.kernel.connect_nodes(node_network_name, source_node_id, dest_node_id, dest_param_index);
-      refresh_renderer(cad_instance, &node_network_name);
+      refresh_renderer(cad_instance, &node_network_name, false);
     }
   }
 }
@@ -353,7 +353,7 @@ pub fn set_node_display(node_network_name: String, node_id: u64, is_displayed: b
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.kernel.set_node_display(&node_network_name, node_id, is_displayed);
-      refresh_renderer(instance, &node_network_name);
+      refresh_renderer(instance, &node_network_name, false);
     }
   }
 }
@@ -363,7 +363,7 @@ pub fn select_node(node_network_name: String, node_id: u64) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let ret = instance.kernel.select_node(&node_network_name, node_id);
-      refresh_renderer(instance, &node_network_name);
+      refresh_renderer(instance, &node_network_name, false);
       ret
     } else {
       false
@@ -376,7 +376,7 @@ pub fn select_wire(node_network_name: String, source_node_id: u64, destination_n
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let ret = instance.kernel.select_wire(&node_network_name, source_node_id, destination_node_id, destination_argument_index);
-      refresh_renderer(instance, &node_network_name);
+      refresh_renderer(instance, &node_network_name, false);
       ret
     } else {
       false
@@ -389,7 +389,7 @@ pub fn clear_selection(node_network_name: String) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.kernel.clear_selection(&node_network_name);
-      refresh_renderer(instance, &node_network_name);
+      refresh_renderer(instance, &node_network_name, false);
     }
   }
 }
@@ -442,7 +442,7 @@ pub fn set_cuboid_data(node_network_name: String, node_id: u64, data: APICuboidD
         extent: from_api_ivec3(&data.extent),
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, cuboid_data);
-      refresh_renderer(instance, &node_network_name);
+      refresh_renderer(instance, &node_network_name, false);
     }
   }
 }
@@ -456,7 +456,7 @@ pub fn set_sphere_data(node_network_name: String, node_id: u64, data: APISphereD
         radius: data.radius,
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, sphere_data);
-      refresh_renderer(instance, &node_network_name);
+      refresh_renderer(instance, &node_network_name, false);
     }
   }
 }
@@ -470,7 +470,7 @@ pub fn set_half_space_data(node_network_name: String, node_id: u64, data: APIHal
         shift: data.shift,
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, half_space_data);
-      refresh_renderer(instance, &node_network_name);
+      refresh_renderer(instance, &node_network_name, false);
     }
   }
 }
@@ -480,7 +480,7 @@ pub fn delete_selected(node_network_name: String) {
   unsafe {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       cad_instance.kernel.delete_selected(&node_network_name);
-      refresh_renderer(cad_instance, &node_network_name);
+      refresh_renderer(cad_instance, &node_network_name, false);
     }
   }
 }
@@ -498,7 +498,7 @@ pub fn gadget_start_drag(node_network_name: String, handle_index: i32, ray_origi
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
     instance.kernel.gadget_start_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-    refresh_renderer(instance, &node_network_name);
+    refresh_renderer(instance, &node_network_name, false);
   }
 }
 
@@ -507,7 +507,7 @@ pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: API
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
     instance.kernel.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-    refresh_renderer(instance, &node_network_name);
+    refresh_renderer(instance, &node_network_name, true);
   }
 }
 
@@ -516,7 +516,7 @@ pub fn gadget_end_drag(node_network_name: String) {
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
     instance.kernel.gadget_end_drag();
-    refresh_renderer(instance, &node_network_name);
+    refresh_renderer(instance, &node_network_name, false);
   }
 }
 
