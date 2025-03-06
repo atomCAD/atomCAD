@@ -10,6 +10,8 @@ use crate::util::hit_test_utils::sphere_hit_test;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 use crate::util::hit_test_utils::get_point_distance_to_ray;
+use crate::kernel::node_type::HalfSpaceData;
+use crate::kernel::node_type::NodeData;
 use std::collections::HashSet;
 
 pub const MAX_MILLER_INDEX: f32 = 6.0;
@@ -187,6 +189,13 @@ impl Gadget for HalfSpaceGadget {
     fn end_drag(&mut self) {
         self.dir = self.miller_index.as_vec3().normalize();
         self.shift_handle_offset = ((self.shift as f32) / self.miller_index.as_vec3().length()) * (DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32)
+    }
+
+    fn sync_data(&self, data: &mut dyn NodeData) {
+        if let Some(half_space_data) = data.as_any_mut().downcast_mut::<HalfSpaceData>() {
+            half_space_data.miller_index = self.miller_index;
+            half_space_data.shift = self.shift;
+        }
     }
 
 }

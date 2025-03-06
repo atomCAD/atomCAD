@@ -126,6 +126,10 @@ impl NodeNetwork {
     self.nodes.get(&node_id).map(|node| node.data.as_ref())
   }
 
+  pub fn get_node_network_data_mut(&mut self, node_id: u64) -> Option<&mut dyn NodeData> {
+    self.nodes.get_mut(&node_id).map(|node| node.data.as_mut())
+  }
+
   pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
     if self.nodes.contains_key(&node_id) {
       if is_displayed {

@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => 1396011658;
+  int get rustContentHash => -687139094;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -176,6 +176,8 @@ abstract class RustLibApi extends BaseApi {
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APISphereData data});
+
+  bool crateApiSimpleSyncGadgetData({required String nodeNetworkName});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -920,6 +922,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "set_sphere_data",
         argNames: ["nodeNetworkName", "nodeId", "data"],
+      );
+
+  @override
+  bool crateApiSimpleSyncGadgetData({required String nodeNetworkName}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiSimpleSyncGadgetDataConstMeta,
+      argValues: [nodeNetworkName],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiSimpleSyncGadgetDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_gadget_data",
+        argNames: ["nodeNetworkName"],
       );
 
   @protected

@@ -68,7 +68,7 @@ vector_math.Vector3 rotatePointAroundAxis(vector_math.Vector3 axisPos,
 
 class CadViewport extends StatefulWidget {
   final GraphModel graphModel;
-  
+
   const CadViewport({
     super.key,
     required this.graphModel,
@@ -245,8 +245,10 @@ class _CadViewportState extends State<CadViewport> {
         handleIndex: draggedGadgetHandle,
         rayOrigin: Vector3ToAPIVec3(ray.start),
         rayDirection: Vector3ToAPIVec3(ray.direction));
+    syncGadgetData(nodeNetworkName: "sample");
     _renderingNeeded();
-    widget.graphModel.refreshFromKernel(); // Refresh other widgets when dragging a gadget
+    widget.graphModel
+        .refreshFromKernel(); // Refresh other widgets when dragging a gadget
   }
 
   void _startPrimaryDrag(Offset pointerPos) {

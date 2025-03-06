@@ -202,6 +202,13 @@ impl Kernel {
       .and_then(|network| network.get_node_network_data(node_id))
   }
 
+  pub fn get_node_network_data_mut(&mut self, network_name: &str, node_id: u64) -> Option<&mut dyn NodeData> {
+    self.node_type_registry
+      .node_networks
+      .get_mut(network_name)
+      .and_then(|network| network.get_node_network_data_mut(node_id))
+  }
+
   pub fn get_network_evaluator(&self) -> &ImplicitNetworkEvaluator {
     &self.network_evaluator
   }
@@ -209,6 +216,22 @@ impl Kernel {
   pub fn set_node_display(&mut self, network_name: &str, node_id: u64, is_displayed: bool) {
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_display(node_id, is_displayed);
+    }
+  }
+
+  pub fn sync_gadget_data(&mut self, network_name: &str) -> bool {
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      if let Some(node_id) = &network.selected_node_id {
+        let data = network.get_node_network_data_mut(*node_id);
+        if let Some(node_data) = data {
+          if let Some(g) = &self.gadget {
+            g.sync_data(node_data);
+          }
+        }
+      }
+      true
+    } else {
+      false
     }
   }
 

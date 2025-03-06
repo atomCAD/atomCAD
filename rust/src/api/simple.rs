@@ -521,6 +521,17 @@ pub fn gadget_end_drag(node_network_name: String) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn sync_gadget_data(node_network_name: String) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      return instance.kernel.sync_gadget_data(&node_network_name);
+    } else {
+      false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn greet(name: String) -> String {
     format!("Hello, {name}!")
 }

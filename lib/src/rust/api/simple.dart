@@ -159,5 +159,8 @@ void gadgetDrag(
 void gadgetEndDrag({required String nodeNetworkName}) => RustLib.instance.api
     .crateApiSimpleGadgetEndDrag(nodeNetworkName: nodeNetworkName);
 
+bool syncGadgetData({required String nodeNetworkName}) => RustLib.instance.api
+    .crateApiSimpleSyncGadgetData(nodeNetworkName: nodeNetworkName);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
