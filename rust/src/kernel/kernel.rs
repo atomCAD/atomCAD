@@ -192,6 +192,7 @@ impl Kernel {
   pub fn set_node_network_data(&mut self, network_name: &str, node_id: u64, data: Box<dyn NodeData>) {
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_network_data(node_id, data);
+      self.gadget = network.provide_gadget();
     }
   }
 
