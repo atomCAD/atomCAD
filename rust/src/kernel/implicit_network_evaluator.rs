@@ -23,8 +23,8 @@ const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
 const CARBON: i32 = 6;
 
-fn eval_cuboid(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
-  let cuboid_data = &node_data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
+fn eval_cuboid(node: &Node, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+  let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
   
   let max_corner = cuboid_data.min_corner + cuboid_data.extent;
   let x_val = f32::max((cuboid_data.min_corner.x as f32) - sample_point.x, sample_point.x - (max_corner.x as f32));
@@ -34,15 +34,15 @@ fn eval_cuboid(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec
   return f32::max(f32::max(x_val, y_val), z_val);
 }
 
-fn eval_sphere(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
-  let sphere_data = &node_data.as_any_ref().downcast_ref::<SphereData>().unwrap();
+fn eval_sphere(node: &Node, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+  let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
 
   return (sample_point - Vec3::new(sphere_data.center.x as f32, sphere_data.center.y as f32, sphere_data.center.z as f32)).length() 
     - (sphere_data.radius as f32);
 }
 
-fn eval_half_space(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
-  let half_space_data = &node_data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
+fn eval_half_space(node: &Node, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+  let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
   let float_miller = half_space_data.miller_index.as_vec3();
   let miller_magnitude = float_miller.length();
   return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f32)) / miller_magnitude;
@@ -55,15 +55,15 @@ fn eval_geo_trans(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &
 }
 */
 
-fn eval_union(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+fn eval_union(node: &Node, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
   return args[0].iter().copied().reduce(f32::min).unwrap_or(f32::MAX);
 }
 
-fn eval_intersect(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+fn eval_intersect(node: &Node, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
   return args[0].iter().copied().reduce(f32::max).unwrap_or(f32::MIN);
 }
 
-fn eval_diff(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+fn eval_diff(node: &Node, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
   let base = &args[0];
   let sub = &args[1];
   let ubase= base.iter().copied().reduce(f32::min).unwrap_or(f32::MAX);
@@ -72,7 +72,7 @@ fn eval_diff(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3)
 }
 
 pub struct ImplicitNetworkEvaluator {
-  built_in_functions: HashMap<String,fn(&dyn NodeData, Vec<Vec<f32>>, &Vec3) -> f32>,
+  built_in_functions: HashMap<String,fn(&Node, Vec<Vec<f32>>, &Vec3) -> f32>,
 }
 
 /*
@@ -361,7 +361,7 @@ impl ImplicitNetworkEvaluator {
       return network_args[param_data.param_index].clone();
     }
     if let Some(built_in_function) = self.built_in_functions.get(&node.node_type_name) {
-      let ret = built_in_function(&(*node.data), args, sample_point);
+      let ret = built_in_function(node, args, sample_point);
       return vec![ret];
     }
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
