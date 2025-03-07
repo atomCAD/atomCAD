@@ -59,6 +59,12 @@ pub struct HalfSpaceData {
   pub shift: i32,
 }
 
+#[derive(Debug)]
+pub struct GeoTransData {
+  pub translation: IVec3,
+  pub rotation: IVec3,
+}
+
 pub trait NodeData: std::fmt::Debug + Any + AsAny  {
   fn provide_gadget(&self) -> Option<Box<dyn Gadget>>;
 }
@@ -93,4 +99,10 @@ impl NodeData for HalfSpaceData {
     return Some(Box::new(HalfSpaceGadget::new(&self.miller_index, self.shift)));
   }
 
+}
+
+impl NodeData for GeoTransData {
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+    None
+  }
 }

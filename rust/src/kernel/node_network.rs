@@ -1,5 +1,4 @@
 use glam::f32::Vec2;
-use glam::f32::Vec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -9,8 +8,8 @@ use super::node_type::NoData;
 use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
+use super::node_type::GeoTransData;
 use super::gadgets::gadget::Gadget;
-use super::gadgets::half_space_gadget::HalfSpaceGadget;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
@@ -82,6 +81,10 @@ impl NodeNetwork {
       "half_space" => Box::new(HalfSpaceData {
         miller_index: IVec3::new(1, 0, 0), // Default normal along x-axis
         shift: 0,
+      }),
+      "geo_trans" => Box::new(GeoTransData {
+        translation: IVec3::new(0, 0, 0),
+        rotation: IVec3::new(0, 0, 0),
       }),
       _ => Box::new(NoData{}),
     };

@@ -9,6 +9,7 @@ use super::node_type::ParameterData;
 use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
+use super::node_type::GeoTransData;
 use super::node_type::DataType;
 use super::node_type_registry::NodeTypeRegistry;
 use super::scene::Scene;
@@ -46,6 +47,13 @@ fn eval_half_space(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: 
   let miller_magnitude = float_miller.length();
   return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f32)) / miller_magnitude;
 }
+
+/*
+fn eval_geo_trans(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
+  let geo_trans_data = &node_data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
+
+}
+*/
 
 fn eval_union(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
   return args[0].iter().copied().reduce(f32::min).unwrap_or(f32::MAX);
