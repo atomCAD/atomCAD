@@ -23,10 +23,16 @@ const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
 const CARBON: i32 = 6;
 
+#[derive(Clone)]
+pub struct NetworkStackElement<'a> {
+  pub node_network: &'a NodeNetwork,
+  pub node_id: u64,
+}
+
 fn eval_cuboid<'a>(
   _evaluator: &ImplicitNetworkEvaluator,
   _registry: &NodeTypeRegistry,
-  _network_stack: &Vec<&'a NodeNetwork>,
+  _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &Vec3) -> f32 {
   let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
@@ -42,7 +48,7 @@ fn eval_cuboid<'a>(
 fn eval_sphere<'a>(
   _evaluator: &ImplicitNetworkEvaluator,
   _registry: &NodeTypeRegistry,
-  _network_stack: &Vec<&'a NodeNetwork>,
+  _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &Vec3) -> f32 {
   let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
@@ -54,7 +60,7 @@ fn eval_sphere<'a>(
 fn eval_half_space<'a>(
   _evaluator: &ImplicitNetworkEvaluator,
   _registry: &NodeTypeRegistry,
-  _network_stack: &Vec<&'a NodeNetwork>,
+  _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &Vec3) -> f32 {
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
@@ -73,7 +79,7 @@ fn eval_geo_trans(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &
 fn eval_union<'a>(
     evaluator: &ImplicitNetworkEvaluator,
     registry: &NodeTypeRegistry,
-    network_stack: &Vec<&'a NodeNetwork>,
+    network_stack: &Vec<NetworkStackElement<'a>>,
     node: &Node,
     sample_point: &Vec3) -> f32 {
   node.arguments[0].argument_node_ids.iter().map(|node_id| {
@@ -84,7 +90,7 @@ fn eval_union<'a>(
 fn eval_intersect<'a>(
   evaluator: &ImplicitNetworkEvaluator,
   registry: &NodeTypeRegistry,
-  network_stack: &Vec<&'a NodeNetwork>,
+  network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &Vec3) -> f32 {
     node.arguments[0].argument_node_ids.iter().map(|node_id| {
@@ -95,7 +101,7 @@ fn eval_intersect<'a>(
 fn eval_diff<'a>(
   evaluator: &ImplicitNetworkEvaluator,
   registry: &NodeTypeRegistry,
-  network_stack: &Vec<&'a NodeNetwork>,
+  network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &Vec3) -> f32 {
 
@@ -103,7 +109,7 @@ fn eval_diff<'a>(
     evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
   }).reduce(f32::min).unwrap_or(f32::MAX);
 
-  let usub = node.arguments[0].argument_node_ids.iter().map(|node_id| {
+  let usub = node.arguments[1].argument_node_ids.iter().map(|node_id| {
     evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
   }).reduce(f32::min).unwrap_or(f32::MAX);
 
@@ -111,7 +117,7 @@ fn eval_diff<'a>(
 }
 
 pub struct ImplicitNetworkEvaluator {
-  built_in_functions: HashMap<String,fn(&ImplicitNetworkEvaluator, &NodeTypeRegistry, &Vec<&NodeNetwork>, &Node, &Vec3) -> f32>,
+  built_in_functions: HashMap<String,fn(&ImplicitNetworkEvaluator, &NodeTypeRegistry, &Vec<NetworkStackElement>, &Node, &Vec3) -> f32>,
 }
 
 /*
@@ -181,7 +187,8 @@ impl ImplicitNetworkEvaluator {
   pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> Scene {
 
     let mut network_stack = Vec::new();
-    network_stack.push(network);
+    // We assign the root node network zero node id. It is not used in the evaluation.
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
 
     if node.arguments[0].argument_node_ids.is_empty() {
       return Scene::new();
@@ -278,7 +285,8 @@ impl ImplicitNetworkEvaluator {
 
   pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
     let mut network_stack = Vec::new();
-    network_stack.push(network);
+    // We assign the root node network zero node id. It is not used in the evaluation.
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
 
     let mut point_cloud = SurfacePointCloud::new();
     let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
@@ -312,6 +320,7 @@ impl ImplicitNetworkEvaluator {
             } else {
               let p = ip.as_vec3() / spu;
               let value = self.implicit_eval(&network_stack, node_id, &p, registry)[0];
+              //println!("Evaluating point: {:?}, value: {}", ip, value);
               eval_cache.put(*ip, value);
               value
             }
@@ -347,7 +356,8 @@ impl ImplicitNetworkEvaluator {
     let epsilon = 0.0001; // Small value for finite difference approximation
     
     let mut network_stack = Vec::new();
-    network_stack.push(network);
+    // We assign the root node network zero node id. It is not used in the evaluation.
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
 
     // Calculate partial derivatives using central differences
     let dx = (
@@ -390,14 +400,20 @@ impl ImplicitNetworkEvaluator {
    * Not all optimizations fit all use cases or even compatible with each other, so we might use multiple approaches
    * in different cases.
    */
-  pub fn implicit_eval<'a>(&self, network_stack: &Vec<&'a NodeNetwork>, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec<f32> {
-    let node = network_stack.last().unwrap().nodes.get(&node_id).unwrap();
+  pub fn implicit_eval<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec<f32> {
+    let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
     if node.node_type_name == "parameter" {
+      let parent_node_id = network_stack.last().unwrap().node_id;
+
       let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
       let mut parent_network_stack = network_stack.clone();
       parent_network_stack.pop();
-      return self.implicit_eval(&parent_network_stack, node_id, sample_point, registry);
+      let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
+      let args : Vec<Vec<f32>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
+        self.implicit_eval(&parent_network_stack, arg_node_id, sample_point, registry)
+      }).collect();
+      return args.concat();
     }
     if let Some(built_in_function) = self.built_in_functions.get(&node.node_type_name) {
       let ret = built_in_function(self, registry, network_stack, node, sample_point);
@@ -405,7 +421,7 @@ impl ImplicitNetworkEvaluator {
     }
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();
-      child_network_stack.push(child_network);
+      child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
       return self.implicit_eval(&child_network_stack, child_network.return_node_id.unwrap(), sample_point, registry);
     }
     return vec![0.0];

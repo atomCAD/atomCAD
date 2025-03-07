@@ -1,6 +1,7 @@
 use rust_lib_flutter_cad::kernel::kernel::Kernel;
 use rust_lib_flutter_cad::kernel::node_type::SphereData;
 use rust_lib_flutter_cad::kernel::node_type::CuboidData;
+use rust_lib_flutter_cad::kernel::implicit_network_evaluator::NetworkStackElement;
 use glam::f32::Vec2;
 use glam::f32::Vec3;
 use glam::i32::IVec3;
@@ -144,21 +145,23 @@ fn test_kernel_sphere_evaluation() {
     let evaluator = k.get_network_evaluator();
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
-    
+    let mut network_stack = Vec::new();
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
     // Test points:
     // 1. Point on surface (should be 0)
     let surface_point = Vec3::new(1.0, 0.0, 0.0);
-    let surface_result = evaluator.implicit_eval(network, &vec![], sphere_node, &surface_point, registry);
+    let surface_result = evaluator.implicit_eval(&network_stack, sphere_node, &surface_point, registry);
     assert!((surface_result[0]).abs() < EPSILON);
     
     // 2. Point inside sphere (should be negative)
     let inside_point = Vec3::new(0.5, 0.0, 0.0);
-    let inside_result = evaluator.implicit_eval(network, &vec![], sphere_node, &inside_point, registry);
+    let inside_result = evaluator.implicit_eval(&network_stack, sphere_node, &inside_point, registry);
     assert!(inside_result[0] < -EPSILON);
     
     // 3. Point outside sphere (should be positive)
     let outside_point = Vec3::new(2.0, 0.0, 0.0);
-    let outside_result = evaluator.implicit_eval(network, &vec![], sphere_node, &outside_point, registry);
+    let outside_result = evaluator.implicit_eval(&network_stack, sphere_node, &outside_point, registry);
     assert!(outside_result[0] > EPSILON);
 }
 
@@ -176,21 +179,23 @@ fn test_kernel_cuboid_evaluation() {
     let evaluator = k.get_network_evaluator();
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
-    
+    let mut network_stack = Vec::new();
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
     // Test points:
     // 1. Point on surface (should be 0)
     let surface_point = Vec3::new(1.0, 0.0, 0.0);
-    let surface_result = evaluator.implicit_eval(network, &vec![], cuboid_node, &surface_point, registry);
+    let surface_result = evaluator.implicit_eval(&network_stack, cuboid_node, &surface_point, registry);
     assert!((surface_result[0]).abs() < EPSILON);
     
     // 2. Point inside cuboid (should be negative)
     let inside_point = Vec3::new(0.5, 0.0, 0.0);
-    let inside_result = evaluator.implicit_eval(network, &vec![], cuboid_node, &inside_point, registry);
+    let inside_result = evaluator.implicit_eval(&network_stack, cuboid_node, &inside_point, registry);
     assert!(inside_result[0] < -EPSILON);
     
     // 3. Point outside sphere (should be positive)
     let outside_point = Vec3::new(2.0, 0.0, 0.0);
-    let outside_result = evaluator.implicit_eval(network, &vec![], cuboid_node, &outside_point, registry);
+    let outside_result = evaluator.implicit_eval(&network_stack, cuboid_node, &outside_point, registry);
     assert!(outside_result[0] > EPSILON);
 }
 
@@ -223,21 +228,23 @@ fn test_kernel_union_of_spheres() {
     let evaluator = k.get_network_evaluator();
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
-    
+    let mut network_stack = Vec::new();
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
     // Test points:
     // 1. Point inside both spheres (should be negative)
     let inside_point = Vec3::new(0.5, 0.0, 0.0);
-    let inside_result = evaluator.implicit_eval(network, &vec![], union_node, &inside_point, registry);
+    let inside_result = evaluator.implicit_eval(&network_stack, union_node, &inside_point, registry);
     assert!(inside_result[0] < -EPSILON);
 
     // 1. Point inside only second sphere (should be negative)
     let inside_2_point = Vec3::new(2.5, 0.0, 0.0);
-    let inside_2_result = evaluator.implicit_eval(network, &vec![], union_node, &inside_2_point, registry);
+    let inside_2_result = evaluator.implicit_eval(&network_stack, union_node, &inside_2_point, registry);
     assert!(inside_2_result[0] < -EPSILON);
 
     // 3. Point outside both spheres (should be positive)
     let outside_point = Vec3::new(5.0, 0.0, 0.0);
-    let outside_result = evaluator.implicit_eval(network, &vec![], union_node, &outside_point, registry);
+    let outside_result = evaluator.implicit_eval(&network_stack, union_node, &outside_point, registry);
     assert!(outside_result[0] > EPSILON);
 }
 
@@ -267,21 +274,23 @@ fn test_kernel_intersection_with_half_space() {
     let evaluator = k.get_network_evaluator();
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
-    
+    let mut network_stack = Vec::new();
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
     // Test points:
     // 1. Point outside both shapes (should be positive)
     let outside_point = Vec3::new(3.0, 0.0, 0.0);
-    let outside_result = evaluator.implicit_eval(network, &vec![], intersect_node, &outside_point, registry);
+    let outside_result = evaluator.implicit_eval(&network_stack, intersect_node, &outside_point, registry);
     assert!(outside_result[0] > EPSILON);
 
     // 2. Point inside both shapes (should be negative)
     let inside_both = Vec3::new(-0.5, 0.0, 0.0);
-    let inside_both_result = evaluator.implicit_eval(network, &vec![], intersect_node, &inside_both, registry);
+    let inside_both_result = evaluator.implicit_eval(&network_stack, intersect_node, &inside_both, registry);
     assert!(inside_both_result[0] < -EPSILON);
 
     // 3. Point inside sphere but outside half-space (should be positive)
     let inside_sphere_outside_half = Vec3::new(0.5, 0.0, 0.0);
-    let mixed_result = evaluator.implicit_eval(network, &vec![], intersect_node, &inside_sphere_outside_half, registry);
+    let mixed_result = evaluator.implicit_eval(&network_stack, intersect_node, &inside_sphere_outside_half, registry);
     assert!(mixed_result[0] > EPSILON);
 }
 
@@ -325,15 +334,17 @@ fn test_kernel_complex_csg_network() {
     let evaluator = k.get_network_evaluator();
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
-    
+    let mut network_stack = Vec::new();
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
     // Test points:
     // 1. Point inside first sphere and cuboid (should be negative)
     let inside_point = Vec3::new(0.0, 0.0, 0.0);
-    let inside_result = evaluator.implicit_eval(network, &vec![], intersect_node, &inside_point, registry);
+    let inside_result = evaluator.implicit_eval(&network_stack, intersect_node, &inside_point, registry);
     assert!(inside_result[0] < -EPSILON);
     
     // 2. Point outside spheres but inside cuboid (should be positive since it's outside the union)
     let outside_spheres = Vec3::new(0.0, 0.0, 2.0);
-    let outside_spheres_result = evaluator.implicit_eval(network, &vec![], intersect_node, &outside_spheres, registry);
+    let outside_spheres_result = evaluator.implicit_eval(&network_stack, intersect_node, &outside_spheres, registry);
     assert!(outside_spheres_result[0] > EPSILON);
 }
