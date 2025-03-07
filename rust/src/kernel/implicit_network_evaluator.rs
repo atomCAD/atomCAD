@@ -19,7 +19,6 @@ use lru::LruCache;
 use crate::kernel::common_constants;
 
 const SAMPLES_PER_UNIT: i32 = 4;
-pub const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f32 = 3.567;  // Size of one complete unit cell (4x4x4) in Ångströms
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
 const CARBON: i32 = 6;
 
@@ -192,7 +191,7 @@ impl ImplicitNetworkEvaluator {
               let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
               let value = self.implicit_eval(network, &network_args, geo_node_id, &crystal_space_pos, registry)[0];
               let atom_id = if value < DIAMOND_SAMPLE_THRESHOLD {
-                let id = atomic_structure.add_atom(CARBON, crystal_space_pos * DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+                let id = atomic_structure.add_atom(CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
                 atom_pos_to_id.insert(absolute_pos, id);
                 id
               } else { 0 };
@@ -281,7 +280,7 @@ impl ImplicitNetworkEvaluator {
             };
             point_cloud.points.push(
               SurfacePoint {
-                position: (center_point - step) * DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+                position: (center_point - step) * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
                 normal: gradient.normalize(),
               }
             );
