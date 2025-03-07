@@ -16,10 +16,8 @@ use super::atomic_structure::AtomicStructure;
 use super::super::util::timer::Timer;
 use std::collections::HashMap;
 use lru::LruCache;
+use crate::kernel::common_constants;
 
-// TODO: these will not be constant, will be set by the user
-const NETWORK_EVAL_VOLUME_MIN: IVec3 = IVec3::new(-4, -4, -4);
-const NETWORK_EVAL_VOLUME_MAX: IVec3 = IVec3::new(4, 4, 4);
 const SAMPLES_PER_UNIT: i32 = 4;
 pub const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f32 = 3.567;  // Size of one complete unit cell (4x4x4) in Ångströms
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
@@ -180,9 +178,9 @@ impl ImplicitNetworkEvaluator {
     let network_args: Vec<Vec<f32>> = Vec::new();
 
     // Iterate over voxel grid
-    for x in NETWORK_EVAL_VOLUME_MIN.x..NETWORK_EVAL_VOLUME_MAX.x {
-      for y in NETWORK_EVAL_VOLUME_MIN.y..NETWORK_EVAL_VOLUME_MAX.y {
-        for z in NETWORK_EVAL_VOLUME_MIN.z..NETWORK_EVAL_VOLUME_MAX.z {
+    for x in common_constants::IMPLICIT_VOLUME_MIN.x..common_constants::IMPLICIT_VOLUME_MAX.x {
+      for y in common_constants::IMPLICIT_VOLUME_MIN.y..common_constants::IMPLICIT_VOLUME_MAX.y {
+        for z in common_constants::IMPLICIT_VOLUME_MIN.z..common_constants::IMPLICIT_VOLUME_MAX.z {
           let cell_start_position = IVec3::new(x, y, z) * 4;
 
           let mut carbon_atom_ids = Vec::new();
@@ -233,8 +231,8 @@ impl ImplicitNetworkEvaluator {
 
   pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
     let mut point_cloud = SurfacePointCloud::new();
-    let cache_size = (NETWORK_EVAL_VOLUME_MAX.z - NETWORK_EVAL_VOLUME_MIN.z + 1) *
-    (NETWORK_EVAL_VOLUME_MAX.y - NETWORK_EVAL_VOLUME_MIN.y + 1) *
+    let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
+    (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
     SAMPLES_PER_UNIT * SAMPLES_PER_UNIT * 2;
 
     let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
@@ -243,9 +241,9 @@ impl ImplicitNetworkEvaluator {
     let network_args: Vec<Vec<f32>> = Vec::new();
 
     // Iterate over voxel grid
-    for x in NETWORK_EVAL_VOLUME_MIN.x*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.x*SAMPLES_PER_UNIT {
-      for y in NETWORK_EVAL_VOLUME_MIN.y*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.y*SAMPLES_PER_UNIT {
-        for z in NETWORK_EVAL_VOLUME_MIN.z*SAMPLES_PER_UNIT..NETWORK_EVAL_VOLUME_MAX.z*SAMPLES_PER_UNIT {
+    for x in common_constants::IMPLICIT_VOLUME_MIN.x*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.x*SAMPLES_PER_UNIT {
+      for y in common_constants::IMPLICIT_VOLUME_MIN.y*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.y*SAMPLES_PER_UNIT {
+        for z in common_constants::IMPLICIT_VOLUME_MIN.z*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.z*SAMPLES_PER_UNIT {
           // Define the corner points for the current cube
           let corner_points = [
             IVec3::new(x, y, z),
