@@ -224,8 +224,6 @@ impl ImplicitNetworkEvaluator {
       IVec3::new(3, 3, 1),
     ];
 
-    let network_args: Vec<Vec<f32>> = Vec::new();
-
     // Iterate over voxel grid
     for x in common_constants::IMPLICIT_VOLUME_MIN.x..common_constants::IMPLICIT_VOLUME_MAX.x {
       for y in common_constants::IMPLICIT_VOLUME_MIN.y..common_constants::IMPLICIT_VOLUME_MAX.y {
@@ -290,7 +288,6 @@ impl ImplicitNetworkEvaluator {
     let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
     let spu = SAMPLES_PER_UNIT as f32;
-    let network_args: Vec<Vec<f32>> = Vec::new();
 
     // Iterate over voxel grid
     for x in common_constants::IMPLICIT_VOLUME_MIN.x*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.x*SAMPLES_PER_UNIT {
@@ -398,7 +395,9 @@ impl ImplicitNetworkEvaluator {
 
     if node.node_type_name == "parameter" {
       let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
-      return vec![param_data.param_index as f32]; // TODO***
+      let mut parent_network_stack = network_stack.clone();
+      parent_network_stack.pop();
+      return self.implicit_eval(&parent_network_stack, node_id, sample_point, registry);
     }
     if let Some(built_in_function) = self.built_in_functions.get(&node.node_type_name) {
       let ret = built_in_function(self, registry, network_stack, node, sample_point);
