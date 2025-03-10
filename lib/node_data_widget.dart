@@ -75,6 +75,18 @@ class NodeDataWidget extends StatelessWidget {
                 nodeId: selectedNode.id,
                 data: halfSpaceData,
               );
+            case 'geo_trans':
+              // Fetch the geo transformation data here in the parent widget
+              final geoTransData = getGeoTransData(
+                nodeNetworkName: nodeNetworkView.name,
+                nodeId: selectedNode.id,
+              );
+              
+              return _GeoTransEditor(
+                nodeNetworkName: nodeNetworkView.name,
+                nodeId: selectedNode.id,
+                data: geoTransData,
+              );
             default:
               return Center(
                 child: Text(
@@ -400,6 +412,120 @@ class _HalfSpaceEditorState extends State<_HalfSpaceEditor> {
                 _updateStagedData(APIHalfSpaceData(
                   millerIndex: _stagedData!.millerIndex,
                   shift: newValue,
+                ));
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _stagedData != widget.data
+                      ? () {
+                          setState(() => _stagedData = widget.data);
+                        }
+                      : null,
+                  child: const Text('Reset'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _stagedData != widget.data ? _applyChanges : null,
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Editor widget for GeoTrans nodes
+class _GeoTransEditor extends StatefulWidget {
+  final String nodeNetworkName;
+  final BigInt nodeId;
+  final APIGeoTransData? data;
+
+  const _GeoTransEditor({
+    required this.nodeNetworkName,
+    required this.nodeId,
+    required this.data,
+  });
+
+  @override
+  State<_GeoTransEditor> createState() => _GeoTransEditorState();
+}
+
+class _GeoTransEditorState extends State<_GeoTransEditor> {
+  APIGeoTransData? _stagedData;
+
+  @override
+  void initState() {
+    super.initState();
+    setState(() {
+      _stagedData = widget.data;
+    });
+  }
+
+  @override
+  void didUpdateWidget(_GeoTransEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
+      setState(() {
+        _stagedData = widget.data;
+      });
+    }
+  }
+
+  void _updateStagedData(APIGeoTransData newData) {
+    setState(() => _stagedData = newData);
+  }
+
+  void _applyChanges() {
+    if (_stagedData != null) {
+      setGeoTransData(
+        nodeNetworkName: widget.nodeNetworkName,
+        nodeId: widget.nodeId,
+        data: _stagedData!,
+      );
+      // No need to update _data here as it will be updated in the parent widget
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_stagedData == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Geo Transformation Properties',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            IVec3Input(
+              label: 'Translation',
+              value: _stagedData!.translation,
+              onChanged: (newValue) {
+                _updateStagedData(APIGeoTransData(
+                  translation: newValue,
+                  rotation: _stagedData!.rotation,
+                ));
+              },
+            ),
+            const SizedBox(height: 8),
+            IVec3Input(
+              label: 'Rotation',
+              value: _stagedData!.rotation,
+              onChanged: (newValue) {
+                _updateStagedData(APIGeoTransData(
+                  translation: _stagedData!.translation,
+                  rotation: newValue,
                 ));
               },
             ),
