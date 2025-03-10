@@ -70,6 +70,27 @@ class APICuboidData {
           extent == other.extent;
 }
 
+class APIGeoTransData {
+  final APIIVec3 translation;
+  final APIIVec3 rotation;
+
+  const APIGeoTransData({
+    required this.translation,
+    required this.rotation,
+  });
+
+  @override
+  int get hashCode => translation.hashCode ^ rotation.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIGeoTransData &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation &&
+          rotation == other.rotation;
+}
+
 class APIHalfSpaceData {
   final APIIVec3 millerIndex;
   final int shift;

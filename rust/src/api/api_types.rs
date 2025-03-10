@@ -74,3 +74,8 @@ pub struct APIHalfSpaceData {
   pub miller_index: APIIVec3,
   pub shift: i32,
 }
+
+pub struct APIGeoTransData {
+  pub translation: APIIVec3,
+  pub rotation: APIIVec3,
+}

@@ -11,7 +11,6 @@ use super::node_type::DataType;
 use super::node_type::NodeType;
 use super::node_type::NodeData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
-use super::surface_point_cloud::SurfacePointCloud;
 use super::scene::Scene;
 use super::gadgets::gadget::Gadget;
 use std::ops::Deref;

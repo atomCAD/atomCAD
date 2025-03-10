@@ -105,6 +105,11 @@ APIHalfSpaceData? getHalfSpaceData(
     RustLib.instance.api.crateApiSimpleGetHalfSpaceData(
         nodeNetworkName: nodeNetworkName, nodeId: nodeId);
 
+APIGeoTransData? getGeoTransData(
+        {required String nodeNetworkName, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleGetGeoTransData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+
 void setCuboidData(
         {required String nodeNetworkName,
         required BigInt nodeId,
@@ -124,6 +129,13 @@ void setHalfSpaceData(
         required BigInt nodeId,
         required APIHalfSpaceData data}) =>
     RustLib.instance.api.crateApiSimpleSetHalfSpaceData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+
+void setGeoTransData(
+        {required String nodeNetworkName,
+        required BigInt nodeId,
+        required APIGeoTransData data}) =>
+    RustLib.instance.api.crateApiSimpleSetGeoTransData(
         nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
 
 void deleteSelected({required String nodeNetworkName}) => RustLib.instance.api
