@@ -55,7 +55,7 @@ impl NetworkEvaluator {
       return self.generate_geo_to_atomic_scene(network, node, registry);
     }
     if node_type.output_type == DataType::Geometry {
-      return self.generate_point_cloud_scene(network, node_id, registry);
+      return self.generate_point_cloud_scene_fast(network, node_id, registry);
     }
 
     return Scene::new();
@@ -187,6 +187,29 @@ impl NetworkEvaluator {
     scene
   }
 
+  pub fn generate_point_cloud_scene_fast(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
+    let mut point_cloud = SurfacePointCloud::new();
+    let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
+    (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
+    (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
+    SAMPLES_PER_UNIT * SAMPLES_PER_UNIT * 2;
+
+    let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
+
+    self.process_box_for_point_cloud(
+        network,
+        node_id,
+        registry,
+      &(common_constants::IMPLICIT_VOLUME_MIN * SAMPLES_PER_UNIT),
+      &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * SAMPLES_PER_UNIT),
+      &mut eval_cache,
+      &mut point_cloud);
+
+    let mut scene = Scene::new();
+    scene.surface_point_clouds.push(point_cloud);
+    scene
+  }
+
   fn process_box_for_point_cloud(
       &self,
       network: &NodeNetwork,
@@ -197,8 +220,90 @@ impl NetworkEvaluator {
       eval_cache: &mut LruCache<IVec3, f32>,
       point_cloud: &mut SurfacePointCloud,) {
 
-    
+    // Calculate the center point of the box in integer coordinates
+    let center_pos = *start_pos + size / 2;
 
+    let spu = SAMPLES_PER_UNIT as f32;
+    let center_point = center_pos.as_vec3() / spu;
+
+    // Evaluate SDF at the center point
+    let sdf_value = self.implicit_evaluator.eval(network, node_id, &center_point, registry)[0];
+    
+    let half_diagonal = size.as_vec3().length() / 2.0;
+    
+    // If absolute SDF value is greater than half diagonal, there's no surface in this box
+    if sdf_value.abs() > half_diagonal {
+        return;
+    }
+    
+    // Determine if we should subdivide in each dimension (size >= 4)
+    let should_subdivide_x = size.x >= 4;
+    let should_subdivide_y = size.y >= 4;
+    let should_subdivide_z = size.z >= 4;
+    
+    // If we can't subdivide in any direction, process each cell individually
+    if !should_subdivide_x && !should_subdivide_y && !should_subdivide_z {
+        // Process each cell within the box
+        for x in 0..size.x {
+            for y in 0..size.y {
+                for z in 0..size.z {
+                    let cell_pos = IVec3::new(
+                        start_pos.x + x,
+                        start_pos.y + y,
+                        start_pos.z + z
+                    );
+                    self.process_cell_for_point_cloud(
+                        network,
+                        node_id,
+                        registry,
+                        &cell_pos,
+                        eval_cache,
+                        point_cloud
+                    );
+                }
+            }
+        }
+        return;
+    }
+    
+    // Otherwise, subdivide the box and recursively process each subdivision
+    let sub_size_x = if should_subdivide_x { size.x / 2 } else { size.x };
+    let sub_size_y = if should_subdivide_y { size.y / 2 } else { size.y };
+    let sub_size_z = if should_subdivide_z { size.z / 2 } else { size.z };
+    
+    // Calculate the number of subdivisions in each direction
+    let subdivisions_x = if should_subdivide_x { 2 } else { 1 };
+    let subdivisions_y = if should_subdivide_y { 2 } else { 1 };
+    let subdivisions_z = if should_subdivide_z { 2 } else { 1 };
+    
+    // Process each subdivision recursively
+    for dx in 0..subdivisions_x {
+        for dy in 0..subdivisions_y {
+            for dz in 0..subdivisions_z {
+                let sub_start = IVec3::new(
+                    start_pos.x + dx * sub_size_x,
+                    start_pos.y + dy * sub_size_y,
+                    start_pos.z + dz * sub_size_z
+                );
+                
+                let sub_size = IVec3::new(
+                    sub_size_x,
+                    sub_size_y,
+                    sub_size_z
+                );
+                
+                self.process_box_for_point_cloud(
+                    network,
+                    node_id,
+                    registry,
+                    &sub_start,
+                    &sub_size,
+                    eval_cache,
+                    point_cloud
+                );
+            }
+        }
+    }
   }
 
   fn process_cell_for_point_cloud(
