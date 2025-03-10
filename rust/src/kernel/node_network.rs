@@ -16,6 +16,14 @@ pub struct Argument {
   pub argument_node_ids: HashSet<u64>, // Set of node ids for which the output is referenced
 }
 
+impl Argument {
+  /// Returns Some(node_id) for one of the nodes in argument_node_ids if not empty,
+  /// otherwise returns None
+  pub fn get_node_id(&self) -> Option<u64> {
+    self.argument_node_ids.iter().next().copied()
+  }
+}
+
 pub struct Wire {
     pub source_node_id: u64,
     pub destination_node_id: u64,

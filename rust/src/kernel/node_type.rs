@@ -62,7 +62,7 @@ pub struct HalfSpaceData {
 #[derive(Debug)]
 pub struct GeoTransData {
   pub translation: IVec3,
-  pub rotation: IVec3,
+  pub rotation: IVec3, // intrinsic euler angles where 1 increment means 90 degrees.
 }
 
 pub trait NodeData: std::fmt::Debug + Any + AsAny  {

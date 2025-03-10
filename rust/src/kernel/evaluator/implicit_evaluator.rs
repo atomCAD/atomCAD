@@ -1,4 +1,5 @@
 use glam::f32::Vec3;
+use glam::f32::Quat;
 use crate::kernel::node_network::NodeNetwork;
 use crate::kernel::node_network::Node;
 use crate::kernel::node_type::ParameterData;
@@ -8,6 +9,7 @@ use crate::kernel::node_type::HalfSpaceData;
 use crate::kernel::node_type::GeoTransData;
 use crate::kernel::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
+use std::f32::consts::PI;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -55,12 +57,32 @@ fn eval_half_space<'a>(
   return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f32)) / miller_magnitude;
 }
 
-/*
-fn eval_geo_trans(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &Vec3) -> f32 {
-  let geo_trans_data = &node_data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
+fn eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
+    registry: &NodeTypeRegistry,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node: &Node,
+    sample_point: &Vec3) -> f32 {
+    let geo_trans_data = &node.data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
+    let translation = geo_trans_data.translation.as_vec3();
+    let rotation_euler = geo_trans_data.rotation.as_vec3() * PI * 0.5;
 
+    let rotation_quat = Quat::from_euler(
+        glam::EulerRot::XYX,
+        rotation_euler.x, 
+        rotation_euler.y, 
+        rotation_euler.z);
+
+    let transformed_point = rotation_quat.inverse().mul_vec3(sample_point - translation);
+
+    match node.arguments[0].get_node_id() {
+        Some(node_id) => evaluator.implicit_eval(
+            network_stack,
+            node_id, 
+            &transformed_point,
+            registry)[0],
+        None => f32::MAX
+    }
 }
-*/
 
 fn eval_union<'a>(
     evaluator: &ImplicitEvaluator,
@@ -123,6 +145,7 @@ impl ImplicitEvaluator {
         ret.built_in_functions.insert("union".to_string(), eval_union);
         ret.built_in_functions.insert("intersect".to_string(), eval_intersect);
         ret.built_in_functions.insert("diff".to_string(), eval_diff);
+        ret.built_in_functions.insert("geo_trans".to_string(), eval_geo_trans);
     
         return ret;
     }
