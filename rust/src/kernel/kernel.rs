@@ -10,7 +10,7 @@ use super::node_network::NodeNetwork;
 use super::node_type::DataType;
 use super::node_type::NodeType;
 use super::node_type::NodeData;
-use super::implicit_network_evaluator::ImplicitNetworkEvaluator;
+use super::evaluator::network_evaluator::NetworkEvaluator;
 use super::surface_point_cloud::SurfacePointCloud;
 use super::scene::Scene;
 use super::gadgets::gadget::Gadget;
@@ -21,7 +21,7 @@ pub struct Kernel {
   pub history: Vec<Box<dyn Command>>,
   pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
   pub node_type_registry: NodeTypeRegistry,
-  pub network_evaluator: ImplicitNetworkEvaluator,
+  pub network_evaluator: NetworkEvaluator,
   pub gadget: Option<Box<dyn Gadget>>,
 }
 
@@ -30,7 +30,7 @@ impl Kernel {
   pub fn new() -> Self {
 
     let node_type_registry = NodeTypeRegistry::new();
-    let network_evaluator = ImplicitNetworkEvaluator::new();
+    let network_evaluator = NetworkEvaluator::new();
 
     Self {
       model: AtomicStructure::new(),
@@ -214,7 +214,7 @@ impl Kernel {
       .and_then(|network| network.get_node_network_data_mut(node_id))
   }
 
-  pub fn get_network_evaluator(&self) -> &ImplicitNetworkEvaluator {
+  pub fn get_network_evaluator(&self) -> &NetworkEvaluator {
     &self.network_evaluator
   }
 

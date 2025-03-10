@@ -1,20 +1,20 @@
 use glam::i32::IVec3;
 use glam::f32::Vec3;
-use super::surface_point_cloud::SurfacePoint;
-use super::surface_point_cloud::SurfacePointCloud;
-use super::node_network::NodeNetwork;
-use super::node_network::Node;
-use super::node_type::NodeData;
-use super::node_type::ParameterData;
-use super::node_type::SphereData;
-use super::node_type::CuboidData;
-use super::node_type::HalfSpaceData;
-use super::node_type::GeoTransData;
-use super::node_type::DataType;
-use super::node_type_registry::NodeTypeRegistry;
-use super::scene::Scene;
-use super::atomic_structure::AtomicStructure;
-use super::super::util::timer::Timer;
+use crate::kernel::surface_point_cloud::SurfacePoint;
+use crate::kernel::surface_point_cloud::SurfacePointCloud;
+use crate::kernel::node_network::NodeNetwork;
+use crate::kernel::node_network::Node;
+use crate::kernel::node_type::NodeData;
+use crate::kernel::node_type::ParameterData;
+use crate::kernel::node_type::SphereData;
+use crate::kernel::node_type::CuboidData;
+use crate::kernel::node_type::HalfSpaceData;
+use crate::kernel::node_type::GeoTransData;
+use crate::kernel::node_type::DataType;
+use crate::kernel::node_type_registry::NodeTypeRegistry;
+use crate::kernel::scene::Scene;
+use crate::kernel::atomic_structure::AtomicStructure;
+use crate::util::timer::Timer;
 use std::collections::HashMap;
 use lru::LruCache;
 use crate::kernel::common_constants;
@@ -30,7 +30,7 @@ pub struct NetworkStackElement<'a> {
 }
 
 fn eval_cuboid<'a>(
-  _evaluator: &ImplicitNetworkEvaluator,
+  _evaluator: &NetworkEvaluator,
   _registry: &NodeTypeRegistry,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
@@ -46,7 +46,7 @@ fn eval_cuboid<'a>(
 }
 
 fn eval_sphere<'a>(
-  _evaluator: &ImplicitNetworkEvaluator,
+  _evaluator: &NetworkEvaluator,
   _registry: &NodeTypeRegistry,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
@@ -58,7 +58,7 @@ fn eval_sphere<'a>(
 }
 
 fn eval_half_space<'a>(
-  _evaluator: &ImplicitNetworkEvaluator,
+  _evaluator: &NetworkEvaluator,
   _registry: &NodeTypeRegistry,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
@@ -77,7 +77,7 @@ fn eval_geo_trans(node_data: &dyn NodeData, args: Vec<Vec<f32>>, sample_point: &
 */
 
 fn eval_union<'a>(
-    evaluator: &ImplicitNetworkEvaluator,
+    evaluator: &NetworkEvaluator,
     registry: &NodeTypeRegistry,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node: &Node,
@@ -88,7 +88,7 @@ fn eval_union<'a>(
 }
 
 fn eval_intersect<'a>(
-  evaluator: &ImplicitNetworkEvaluator,
+  evaluator: &NetworkEvaluator,
   registry: &NodeTypeRegistry,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
@@ -99,7 +99,7 @@ fn eval_intersect<'a>(
 }
 
 fn eval_diff<'a>(
-  evaluator: &ImplicitNetworkEvaluator,
+  evaluator: &NetworkEvaluator,
   registry: &NodeTypeRegistry,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
@@ -116,8 +116,8 @@ fn eval_diff<'a>(
   return f32::max(ubase, -usub)
 }
 
-pub struct ImplicitNetworkEvaluator {
-  built_in_functions: HashMap<String,fn(&ImplicitNetworkEvaluator, &NodeTypeRegistry, &Vec<NetworkStackElement>, &Node, &Vec3) -> f32>,
+pub struct NetworkEvaluator {
+  built_in_functions: HashMap<String,fn(&NetworkEvaluator, &NodeTypeRegistry, &Vec<NetworkStackElement>, &Node, &Vec3) -> f32>,
 }
 
 /*
@@ -129,7 +129,7 @@ pub struct ImplicitNetworkEvaluator {
  * TODO: probably should be refactored into an Evaluator and an ImplicitGeometry evaluator,
  * as nodes related to atomic representation is not specific to implicits. 
  */
-impl ImplicitNetworkEvaluator {
+impl NetworkEvaluator {
 
   pub fn new() -> Self {
     let mut ret = Self {
