@@ -174,61 +174,86 @@ impl NetworkEvaluator {
 
     let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
-    let spu = SAMPLES_PER_UNIT as f32;
-
     // Iterate over voxel grid
     for x in common_constants::IMPLICIT_VOLUME_MIN.x*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.x*SAMPLES_PER_UNIT {
       for y in common_constants::IMPLICIT_VOLUME_MIN.y*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.y*SAMPLES_PER_UNIT {
         for z in common_constants::IMPLICIT_VOLUME_MIN.z*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.z*SAMPLES_PER_UNIT {
-          // Define the corner points for the current cube
-          let corner_points = [
-            IVec3::new(x, y, z),
-            IVec3::new(x + 1, y, z),
-            IVec3::new(x, y + 1, z),
-            IVec3::new(x, y, z + 1),
-            IVec3::new(x + 1, y + 1, z),
-            IVec3::new(x + 1, y, z + 1),
-            IVec3::new(x, y + 1, z + 1),
-            IVec3::new(x + 1, y + 1, z + 1),
-          ];
-
-          // Evaluate corner points using cache
-          let values: Vec<f32> = corner_points.iter().map(|ip| {
-            if let Some(&cached_value) = eval_cache.get(ip) {
-              cached_value
-            } else {
-              let p = ip.as_vec3() / spu;
-              let value = self.implicit_evaluator.eval(network, node_id, &p, registry)[0];
-              //println!("Evaluating point: {:?}, value: {}", ip, value);
-              eval_cache.put(*ip, value);
-              value
-            }
-          }).collect();
-
-          if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
-            let center_point = (corner_points[0].as_vec3() + 0.5) / spu;
-            let value = self.implicit_evaluator.eval(network, node_id, &center_point, registry)[0];
-            let gradient = self.implicit_evaluator.get_gradient(network, node_id, &center_point, registry);
-            let gradient_magnitude_sq = gradient.length_squared();
-            // Avoid division by very small numbers
-            let step = if gradient_magnitude_sq > 1e-10 {
-                value * gradient / gradient_magnitude_sq
-            } else {
-                value * gradient // Fallback to SDF assumption if gradient is nearly zero
-            };
-            point_cloud.points.push(
-              SurfacePoint {
-                position: (center_point - step) * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
-                normal: gradient.normalize(),
-              }
-            );
-          }
+          self.process_cell_for_point_cloud(network, node_id, registry, &IVec3::new(x, y, z), &mut eval_cache, &mut point_cloud);
         }
       }
     }
     let mut scene = Scene::new();
     scene.surface_point_clouds.push(point_cloud);
     scene
+  }
+
+  fn process_box_for_point_cloud(
+      &self,
+      network: &NodeNetwork,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      start_pos: &IVec3,
+      size: &IVec3,
+      eval_cache: &mut LruCache<IVec3, f32>,
+      point_cloud: &mut SurfacePointCloud,) {
+
+    
+
+  }
+
+  fn process_cell_for_point_cloud(
+    &self,
+    network: &NodeNetwork,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    int_pos: &IVec3,
+    eval_cache: &mut LruCache<IVec3, f32>,
+    point_cloud: &mut SurfacePointCloud) {
+      let spu = SAMPLES_PER_UNIT as f32;
+
+      // Define the corner points for the current cube
+      let corner_points = [
+          IVec3::new(int_pos.x, int_pos.y, int_pos.z),
+          IVec3::new(int_pos.x + 1, int_pos.y, int_pos.z),
+          IVec3::new(int_pos.x, int_pos.y + 1, int_pos.z),
+          IVec3::new(int_pos.x, int_pos.y, int_pos.z + 1),
+          IVec3::new(int_pos.x + 1, int_pos.y + 1, int_pos.z),
+          IVec3::new(int_pos.x + 1, int_pos.y, int_pos.z + 1),
+          IVec3::new(int_pos.x, int_pos.y + 1, int_pos.z + 1),
+          IVec3::new(int_pos.x + 1, int_pos.y + 1, int_pos.z + 1),
+      ];
+
+      // Evaluate corner points using cache
+      let values: Vec<f32> = corner_points.iter().map(|ip| {
+      if let Some(&cached_value) = eval_cache.get(ip) {
+          cached_value
+      } else {
+          let p = ip.as_vec3() / spu;
+          let value = self.implicit_evaluator.eval(network, node_id, &p, registry)[0];
+          //println!("Evaluating point: {:?}, value: {}", ip, value);
+          eval_cache.put(*ip, value);
+          value
+        }
+      }).collect();
+
+      if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
+          let center_point = (corner_points[0].as_vec3() + 0.5) / spu;
+          let value = self.implicit_evaluator.eval(network, node_id, &center_point, registry)[0];
+          let gradient = self.implicit_evaluator.get_gradient(network, node_id, &center_point, registry);
+          let gradient_magnitude_sq = gradient.length_squared();
+          // Avoid division by very small numbers
+          let step = if gradient_magnitude_sq > 1e-10 {
+              value * gradient / gradient_magnitude_sq
+          } else {
+              value * gradient // Fallback to SDF assumption if gradient is nearly zero
+          };
+          point_cloud.points.push(
+            SurfacePoint {
+              position: (center_point - step) * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+              normal: gradient.normalize(),
+            }
+          );
+      }
   }
 
 }

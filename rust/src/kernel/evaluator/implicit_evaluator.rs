@@ -151,7 +151,7 @@ impl ImplicitEvaluator {
     }
 
     pub fn get_gradient(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec3 {
-        let epsilon = 0.0001; // Small value for finite difference approximation
+        let epsilon = 0.001; // Small value for finite difference approximation
         
         let mut network_stack = Vec::new();
         // We assign the root node network zero node id. It is not used in the evaluation.
