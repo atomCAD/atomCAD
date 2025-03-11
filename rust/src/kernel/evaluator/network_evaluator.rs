@@ -118,44 +118,16 @@ impl NetworkEvaluator {
     for x in common_constants::IMPLICIT_VOLUME_MIN.x..common_constants::IMPLICIT_VOLUME_MAX.x {
       for y in common_constants::IMPLICIT_VOLUME_MIN.y..common_constants::IMPLICIT_VOLUME_MAX.y {
         for z in common_constants::IMPLICIT_VOLUME_MIN.z..common_constants::IMPLICIT_VOLUME_MAX.z {
-          let cell_start_position = IVec3::new(x, y, z) * 4;
 
-          let mut carbon_atom_ids = Vec::new();
-          for pos in &in_cell_carbon_positions {
-            let absolute_pos = cell_start_position + *pos;
-            if let Some(id) = atom_pos_to_id.get(&absolute_pos) {
-              carbon_atom_ids.push(*id);
-            } else {
-              let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
-              let value = self.implicit_evaluator.eval(network, geo_node_id, &crystal_space_pos, registry)[0];
-              let atom_id = if value < DIAMOND_SAMPLE_THRESHOLD {
-                let id = atomic_structure.add_atom(CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
-                atom_pos_to_id.insert(absolute_pos, id);
-                id
-              } else { 0 };
-              carbon_atom_ids.push(atom_id);
-            }
-          }
-
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 0);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 8);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 10);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 14, 12);
-
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 6);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 9);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 11);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 15, 12);
-
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 5);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 9);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 10);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 16, 13);
-
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 4);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 8);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 11);
-          self.add_bond(&mut atomic_structure, &carbon_atom_ids, 17, 13);
+          self.process_cell_for_atomic(
+            network,
+            geo_node_id,
+            registry,
+            &IVec3::new(x,y,z),
+            &in_cell_carbon_positions,
+            &mut atom_pos_to_id,
+            &mut atomic_structure,
+          );
         }
       }
     }
@@ -165,6 +137,56 @@ impl NetworkEvaluator {
     scene.atomic_structures.push(atomic_structure);
     return scene;
   }
+
+
+  fn process_cell_for_atomic(
+    &self,
+    network: &NodeNetwork,
+    geo_node_id: u64,
+    registry: &NodeTypeRegistry,
+    int_pos: &IVec3,
+    in_cell_carbon_positions: &[IVec3; 18],
+    atom_pos_to_id: &mut HashMap<IVec3, u64>,
+    atomic_structure: &mut AtomicStructure) {
+      let cell_start_position = int_pos * 4;
+
+      let mut carbon_atom_ids = Vec::new();
+      for pos in in_cell_carbon_positions {
+        let absolute_pos = cell_start_position + *pos;
+        if let Some(id) = atom_pos_to_id.get(&absolute_pos) {
+          carbon_atom_ids.push(*id);
+        } else {
+          let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
+          let value = self.implicit_evaluator.eval(network, geo_node_id, &crystal_space_pos, registry)[0];
+          let atom_id = if value < DIAMOND_SAMPLE_THRESHOLD {
+            let id = atomic_structure.add_atom(CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+            atom_pos_to_id.insert(absolute_pos, id);
+            id
+          } else { 0 };
+          carbon_atom_ids.push(atom_id);
+        }
+      }
+
+      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 0);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 8);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 10);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 12);
+
+      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 6);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 9);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 11);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 12);
+
+      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 5);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 9);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 10);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 13);
+
+      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 4);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 8);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 11);
+      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 13);
+    }
 
   pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
     let mut point_cloud = SurfacePointCloud::new();
