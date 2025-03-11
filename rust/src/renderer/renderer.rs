@@ -279,8 +279,8 @@ impl Renderer {
             gadget.tessellate(&mut lightweight_mesh);
         }
         
-        println!("lightweight tessellated {} vertices and {} indices", 
-                 lightweight_mesh.vertices.len(), lightweight_mesh.indices.len());
+        //println!("lightweight tessellated {} vertices and {} indices", 
+        //         lightweight_mesh.vertices.len(), lightweight_mesh.indices.len());
 
         // Update lightweight GPU mesh
         self.lightweight_mesh.update_from_mesh(&self.device, &lightweight_mesh, "Lightweight");
@@ -304,7 +304,7 @@ impl Renderer {
                 surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
             }
 
-            println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
+            //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
 
             // Update main GPU mesh
             self.main_mesh.update_from_mesh(&self.device, &mesh, "Main");

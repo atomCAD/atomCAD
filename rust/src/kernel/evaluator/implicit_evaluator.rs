@@ -150,6 +150,7 @@ impl ImplicitEvaluator {
         return ret;
     }
 
+    // Calculate gradient using central differences
     pub fn get_gradient(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec3 {
         let epsilon = 0.001; // Small value for finite difference approximation
         
@@ -157,7 +158,6 @@ impl ImplicitEvaluator {
         // We assign the root node network zero node id. It is not used in the evaluation.
         network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
     
-        // Calculate partial derivatives using central differences
         let dx = (
           self.implicit_eval(&network_stack, node_id, &(sample_point + Vec3::new(epsilon, 0.0, 0.0)), registry)[0] -
           self.implicit_eval(&network_stack, node_id, &(sample_point - Vec3::new(epsilon, 0.0, 0.0)), registry)[0]
@@ -173,33 +173,39 @@ impl ImplicitEvaluator {
           self.implicit_eval(&network_stack, node_id, &(sample_point - Vec3::new(0.0, 0.0, epsilon)), registry)[0]
         ) / (2.0 * epsilon);
     
-        let gradient = Vec3::new(dx, dy, dz);
-        
-        // Normalize the gradient vector
-        if gradient.length_squared() > 0.0 {
-          gradient.normalize()
-        } else {
-          gradient
-        }
+        Vec3::new(dx, dy, dz)
+    }
+
+    // Calculate gradient using one sided differences
+    // This is faster than get_gradient but potentially less accurate
+    // It also returns the value at the sampled point, so that the value can be reused. 
+    pub fn get_gradient_fast(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> (Vec3, f32) {
+      let epsilon = 0.001; // Small value for finite difference approximation
+
+      let value = self.eval(&network, node_id, sample_point, registry)[0];
+      let gradient = Vec3::new(
+        (self.eval(&network, node_id, &(sample_point + Vec3::new(epsilon, 0.0, 0.0)), registry)[0] - value) / epsilon,
+        (self.eval(&network, node_id, &(sample_point + Vec3::new(0.0, epsilon, 0.0)), registry)[0] - value) / epsilon,
+        (self.eval(&network, node_id, &(sample_point + Vec3::new(0.0, 0.0, epsilon)), registry)[0] - value) / epsilon
+      );
+      (gradient, value)
     }
 
     pub fn eval(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec<f32> {
         let mut network_stack = Vec::new();
         // We assign the root node network zero node id. It is not used in the evaluation.
         network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
         return self.implicit_eval(&network_stack, node_id, sample_point, registry);
     }
 
   /*
-   * This is a naive but relatively simple way to evaluate the implicit function. We need this now
-   * for rapid development and later to have a correct reference implementation.
    * Future possible optimizations:
    * - Do not refer to node types by string: use an internal id
    * - Do not do this recursion per sampled point, but do it for a cubic array at a time, and work with
    * cubic array of f32 values at once.
-   * - Do not sample everywhere. If we know the max gradient length we can infer that there is no sign change in big ranges.
    * - Ultimatly to achieve very high performance we can consider generating GPU code so that evaluation can be done
-   * per sampled point again, but massively paralelly in compute shader using generated GPU shader code.
+   * massively paralelly in compute shader using generated GPU shader code.
    * The GPU compute shader needs to be regenerated on node network edit operations though, the cost of which
    * needs to be investigated. If partial recompilation of shader code is possible that would be a huge win.
    * Not all optimizations fit all use cases or even compatible with each other, so we might use multiple approaches

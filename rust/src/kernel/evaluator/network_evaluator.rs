@@ -330,9 +330,9 @@ impl NetworkEvaluator {
 
       // Evaluate corner points using cache
       let values: Vec<f32> = corner_points.iter().map(|ip| {
-      if let Some(&cached_value) = eval_cache.get(ip) {
+        if let Some(&cached_value) = eval_cache.get(ip) {
           cached_value
-      } else {
+        } else {
           let p = ip.as_vec3() / spu;
           let value = self.implicit_evaluator.eval(network, node_id, &p, registry)[0];
           //println!("Evaluating point: {:?}, value: {}", ip, value);
@@ -343,8 +343,9 @@ impl NetworkEvaluator {
 
       if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
           let center_point = (corner_points[0].as_vec3() + 0.5) / spu;
-          let value = self.implicit_evaluator.eval(network, node_id, &center_point, registry)[0];
-          let gradient = self.implicit_evaluator.get_gradient(network, node_id, &center_point, registry);
+          let gradient_val = self.implicit_evaluator.get_gradient_fast(network, node_id, &center_point, registry);
+          let gradient = gradient_val.0;
+          let value = gradient_val.1;
           let gradient_magnitude_sq = gradient.length_squared();
           // Avoid division by very small numbers
           let step = if gradient_magnitude_sq > 1e-10 {
