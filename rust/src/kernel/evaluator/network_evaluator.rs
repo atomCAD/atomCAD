@@ -82,7 +82,7 @@ impl NetworkEvaluator {
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
 
     if node.node_type_name == "geo_to_atom" {
-      return self.generate_geo_to_atomic_scene(network, node, registry);
+      return self.generate_geo_to_atomic_scene_fast(network, node, registry);
     }
     if node_type.output_type == DataType::Geometry {
       return self.generate_point_cloud_scene_fast(network, node_id, registry);
@@ -126,6 +126,7 @@ impl NetworkEvaluator {
             &IVec3::new(x,y,z),
             &mut atom_pos_to_id,
             &mut atomic_structure,
+            false,
           );
         }
       }
@@ -137,6 +138,135 @@ impl NetworkEvaluator {
     return scene;
   }
 
+  // generates diamond molecule from geometry in an optimized way
+  pub fn generate_geo_to_atomic_scene_fast(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> Scene {
+    if node.arguments[0].argument_node_ids.is_empty() {
+      return Scene::new();
+    }
+
+    let geo_node_id = *node.arguments[0].argument_node_ids.iter().next().unwrap();
+
+    let mut atomic_structure = AtomicStructure::new();
+
+    // id:0 means there is no atom there
+    let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
+
+
+    self.process_box_for_atomic(
+      network,
+      geo_node_id,
+      registry,
+      &common_constants::IMPLICIT_VOLUME_MIN,
+      &(common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN),
+      &mut atom_pos_to_id,
+      &mut atomic_structure
+    );
+
+    atomic_structure.remove_lone_atoms();
+
+    let mut scene = Scene::new();
+    scene.atomic_structures.push(atomic_structure);
+    return scene;
+  }
+
+  fn process_box_for_atomic(
+    &self,
+    network: &NodeNetwork,
+    geo_node_id: u64,
+    registry: &NodeTypeRegistry,
+    start_pos: &IVec3,
+    size: &IVec3,
+    atom_pos_to_id: &mut HashMap<IVec3, u64>,
+    atomic_structure: &mut AtomicStructure) {
+
+    // Calculate the center point of the box
+    let center_pos = *start_pos + size / 2;
+    let center_point = center_pos.as_vec3();
+
+    // Evaluate SDF at the center point
+    let sdf_value = self.implicit_evaluator.eval(network, geo_node_id, &center_point, registry)[0];
+  
+    let half_diagonal = size.as_vec3().length() / 2.0;
+
+    // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
+    if sdf_value > half_diagonal + DIAMOND_SAMPLE_THRESHOLD {
+      return;
+    }
+
+    // If SDF value is less than -half diagonal, the whole box is filled
+    let filled = sdf_value < (-half_diagonal);
+  
+    // Determine if we should subdivide in each dimension (size >= 4)
+    let should_subdivide_x = size.x >= 2;
+    let should_subdivide_y = size.y >= 2;
+    let should_subdivide_z = size.z >= 2;
+
+    // If the whole box is filled or we can't subdivide in any direction, process each cell individually
+    if filled || (!should_subdivide_x && !should_subdivide_y && !should_subdivide_z) {
+        // Process each cell within the box
+        for x in 0..size.x {
+            for y in 0..size.y {
+                for z in 0..size.z {
+                    let cell_pos = IVec3::new(
+                        start_pos.x + x,
+                        start_pos.y + y,
+                        start_pos.z + z
+                    );
+                    self.process_cell_for_atomic(
+                        network,
+                        geo_node_id,
+                        registry,
+                        &cell_pos,
+                        atom_pos_to_id,
+                        atomic_structure,
+                        filled,
+                    );
+                }
+            }
+        }
+        return;
+    }
+    
+    // Otherwise, subdivide the box and recursively process each subdivision
+    let sub_size_x = if should_subdivide_x { size.x / 2 } else { size.x };
+    let sub_size_y = if should_subdivide_y { size.y / 2 } else { size.y };
+    let sub_size_z = if should_subdivide_z { size.z / 2 } else { size.z };
+    
+    // Calculate the number of subdivisions in each direction
+    let subdivisions_x = if should_subdivide_x { 2 } else { 1 };
+    let subdivisions_y = if should_subdivide_y { 2 } else { 1 };
+    let subdivisions_z = if should_subdivide_z { 2 } else { 1 };
+    
+    // Process each subdivision recursively
+    for dx in 0..subdivisions_x {
+        for dy in 0..subdivisions_y {
+            for dz in 0..subdivisions_z {
+                let sub_start = IVec3::new(
+                    start_pos.x + dx * sub_size_x,
+                    start_pos.y + dy * sub_size_y,
+                    start_pos.z + dz * sub_size_z
+                );
+                
+                let sub_size = IVec3::new(
+                    sub_size_x,
+                    sub_size_y,
+                    sub_size_z
+                );
+                
+                self.process_box_for_atomic(
+                    network,
+                    geo_node_id,
+                    registry,
+                    &sub_start,
+                    &sub_size,
+                    atom_pos_to_id,
+                    atomic_structure,
+                );
+            }
+        }
+    }
+
+  }
 
   fn process_cell_for_atomic(
     &self,
@@ -145,7 +275,8 @@ impl NetworkEvaluator {
     registry: &NodeTypeRegistry,
     int_pos: &IVec3,
     atom_pos_to_id: &mut HashMap<IVec3, u64>,
-    atomic_structure: &mut AtomicStructure) {
+    atomic_structure: &mut AtomicStructure,
+    filled: bool,) {
       let cell_start_position = int_pos * 4;
 
       let mut carbon_atom_ids = Vec::new();
@@ -155,8 +286,13 @@ impl NetworkEvaluator {
           carbon_atom_ids.push(*id);
         } else {
           let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
-          let value = self.implicit_evaluator.eval(network, geo_node_id, &crystal_space_pos, registry)[0];
-          let atom_id = if value < DIAMOND_SAMPLE_THRESHOLD {
+          let mut has_atom = filled;
+          if !has_atom {
+            let value = self.implicit_evaluator.eval(network, geo_node_id, &crystal_space_pos, registry)[0];
+            has_atom = value < DIAMOND_SAMPLE_THRESHOLD;
+          }
+
+          let atom_id = if has_atom {
             let id = atomic_structure.add_atom(CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
             atom_pos_to_id.insert(absolute_pos, id);
             id
@@ -249,7 +385,7 @@ impl NetworkEvaluator {
     // Evaluate SDF at the center point
     let sdf_value = self.implicit_evaluator.eval(network, node_id, &center_point, registry)[0];
     
-    let half_diagonal = size.as_vec3().length() / 2.0;
+    let half_diagonal = size.as_vec3().length() / spu / 2.0;
     
     // If absolute SDF value is greater than half diagonal, there's no surface in this box
     if sdf_value.abs() > half_diagonal {
@@ -260,7 +396,7 @@ impl NetworkEvaluator {
     let should_subdivide_x = size.x >= 4;
     let should_subdivide_y = size.y >= 4;
     let should_subdivide_z = size.z >= 4;
-    
+
     // If we can't subdivide in any direction, process each cell individually
     if !should_subdivide_x && !should_subdivide_y && !should_subdivide_z {
         // Process each cell within the box
