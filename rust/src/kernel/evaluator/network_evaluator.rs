@@ -182,8 +182,7 @@ impl NetworkEvaluator {
     let epsilon = 0.001;
 
     // Calculate the center point of the box
-    let center_pos = *start_pos + size / 2;
-    let center_point = center_pos.as_vec3();
+    let center_point = start_pos.as_vec3() + size.as_vec3() / 2.0;
 
     // Evaluate SDF at the center point
     let sdf_value = self.implicit_evaluator.eval(network, geo_node_id, &center_point, registry)[0];
