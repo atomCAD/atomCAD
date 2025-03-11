@@ -17,6 +17,36 @@ const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
 const CARBON: i32 = 6;
 
+// Relative in-cell positions of the carbon atoms that are part of a cell
+// A position can be part of multiple cells (corner positions are part of 8 cells,
+// face center positions are part of 2 cells, other positions are part of 1 cell).
+// In one cell coordinates go from 0 to 4. (a cell can be thought of 4x4x4 mini cells)
+const IN_CELL_CARBON_POSITIONS: [IVec3; 18] = [
+  // corner positions
+  IVec3::new(0, 0, 0),
+  IVec3::new(4, 0, 0),
+  IVec3::new(0, 4, 0),
+  IVec3::new(0, 0, 4),
+  IVec3::new(4, 4, 0),
+  IVec3::new(4, 0, 4),
+  IVec3::new(0, 4, 4),
+  IVec3::new(4, 4, 4),
+
+  // face center positions
+  IVec3::new(2, 2, 0),
+  IVec3::new(2, 2, 4),
+  IVec3::new(2, 0, 2),
+  IVec3::new(2, 4, 2),
+  IVec3::new(0, 2, 2),
+  IVec3::new(4, 2, 2),
+
+  // other positions
+  IVec3::new(1, 1, 1),
+  IVec3::new(1, 3, 3),
+  IVec3::new(3, 1, 3),
+  IVec3::new(3, 3, 1),
+];
+
 pub struct NetworkEvaluator {
     implicit_evaluator: ImplicitEvaluator,
 }
@@ -84,36 +114,6 @@ impl NetworkEvaluator {
     // id:0 means there is no atom there
     let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
 
-    // relative in-cell positions of the carbon atoms that are part of a cell
-    // a position can be part of multiple cells (corner positions are part of 8 cells,
-    // face center positions are part of 2 cells, other positions are part of 1 cell).
-    // in one cell coordinates go from 0 to 4. (a cell can be thought of 4x4x4 mini cells)
-    let in_cell_carbon_positions = [
-      // corner positions
-      IVec3::new(0, 0, 0),
-      IVec3::new(4, 0, 0),
-      IVec3::new(0, 4, 0),
-      IVec3::new(0, 0, 4),
-      IVec3::new(4, 4, 0),
-      IVec3::new(4, 0, 4),
-      IVec3::new(0, 4, 4),
-      IVec3::new(4, 4, 4),
-
-      // face center positions
-      IVec3::new(2, 2, 0),
-      IVec3::new(2, 2, 4),
-      IVec3::new(2, 0, 2),
-      IVec3::new(2, 4, 2),
-      IVec3::new(0, 2, 2),
-      IVec3::new(4, 2, 2),
-
-      // other positions
-      IVec3::new(1, 1, 1),
-      IVec3::new(1, 3, 3),
-      IVec3::new(3, 1, 3),
-      IVec3::new(3, 3, 1),
-    ];
-
     // Iterate over voxel grid
     for x in common_constants::IMPLICIT_VOLUME_MIN.x..common_constants::IMPLICIT_VOLUME_MAX.x {
       for y in common_constants::IMPLICIT_VOLUME_MIN.y..common_constants::IMPLICIT_VOLUME_MAX.y {
@@ -124,7 +124,6 @@ impl NetworkEvaluator {
             geo_node_id,
             registry,
             &IVec3::new(x,y,z),
-            &in_cell_carbon_positions,
             &mut atom_pos_to_id,
             &mut atomic_structure,
           );
@@ -145,13 +144,12 @@ impl NetworkEvaluator {
     geo_node_id: u64,
     registry: &NodeTypeRegistry,
     int_pos: &IVec3,
-    in_cell_carbon_positions: &[IVec3; 18],
     atom_pos_to_id: &mut HashMap<IVec3, u64>,
     atomic_structure: &mut AtomicStructure) {
       let cell_start_position = int_pos * 4;
 
       let mut carbon_atom_ids = Vec::new();
-      for pos in in_cell_carbon_positions {
+      for pos in &IN_CELL_CARBON_POSITIONS {
         let absolute_pos = cell_start_position + *pos;
         if let Some(id) = atom_pos_to_id.get(&absolute_pos) {
           carbon_atom_ids.push(*id);
