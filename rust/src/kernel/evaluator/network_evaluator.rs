@@ -179,6 +179,8 @@ impl NetworkEvaluator {
     atom_pos_to_id: &mut HashMap<IVec3, u64>,
     atomic_structure: &mut AtomicStructure) {
 
+    let epsilon = 0.001;
+
     // Calculate the center point of the box
     let center_pos = *start_pos + size / 2;
     let center_point = center_pos.as_vec3();
@@ -189,12 +191,12 @@ impl NetworkEvaluator {
     let half_diagonal = size.as_vec3().length() / 2.0;
 
     // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
-    if sdf_value > half_diagonal + DIAMOND_SAMPLE_THRESHOLD {
+    if sdf_value > half_diagonal + DIAMOND_SAMPLE_THRESHOLD + epsilon {
       return;
     }
 
     // If SDF value is less than -half diagonal, the whole box is filled
-    let filled = sdf_value < (-half_diagonal);
+    let filled = sdf_value < (-half_diagonal - epsilon);
   
     // Determine if we should subdivide in each dimension (size >= 4)
     let should_subdivide_x = size.x >= 2;
@@ -348,7 +350,7 @@ impl NetworkEvaluator {
     let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
     (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
     (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
-    SAMPLES_PER_UNIT * SAMPLES_PER_UNIT * 2;
+    SAMPLES_PER_UNIT * SAMPLES_PER_UNIT;
 
     let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
@@ -356,10 +358,10 @@ impl NetworkEvaluator {
         network,
         node_id,
         registry,
-      &(common_constants::IMPLICIT_VOLUME_MIN * SAMPLES_PER_UNIT),
-      &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * SAMPLES_PER_UNIT),
-      &mut eval_cache,
-      &mut point_cloud);
+        &(common_constants::IMPLICIT_VOLUME_MIN * SAMPLES_PER_UNIT),
+        &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * SAMPLES_PER_UNIT),
+        &mut eval_cache,
+        &mut point_cloud);
 
     let mut scene = Scene::new();
     scene.surface_point_clouds.push(point_cloud);
@@ -376,11 +378,11 @@ impl NetworkEvaluator {
       eval_cache: &mut LruCache<IVec3, f32>,
       point_cloud: &mut SurfacePointCloud,) {
 
-    // Calculate the center point of the box in integer coordinates
-    let center_pos = *start_pos + size / 2;
-
     let spu = SAMPLES_PER_UNIT as f32;
-    let center_point = center_pos.as_vec3() / spu;
+    let epsilon = 0.001;
+
+    // Calculate the center point of the box
+    let center_point = (start_pos.as_vec3() + size.as_vec3() / 2.0) / spu;
 
     // Evaluate SDF at the center point
     let sdf_value = self.implicit_evaluator.eval(network, node_id, &center_point, registry)[0];
@@ -388,10 +390,10 @@ impl NetworkEvaluator {
     let half_diagonal = size.as_vec3().length() / spu / 2.0;
     
     // If absolute SDF value is greater than half diagonal, there's no surface in this box
-    if sdf_value.abs() > half_diagonal {
+    if sdf_value.abs() > half_diagonal + epsilon {
         return;
     }
-    
+
     // Determine if we should subdivide in each dimension (size >= 4)
     let should_subdivide_x = size.x >= 4;
     let should_subdivide_y = size.y >= 4;
