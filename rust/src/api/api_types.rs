@@ -79,3 +79,8 @@ pub struct APIGeoTransData {
   pub translation: APIIVec3,
   pub rotation: APIIVec3,
 }
+
+pub struct APIAtomTransData {
+  pub translation: APIVec3,
+  pub rotation: APIVec3, // intrinsic euler angles in radians
+}

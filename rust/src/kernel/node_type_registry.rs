@@ -123,7 +123,19 @@ impl NodeTypeRegistry {
       name: "edit_atom".to_string(),
       parameters: vec![
           Parameter {
-              name: "atomic".to_string(),
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+              multi: false,
+          },
+      ],
+      output_type: DataType::Atomic,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "atom_trans".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
               data_type: DataType::Atomic,
               multi: false,
           },

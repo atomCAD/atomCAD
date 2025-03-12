@@ -7,7 +7,7 @@ use glam::f32::Vec2;
 use glam::f32::Vec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
-use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData};
+use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData, APIAtomTransData};
 use super::api_types::APIVec3;
 use super::api_types::APIIVec3;
 use super::api_types::APICamera;
@@ -15,7 +15,7 @@ use super::api_types::InputPinView;
 use super::api_types::NodeView;
 use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
-use crate::kernel::node_type::{data_type_to_str, CuboidData, SphereData, HalfSpaceData, GeoTransData};
+use crate::kernel::node_type::{data_type_to_str, CuboidData, SphereData, HalfSpaceData, GeoTransData, AtomTransData};
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
   return APIVec3{
@@ -447,6 +447,19 @@ pub fn get_geo_trans_data(node_network_name: String, node_id: u64) -> Option<API
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_atom_trans_data(node_network_name: String, node_id: u64) -> Option<APIAtomTransData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.kernel.get_node_network_data(&node_network_name, node_id)?;
+    let atom_trans_data = node_data.as_any_ref().downcast_ref::<AtomTransData>()?;
+    return Some(APIAtomTransData {
+      translation: to_api_vec3(&atom_trans_data.translation),
+      rotation: to_api_vec3(&atom_trans_data.rotation),
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_cuboid_data(node_network_name: String, node_id: u64, data: APICuboidData) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
@@ -497,6 +510,20 @@ pub fn set_geo_trans_data(node_network_name: String, node_id: u64, data: APIGeoT
         rotation: from_api_ivec3(&data.rotation),
       });
       instance.kernel.set_node_network_data(&node_network_name, node_id, geo_trans_data);
+      refresh_renderer(instance, &node_network_name, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_atom_trans_data(node_network_name: String, node_id: u64, data: APIAtomTransData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let atom_trans_data = Box::new(AtomTransData {
+        translation: from_api_vec3(&data.translation),
+        rotation: from_api_vec3(&data.rotation),
+      });
+      instance.kernel.set_node_network_data(&node_network_name, node_id, atom_trans_data);
       refresh_renderer(instance, &node_network_name, false);
     }
   }

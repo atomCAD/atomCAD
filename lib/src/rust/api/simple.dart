@@ -110,6 +110,11 @@ APIGeoTransData? getGeoTransData(
     RustLib.instance.api.crateApiSimpleGetGeoTransData(
         nodeNetworkName: nodeNetworkName, nodeId: nodeId);
 
+APIAtomTransData? getAtomTransData(
+        {required String nodeNetworkName, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleGetAtomTransData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+
 void setCuboidData(
         {required String nodeNetworkName,
         required BigInt nodeId,
@@ -136,6 +141,13 @@ void setGeoTransData(
         required BigInt nodeId,
         required APIGeoTransData data}) =>
     RustLib.instance.api.crateApiSimpleSetGeoTransData(
+        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+
+void setAtomTransData(
+        {required String nodeNetworkName,
+        required BigInt nodeId,
+        required APIAtomTransData data}) =>
+    RustLib.instance.api.crateApiSimpleSetAtomTransData(
         nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
 
 void deleteSelected({required String nodeNetworkName}) => RustLib.instance.api

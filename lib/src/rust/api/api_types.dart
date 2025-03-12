@@ -6,6 +6,27 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+class APIAtomTransData {
+  final APIVec3 translation;
+  final APIVec3 rotation;
+
+  const APIAtomTransData({
+    required this.translation,
+    required this.rotation,
+  });
+
+  @override
+  int get hashCode => translation.hashCode ^ rotation.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomTransData &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation &&
+          rotation == other.rotation;
+}
+
 class APICamera {
   final APIVec3 eye;
   final APIVec3 target;

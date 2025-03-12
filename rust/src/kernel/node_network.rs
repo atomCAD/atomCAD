@@ -1,4 +1,5 @@
 use glam::f32::Vec2;
+use glam::f32::Vec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -9,6 +10,7 @@ use super::node_type::SphereData;
 use super::node_type::CuboidData;
 use super::node_type::HalfSpaceData;
 use super::node_type::GeoTransData;
+use super::node_type::AtomTransData;
 use super::gadgets::gadget::Gadget;
 
 pub struct Argument {
@@ -94,6 +96,10 @@ impl NodeNetwork {
         translation: IVec3::new(0, 0, 0),
         rotation: IVec3::new(0, 0, 0),
       }),
+      "atom_trans" => Box::new(AtomTransData {
+        translation: Vec3::new(0.0, 0.0, 0.0),
+        rotation: Vec3::new(0.0, 0.0, 0.0),
+      }),      
       _ => Box::new(NoData{}),
     };
 

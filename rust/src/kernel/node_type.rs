@@ -1,4 +1,5 @@
 use glam::i32::IVec3;
+use glam::f32::Vec3;
 use std::any::Any;
 use super::as_any::AsAny;
 use super::gadgets::gadget::Gadget;
@@ -65,6 +66,12 @@ pub struct GeoTransData {
   pub rotation: IVec3, // intrinsic euler angles where 1 increment means 90 degrees.
 }
 
+#[derive(Debug)]
+pub struct AtomTransData {
+  pub translation: Vec3,
+  pub rotation: Vec3, // intrinsic euler angles in radians
+}
+
 pub trait NodeData: std::fmt::Debug + Any + AsAny  {
   fn provide_gadget(&self) -> Option<Box<dyn Gadget>>;
 }
@@ -102,6 +109,12 @@ impl NodeData for HalfSpaceData {
 }
 
 impl NodeData for GeoTransData {
+  fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+    None
+  }
+}
+
+impl NodeData for AtomTransData {
   fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
     None
   }
