@@ -4,6 +4,7 @@ use std::any::Any;
 use super::as_any::AsAny;
 use super::gadgets::gadget::Gadget;
 use super::gadgets::half_space_gadget::HalfSpaceGadget;
+use super::gadgets::atom_trans_gadget::AtomTransGadget;
 
 #[derive(PartialEq)]
 pub enum DataType {
@@ -116,6 +117,6 @@ impl NodeData for GeoTransData {
 
 impl NodeData for AtomTransData {
   fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
-    None
+    return Some(Box::new(AtomTransGadget::new(self.translation, self.rotation)));
   }
 }
