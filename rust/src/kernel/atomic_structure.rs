@@ -1,4 +1,5 @@
 use glam::f32::Vec3 as Vec3;
+use glam::f32::Quat;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -198,6 +199,21 @@ impl AtomicStructure {
     let bond_ids = &mut self.atoms.get_mut(&atom_id).unwrap().bond_ids;
     if let Some(pos) = bond_ids.iter().position(|&x| x == bond_id) {
         bond_ids.swap_remove(pos);
+    }
+  }
+  
+  pub fn transform(&mut self, rotation: &Quat, translation: &Vec3) {
+    // First, collect all atom IDs that will be transformed
+    let atom_ids: Vec<u64> = self.atoms.keys().cloned().collect();
+    
+    // Transform all atom positions
+    for (_, atom) in self.atoms.iter_mut() {
+      atom.position = rotation.mul_vec3(atom.position) + *translation;
+    }
+    
+    // Then mark all atoms as dirty in a separate loop
+    for atom_id in atom_ids {
+      self.make_atom_dirty(atom_id);
     }
   }
 

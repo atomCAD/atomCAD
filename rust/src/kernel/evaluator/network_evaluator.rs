@@ -1,9 +1,11 @@
 use glam::i32::IVec3;
+use glam::f32::Quat;
 use crate::kernel::surface_point_cloud::SurfacePoint;
 use crate::kernel::surface_point_cloud::SurfacePointCloud;
 use crate::kernel::node_network::NodeNetwork;
 use crate::kernel::node_network::Node;
 use crate::kernel::node_type::DataType;
+use crate::kernel::node_type::AtomTransData;
 use crate::kernel::node_type_registry::NodeTypeRegistry;
 use crate::kernel::scene::Scene;
 use crate::kernel::atomic_structure::AtomicStructure;
@@ -81,14 +83,27 @@ impl NetworkEvaluator {
 
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
 
-    if node.node_type_name == "geo_to_atom" {
-      return self.generate_geo_to_atomic_scene_fast(network, node, registry);
-    }
     if node_type.output_type == DataType::Geometry {
       return self.generate_point_cloud_scene_fast(network, node_id, registry);
     }
+    if node_type.output_type == DataType::Atomic {
+      let atomic_structure = self.generate_atomic_structure(network, node, registry);
+      let mut scene = Scene::new();
+      scene.atomic_structures.push(atomic_structure);
+      return scene;
+    }
 
     return Scene::new();
+  }
+
+  fn generate_atomic_structure(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
+    if node.node_type_name == "geo_to_atom" {
+      return self.generate_geo_to_atom_fast(network, node, registry);
+    }
+    if node.node_type_name == "atom_trans" {
+      return self.generate_atom_trans(network, node, registry);
+    }
+    return AtomicStructure::new();
   }
 
   fn add_bond(
@@ -102,9 +117,9 @@ impl NetworkEvaluator {
   }
 
   // generates diamond molecule from geometry
-  pub fn generate_geo_to_atomic_scene(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> Scene {
+  fn generate_geo_to_atom(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
     if node.arguments[0].argument_node_ids.is_empty() {
-      return Scene::new();
+      return AtomicStructure::new();
     }
 
     let geo_node_id = *node.arguments[0].argument_node_ids.iter().next().unwrap();
@@ -132,19 +147,38 @@ impl NetworkEvaluator {
       }
     }
     atomic_structure.remove_lone_atoms();
+    return atomic_structure;
+  }
 
-    let mut scene = Scene::new();
-    scene.atomic_structures.push(atomic_structure);
-    return scene;
+  fn generate_atom_trans(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
+    if node.arguments[0].argument_node_ids.is_empty() {
+      return AtomicStructure::new();
+    }
+    let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
+    let input_molecule_node = network.nodes.get(&input_molecule_node_id).unwrap();
+
+    let mut atomic_structure = self.generate_atomic_structure(network, input_molecule_node, registry);
+
+    let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
+
+    let rotation_quat = Quat::from_euler(
+      glam::EulerRot::XYX,
+      atom_trans_data.rotation.x, 
+      atom_trans_data.rotation.y, 
+      atom_trans_data.rotation.z);
+
+    atomic_structure.transform(&rotation_quat, &atom_trans_data.translation);
+ 
+    return atomic_structure;
   }
 
   // generates diamond molecule from geometry in an optimized way
-  pub fn generate_geo_to_atomic_scene_fast(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> Scene {
+  fn generate_geo_to_atom_fast(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
     if node.arguments[0].argument_node_ids.is_empty() {
-      return Scene::new();
+      return AtomicStructure::new();
     }
 
-    let geo_node_id = *node.arguments[0].argument_node_ids.iter().next().unwrap();
+    let geo_node_id = node.arguments[0].get_node_id().unwrap();
 
     let mut atomic_structure = AtomicStructure::new();
 
@@ -163,10 +197,7 @@ impl NetworkEvaluator {
     );
 
     atomic_structure.remove_lone_atoms();
-
-    let mut scene = Scene::new();
-    scene.atomic_structures.push(atomic_structure);
-    return scene;
+    return atomic_structure;
   }
 
   fn process_box_for_atomic(
