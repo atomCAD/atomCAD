@@ -16,6 +16,7 @@ use crate::kernel::common_constants;
 use crate::kernel::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::kernel::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::util::transform::Transform;
+use crate::kernel::node_data::parameter_data::ParameterData;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
@@ -51,10 +52,12 @@ const IN_CELL_CARBON_POSITIONS: [IVec3; 18] = [
   IVec3::new(3, 3, 1),
 ];
 
+#[derive(Clone)]
 pub struct GeometrySummary {
   pub frame_transform: Transform,
 }
 
+#[derive(Clone)]
 pub enum NetworkResult {
   None,
   Geometry(GeometrySummary),
@@ -88,6 +91,10 @@ impl NetworkEvaluator {
       None => return Scene::new(),
     };
 
+    let mut network_stack = Vec::new();
+    // We assign the root node network zero node id. It is not used in the evaluation.
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
     let node = match network.nodes.get(&node_id) {
       Some(node) => node,
       None => return Scene::new(),
@@ -103,7 +110,7 @@ impl NetworkEvaluator {
 
       let mut scene = Scene::new();
 
-      let result = &self.evaluate(network, node, registry)[0];
+      let result = &self.evaluate(&network_stack, node_id, registry)[0];
       if let NetworkResult::Atomic(atomic_structure) = result {
         scene.atomic_structures.push(atomic_structure.clone());
       };
@@ -114,12 +121,32 @@ impl NetworkEvaluator {
     return Scene::new();
   }
 
-  fn evaluate(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> Vec<NetworkResult> {
+  fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> Vec<NetworkResult> {
+
+    let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+
+    if node.node_type_name == "parameter" {
+      let parent_node_id = network_stack.last().unwrap().node_id;
+
+      let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
+      let mut parent_network_stack = network_stack.clone();
+      parent_network_stack.pop();
+      let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
+      let args : Vec<Vec<NetworkResult>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
+        self.evaluate(&parent_network_stack, arg_node_id, registry)
+      }).collect();
+      return args.concat();
+    }
     if node.node_type_name == "geo_to_atom" {
-      return vec![self.eval_geo_to_atom(network, node, registry)];
+      return vec![self.eval_geo_to_atom(network_stack, node_id, registry)];
     }
     if node.node_type_name == "atom_trans" {
-      return vec![self.eval_atom_trans(network, node, registry)];
+      return vec![self.eval_atom_trans(network_stack, node_id, registry)];
+    }
+    if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
+      let mut child_network_stack = network_stack.clone();
+      child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
+      return self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry);
     }
     return vec![NetworkResult::None];
   }
@@ -134,14 +161,15 @@ impl NetworkEvaluator {
       atomic_structure.add_bond(atom_ids[atom_index_1], atom_ids[atom_index_2], 1);    
   }
 
-  fn eval_atom_trans(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> NetworkResult {
+  fn eval_atom_trans<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+    let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+  
     if node.arguments[0].argument_node_ids.is_empty() {
       return NetworkResult::Atomic(AtomicStructure::new());
     }
     let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
-    let input_molecule_node = network.nodes.get(&input_molecule_node_id).unwrap();
 
-    let result = &self.evaluate(network, input_molecule_node, registry)[0];
+    let result = &self.evaluate(network_stack, input_molecule_node_id, registry)[0];
     if let NetworkResult::Atomic(atomic_structure) = result {
       let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 
@@ -160,7 +188,9 @@ impl NetworkEvaluator {
   }
 
   // generates diamond molecule from geometry in an optimized way
-  fn eval_geo_to_atom(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> NetworkResult {
+  fn eval_geo_to_atom<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+    let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+
     if node.arguments[0].argument_node_ids.is_empty() {
       return NetworkResult::Atomic(AtomicStructure::new());
     }
@@ -173,7 +203,7 @@ impl NetworkEvaluator {
     let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
 
     self.process_box_for_atomic(
-      network,
+      network_stack,
       geo_node_id,
       registry,
       &common_constants::IMPLICIT_VOLUME_MIN,
@@ -186,9 +216,9 @@ impl NetworkEvaluator {
     return NetworkResult::Atomic(atomic_structure);
   }
 
-  fn process_box_for_atomic(
+  fn process_box_for_atomic<'a>(
     &self,
-    network: &NodeNetwork,
+    network_stack: &Vec<NetworkStackElement<'a>>,
     geo_node_id: u64,
     registry: &NodeTypeRegistry,
     start_pos: &IVec3,
@@ -202,7 +232,7 @@ impl NetworkEvaluator {
     let center_point = start_pos.as_vec3() + size.as_vec3() / 2.0;
 
     // Evaluate SDF at the center point
-    let sdf_value = self.implicit_evaluator.eval(network, geo_node_id, &center_point, registry)[0];
+    let sdf_value = self.implicit_evaluator.implicit_eval(network_stack, geo_node_id, &center_point, registry)[0];
   
     let half_diagonal = size.as_vec3().length() / 2.0;
 
@@ -231,7 +261,7 @@ impl NetworkEvaluator {
                         start_pos.z + z
                     );
                     self.process_cell_for_atomic(
-                        network,
+                        network_stack,
                         geo_node_id,
                         registry,
                         &cell_pos,
@@ -257,7 +287,7 @@ impl NetworkEvaluator {
     // Process each subdivision recursively
     for (sub_start, sub_size) in subdivisions {
         self.process_box_for_atomic(
-            network,
+            network_stack,
             geo_node_id,
             registry,
             &sub_start,
@@ -326,9 +356,9 @@ impl NetworkEvaluator {
     result
   }
 
-  fn process_cell_for_atomic(
+  fn process_cell_for_atomic<'a>(
     &self,
-    network: &NodeNetwork,
+    network_stack: &Vec<NetworkStackElement<'a>>,
     geo_node_id: u64,
     registry: &NodeTypeRegistry,
     int_pos: &IVec3,
@@ -346,7 +376,7 @@ impl NetworkEvaluator {
           let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
           let mut has_atom = filled;
           if !has_atom {
-            let value = self.implicit_evaluator.eval(network, geo_node_id, &crystal_space_pos, registry)[0];
+            let value = self.implicit_evaluator.implicit_eval(network_stack, geo_node_id, &crystal_space_pos, registry)[0];
             has_atom = value < DIAMOND_SAMPLE_THRESHOLD;
           }
 
