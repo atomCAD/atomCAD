@@ -4,6 +4,7 @@ use glam::f32::Quat;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+#[derive(Clone)]
 pub struct Bond {
   pub id: u64,
   pub atom_id1: u64,
@@ -12,6 +13,7 @@ pub struct Bond {
   pub selected: bool,
 }
 
+#[derive(Clone)]
 pub struct Atom {
   pub id: u64,
   pub atomic_number: i32,
@@ -20,6 +22,7 @@ pub struct Atom {
   pub selected: bool,
 }
 
+#[derive(Clone)]
 pub struct AtomicStructure {
   pub frame_transform: Transform,
   pub next_id: u64,

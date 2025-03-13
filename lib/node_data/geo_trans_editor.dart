@@ -10,6 +10,7 @@ class GeoTransEditor extends StatefulWidget {
   final APIGeoTransData? data;
 
   const GeoTransEditor({
+    super.key,
     required this.nodeNetworkName,
     required this.nodeId,
     required this.data,
@@ -75,6 +76,7 @@ class GeoTransEditorState extends State<GeoTransEditor> {
               value: _stagedData!.translation,
               onChanged: (newValue) {
                 _updateStagedData(APIGeoTransData(
+                  transformOnlyFrame: _stagedData!.transformOnlyFrame,
                   translation: newValue,
                   rotation: _stagedData!.rotation,
                 ));
@@ -86,6 +88,7 @@ class GeoTransEditorState extends State<GeoTransEditor> {
               value: _stagedData!.rotation,
               onChanged: (newValue) {
                 _updateStagedData(APIGeoTransData(
+                  transformOnlyFrame: _stagedData!.transformOnlyFrame,
                   translation: _stagedData!.translation,
                   rotation: newValue,
                 ));

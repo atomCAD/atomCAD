@@ -94,14 +94,17 @@ class APICuboidData {
 class APIGeoTransData {
   final APIIVec3 translation;
   final APIIVec3 rotation;
+  final bool transformOnlyFrame;
 
   const APIGeoTransData({
     required this.translation,
     required this.rotation,
+    required this.transformOnlyFrame,
   });
 
   @override
-  int get hashCode => translation.hashCode ^ rotation.hashCode;
+  int get hashCode =>
+      translation.hashCode ^ rotation.hashCode ^ transformOnlyFrame.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -109,7 +112,8 @@ class APIGeoTransData {
       other is APIGeoTransData &&
           runtimeType == other.runtimeType &&
           translation == other.translation &&
-          rotation == other.rotation;
+          rotation == other.rotation &&
+          transformOnlyFrame == other.transformOnlyFrame;
 }
 
 class APIHalfSpaceData {

@@ -14,6 +14,8 @@ use std::collections::HashMap;
 use lru::LruCache;
 use crate::kernel::common_constants;
 use crate::kernel::evaluator::implicit_evaluator::ImplicitEvaluator;
+use crate::kernel::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::util::transform::Transform;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
@@ -48,6 +50,16 @@ const IN_CELL_CARBON_POSITIONS: [IVec3; 18] = [
   IVec3::new(3, 1, 3),
   IVec3::new(3, 3, 1),
 ];
+
+pub struct GeometrySummary {
+  pub frame_transform: Transform,
+}
+
+pub enum NetworkResult {
+  None,
+  Geometry(GeometrySummary),
+  Atomic(AtomicStructure),
+}
 
 pub struct NetworkEvaluator {
     implicit_evaluator: ImplicitEvaluator,
@@ -87,23 +99,29 @@ impl NetworkEvaluator {
       return self.generate_point_cloud_scene(network, node_id, registry);
     }
     if node_type.output_type == DataType::Atomic {
-      let atomic_structure = self.generate_atomic_structure(network, node, registry);
+      //let atomic_structure = self.generate_atomic_structure(network, node, registry);
+
       let mut scene = Scene::new();
-      scene.atomic_structures.push(atomic_structure);
+
+      let result = &self.evaluate(network, node, registry)[0];
+      if let NetworkResult::Atomic(atomic_structure) = result {
+        scene.atomic_structures.push(atomic_structure.clone());
+      };
+
       return scene;
     }
 
     return Scene::new();
   }
 
-  fn generate_atomic_structure(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
+  fn evaluate(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> Vec<NetworkResult> {
     if node.node_type_name == "geo_to_atom" {
-      return self.generate_geo_to_atom(network, node, registry);
+      return vec![self.eval_geo_to_atom(network, node, registry)];
     }
     if node.node_type_name == "atom_trans" {
-      return self.generate_atom_trans(network, node, registry);
+      return vec![self.eval_atom_trans(network, node, registry)];
     }
-    return AtomicStructure::new();
+    return vec![NetworkResult::None];
   }
 
   fn add_bond(
@@ -116,32 +134,35 @@ impl NetworkEvaluator {
       atomic_structure.add_bond(atom_ids[atom_index_1], atom_ids[atom_index_2], 1);    
   }
 
-  fn generate_atom_trans(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
+  fn eval_atom_trans(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> NetworkResult {
     if node.arguments[0].argument_node_ids.is_empty() {
-      return AtomicStructure::new();
+      return NetworkResult::Atomic(AtomicStructure::new());
     }
     let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
     let input_molecule_node = network.nodes.get(&input_molecule_node_id).unwrap();
 
-    let mut atomic_structure = self.generate_atomic_structure(network, input_molecule_node, registry);
+    let result = &self.evaluate(network, input_molecule_node, registry)[0];
+    if let NetworkResult::Atomic(atomic_structure) = result {
+      let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 
-    let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
+      let rotation_quat = Quat::from_euler(
+        glam::EulerRot::XYX,
+        atom_trans_data.rotation.x, 
+        atom_trans_data.rotation.y, 
+        atom_trans_data.rotation.z);
 
-    let rotation_quat = Quat::from_euler(
-      glam::EulerRot::XYX,
-      atom_trans_data.rotation.x, 
-      atom_trans_data.rotation.y, 
-      atom_trans_data.rotation.z);
+      let mut result_atomic_structure = atomic_structure.clone();
+      result_atomic_structure.transform(&rotation_quat, &atom_trans_data.translation);
 
-    atomic_structure.transform(&rotation_quat, &atom_trans_data.translation);
- 
-    return atomic_structure;
+      return NetworkResult::Atomic(result_atomic_structure);
+    }
+    return NetworkResult::None;
   }
 
   // generates diamond molecule from geometry in an optimized way
-  fn generate_geo_to_atom(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
+  fn eval_geo_to_atom(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> NetworkResult {
     if node.arguments[0].argument_node_ids.is_empty() {
-      return AtomicStructure::new();
+      return NetworkResult::Atomic(AtomicStructure::new());
     }
 
     let geo_node_id = node.arguments[0].get_node_id().unwrap();
@@ -150,7 +171,6 @@ impl NetworkEvaluator {
 
     // id:0 means there is no atom there
     let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
-
 
     self.process_box_for_atomic(
       network,
@@ -163,7 +183,7 @@ impl NetworkEvaluator {
     );
 
     atomic_structure.remove_lone_atoms();
-    return atomic_structure;
+    return NetworkResult::Atomic(atomic_structure);
   }
 
   fn process_box_for_atomic(

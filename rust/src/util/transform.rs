@@ -1,6 +1,7 @@
 use glam::f32::Vec3;
 use glam::f32::Quat;
 
+#[derive(Clone)]
 pub struct Transform {
   pub translation: Vec3,
   pub rotation: Quat,

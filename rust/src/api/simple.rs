@@ -445,6 +445,7 @@ pub fn get_geo_trans_data(node_network_name: String, node_id: u64) -> Option<API
     let node_data = cad_instance.kernel.get_node_network_data(&node_network_name, node_id)?;
     let geo_trans_data = node_data.as_any_ref().downcast_ref::<GeoTransData>()?;
     return Some(APIGeoTransData {
+      transform_only_frame: geo_trans_data.transform_only_frame,
       translation: to_api_ivec3(&geo_trans_data.translation),
       rotation: to_api_ivec3(&geo_trans_data.rotation),
     });
@@ -511,6 +512,7 @@ pub fn set_geo_trans_data(node_network_name: String, node_id: u64, data: APIGeoT
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let geo_trans_data = Box::new(GeoTransData {
+        transform_only_frame: data.transform_only_frame,
         translation: from_api_ivec3(&data.translation),
         rotation: from_api_ivec3(&data.rotation),
       });

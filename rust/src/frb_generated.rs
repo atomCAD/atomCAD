@@ -1227,9 +1227,11 @@ impl SseDecode for crate::api::api_types::APIGeoTransData {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_translation = <crate::api::api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_rotation = <crate::api::api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_transformOnlyFrame = <bool>::sse_decode(deserializer);
         return crate::api::api_types::APIGeoTransData {
             translation: var_translation,
             rotation: var_rotation,
+            transform_only_frame: var_transformOnlyFrame,
         };
     }
 }
@@ -1736,6 +1738,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::api_types::APIGeoTransData {
         [
             self.translation.into_into_dart().into_dart(),
             self.rotation.into_into_dart().into_dart(),
+            self.transform_only_frame.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2003,6 +2006,7 @@ impl SseEncode for crate::api::api_types::APIGeoTransData {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::api_types::APIIVec3>::sse_encode(self.translation, serializer);
         <crate::api::api_types::APIIVec3>::sse_encode(self.rotation, serializer);
+        <bool>::sse_encode(self.transform_only_frame, serializer);
     }
 }
 

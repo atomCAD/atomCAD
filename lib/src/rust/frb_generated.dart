@@ -1139,11 +1139,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIGeoTransData(
       translation: dco_decode_apii_vec_3(arr[0]),
       rotation: dco_decode_apii_vec_3(arr[1]),
+      transformOnlyFrame: dco_decode_bool(arr[2]),
     );
   }
 
@@ -1540,8 +1541,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_translation = sse_decode_apii_vec_3(deserializer);
     var var_rotation = sse_decode_apii_vec_3(deserializer);
+    var var_transformOnlyFrame = sse_decode_bool(deserializer);
     return APIGeoTransData(
-        translation: var_translation, rotation: var_rotation);
+        translation: var_translation,
+        rotation: var_rotation,
+        transformOnlyFrame: var_transformOnlyFrame);
   }
 
   @protected
@@ -1979,6 +1983,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_3(self.translation, serializer);
     sse_encode_apii_vec_3(self.rotation, serializer);
+    sse_encode_bool(self.transformOnlyFrame, serializer);
   }
 
   @protected
