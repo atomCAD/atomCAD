@@ -156,36 +156,10 @@ impl ImplicitEvaluator {
         return ret;
     }
 
-    // Calculate gradient using central differences
-    pub fn get_gradient(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec3 {
-        let epsilon = 0.001; // Small value for finite difference approximation
-        
-        let mut network_stack = Vec::new();
-        // We assign the root node network zero node id. It is not used in the evaluation.
-        network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
-    
-        let dx = (
-          self.implicit_eval(&network_stack, node_id, &(sample_point + Vec3::new(epsilon, 0.0, 0.0)), registry)[0] -
-          self.implicit_eval(&network_stack, node_id, &(sample_point - Vec3::new(epsilon, 0.0, 0.0)), registry)[0]
-        ) / (2.0 * epsilon);
-        
-        let dy = (
-          self.implicit_eval(&network_stack, node_id, &(sample_point + Vec3::new(0.0, epsilon, 0.0)), registry)[0] -
-          self.implicit_eval(&network_stack, node_id, &(sample_point - Vec3::new(0.0, epsilon, 0.0)), registry)[0]
-        ) / (2.0 * epsilon);
-        
-        let dz = (
-          self.implicit_eval(&network_stack, node_id, &(sample_point + Vec3::new(0.0, 0.0, epsilon)), registry)[0] -
-          self.implicit_eval(&network_stack, node_id, &(sample_point - Vec3::new(0.0, 0.0, epsilon)), registry)[0]
-        ) / (2.0 * epsilon);
-    
-        Vec3::new(dx, dy, dz)
-    }
-
     // Calculate gradient using one sided differences
-    // This is faster than get_gradient but potentially less accurate
+    // This is faster than using central differences but potentially less accurate
     // It also returns the value at the sampled point, so that the value can be reused. 
-    pub fn get_gradient_fast(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> (Vec3, f32) {
+    pub fn get_gradient(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> (Vec3, f32) {
       let epsilon = 0.001; // Small value for finite difference approximation
 
       let value = self.eval(&network, node_id, sample_point, registry)[0];

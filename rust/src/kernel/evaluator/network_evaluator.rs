@@ -84,7 +84,7 @@ impl NetworkEvaluator {
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
 
     if node_type.output_type == DataType::Geometry {
-      return self.generate_point_cloud_scene_fast(network, node_id, registry);
+      return self.generate_point_cloud_scene(network, node_id, registry);
     }
     if node_type.output_type == DataType::Atomic {
       let atomic_structure = self.generate_atomic_structure(network, node, registry);
@@ -98,7 +98,7 @@ impl NetworkEvaluator {
 
   fn generate_atomic_structure(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
     if node.node_type_name == "geo_to_atom" {
-      return self.generate_geo_to_atom_fast(network, node, registry);
+      return self.generate_geo_to_atom(network, node, registry);
     }
     if node.node_type_name == "atom_trans" {
       return self.generate_atom_trans(network, node, registry);
@@ -114,40 +114,6 @@ impl NetworkEvaluator {
     atom_index_2: usize) {
       if atom_ids[atom_index_1] == 0 || atom_ids[atom_index_2] == 0 { return; }
       atomic_structure.add_bond(atom_ids[atom_index_1], atom_ids[atom_index_2], 1);    
-  }
-
-  // generates diamond molecule from geometry
-  fn generate_geo_to_atom(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
-    if node.arguments[0].argument_node_ids.is_empty() {
-      return AtomicStructure::new();
-    }
-
-    let geo_node_id = *node.arguments[0].argument_node_ids.iter().next().unwrap();
-
-    let mut atomic_structure = AtomicStructure::new();
-
-    // id:0 means there is no atom there
-    let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
-
-    // Iterate over voxel grid
-    for x in common_constants::IMPLICIT_VOLUME_MIN.x..common_constants::IMPLICIT_VOLUME_MAX.x {
-      for y in common_constants::IMPLICIT_VOLUME_MIN.y..common_constants::IMPLICIT_VOLUME_MAX.y {
-        for z in common_constants::IMPLICIT_VOLUME_MIN.z..common_constants::IMPLICIT_VOLUME_MAX.z {
-
-          self.process_cell_for_atomic(
-            network,
-            geo_node_id,
-            registry,
-            &IVec3::new(x,y,z),
-            &mut atom_pos_to_id,
-            &mut atomic_structure,
-            false,
-          );
-        }
-      }
-    }
-    atomic_structure.remove_lone_atoms();
-    return atomic_structure;
   }
 
   fn generate_atom_trans(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
@@ -173,7 +139,7 @@ impl NetworkEvaluator {
   }
 
   // generates diamond molecule from geometry in an optimized way
-  fn generate_geo_to_atom_fast(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
+  fn generate_geo_to_atom(&self, network: &NodeNetwork, node: &Node, registry: &NodeTypeRegistry) -> AtomicStructure {
     if node.arguments[0].argument_node_ids.is_empty() {
       return AtomicStructure::new();
     }
@@ -398,27 +364,6 @@ impl NetworkEvaluator {
     let mut point_cloud = SurfacePointCloud::new();
     let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
     (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
-    SAMPLES_PER_UNIT * SAMPLES_PER_UNIT * 2;
-
-    let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
-
-    // Iterate over voxel grid
-    for x in common_constants::IMPLICIT_VOLUME_MIN.x*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.x*SAMPLES_PER_UNIT {
-      for y in common_constants::IMPLICIT_VOLUME_MIN.y*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.y*SAMPLES_PER_UNIT {
-        for z in common_constants::IMPLICIT_VOLUME_MIN.z*SAMPLES_PER_UNIT..common_constants::IMPLICIT_VOLUME_MAX.z*SAMPLES_PER_UNIT {
-          self.process_cell_for_point_cloud(network, node_id, registry, &IVec3::new(x, y, z), &mut eval_cache, &mut point_cloud);
-        }
-      }
-    }
-    let mut scene = Scene::new();
-    scene.surface_point_clouds.push(point_cloud);
-    return scene;
-  }
-
-  pub fn generate_point_cloud_scene_fast(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
-    let mut point_cloud = SurfacePointCloud::new();
-    let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
-    (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
     (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
     SAMPLES_PER_UNIT * SAMPLES_PER_UNIT;
 
@@ -554,7 +499,7 @@ impl NetworkEvaluator {
 
       if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
           let center_point = (corner_points[0].as_vec3() + 0.5) / spu;
-          let gradient_val = self.implicit_evaluator.get_gradient_fast(network, node_id, &center_point, registry);
+          let gradient_val = self.implicit_evaluator.get_gradient(network, node_id, &center_point, registry);
           let gradient = gradient_val.0;
           let value = gradient_val.1;
           let gradient_magnitude_sq = gradient.length_squared();
