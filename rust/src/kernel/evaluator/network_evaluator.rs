@@ -5,7 +5,7 @@ use crate::kernel::surface_point_cloud::SurfacePointCloud;
 use crate::kernel::node_network::NodeNetwork;
 use crate::kernel::node_network::Node;
 use crate::kernel::node_type::DataType;
-use crate::kernel::node_type::AtomTransData;
+use crate::kernel::node_data::atom_trans_data::AtomTransData;
 use crate::kernel::node_type_registry::NodeTypeRegistry;
 use crate::kernel::scene::Scene;
 use crate::kernel::atomic_structure::AtomicStructure;

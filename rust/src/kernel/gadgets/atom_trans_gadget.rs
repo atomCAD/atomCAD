@@ -1,7 +1,7 @@
 use super::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
-use crate::kernel::node_type::AtomTransData;
-use crate::kernel::node_type::NodeData;
+use crate::kernel::node_data::atom_trans_data::AtomTransData;
+use crate::kernel::node_data::node_data::NodeData;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::mesh::Material;
 use glam::f32::Vec3;

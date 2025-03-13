@@ -9,7 +9,7 @@ use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
 use super::node_type::NodeType;
-use super::node_type::NodeData;
+use crate::kernel::node_data::node_data::NodeData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use super::scene::Scene;
 use super::gadgets::gadget::Gadget;

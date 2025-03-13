@@ -3,15 +3,15 @@ use glam::f32::Vec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use super::node_type::NodeType;
-use super::node_type::NodeData;
-use super::node_type::NoData;
-use super::node_type::SphereData;
-use super::node_type::CuboidData;
-use super::node_type::HalfSpaceData;
-use super::node_type::GeoTransData;
-use super::node_type::AtomTransData;
-use super::gadgets::gadget::Gadget;
+use crate::kernel::node_type::NodeType;
+use crate::kernel::node_data::node_data::NodeData;
+use crate::kernel::node_data::no_data::NoData;
+use crate::kernel::node_data::sphere_data::SphereData;
+use crate::kernel::node_data::cuboid_data::CuboidData;
+use crate::kernel::node_data::half_space_data::HalfSpaceData;
+use crate::kernel::node_data::geo_trans_data::GeoTransData;
+use crate::kernel::node_data::atom_trans_data::AtomTransData;
+use crate::kernel::gadgets::gadget::Gadget;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.

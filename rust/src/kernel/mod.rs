@@ -6,6 +6,7 @@ pub mod commands;
 pub mod node_type;
 pub mod node_network;
 pub mod node_type_registry;
+pub mod node_data;
 pub mod evaluator;
 pub mod surface_point_cloud;
 pub mod scene;

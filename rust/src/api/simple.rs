@@ -15,7 +15,12 @@ use super::api_types::InputPinView;
 use super::api_types::NodeView;
 use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
-use crate::kernel::node_type::{data_type_to_str, CuboidData, SphereData, HalfSpaceData, GeoTransData, AtomTransData};
+use crate::kernel::node_type::data_type_to_str;
+use crate::kernel::node_data::sphere_data::SphereData;
+use crate::kernel::node_data::cuboid_data::CuboidData;
+use crate::kernel::node_data::half_space_data::HalfSpaceData;
+use crate::kernel::node_data::geo_trans_data::GeoTransData;
+use crate::kernel::node_data::atom_trans_data::AtomTransData;
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
   return APIVec3{
