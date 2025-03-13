@@ -71,44 +71,19 @@ impl NodeNetwork {
     return ret;
   }
 
-  pub fn add_node(&mut self, node_type_name: &str, position: Vec2, num_of_parameters: usize) -> u64 {
+  pub fn add_node(&mut self, node_type_name: &str, position: Vec2, num_of_parameters: usize, node_data: Box<dyn NodeData>) -> u64 {
     let node_id = self.next_node_id;
     let mut arguments: Vec<Argument> = Vec::new();
     for _i in 0..num_of_parameters {
       arguments.push(Argument { argument_node_ids: HashSet::new() });
     }
-    
-    // Create default node data based on node type
-    let default_data: Box<dyn NodeData> = match node_type_name {
-      "sphere" => Box::new(SphereData {
-        center: IVec3::new(0, 0, 0),
-        radius: 1,
-      }),
-      "cuboid" => Box::new(CuboidData {
-        min_corner: IVec3::new(-1, -1, -1),
-        extent: IVec3::new(2, 2, 2),
-      }),
-      "half_space" => Box::new(HalfSpaceData {
-        miller_index: IVec3::new(1, 0, 0), // Default normal along x-axis
-        shift: 0,
-      }),
-      "geo_trans" => Box::new(GeoTransData {
-        translation: IVec3::new(0, 0, 0),
-        rotation: IVec3::new(0, 0, 0),
-      }),
-      "atom_trans" => Box::new(AtomTransData {
-        translation: Vec3::new(0.0, 0.0, 0.0),
-        rotation: Vec3::new(0.0, 0.0, 0.0),
-      }),      
-      _ => Box::new(NoData{}),
-    };
 
     let node = Node {
       id: node_id,
       node_type_name: node_type_name.to_string(),
       position,
       arguments,
-      data: default_data,
+      data: node_data,
     };
     
     self.next_node_id += 1;

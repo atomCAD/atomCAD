@@ -1,8 +1,4 @@
-use glam::i32::IVec3;
-use glam::f32::Vec3;
-use super::gadgets::gadget::Gadget;
-use super::gadgets::half_space_gadget::HalfSpaceGadget;
-use super::gadgets::atom_trans_gadget::AtomTransGadget;
+use crate::kernel::node_data::node_data::NodeData;
 
 #[derive(PartialEq)]
 pub enum DataType {
@@ -28,4 +24,5 @@ pub struct NodeType {
   pub name: String, // name of the node type
   pub parameters: Vec<Parameter>,
   pub output_type: DataType,
+  pub node_data_creator: fn() -> Box<dyn NodeData>,
 }

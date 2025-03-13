@@ -3,6 +3,15 @@ use super::node_type::DataType;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
 use super::node_network::NodeNetwork;
+use super::node_data::node_data::NodeData;
+use super::node_data::no_data::NoData;
+use super::node_data::sphere_data::SphereData;
+use super::node_data::cuboid_data::CuboidData;
+use super::node_data::half_space_data::HalfSpaceData;
+use super::node_data::geo_trans_data::GeoTransData;
+use super::node_data::atom_trans_data::AtomTransData;
+use super::node_data::parameter_data::ParameterData;
+use glam::{IVec3, Vec3};
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
@@ -22,24 +31,39 @@ impl NodeTypeRegistry {
       name: "parameter".to_string(),
       parameters: Vec::new(),
       output_type: DataType::Geometry, // is not used, the parameter node's output type will be determined by the node network's node type.
+      node_data_creator: || Box::new(ParameterData {
+        param_index: 0,
+      }),
     });
 
     ret.add_node_type(NodeType {
       name: "cuboid".to_string(),
       parameters: Vec::new(),
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(CuboidData {
+        min_corner: IVec3::new(-1, -1, -1),
+        extent: IVec3::new(2, 2, 2),
+      }),
     });
 
     ret.add_node_type(NodeType {
       name: "sphere".to_string(),
       parameters: Vec::new(),
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(SphereData {
+        center: IVec3::new(0, 0, 0),
+        radius: 1,
+      }),
     });
 
     ret.add_node_type(NodeType {
       name: "half_space".to_string(),
       parameters: Vec::new(),
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(HalfSpaceData {
+        miller_index: IVec3::new(1, 0, 0), // Default normal along x-axis
+        shift: 0,
+      }),
     });
 
     ret.add_node_type(NodeType {
@@ -52,6 +76,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(NoData {}),
     });
 
     ret.add_node_type(NodeType {
@@ -64,6 +89,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(NoData {}),
     });
 
     ret.add_node_type(NodeType {
@@ -76,6 +102,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(NoData {}),
     });
 
     ret.add_node_type(NodeType {
@@ -93,6 +120,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(NoData {}),
     });
 
     ret.add_node_type(NodeType {
@@ -105,6 +133,10 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      node_data_creator: || Box::new(GeoTransData {
+        translation: IVec3::new(0, 0, 0),
+        rotation: IVec3::new(0, 0, 0),
+      }),
     });
 
     ret.add_node_type(NodeType {
@@ -117,6 +149,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      node_data_creator: || Box::new(NoData {}),
     });
 
     ret.add_node_type(NodeType {
@@ -129,6 +162,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      node_data_creator: || Box::new(NoData {}),
     });
 
     ret.add_node_type(NodeType {
@@ -141,6 +175,10 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      node_data_creator: || Box::new(AtomTransData {
+        translation: Vec3::new(0.0, 0.0, 0.0),
+        rotation: Vec3::new(0.0, 0.0, 0.0),
+      }),
     });
 
     return ret;

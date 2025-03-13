@@ -10,6 +10,7 @@ use super::node_network::NodeNetwork;
 use super::node_type::DataType;
 use super::node_type::NodeType;
 use crate::kernel::node_data::node_data::NodeData;
+use crate::kernel::node_data::no_data::NoData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use super::scene::Scene;
 use super::gadgets::gadget::Gadget;
@@ -128,21 +129,25 @@ impl Kernel {
       NodeType {
         name: node_network_name.to_string(),
         parameters: Vec::new(),
-        output_type: DataType::Geometry // TODO: change this
+        output_type: DataType::Geometry, // TODO: change this
+        node_data_creator: || Box::new(NoData {}),
       }
     ));
   }
 
   pub fn add_node(&mut self, node_network_name: &str, node_type_name: &str, position: Vec2) -> u64 {
     // First get the node type info
-    let num_parameters = match self.node_type_registry.get_node_type(node_type_name) {
-      Some(node_type) => node_type.parameters.len(),
+    let (num_parameters, node_data) = match self.node_type_registry.get_node_type(node_type_name) {
+      Some(node_type) => {
+        let data_creator = &node_type.node_data_creator;
+        (node_type.parameters.len(), (data_creator)())
+      },
       None => return 0,
     };
 
     // Then modify the network
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
-      node_network.add_node(node_type_name, position, num_parameters)
+      node_network.add_node(node_type_name, position, num_parameters, node_data)
     } else {
       0
     }
