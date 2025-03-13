@@ -78,6 +78,7 @@ pub struct APIHalfSpaceData {
 pub struct APIGeoTransData {
   pub translation: APIIVec3,
   pub rotation: APIIVec3,
+  pub transform_only_frame: bool,
 }
 
 pub struct APIAtomTransData {

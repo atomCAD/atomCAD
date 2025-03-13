@@ -136,6 +136,7 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(GeoTransData {
         translation: IVec3::new(0, 0, 0),
         rotation: IVec3::new(0, 0, 0),
+        transform_only_frame: false,
       }),
     });
 

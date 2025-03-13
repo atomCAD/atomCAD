@@ -6,6 +6,7 @@ use glam::i32::IVec3;
 pub struct GeoTransData {
   pub translation: IVec3,
   pub rotation: IVec3, // intrinsic euler angles where 1 increment means 90 degrees.
+  pub transform_only_frame: bool, // If true, only the reference frame is transformed, the geometry remains in place.
 }
 
 impl NodeData for GeoTransData {

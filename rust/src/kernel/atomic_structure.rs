@@ -1,3 +1,4 @@
+use crate::util::transform::Transform;
 use glam::f32::Vec3 as Vec3;
 use glam::f32::Quat;
 use std::collections::HashMap;
@@ -20,6 +21,7 @@ pub struct Atom {
 }
 
 pub struct AtomicStructure {
+  pub frame_transform: Transform,
   pub next_id: u64,
   pub atoms: HashMap<u64, Atom>,
   pub bonds: HashMap<u64, Bond>,
@@ -30,6 +32,7 @@ impl AtomicStructure {
 
   pub fn new() -> Self {
     Self {
+      frame_transform: Transform::default(),
       next_id: 1,
       atoms: HashMap::new(),
       bonds: HashMap::new(),

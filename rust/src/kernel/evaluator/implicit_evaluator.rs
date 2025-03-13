@@ -62,17 +62,23 @@ fn eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node: &Node,
     sample_point: &Vec3) -> f32 {
+
+    let mut transformed_point = sample_point.clone(); 
+
     let geo_trans_data = &node.data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
-    let translation = geo_trans_data.translation.as_vec3();
-    let rotation_euler = geo_trans_data.rotation.as_vec3() * PI * 0.5;
 
-    let rotation_quat = Quat::from_euler(
-        glam::EulerRot::XYX,
-        rotation_euler.x, 
-        rotation_euler.y, 
-        rotation_euler.z);
-
-    let transformed_point = rotation_quat.inverse().mul_vec3(sample_point - translation);
+    if !geo_trans_data.transform_only_frame {
+      let translation = geo_trans_data.translation.as_vec3();
+      let rotation_euler = geo_trans_data.rotation.as_vec3() * PI * 0.5;
+  
+      let rotation_quat = Quat::from_euler(
+          glam::EulerRot::XYX,
+          rotation_euler.x, 
+          rotation_euler.y, 
+          rotation_euler.z);
+  
+      transformed_point = rotation_quat.inverse().mul_vec3(sample_point - translation); 
+    }
 
     match node.arguments[0].get_node_id() {
         Some(node_id) => evaluator.implicit_eval(
