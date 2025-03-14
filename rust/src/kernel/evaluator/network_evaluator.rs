@@ -1,9 +1,9 @@
 use glam::i32::IVec3;
 use glam::f32::Quat;
+use glam::f32::Vec3;
 use crate::kernel::surface_point_cloud::SurfacePoint;
 use crate::kernel::surface_point_cloud::SurfacePointCloud;
 use crate::kernel::node_network::NodeNetwork;
-use crate::kernel::node_network::Node;
 use crate::kernel::node_type::DataType;
 use crate::kernel::node_data::atom_trans_data::AtomTransData;
 use crate::kernel::node_type_registry::NodeTypeRegistry;
@@ -17,6 +17,9 @@ use crate::kernel::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::kernel::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::util::transform::Transform;
 use crate::kernel::node_data::parameter_data::ParameterData;
+use crate::kernel::node_data::sphere_data::SphereData;
+use crate::kernel::node_data::cuboid_data::CuboidData;
+use crate::kernel::node_data::half_space_data::HalfSpaceData;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
@@ -137,6 +140,15 @@ impl NetworkEvaluator {
       }).collect();
       return args.concat();
     }
+    if node.node_type_name == "sphere" {
+      return vec![self.eval_sphere(network_stack, node_id, registry)];
+    }
+    if node.node_type_name == "cuboid" {
+      return vec![self.eval_cuboid(network_stack, node_id, registry)];
+    }
+    if node.node_type_name == "half_space" {
+      return vec![self.eval_half_space(network_stack, node_id, registry)];
+    }
     if node.node_type_name == "geo_to_atom" {
       return vec![self.eval_geo_to_atom(network_stack, node_id, registry)];
     }
@@ -161,9 +173,47 @@ impl NetworkEvaluator {
       atomic_structure.add_bond(atom_ids[atom_index_1], atom_ids[atom_index_2], 1);    
   }
 
-  fn eval_atom_trans<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
-  
+  fn eval_sphere<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
+
+    return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
+      sphere_data.center.as_vec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+      Quat::IDENTITY,
+    ) });
+  }
+
+  fn eval_cuboid<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
+
+    let min_corner = cuboid_data.min_corner.as_vec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+    let extent = cuboid_data.extent.as_vec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+    let center = min_corner + extent / 2.0;
+
+    return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
+      center,
+      Quat::IDENTITY,
+    ) });
+  }
+
+  fn eval_half_space<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
+
+
+    let dir = half_space_data.miller_index.as_vec3().normalize();
+    let shift_handle_offset = ((half_space_data.shift as f32) / half_space_data.miller_index.as_vec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32);
+
+    return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
+      dir * shift_handle_offset,
+      Quat::from_rotation_arc(Vec3::Y, dir),
+    )});
+  }
+
+  fn eval_atom_trans<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {  
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
     if node.arguments[0].argument_node_ids.is_empty() {
       return NetworkResult::Atomic(AtomicStructure::new());
     }
@@ -189,7 +239,7 @@ impl NetworkEvaluator {
 
   // generates diamond molecule from geometry in an optimized way
   fn eval_geo_to_atom<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
     if node.arguments[0].argument_node_ids.is_empty() {
       return NetworkResult::Atomic(AtomicStructure::new());

@@ -17,6 +17,12 @@ pub struct NetworkStackElement<'a> {
   pub node_id: u64,
 }
 
+impl<'a> NetworkStackElement<'a> {
+  pub fn get_top_node(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> &'a Node {
+    return network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+  }
+}
+
 fn eval_cuboid<'a>(
   _evaluator: &ImplicitEvaluator,
   _registry: &NodeTypeRegistry,
