@@ -1,5 +1,5 @@
 use super::super::command::Command;
-use super::super::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::AtomicStructure;
 
 /*
  * Command to add a bond between the given atoms with the given multiplicity (1-3).

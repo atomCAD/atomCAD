@@ -1,7 +1,7 @@
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
-use crate::kernel::surface_point_cloud::SurfacePoint;
-use crate::kernel::surface_point_cloud::SurfacePointCloud;
+use crate::common::surface_point_cloud::SurfacePoint;
+use crate::common::surface_point_cloud::SurfacePointCloud;
 use super::tessellator;
 use glam::f32::Vec3;
 use glam::f32::Quat;

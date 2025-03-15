@@ -1,5 +1,5 @@
-use crate::kernel::node_data::node_data::NodeData;
-use crate::kernel::gadgets::gadget::Gadget;
+use crate::structure_editor::node_data::node_data::NodeData;
+use crate::structure_editor::gadgets::gadget::Gadget;
 use glam::i32::IVec3;
 
 #[derive(Debug)]

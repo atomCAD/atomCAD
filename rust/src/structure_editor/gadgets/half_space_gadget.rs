@@ -9,9 +9,9 @@ use crate::util::hit_test_utils::sphere_hit_test;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 use crate::util::hit_test_utils::get_point_distance_to_ray;
-use crate::kernel::node_data::half_space_data::HalfSpaceData;
-use crate::kernel::node_data::node_data::NodeData;
-use crate::kernel::common_constants;
+use crate::structure_editor::node_data::half_space_data::HalfSpaceData;
+use crate::structure_editor::node_data::node_data::NodeData;
+use crate::structure_editor::common_constants;
 use std::collections::HashSet;
 
 pub const MAX_MILLER_INDEX: f32 = 6.0;

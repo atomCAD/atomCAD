@@ -1,6 +1,6 @@
 use super::atomic_structure::AtomicStructure;
 use super::surface_point_cloud::SurfacePointCloud;
-use crate::kernel::gadgets::gadget::Gadget;
+use crate::structure_editor::gadgets::gadget::Gadget;
 
 pub struct Scene {
     pub atomic_structures: Vec<AtomicStructure>,

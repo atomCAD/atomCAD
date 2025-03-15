@@ -1,4 +1,3 @@
-use wgpu::*;
 use bytemuck;
 use glam::f32::Vec3;
 

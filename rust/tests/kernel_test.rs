@@ -1,7 +1,7 @@
-use rust_lib_flutter_cad::kernel::kernel::Kernel;
-use rust_lib_flutter_cad::kernel::node_type::SphereData;
-use rust_lib_flutter_cad::kernel::node_type::CuboidData;
-use rust_lib_flutter_cad::kernel::implicit_network_evaluator::NetworkStackElement;
+use rust_lib_flutter_cad::structure_editor::structure_editor::StructureEditor;
+use rust_lib_flutter_cad::structure_editor::node_type::SphereData;
+use rust_lib_flutter_cad::structure_editor::node_type::CuboidData;
+use rust_lib_flutter_cad::structure_editor::network_evaluator::NetworkStackElement;
 use glam::f32::Vec2;
 use glam::f32::Vec3;
 use glam::i32::IVec3;
@@ -9,7 +9,7 @@ use glam::i32::IVec3;
 // cmd: cargo test
 #[test]
 fn it_adds_atom() {
-    let mut k = Kernel::new();
+    let mut k = StructureEditor::new();
 
     assert_eq!(k.get_atomic_structure().get_num_of_atoms(), 0); 
     assert_eq!(k.get_history_size(), 0);
@@ -39,7 +39,7 @@ fn it_adds_atom() {
 
 #[test]
 fn it_adds_atom_do_undo_do() {
-    let mut k = Kernel::new();
+    let mut k = StructureEditor::new();
 
     assert_eq!(k.get_history_size(), 0);
     assert_eq!(k.get_atomic_structure().get_num_of_atoms(), 0);
@@ -65,7 +65,7 @@ fn it_adds_atom_do_undo_do() {
 
 #[test]
 fn it_adds_bond() {
-  let mut k = Kernel::new();
+  let mut k = StructureEditor::new();
 
   let atom_id1 = k.add_atom(6, Vec3::new(1.0, 2.0, 3.0));
   let atom_id2 = k.add_atom(8, Vec3::new(2.0, 1.0, 1.0));
@@ -91,7 +91,7 @@ fn it_adds_bond() {
 
 #[test]
 fn it_selects_an_atom() {
-  let mut k = Kernel::new();
+  let mut k = StructureEditor::new();
 
   let atom_id1 = k.add_atom(6, Vec3::new(1.0, 2.0, 3.0));
   let atom_id2 = k.add_atom(8, Vec3::new(2.0, 1.0, 1.0));
@@ -109,7 +109,7 @@ fn it_selects_an_atom() {
 
 #[test]
 fn it_selects_a_bond() {
-  let mut k = Kernel::new();
+  let mut k = StructureEditor::new();
 
   let atom_id1 = k.add_atom(6, Vec3::new(1.0, 2.0, 3.0));
   let atom_id2 = k.add_atom(8, Vec3::new(2.0, 1.0, 1.0));
@@ -133,7 +133,7 @@ const EPSILON: f32 = 1e-5;
 
 #[test]
 fn test_kernel_sphere_evaluation() {
-    let mut k = Kernel::new();
+    let mut k = StructureEditor::new();
     
     // Create a test network
     k.add_node_network("test_network");
@@ -167,7 +167,7 @@ fn test_kernel_sphere_evaluation() {
 
 #[test]
 fn test_kernel_cuboid_evaluation() {
-    let mut k = Kernel::new();
+    let mut k = StructureEditor::new();
     
     // Create a test network
     k.add_node_network("test_network");
@@ -201,7 +201,7 @@ fn test_kernel_cuboid_evaluation() {
 
 #[test]
 fn test_kernel_union_of_spheres() {
-    let mut k = Kernel::new();
+    let mut k = StructureEditor::new();
     
     // Create a test network
     k.add_node_network("test_network");
@@ -250,7 +250,7 @@ fn test_kernel_union_of_spheres() {
 
 #[test]
 fn test_kernel_intersection_with_half_space() {
-    let mut k = Kernel::new();
+    let mut k = StructureEditor::new();
     
     // Create a test network
     k.add_node_network("test_network");
@@ -296,7 +296,7 @@ fn test_kernel_intersection_with_half_space() {
 
 #[test]
 fn test_kernel_complex_csg_network() {
-    let mut k = Kernel::new();
+    let mut k = StructureEditor::new();
     
     // Create a test network
     k.add_node_network("test_network");

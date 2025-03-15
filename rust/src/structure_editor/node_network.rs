@@ -3,15 +3,15 @@ use glam::f32::Vec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use crate::kernel::node_type::NodeType;
-use crate::kernel::node_data::node_data::NodeData;
-use crate::kernel::node_data::no_data::NoData;
-use crate::kernel::node_data::sphere_data::SphereData;
-use crate::kernel::node_data::cuboid_data::CuboidData;
-use crate::kernel::node_data::half_space_data::HalfSpaceData;
-use crate::kernel::node_data::geo_trans_data::GeoTransData;
-use crate::kernel::node_data::atom_trans_data::AtomTransData;
-use crate::kernel::gadgets::gadget::Gadget;
+use crate::structure_editor::node_type::NodeType;
+use crate::structure_editor::node_data::node_data::NodeData;
+use crate::structure_editor::node_data::no_data::NoData;
+use crate::structure_editor::node_data::sphere_data::SphereData;
+use crate::structure_editor::node_data::cuboid_data::CuboidData;
+use crate::structure_editor::node_data::half_space_data::HalfSpaceData;
+use crate::structure_editor::node_data::geo_trans_data::GeoTransData;
+use crate::structure_editor::node_data::atom_trans_data::AtomTransData;
+use crate::structure_editor::gadgets::gadget::Gadget;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.

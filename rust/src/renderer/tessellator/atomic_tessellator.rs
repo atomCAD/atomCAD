@@ -1,8 +1,8 @@
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
-use crate::kernel::atomic_structure::AtomicStructure;
-use crate::kernel::atomic_structure::Atom;
-use crate::kernel::atomic_structure::Bond;
+use crate::common::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::Atom;
+use crate::common::atomic_structure::Bond;
 use super::tessellator;
 use glam::f32::Vec3;
 use std::collections::HashMap;

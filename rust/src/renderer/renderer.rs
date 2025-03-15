@@ -9,7 +9,7 @@ use super::tessellator::surface_point_tessellator;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
-use crate::kernel::scene::Scene;
+use crate::common::scene::Scene;
 use std::time::Instant;
 
 #[repr(C)]

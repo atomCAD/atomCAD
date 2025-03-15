@@ -1,5 +1,4 @@
-pub mod kernel;
-pub mod atomic_structure;
+pub mod structure_editor;
 pub mod common_constants;
 pub mod command;
 pub mod commands;
@@ -8,7 +7,4 @@ pub mod node_network;
 pub mod node_type_registry;
 pub mod node_data;
 pub mod evaluator;
-pub mod surface_point_cloud;
-pub mod scene;
 pub mod gadgets;
-pub mod as_any;

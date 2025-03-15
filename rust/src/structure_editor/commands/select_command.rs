@@ -1,5 +1,5 @@
 use super::super::command::Command;
-use super::super::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 
 /*

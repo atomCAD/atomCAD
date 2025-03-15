@@ -2,7 +2,7 @@ use std::ffi::{c_int, c_void};
 use dlopen::{symbor::{Library, Symbol}, Error as LibError};
 use std::time::Instant;
 use crate::renderer::renderer::Renderer;
-use crate::kernel::kernel::Kernel;
+use crate::structure_editor::structure_editor::StructureEditor;
 use glam::f32::Vec2;
 use glam::f32::Vec3;
 use glam::i32::IVec3;
@@ -15,12 +15,12 @@ use super::api_types::InputPinView;
 use super::api_types::NodeView;
 use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
-use crate::kernel::node_type::data_type_to_str;
-use crate::kernel::node_data::sphere_data::SphereData;
-use crate::kernel::node_data::cuboid_data::CuboidData;
-use crate::kernel::node_data::half_space_data::HalfSpaceData;
-use crate::kernel::node_data::geo_trans_data::GeoTransData;
-use crate::kernel::node_data::atom_trans_data::AtomTransData;
+use crate::structure_editor::node_type::data_type_to_str;
+use crate::structure_editor::node_data::sphere_data::SphereData;
+use crate::structure_editor::node_data::cuboid_data::CuboidData;
+use crate::structure_editor::node_data::half_space_data::HalfSpaceData;
+use crate::structure_editor::node_data::geo_trans_data::GeoTransData;
+use crate::structure_editor::node_data::atom_trans_data::AtomTransData;
 
 fn to_api_vec3(v: &Vec3) -> APIVec3 {
   return APIVec3{
@@ -72,7 +72,7 @@ const IMAGE_WIDTH : u32 = 1280;
 const IMAGE_HEIGHT : u32 = 544;
 
 pub struct CADInstance {
-  kernel: Kernel,
+  kernel: StructureEditor,
   renderer: Renderer,
 }
 
@@ -119,7 +119,7 @@ async fn initialize_cad_instance_async() {
   unsafe {
     CAD_INSTANCE = Some(
       CADInstance {
-        kernel: Kernel::new(),
+        kernel: StructureEditor::new(),
         renderer: Renderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await
       }
     );
@@ -137,14 +137,14 @@ fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str, lig
   cad_instance.renderer.refresh(&scene, lightweight);
 }
 
-fn add_sample_model(kernel: &mut Kernel) {
+fn add_sample_model(kernel: &mut StructureEditor) {
   let atom_id1 = kernel.add_atom(6, Vec3::new(-1.3, 0.0, 0.0));
   let atom_id2 = kernel.add_atom(6, Vec3::new(1.3, 0.0, 0.0));
   kernel.add_atom(6, Vec3::new(1.3, 3.0, 0.0));
   kernel.add_bond(atom_id1, atom_id2, 1);
 }
 
-fn add_sample_network(kernel: &mut Kernel) {
+fn add_sample_network(kernel: &mut StructureEditor) {
   kernel.add_node_network("sample");
   let cuboid_id = kernel.add_node("sample", "cuboid", Vec2::new(30.0, 30.0));
   let sphere_id = kernel.add_node("sample", "sphere", Vec2::new(100.0, 100.0));

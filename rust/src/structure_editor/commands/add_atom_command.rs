@@ -1,6 +1,6 @@
 use glam::f32::Vec3;
 use super::super::command::Command;
-use super::super::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::AtomicStructure;
 
 /*
  * Command to add an atom with the given atomic number and position.
