@@ -4,8 +4,12 @@ use super::super::mesh::Material;
 use glam::f32::Vec3;
 use glam::f32::Quat;
 
-  // provide the positions in counter clockwise order
-  pub fn tessellate_quad(
+pub trait Tessellatable {
+  fn tessellate(&self, output_mesh: &mut Mesh);
+}
+
+// provide the positions in counter clockwise order
+pub fn tessellate_quad(
     output_mesh: &mut Mesh,
     pos0: &Vec3,
     pos1: &Vec3,
@@ -13,7 +17,7 @@ use glam::f32::Quat;
     pos3: &Vec3,
     normal: &Vec3,
     material: &Material,
-  ) {
+) {
     let index0 = output_mesh.add_vertex(Vertex::new(pos0, normal, material));
     let index1 = output_mesh.add_vertex(Vertex::new(pos1, normal, material));
     let index2 = output_mesh.add_vertex(Vertex::new(pos2, normal, material));

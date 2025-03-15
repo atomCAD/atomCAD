@@ -4,6 +4,7 @@ use crate::structure_editor::node_data::atom_trans_data::AtomTransData;
 use crate::structure_editor::node_data::node_data::NodeData;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::mesh::Material;
+use crate::renderer::tessellator::tessellator::Tessellatable;
 use glam::f32::Vec3;
 use glam::f32::Quat;
 
@@ -18,7 +19,7 @@ pub struct AtomTransGadget {
     pub rotation_quat: Quat,
 }
 
-impl Gadget for AtomTransGadget {
+impl Tessellatable for AtomTransGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {        
         let x_axis_dir = self.rotation_quat.mul_vec3(Vec3::new(1.0, 0.0, 0.0));
         let y_axis_dir = self.rotation_quat.mul_vec3(Vec3::new(0.0, 1.0, 0.0));
@@ -28,7 +29,9 @@ impl Gadget for AtomTransGadget {
         self.tessellate_axis_arrow(output_mesh, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0));
         self.tessellate_axis_arrow(output_mesh, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0));
     }
+}
 
+impl Gadget for AtomTransGadget {
     fn hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<i32> {
         None
     }
@@ -55,7 +58,10 @@ impl Gadget for AtomTransGadget {
     fn clone_box(&self) -> Box<dyn Gadget> {
         Box::new(self.clone())
     }
-
+    
+    fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+        Box::new(self.clone())
+    }
 }
 
 impl AtomTransGadget {

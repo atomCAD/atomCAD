@@ -1,12 +1,12 @@
 use super::atomic_structure::AtomicStructure;
 use super::surface_point_cloud::SurfacePointCloud;
-use crate::structure_editor::gadgets::gadget::Gadget;
+use crate::renderer::tessellator::tessellator::Tessellatable;
 
 pub struct Scene {
     pub atomic_structures: Vec<AtomicStructure>,
     pub surface_point_clouds: Vec<SurfacePointCloud>,
 
-    pub gadget: Option<Box<dyn Gadget>>,
+    pub tessellatable: Option<Box<dyn Tessellatable>>,
 }
 
 impl Scene {
@@ -14,7 +14,7 @@ impl Scene {
         Self {
             atomic_structures: Vec::new(),
             surface_point_clouds: Vec::new(),
-            gadget: None,
+            tessellatable: None,
         }
     }
 
@@ -22,10 +22,10 @@ impl Scene {
         self.atomic_structures.extend(other.atomic_structures);
         self.surface_point_clouds.extend(other.surface_point_clouds);
         
-        match other.gadget {
+        match other.tessellatable {
             None => {}, // Do nothing if empty
-            Some(other_gadget) => {
-                self.gadget = Some(other_gadget)
+            Some(other_tessellatable) => {
+                self.tessellatable = Some(other_tessellatable)
             },
         }
     }

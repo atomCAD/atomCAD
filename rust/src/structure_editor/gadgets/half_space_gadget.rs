@@ -5,6 +5,7 @@ use super::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
+use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::util::hit_test_utils::sphere_hit_test;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
@@ -39,7 +40,7 @@ pub struct HalfSpaceGadget {
     pub is_dragging: bool,
 }
 
-impl Gadget for HalfSpaceGadget {
+impl Tessellatable for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
         let direction_handle_center = self.dir * GADGET_LENGTH;
 
@@ -116,7 +117,9 @@ impl Gadget for HalfSpaceGadget {
 
         self.tessellate_lattice_points(output_mesh);     
     }
+}
 
+impl Gadget for HalfSpaceGadget {
     // Returns the index of the handle that was hit, or None if no handle was hit
     // handle 0: shift handle
     // handle 1: direction handle
@@ -202,7 +205,10 @@ impl Gadget for HalfSpaceGadget {
             half_space_data.shift = self.shift;
         }
     }
-
+    
+    fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+        Box::new(self.clone())
+    }
 }
 
 impl HalfSpaceGadget {

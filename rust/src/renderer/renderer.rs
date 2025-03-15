@@ -273,10 +273,10 @@ impl Renderer {
     pub fn refresh(&mut self, scene: &Scene, lightweight: bool) {
         let start_time = Instant::now();
 
-        // Always refresh lightweight buffers with gadget data
+        // Always refresh lightweight buffers with extra tessellatable data
         let mut lightweight_mesh = Mesh::new();
-        if let Some(gadget) = &scene.gadget {
-            gadget.tessellate(&mut lightweight_mesh);
+        if let Some(tessellatable) = &scene.tessellatable {
+            tessellatable.tessellate(&mut lightweight_mesh);
         }
         
         //println!("lightweight tessellated {} vertices and {} indices", 
@@ -287,7 +287,7 @@ impl Renderer {
 
         // Only refresh main buffers when not in lightweight mode
         if !lightweight {
-            // Tessellate everything except gadget into main buffers
+            // Tessellate everything except tessellatable into main buffers
             let mut mesh = Mesh::new();
 
             let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {

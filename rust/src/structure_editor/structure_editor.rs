@@ -94,7 +94,7 @@ impl StructureEditor {
     }
 
     if let Some(gadget) = &self.gadget {
-      scene.gadget = Some(gadget.clone_box());
+      scene.tessellatable = Some(gadget.as_tessellatable());
     }
 
     return scene;
