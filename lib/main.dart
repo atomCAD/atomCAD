@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/structure_designer_viewport.dart';
-import 'package:flutter_cad/node_network.dart';
-import 'package:flutter_cad/graph_model.dart';
-import 'package:flutter_cad/node_data/node_data_widget.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart';
+import 'package:flutter_cad/structure_designer/node_network.dart';
+import 'package:flutter_cad/structure_designer/graph_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 
 Future<void> main() async {

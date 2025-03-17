@@ -1,7 +1,7 @@
-use rust_lib_flutter_cad::structure_editor::structure_editor::StructureEditor;
-use rust_lib_flutter_cad::structure_editor::node_type::SphereData;
-use rust_lib_flutter_cad::structure_editor::node_type::CuboidData;
-use rust_lib_flutter_cad::structure_editor::network_evaluator::NetworkStackElement;
+use rust_lib_flutter_cad::structure_designer::structure_editor::StructureEditor;
+use rust_lib_flutter_cad::structure_designer::node_type::SphereData;
+use rust_lib_flutter_cad::structure_designer::node_type::CuboidData;
+use rust_lib_flutter_cad::structure_designer::network_evaluator::NetworkStackElement;
 use glam::f32::Vec2;
 use glam::f32::Vec3;
 use glam::i32::IVec3;

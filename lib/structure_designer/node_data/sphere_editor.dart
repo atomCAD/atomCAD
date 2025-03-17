@@ -4,24 +4,25 @@ import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 
-/// Editor widget for half_space nodes
-class HalfSpaceEditor extends StatefulWidget {
+/// Editor widget for sphere nodes
+class SphereEditor extends StatefulWidget {
   final String nodeNetworkName;
   final BigInt nodeId;
-  final APIHalfSpaceData? data;
+  final APISphereData? data;
 
-  const HalfSpaceEditor({
+  const SphereEditor({
+    super.key,
     required this.nodeNetworkName,
     required this.nodeId,
     required this.data,
   });
 
   @override
-  State<HalfSpaceEditor> createState() => HalfSpaceEditorState();
+  State<SphereEditor> createState() => SphereEditorState();
 }
 
-class HalfSpaceEditorState extends State<HalfSpaceEditor> {
-  APIHalfSpaceData? _stagedData;
+class SphereEditorState extends State<SphereEditor> {
+  APISphereData? _stagedData;
 
   @override
   void initState() {
@@ -32,7 +33,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
   }
 
   @override
-  void didUpdateWidget(HalfSpaceEditor oldWidget) {
+  void didUpdateWidget(SphereEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data != widget.data) {
       setState(() {
@@ -41,13 +42,13 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
     }
   }
 
-  void _updateStagedData(APIHalfSpaceData newData) {
+  void _updateStagedData(APISphereData newData) {
     setState(() => _stagedData = newData);
   }
 
   void _applyChanges() {
     if (_stagedData != null) {
-      setHalfSpaceData(
+      setSphereData(
         nodeNetworkName: widget.nodeNetworkName,
         nodeId: widget.nodeId,
         data: _stagedData!,
@@ -68,27 +69,27 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Half Space Properties',
+            Text('Sphere Properties',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             IVec3Input(
-              label: 'Miller Index',
-              value: _stagedData!.millerIndex,
+              label: 'Center',
+              value: _stagedData!.center,
               onChanged: (newValue) {
-                _updateStagedData(APIHalfSpaceData(
-                  millerIndex: newValue,
-                  shift: _stagedData!.shift,
+                _updateStagedData(APISphereData(
+                  center: newValue,
+                  radius: _stagedData!.radius,
                 ));
               },
             ),
             const SizedBox(height: 8),
             IntInput(
-              label: 'Shift',
-              value: _stagedData!.shift,
+              label: 'Radius',
+              value: _stagedData!.radius,
               onChanged: (newValue) {
-                _updateStagedData(APIHalfSpaceData(
-                  millerIndex: _stagedData!.millerIndex,
-                  shift: newValue,
+                _updateStagedData(APISphereData(
+                  center: _stagedData!.center,
+                  radius: newValue,
                 ));
               },
             ),

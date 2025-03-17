@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
-import 'package:flutter_cad/api_utils.dart';
-import 'package:flutter_cad/add_node_popup.dart';
-import 'package:flutter_cad/graph_model.dart';
+import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/structure_designer/add_node_popup.dart';
+import 'package:flutter_cad/structure_designer/graph_model.dart';
 
 // Node dimensions and layout constants
 const double NODE_WIDTH = 130.0;
