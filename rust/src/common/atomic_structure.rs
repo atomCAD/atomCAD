@@ -20,6 +20,14 @@ pub struct Atom {
   pub position: Vec3,
   pub bond_ids: Vec<u64>,
   pub selected: bool,
+  pub cluster_id: u64,
+}
+
+#[derive(Clone)]
+pub struct Cluster {
+  pub id: u64,
+  pub name: String,
+  pub atom_ids: HashSet<u64>,
 }
 
 #[derive(Clone)]
@@ -29,18 +37,22 @@ pub struct AtomicStructure {
   pub atoms: HashMap<u64, Atom>,
   pub bonds: HashMap<u64, Bond>,
   pub dirty_atom_ids: HashSet<u64>,
+  pub clusters: HashMap<u64, Cluster>,
 }
 
 impl AtomicStructure {
 
   pub fn new() -> Self {
-    Self {
+    let mut ret = Self {
       frame_transform: Transform::default(),
       next_id: 1,
       atoms: HashMap::new(),
       bonds: HashMap::new(),
       dirty_atom_ids: HashSet::new(),
-    }
+      clusters: HashMap::new(),
+    };
+    ret.add_cluster("default");
+    ret
   }
 
   pub fn get_num_of_atoms(&self) -> usize {
@@ -73,20 +85,41 @@ impl AtomicStructure {
     return ret;
   }
 
-  pub fn add_atom(&mut self, atomic_number: i32, position: Vec3) -> u64 {
+  pub fn add_cluster(&mut self, name: &str) -> u64 {
     let id = self.obtain_next_id();
-    self.add_atom_with_id(id, atomic_number, position);
+    self.add_cluster_with_id(id, name);
     id
   }
 
-  pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: Vec3) {
+  pub fn add_cluster_with_id(&mut self, id: u64, name: &str) {
+    self.clusters.insert(id, Cluster {
+      id,
+      name: name.to_string(),
+      atom_ids: HashSet::new(),
+    });
+  }
+
+  pub fn add_atom(&mut self, atomic_number: i32, position: Vec3, cluster_id: u64) -> u64 {
+    let id = self.obtain_next_id();
+    self.add_atom_with_id(id, atomic_number, position, cluster_id);
+    id
+  }
+
+  pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: Vec3, cluster_id: u64) {
     self.atoms.insert(id, Atom {
       id,
       atomic_number,
       position,
       bond_ids: Vec::new(),
       selected: false,
+      cluster_id,
     });
+    
+    // Add atom ID to the cluster's atom_ids HashSet if the cluster exists
+    if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+      cluster.atom_ids.insert(id);
+    }
+    
     self.make_atom_dirty(id);
   }
 
@@ -94,6 +127,14 @@ impl AtomicStructure {
   // Delete the bonds before calling this function
   // TODO: delete bonds in the method first.
   pub fn delete_atom(&mut self, id: u64) {
+    // Find the cluster ID of the atom before removing it
+    if let Some(atom) = self.atoms.get(&id) {
+      // Remove atom ID from its cluster's atom_ids HashSet if the cluster exists
+      if let Some(cluster) = self.clusters.get_mut(&atom.cluster_id) {
+        cluster.atom_ids.remove(&id);
+      }
+    }
+    
     self.atoms.remove(&id);
     self.make_atom_dirty(id);
   }

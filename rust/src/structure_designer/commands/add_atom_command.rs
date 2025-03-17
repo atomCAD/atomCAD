@@ -24,7 +24,7 @@ impl Command for AddAtomCommand {
     if !is_redo {
       self.atom_id = model.obtain_next_id();
     }
-    model.add_atom_with_id(self.atom_id, self.atomic_number, self.position);
+    model.add_atom_with_id(self.atom_id, self.atomic_number, self.position, 1);
   }
 
   fn undo(&mut self, model: &mut AtomicStructure) {

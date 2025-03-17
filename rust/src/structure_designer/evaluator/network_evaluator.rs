@@ -431,7 +431,7 @@ impl NetworkEvaluator {
           }
 
           let atom_id = if has_atom {
-            let id = atomic_structure.add_atom(CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+            let id = atomic_structure.add_atom(CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 1);
             atom_pos_to_id.insert(absolute_pos, id);
             id
           } else { 0 };
