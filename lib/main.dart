@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/cad_viewport.dart';
+import 'package:flutter_cad/structure_designer_viewport.dart';
 import 'package:flutter_cad/node_network.dart';
 import 'package:flutter_cad/graph_model.dart';
 import 'package:flutter_cad/node_data/node_data_widget.dart';
@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
               child: SizedBox(
                 width: 1280,
                 height: 544,
-                child: CadViewport(graphModel: graphModel),
+                child: StructureDesignerViewport(graphModel: graphModel),
               ),
             ),
             Expanded(
