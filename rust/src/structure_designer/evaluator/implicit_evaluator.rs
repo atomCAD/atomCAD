@@ -1,13 +1,13 @@
 use glam::f32::Vec3;
 use glam::f32::Quat;
-use crate::structure_editor::node_network::NodeNetwork;
-use crate::structure_editor::node_network::Node;
-use crate::structure_editor::node_data::parameter_data::ParameterData;
-use crate::structure_editor::node_data::sphere_data::SphereData;
-use crate::structure_editor::node_data::cuboid_data::CuboidData;
-use crate::structure_editor::node_data::half_space_data::HalfSpaceData;
-use crate::structure_editor::node_data::geo_trans_data::GeoTransData;
-use crate::structure_editor::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::node_network::NodeNetwork;
+use crate::structure_designer::node_network::Node;
+use crate::structure_designer::node_data::parameter_data::ParameterData;
+use crate::structure_designer::node_data::sphere_data::SphereData;
+use crate::structure_designer::node_data::cuboid_data::CuboidData;
+use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
+use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
 use std::f32::consts::PI;
 

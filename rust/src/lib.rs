@@ -1,6 +1,6 @@
 pub mod api;
 pub mod common;
-pub mod structure_editor;
+pub mod structure_designer;
 pub mod renderer;
 pub mod util;
 mod frb_generated;

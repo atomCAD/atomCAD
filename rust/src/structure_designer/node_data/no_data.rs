@@ -1,5 +1,5 @@
-use crate::structure_editor::node_data::node_data::NodeData;
-use crate::structure_editor::gadgets::gadget::Gadget;
+use crate::structure_designer::node_data::node_data::NodeData;
+use crate::structure_designer::gadgets::gadget::Gadget;
 
 #[derive(Debug)]
 pub struct NoData {

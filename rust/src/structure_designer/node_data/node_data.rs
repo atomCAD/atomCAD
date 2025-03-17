@@ -1,4 +1,4 @@
-use crate::structure_editor::gadgets::gadget::Gadget;
+use crate::structure_designer::gadgets::gadget::Gadget;
 use std::any::Any;
 use crate::util::as_any::AsAny;
 

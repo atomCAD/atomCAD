@@ -1,4 +1,4 @@
-use crate::structure_editor::node_data::node_data::NodeData;
+use crate::structure_designer::node_data::node_data::NodeData;
 
 #[derive(PartialEq)]
 pub enum DataType {

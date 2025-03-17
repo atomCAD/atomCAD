@@ -9,14 +9,14 @@ use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
 use super::node_type::NodeType;
-use crate::structure_editor::node_data::node_data::NodeData;
-use crate::structure_editor::node_data::no_data::NoData;
+use crate::structure_designer::node_data::node_data::NodeData;
+use crate::structure_designer::node_data::no_data::NoData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::common::scene::Scene;
 use super::gadgets::gadget::Gadget;
 use std::ops::Deref;
 
-pub struct StructureEditor {
+pub struct StructureDesigner {
   pub model: AtomicStructure,
   pub history: Vec<Box<dyn Command>>,
   pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
@@ -25,7 +25,7 @@ pub struct StructureEditor {
   pub gadget: Option<Box<dyn Gadget>>,
 }
 
-impl StructureEditor {
+impl StructureDesigner {
 
   pub fn new() -> Self {
 

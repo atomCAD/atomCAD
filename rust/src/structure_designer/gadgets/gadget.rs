@@ -1,5 +1,5 @@
 use glam::f32::Vec3;
-use crate::structure_editor::node_data::node_data::NodeData;
+use crate::structure_designer::node_data::node_data::NodeData;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 
 pub trait Gadget: Tessellatable {

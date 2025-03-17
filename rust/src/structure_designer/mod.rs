@@ -1,4 +1,4 @@
-pub mod structure_editor;
+pub mod structure_designer;
 pub mod common_constants;
 pub mod command;
 pub mod commands;
