@@ -388,4 +388,15 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       ],
     );
   }
+
+  @override
+  void initState() {
+    super.initState();
+    initTexture();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 }
