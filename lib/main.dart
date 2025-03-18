@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
+import 'package:flutter_cad/scene_composer/scene_composer.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 
 Future<void> main() async {
@@ -14,7 +15,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        body: const StructureDesigner(),
+        body: const SceneComposer(),
       ),
     );
   }
