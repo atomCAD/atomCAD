@@ -7,7 +7,7 @@ use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type::DataType;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::common::scene::StructureDesignerScene;
+use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::util::timer::Timer;
 use std::collections::HashMap;

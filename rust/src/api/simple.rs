@@ -139,8 +139,16 @@ async fn initialize_cad_instance_async() {
 }
 
 fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str, lightweight: bool) {
-  let scene = cad_instance.structure_designer.generate_scene(node_network_name, lightweight);
-  cad_instance.renderer.refresh(&scene, lightweight);
+  match cad_instance.active_editor {
+    Editor::StructureDesigner => {
+      let scene = cad_instance.structure_designer.generate_scene(node_network_name, lightweight);
+      cad_instance.renderer.refresh(&scene, lightweight);
+    },
+    Editor::SceneComposer => {
+      cad_instance.renderer.refresh(&cad_instance.scene_composer, lightweight);
+    },
+    Editor::None => {}
+  }
 }
 
 fn add_sample_model(kernel: &mut StructureDesigner) {

@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -243931363;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -184140759;
 
 // Section: executor
 
@@ -897,6 +897,38 @@ fn wire__crate__api__simple__select_wire_impl(
         },
     )
 }
+fn wire__crate__api__simple__set_active_editor_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_active_editor",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_editor = <crate::api::api_types::Editor>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::set_active_editor(api_editor);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__set_atom_trans_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1304,6 +1336,19 @@ impl SseDecode for bool {
     }
 }
 
+impl SseDecode for crate::api::api_types::Editor {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::api_types::Editor::None,
+            1 => crate::api::api_types::Editor::StructureDesigner,
+            2 => crate::api::api_types::Editor::SceneComposer,
+            _ => unreachable!("Invalid variant for Editor: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1651,13 +1696,14 @@ fn pde_ffi_dispatcher_sync_impl(
         23 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
         24 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
         25 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__simple__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__simple__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__simple__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__simple__set_active_editor_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__simple__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__simple__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__simple__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1862,6 +1908,25 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::APIIVec3>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::api_types::Editor {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::None => 0.into_dart(),
+            Self::StructureDesigner => 1.into_dart(),
+            Self::SceneComposer => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::api_types::Editor {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::Editor>
+    for crate::api::api_types::Editor
+{
+    fn into_into_dart(self) -> crate::api::api_types::Editor {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::api_types::InputPinView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2056,6 +2121,23 @@ impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self as _).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::api_types::Editor {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::api_types::Editor::None => 0,
+                crate::api::api_types::Editor::StructureDesigner => 1,
+                crate::api::api_types::Editor::SceneComposer => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

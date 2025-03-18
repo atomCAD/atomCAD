@@ -227,6 +227,13 @@ class APIIVec3 {
           z == other.z;
 }
 
+enum Editor {
+  none,
+  structureDesigner,
+  sceneComposer,
+  ;
+}
+
 class InputPinView {
   final String name;
   final String dataType;

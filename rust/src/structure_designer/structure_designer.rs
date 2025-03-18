@@ -12,7 +12,7 @@ use super::node_type::NodeType;
 use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::node_data::no_data::NoData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
-use crate::common::scene::StructureDesignerScene;
+use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::gadget::Gadget;
 use std::ops::Deref;
 

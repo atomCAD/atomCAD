@@ -11,6 +11,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These types are ignored because they are not used by any `pub` functions: `CADInstance`, `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
+void setActiveEditor({required Editor editor}) =>
+    RustLib.instance.api.crateApiSimpleSetActiveEditor(editor: editor);
+
 double provideTexture({required int texturePtr}) =>
     RustLib.instance.api.crateApiSimpleProvideTexture(texturePtr: texturePtr);
 

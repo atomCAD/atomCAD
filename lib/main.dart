@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/scene_composer/scene_composer.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
+import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/simple.dart';
 
 Future<void> main() async {
   await RustLib.init();
@@ -34,6 +36,7 @@ class EditorSelector extends StatelessWidget {
           children: [
             ElevatedButton(
               onPressed: () {
+                setActiveEditor(editor: Editor.structureDesigner);
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (context) => const Scaffold(
@@ -47,6 +50,7 @@ class EditorSelector extends StatelessWidget {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
+                setActiveEditor(editor: Editor.sceneComposer);
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (context) => const Scaffold(

@@ -8,3 +8,4 @@ pub mod node_type_registry;
 pub mod node_data;
 pub mod evaluator;
 pub mod gadgets;
+pub mod structure_designer_scene;

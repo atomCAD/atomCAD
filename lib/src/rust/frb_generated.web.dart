@@ -91,6 +91,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView dco_decode_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  Editor dco_decode_editor(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -243,6 +246,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   NodeNetworkView sse_decode_box_autoadd_node_network_view(
       SseDeserializer deserializer);
+
+  @protected
+  Editor sse_decode_editor(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -411,6 +417,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_node_network_view(
       NodeNetworkView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_editor(Editor self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
