@@ -16,6 +16,7 @@ use super::api_types::InputPinView;
 use super::api_types::NodeView;
 use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
+use super::api_types::Editor;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::node_data::sphere_data::SphereData;
 use crate::structure_designer::node_data::cuboid_data::CuboidData;
@@ -76,6 +77,7 @@ pub struct CADInstance {
   structure_designer: StructureDesigner,
   scene_composer: SceneComposer,
   renderer: Renderer,
+  active_editor: Editor, // This one refreshes itself into the Renderer when the refresh_renderer function is called.
 }
 
 pub type FlutterRgbaRendererPluginOnRgba = unsafe extern "C" fn(
@@ -123,7 +125,8 @@ async fn initialize_cad_instance_async() {
       CADInstance {
         structure_designer: StructureDesigner::new(),
         scene_composer: SceneComposer::new(),
-        renderer: Renderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await
+        renderer: Renderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await,
+        active_editor: Editor::None,
       }
     );
 
@@ -181,6 +184,15 @@ fn send_texture(texture_ptr: u64, width: u32, height: u32, v : Vec<u8>) {
     }
     Err(err) => {
       println!("Failed to load render function: {}", err);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_editor(editor: Editor) {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.active_editor = editor;
     }
   }
 }

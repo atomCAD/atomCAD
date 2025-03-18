@@ -2,6 +2,12 @@ use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
 
+pub enum Editor {
+  None,
+  StructureDesigner,
+  SceneComposer
+}
+
 pub struct APIVec2 {
   pub x: f32,
   pub y: f32,
