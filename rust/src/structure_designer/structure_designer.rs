@@ -12,7 +12,7 @@ use super::node_type::NodeType;
 use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::node_data::no_data::NoData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
-use crate::common::scene::Scene;
+use crate::common::scene::StructureDesignerScene;
 use super::gadgets::gadget::Gadget;
 use std::ops::Deref;
 
@@ -79,14 +79,14 @@ impl StructureDesigner {
   }
 
   // Generates the scene to be rendered according to the displayed nodes of the given node network
-  pub fn generate_scene(&mut self, node_network_name: &str, lightweight: bool) -> Scene {
+  pub fn generate_scene(&mut self, node_network_name: &str, lightweight: bool) -> StructureDesignerScene {
 
-    let mut scene: Scene = Scene::new();
+    let mut scene: StructureDesignerScene = StructureDesignerScene::new();
 
     if !lightweight {
       let network = match self.node_type_registry.node_networks.get(node_network_name) {
         Some(network) => network,
-        None => return Scene::new(),
+        None => return StructureDesignerScene::new(),
       };
       for node_id in &network.displayed_node_ids {
         scene.merge(self.network_evaluator.generate_scene(node_network_name, *node_id, &self.node_type_registry));

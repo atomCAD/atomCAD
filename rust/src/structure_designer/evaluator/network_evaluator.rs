@@ -7,7 +7,7 @@ use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type::DataType;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::common::scene::Scene;
+use crate::common::scene::StructureDesignerScene;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::util::timer::Timer;
 use std::collections::HashMap;
@@ -86,12 +86,12 @@ impl NetworkEvaluator {
 
   // Creates the Scene that will be displayed for the given node
   // Currently creates it from scratch, no caching is used.
-  pub fn generate_scene(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
+  pub fn generate_scene(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> StructureDesignerScene {
     let _timer = Timer::new("generate_scene");
 
     let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
-      None => return Scene::new(),
+      None => return StructureDesignerScene::new(),
     };
 
     let mut network_stack = Vec::new();
@@ -100,7 +100,7 @@ impl NetworkEvaluator {
 
     let node = match network.nodes.get(&node_id) {
       Some(node) => node,
-      None => return Scene::new(),
+      None => return StructureDesignerScene::new(),
     };
 
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
@@ -111,7 +111,7 @@ impl NetworkEvaluator {
     if node_type.output_type == DataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);
 
-      let mut scene = Scene::new();
+      let mut scene = StructureDesignerScene::new();
 
       let result = &self.evaluate(&network_stack, node_id, registry)[0];
       if let NetworkResult::Atomic(atomic_structure) = result {
@@ -121,7 +121,7 @@ impl NetworkEvaluator {
       return scene;
     }
 
-    return Scene::new();
+    return StructureDesignerScene::new();
   }
 
   fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> Vec<NetworkResult> {
@@ -460,7 +460,7 @@ impl NetworkEvaluator {
       self.add_bond(atomic_structure, &carbon_atom_ids, 17, 13);
     }
 
-  pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> Scene {
+  pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> StructureDesignerScene {
     let mut point_cloud = SurfacePointCloud::new();
     let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
     (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
@@ -478,7 +478,7 @@ impl NetworkEvaluator {
         &mut eval_cache,
         &mut point_cloud);
 
-    let mut scene = Scene::new();
+    let mut scene = StructureDesignerScene::new();
     scene.surface_point_clouds.push(point_cloud);
     scene
   }

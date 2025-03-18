@@ -270,12 +270,12 @@ impl Renderer {
       self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
 
-    pub fn refresh(&mut self, scene: &Scene, lightweight: bool) {
+    pub fn refresh<'a, S: Scene<'a>>(&mut self, scene: &S, lightweight: bool) {
         let start_time = Instant::now();
 
         // Always refresh lightweight buffers with extra tessellatable data
         let mut lightweight_mesh = Mesh::new();
-        if let Some(tessellatable) = &scene.tessellatable {
+        if let Some(tessellatable) = scene.tessellatable() {
             tessellatable.tessellate(&mut lightweight_mesh);
         }
         
@@ -296,11 +296,11 @@ impl Renderer {
                 cylinder_divisions: 16,
             };
 
-            for atomic_structure in scene.atomic_structures.iter() {
+            for atomic_structure in scene.atomic_structures() {
                 atomic_tessellator::tessellate_atomic_structure(&mut mesh, atomic_structure, &atomic_tessellation_params);
             }
 
-            for surface_point_cloud in scene.surface_point_clouds.iter() {
+            for surface_point_cloud in scene.surface_point_clouds() {
                 surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
             }
 

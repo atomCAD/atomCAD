@@ -2,14 +2,20 @@ use super::atomic_structure::AtomicStructure;
 use super::surface_point_cloud::SurfacePointCloud;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 
-pub struct Scene {
+pub trait Scene<'a> {
+    fn atomic_structures(&self) -> Box<dyn Iterator<Item = &AtomicStructure> + '_>;
+    fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_>;
+    fn tessellatable(&self) -> Option<&dyn Tessellatable>;
+}
+
+pub struct StructureDesignerScene {
     pub atomic_structures: Vec<AtomicStructure>,
     pub surface_point_clouds: Vec<SurfacePointCloud>,
 
     pub tessellatable: Option<Box<dyn Tessellatable>>,
 }
 
-impl Scene {
+impl StructureDesignerScene {
     pub fn new() -> Self {
         Self {
             atomic_structures: Vec::new(),
@@ -18,7 +24,7 @@ impl Scene {
         }
     }
 
-    pub fn merge(&mut self, other: Scene) {
+    pub fn merge(&mut self, other: StructureDesignerScene) {
         self.atomic_structures.extend(other.atomic_structures);
         self.surface_point_clouds.extend(other.surface_point_clouds);
         
@@ -28,5 +34,19 @@ impl Scene {
                 self.tessellatable = Some(other_tessellatable)
             },
         }
+    }
+}
+
+impl<'a> Scene<'a> for StructureDesignerScene {
+    fn atomic_structures(&self) -> Box<dyn Iterator<Item = &AtomicStructure> + '_> {
+        Box::new(self.atomic_structures.iter())
+    }
+
+    fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_> {
+        Box::new(self.surface_point_clouds.iter())
+    }
+
+    fn tessellatable(&self) -> Option<&dyn Tessellatable> {
+        self.tessellatable.as_deref()
     }
 }
