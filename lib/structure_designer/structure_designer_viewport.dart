@@ -79,4 +79,15 @@ class _StructureDesignerViewportState
       _isGadgetDragging = false;
     }
   }
+
+  @override
+  void initState() {
+    super.initState();
+    initTexture();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 }
