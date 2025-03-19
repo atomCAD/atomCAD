@@ -1,5 +1,5 @@
-use glam::f32::Vec2;
-use glam::f32::Vec3;
+use glam::f64::DVec2;
+use glam::f64::DVec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -35,7 +35,7 @@ pub struct Wire {
 pub struct Node {
   pub id: u64,
   pub node_type_name: String,
-  pub position: Vec2,
+  pub position: DVec2,
   pub arguments: Vec<Argument>,
   pub data: Box<dyn NodeData>,
 }
@@ -71,7 +71,7 @@ impl NodeNetwork {
     return ret;
   }
 
-  pub fn add_node(&mut self, node_type_name: &str, position: Vec2, num_of_parameters: usize, node_data: Box<dyn NodeData>) -> u64 {
+  pub fn add_node(&mut self, node_type_name: &str, position: DVec2, num_of_parameters: usize, node_data: Box<dyn NodeData>) -> u64 {
     let node_id = self.next_node_id;
     let mut arguments: Vec<Argument> = Vec::new();
     for _i in 0..num_of_parameters {
@@ -91,7 +91,7 @@ impl NodeNetwork {
     return node_id;
   }
 
-  pub fn move_node(&mut self, node_id: u64, position: Vec2) {
+  pub fn move_node(&mut self, node_id: u64, position: DVec2) {
     if let Some(node) = self.nodes.get_mut(&node_id) {
       node.position = position;
     }

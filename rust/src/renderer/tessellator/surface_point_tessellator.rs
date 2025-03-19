@@ -4,7 +4,9 @@ use crate::common::surface_point_cloud::SurfacePoint;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use super::tessellator;
 use glam::f32::Vec3;
-use glam::f32::Quat;
+use glam::f64::DQuat;
+use glam::f64::DVec3;
+
 
 pub fn tessellate_surface_point_cloud(output_mesh: &mut Mesh, surface_point_cloud: &SurfacePointCloud) {
   // Iterate through all surface points and add them to the tessellator
@@ -21,9 +23,9 @@ pub fn tessellate_surface_point(output_mesh: &mut Mesh, point: &SurfacePoint) {
   let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
 
   // Create rotation quaternion from surface normal to align cuboid
-  let rotator = Quat::from_rotation_arc(Vec3::Y, point.normal);
+  let rotator = DQuat::from_rotation_arc(DVec3::Y, point.normal);
 
-  let size = Vec3::new(0.3, 0.08, 0.3); // x, y, z extents
+  let size = DVec3::new(0.3, 0.08, 0.3); // x, y, z extents
 
   tessellator::tessellate_cuboid(
     output_mesh,

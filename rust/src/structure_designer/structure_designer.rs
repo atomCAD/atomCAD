@@ -1,7 +1,7 @@
 use crate::common::atomic_structure::AtomicStructure;
 use super::command::Command;
-use glam::f32::Vec3;
-use glam::f32::Vec2;
+use glam::f64::DVec3;
+use glam::f64::DVec2;
 use super::commands::add_atom_command::AddAtomCommand;
 use super::commands::add_bond_command::AddBondCommand;
 use super::commands::select_command::SelectCommand;
@@ -104,7 +104,7 @@ impl StructureDesigner {
   // -------------------------------------------------------------------------------------------------------------------------
 
   // Issue an AddAtomCommand
-  pub fn add_atom(&mut self, atomic_number: i32, position: Vec3) -> u64 {
+  pub fn add_atom(&mut self, atomic_number: i32, position: DVec3) -> u64 {
     let executed_command = self.execute_command(Box::new(AddAtomCommand::new(atomic_number, position)));
     let c: &AddAtomCommand = executed_command.deref().as_any_ref().downcast_ref().unwrap();
     c.atom_id
@@ -135,7 +135,7 @@ impl StructureDesigner {
     ));
   }
 
-  pub fn add_node(&mut self, node_network_name: &str, node_type_name: &str, position: Vec2) -> u64 {
+  pub fn add_node(&mut self, node_network_name: &str, node_type_name: &str, position: DVec2) -> u64 {
     // First get the node type info
     let (num_parameters, node_data) = match self.node_type_registry.get_node_type(node_type_name) {
       Some(node_type) => {
@@ -153,7 +153,7 @@ impl StructureDesigner {
     }
   }
 
-  pub fn move_node(&mut self, node_network_name: &str, node_id: u64, position: Vec2) {
+  pub fn move_node(&mut self, node_network_name: &str, node_id: u64, position: DVec2) {
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.move_node(node_id, position);
     }
@@ -281,20 +281,20 @@ impl StructureDesigner {
   // --- Gadget delegation methods                                                                                        ---
   // -------------------------------------------------------------------------------------------------------------------------
 
-  pub fn gadget_hit_test(&self, ray_origin: Vec3, ray_direction: Vec3) -> Option<i32> {
+  pub fn gadget_hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
     if let Some(gadget) = &self.gadget {
       return gadget.hit_test(ray_origin, ray_direction);
     }
     None
   }
 
-  pub fn gadget_start_drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
+  pub fn gadget_start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
     if let Some(gadget) = &mut self.gadget {
       gadget.start_drag(handle_index, ray_origin, ray_direction);
     }
   }
 
-  pub fn gadget_drag(&mut self, handle_index: i32, ray_origin: Vec3, ray_direction: Vec3) {
+  pub fn gadget_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
     if let Some(gadget) = &mut self.gadget {
       gadget.drag(handle_index, ray_origin, ray_direction);
     }

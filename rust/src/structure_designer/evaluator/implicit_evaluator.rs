@@ -1,5 +1,5 @@
-use glam::f32::Vec3;
-use glam::f32::Quat;
+use glam::f64::DVec3;
+use glam::f64::DQuat;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_data::parameter_data::ParameterData;
@@ -9,7 +9,7 @@ use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
-use std::f32::consts::PI;
+use std::f64::consts::PI;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -28,15 +28,15 @@ fn eval_cuboid<'a>(
   _registry: &NodeTypeRegistry,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
-  sample_point: &Vec3) -> f32 {
+  sample_point: &DVec3) -> f64 {
   let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
 
   let max_corner = cuboid_data.min_corner + cuboid_data.extent;
-  let x_val = f32::max((cuboid_data.min_corner.x as f32) - sample_point.x, sample_point.x - (max_corner.x as f32));
-  let y_val = f32::max((cuboid_data.min_corner.y as f32) - sample_point.y, sample_point.y - (max_corner.y as f32));
-  let z_val = f32::max((cuboid_data.min_corner.z as f32) - sample_point.z, sample_point.z - (max_corner.z as f32));
+  let x_val = f64::max((cuboid_data.min_corner.x as f64) - sample_point.x, sample_point.x - (max_corner.x as f64));
+  let y_val = f64::max((cuboid_data.min_corner.y as f64) - sample_point.y, sample_point.y - (max_corner.y as f64));
+  let z_val = f64::max((cuboid_data.min_corner.z as f64) - sample_point.z, sample_point.z - (max_corner.z as f64));
 
-  return f32::max(f32::max(x_val, y_val), z_val);
+  return f64::max(f64::max(x_val, y_val), z_val);
 }
 
 fn eval_sphere<'a>(
@@ -44,11 +44,11 @@ fn eval_sphere<'a>(
   _registry: &NodeTypeRegistry,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
-  sample_point: &Vec3) -> f32 {
+  sample_point: &DVec3) -> f64 {
   let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
 
-  return (sample_point - Vec3::new(sphere_data.center.x as f32, sphere_data.center.y as f32, sphere_data.center.z as f32)).length() 
-    - (sphere_data.radius as f32);
+  return (sample_point - DVec3::new(sphere_data.center.x as f64, sphere_data.center.y as f64, sphere_data.center.z as f64)).length() 
+    - (sphere_data.radius as f64);
 }
 
 fn eval_half_space<'a>(
@@ -56,28 +56,28 @@ fn eval_half_space<'a>(
   _registry: &NodeTypeRegistry,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
-  sample_point: &Vec3) -> f32 {
+  sample_point: &DVec3) -> f64 {
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
-  let float_miller = half_space_data.miller_index.as_vec3();
+  let float_miller = half_space_data.miller_index.as_dvec3();
   let miller_magnitude = float_miller.length();
-  return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f32)) / miller_magnitude;
+  return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f64)) / miller_magnitude;
 }
 
 fn eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
     registry: &NodeTypeRegistry,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node: &Node,
-    sample_point: &Vec3) -> f32 {
+    sample_point: &DVec3) -> f64 {
 
     let mut transformed_point = sample_point.clone(); 
 
     let geo_trans_data = &node.data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
 
     if !geo_trans_data.transform_only_frame {
-      let translation = geo_trans_data.translation.as_vec3();
-      let rotation_euler = geo_trans_data.rotation.as_vec3() * PI * 0.5;
+      let translation = geo_trans_data.translation.as_dvec3();
+      let rotation_euler = geo_trans_data.rotation.as_dvec3() * PI * 0.5;
   
-      let rotation_quat = Quat::from_euler(
+      let rotation_quat = DQuat::from_euler(
           glam::EulerRot::XYX,
           rotation_euler.x, 
           rotation_euler.y, 
@@ -92,7 +92,7 @@ fn eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
             node_id, 
             &transformed_point,
             registry)[0],
-        None => f32::MAX
+        None => f64::MAX
     }
 }
 
@@ -101,10 +101,10 @@ fn eval_union<'a>(
     registry: &NodeTypeRegistry,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node: &Node,
-    sample_point: &Vec3) -> f32 {
+    sample_point: &DVec3) -> f64 {
   node.arguments[0].argument_node_ids.iter().map(|node_id| {
     evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-  }).reduce(f32::min).unwrap_or(f32::MAX)
+  }).reduce(f64::min).unwrap_or(f64::MAX)
 }
 
 fn eval_intersect<'a>(
@@ -112,10 +112,10 @@ fn eval_intersect<'a>(
   registry: &NodeTypeRegistry,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
-  sample_point: &Vec3) -> f32 {
+  sample_point: &DVec3) -> f64 {
     node.arguments[0].argument_node_ids.iter().map(|node_id| {
       evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-    }).reduce(f32::max).unwrap_or(f32::MIN)
+    }).reduce(f64::max).unwrap_or(f64::MIN)
 }
 
 fn eval_diff<'a>(
@@ -123,17 +123,17 @@ fn eval_diff<'a>(
   registry: &NodeTypeRegistry,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
-  sample_point: &Vec3) -> f32 {
+  sample_point: &DVec3) -> f64 {
 
   let ubase = node.arguments[0].argument_node_ids.iter().map(|node_id| {
     evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-  }).reduce(f32::min).unwrap_or(f32::MAX);
+  }).reduce(f64::min).unwrap_or(f64::MAX);
 
   let usub = node.arguments[1].argument_node_ids.iter().map(|node_id| {
     evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-  }).reduce(f32::min).unwrap_or(f32::MAX);
+  }).reduce(f64::min).unwrap_or(f64::MAX);
 
-  return f32::max(ubase, -usub)
+  return f64::max(ubase, -usub)
 }
 
 /*
@@ -142,7 +142,7 @@ fn eval_diff<'a>(
  * It does this by treating the abstract operators (nodes) in the node network as implicit geometry functions. 
  */
 pub struct ImplicitEvaluator {
-    built_in_functions: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, &Vec<NetworkStackElement>, &Node, &Vec3) -> f32>,
+    built_in_functions: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, &Vec<NetworkStackElement>, &Node, &DVec3) -> f64>,
 }
 
 impl ImplicitEvaluator {
@@ -165,19 +165,19 @@ impl ImplicitEvaluator {
     // Calculate gradient using one sided differences
     // This is faster than using central differences but potentially less accurate
     // It also returns the value at the sampled point, so that the value can be reused. 
-    pub fn get_gradient(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> (Vec3, f32) {
-      let epsilon = 0.001; // Small value for finite difference approximation
+    pub fn get_gradient(&self, network: &NodeNetwork, node_id: u64, sample_point: &DVec3, registry: &NodeTypeRegistry) -> (DVec3, f64) {
+      let epsilon: f64 = 0.001; // Small value for finite difference approximation
 
       let value = self.eval(&network, node_id, sample_point, registry)[0];
-      let gradient = Vec3::new(
-        (self.eval(&network, node_id, &(sample_point + Vec3::new(epsilon, 0.0, 0.0)), registry)[0] - value) / epsilon,
-        (self.eval(&network, node_id, &(sample_point + Vec3::new(0.0, epsilon, 0.0)), registry)[0] - value) / epsilon,
-        (self.eval(&network, node_id, &(sample_point + Vec3::new(0.0, 0.0, epsilon)), registry)[0] - value) / epsilon
+      let gradient = DVec3::new(
+        (self.eval(&network, node_id, &(sample_point + DVec3::new(epsilon, 0.0, 0.0)), registry)[0] - value) / epsilon,
+        (self.eval(&network, node_id, &(sample_point + DVec3::new(0.0, epsilon, 0.0)), registry)[0] - value) / epsilon,
+        (self.eval(&network, node_id, &(sample_point + DVec3::new(0.0, 0.0, epsilon)), registry)[0] - value) / epsilon
       );
       (gradient, value)
     }
 
-    pub fn eval(&self, network: &NodeNetwork, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec<f32> {
+    pub fn eval(&self, network: &NodeNetwork, node_id: u64, sample_point: &DVec3, registry: &NodeTypeRegistry) -> Vec<f64> {
         let mut network_stack = Vec::new();
         // We assign the root node network zero node id. It is not used in the evaluation.
         network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
@@ -197,7 +197,7 @@ impl ImplicitEvaluator {
    * Not all optimizations fit all use cases or even compatible with each other, so we might use multiple approaches
    * in different cases.
    */
-  pub fn implicit_eval<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, sample_point: &Vec3, registry: &NodeTypeRegistry) -> Vec<f32> {
+  pub fn implicit_eval<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, sample_point: &DVec3, registry: &NodeTypeRegistry) -> Vec<f64> {
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
     if node.node_type_name == "parameter" {
@@ -207,7 +207,7 @@ impl ImplicitEvaluator {
       let mut parent_network_stack = network_stack.clone();
       parent_network_stack.pop();
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
-      let args : Vec<Vec<f32>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
+      let args : Vec<Vec<f64>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
         self.implicit_eval(&parent_network_stack, arg_node_id, sample_point, registry)
       }).collect();
       return args.concat();

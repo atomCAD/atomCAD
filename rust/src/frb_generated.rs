@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -184140759;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 100417522;
 
 // Section: executor
 
@@ -688,6 +688,38 @@ fn wire__crate__api__simple__greet_impl(
         },
     )
 }
+fn wire__crate__api__simple__import_xyz_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "import_xyz",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_file_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::import_xyz(&api_file_path);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__init_app_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1226,10 +1258,10 @@ impl SseDecode for crate::api::api_types::APICamera {
         let mut var_eye = <crate::api::api_types::APIVec3>::sse_decode(deserializer);
         let mut var_target = <crate::api::api_types::APIVec3>::sse_decode(deserializer);
         let mut var_up = <crate::api::api_types::APIVec3>::sse_decode(deserializer);
-        let mut var_aspect = <f32>::sse_decode(deserializer);
-        let mut var_fovy = <f32>::sse_decode(deserializer);
-        let mut var_znear = <f32>::sse_decode(deserializer);
-        let mut var_zfar = <f32>::sse_decode(deserializer);
+        let mut var_aspect = <f64>::sse_decode(deserializer);
+        let mut var_fovy = <f64>::sse_decode(deserializer);
+        let mut var_znear = <f64>::sse_decode(deserializer);
+        let mut var_zfar = <f64>::sse_decode(deserializer);
         return crate::api::api_types::APICamera {
             eye: var_eye,
             target: var_target,
@@ -1295,8 +1327,8 @@ impl SseDecode for crate::api::api_types::APISphereData {
 impl SseDecode for crate::api::api_types::APIVec2 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_x = <f32>::sse_decode(deserializer);
-        let mut var_y = <f32>::sse_decode(deserializer);
+        let mut var_x = <f64>::sse_decode(deserializer);
+        let mut var_y = <f64>::sse_decode(deserializer);
         return crate::api::api_types::APIVec2 { x: var_x, y: var_y };
     }
 }
@@ -1304,9 +1336,9 @@ impl SseDecode for crate::api::api_types::APIVec2 {
 impl SseDecode for crate::api::api_types::APIVec3 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_x = <f32>::sse_decode(deserializer);
-        let mut var_y = <f32>::sse_decode(deserializer);
-        let mut var_z = <f32>::sse_decode(deserializer);
+        let mut var_x = <f64>::sse_decode(deserializer);
+        let mut var_y = <f64>::sse_decode(deserializer);
+        let mut var_z = <f64>::sse_decode(deserializer);
         return crate::api::api_types::APIVec3 {
             x: var_x,
             y: var_y,
@@ -1346,13 +1378,6 @@ impl SseDecode for crate::api::api_types::Editor {
             2 => crate::api::api_types::Editor::SceneComposer,
             _ => unreachable!("Invalid variant for Editor: {}", inner),
         };
-    }
-}
-
-impl SseDecode for f32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_f32::<NativeEndian>().unwrap()
     }
 }
 
@@ -1659,7 +1684,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        20 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1691,19 +1716,20 @@ fn pde_ffi_dispatcher_sync_impl(
         17 => wire__crate__api__simple__get_node_type_names_impl(ptr, rust_vec_len, data_len),
         18 => wire__crate__api__simple__get_sphere_data_impl(ptr, rust_vec_len, data_len),
         19 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__simple__set_active_editor_impl(ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__simple__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__simple__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__simple__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__simple__import_xyz_impl(ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__simple__move_camera_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__simple__move_node_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__simple__provide_texture_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__simple__select_wire_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__simple__set_active_editor_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__simple__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__simple__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__simple__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__simple__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__simple__set_node_display_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__simple__set_sphere_data_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__simple__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2051,10 +2077,10 @@ impl SseEncode for crate::api::api_types::APICamera {
         <crate::api::api_types::APIVec3>::sse_encode(self.eye, serializer);
         <crate::api::api_types::APIVec3>::sse_encode(self.target, serializer);
         <crate::api::api_types::APIVec3>::sse_encode(self.up, serializer);
-        <f32>::sse_encode(self.aspect, serializer);
-        <f32>::sse_encode(self.fovy, serializer);
-        <f32>::sse_encode(self.znear, serializer);
-        <f32>::sse_encode(self.zfar, serializer);
+        <f64>::sse_encode(self.aspect, serializer);
+        <f64>::sse_encode(self.fovy, serializer);
+        <f64>::sse_encode(self.znear, serializer);
+        <f64>::sse_encode(self.zfar, serializer);
     }
 }
 
@@ -2094,17 +2120,17 @@ impl SseEncode for crate::api::api_types::APISphereData {
 impl SseEncode for crate::api::api_types::APIVec2 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <f32>::sse_encode(self.x, serializer);
-        <f32>::sse_encode(self.y, serializer);
+        <f64>::sse_encode(self.x, serializer);
+        <f64>::sse_encode(self.y, serializer);
     }
 }
 
 impl SseEncode for crate::api::api_types::APIVec3 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <f32>::sse_encode(self.x, serializer);
-        <f32>::sse_encode(self.y, serializer);
-        <f32>::sse_encode(self.z, serializer);
+        <f64>::sse_encode(self.x, serializer);
+        <f64>::sse_encode(self.y, serializer);
+        <f64>::sse_encode(self.z, serializer);
     }
 }
 
@@ -2138,13 +2164,6 @@ impl SseEncode for crate::api::api_types::Editor {
             },
             serializer,
         );
-    }
-}
-
-impl SseEncode for f32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_f32::<NativeEndian>(self).unwrap();
     }
 }
 

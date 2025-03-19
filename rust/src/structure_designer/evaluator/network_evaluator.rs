@@ -1,6 +1,6 @@
 use glam::i32::IVec3;
-use glam::f32::Quat;
-use glam::f32::Vec3;
+use glam::f64::DQuat;
+use glam::f64::DVec3;
 use crate::common::surface_point_cloud::SurfacePoint;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::structure_designer::node_network::NodeNetwork;
@@ -22,7 +22,7 @@ use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 
 const SAMPLES_PER_UNIT: i32 = 4;
-const DIAMOND_SAMPLE_THRESHOLD: f32 = 0.01;
+const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 const CARBON: i32 = 6;
 
 // Relative in-cell positions of the carbon atoms that are part of a cell
@@ -178,8 +178,8 @@ impl NetworkEvaluator {
     let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
 
     return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-      sphere_data.center.as_vec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
-      Quat::IDENTITY,
+      sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+      DQuat::IDENTITY,
     ) });
   }
 
@@ -187,13 +187,13 @@ impl NetworkEvaluator {
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
     let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
 
-    let min_corner = cuboid_data.min_corner.as_vec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-    let extent = cuboid_data.extent.as_vec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+    let min_corner = cuboid_data.min_corner.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+    let extent = cuboid_data.extent.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
     let center = min_corner + extent / 2.0;
 
     return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
       center,
-      Quat::IDENTITY,
+      DQuat::IDENTITY,
     ) });
   }
 
@@ -202,12 +202,12 @@ impl NetworkEvaluator {
     let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
 
-    let dir = half_space_data.miller_index.as_vec3().normalize();
-    let shift_handle_offset = ((half_space_data.shift as f32) / half_space_data.miller_index.as_vec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32);
+    let dir = half_space_data.miller_index.as_dvec3().normalize();
+    let shift_handle_offset = ((half_space_data.shift as f64) / half_space_data.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
     return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
       dir * shift_handle_offset,
-      Quat::from_rotation_arc(Vec3::Y, dir),
+      DQuat::from_rotation_arc(DVec3::Y, dir),
     )});
   }
 
@@ -223,7 +223,7 @@ impl NetworkEvaluator {
     if let NetworkResult::Atomic(atomic_structure) = result {
       let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 
-      let rotation_quat = Quat::from_euler(
+      let rotation_quat = DQuat::from_euler(
         glam::EulerRot::XYX,
         atom_trans_data.rotation.x, 
         atom_trans_data.rotation.y, 
@@ -276,15 +276,15 @@ impl NetworkEvaluator {
     atom_pos_to_id: &mut HashMap<IVec3, u64>,
     atomic_structure: &mut AtomicStructure) {
 
-    let epsilon = 0.001;
+    let epsilon: f64 = 0.001;
 
     // Calculate the center point of the box
-    let center_point = start_pos.as_vec3() + size.as_vec3() / 2.0;
+    let center_point = start_pos.as_dvec3() + size.as_dvec3() / 2.0;
 
     // Evaluate SDF at the center point
     let sdf_value = self.implicit_evaluator.implicit_eval(network_stack, geo_node_id, &center_point, registry)[0];
   
-    let half_diagonal = size.as_vec3().length() / 2.0;
+    let half_diagonal = size.as_dvec3().length() / 2.0;
 
     // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
     if sdf_value > half_diagonal + DIAMOND_SAMPLE_THRESHOLD + epsilon {
@@ -423,7 +423,7 @@ impl NetworkEvaluator {
         if let Some(id) = atom_pos_to_id.get(&absolute_pos) {
           carbon_atom_ids.push(*id);
         } else {
-          let crystal_space_pos = absolute_pos.as_vec3() / 4.0;
+          let crystal_space_pos = absolute_pos.as_dvec3() / 4.0;
           let mut has_atom = filled;
           if !has_atom {
             let value = self.implicit_evaluator.implicit_eval(network_stack, geo_node_id, &crystal_space_pos, registry)[0];
@@ -490,19 +490,19 @@ impl NetworkEvaluator {
       registry: &NodeTypeRegistry,
       start_pos: &IVec3,
       size: &IVec3,
-      eval_cache: &mut LruCache<IVec3, f32>,
+      eval_cache: &mut LruCache<IVec3, f64>,
       point_cloud: &mut SurfacePointCloud,) {
 
-    let spu = SAMPLES_PER_UNIT as f32;
+    let spu = SAMPLES_PER_UNIT as f64;
     let epsilon = 0.001;
 
     // Calculate the center point of the box
-    let center_point = (start_pos.as_vec3() + size.as_vec3() / 2.0) / spu;
+    let center_point = (start_pos.as_dvec3() + size.as_dvec3() / 2.0) / spu;
 
     // Evaluate SDF at the center point
     let sdf_value = self.implicit_evaluator.eval(network, node_id, &center_point, registry)[0];
     
-    let half_diagonal = size.as_vec3().length() / spu / 2.0;
+    let half_diagonal = size.as_dvec3().length() / spu / 2.0;
     
     // If absolute SDF value is greater than half diagonal, there's no surface in this box
     if sdf_value.abs() > half_diagonal + epsilon {
@@ -568,9 +568,9 @@ impl NetworkEvaluator {
     node_id: u64,
     registry: &NodeTypeRegistry,
     int_pos: &IVec3,
-    eval_cache: &mut LruCache<IVec3, f32>,
+    eval_cache: &mut LruCache<IVec3, f64>,
     point_cloud: &mut SurfacePointCloud) {
-      let spu = SAMPLES_PER_UNIT as f32;
+      let spu = SAMPLES_PER_UNIT as f64;
 
       // Define the corner points for the current cube
       let corner_points = [
@@ -585,11 +585,11 @@ impl NetworkEvaluator {
       ];
 
       // Evaluate corner points using cache
-      let values: Vec<f32> = corner_points.iter().map(|ip| {
+      let values: Vec<f64> = corner_points.iter().map(|ip| {
         if let Some(&cached_value) = eval_cache.get(ip) {
           cached_value
         } else {
-          let p = ip.as_vec3() / spu;
+          let p = ip.as_dvec3() / spu;
           let value = self.implicit_evaluator.eval(network, node_id, &p, registry)[0];
           //println!("Evaluating point: {:?}, value: {}", ip, value);
           eval_cache.put(*ip, value);
@@ -598,7 +598,7 @@ impl NetworkEvaluator {
       }).collect();
 
       if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
-          let center_point = (corner_points[0].as_vec3() + 0.5) / spu;
+          let center_point = (corner_points[0].as_dvec3() + 0.5) / spu;
           let gradient_val = self.implicit_evaluator.get_gradient(network, node_id, &center_point, registry);
           let gradient = gradient_val.0;
           let value = gradient_val.1;

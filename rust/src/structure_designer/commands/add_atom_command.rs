@@ -1,4 +1,4 @@
-use glam::f32::Vec3;
+use glam::f64::DVec3;
 use super::super::command::Command;
 use crate::common::atomic_structure::AtomicStructure;
 
@@ -7,14 +7,14 @@ use crate::common::atomic_structure::AtomicStructure;
  */
 pub struct AddAtomCommand {
   pub atomic_number: i32,
-  pub position: Vec3,
+  pub position: DVec3,
 
   // undo information
   pub atom_id: u64,
 }
 
 impl AddAtomCommand {
-  pub fn new(atomic_number: i32, position: Vec3) -> Self {
+  pub fn new(atomic_number: i32, position: DVec3) -> Self {
       Self { atomic_number, position, atom_id: 0 }
   }
 }

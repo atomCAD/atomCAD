@@ -11,7 +11,7 @@ use super::node_data::half_space_data::HalfSpaceData;
 use super::node_data::geo_trans_data::GeoTransData;
 use super::node_data::atom_trans_data::AtomTransData;
 use super::node_data::parameter_data::ParameterData;
-use glam::{IVec3, Vec3};
+use glam::{IVec3, DVec3};
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
@@ -177,8 +177,8 @@ impl NodeTypeRegistry {
       ],
       output_type: DataType::Atomic,
       node_data_creator: || Box::new(AtomTransData {
-        translation: Vec3::new(0.0, 0.0, 0.0),
-        rotation: Vec3::new(0.0, 0.0, 0.0),
+        translation: DVec3::new(0.0, 0.0, 0.0),
+        rotation: DVec3::new(0.0, 0.0, 0.0),
       }),
     });
 

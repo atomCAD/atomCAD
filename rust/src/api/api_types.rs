@@ -9,14 +9,14 @@ pub enum Editor {
 }
 
 pub struct APIVec2 {
-  pub x: f32,
-  pub y: f32,
+  pub x: f64,
+  pub y: f64,
 }
 
 pub struct APIVec3 {
-  pub x: f32,
-  pub y: f32,
-  pub z: f32,
+  pub x: f64,
+  pub y: f64,
+  pub z: f64,
 }
 
 pub struct APIIVec3 {
@@ -29,10 +29,10 @@ pub struct APICamera {
   pub eye: APIVec3,
   pub target: APIVec3,
   pub up: APIVec3,
-  pub aspect: f32,
-  pub fovy: f32, // in radians
-  pub znear: f32,
-  pub zfar: f32,
+  pub aspect: f64,
+  pub fovy: f64, // in radians
+  pub znear: f64,
+  pub zfar: f64,
 }
 
 pub struct InputPinView {

@@ -4,8 +4,8 @@ use std::time::Instant;
 use crate::renderer::renderer::Renderer;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::scene_composer::scene_composer::SceneComposer;
-use glam::f32::Vec2;
-use glam::f32::Vec3;
+use glam::f64::DVec2;
+use glam::f64::DVec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
 use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData, APIAtomTransData};
@@ -24,7 +24,7 @@ use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 
-fn to_api_vec3(v: &Vec3) -> APIVec3 {
+fn to_api_vec3(v: &DVec3) -> APIVec3 {
   return APIVec3{
     x: v.x,
     y: v.y,
@@ -32,8 +32,8 @@ fn to_api_vec3(v: &Vec3) -> APIVec3 {
   }
 }
 
-fn from_api_vec3(v: &APIVec3) -> Vec3 {
-  return Vec3{
+fn from_api_vec3(v: &APIVec3) -> DVec3 {
+  return DVec3{
     x: v.x,
     y: v.y,
     z: v.z
@@ -56,15 +56,15 @@ fn from_api_ivec3(v: &APIIVec3) -> IVec3 {
   }
 }
 
-fn to_api_vec2(v: &Vec2) -> APIVec2 {
+fn to_api_vec2(v: &DVec2) -> APIVec2 {
   return APIVec2{
     x: v.x,
     y: v.y,
   }
 }
 
-fn from_api_vec2(v: &APIVec2) -> Vec2 {
-  return Vec2 {
+fn from_api_vec2(v: &APIVec2) -> DVec2 {
+  return DVec2 {
     x: v.x,
     y: v.y,
   }
@@ -152,18 +152,18 @@ fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str, lig
 }
 
 fn add_sample_model(kernel: &mut StructureDesigner) {
-  let atom_id1 = kernel.add_atom(6, Vec3::new(-1.3, 0.0, 0.0));
-  let atom_id2 = kernel.add_atom(6, Vec3::new(1.3, 0.0, 0.0));
-  kernel.add_atom(6, Vec3::new(1.3, 3.0, 0.0));
+  let atom_id1 = kernel.add_atom(6, DVec3::new(-1.3, 0.0, 0.0));
+  let atom_id2 = kernel.add_atom(6, DVec3::new(1.3, 0.0, 0.0));
+  kernel.add_atom(6, DVec3::new(1.3, 3.0, 0.0));
   kernel.add_bond(atom_id1, atom_id2, 1);
 }
 
 fn add_sample_network(kernel: &mut StructureDesigner) {
   kernel.add_node_network("sample");
-  let cuboid_id = kernel.add_node("sample", "cuboid", Vec2::new(30.0, 30.0));
-  let sphere_id = kernel.add_node("sample", "sphere", Vec2::new(100.0, 100.0));
-  let diff_id_1 = kernel.add_node("sample", "diff", Vec2::new(300.0, 80.0));
-  let diff_id_2 = kernel.add_node("sample", "diff", Vec2::new(500.0, 80.0));
+  let cuboid_id = kernel.add_node("sample", "cuboid", DVec2::new(30.0, 30.0));
+  let sphere_id = kernel.add_node("sample", "sphere", DVec2::new(100.0, 100.0));
+  let diff_id_1 = kernel.add_node("sample", "diff", DVec2::new(300.0, 80.0));
+  let diff_id_2 = kernel.add_node("sample", "diff", DVec2::new(500.0, 80.0));
 
   kernel.connect_nodes("sample", cuboid_id, diff_id_1, 0);
   kernel.connect_nodes("sample", sphere_id, diff_id_1, 1);
@@ -270,7 +270,7 @@ pub fn add_atom(atomic_number: i32, position: APIVec3) {
 pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
   unsafe {
     if let Some(cad_instance) = &CAD_INSTANCE {
-      let model = cad_instance.structure_designer.get_atomic_structure();
+      let model = &cad_instance.scene_composer.model;
       return to_api_vec3(&model.find_pivot_point(&from_api_vec3(&ray_start), &from_api_vec3(&ray_dir)));
     } else {
       return APIVec3{
@@ -611,6 +611,16 @@ pub fn sync_gadget_data(node_network_name: String) -> bool {
       return instance.structure_designer.sync_gadget_data(&node_network_name);
     } else {
       false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn import_xyz(file_path: &str) {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.scene_composer.import_xyz(file_path).unwrap();
+      refresh_renderer(cad_instance, "", false);
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_viewport.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_cad/src/rust/api/simple.dart';
 
 /// The scene composer editor.
 class SceneComposer extends StatefulWidget {
@@ -23,11 +24,11 @@ class _SceneComposerState extends State<SceneComposer> {
       allowedExtensions: ['xyz'],
       dialogTitle: 'Select XYZ File',
     );
-    
+
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
       debugPrint('XYZ file selected: $filePath');
-      // TODO: Implement actual XYZ file parsing and importing
+      importXyz(filePath: filePath);
     } else {
       debugPrint('No XYZ file selected');
     }

@@ -1,20 +1,20 @@
-use glam::f32::Vec3;
-use glam::f32::Quat;
+use glam::f64::DVec3;
+use glam::f64::DQuat;
 
 #[derive(Clone)]
 pub struct Transform {
-  pub translation: Vec3,
-  pub rotation: Quat,
+  pub translation: DVec3,
+  pub rotation: DQuat,
 }
 
 impl Transform {
-  pub fn new(translation: Vec3, rotation: Quat) -> Self {
+  pub fn new(translation: DVec3, rotation: DQuat) -> Self {
     Self { translation, rotation }
   }
 }
 
 impl Default for Transform {
   fn default() -> Self {
-    Self { translation: Vec3::ZERO, rotation: Quat::IDENTITY }
+    Self { translation: DVec3::ZERO, rotation: DQuat::IDENTITY }
   }
 }

@@ -2,7 +2,8 @@ use super::super::mesh::Mesh;
 use super::super::mesh::Vertex;
 use super::super::mesh::Material;
 use glam::f32::Vec3;
-use glam::f32::Quat;
+use glam::f64::DQuat;
+use glam::f64::DVec3;
 
 pub trait Tessellatable {
   fn tessellate(&self, output_mesh: &mut Mesh);
@@ -11,25 +12,25 @@ pub trait Tessellatable {
 // provide the positions in counter clockwise order
 pub fn tessellate_quad(
     output_mesh: &mut Mesh,
-    pos0: &Vec3,
-    pos1: &Vec3,
-    pos2: &Vec3,
-    pos3: &Vec3,
-    normal: &Vec3,
+    pos0: &DVec3,
+    pos1: &DVec3,
+    pos2: &DVec3,
+    pos3: &DVec3,
+    normal: &DVec3,
     material: &Material,
 ) {
-    let index0 = output_mesh.add_vertex(Vertex::new(pos0, normal, material));
-    let index1 = output_mesh.add_vertex(Vertex::new(pos1, normal, material));
-    let index2 = output_mesh.add_vertex(Vertex::new(pos2, normal, material));
-    let index3 = output_mesh.add_vertex(Vertex::new(pos3, normal, material));
+    let index0 = output_mesh.add_vertex(Vertex::new(&pos0.as_vec3(), &normal.as_vec3(), material));
+    let index1 = output_mesh.add_vertex(Vertex::new(&pos1.as_vec3(), &normal.as_vec3(), material));
+    let index2 = output_mesh.add_vertex(Vertex::new(&pos2.as_vec3(), &normal.as_vec3(), material));
+    let index3 = output_mesh.add_vertex(Vertex::new(&pos3.as_vec3(), &normal.as_vec3(), material));
     output_mesh.add_quad(index0, index1, index2, index3);
 }
 
 pub fn tessellate_cuboid(
   output_mesh: &mut Mesh,
-  center: &Vec3,
-  size: &Vec3,
-  rotator: &Quat,
+  center: &DVec3,
+  size: &DVec3,
+  rotator: &DQuat,
   top_material: &Material,
   bottom_material: &Material,
   side_material: &Material,
@@ -38,15 +39,15 @@ pub fn tessellate_cuboid(
   let half_size = size * 0.5;
   let vertices = [
     // Top face vertices
-    center + rotator.mul_vec3(Vec3::new(-half_size.x, half_size.y, -half_size.z)),
-    center + rotator.mul_vec3(Vec3::new(half_size.x, half_size.y, -half_size.z)),
-    center + rotator.mul_vec3(Vec3::new(half_size.x, half_size.y, half_size.z)),
-    center + rotator.mul_vec3(Vec3::new(-half_size.x, half_size.y, half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(-half_size.x, half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(half_size.x, half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(half_size.x, half_size.y, half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(-half_size.x, half_size.y, half_size.z)),
     // Bottom face vertices
-    center + rotator.mul_vec3(Vec3::new(-half_size.x, - half_size.y, -half_size.z)),
-    center + rotator.mul_vec3(Vec3::new(half_size.x, - half_size.y, -half_size.z)),
-    center + rotator.mul_vec3(Vec3::new(half_size.x, - half_size.y, half_size.z)),
-    center + rotator.mul_vec3(Vec3::new(-half_size.x, - half_size.y, half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(-half_size.x, - half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(half_size.x, - half_size.y, -half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(half_size.x, - half_size.y, half_size.z)),
+    center + rotator.mul_vec3(DVec3::new(-half_size.x, - half_size.y, half_size.z)),
   ];
 
   // Add the six faces of the cuboid
@@ -54,7 +55,7 @@ pub fn tessellate_cuboid(
   tessellate_quad(
     output_mesh,
     &vertices[3], &vertices[2], &vertices[1], &vertices[0],
-    &rotator.mul_vec3(Vec3::Y),
+    &rotator.mul_vec3(DVec3::Y),
     &top_material
   );
 
@@ -62,7 +63,7 @@ pub fn tessellate_cuboid(
   tessellate_quad(
     output_mesh,
     &vertices[4], &vertices[5], &vertices[6], &vertices[7],
-    &rotator.mul_vec3(-Vec3::Y),
+    &rotator.mul_vec3(-DVec3::Y),
     &bottom_material
   );
 
@@ -70,7 +71,7 @@ pub fn tessellate_cuboid(
   tessellate_quad(
     output_mesh,
     &vertices[2], &vertices[3], &vertices[7], &vertices[6],
-    &rotator.mul_vec3(Vec3::Z),
+    &rotator.mul_vec3(DVec3::Z),
     &side_material
   );
 
@@ -78,7 +79,7 @@ pub fn tessellate_cuboid(
   tessellate_quad(
     output_mesh,
     &vertices[0], &vertices[1], &vertices[5], &vertices[4],
-    &rotator.mul_vec3(-Vec3::Z),
+    &rotator.mul_vec3(-DVec3::Z),
     &side_material
   );
 
@@ -86,7 +87,7 @@ pub fn tessellate_cuboid(
   tessellate_quad(
     output_mesh,
     &vertices[1], &vertices[2], &vertices[6], &vertices[5],
-    &rotator.mul_vec3(Vec3::X),
+    &rotator.mul_vec3(DVec3::X),
     &side_material
   );
 
@@ -94,40 +95,40 @@ pub fn tessellate_cuboid(
   tessellate_quad(
     output_mesh,
     &vertices[3], &vertices[0], &vertices[4], &vertices[7],
-    &rotator.mul_vec3(-Vec3::X),
+    &rotator.mul_vec3(-DVec3::X),
     &side_material
   );
 }
 
 pub fn tessellate_circle_sheet (
     output_mesh: &mut Mesh,
-    center: &Vec3,
-    normal: &Vec3,
-    radius: f32,
+    center: &DVec3,
+    normal: &DVec3,
+    radius: f64,
     divisions: u32,
     material: &Material,
 ) 
 {
-  let rotation = Quat::from_rotation_arc(Vec3::new(0.0, 1.0, 0.0), *normal);
+  let rotation = DQuat::from_rotation_arc(DVec3::new(0.0, 1.0, 0.0), *normal);
 
   let center_index = output_mesh.add_vertex(Vertex::new(
-    &center,
-    &normal,
+    &center.as_vec3(),
+    &normal.as_vec3(),
     material,
   ));
 
   let index_start = output_mesh.vertices.len() as u32;
 
   for x in 0..divisions {
-    let u = (x as f32) / (divisions as f32); // u runs from 0 to 1
-    let theta = u * 2.0 * std::f32::consts::PI; // From 0 to 2*PI
-    let out_normal = Vec3::new(theta.sin(), 0.0, theta.cos());
+    let u = (x as f64) / (divisions as f64); // u runs from 0 to 1
+    let theta = u * 2.0 * std::f64::consts::PI; // From 0 to 2*PI
+    let out_normal = DVec3::new(theta.sin(), 0.0, theta.cos());
 
     let position = center + rotation.mul_vec3(out_normal * radius);
     
     output_mesh.add_vertex(Vertex::new(
-      &position,
-      &normal,
+      &position.as_vec3(),
+      &normal.as_vec3(),
       material,
     ));
 
@@ -140,8 +141,8 @@ pub fn tessellate_circle_sheet (
 
 pub fn tessellate_sphere(
     output_mesh: &mut Mesh,
-    center: &Vec3,
-    radius: f32,
+    center: &DVec3,
+    radius: f64,
     horizontal_divisions: u32, // number sections when dividing by horizontal lines
     vertical_divisions: u32, // number of sections when dividing by vertical lines
     material: &Material,
@@ -150,13 +151,13 @@ pub fn tessellate_sphere(
   // ---------- Add vertices ----------
 
   let north_pole_index = output_mesh.add_vertex(Vertex::new(
-    &Vec3::new(center.x, center.y + radius, center.z),
+    &Vec3::new(center.x as f32, (center.y + radius) as f32, center.z as f32),
     &Vec3::new(0.0, 1.0, 0.0),
     material,
   ));
 
   let south_pole_index = output_mesh.add_vertex(Vertex::new(
-    &Vec3::new(center.x, center.y - radius, center.z),
+    &Vec3::new(center.x as f32, (center.y - radius) as f32, center.z as f32),
     &Vec3::new(0.0, -1.0, 0.0),
     material,
   ));
@@ -164,18 +165,18 @@ pub fn tessellate_sphere(
   let non_pole_index_start = output_mesh.vertices.len() as u32;
 
   for y in 1..vertical_divisions {
-    let v = (y as f32) / (vertical_divisions as f32); // v runs from 0 to 1
-    let phi = v * std::f32::consts::PI; // From 0 to PI (latitude)    
+    let v = (y as f64) / (vertical_divisions as f64); // v runs from 0 to 1
+    let phi = v * std::f64::consts::PI; // From 0 to PI (latitude)    
     for x in 0..horizontal_divisions {
-      let u = (x as f32) / (horizontal_divisions as f32); // u runs from 0 to 1
-      let theta = u * 2.0 * std::f32::consts::PI; // From 0 to 2*PI (longitude)
+      let u = (x as f64) / (horizontal_divisions as f64); // u runs from 0 to 1
+      let theta = u * 2.0 * std::f64::consts::PI; // From 0 to 2*PI (longitude)
 
-      let normal = Vec3::new(theta.sin() * phi.sin(), phi.cos(), theta.cos() * phi.sin());
+      let normal = DVec3::new(theta.sin() * phi.sin(), phi.cos(), theta.cos() * phi.sin());
       let position = normal * radius + center;
 
       output_mesh.add_vertex(Vertex::new(
-        &position,
-        &normal,
+        &position.as_vec3(),
+        &normal.as_vec3(),
         material,
       ));
     } // end of for x
@@ -218,9 +219,9 @@ pub fn tessellate_sphere(
 
 pub fn tessellate_cylinder(
     output_mesh: &mut Mesh,
-    top_center: &Vec3,
-    bottom_center: &Vec3,
-    radius: f32,
+    top_center: &DVec3,
+    bottom_center: &DVec3,
+    radius: f64,
     divisions: u32,
     material: &Material,
     include_top_and_bottom: bool) {
@@ -229,26 +230,26 @@ pub fn tessellate_cylinder(
   let up = dir;
   let down = dir * -1.0;
   let length = (top_center - bottom_center).length();
-  let rotation = Quat::from_rotation_arc(Vec3::new(0.0, 1.0, 0.0), dir);
+  let rotation = DQuat::from_rotation_arc(DVec3::new(0.0, 1.0, 0.0), dir);
   
   let index_start = output_mesh.vertices.len() as u32;
   for x in 0..divisions {
-    let u = (x as f32) / (divisions as f32); // u runs from 0 to 1
-    let theta = u * 2.0 * std::f32::consts::PI; // From 0 to 2*PI
+    let u = (x as f64) / (divisions as f64); // u runs from 0 to 1
+    let theta = u * 2.0 * std::f64::consts::PI; // From 0 to 2*PI
 
-    let normal = Vec3::new(theta.sin(), 0.0, theta.cos());
-    let bottom_position = center + rotation.mul_vec3(Vec3::new(0.0, -length * 0.5, 0.0) + normal * radius);
-    let top_position = center + rotation.mul_vec3(Vec3::new(0.0, length * 0.5, 0.0) + normal * radius);
+    let normal = DVec3::new(theta.sin(), 0.0, theta.cos());
+    let bottom_position = center + rotation.mul_vec3(DVec3::new(0.0, -length * 0.5, 0.0) + normal * radius);
+    let top_position = center + rotation.mul_vec3(DVec3::new(0.0, length * 0.5, 0.0) + normal * radius);
 
     output_mesh.add_vertex(Vertex::new(
-      &bottom_position,
-      &normal,
+      &bottom_position.as_vec3(),
+      &normal.as_vec3(),
       material,
     ));
 
     output_mesh.add_vertex(Vertex::new(
-      &top_position,
-      &normal,
+      &top_position.as_vec3(),
+      &normal.as_vec3(),
       material,
     ));
 
@@ -286,13 +287,13 @@ pub fn tessellate_cylinder(
 
 pub fn tessellate_grid(
     output_mesh: &mut Mesh,
-    center: &Vec3,
-    rotator: &Quat,
-    thickness: f32,
-    width: f32,
-    height: f32,
-    line_width: f32,
-    grid_unit: f32,
+    center: &DVec3,
+    rotator: &DQuat,
+    thickness: f64,
+    width: f64,
+    height: f64,
+    line_width: f64,
+    grid_unit: f64,
     top_material: &Material,
     bottom_material: &Material,
     side_material: &Material,
@@ -301,16 +302,16 @@ pub fn tessellate_grid(
   let horiz_divisions = (width / grid_unit).ceil() as u32;
   let vert_divisions = (height / grid_unit).ceil() as u32;
 
-  let start_x =  (- width * 0.5);
-  let start_z =  (- height * 0.5);
+  let start_x =  - width * 0.5;
+  let start_z =  - height * 0.5;
   for x in 0..horiz_divisions {
 
-    let cuboid_center = center + rotator.mul_vec3(Vec3::new(start_x + (x as f32) * grid_unit, -thickness * 0.5, 0.0));
+    let cuboid_center = center + rotator.mul_vec3(DVec3::new(start_x + (x as f64) * grid_unit, -thickness * 0.5, 0.0));
 
     tessellate_cuboid(
       output_mesh,
       &cuboid_center,
-      &(Vec3::new(line_width, thickness, height)),
+      &(DVec3::new(line_width, thickness, height)),
       rotator,
       top_material,
       bottom_material,
@@ -319,28 +320,16 @@ pub fn tessellate_grid(
   }
   for z in 0..vert_divisions {
 
-    let cuboid_center = center + rotator.mul_vec3(Vec3::new(0.0, -thickness * 0.5, start_z + (z as f32) * grid_unit));
+    let cuboid_center = center + rotator.mul_vec3(DVec3::new(0.0, -thickness * 0.5, start_z + (z as f64) * grid_unit));
 
     tessellate_cuboid(
       output_mesh,
       &cuboid_center,
-      &(Vec3::new(width, thickness, line_width)),
+      &(DVec3::new(width, thickness, line_width)),
       rotator,
       top_material,
       bottom_material,
       side_material,
     );
   }
-
-      /*
-  tessellate_cuboid(
-    output_mesh,
-    center,
-    &(Vec3::new(width, thickness, height)),
-    rotator,
-    top_material,
-    bottom_material,
-    side_material,
-  );
-  */
 }

@@ -5,6 +5,7 @@ use crate::common::atomic_structure::Atom;
 use crate::common::atomic_structure::Bond;
 use super::tessellator;
 use glam::f32::Vec3;
+use glam::f64::DVec3;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
@@ -16,15 +17,15 @@ pub struct AtomicTessellatorParams {
 
 #[derive(Clone)]
 pub struct AtomInfo {
-    pub radius: f32,
+    pub radius: f64,
     pub color: Vec3,
 }
 
 // atom radius factor for the 'balls and sticks' view
-const BAS_ATOM_RADIUS_FACTOR: f32 = 0.5;
+const BAS_ATOM_RADIUS_FACTOR: f64 = 0.5;
 
 // radius of a bond cylinder (stick) in the 'balls and sticks' view
-const BAS_STICK_RADIUS: f32 = 0.1; 
+const BAS_STICK_RADIUS: f64 = 0.1; 
 
 lazy_static! {
     static ref DEFAULT_ATOM_INFO: AtomInfo = AtomInfo {

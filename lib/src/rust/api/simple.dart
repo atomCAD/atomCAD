@@ -189,5 +189,8 @@ void gadgetEndDrag({required String nodeNetworkName}) => RustLib.instance.api
 bool syncGadgetData({required String nodeNetworkName}) => RustLib.instance.api
     .crateApiSimpleSyncGadgetData(nodeNetworkName: nodeNetworkName);
 
+void importXyz({required String filePath}) =>
+    RustLib.instance.api.crateApiSimpleImportXyz(filePath: filePath);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

@@ -9,6 +9,8 @@ use super::tessellator::surface_point_tessellator;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
+use glam::f64::DVec3;
+use glam::f64::DMat4;
 use crate::common::scene::Scene;
 use std::time::Instant;
 
@@ -41,9 +43,9 @@ impl CameraUniform {
   }
 
   fn refresh(&mut self, camera: &Camera) {
-    self.view_proj = camera.build_view_projection_matrix().to_cols_array_2d();
-    self.camera_position = camera.eye.to_array();
-    self.head_light_dir = camera.calc_headlight_direction().to_array();
+    self.view_proj = camera.build_view_projection_matrix().as_mat4().to_cols_array_2d();
+    self.camera_position = camera.eye.as_vec3().to_array();
+    self.head_light_dir = camera.calc_headlight_direction().as_vec3().to_array();
   }
 }
 
@@ -73,13 +75,13 @@ impl Renderer {
         let camera = Camera {
           // position the camera 20 units back
           // +z is out of the screen
-          eye: Vec3::new(0.0, 0.0, 20.0),
+          eye: DVec3::new(0.0, 0.0, 20.0),
           // have it look at the origin
-          target: Vec3::new(0.0, 0.0, 0.0),
+          target: DVec3::new(0.0, 0.0, 0.0),
           // which way is "up"
-          up: Vec3::new(0.0, 1.0, 0.0),
-          aspect: width as f32 / height as f32,
-          fovy: std::f32::consts::PI * 0.15,
+          up: DVec3::new(0.0, 1.0, 0.0),
+          aspect: width as f64 / height as f64,
+          fovy: std::f64::consts::PI * 0.15,
           znear: 0.5,
           zfar: 600.0,
         };
@@ -259,7 +261,7 @@ impl Renderer {
         }
     }
 
-    pub fn move_camera(&mut self, eye: &Vec3, target: &Vec3, up: &Vec3) {
+    pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
       self.camera.eye = *eye;
       self.camera.target = *target;
       self.camera.up = *up;

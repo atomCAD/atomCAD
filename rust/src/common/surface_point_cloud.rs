@@ -1,9 +1,9 @@
-use glam::f32::Vec3;
+use glam::f64::DVec3;
 use crate::util::transform::Transform;
 
 pub struct SurfacePoint {
-  pub position: Vec3,
-  pub normal: Vec3, // points outwards
+  pub position: DVec3,
+  pub normal: DVec3, // points outwards
 }
 
 pub struct SurfacePointCloud {

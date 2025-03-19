@@ -1,12 +1,12 @@
-use glam::f32::Vec3;
-use glam::f32::Quat;
+use glam::f64::DVec3;
+use glam::f64::DQuat;
 
 // ray_direction must be normalized
 pub fn sphere_hit_test(
-    sphere_center: &Vec3,
-    sphere_radius: f32,
-    ray_origin: &Vec3,
-    ray_direction: &Vec3) -> Option<f32> {
+    sphere_center: &DVec3,
+    sphere_radius: f64,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3) -> Option<f64> {
     
     // Vector from sphere center to ray origin
     let oc = *ray_origin - *sphere_center;
@@ -46,10 +46,10 @@ pub fn sphere_hit_test(
 }
 
 pub fn get_closest_point_on_first_ray(
-    ray1_origin: &Vec3,
-    ray1_direction: &Vec3,
-    ray2_origin: &Vec3,
-    ray2_direction: &Vec3) -> f32 {
+    ray1_origin: &DVec3,
+    ray1_direction: &DVec3,
+    ray2_origin: &DVec3,
+    ray2_direction: &DVec3) -> f64 {
     // This function calculates the parameter 't' on ray1 where the two rays are closest to each other.
     // Based on the formula for distance between two skew lines.
     
@@ -83,9 +83,9 @@ pub fn get_closest_point_on_first_ray(
 }
 
 pub fn get_point_distance_to_ray(
-    ray_origin: &Vec3,
-    ray_direction: &Vec3,
-    point: &Vec3) -> f32 {
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
+    point: &DVec3) -> f64 {
     // Vector from ray origin to the point
     let v = *point - *ray_origin;
     
@@ -100,11 +100,11 @@ pub fn get_point_distance_to_ray(
 }
 
 pub fn cylinder_hit_test(
-    cylinder_top_center: &Vec3,
-    cylinder_bottom_center: &Vec3,
-    cylinder_radius: f32,
-    ray_origin: &Vec3,
-    ray_direction: &Vec3) -> Option<f32> {
+    cylinder_top_center: &DVec3,
+    cylinder_bottom_center: &DVec3,
+    cylinder_radius: f64,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3) -> Option<f64> {
     
     // Step 1: Calculate cylinder properties
     let cylinder_axis = *cylinder_top_center - *cylinder_bottom_center;
@@ -113,10 +113,10 @@ pub fn cylinder_hit_test(
     let cylinder_axis_normalized = cylinder_axis.normalize();
     
     // Step 2: Create a rotation that maps the cylinder axis to the y-axis (0,1,0)
-    let y_axis = Vec3::new(0.0, 1.0, 0.0);
+    let y_axis = DVec3::new(0.0, 1.0, 0.0);
     
     // Much simpler rotation calculation using from_rotation_arc
-    let quat = Quat::from_rotation_arc(cylinder_axis_normalized, y_axis);
+    let quat = DQuat::from_rotation_arc(cylinder_axis_normalized, y_axis);
     
     // Step 3: Transform the ray to the cylinder's local space where cylinder axis is along y
     let center_to_origin = *ray_origin - cylinder_center;
@@ -169,7 +169,7 @@ pub fn cylinder_hit_test(
     let t2 = (-b + discriminant_sqrt) / (2.0 * a);
     
     // We need to find the t value that represents the closest valid intersection
-    let mut t_cyl = std::f32::MAX;
+    let mut t_cyl = std::f64::MAX;
     let mut found = false;
     
     // Check if t1 is a valid intersection (within cylinder height)
@@ -204,12 +204,12 @@ pub fn cylinder_hit_test(
 
 // Helper function to calculate intersection with the cylinder caps
 fn cylinder_caps_intersection(
-    local_ray_origin: &Vec3, 
-    local_ray_direction: &Vec3, 
-    half_height: f32,
-    cylinder_radius: f32
-) -> Option<f32> {
-    let mut t_min = std::f32::MAX;
+    local_ray_origin: &DVec3, 
+    local_ray_direction: &DVec3, 
+    half_height: f64,
+    cylinder_radius: f64
+) -> Option<f64> {
+    let mut t_min = std::f64::MAX;
     let mut found = false;
     
     // Skip cap intersection tests if ray is parallel to the cap planes

@@ -1,6 +1,6 @@
 use crate::util::transform::Transform;
-use glam::f32::Vec3 as Vec3;
-use glam::f32::Quat;
+use glam::f64::DVec3;
+use glam::f64::DQuat;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -17,7 +17,7 @@ pub struct Bond {
 pub struct Atom {
   pub id: u64,
   pub atomic_number: i32,
-  pub position: Vec3,
+  pub position: DVec3,
   pub bond_ids: Vec<u64>,
   pub selected: bool,
   pub cluster_id: u64,
@@ -99,13 +99,13 @@ impl AtomicStructure {
     });
   }
 
-  pub fn add_atom(&mut self, atomic_number: i32, position: Vec3, cluster_id: u64) -> u64 {
+  pub fn add_atom(&mut self, atomic_number: i32, position: DVec3, cluster_id: u64) -> u64 {
     let id = self.obtain_next_id();
     self.add_atom_with_id(id, atomic_number, position, cluster_id);
     id
   }
 
-  pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: Vec3, cluster_id: u64) {
+  pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: DVec3, cluster_id: u64) {
     self.atoms.insert(id, Atom {
       id,
       atomic_number,
@@ -204,12 +204,12 @@ impl AtomicStructure {
     }
   }
 
-  pub fn find_pivot_point(&self, ray_start: &Vec3, ray_dir: &Vec3) -> Vec3 {
+  pub fn find_pivot_point(&self, ray_start: &DVec3, ray_dir: &DVec3) -> DVec3 {
     // Find closest atom to ray.
     // Linear search for now. We will use space partitioning later.
     
-    let mut closest_distance_squared = f32::MAX;
-    let mut closest_atom_position = Vec3::ZERO;
+    let mut closest_distance_squared = f64::MAX;
+    let mut closest_atom_position = DVec3::ZERO;
 
     for atom in self.atoms.values() {
         // Vector from ray start to atom center.
@@ -235,8 +235,8 @@ impl AtomicStructure {
     }
 
     // If no atom was found, return the ray origin.
-    if closest_distance_squared == f32::MAX {
-        return Vec3::new(0.0, 0.0, 0.0);
+    if closest_distance_squared == f64::MAX {
+        return DVec3::new(0.0, 0.0, 0.0);
     }
 
     return closest_atom_position;
@@ -249,7 +249,7 @@ impl AtomicStructure {
     }
   }
   
-  pub fn transform(&mut self, rotation: &Quat, translation: &Vec3) {
+  pub fn transform(&mut self, rotation: &DQuat, translation: &DVec3) {
     // First, collect all atom IDs that will be transformed
     let atom_ids: Vec<u64> = self.atoms.keys().cloned().collect();
     

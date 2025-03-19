@@ -2,6 +2,8 @@ use crate::common::atomic_structure::AtomicStructure;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::scene::Scene;
+use crate::common::xyz_loader::load_xyz;
+use crate::common::xyz_loader::XyzError;
 
 pub struct SceneComposer {
     pub model: AtomicStructure,
@@ -14,6 +16,10 @@ impl SceneComposer {
     }
   }
 
+  pub fn import_xyz(&mut self, file_path: &str) -> Result<(), XyzError> {
+    self.model = load_xyz(&file_path)?;
+    Ok(())
+  }
 }
 
 impl<'a> Scene<'a> for SceneComposer {
