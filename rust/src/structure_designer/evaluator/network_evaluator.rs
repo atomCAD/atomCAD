@@ -68,7 +68,7 @@ pub enum NetworkResult {
 }
 
 pub struct NetworkEvaluator {
-    implicit_evaluator: ImplicitEvaluator,
+    pub implicit_evaluator: ImplicitEvaluator,
 }
 
 /*
