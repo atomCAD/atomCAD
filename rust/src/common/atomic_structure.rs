@@ -4,6 +4,10 @@ use glam::f64::DQuat;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+// Bigger than any realistically possible bond, so a neighbouring atom will be in the same cell
+// or in a neighbouring cell
+const ATOM_GRID_CELL_SIZE: f64 = 3.0;
+
 #[derive(Clone)]
 pub struct Bond {
   pub id: u64,
@@ -35,6 +39,8 @@ pub struct AtomicStructure {
   pub frame_transform: Transform,
   pub next_id: u64,
   pub atoms: HashMap<u64, Atom>,
+  // Sparse grid of atoms
+  pub grid: HashMap<(i32, i32, i32), Vec<u64>>,
   pub bonds: HashMap<u64, Bond>,
   pub dirty_atom_ids: HashSet<u64>,
   pub clusters: HashMap<u64, Cluster>,
@@ -47,6 +53,7 @@ impl AtomicStructure {
       frame_transform: Transform::default(),
       next_id: 1,
       atoms: HashMap::new(),
+      grid: HashMap::new(),
       bonds: HashMap::new(),
       dirty_atom_ids: HashSet::new(),
       clusters: HashMap::new(),
@@ -57,6 +64,11 @@ impl AtomicStructure {
 
   pub fn get_num_of_atoms(&self) -> usize {
     self.atoms.len()
+  }
+
+  pub fn get_cell_for_pos(&self, pos: &DVec3) -> (i32, i32, i32) {
+    let cell = (pos / ATOM_GRID_CELL_SIZE).trunc().as_ivec3();
+    (cell.x, cell.y, cell.z)
   }
 
   pub fn get_atom(&self, atom_id: u64) -> Option<&Atom> {
@@ -106,6 +118,7 @@ impl AtomicStructure {
   }
 
   pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: DVec3, cluster_id: u64) {
+
     self.atoms.insert(id, Atom {
       id,
       atomic_number,
@@ -114,7 +127,9 @@ impl AtomicStructure {
       selected: false,
       cluster_id,
     });
-    
+
+    self.add_atom_to_grid(id, &position);
+
     // Add atom ID to the cluster's atom_ids HashSet if the cluster exists
     if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
       cluster.atom_ids.insert(id);
@@ -127,14 +142,21 @@ impl AtomicStructure {
   // Delete the bonds before calling this function
   // TODO: delete bonds in the method first.
   pub fn delete_atom(&mut self, id: u64) {
-    // Find the cluster ID of the atom before removing it
-    if let Some(atom) = self.atoms.get(&id) {
+    let pos = if let Some(atom) = self.atoms.get(&id) {
       // Remove atom ID from its cluster's atom_ids HashSet if the cluster exists
       if let Some(cluster) = self.clusters.get_mut(&atom.cluster_id) {
         cluster.atom_ids.remove(&id);
       }
-    }
+      Some(atom.position)
+    } else {
+      None
+    };
     
+    // Remove from the grid cell
+    if let Some(pos) = pos {
+      self.remove_atom_from_grid(id, &pos);
+    }
+
     self.atoms.remove(&id);
     self.make_atom_dirty(id);
   }
@@ -253,11 +275,22 @@ impl AtomicStructure {
     // First, collect all atom IDs that will be transformed
     let atom_ids: Vec<u64> = self.atoms.keys().cloned().collect();
     
-    // Transform all atom positions
-    for (_, atom) in self.atoms.iter_mut() {
-      atom.position = rotation.mul_vec3(atom.position) + *translation;
+    // Transform all atom positions and update grid positions
+    for atom_id in &atom_ids {
+      let positions = if let Some(atom) = self.atoms.get_mut(atom_id) {
+        let old_position = atom.position;
+        atom.position = rotation.mul_vec3(atom.position) + *translation;
+        Some((old_position, atom.position))
+      } else {
+        None
+      };
+      // Update grid position
+      if let Some((old_position, new_position)) = positions {
+        self.remove_atom_from_grid(*atom_id, &old_position);
+        self.add_atom_to_grid(*atom_id, &new_position);
+      }
     }
-    
+
     // Then mark all atoms as dirty in a separate loop
     for atom_id in atom_ids {
       self.make_atom_dirty(atom_id);
@@ -276,4 +309,17 @@ impl AtomicStructure {
     }
   }
 
+  // Helper method to add an atom to the grid at a specific position
+  fn add_atom_to_grid(&mut self, atom_id: u64, position: &DVec3) {
+    let cell = self.get_cell_for_pos(position);
+    self.grid.entry(cell).or_insert_with(Vec::new).push(atom_id);
+  }
+
+  // Helper method to remove an atom from the grid at a specific position
+  fn remove_atom_from_grid(&mut self, atom_id: u64, position: &DVec3) {
+    let cell = self.get_cell_for_pos(position);
+    if let Some(cell_atoms) = self.grid.get_mut(&cell) {
+      cell_atoms.retain(|&x| x != atom_id);
+    }
+  }
 }
