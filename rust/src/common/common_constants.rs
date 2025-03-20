@@ -8,7 +8,7 @@ pub struct AtomInfo {
     pub color: Vec3,
 }
 
-// Maximum radius of an atom that can be supported by the system
+// Maximum radius of an atom that can be supported by bond detection
 pub const MAX_SUPPORTED_ATOMIC_RADIUS: f64 = 2.0;
 
 lazy_static! {
