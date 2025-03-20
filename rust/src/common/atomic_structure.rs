@@ -111,6 +111,29 @@ impl AtomicStructure {
     });
   }
 
+  /// Removes all clusters that have no atoms (empty atom_ids sets)
+  /// 
+  /// # Returns
+  /// 
+  /// A vector containing the IDs of the removed clusters
+  pub fn remove_empty_clusters(&mut self) -> Vec<u64> {
+    let mut empty_cluster_ids = Vec::new();
+    
+    // Find all empty clusters
+    for (cluster_id, cluster) in &self.clusters {
+      if cluster.atom_ids.is_empty() {
+        empty_cluster_ids.push(*cluster_id);
+      }
+    }
+    
+    // Remove the empty clusters
+    for cluster_id in &empty_cluster_ids {
+      self.clusters.remove(cluster_id);
+    }
+    
+    empty_cluster_ids
+  }
+
   pub fn add_atom(&mut self, atomic_number: i32, position: DVec3, cluster_id: u64) -> u64 {
     let id = self.obtain_next_id();
     self.add_atom_with_id(id, atomic_number, position, cluster_id);
@@ -159,6 +182,34 @@ impl AtomicStructure {
 
     self.atoms.remove(&id);
     self.make_atom_dirty(id);
+  }
+
+  pub fn move_atom_to_cluster(&mut self, atom_id: u64, new_cluster_id: u64) {
+    // Get the atom and its current cluster_id
+    if let Some(atom) = self.atoms.get_mut(&atom_id) {
+      let old_cluster_id = atom.cluster_id;
+      
+      // Skip if the atom is already in the target cluster
+      if old_cluster_id == new_cluster_id {
+        return;
+      }
+      
+      // Update the atom's cluster_id
+      atom.cluster_id = new_cluster_id;
+      
+      // Remove atom_id from the old cluster's atom_ids
+      if let Some(old_cluster) = self.clusters.get_mut(&old_cluster_id) {
+        old_cluster.atom_ids.remove(&atom_id);
+      }
+      
+      // Add atom_id to the new cluster's atom_ids
+      if let Some(new_cluster) = self.clusters.get_mut(&new_cluster_id) {
+        new_cluster.atom_ids.insert(atom_id);
+      }
+      
+      // Mark the atom as dirty since it's been modified
+      self.make_atom_dirty(atom_id);
+    }
   }
 
   pub fn add_bond(&mut self, atom_id1: u64, atom_id2: u64, multiplicity: i32) -> u64 {
