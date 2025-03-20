@@ -322,4 +322,57 @@ impl AtomicStructure {
       cell_atoms.retain(|&x| x != atom_id);
     }
   }
+
+  /// Returns a vector of atom IDs that are within the specified radius of the given position.
+  /// 
+  /// # Arguments
+  /// 
+  /// * `position` - The center position to search around
+  /// * `radius` - The maximum distance from the position to include atoms
+  /// 
+  /// # Returns
+  /// 
+  /// A vector of atom IDs that are within the radius of the position
+  pub fn get_atoms_in_radius(&self, position: &DVec3, radius: f64) -> Vec<u64> {
+    let mut result = Vec::new();
+    
+    // Calculate how many cells we need to check in each direction
+    // We add 1 to ensure we cover the boundary cases
+    let cell_radius = (radius / ATOM_GRID_CELL_SIZE).ceil() as i32;
+    
+    // Get the cell coordinates for the center position
+    let center_cell = self.get_cell_for_pos(position);
+    
+    // Iterate through all relevant cells
+    for dx in -cell_radius..=cell_radius {
+      for dy in -cell_radius..=cell_radius {
+        for dz in -cell_radius..=cell_radius {
+          // Calculate the coordinates of the current cell
+          let current_cell = (
+            center_cell.0 + dx,
+            center_cell.1 + dy,
+            center_cell.2 + dz
+          );
+          
+          // Check if this cell exists in our sparse grid
+          if let Some(cell_atoms) = self.grid.get(&current_cell) {
+            // For each atom in this cell, check if it's within the radius
+            for &atom_id in cell_atoms {
+              if let Some(atom) = self.atoms.get(&atom_id) {
+                // Calculate the squared distance (more efficient than using sqrt)
+                let squared_distance = position.distance_squared(atom.position);
+                
+                // If the atom is within the radius, add its ID to the result
+                if squared_distance <= radius * radius {
+                  result.push(atom_id);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    result
+  }
 }
