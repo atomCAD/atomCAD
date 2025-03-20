@@ -4,9 +4,9 @@ use glam::f64::DQuat;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-// Bigger than any realistically possible bond, so a neighbouring atom will be in the same cell
-// or in a neighbouring cell
-const ATOM_GRID_CELL_SIZE: f64 = 3.0;
+// Bigger than most realistically possible bonds, so a neighbouring atom will be in the same cell
+// or in a neighbouring cell most of the time. This is important for performance reasons.
+const ATOM_GRID_CELL_SIZE: f64 = 4.0;
 
 #[derive(Clone)]
 pub struct Bond {

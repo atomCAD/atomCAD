@@ -8,6 +8,9 @@ pub struct AtomInfo {
     pub color: Vec3,
 }
 
+// Maximum radius of an atom that can be supported by the system
+pub const MAX_SUPPORTED_ATOMIC_RADIUS: f64 = 2.0;
+
 lazy_static! {
     /// HashMap containing chemical elements (as uppercase symbols) and their atomic numbers
     pub static ref CHEMICAL_ELEMENTS: HashMap<String, i32> = {
