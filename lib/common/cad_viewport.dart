@@ -360,11 +360,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     return Stack(
       children: [
         textureId != null
-            ? Center(
-                child: SizedBox(
-                width: CadViewportState.VIEWPORT_WIDTH,
-                height: CadViewportState.VIEWPORT_HEIGHT,
-                child: Listener(
+            ? LayoutBuilder(builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final height = constraints.maxHeight;
+                print('Viewport size: $width x $height');
+
+                return Listener(
                   onPointerSignal: (pointerSignal) {
                     onPointerSignal(pointerSignal);
                   },
@@ -380,8 +381,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
                   child: Texture(
                     textureId: textureId!,
                   ),
-                ),
-              ))
+                );
+              })
             : Container(
                 color: Colors.grey,
               ),

@@ -28,12 +28,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
     return Column(
       children: [
-        Center(
-          child: SizedBox(
-            width: 1280,
-            height: 544,
-            child: StructureDesignerViewport(graphModel: graphModel),
-          ),
+        Expanded(
+          flex: 2,
+          child: StructureDesignerViewport(graphModel: graphModel),
         ),
         Expanded(
           child: Row(

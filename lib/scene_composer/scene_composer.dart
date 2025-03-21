@@ -87,12 +87,8 @@ class _SceneComposerState extends State<SceneComposer> {
             ],
           ),
         ),
-        Center(
-          child: SizedBox(
-            width: 1280,
-            height: 544,
-            child: SceneComposerViewport(),
-          ),
+        Expanded(
+          child: SceneComposerViewport(),
         ),
       ],
     );
