@@ -255,25 +255,29 @@ impl Renderer {
 
         println!("Resizing viewport to {}x{}", width, height);
 
+        // Ensure all previous GPU work is complete before changing resources
+        self.device.poll(Maintain::Wait);
+
+        // Update texture size
         self.texture_size = Extent3d {
             width,
             height,
             depth_or_array_layers: 1,
         };
 
+        // Update camera aspect ratio and buffer
         self.camera.aspect = width as f64 / height as f64;
         self.update_camera_buffer();
 
-        // Recreate texture
+        // Recreate all GPU resources
         self.texture = Self::create_texture(&self.device, &self.texture_size);
         self.texture_view = self.texture.create_view(&TextureViewDescriptor::default());
-        
-        // Recreate depth texture
         self.depth_texture = Self::create_depth_texture(&self.device, &self.texture_size);
         self.depth_texture_view = self.depth_texture.create_view(&TextureViewDescriptor::default());
-        
-        // Recreate output buffer
         self.output_buffer = Self::create_output_buffer(&self.device, &self.texture_size);
+
+        // Ensure all resource creation is complete
+        self.device.poll(Maintain::Wait);
     }
 
     pub fn refresh<'a, S: Scene<'a>>(&mut self, scene: &S, lightweight: bool) {
@@ -366,7 +370,11 @@ impl Renderer {
             self.render_mesh(&mut render_pass, &self.lightweight_mesh);
         }
 
-        // Copy texture to output buffer
+        // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
+        let bytes_per_row = 4 * self.texture_size.width;
+        let aligned_bytes_per_row = (bytes_per_row + 255) & !255;
+
+        // Copy texture to output buffer with aligned bytes per row
         encoder.copy_texture_to_buffer(
             ImageCopyTexture {
                 texture: &self.texture,
@@ -378,7 +386,7 @@ impl Renderer {
                 buffer: &self.output_buffer,
                 layout: ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(4 * self.texture_size.width),
+                    bytes_per_row: Some(aligned_bytes_per_row),
                     rows_per_image: Some(self.texture_size.height),
                 },
             },
@@ -390,14 +398,30 @@ impl Renderer {
 
         // Read data
         let buffer_slice = self.output_buffer.slice(..);
-        buffer_slice.map_async(MapMode::Read, |_| {
-        });
-
+        buffer_slice.map_async(MapMode::Read, |_| {});
         self.device.poll(Maintain::Wait);
 
-        let data = buffer_slice.get_mapped_range().to_vec();
+        // Get the data and handle alignment if needed
+        let data = if aligned_bytes_per_row != bytes_per_row {
+            let mut aligned_data = buffer_slice.get_mapped_range();
+            let mut data = Vec::with_capacity((bytes_per_row * self.texture_size.height) as usize);
+            
+            // Extract each row, skipping the padding
+            for row in 0..self.texture_size.height {
+                let start = row as usize * aligned_bytes_per_row as usize;
+                let end = start + bytes_per_row as usize;
+                data.extend_from_slice(&aligned_data[start..end]);
+            }
+            
+            // Drop the mapped data before unmapping
+            drop(aligned_data);
+            data
+        } else {
+            let data = buffer_slice.get_mapped_range().to_vec();
+            data
+        };
+        
         self.output_buffer.unmap();
-
         data
     }
 
@@ -447,9 +471,14 @@ impl Renderer {
 
     // Helper method to create output buffer
     fn create_output_buffer(device: &Device, texture_size: &Extent3d) -> Buffer {
+        // Calculate aligned bytes per row (must be a multiple of 256 in WebGPU)
+        let bytes_per_row = 4 * texture_size.width; // 4 bytes per pixel (RGBA8)
+        let aligned_bytes_per_row = (bytes_per_row + 255) & !255;
+        let buffer_size = aligned_bytes_per_row * texture_size.height;
+
         device.create_buffer(&BufferDescriptor {
             label: Some("Output Buffer"),
-            size: (4 * texture_size.width * texture_size.height) as BufferAddress, // 4 bytes per pixel (RGBA8)
+            size: buffer_size as BufferAddress,
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         })
