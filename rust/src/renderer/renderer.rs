@@ -62,7 +62,7 @@ pub struct Renderer  {
     depth_texture: Texture,
     depth_texture_view: TextureView,
     output_buffer: Buffer,
-    texture_size: Extent3d,
+    pub texture_size: Extent3d,
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -107,42 +107,19 @@ impl Renderer {
         };
 
         // Create texture
-        let texture = device.create_texture(&TextureDescriptor {
-            label: Some("Render Target Texture"),
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Bgra8Unorm,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-
+        let texture = Self::create_texture(&device, &texture_size);
+        
         // Texture view
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
         // Create depth texture
-        let depth_texture = device.create_texture(&TextureDescriptor {
-          label: Some("Depth Buffer"),
-          size: texture_size,
-          mip_level_count: 1,
-          sample_count: 1,
-          dimension: TextureDimension::D2,
-          format: DEPTH_FORMAT,
-          usage: TextureUsages::RENDER_ATTACHMENT, // Only needs RENDER_ATTACHMENT usage
-          view_formats: &[],
-        });
+        let depth_texture = Self::create_depth_texture(&device, &texture_size);
       
         // Create depth texture view
         let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
 
         // Create output buffer for readback
-        let output_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Output Buffer"),
-            size: (4 * texture_size.width * texture_size.height) as BufferAddress, // 4 bytes per pixel (RGBA8)
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
+        let output_buffer = Self::create_output_buffer(&device, &texture_size);
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.refresh(&camera);
@@ -266,10 +243,37 @@ impl Renderer {
       self.camera.target = *target;
       self.camera.up = *up;
 
-      let mut camera_uniform = CameraUniform::new();
-      camera_uniform.refresh(&self.camera);
+      self.update_camera_buffer();
+    }
 
-      self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
+    // Method to resize the viewport
+    pub fn set_viewport_size(&mut self, width: u32, height: u32) {
+        // Skip if dimensions haven't changed
+        if self.texture_size.width == width && self.texture_size.height == height {
+            return;
+        }
+
+        println!("Resizing viewport to {}x{}", width, height);
+
+        self.texture_size = Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+
+        self.camera.aspect = width as f64 / height as f64;
+        self.update_camera_buffer();
+
+        // Recreate texture
+        self.texture = Self::create_texture(&self.device, &self.texture_size);
+        self.texture_view = self.texture.create_view(&TextureViewDescriptor::default());
+        
+        // Recreate depth texture
+        self.depth_texture = Self::create_depth_texture(&self.device, &self.texture_size);
+        self.depth_texture_view = self.depth_texture.create_view(&TextureViewDescriptor::default());
+        
+        // Recreate output buffer
+        self.output_buffer = Self::create_output_buffer(&self.device, &self.texture_size);
     }
 
     pub fn refresh<'a, S: Scene<'a>>(&mut self, scene: &S, lightweight: bool) {
@@ -404,5 +408,50 @@ impl Renderer {
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
         }
+    }
+
+    // Helper method to update camera buffer
+    fn update_camera_buffer(&mut self) {
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.refresh(&self.camera);
+        self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
+    }
+
+    // Helper method to create texture
+    fn create_texture(device: &Device, texture_size: &Extent3d) -> Texture {
+        device.create_texture(&TextureDescriptor {
+            label: Some("Render Target Texture"),
+            size: *texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Bgra8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            view_formats: &[],
+        })
+    }
+
+    // Helper method to create depth texture
+    fn create_depth_texture(device: &Device, texture_size: &Extent3d) -> Texture {
+        device.create_texture(&TextureDescriptor {
+            label: Some("Depth Buffer"),
+            size: *texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+    }
+
+    // Helper method to create output buffer
+    fn create_output_buffer(device: &Device, texture_size: &Extent3d) -> Buffer {
+        device.create_buffer(&BufferDescriptor {
+            label: Some("Output Buffer"),
+            size: (4 * texture_size.width * texture_size.height) as BufferAddress, // 4 bytes per pixel (RGBA8)
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        })
     }
 }

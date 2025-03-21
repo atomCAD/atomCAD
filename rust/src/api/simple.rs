@@ -70,8 +70,23 @@ fn from_api_vec2(v: &APIVec2) -> DVec2 {
   }
 }
 
-const IMAGE_WIDTH : u32 = 1280;
-const IMAGE_HEIGHT : u32 = 544;
+const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
+const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
+
+/// Set the viewport size for rendering
+#[no_mangle]
+pub fn set_viewport_size(width: u32, height: u32) {
+  let start_time = Instant::now();
+  println!("API: Setting viewport size to {}x{}", width, height);
+
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.renderer.set_viewport_size(width, height);
+    }
+  }
+
+  println!("set_viewport_size took: {:?}", start_time.elapsed());
+}
 
 pub struct CADInstance {
   structure_designer: StructureDesigner,
@@ -125,7 +140,7 @@ async fn initialize_cad_instance_async() {
       CADInstance {
         structure_designer: StructureDesigner::new(),
         scene_composer: SceneComposer::new(),
-        renderer: Renderer::new(IMAGE_WIDTH, IMAGE_HEIGHT).await,
+        renderer: Renderer::new(INITIAL_VIEWPORT_WIDTH, INITIAL_VIEWPORT_HEIGHT).await,
         active_editor: Editor::None,
       }
     );
@@ -213,11 +228,11 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
   match unsafe { &mut CAD_INSTANCE } {
     Some(cad_instance) => {
       let v = cad_instance.renderer.render();
-      send_texture(texture_ptr, IMAGE_WIDTH, IMAGE_HEIGHT, v);
+      send_texture(texture_ptr, cad_instance.renderer.texture_size.width, cad_instance.renderer.texture_size.height, v);
     }
     None => {
-      let v: Vec<u8> = generate_mock_image(IMAGE_WIDTH, IMAGE_HEIGHT);
-      send_texture(texture_ptr, IMAGE_WIDTH, IMAGE_HEIGHT, v);
+      let v: Vec<u8> = generate_mock_image(INITIAL_VIEWPORT_WIDTH, INITIAL_VIEWPORT_HEIGHT);
+      send_texture(texture_ptr, INITIAL_VIEWPORT_WIDTH, INITIAL_VIEWPORT_HEIGHT, v);
     }
   };
 
