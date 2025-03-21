@@ -13,6 +13,7 @@ use glam::f64::DVec3;
 use glam::f64::DMat4;
 use crate::common::scene::Scene;
 use std::time::Instant;
+use std::sync::Mutex;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -66,6 +67,7 @@ pub struct Renderer  {
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    render_mutex: Mutex<()>,
 }
 
 impl Renderer {
@@ -235,6 +237,7 @@ impl Renderer {
             camera,
             camera_buffer,
             camera_bind_group,
+            render_mutex: Mutex::new(()),
         }
     }
 
@@ -253,7 +256,12 @@ impl Renderer {
             return;
         }
 
-        println!("Resizing viewport to {}x{}", width, height);
+        // Update camera aspect ratio
+        self.camera.aspect = width as f64 / height as f64;
+        self.update_camera_buffer();
+
+        // Acquire lock for texture recreation only
+        let _lock = self.render_mutex.lock().unwrap();
 
         // Ensure all previous GPU work is complete before changing resources
         self.device.poll(Maintain::Wait);
@@ -265,16 +273,18 @@ impl Renderer {
             depth_or_array_layers: 1,
         };
 
-        // Update camera aspect ratio and buffer
-        self.camera.aspect = width as f64 / height as f64;
-        self.update_camera_buffer();
-
         // Recreate all GPU resources
-        self.texture = Self::create_texture(&self.device, &self.texture_size);
-        self.texture_view = self.texture.create_view(&TextureViewDescriptor::default());
-        self.depth_texture = Self::create_depth_texture(&self.device, &self.texture_size);
-        self.depth_texture_view = self.depth_texture.create_view(&TextureViewDescriptor::default());
-        self.output_buffer = Self::create_output_buffer(&self.device, &self.texture_size);
+        let texture = Self::create_texture(&self.device, &self.texture_size);
+        let texture_view = texture.create_view(&TextureViewDescriptor::default());
+        let depth_texture = Self::create_depth_texture(&self.device, &self.texture_size);
+        let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
+        let output_buffer = Self::create_output_buffer(&self.device, &self.texture_size);
+
+        self.texture = texture;
+        self.texture_view = texture_view;
+        self.depth_texture = depth_texture;
+        self.depth_texture_view = depth_texture_view;
+        self.output_buffer = output_buffer;
 
         // Ensure all resource creation is complete
         self.device.poll(Maintain::Wait);
@@ -324,6 +334,9 @@ impl Renderer {
     }
 
     pub fn render(&mut self) -> Vec<u8> {
+        // Acquire lock before rendering
+        let _lock = self.render_mutex.lock().unwrap();
+
         // Create a new command encoder
         let mut encoder = self
             .device
@@ -338,8 +351,8 @@ impl Renderer {
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &self.texture_view,
                     resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color {
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(Color {
                             r: 0.1,
                             g: 0.2,
                             b: 0.3,

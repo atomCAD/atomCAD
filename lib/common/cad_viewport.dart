@@ -363,8 +363,6 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
             ? LayoutBuilder(builder: (context, constraints) {
                 viewportWidth = constraints.maxWidth;
                 viewportHeight = constraints.maxHeight;
-                print(
-                    'Flutter viewport size: $viewportWidth x $viewportHeight');
                 setViewportSize(
                     width: viewportWidth.toInt(),
                     height: viewportHeight.toInt());
