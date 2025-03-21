@@ -72,9 +72,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   static const double _clickThreshold = 4.0;
   static const double _addAtomPlaneDistance = 20.0;
 
-  //TODO: viewport should be resizable.
-  static const double VIEWPORT_WIDTH = 1280.0;
-  static const double VIEWPORT_HEIGHT = 544.0;
+  // These initial values get overwritten
+  double viewportWidth = 1280.0;
+  double viewportHeight = 544.0;
 
   // Rotation per pixel in radian
   static const double ROT_PER_PIXEL = 0.02;
@@ -158,9 +158,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final cameraTransform = getCameraTransform(camera);
 
     final centeredPointerPos =
-        pointerPos - Offset(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5);
+        pointerPos - Offset(viewportWidth * 0.5, viewportHeight * 0.5);
 
-    final d = VIEWPORT_HEIGHT * 0.5 / tan(camera!.fovy * 0.5);
+    final d = viewportHeight * 0.5 / tan(camera!.fovy * 0.5);
 
     final rayDir = (cameraTransform!.right * centeredPointerPos.dx -
             cameraTransform.up * centeredPointerPos.dy +
@@ -204,7 +204,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     var movePlaneDistance = (_pivotPoint - _dragStartCameraTransform!.eye)
         .dot(_dragStartCameraTransform!.forward);
     _cameraMovePerPixel =
-        2.0 * movePlaneDistance * tan(camera!.fovy * 0.5) / VIEWPORT_HEIGHT;
+        2.0 * movePlaneDistance * tan(camera!.fovy * 0.5) / viewportHeight;
   }
 
   void cameraMove(Offset pointerPos) {
@@ -316,10 +316,10 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final cameraTransform = getCameraTransform(camera);
 
     var offsetPerPixel =
-        2.0 * _addAtomPlaneDistance * tan(camera!.fovy * 0.5) / VIEWPORT_HEIGHT;
+        2.0 * _addAtomPlaneDistance * tan(camera!.fovy * 0.5) / viewportHeight;
 
     var centeredPointerPos =
-        pointerPos - Offset(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5);
+        pointerPos - Offset(viewportWidth * 0.5, viewportHeight * 0.5);
 
     var atomPos = cameraTransform!.eye +
         cameraTransform.forward * _addAtomPlaneDistance +
@@ -361,9 +361,13 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       children: [
         textureId != null
             ? LayoutBuilder(builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final height = constraints.maxHeight;
-                print('Viewport size: $width x $height');
+                viewportWidth = constraints.maxWidth;
+                viewportHeight = constraints.maxHeight;
+                print(
+                    'Flutter viewport size: $viewportWidth x $viewportHeight');
+                setViewportSize(
+                    width: viewportWidth.toInt(),
+                    height: viewportHeight.toInt());
 
                 return Listener(
                   onPointerSignal: (pointerSignal) {
