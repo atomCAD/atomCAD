@@ -8,7 +8,7 @@ use glam::f64::DVec2;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
-use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData, APIAtomTransData};
+use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData, APIAtomTransData, SelectModifier};
 use super::api_types::APIVec3;
 use super::api_types::APIIVec3;
 use super::api_types::APICamera;
@@ -637,6 +637,19 @@ pub fn import_xyz(file_path: &str) {
       cad_instance.scene_composer.import_xyz(file_path).unwrap();
       refresh_renderer(cad_instance, "", false);
     }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_cluster(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> Option<u64> {
+  unsafe {
+    let instance = CAD_INSTANCE.as_mut()?;
+    let selected_cluster = instance.scene_composer.select_cluster(
+      &from_api_vec3(&ray_start),
+      &from_api_vec3(&ray_dir),
+      select_modifier);
+    refresh_renderer(instance, "", false);
+    selected_cluster
   }
 }
 

@@ -288,19 +288,19 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     var wasClick =
         ((pointerPos - _dragStartPointerPos).distance < _clickThreshold);
     if (wasClick) {
-      _onClick(pointerPos);
+      onClick(pointerPos);
     }
 
     dragState = ViewportDragState.noDrag;
   }
 
-  void _onClick(Offset pointerPos) {
+  void onClick(Offset pointerPos) {
     if (dragState == ViewportDragState.defaultDrag) {
-      _onDefaultClick(pointerPos);
+      onDefaultClick(pointerPos);
     }
   }
 
-  void _onDefaultClick(Offset pointerPos) {
+  void onDefaultClick(Offset pointerPos) {
     //print('primary click at ${pointerPos}');
 
     //TODO: raycast into the model.

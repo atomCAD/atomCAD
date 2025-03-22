@@ -8,6 +8,12 @@ pub enum Editor {
   SceneComposer
 }
 
+pub enum SelectModifier {
+  Replace,
+  Toggle,
+  Expand
+}
+
 pub struct APIVec2 {
   pub x: f64,
   pub y: f64,

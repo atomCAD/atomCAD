@@ -4,7 +4,9 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::scene::Scene;
 use crate::common::xyz_loader::load_xyz;
 use crate::common::xyz_loader::XyzError;
+use glam::f64::DVec3;
 use crate::common::atomic_structure_utils::{auto_create_bonds, detect_bonded_substructures};
+use crate::api::api_types::SelectModifier;
 
 pub struct SceneComposer {
     pub model: AtomicStructure,
@@ -22,6 +24,15 @@ impl SceneComposer {
     auto_create_bonds(&mut self.model);
     detect_bonded_substructures(&mut self.model);
     Ok(())
+  }
+
+  // Returns the cluster id of the cluster that was selected or deselected, or None if no cluster was hit
+  pub fn select_cluster(&mut self, ray_start: &DVec3, ray_dir: &DVec3, select_modifier: SelectModifier) -> Option<u64> {
+    let selected_atom_id = self.model.hit_test(ray_start, ray_dir)?; 
+    let atom = self.model.get_atom(selected_atom_id)?;
+    let cluster_id = atom.cluster_id;
+    self.model.select_cluster(atom.cluster_id, select_modifier);
+    Some(cluster_id)
   }
 }
 

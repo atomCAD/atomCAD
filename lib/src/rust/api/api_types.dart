@@ -325,6 +325,13 @@ class NodeView {
           displayed == other.displayed;
 }
 
+enum SelectModifier {
+  replace,
+  toggle,
+  expand,
+  ;
+}
+
 class WireView {
   final BigInt sourceNodeId;
   final BigInt destNodeId;

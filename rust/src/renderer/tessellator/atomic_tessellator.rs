@@ -29,18 +29,34 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
   }
 }
 
+pub fn get_displayed_atom_radius(atom: &Atom) -> f64 {
+  let atom_info = ATOM_INFO.get(&atom.atomic_number)
+    .unwrap_or(&DEFAULT_ATOM_INFO);
+  atom_info.radius * BAS_ATOM_RADIUS_FACTOR
+}
+
 pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams) {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
-  let scaled_radius = atom_info.radius * BAS_ATOM_RADIUS_FACTOR;
+  let selected = atom.selected || _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
+
+  let color = if selected {
+    Vec3::new(0.0, 0.0, atom_info.color.length())
+  } else { 
+    atom_info.color
+  };
+
   tessellator::tessellate_sphere(
     output_mesh,
     &atom.position,
-    scaled_radius,
+    get_displayed_atom_radius(atom),
     params.sphere_horizontal_divisions,
     params.sphere_vertical_divisions,
-    &Material::new(&atom_info.color, 0.3, 0.0),
+    &Material::new(
+      &color, 
+      0.8,
+      0.0),
   );
 }
 

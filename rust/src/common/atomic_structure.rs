@@ -3,6 +3,9 @@ use glam::f64::DVec3;
 use glam::f64::DQuat;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use crate::util::hit_test_utils;
+use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
+use crate::api::api_types::SelectModifier;
 
 // Bigger than most realistically possible bonds, so a neighbouring atom will be in the same cell
 // or in a neighbouring cell most of the time. This is important for performance reasons.
@@ -32,6 +35,7 @@ pub struct Cluster {
   pub id: u64,
   pub name: String,
   pub atom_ids: HashSet<u64>,
+  pub selected: bool,
 }
 
 #[derive(Clone)]
@@ -108,7 +112,40 @@ impl AtomicStructure {
       id,
       name: name.to_string(),
       atom_ids: HashSet::new(),
+      selected: false,
     });
+  }
+
+  pub fn get_cluster(&self, cluster_id: u64) -> Option<&Cluster> {
+    self.clusters.get(&cluster_id)
+  }
+
+  pub fn select_cluster(&mut self, cluster_id: u64, select_modifier: SelectModifier) {
+    match select_modifier {
+      SelectModifier::Replace => {
+        // Deselect all clusters
+        for (_, cluster) in self.clusters.iter_mut() {
+          cluster.selected = false;
+        }
+        
+        // Select the specified cluster if it exists
+        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+          cluster.selected = true;
+        }
+      },
+      SelectModifier::Toggle => {
+        // Toggle selection state of the specified cluster
+        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+          cluster.selected = !cluster.selected;
+        }
+      },
+      SelectModifier::Expand => {
+        // Add the specified cluster to the selection
+        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+          cluster.selected = true;
+        }
+      }
+    }
   }
 
   /// Removes all clusters that have no atoms (empty atom_ids sets)
@@ -275,6 +312,19 @@ impl AtomicStructure {
         bond.selected = *value;
       }
     }
+  }
+
+  pub fn hit_test(&self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
+    for atom in self.atoms.values() {
+      if let Some(_distance) = hit_test_utils::sphere_hit_test(
+          &atom.position, 
+          get_displayed_atom_radius(atom), 
+          ray_start, 
+          ray_dir) {
+        return Some(atom.id);
+      }
+    }
+    None
   }
 
   pub fn find_pivot_point(&self, ray_start: &DVec3, ray_dir: &DVec3) -> DVec3 {

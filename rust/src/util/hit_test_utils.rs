@@ -2,6 +2,8 @@ use glam::f64::DVec3;
 use glam::f64::DQuat;
 
 // ray_direction must be normalized
+// If the ray hits the sphere, returns the distance from the ray origin to the intersection point
+// If the ray does not hit the sphere, returns None
 pub fn sphere_hit_test(
     sphere_center: &DVec3,
     sphere_radius: f64,
