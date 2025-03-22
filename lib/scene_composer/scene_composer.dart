@@ -12,6 +12,9 @@ class SceneComposer extends StatefulWidget {
 }
 
 class _SceneComposerState extends State<SceneComposer> {
+  // GlobalKey to access the viewport state
+  final _viewportKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -29,6 +32,11 @@ class _SceneComposerState extends State<SceneComposer> {
       String filePath = result.files.first.path!;
       debugPrint('XYZ file selected: $filePath');
       importXyz(filePath: filePath);
+
+      // Trigger rendering in the viewport by accessing its state
+      if (_viewportKey.currentState != null) {
+        (_viewportKey.currentState as dynamic).renderingNeeded();
+      }
     } else {
       debugPrint('No XYZ file selected');
     }
@@ -88,7 +96,7 @@ class _SceneComposerState extends State<SceneComposer> {
           ),
         ),
         Expanded(
-          child: SceneComposerViewport(),
+          child: SceneComposerViewport(key: _viewportKey),
         ),
       ],
     );
