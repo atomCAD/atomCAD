@@ -27,12 +27,16 @@ impl SceneComposer {
   }
 
   // Returns the cluster id of the cluster that was selected or deselected, or None if no cluster was hit
-  pub fn select_cluster(&mut self, ray_start: &DVec3, ray_dir: &DVec3, select_modifier: SelectModifier) -> Option<u64> {
+  pub fn select_cluster_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3, select_modifier: SelectModifier) -> Option<u64> {
     let selected_atom_id = self.model.hit_test(ray_start, ray_dir)?; 
     let atom = self.model.get_atom(selected_atom_id)?;
     let cluster_id = atom.cluster_id;
     self.model.select_cluster(atom.cluster_id, select_modifier);
     Some(cluster_id)
+  }
+
+  pub fn select_cluster_by_id(&mut self, cluster_id: u64, select_modifier: SelectModifier) {
+    self.model.select_cluster(cluster_id, select_modifier);
   }
 }
 

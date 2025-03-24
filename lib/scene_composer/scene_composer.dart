@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_viewport.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
+import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 
 /// The scene composer editor.
 class SceneComposer extends StatefulWidget {
@@ -15,9 +16,12 @@ class _SceneComposerState extends State<SceneComposer> {
   // GlobalKey to access the viewport state
   final _viewportKey = GlobalKey();
 
+  late SceneComposerModel model;
+
   @override
   void initState() {
     super.initState();
+    model = SceneComposerModel();
   }
 
   Future<void> _importXYZ() async {

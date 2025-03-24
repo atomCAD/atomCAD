@@ -227,6 +227,30 @@ class APIIVec3 {
           z == other.z;
 }
 
+class ClusterView {
+  final BigInt id;
+  final String name;
+  final bool selected;
+
+  const ClusterView({
+    required this.id,
+    required this.name,
+    required this.selected,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ selected.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClusterView &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          selected == other.selected;
+}
+
 enum Editor {
   none,
   structureDesigner,
@@ -323,6 +347,24 @@ class NodeView {
           outputType == other.outputType &&
           selected == other.selected &&
           displayed == other.displayed;
+}
+
+class SceneComposerView {
+  final Map<BigInt, ClusterView> clusters;
+
+  const SceneComposerView({
+    required this.clusters,
+  });
+
+  @override
+  int get hashCode => clusters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SceneComposerView &&
+          runtimeType == other.runtimeType &&
+          clusters == other.clusters;
 }
 
 enum SelectModifier {

@@ -197,12 +197,20 @@ bool syncGadgetData({required String nodeNetworkName}) => RustLib.instance.api
 void importXyz({required String filePath}) =>
     RustLib.instance.api.crateApiSimpleImportXyz(filePath: filePath);
 
-BigInt? selectCluster(
+BigInt? selectClusterByRay(
         {required APIVec3 rayStart,
         required APIVec3 rayDir,
         required SelectModifier selectModifier}) =>
-    RustLib.instance.api.crateApiSimpleSelectCluster(
+    RustLib.instance.api.crateApiSimpleSelectClusterByRay(
         rayStart: rayStart, rayDir: rayDir, selectModifier: selectModifier);
+
+void selectClusterById(
+        {required BigInt clusterId, required SelectModifier selectModifier}) =>
+    RustLib.instance.api.crateApiSimpleSelectClusterById(
+        clusterId: clusterId, selectModifier: selectModifier);
+
+SceneComposerView? getSceneComposerView() =>
+    RustLib.instance.api.crateApiSimpleGetSceneComposerView();
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

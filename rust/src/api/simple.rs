@@ -17,6 +17,8 @@ use super::api_types::NodeView;
 use super::api_types::WireView;
 use super::api_types::NodeNetworkView;
 use super::api_types::Editor;
+use super::api_types::SceneComposerView;
+use super::api_types::ClusterView;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::node_data::sphere_data::SphereData;
 use crate::structure_designer::node_data::cuboid_data::CuboidData;
@@ -641,15 +643,45 @@ pub fn import_xyz(file_path: &str) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_cluster(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> Option<u64> {
+pub fn select_cluster_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> Option<u64> {
   unsafe {
     let instance = CAD_INSTANCE.as_mut()?;
-    let selected_cluster = instance.scene_composer.select_cluster(
+    let selected_cluster = instance.scene_composer.select_cluster_by_ray(
       &from_api_vec3(&ray_start),
       &from_api_vec3(&ray_dir),
       select_modifier);
     refresh_renderer(instance, "", false);
     selected_cluster
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_cluster_by_id(cluster_id: u64, select_modifier: SelectModifier) {
+  unsafe {
+    let instance = CAD_INSTANCE.as_mut().unwrap();
+    instance.scene_composer.select_cluster_by_id(cluster_id, select_modifier);
+    refresh_renderer(instance, "", false);
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_scene_composer_view() -> Option<SceneComposerView> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+
+    let mut scene_composer_view = SceneComposerView {
+      clusters: HashMap::new(),
+    };
+
+    for cluster in cad_instance.scene_composer.model.clusters.values() {
+      scene_composer_view.clusters.insert(cluster.id, ClusterView {
+        id: cluster.id,
+        name: cluster.name.clone(),
+        selected: cluster.selected,
+      });
+    }
+
+    Some(scene_composer_view)
   }
 }
 

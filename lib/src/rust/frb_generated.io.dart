@@ -23,6 +23,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_CastedPrimitive_u_64(dynamic raw);
 
   @protected
+  Map<BigInt, ClusterView> dco_decode_Map_u_64_cluster_view(dynamic raw);
+
+  @protected
   Map<BigInt, NodeView> dco_decode_Map_u_64_node_view(dynamic raw);
 
   @protected
@@ -89,7 +92,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView dco_decode_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  SceneComposerView dco_decode_box_autoadd_scene_composer_view(dynamic raw);
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  ClusterView dco_decode_cluster_view(dynamic raw);
 
   @protected
   Editor dco_decode_editor(dynamic raw);
@@ -111,6 +120,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<(BigInt, ClusterView)> dco_decode_list_record_u_64_cluster_view(
+      dynamic raw);
 
   @protected
   List<(BigInt, NodeView)> dco_decode_list_record_u_64_node_view(dynamic raw);
@@ -149,13 +162,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  SceneComposerView? dco_decode_opt_box_autoadd_scene_composer_view(
+      dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
+  (BigInt, ClusterView) dco_decode_record_u_64_cluster_view(dynamic raw);
+
+  @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
+
+  @protected
+  SceneComposerView dco_decode_scene_composer_view(dynamic raw);
 
   @protected
   SelectModifier dco_decode_select_modifier(dynamic raw);
@@ -180,6 +203,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
+
+  @protected
+  Map<BigInt, ClusterView> sse_decode_Map_u_64_cluster_view(
+      SseDeserializer deserializer);
 
   @protected
   Map<BigInt, NodeView> sse_decode_Map_u_64_node_view(
@@ -255,7 +282,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  SceneComposerView sse_decode_box_autoadd_scene_composer_view(
+      SseDeserializer deserializer);
+
+  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  ClusterView sse_decode_cluster_view(SseDeserializer deserializer);
 
   @protected
   Editor sse_decode_editor(SseDeserializer deserializer);
@@ -278,6 +312,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<(BigInt, ClusterView)> sse_decode_list_record_u_64_cluster_view(
+      SseDeserializer deserializer);
 
   @protected
   List<(BigInt, NodeView)> sse_decode_list_record_u_64_node_view(
@@ -324,13 +362,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  SceneComposerView? sse_decode_opt_box_autoadd_scene_composer_view(
+      SseDeserializer deserializer);
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
+  (BigInt, ClusterView) sse_decode_record_u_64_cluster_view(
+      SseDeserializer deserializer);
+
+  @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
+      SseDeserializer deserializer);
+
+  @protected
+  SceneComposerView sse_decode_scene_composer_view(
       SseDeserializer deserializer);
 
   @protected
@@ -356,6 +406,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_Map_u_64_cluster_view(
+      Map<BigInt, ClusterView> self, SseSerializer serializer);
 
   @protected
   void sse_encode_Map_u_64_node_view(
@@ -435,7 +489,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_scene_composer_view(
+      SceneComposerView self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_cluster_view(ClusterView self, SseSerializer serializer);
 
   @protected
   void sse_encode_editor(Editor self, SseSerializer serializer);
@@ -459,6 +520,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_record_u_64_cluster_view(
+      List<(BigInt, ClusterView)> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_record_u_64_node_view(
@@ -506,14 +571,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_scene_composer_view(
+      SceneComposerView? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_record_u_64_cluster_view(
+      (BigInt, ClusterView) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_record_u_64_node_view(
       (BigInt, NodeView) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_scene_composer_view(
+      SceneComposerView self, SseSerializer serializer);
 
   @protected
   void sse_encode_select_modifier(

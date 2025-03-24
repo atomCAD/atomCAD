@@ -97,3 +97,13 @@ pub struct APIAtomTransData {
   pub translation: APIVec3,
   pub rotation: APIVec3, // intrinsic euler angles in radians
 }
+
+pub struct ClusterView {
+  pub id: u64,
+  pub name: String,
+  pub selected: bool,
+}
+
+pub struct SceneComposerView {
+  pub clusters: HashMap<u64, ClusterView>,
+}

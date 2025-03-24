@@ -26,7 +26,7 @@ class _SceneComposerViewportState
             ? SelectModifier.expand
             : SelectModifier.replace;
 
-    selectCluster(
+    selectClusterByRay(
         rayStart: Vector3ToAPIVec3(ray.start),
         rayDir: Vector3ToAPIVec3(ray.direction),
         selectModifier: selectModifier);
