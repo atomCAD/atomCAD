@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_viewport.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
+import 'package:flutter_cad/scene_composer/cluster_list_panel.dart';
 
 /// The scene composer editor.
 class SceneComposer extends StatefulWidget {
@@ -35,7 +35,7 @@ class _SceneComposerState extends State<SceneComposer> {
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
       debugPrint('XYZ file selected: $filePath');
-      importXyz(filePath: filePath);
+      model.importXyzFile(filePath);
 
       // Trigger rendering in the viewport by accessing its state
       if (_viewportKey.currentState != null) {
@@ -100,7 +100,25 @@ class _SceneComposerState extends State<SceneComposer> {
           ),
         ),
         Expanded(
-          child: SceneComposerViewport(key: _viewportKey),
+          child: Row(
+            children: [
+              // Left panel - Cluster List
+              SizedBox(
+                width: 250,
+                child: ClusterListPanel(model: model),
+              ),
+              // Vertical divider
+              const VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: Colors.black12,
+              ),
+              // Main viewport
+              Expanded(
+                child: SceneComposerViewport(key: _viewportKey),
+              ),
+            ],
+          ),
         ),
       ],
     );
