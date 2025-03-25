@@ -1,6 +1,5 @@
-use glam::f64::DVec3;
-use crate::structure_designer::node_data::node_data::NodeData;
 use crate::renderer::tessellator::tessellator::Tessellatable;
+use glam::f64::DVec3;
 
 pub trait Gadget: Tessellatable {
     // Returns the index of the handle.
@@ -8,10 +7,4 @@ pub trait Gadget: Tessellatable {
     fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3);
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3);
     fn end_drag(&mut self);
-    // Syncs the gadget's state into the node data
-    fn sync_data(&self, data: &mut dyn NodeData);
-    fn clone_box(&self) -> Box<dyn Gadget>;
-    
-    // Explicit conversion to Box<dyn Tessellatable>
-    fn as_tessellatable(&self) -> Box<dyn Tessellatable>;
 }

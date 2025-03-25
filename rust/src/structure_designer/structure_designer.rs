@@ -13,7 +13,7 @@ use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::node_data::no_data::NoData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
-use super::gadgets::gadget::Gadget;
+use super::gadgets::node_network_gadget::NodeNetworkGadget;
 use std::ops::Deref;
 
 pub struct StructureDesigner {
@@ -22,7 +22,7 @@ pub struct StructureDesigner {
   pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
-  pub gadget: Option<Box<dyn Gadget>>,
+  pub gadget: Option<Box<dyn NodeNetworkGadget>>,
 }
 
 impl StructureDesigner {

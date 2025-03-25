@@ -2,7 +2,7 @@ use glam::i32::IVec3;
 use glam::f32::Vec3;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
-use super::gadget::Gadget;
+use super::node_network_gadget::NodeNetworkGadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
@@ -15,6 +15,7 @@ use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::common_constants;
 use std::collections::HashSet;
+use crate::common::gadget::Gadget;
 
 pub const MAX_MILLER_INDEX: f64 = 6.0;
 pub const GADGET_LENGTH: f64 = 6.0;
@@ -118,6 +119,10 @@ impl Tessellatable for HalfSpaceGadget {
 
         self.tessellate_lattice_points(output_mesh);     
     }
+
+    fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+        Box::new(self.clone())
+    }
 }
 
 impl Gadget for HalfSpaceGadget {
@@ -159,10 +164,6 @@ impl Gadget for HalfSpaceGadget {
         None // No handle was hit
     }
 
-    fn clone_box(&self) -> Box<dyn Gadget> {
-        Box::new(self.clone())
-    }
-
     fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
         self.is_dragging = true;
     }
@@ -199,16 +200,18 @@ impl Gadget for HalfSpaceGadget {
         self.dir = self.miller_index.as_dvec3().normalize();
         self.shift_handle_offset = ((self.shift as f64) / self.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64)
     }
+}
+
+impl NodeNetworkGadget for HalfSpaceGadget {
+    fn clone_box(&self) -> Box<dyn NodeNetworkGadget> {
+        Box::new(self.clone())
+    }
 
     fn sync_data(&self, data: &mut dyn NodeData) {
         if let Some(half_space_data) = data.as_any_mut().downcast_mut::<HalfSpaceData>() {
             half_space_data.miller_index = self.miller_index;
             half_space_data.shift = self.shift;
         }
-    }
-    
-    fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
-        Box::new(self.clone())
     }
 }
 

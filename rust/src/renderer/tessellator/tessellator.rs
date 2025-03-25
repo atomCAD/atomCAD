@@ -7,6 +7,9 @@ use glam::f64::DVec3;
 
 pub trait Tessellatable {
   fn tessellate(&self, output_mesh: &mut Mesh);
+
+  // Explicit conversion to Box<dyn Tessellatable
+  fn as_tessellatable(&self) -> Box<dyn Tessellatable>;
 }
 
 // provide the positions in counter clockwise order

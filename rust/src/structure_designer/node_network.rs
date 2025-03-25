@@ -11,7 +11,7 @@ use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
-use crate::structure_designer::gadgets::gadget::Gadget;
+use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
 
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
@@ -166,7 +166,7 @@ impl NodeNetwork {
     self.selected_wire = None;
   }
 
-  pub fn provide_gadget(&self) -> Option<Box<dyn Gadget>> {
+  pub fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
     if let Some(node_id) = self.selected_node_id {
       let node = self.nodes.get(&node_id).unwrap();
       return node.data.provide_gadget();

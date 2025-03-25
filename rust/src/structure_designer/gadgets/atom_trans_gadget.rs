@@ -1,10 +1,11 @@
-use super::gadget::Gadget;
+use super::node_network_gadget::NodeNetworkGadget;
 use crate::renderer::mesh::Mesh;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 use crate::structure_designer::node_data::node_data::NodeData;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::common::gadget::Gadget;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
 use glam::f32::Vec3;
@@ -30,6 +31,10 @@ impl Tessellatable for AtomTransGadget {
         self.tessellate_axis_arrow(output_mesh, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0));
         self.tessellate_axis_arrow(output_mesh, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0));
     }
+
+    fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+        Box::new(self.clone())
+    }
 }
 
 impl Gadget for AtomTransGadget {
@@ -48,7 +53,9 @@ impl Gadget for AtomTransGadget {
     fn end_drag(&mut self) {
 
     }
+}
 
+impl NodeNetworkGadget for AtomTransGadget {
     fn sync_data(&self, data: &mut dyn NodeData) {
         if let Some(atom_trans_data) = data.as_any_mut().downcast_mut::<AtomTransData>() {
             atom_trans_data.translation = self.translation;
@@ -56,11 +63,7 @@ impl Gadget for AtomTransGadget {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn Gadget> {
-        Box::new(self.clone())
-    }
-    
-    fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+    fn clone_box(&self) -> Box<dyn NodeNetworkGadget> {
         Box::new(self.clone())
     }
 }
