@@ -1,21 +1,26 @@
 use crate::common::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::Cluster;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::scene::Scene;
 use crate::common::xyz_loader::load_xyz;
 use crate::common::xyz_loader::XyzError;
 use glam::f64::DVec3;
+use glam::f64::DQuat;
+use crate::util::transform::Transform;
 use crate::common::atomic_structure_utils::{auto_create_bonds, detect_bonded_substructures};
 use crate::api::api_types::SelectModifier;
 
 pub struct SceneComposer {
     pub model: AtomicStructure,
+    pub selected_frame_transform: Option<Transform>,
 }
 
 impl SceneComposer {
   pub fn new() -> Self {
     Self {
       model: AtomicStructure::new(),
+      selected_frame_transform: None,
     }
   }
 
@@ -31,12 +36,48 @@ impl SceneComposer {
     let selected_atom_id = self.model.hit_test(ray_start, ray_dir)?; 
     let atom = self.model.get_atom(selected_atom_id)?;
     let cluster_id = atom.cluster_id;
-    self.model.select_cluster(atom.cluster_id, select_modifier);
+    self.select_cluster_by_id(atom.cluster_id, select_modifier);
     Some(cluster_id)
   }
 
   pub fn select_cluster_by_id(&mut self, cluster_id: u64, select_modifier: SelectModifier) {
     self.model.select_cluster(cluster_id, select_modifier);
+    self.calculate_selected_frame_transform();
+  }
+
+  fn calculate_selected_frame_transform(&mut self) {
+    let selected_clusters: Vec<&Cluster> = self.model.clusters
+        .values()
+        .filter(|cluster| cluster.selected)
+        .collect();
+    
+    if selected_clusters.is_empty() {
+        self.selected_frame_transform = None;
+        return;
+    }
+    
+    if selected_clusters.len() == 1 {
+        self.selected_frame_transform = Some(selected_clusters[0].frame_transform.clone());
+        return;
+    }
+    
+    // If multiple clusters are selected, calculate average transform
+    let avg_translation = selected_clusters.iter()
+        .map(|cluster| cluster.frame_transform.translation)
+        .fold(DVec3::ZERO, |acc, t| acc + t) / selected_clusters.len() as f64;
+    
+    // Average rotations (this is an approximation - we're simply normalizing the sum)
+    // For a more mathematically correct solution, a more complex averaging algorithm might be needed
+    let mut avg_rotation = selected_clusters.iter()
+        .map(|cluster| cluster.frame_transform.rotation)
+        .fold(DQuat::IDENTITY, |acc, r| acc + r);
+    if avg_rotation.length_squared() > 0.0 {
+        avg_rotation = avg_rotation.normalize();
+    } else {
+        avg_rotation = DQuat::IDENTITY;
+    }
+
+    self.selected_frame_transform = Some(Transform::new(avg_translation, avg_rotation));
   }
 }
 
