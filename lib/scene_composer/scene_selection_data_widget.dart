@@ -19,8 +19,8 @@ class SceneSelectionDataWidget extends StatefulWidget {
 }
 
 class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
-  APIVec3 _translation = APIVec3(x: 0, y: 0, z: 0);
-  APIVec3 _rotation = APIVec3(x: 0, y: 0, z: 0);
+  SceneComposerView? sceneComposerView;
+  APITransform? _stagedTransform;
   String _selectedAxis = 'X';
   TextEditingController _translationValueController =
       TextEditingController(text: '0.0');
@@ -30,7 +30,14 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
   @override
   void initState() {
     super.initState();
-    _updateTransformValues();
+    _updateStagedTransform();
+  }
+
+  void _updateStagedTransform() {
+    final transform = widget.model.getSelectedFrameTransform();
+    setState(() {
+      _stagedTransform = transform;
+    });
   }
 
   @override
@@ -40,28 +47,19 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
     super.dispose();
   }
 
-  void _updateTransformValues() {
-    final transform = widget.model.getSelectedFrameTransform();
-    if (transform != null) {
-      setState(() {
-        _translation = transform.translation;
-        _rotation = transform.rotation;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: widget.model,
       child: Consumer<SceneComposerModel>(
         builder: (context, model, child) {
-          // Get the latest transform when the model updates
-          final transform = model.getSelectedFrameTransform();
-          if (transform != null) {
-            _translation = transform.translation;
-            _rotation = transform.rotation;
+          // Only update transform from model, if the model actually changed
+          // otherwise we keep the staged transform
+
+          if (sceneComposerView != model.sceneComposerView) {
+            _stagedTransform = model.getSelectedFrameTransform();
           }
+          sceneComposerView = model.sceneComposerView;
 
           return Padding(
             padding: const EdgeInsets.all(16.0),
@@ -77,10 +75,17 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                 // Translation section
                 Vec3Input(
                   label: 'Translation',
-                  value: _translation,
+                  value: _stagedTransform?.translation ??
+                      APIVec3(x: 0, y: 0, z: 0),
                   onChanged: (value) {
+                    print("onChanged ${value.x} ${value.y} ${value.z}");
                     setState(() {
-                      _translation = value;
+                      if (_stagedTransform != null) {
+                        _stagedTransform = APITransform(
+                          translation: value,
+                          rotation: _stagedTransform!.rotation,
+                        );
+                      }
                     });
                   },
                 ),
@@ -90,10 +95,16 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                 // Rotation section
                 Vec3Input(
                   label: 'Rotation',
-                  value: _rotation,
+                  value:
+                      _stagedTransform?.rotation ?? APIVec3(x: 0, y: 0, z: 0),
                   onChanged: (value) {
                     setState(() {
-                      _rotation = value;
+                      if (_stagedTransform != null) {
+                        _stagedTransform = APITransform(
+                          translation: _stagedTransform!.translation,
+                          rotation: value,
+                        );
+                      }
                     });
                   },
                 ),
@@ -102,13 +113,10 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
 
                 // Apply button
                 ElevatedButton(
-                  onPressed: transform == null
+                  onPressed: _stagedTransform == null
                       ? null
                       : () {
-                          model.setSelectedFrameTransform(
-                            APITransform(
-                                translation: _translation, rotation: _rotation),
-                          );
+                          model.setSelectedFrameTransform(_stagedTransform!);
                         },
                   child: const Text('Apply Transform'),
                 ),
@@ -153,7 +161,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton(
-                      onPressed: transform == null
+                      onPressed: _stagedTransform == null
                           ? null
                           : () {
                               final value = double.tryParse(
@@ -165,6 +173,8 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                         ? 1
                                         : 2;
                                 model.translateAlongLocalAxis(axisIndex, value);
+                                // Update staged transform after modification
+                                _updateStagedTransform();
                               }
                             },
                       child: const Text('Translate'),
@@ -210,7 +220,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton(
-                      onPressed: transform == null
+                      onPressed: _stagedTransform == null
                           ? null
                           : () {
                               final value = double.tryParse(
@@ -222,6 +232,8 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                         ? 1
                                         : 2;
                                 model.rotateAroundLocalAxis(axisIndex, value);
+                                // Update staged transform after modification
+                                _updateStagedTransform();
                               }
                             },
                       child: const Text('Rotate'),

@@ -40,6 +40,8 @@ class SceneComposerModel extends ChangeNotifier {
   }
 
   void setSelectedFrameTransform(APITransform transform) {
+    print(
+        "setSelectedFrameTransform ${transform.translation.x} ${transform.translation.y} ${transform.translation.z}");
     simple.setSelectedFrameTransform(transform: transform);
     refreshFromKernel();
   }
