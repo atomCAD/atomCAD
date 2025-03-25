@@ -126,6 +126,7 @@ pub fn detect_bonded_substructures(structure: &mut AtomicStructure) -> Vec<u64> 
     }
 
     structure.remove_empty_clusters();
+    structure.calculate_all_clusters_default_frame_transforms();
     
     new_cluster_ids
 }

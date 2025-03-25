@@ -37,6 +37,7 @@ pub struct Cluster {
   pub name: String,
   pub atom_ids: HashSet<u64>,
   pub selected: bool,
+  pub frame_transform: Transform,
 }
 
 #[derive(Clone)]
@@ -114,6 +115,7 @@ impl AtomicStructure {
       name: name.to_string(),
       atom_ids: HashSet::new(),
       selected: false,
+      frame_transform: Transform::default(),
     });
   }
 
@@ -476,5 +478,67 @@ impl AtomicStructure {
     }
     
     result
+  }
+
+  /// Calculates the default frame_transform for a specific cluster.
+  /// The translation is set to the average position of all atoms in the cluster,
+  /// and the rotation is set to identity.
+  ///
+  /// # Arguments
+  ///
+  /// * `cluster_id` - The ID of the cluster to calculate the frame_transform for
+  ///
+  /// # Returns
+  ///
+  /// `true` if the cluster exists and has atoms, `false` otherwise
+  pub fn calculate_cluster_default_frame_transform(&mut self, cluster_id: u64) -> bool {
+    if let Some(cluster) = self.clusters.get(&cluster_id) {
+      if cluster.atom_ids.is_empty() {
+        return false;
+      }
+      
+      // Calculate the average position of all atoms in the cluster
+      let mut total_position = DVec3::ZERO;
+      let mut atom_count = 0;
+      
+      for atom_id in &cluster.atom_ids {
+        if let Some(atom) = self.atoms.get(atom_id) {
+          total_position += atom.position;
+          atom_count += 1;
+        }
+      }
+      
+      if atom_count > 0 {
+        // Calculate average position
+        let avg_position = total_position / atom_count as f64;
+        
+        // Update the cluster's frame_transform
+        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+          cluster.frame_transform = Transform::new(avg_position, DQuat::IDENTITY);
+        }
+        
+        return true;
+      }
+    }
+    
+    false
+  }
+
+  /// Calculates the default frame_transform for all clusters in the atomic structure.
+  ///
+  /// # Returns
+  ///
+  /// A vector of cluster IDs for which the frame_transform was successfully calculated
+  pub fn calculate_all_clusters_default_frame_transforms(&mut self) -> Vec<u64> {
+    let cluster_ids: Vec<u64> = self.clusters.keys().cloned().collect();
+    let mut updated_clusters = Vec::new();
+    
+    for cluster_id in cluster_ids {
+      if self.calculate_cluster_default_frame_transform(cluster_id) {
+        updated_clusters.push(cluster_id);
+      }
+    }
+    
+    updated_clusters
   }
 }
