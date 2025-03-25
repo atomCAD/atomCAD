@@ -1360,14 +1360,6 @@ fn wire__crate__api__simple__sync_gadget_data_impl(
 
 // Section: dart2rust
 
-impl SseDecode for std::collections::HashMap<u64, crate::api::api_types::ClusterView> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u64, crate::api::api_types::ClusterView)>>::sse_decode(deserializer);
-        return inner.into_iter().collect();
-    }
-}
-
 impl SseDecode for std::collections::HashMap<u64, crate::api::api_types::NodeView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1579,6 +1571,20 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::api::api_types::ClusterView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::api_types::ClusterView>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::api_types::InputPinView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1600,20 +1606,6 @@ impl SseDecode for Vec<u8> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<u8>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u64, crate::api::api_types::ClusterView)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<(u64, crate::api::api_types::ClusterView)>::sse_decode(
-                deserializer,
-            ));
         }
         return ans_;
     }
@@ -1820,15 +1812,6 @@ impl SseDecode for Option<Vec<String>> {
     }
 }
 
-impl SseDecode for (u64, crate::api::api_types::ClusterView) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u64>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::api_types::ClusterView>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
 impl SseDecode for (u64, crate::api::api_types::NodeView) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1841,10 +1824,7 @@ impl SseDecode for (u64, crate::api::api_types::NodeView) {
 impl SseDecode for crate::api::api_types::SceneComposerView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_clusters =
-            <std::collections::HashMap<u64, crate::api::api_types::ClusterView>>::sse_decode(
-                deserializer,
-            );
+        let mut var_clusters = <Vec<crate::api::api_types::ClusterView>>::sse_decode(deserializer);
         return crate::api::api_types::SceneComposerView {
             clusters: var_clusters,
         };
@@ -2349,16 +2329,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::api_types::WireView>
     }
 }
 
-impl SseEncode for std::collections::HashMap<u64, crate::api::api_types::ClusterView> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u64, crate::api::api_types::ClusterView)>>::sse_encode(
-            self.into_iter().collect(),
-            serializer,
-        );
-    }
-}
-
 impl SseEncode for std::collections::HashMap<u64, crate::api::api_types::NodeView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2522,6 +2492,16 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::api::api_types::ClusterView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::api_types::ClusterView>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::api_types::InputPinView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2538,16 +2518,6 @@ impl SseEncode for Vec<u8> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <u8>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u64, crate::api::api_types::ClusterView)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u64, crate::api::api_types::ClusterView)>::sse_encode(item, serializer);
         }
     }
 }
@@ -2706,14 +2676,6 @@ impl SseEncode for Option<Vec<String>> {
     }
 }
 
-impl SseEncode for (u64, crate::api::api_types::ClusterView) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u64>::sse_encode(self.0, serializer);
-        <crate::api::api_types::ClusterView>::sse_encode(self.1, serializer);
-    }
-}
-
 impl SseEncode for (u64, crate::api::api_types::NodeView) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2725,10 +2687,7 @@ impl SseEncode for (u64, crate::api::api_types::NodeView) {
 impl SseEncode for crate::api::api_types::SceneComposerView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <std::collections::HashMap<u64, crate::api::api_types::ClusterView>>::sse_encode(
-            self.clusters,
-            serializer,
-        );
+        <Vec<crate::api::api_types::ClusterView>>::sse_encode(self.clusters, serializer);
     }
 }
 

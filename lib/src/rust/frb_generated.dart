@@ -1251,13 +1251,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<BigInt, ClusterView> dco_decode_Map_u_64_cluster_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return Map.fromEntries(dco_decode_list_record_u_64_cluster_view(raw)
-        .map((e) => MapEntry(e.$1, e.$2)));
-  }
-
-  @protected
   Map<BigInt, NodeView> dco_decode_Map_u_64_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return Map.fromEntries(dco_decode_list_record_u_64_node_view(raw)
@@ -1515,6 +1508,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ClusterView> dco_decode_list_cluster_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_cluster_view).toList();
+  }
+
+  @protected
   List<InputPinView> dco_decode_list_input_pin_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_input_pin_view).toList();
@@ -1524,15 +1523,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
-  }
-
-  @protected
-  List<(BigInt, ClusterView)> dco_decode_list_record_u_64_cluster_view(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_record_u_64_cluster_view)
-        .toList();
   }
 
   @protected
@@ -1649,19 +1639,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (BigInt, ClusterView) dco_decode_record_u_64_cluster_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2) {
-      throw Exception('Expected 2 elements, got ${arr.length}');
-    }
-    return (
-      dco_decode_u_64(arr[0]),
-      dco_decode_cluster_view(arr[1]),
-    );
-  }
-
-  @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1681,7 +1658,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 1)
       throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
     return SceneComposerView(
-      clusters: dco_decode_Map_u_64_cluster_view(arr[0]),
+      clusters: dco_decode_list_cluster_view(arr[0]),
     );
   }
 
@@ -1740,14 +1717,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_u_64(deserializer);
     return inner.toInt();
-  }
-
-  @protected
-  Map<BigInt, ClusterView> sse_decode_Map_u_64_cluster_view(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_list_record_u_64_cluster_view(deserializer);
-    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
   }
 
   @protected
@@ -1994,6 +1963,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ClusterView> sse_decode_list_cluster_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ClusterView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_cluster_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<InputPinView> sse_decode_list_input_pin_view(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2011,19 +1992,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
-  }
-
-  @protected
-  List<(BigInt, ClusterView)> sse_decode_list_record_u_64_cluster_view(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <(BigInt, ClusterView)>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_record_u_64_cluster_view(deserializer));
-    }
-    return ans_;
   }
 
   @protected
@@ -2210,15 +2178,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (BigInt, ClusterView) sse_decode_record_u_64_cluster_view(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_field0 = sse_decode_u_64(deserializer);
-    var var_field1 = sse_decode_cluster_view(deserializer);
-    return (var_field0, var_field1);
-  }
-
-  @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2231,7 +2190,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SceneComposerView sse_decode_scene_composer_view(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_clusters = sse_decode_Map_u_64_cluster_view(deserializer);
+    var var_clusters = sse_decode_list_cluster_view(deserializer);
     return SceneComposerView(clusters: var_clusters);
   }
 
@@ -2289,14 +2248,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(sseEncodeCastedPrimitiveU64(self), serializer);
-  }
-
-  @protected
-  void sse_encode_Map_u_64_cluster_view(
-      Map<BigInt, ClusterView> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_record_u_64_cluster_view(
-        self.entries.map((e) => (e.key, e.value)).toList(), serializer);
   }
 
   @protected
@@ -2521,6 +2472,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_cluster_view(
+      List<ClusterView> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_cluster_view(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_input_pin_view(
       List<InputPinView> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2536,16 +2497,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
-  }
-
-  @protected
-  void sse_encode_list_record_u_64_cluster_view(
-      List<(BigInt, ClusterView)> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_record_u_64_cluster_view(item, serializer);
-    }
   }
 
   @protected
@@ -2709,14 +2660,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_record_u_64_cluster_view(
-      (BigInt, ClusterView) self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_64(self.$1, serializer);
-    sse_encode_cluster_view(self.$2, serializer);
-  }
-
-  @protected
   void sse_encode_record_u_64_node_view(
       (BigInt, NodeView) self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2728,7 +2671,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_scene_composer_view(
       SceneComposerView self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_Map_u_64_cluster_view(self.clusters, serializer);
+    sse_encode_list_cluster_view(self.clusters, serializer);
   }
 
   @protected

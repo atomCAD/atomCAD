@@ -670,11 +670,11 @@ pub fn get_scene_composer_view() -> Option<SceneComposerView> {
     let cad_instance = CAD_INSTANCE.as_ref()?;
 
     let mut scene_composer_view = SceneComposerView {
-      clusters: HashMap::new(),
+      clusters: Vec::new(),
     };
 
     for cluster in cad_instance.scene_composer.model.clusters.values() {
-      scene_composer_view.clusters.insert(cluster.id, ClusterView {
+      scene_composer_view.clusters.push(ClusterView {
         id: cluster.id,
         name: cluster.name.clone(),
         selected: cluster.selected,

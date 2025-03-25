@@ -23,9 +23,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_CastedPrimitive_u_64(dynamic raw);
 
   @protected
-  Map<BigInt, ClusterView> dco_decode_Map_u_64_cluster_view(dynamic raw);
-
-  @protected
   Map<BigInt, NodeView> dco_decode_Map_u_64_node_view(dynamic raw);
 
   @protected
@@ -116,14 +113,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<ClusterView> dco_decode_list_cluster_view(dynamic raw);
+
+  @protected
   List<InputPinView> dco_decode_list_input_pin_view(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
-
-  @protected
-  List<(BigInt, ClusterView)> dco_decode_list_record_u_64_cluster_view(
-      dynamic raw);
 
   @protected
   List<(BigInt, NodeView)> dco_decode_list_record_u_64_node_view(dynamic raw);
@@ -172,9 +168,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
-  (BigInt, ClusterView) dco_decode_record_u_64_cluster_view(dynamic raw);
-
-  @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
 
   @protected
@@ -203,10 +196,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
-
-  @protected
-  Map<BigInt, ClusterView> sse_decode_Map_u_64_cluster_view(
-      SseDeserializer deserializer);
 
   @protected
   Map<BigInt, NodeView> sse_decode_Map_u_64_node_view(
@@ -307,15 +296,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<ClusterView> sse_decode_list_cluster_view(SseDeserializer deserializer);
+
+  @protected
   List<InputPinView> sse_decode_list_input_pin_view(
       SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
-
-  @protected
-  List<(BigInt, ClusterView)> sse_decode_list_record_u_64_cluster_view(
-      SseDeserializer deserializer);
 
   @protected
   List<(BigInt, NodeView)> sse_decode_list_record_u_64_node_view(
@@ -372,10 +360,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
-  (BigInt, ClusterView) sse_decode_record_u_64_cluster_view(
-      SseDeserializer deserializer);
-
-  @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
       SseDeserializer deserializer);
 
@@ -406,10 +390,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_Map_u_64_cluster_view(
-      Map<BigInt, ClusterView> self, SseSerializer serializer);
 
   @protected
   void sse_encode_Map_u_64_node_view(
@@ -514,16 +494,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_cluster_view(
+      List<ClusterView> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_input_pin_view(
       List<InputPinView> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_record_u_64_cluster_view(
-      List<(BigInt, ClusterView)> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_record_u_64_node_view(
@@ -579,10 +559,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_record_u_64_cluster_view(
-      (BigInt, ClusterView) self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_u_64_node_view(

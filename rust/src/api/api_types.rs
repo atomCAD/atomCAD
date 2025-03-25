@@ -105,5 +105,5 @@ pub struct ClusterView {
 }
 
 pub struct SceneComposerView {
-  pub clusters: HashMap<u64, ClusterView>,
+  pub clusters: Vec<ClusterView>,
 }

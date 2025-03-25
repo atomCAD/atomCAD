@@ -350,7 +350,7 @@ class NodeView {
 }
 
 class SceneComposerView {
-  final Map<BigInt, ClusterView> clusters;
+  final List<ClusterView> clusters;
 
   const SceneComposerView({
     required this.clusters,

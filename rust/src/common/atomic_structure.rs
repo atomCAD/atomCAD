@@ -1,6 +1,7 @@
 use crate::util::transform::Transform;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::util::hit_test_utils;
@@ -47,7 +48,7 @@ pub struct AtomicStructure {
   pub grid: HashMap<(i32, i32, i32), Vec<u64>>,
   pub bonds: HashMap<u64, Bond>,
   pub dirty_atom_ids: HashSet<u64>,
-  pub clusters: HashMap<u64, Cluster>,
+  pub clusters: BTreeMap<u64, Cluster>,
 }
 
 impl AtomicStructure {
@@ -60,7 +61,7 @@ impl AtomicStructure {
       grid: HashMap::new(),
       bonds: HashMap::new(),
       dirty_atom_ids: HashSet::new(),
-      clusters: HashMap::new(),
+      clusters: BTreeMap::new(),
     };
     ret.add_cluster("default");
     ret

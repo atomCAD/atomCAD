@@ -35,7 +35,7 @@ class _SceneComposerState extends State<SceneComposer> {
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
       debugPrint('XYZ file selected: $filePath');
-      model.importXyzFile(filePath);
+      model.importXyz(filePath);
 
       // Trigger rendering in the viewport by accessing its state
       if (_viewportKey.currentState != null) {
@@ -115,7 +115,10 @@ class _SceneComposerState extends State<SceneComposer> {
               ),
               // Main viewport
               Expanded(
-                child: SceneComposerViewport(key: _viewportKey),
+                child: SceneComposerViewport(
+                  key: _viewportKey,
+                  model: model,
+                ),
               ),
             ],
           ),

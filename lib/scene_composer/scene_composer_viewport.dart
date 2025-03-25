@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 
 class SceneComposerViewport extends CadViewport {
+  final SceneComposerModel model;
   const SceneComposerViewport({
     super.key,
+    required this.model,
   });
 
   @override
@@ -26,10 +29,11 @@ class _SceneComposerViewportState
             ? SelectModifier.expand
             : SelectModifier.replace;
 
-    selectClusterByRay(
-        rayStart: Vector3ToAPIVec3(ray.start),
-        rayDir: Vector3ToAPIVec3(ray.direction),
-        selectModifier: selectModifier);
+    widget.model.selectClusterByRay(
+      ray.start,
+      ray.direction,
+      selectModifier,
+    );
     renderingNeeded();
   }
 }
