@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `add_sample_network`, `from_api_ivec3`, `from_api_vec2`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `refresh_renderer`, `send_texture`, `to_api_ivec3`, `to_api_vec2`, `to_api_vec3`
+// These functions are ignored because they are not marked as `pub`: `add_sample_model`, `add_sample_network`, `from_api_ivec3`, `from_api_transform`, `from_api_vec2`, `from_api_vec3`, `generate_mock_image`, `initialize_cad_instance_async`, `refresh_renderer`, `send_texture`, `to_api_ivec3`, `to_api_transform`, `to_api_vec2`, `to_api_vec3`
 // These types are ignored because they are not used by any `pub` functions: `CADInstance`, `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
@@ -211,6 +211,23 @@ void selectClusterById(
 
 SceneComposerView? getSceneComposerView() =>
     RustLib.instance.api.crateApiSimpleGetSceneComposerView();
+
+APITransform? getSelectedFrameTransform() =>
+    RustLib.instance.api.crateApiSimpleGetSelectedFrameTransform();
+
+void setSelectedFrameTransform({required APITransform transform}) =>
+    RustLib.instance.api
+        .crateApiSimpleSetSelectedFrameTransform(transform: transform);
+
+void translateAlongLocalAxis(
+        {required int axisIndex, required double translation}) =>
+    RustLib.instance.api.crateApiSimpleTranslateAlongLocalAxis(
+        axisIndex: axisIndex, translation: translation);
+
+void rotateAroundLocalAxis(
+        {required int axisIndex, required double angleDegrees}) =>
+    RustLib.instance.api.crateApiSimpleRotateAroundLocalAxis(
+        axisIndex: axisIndex, angleDegrees: angleDegrees);
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

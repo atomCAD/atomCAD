@@ -158,6 +158,27 @@ class APISphereData {
           radius == other.radius;
 }
 
+class APITransform {
+  final APIVec3 translation;
+  final APIVec3 rotation;
+
+  const APITransform({
+    required this.translation,
+    required this.rotation,
+  });
+
+  @override
+  int get hashCode => translation.hashCode ^ rotation.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITransform &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation &&
+          rotation == other.rotation;
+}
+
 class APIVec2 {
   final double x;
   final double y;

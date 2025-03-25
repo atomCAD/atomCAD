@@ -41,7 +41,7 @@ impl<'a> Scene<'a> for StructureDesignerScene {
         Box::new(self.surface_point_clouds.iter())
     }
 
-    fn tessellatable(&self) -> Option<&dyn Tessellatable> {
-        self.tessellatable.as_deref()
+    fn tessellatable(&self) -> Option<Box<&dyn Tessellatable>> {
+        self.tessellatable.as_deref().map(Box::new)
     }
 }

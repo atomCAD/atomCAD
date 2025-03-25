@@ -6,9 +6,10 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::scene_composer::scene_composer::SceneComposer;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
+use glam::f64::DQuat;
 use glam::i32::IVec3;
 use std::collections::HashMap;
-use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData, APIAtomTransData, SelectModifier};
+use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData, APIAtomTransData, SelectModifier, APITransform};
 use super::api_types::APIVec3;
 use super::api_types::APIIVec3;
 use super::api_types::APICamera;
@@ -25,6 +26,7 @@ use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
+use crate::util::transform::Transform;
 
 fn to_api_vec3(v: &DVec3) -> APIVec3 {
   return APIVec3{
@@ -69,6 +71,35 @@ fn from_api_vec2(v: &APIVec2) -> DVec2 {
   return DVec2 {
     x: v.x,
     y: v.y,
+  }
+}
+
+fn to_api_transform(transform: &Transform) -> APITransform {
+  // Convert quaternion to Euler angles (intrinsic rotation in radians)
+  let rotation_euler = transform.rotation.to_euler(glam::EulerRot::XYZ);
+  
+  return APITransform {
+    translation: to_api_vec3(&transform.translation),
+    rotation: APIVec3 {
+      x: rotation_euler.0.to_degrees(), // roll (x-axis rotation)
+      y: rotation_euler.1.to_degrees(), // pitch (y-axis rotation)
+      z: rotation_euler.2.to_degrees(), // yaw (z-axis rotation)
+    },
+  }
+}
+
+fn from_api_transform(api_transform: &APITransform) -> Transform {
+  // Convert Euler angles (intrinsic XYZ in degrees) to quaternion
+  let rotation = DQuat::from_euler(
+    glam::EulerRot::XYZ, 
+    api_transform.rotation.x.to_radians(), 
+    api_transform.rotation.y.to_radians(), 
+    api_transform.rotation.z.to_radians()
+  );
+  
+  return Transform {
+    translation: from_api_vec3(&api_transform.translation),
+    rotation,
   }
 }
 
@@ -682,6 +713,45 @@ pub fn get_scene_composer_view() -> Option<SceneComposerView> {
     }
 
     Some(scene_composer_view)
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_selected_frame_transform() -> Option<APITransform> {
+  unsafe {
+    let instance = CAD_INSTANCE.as_ref()?;
+    let transform = instance.scene_composer.get_selected_frame_transform()?;
+    Some(to_api_transform(&transform))
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_frame_transform(transform: APITransform) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.scene_composer.set_selected_frame_transform(from_api_transform(&transform));
+      refresh_renderer(instance, "", false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn translate_along_local_axis(axis_index: u32, translation: f64) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.scene_composer.translate_along_local_axis(axis_index, translation);
+      refresh_renderer(instance, "", false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn rotate_around_local_axis(axis_index: u32, angle_degrees: f64) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.scene_composer.rotate_around_local_axis(axis_index, angle_degrees);
+      refresh_renderer(instance, "", false);
+    }
   }
 }
 

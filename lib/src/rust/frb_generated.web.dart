@@ -49,6 +49,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
+  APITransform dco_decode_api_transform(dynamic raw);
+
+  @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw);
 
   @protected
@@ -77,6 +80,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw);
+
+  @protected
+  APITransform dco_decode_box_autoadd_api_transform(dynamic raw);
 
   @protected
   APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
@@ -154,6 +160,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw);
 
   @protected
+  APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
+
+  @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
   @protected
@@ -225,6 +234,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
+  APITransform sse_decode_api_transform(SseDeserializer deserializer);
+
+  @protected
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
 
   @protected
@@ -257,6 +269,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISphereData sse_decode_box_autoadd_api_sphere_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APITransform sse_decode_box_autoadd_api_transform(
       SseDeserializer deserializer);
 
   @protected
@@ -345,6 +361,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APITransform? sse_decode_opt_box_autoadd_api_transform(
+      SseDeserializer deserializer);
+
+  @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
@@ -422,6 +442,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_transform(APITransform self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
 
   @protected
@@ -456,6 +479,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_sphere_data(
       APISphereData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_transform(
+      APITransform self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -544,6 +571,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_sphere_data(
       APISphereData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_transform(
+      APITransform? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
