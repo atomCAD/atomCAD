@@ -35,6 +35,27 @@ class SceneComposerModel extends ChangeNotifier {
     return ret;
   }
 
+  APITransform? getSelectedFrameTransform() {
+    return simple.getSelectedFrameTransform();
+  }
+
+  void setSelectedFrameTransform(APITransform transform) {
+    simple.setSelectedFrameTransform(transform: transform);
+    refreshFromKernel();
+  }
+
+  void translateAlongLocalAxis(int axisIndex, double translation) {
+    simple.translateAlongLocalAxis(
+        axisIndex: axisIndex, translation: translation);
+    refreshFromKernel();
+  }
+
+  void rotateAroundLocalAxis(int axisIndex, double angleDegrees) {
+    simple.rotateAroundLocalAxis(
+        axisIndex: axisIndex, angleDegrees: angleDegrees);
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     sceneComposerView = simple.getSceneComposerView();
     notifyListeners();
