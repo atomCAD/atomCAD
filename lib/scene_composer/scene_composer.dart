@@ -3,6 +3,7 @@ import 'package:flutter_cad/scene_composer/scene_composer_viewport.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 import 'package:flutter_cad/scene_composer/cluster_list_panel.dart';
+import 'package:flutter_cad/scene_composer/scene_selection_data_widget.dart';
 
 /// The scene composer editor.
 class SceneComposer extends StatefulWidget {
@@ -105,7 +106,19 @@ class _SceneComposerState extends State<SceneComposer> {
               // Left panel - Cluster List
               SizedBox(
                 width: 250,
-                child: ClusterListPanel(model: model),
+                child: Column(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: ClusterListPanel(model: model),
+                    ),
+                    const Divider(height: 1, thickness: 1, color: Colors.black12),
+                    Expanded(
+                      flex: 3,
+                      child: SceneSelectionDataWidget(model: model),
+                    ),
+                  ],
+                ),
               ),
               // Vertical divider
               const VerticalDivider(
