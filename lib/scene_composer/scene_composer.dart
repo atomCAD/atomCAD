@@ -105,18 +105,15 @@ class _SceneComposerState extends State<SceneComposer> {
             children: [
               // Left panel - Cluster List
               SizedBox(
-                width: 250,
+                width: 300,
                 child: Column(
                   children: [
                     Expanded(
-                      flex: 2,
                       child: ClusterListPanel(model: model),
                     ),
-                    const Divider(height: 1, thickness: 1, color: Colors.black12),
-                    Expanded(
-                      flex: 3,
-                      child: SceneSelectionDataWidget(model: model),
-                    ),
+                    const Divider(
+                        height: 1, thickness: 1, color: Colors.black12),
+                    SceneSelectionDataWidget(model: model),
                   ],
                 ),
               ),

@@ -47,8 +47,107 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
     super.dispose();
   }
 
+  // Custom dropdown button style
+  DropdownButton<String> _buildAxisDropdown() {
+    return DropdownButton<String>(
+      value: _selectedAxis,
+      isDense: true,
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      icon: const Icon(Icons.arrow_drop_down, color: Colors.blueGrey),
+      dropdownColor: Colors.grey[200],
+      iconEnabledColor: Colors.blue,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Colors.black87,
+      ),
+      underline: Container(
+        height: 1,
+        color: _selectedAxis == 'X'
+            ? Colors.deepOrange
+            : _selectedAxis == 'Y'
+                ? Colors.green
+                : Colors.blue,
+      ),
+      selectedItemBuilder: (BuildContext context) {
+        return ['X', 'Y', 'Z'].map<Widget>((String value) {
+          // Use the appropriate color for each axis
+          Color textColor;
+          switch (value) {
+            case 'X':
+              textColor = Colors.deepOrange;
+              break;
+            case 'Y':
+              textColor = Colors.green;
+              break;
+            case 'Z':
+              textColor = Colors.blue;
+              break;
+            default:
+              textColor = Colors.blueGrey;
+          }
+
+          return Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            constraints: const BoxConstraints(minWidth: 28),
+            child: Text(
+              value,
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          );
+        }).toList();
+      },
+      items: const [
+        DropdownMenuItem(
+          value: 'X',
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text('X', style: TextStyle(color: Colors.deepOrange)),
+          ),
+        ),
+        DropdownMenuItem(
+          value: 'Y',
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text('Y', style: TextStyle(color: Colors.green)),
+          ),
+        ),
+        DropdownMenuItem(
+          value: 'Z',
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text('Z', style: TextStyle(color: Colors.blue)),
+          ),
+        ),
+      ],
+      onChanged: (value) {
+        if (value != null) {
+          setState(() {
+            _selectedAxis = value;
+          });
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Define common button style for consistency
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: Colors.blueGrey[700],
+      foregroundColor: Colors.white,
+      elevation: 2,
+      shadowColor: Colors.blueGrey[800],
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    );
+
     return ChangeNotifierProvider.value(
       value: widget.model,
       child: Consumer<SceneComposerModel>(
@@ -62,16 +161,10 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
           sceneComposerView = model.sceneComposerView;
 
           return Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(12.0, 8.0, 8.0, 8.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Frame Transformation',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-
                 // Translation section
                 Vec3Input(
                   label: 'Translation',
@@ -90,7 +183,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                   },
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 6),
 
                 // Rotation section
                 Vec3Input(
@@ -109,134 +202,138 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                   },
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 6),
 
                 // Apply button
-                ElevatedButton(
-                  onPressed: _stagedTransform == null
-                      ? null
-                      : () {
-                          model.setSelectedFrameTransform(_stagedTransform!);
-                        },
-                  child: const Text('Apply Transform'),
+                SizedBox(
+                  width: double.infinity,
+                  height: 32,
+                  child: ElevatedButton(
+                    onPressed: _stagedTransform == null
+                        ? null
+                        : () {
+                            model.setSelectedFrameTransform(_stagedTransform!);
+                          },
+                    style: buttonStyle,
+                    child: const Text('Apply Transform'),
+                  ),
                 ),
 
-                const SizedBox(height: 24),
-                const Divider(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 6),
 
                 // Translate along axis section
                 Row(
                   children: [
-                    const Text('Along:'),
-                    const SizedBox(width: 16),
-                    DropdownButton<String>(
-                      value: _selectedAxis,
-                      items: const [
-                        DropdownMenuItem(value: 'X', child: Text('X')),
-                        DropdownMenuItem(value: 'Y', child: Text('Y')),
-                        DropdownMenuItem(value: 'Z', child: Text('Z')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedAxis = value;
-                          });
-                        }
-                      },
+                    Container(
+                      width: 48,
+                      alignment: Alignment.centerRight,
+                      child:
+                          const Text('Along:', style: TextStyle(fontSize: 13)),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 4),
+                    _buildAxisDropdown(),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: TextField(
                         controller: _translationValueController,
+                        style: const TextStyle(fontSize: 14),
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           labelText: 'Distance',
+                          labelStyle: TextStyle(fontSize: 13),
                           contentPadding:
-                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          isDense: true,
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: _stagedTransform == null
-                          ? null
-                          : () {
-                              final value = double.tryParse(
-                                  _translationValueController.text);
-                              if (value != null) {
-                                final axisIndex = _selectedAxis == 'X'
-                                    ? 0
-                                    : _selectedAxis == 'Y'
-                                        ? 1
-                                        : 2;
-                                model.translateAlongLocalAxis(axisIndex, value);
-                                // Update staged transform after modification
-                                _updateStagedTransform();
-                              }
-                            },
-                      child: const Text('Translate'),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      height: 28,
+                      width: 66,
+                      child: ElevatedButton(
+                        onPressed: _stagedTransform == null
+                            ? null
+                            : () {
+                                final value = double.tryParse(
+                                    _translationValueController.text);
+                                if (value != null) {
+                                  final axisIndex = _selectedAxis == 'X'
+                                      ? 0
+                                      : _selectedAxis == 'Y'
+                                          ? 1
+                                          : 2;
+                                  model.translateAlongLocalAxis(
+                                      axisIndex, value);
+                                  // Update staged transform after modification
+                                  _updateStagedTransform();
+                                }
+                              },
+                        style: buttonStyle,
+                        child: const Text('Trans.'),
+                      ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 6),
 
                 // Rotate around axis section
                 Row(
                   children: [
-                    const Text('Around:'),
-                    const SizedBox(width: 16),
-                    DropdownButton<String>(
-                      value: _selectedAxis,
-                      items: const [
-                        DropdownMenuItem(value: 'X', child: Text('X')),
-                        DropdownMenuItem(value: 'Y', child: Text('Y')),
-                        DropdownMenuItem(value: 'Z', child: Text('Z')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedAxis = value;
-                          });
-                        }
-                      },
+                    Container(
+                      width: 48,
+                      alignment: Alignment.centerRight,
+                      child:
+                          const Text('Around:', style: TextStyle(fontSize: 13)),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 4),
+                    _buildAxisDropdown(),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: TextField(
                         controller: _rotationValueController,
+                        style: const TextStyle(fontSize: 14),
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
-                          labelText: 'Degrees',
+                          labelText: 'Angle',
+                          labelStyle: TextStyle(fontSize: 13),
                           contentPadding:
-                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          isDense: true,
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: _stagedTransform == null
-                          ? null
-                          : () {
-                              final value = double.tryParse(
-                                  _rotationValueController.text);
-                              if (value != null) {
-                                final axisIndex = _selectedAxis == 'X'
-                                    ? 0
-                                    : _selectedAxis == 'Y'
-                                        ? 1
-                                        : 2;
-                                model.rotateAroundLocalAxis(axisIndex, value);
-                                // Update staged transform after modification
-                                _updateStagedTransform();
-                              }
-                            },
-                      child: const Text('Rotate'),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      height: 28,
+                      width: 66,
+                      child: ElevatedButton(
+                        onPressed: _stagedTransform == null
+                            ? null
+                            : () {
+                                final value = double.tryParse(
+                                    _rotationValueController.text);
+                                if (value != null) {
+                                  final axisIndex = _selectedAxis == 'X'
+                                      ? 0
+                                      : _selectedAxis == 'Y'
+                                          ? 1
+                                          : 2;
+                                  model.rotateAroundLocalAxis(axisIndex, value);
+                                  // Update staged transform after modification
+                                  _updateStagedTransform();
+                                }
+                              },
+                        style: buttonStyle,
+                        child: const Text('Rotate'),
+                      ),
                     ),
                   ],
                 ),

@@ -33,9 +33,17 @@ class ClusterListPanel extends StatelessWidget {
               final cluster = clusters[index];
 
               return ListTile(
-                title: Text(cluster.name),
+                dense: true,
+                visualDensity: const VisualDensity(vertical: -2),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                title: Text(
+                  cluster.name,
+                  style: const TextStyle(fontSize: 14),
+                ),
                 selected: cluster.selected,
-                selectedTileColor: Colors.blue.withOpacity(0.5),
+                selectedTileColor: Colors.blueGrey[700],
+                selectedColor: Colors.white,
                 onTap: () {
                   // Determine the selection modifier based on pressed keys
                   final selectModifier =

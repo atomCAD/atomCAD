@@ -142,39 +142,52 @@ class _Vec3InputState extends State<Vec3Input> {
   Widget build(BuildContext context) {
     const inputDecoration = InputDecoration(
       border: OutlineInputBorder(),
-      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      isDense: true,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label),
-        const SizedBox(height: 4),
+        Text(widget.label, style: const TextStyle(fontSize: 13)),
+        const SizedBox(height: 2),
         Row(
           children: [
             Expanded(
               child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'X'),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'X',
+                  labelStyle: const TextStyle(fontSize: 13),
+                ),
+                style: const TextStyle(fontSize: 14),
                 controller: _xController,
                 focusNode: _xFocus,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (text) => _handleValueChange(text, 'x'),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             Expanded(
               child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'Y'),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'Y',
+                  labelStyle: const TextStyle(fontSize: 13),
+                ),
+                style: const TextStyle(fontSize: 14),
                 controller: _yController,
                 focusNode: _yFocus,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (text) => _handleValueChange(text, 'y'),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             Expanded(
               child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'Z'),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'Z',
+                  labelStyle: const TextStyle(fontSize: 13),
+                ),
+                style: const TextStyle(fontSize: 14),
                 controller: _zController,
                 focusNode: _zFocus,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
