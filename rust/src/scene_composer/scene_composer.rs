@@ -37,6 +37,7 @@ impl SceneComposer {
   pub fn set_selected_frame_transform(&mut self, transform: Transform) {
     if let Some(gadget) = self.selected_frame_gadget.as_mut() {
         gadget.transform = transform;
+        self.sync_gadget_to_model();
     }
   }
 
@@ -55,7 +56,7 @@ impl SceneComposer {
       };
 
       gadget.transform.translation += gadget.transform.rotation.mul_vec3(dir) * translation;
-
+      self.sync_gadget_to_model();
     }
   }
 
@@ -78,6 +79,7 @@ impl SceneComposer {
       
       // Apply the rotation to the current rotation
       gadget.transform.rotation = rotation * gadget.transform.rotation;
+      self.sync_gadget_to_model();
     }
   }
 
@@ -95,16 +97,40 @@ impl SceneComposer {
     self.recreate_selected_frame_gadget();
   }
 
+  fn get_selected_cluster_ids(&self) -> Vec<u64> {
+    self.model.clusters
+      .iter()
+      .filter(|(_, cluster)| cluster.selected)
+      .map(|(id, _)| *id)
+      .collect()
+  }
+
+  fn sync_gadget_to_model(&mut self) {
+    if let Some(gadget) = &self.selected_frame_gadget {
+      let selected_cluster_ids = self.get_selected_cluster_ids();
+      
+      if selected_cluster_ids.len() == 1 {
+        let cluster_id = selected_cluster_ids[0];
+        if let Some(cluster) = self.model.clusters.get_mut(&cluster_id) {
+          cluster.frame_transform = gadget.transform.clone();
+        }
+      }
+    }
+  }
+
   fn recreate_selected_frame_gadget(&mut self) {
-    let selected_clusters: Vec<&Cluster> = self.model.clusters
-        .values()
-        .filter(|cluster| cluster.selected)
-        .collect();
+    let selected_cluster_ids = self.get_selected_cluster_ids();
     
-    if selected_clusters.is_empty() {
+    if selected_cluster_ids.is_empty() {
         self.selected_frame_gadget = None;
         return;
     }
+    
+    // Collect selected clusters by their IDs
+    let selected_clusters: Vec<&Cluster> = selected_cluster_ids
+        .iter()
+        .filter_map(|id| self.model.clusters.get(id))
+        .collect();
     
     if selected_clusters.len() == 1 {
         self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget { transform: selected_clusters[0].frame_transform.clone() }));
