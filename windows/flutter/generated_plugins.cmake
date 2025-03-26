@@ -3,7 +3,9 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  screen_retriever
   texture_rgba_renderer
+  window_manager
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

@@ -5,9 +5,16 @@ import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
+import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   await RustLib.init();
+
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+
+  windowManager.setTitle('atomCAD');
+
   runApp(const MyApp());
 }
 
