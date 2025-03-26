@@ -19,6 +19,7 @@ lazy_static! {
         elements.insert("C".to_string(), 6);   // Carbon
         elements.insert("N".to_string(), 7);   // Nitrogen
         elements.insert("O".to_string(), 8);   // Oxygen
+        elements.insert("Ge".to_string(), 32); // Germanium
         elements
     };
 
@@ -33,9 +34,10 @@ lazy_static! {
         let mut m = HashMap::new();
         // Values based on common atomic radii (in Angstroms) and typical visualization colors
         m.insert(1, AtomInfo { radius: 0.31, color: Vec3::new(1.0, 1.0, 1.0) });  // Hydrogen - white
-        m.insert(6, AtomInfo { radius: 0.76, color: Vec3::new(0.1, 1.0, 0.1) });  // Carbon - dark grey
-        m.insert(7, AtomInfo { radius: 0.71, color: Vec3::new(0.2, 0.2, 1.0) });  // Nitrogen - blue
-        m.insert(8, AtomInfo { radius: 0.66, color: Vec3::new(1.0, 0.0, 0.0) });  // Oxygen - red
+        m.insert(6, AtomInfo { radius: 0.76, color: Vec3::new(0.18, 0.18, 0.18) });  // Carbon - dark grey
+        m.insert(7, AtomInfo { radius: 0.71, color: Vec3::new(0.187, 0.375, 0.97) });  // Nitrogen - blue
+        m.insert(8, AtomInfo { radius: 0.66, color: Vec3::new(1.0, 0.05, 0.05) });  // Oxygen - red
+        m.insert(32, AtomInfo { radius: 1.2, color: Vec3::new(0.4, 0.56, 0.56) });  // Germanium
         m
     };
 }
