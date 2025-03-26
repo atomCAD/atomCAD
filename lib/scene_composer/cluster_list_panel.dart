@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// A widget that displays a list of clusters from the SceneComposerModel.
 class ClusterListPanel extends StatelessWidget {
@@ -34,16 +35,16 @@ class ClusterListPanel extends StatelessWidget {
 
               return ListTile(
                 dense: true,
-                visualDensity: const VisualDensity(vertical: -2),
+                visualDensity: AppSpacing.compactVerticalDensity,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 title: Text(
                   cluster.name,
-                  style: const TextStyle(fontSize: 14),
+                  style: AppTextStyles.regular,
                 ),
                 selected: cluster.selected,
-                selectedTileColor: Colors.blueGrey[700],
-                selectedColor: Colors.white,
+                selectedTileColor: AppColors.selectionBackground,
+                selectedColor: AppColors.selectionForeground,
                 onTap: () {
                   // Determine the selection modifier based on pressed keys
                   final selectModifier =

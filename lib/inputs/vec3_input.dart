@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// A reusable widget for editing Vec3 (floating point) values
 class Vec3Input extends StatefulWidget {
@@ -115,11 +116,8 @@ class _Vec3InputState extends State<Vec3Input> {
     super.dispose();
   }
 
-  void _handleValueChange(String text, String axis) {
-    // Set the currently editing flag
-    _currentlyEditingAxis = axis;
-    
-    final newValue = double.tryParse(text);
+  void _applyValueChange(String axis) {
+    final newValue = double.tryParse(_getController(axis).text);
     if (newValue != null) {
       switch (axis) {
         case 'x':
@@ -138,60 +136,127 @@ class _Vec3InputState extends State<Vec3Input> {
     }
   }
 
+  TextEditingController _getController(String axis) {
+    switch (axis) {
+      case 'x':
+        return _xController;
+      case 'y':
+        return _yController;
+      case 'z':
+        return _zController;
+      default:
+        throw Exception('Invalid axis');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    const inputDecoration = InputDecoration(
-      border: OutlineInputBorder(),
-      contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      isDense: true,
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label, style: const TextStyle(fontSize: 13)),
-        const SizedBox(height: 2),
+        Text(widget.label, style: AppTextStyles.label),
+        const SizedBox(height: 4),
         Row(
           children: [
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(
-                  labelText: 'X',
-                  labelStyle: const TextStyle(fontSize: 13),
+              child: Focus(
+                onFocusChange: (hasFocus) {
+                  if (!hasFocus && _currentlyEditingAxis == 'x') {
+                    _applyValueChange('x');
+                    _currentlyEditingAxis = null;
+                  }
+                },
+                child: TextField(
+                  controller: _xController,
+                  focusNode: _xFocus,
+                  style: AppTextStyles.inputField,
+                  decoration: AppInputDecorations.standard.copyWith(
+                    labelText: 'X',
+                    labelStyle: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.xAxisColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (value) {
+                    // Mark that we're editing this field
+                    _currentlyEditingAxis = 'x';
+                  },
+                  onSubmitted: (value) {
+                    _applyValueChange('x');
+                    _currentlyEditingAxis = null;
+                  },
                 ),
-                style: const TextStyle(fontSize: 14),
-                controller: _xController,
-                focusNode: _xFocus,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (text) => _handleValueChange(text, 'x'),
               ),
             ),
             const SizedBox(width: 4),
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(
-                  labelText: 'Y',
-                  labelStyle: const TextStyle(fontSize: 13),
+              child: Focus(
+                onFocusChange: (hasFocus) {
+                  if (!hasFocus && _currentlyEditingAxis == 'y') {
+                    _applyValueChange('y');
+                    _currentlyEditingAxis = null;
+                  }
+                },
+                child: TextField(
+                  controller: _yController,
+                  focusNode: _yFocus,
+                  style: AppTextStyles.inputField,
+                  decoration: AppInputDecorations.standard.copyWith(
+                    labelText: 'Y',
+                    labelStyle: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.yAxisColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (value) {
+                    // Mark that we're editing this field
+                    _currentlyEditingAxis = 'y';
+                  },
+                  onSubmitted: (value) {
+                    _applyValueChange('y');
+                    _currentlyEditingAxis = null;
+                  },
                 ),
-                style: const TextStyle(fontSize: 14),
-                controller: _yController,
-                focusNode: _yFocus,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (text) => _handleValueChange(text, 'y'),
               ),
             ),
             const SizedBox(width: 4),
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(
-                  labelText: 'Z',
-                  labelStyle: const TextStyle(fontSize: 13),
+              child: Focus(
+                onFocusChange: (hasFocus) {
+                  if (!hasFocus && _currentlyEditingAxis == 'z') {
+                    _applyValueChange('z');
+                    _currentlyEditingAxis = null;
+                  }
+                },
+                child: TextField(
+                  controller: _zController,
+                  focusNode: _zFocus,
+                  style: AppTextStyles.inputField,
+                  decoration: AppInputDecorations.standard.copyWith(
+                    labelText: 'Z',
+                    labelStyle: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.zAxisColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (value) {
+                    // Mark that we're editing this field
+                    _currentlyEditingAxis = 'z';
+                  },
+                  onSubmitted: (value) {
+                    _applyValueChange('z');
+                    _currentlyEditingAxis = null;
+                  },
                 ),
-                style: const TextStyle(fontSize: 14),
-                controller: _zController,
-                focusNode: _zFocus,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (text) => _handleValueChange(text, 'z'),
               ),
             ),
           ],

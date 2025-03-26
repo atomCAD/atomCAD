@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
+import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// A widget that displays and allows editing of the selected frame transformation.
 class SceneSelectionDataWidget extends StatefulWidget {
@@ -51,103 +52,83 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
   DropdownButton<String> _buildAxisDropdown() {
     return DropdownButton<String>(
       value: _selectedAxis,
-      isDense: true,
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      icon: const Icon(Icons.arrow_drop_down, color: Colors.blueGrey),
-      dropdownColor: Colors.grey[200],
-      iconEnabledColor: Colors.blue,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: Colors.black87,
-      ),
-      underline: Container(
-        height: 1,
-        color: _selectedAxis == 'X'
-            ? Colors.deepOrange
-            : _selectedAxis == 'Y'
-                ? Colors.green
-                : Colors.blue,
-      ),
-      selectedItemBuilder: (BuildContext context) {
-        return ['X', 'Y', 'Z'].map<Widget>((String value) {
-          // Use the appropriate color for each axis
-          Color textColor;
-          switch (value) {
-            case 'X':
-              textColor = Colors.deepOrange;
-              break;
-            case 'Y':
-              textColor = Colors.green;
-              break;
-            case 'Z':
-              textColor = Colors.blue;
-              break;
-            default:
-              textColor = Colors.blueGrey;
-          }
-
-          return Container(
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            constraints: const BoxConstraints(minWidth: 28),
-            child: Text(
-              value,
-              style: TextStyle(
-                color: textColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-          );
-        }).toList();
-      },
-      items: const [
-        DropdownMenuItem(
-          value: 'X',
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4.0),
-            child: Text('X', style: TextStyle(color: Colors.deepOrange)),
-          ),
-        ),
-        DropdownMenuItem(
-          value: 'Y',
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4.0),
-            child: Text('Y', style: TextStyle(color: Colors.green)),
-          ),
-        ),
-        DropdownMenuItem(
-          value: 'Z',
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4.0),
-            child: Text('Z', style: TextStyle(color: Colors.blue)),
-          ),
-        ),
-      ],
-      onChanged: (value) {
+      onChanged: (String? value) {
         if (value != null) {
           setState(() {
             _selectedAxis = value;
           });
         }
       },
+      icon: const Icon(
+        Icons.arrow_drop_down,
+        size: 18,
+      ),
+      underline: Container(
+        height: 1,
+        color: _selectedAxis == 'X'
+            ? AppColors.xAxisColor
+            : _selectedAxis == 'Y'
+                ? AppColors.yAxisColor
+                : AppColors.zAxisColor,
+      ),
+      isDense: true,
+      padding: const EdgeInsets.fromLTRB(8.0, 0, 0, 0),
+      // Custom dropdown menu items
+      selectedItemBuilder: (BuildContext context) {
+        return ['X', 'Y', 'Z'].map<Widget>((String value) {
+          return Container(
+            alignment: Alignment.centerLeft,
+            constraints: const BoxConstraints(minWidth: 28),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: value == 'X'
+                    ? AppColors.xAxisColor
+                    : value == 'Y'
+                        ? AppColors.yAxisColor
+                        : AppColors.zAxisColor,
+              ),
+            ),
+          );
+        }).toList();
+      },
+      items: ['X', 'Y', 'Z'].map<DropdownMenuItem<String>>((String value) {
+        Color textColor;
+        switch (value) {
+          case 'X':
+            textColor = AppColors.xAxisColor;
+            break;
+          case 'Y':
+            textColor = AppColors.yAxisColor;
+            break;
+          case 'Z':
+            textColor = AppColors.zAxisColor;
+            break;
+          default:
+            textColor = Colors.blueGrey;
+        }
+
+        return DropdownMenuItem<String>(
+          value: value,
+          child: Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Define common button style for consistency
-    final buttonStyle = ElevatedButton.styleFrom(
-      backgroundColor: Colors.blueGrey[700],
-      foregroundColor: Colors.white,
-      elevation: 2,
-      shadowColor: Colors.blueGrey[800],
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-    );
-
     return ChangeNotifierProvider.value(
       value: widget.model,
       child: Consumer<SceneComposerModel>(
@@ -214,7 +195,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                         : () {
                             model.setSelectedFrameTransform(_stagedTransform!);
                           },
-                    style: buttonStyle,
+                    style: AppButtonStyles.primary,
                     child: const Text('Apply Transform'),
                   ),
                 ),
@@ -227,34 +208,28 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                 Row(
                   children: [
                     Container(
-                      width: 48,
+                      width: AppSpacing.labelWidth,
                       alignment: Alignment.centerRight,
-                      child:
-                          const Text('Along:', style: TextStyle(fontSize: 13)),
+                      child: const Text('Along:', style: AppTextStyles.label),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.small),
                     _buildAxisDropdown(),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.small),
                     Expanded(
                       child: TextField(
                         controller: _translationValueController,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
+                        style: AppTextStyles.inputField,
+                        decoration: AppInputDecorations.standard.copyWith(
                           labelText: 'Distance',
-                          labelStyle: TextStyle(fontSize: 13),
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          isDense: true,
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.small),
                     SizedBox(
-                      height: 28,
-                      width: 66,
+                      height: AppSpacing.buttonHeight,
+                      width: AppSpacing.smallButtonWidth,
                       child: ElevatedButton(
                         onPressed: _stagedTransform == null
                             ? null
@@ -273,7 +248,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                   _updateStagedTransform();
                                 }
                               },
-                        style: buttonStyle,
+                        style: AppButtonStyles.primary,
                         child: const Text('Trans.'),
                       ),
                     ),
@@ -286,34 +261,28 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                 Row(
                   children: [
                     Container(
-                      width: 48,
+                      width: AppSpacing.labelWidth,
                       alignment: Alignment.centerRight,
-                      child:
-                          const Text('Around:', style: TextStyle(fontSize: 13)),
+                      child: const Text('Around:', style: AppTextStyles.label),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.small),
                     _buildAxisDropdown(),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.small),
                     Expanded(
                       child: TextField(
                         controller: _rotationValueController,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
+                        style: AppTextStyles.inputField,
+                        decoration: AppInputDecorations.standard.copyWith(
                           labelText: 'Angle',
-                          labelStyle: TextStyle(fontSize: 13),
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          isDense: true,
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.small),
                     SizedBox(
-                      height: 28,
-                      width: 66,
+                      height: AppSpacing.buttonHeight,
+                      width: AppSpacing.smallButtonWidth,
                       child: ElevatedButton(
                         onPressed: _stagedTransform == null
                             ? null
@@ -331,7 +300,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                   _updateStagedTransform();
                                 }
                               },
-                        style: buttonStyle,
+                        style: AppButtonStyles.primary,
                         child: const Text('Rotate'),
                       ),
                     ),

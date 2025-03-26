@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/scene_composer/scene_composer.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/src/rust/api/simple.dart';
@@ -45,6 +46,7 @@ class EditorSelector extends StatelessWidget {
                   ),
                 );
               },
+              style: AppButtonStyles.primary,
               child: const Text('Structure Designer'),
             ),
             const SizedBox(height: 20),
@@ -59,6 +61,7 @@ class EditorSelector extends StatelessWidget {
                   ),
                 );
               },
+              style: AppButtonStyles.primary,
               child: const Text('Scene Composer'),
             ),
           ],
