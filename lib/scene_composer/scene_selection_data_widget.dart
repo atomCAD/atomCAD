@@ -314,6 +314,38 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                     ),
                   ],
                 ),
+                
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                
+                // Frame lock to atoms toggle
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Lock frame to atoms:', style: AppTextStyles.label),
+                    const SizedBox(width: 10),
+                    IconButton(
+                      icon: Icon(
+                        model.isFrameLockedToAtoms() 
+                            ? Icons.lock 
+                            : Icons.lock_open,
+                        color: model.isFrameLockedToAtoms() 
+                            ? Colors.blue 
+                            : Colors.grey,
+                      ),
+                      tooltip: model.isFrameLockedToAtoms() 
+                          ? 'Frame is locked to atoms' 
+                          : 'Frame is not locked to atoms',
+                      onPressed: _stagedTransform == null
+                          ? null
+                          : () {
+                              // Toggle the frame lock state
+                              model.setFrameLockedToAtoms(!model.isFrameLockedToAtoms());
+                            },
+                    ),
+                  ],
+                ),
               ],
             ),
           );

@@ -45,6 +45,7 @@ class SceneComposerModel extends ChangeNotifier {
 
   void setFrameLockedToAtoms(bool locked) {
     simple.setFrameLockedToAtoms(locked: locked);
+    refreshFromKernel();
   }
 
   void setSelectedFrameTransform(APITransform transform) {
