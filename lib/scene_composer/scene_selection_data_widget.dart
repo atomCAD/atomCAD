@@ -20,9 +20,13 @@ class SceneSelectionDataWidget extends StatefulWidget {
 }
 
 class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
+  // Constants for axis values
+  static const List<String> _axisOptions = ['X', 'Y', 'Z'];
+  
   SceneComposerView? sceneComposerView;
   APITransform? _stagedTransform;
-  String _selectedAxis = 'X';
+  String _selectedTranslationAxis = 'X';
+  String _selectedRotationAxis = 'X';
   TextEditingController _translationValueController =
       TextEditingController(text: '0.0');
   TextEditingController _rotationValueController =
@@ -48,34 +52,47 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
     super.dispose();
   }
 
-  // Custom dropdown button style
-  DropdownButton<String> _buildAxisDropdown() {
+  // Convert axis name (X, Y, Z) to index (0, 1, 2)
+  int _getAxisIndex(String axisName) {
+    switch (axisName) {
+      case 'X': return 0;
+      case 'Y': return 1;
+      case 'Z': return 2;
+      default: return 0; // Default to X axis
+    }
+  }
+
+  // Get the color for a specific axis
+  Color _getAxisColor(String axisName) {
+    switch (axisName) {
+      case 'X': return AppColors.xAxisColor;
+      case 'Y': return AppColors.yAxisColor;
+      case 'Z': return AppColors.zAxisColor;
+      default: return Colors.blueGrey;
+    }
+  }
+
+  // Common dropdown button builder for axis selection
+  DropdownButton<String> _buildAxisDropdown({
+    required String currentValue,
+    required ValueChanged<String?> onChanged,
+  }) {
     return DropdownButton<String>(
-      value: _selectedAxis,
-      onChanged: (String? value) {
-        if (value != null) {
-          setState(() {
-            _selectedAxis = value;
-          });
-        }
-      },
+      value: currentValue,
+      onChanged: onChanged,
       icon: const Icon(
         Icons.arrow_drop_down,
         size: 18,
       ),
       underline: Container(
         height: 1,
-        color: _selectedAxis == 'X'
-            ? AppColors.xAxisColor
-            : _selectedAxis == 'Y'
-                ? AppColors.yAxisColor
-                : AppColors.zAxisColor,
+        color: _getAxisColor(currentValue),
       ),
       isDense: true,
       padding: const EdgeInsets.fromLTRB(8.0, 0, 0, 0),
       // Custom dropdown menu items
       selectedItemBuilder: (BuildContext context) {
-        return ['X', 'Y', 'Z'].map<Widget>((String value) {
+        return _axisOptions.map<Widget>((String value) {
           return Container(
             alignment: Alignment.centerLeft,
             constraints: const BoxConstraints(minWidth: 28),
@@ -83,32 +100,13 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
               value,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: value == 'X'
-                    ? AppColors.xAxisColor
-                    : value == 'Y'
-                        ? AppColors.yAxisColor
-                        : AppColors.zAxisColor,
+                color: _getAxisColor(value),
               ),
             ),
           );
         }).toList();
       },
-      items: ['X', 'Y', 'Z'].map<DropdownMenuItem<String>>((String value) {
-        Color textColor;
-        switch (value) {
-          case 'X':
-            textColor = AppColors.xAxisColor;
-            break;
-          case 'Y':
-            textColor = AppColors.yAxisColor;
-            break;
-          case 'Z':
-            textColor = AppColors.zAxisColor;
-            break;
-          default:
-            textColor = Colors.blueGrey;
-        }
-
+      items: _axisOptions.map<DropdownMenuItem<String>>((String value) {
         return DropdownMenuItem<String>(
           value: value,
           child: Container(
@@ -118,7 +116,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
               value,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: textColor,
+                color: _getAxisColor(value),
               ),
             ),
           ),
@@ -213,7 +211,16 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                       child: const Text('Along:', style: AppTextStyles.label),
                     ),
                     const SizedBox(width: AppSpacing.small),
-                    _buildAxisDropdown(),
+                    _buildAxisDropdown(
+                      currentValue: _selectedTranslationAxis,
+                      onChanged: (String? value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedTranslationAxis = value;
+                          });
+                        }
+                      },
+                    ),
                     const SizedBox(width: AppSpacing.small),
                     Expanded(
                       child: TextField(
@@ -237,11 +244,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                 final value = double.tryParse(
                                     _translationValueController.text);
                                 if (value != null) {
-                                  final axisIndex = _selectedAxis == 'X'
-                                      ? 0
-                                      : _selectedAxis == 'Y'
-                                          ? 1
-                                          : 2;
+                                  final axisIndex = _getAxisIndex(_selectedTranslationAxis);
                                   model.translateAlongLocalAxis(
                                       axisIndex, value);
                                   // Update staged transform after modification
@@ -266,7 +269,16 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                       child: const Text('Around:', style: AppTextStyles.label),
                     ),
                     const SizedBox(width: AppSpacing.small),
-                    _buildAxisDropdown(),
+                    _buildAxisDropdown(
+                      currentValue: _selectedRotationAxis,
+                      onChanged: (String? value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedRotationAxis = value;
+                          });
+                        }
+                      },
+                    ),
                     const SizedBox(width: AppSpacing.small),
                     Expanded(
                       child: TextField(
@@ -290,11 +302,7 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                 final value = double.tryParse(
                                     _rotationValueController.text);
                                 if (value != null) {
-                                  final axisIndex = _selectedAxis == 'X'
-                                      ? 0
-                                      : _selectedAxis == 'Y'
-                                          ? 1
-                                          : 2;
+                                  final axisIndex = _getAxisIndex(_selectedRotationAxis);
                                   model.rotateAroundLocalAxis(axisIndex, value);
                                   // Update staged transform after modification
                                   _updateStagedTransform();
