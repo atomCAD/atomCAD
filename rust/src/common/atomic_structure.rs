@@ -38,6 +38,7 @@ pub struct Cluster {
   pub atom_ids: HashSet<u64>,
   pub selected: bool,
   pub frame_transform: Transform,
+  pub frame_locked_to_atoms: bool,
 }
 
 #[derive(Clone)]
@@ -116,6 +117,7 @@ impl AtomicStructure {
       atom_ids: HashSet::new(),
       selected: false,
       frame_transform: Transform::default(),
+      frame_locked_to_atoms: true,
     });
   }
 
@@ -375,29 +377,45 @@ impl AtomicStructure {
     }
   }
   
+  /// Transform a single atom by applying rotation and translation.
+  /// Updates the atom position in the grid and marks it as dirty.
+  ///
+  /// # Arguments
+  ///
+  /// * `atom_id` - The ID of the atom to transform
+  /// * `rotation` - The rotation to apply
+  /// * `translation` - The translation to apply
+  ///
+  /// # Returns
+  ///
+  /// `true` if the atom was found and transformed, `false` otherwise
+  pub fn transform_atom(&mut self, atom_id: u64, rotation: &DQuat, translation: &DVec3) -> bool {
+    let positions = if let Some(atom) = self.atoms.get_mut(&atom_id) {
+      let old_position = atom.position;
+      atom.position = rotation.mul_vec3(atom.position) + *translation;
+      Some((old_position, atom.position))
+    } else {
+      None
+    };
+    
+    // Update grid position
+    if let Some((old_position, new_position)) = positions {
+      self.remove_atom_from_grid(atom_id, &old_position);
+      self.add_atom_to_grid(atom_id, &new_position);
+      self.make_atom_dirty(atom_id);
+      true
+    } else {
+      false
+    }
+  }
+  
   pub fn transform(&mut self, rotation: &DQuat, translation: &DVec3) {
     // First, collect all atom IDs that will be transformed
     let atom_ids: Vec<u64> = self.atoms.keys().cloned().collect();
     
-    // Transform all atom positions and update grid positions
-    for atom_id in &atom_ids {
-      let positions = if let Some(atom) = self.atoms.get_mut(atom_id) {
-        let old_position = atom.position;
-        atom.position = rotation.mul_vec3(atom.position) + *translation;
-        Some((old_position, atom.position))
-      } else {
-        None
-      };
-      // Update grid position
-      if let Some((old_position, new_position)) = positions {
-        self.remove_atom_from_grid(*atom_id, &old_position);
-        self.add_atom_to_grid(*atom_id, &new_position);
-      }
-    }
-
-    // Then mark all atoms as dirty in a separate loop
+    // Transform all atoms
     for atom_id in atom_ids {
-      self.make_atom_dirty(atom_id);
+      self.transform_atom(atom_id, rotation, translation);
     }
   }
 

@@ -14,6 +14,8 @@ pub const AXIS_DIVISIONS: u32 = 16;
 #[derive(Clone)]
 pub struct ClusterFrameGadget {
     pub transform: Transform,
+    pub last_synced_transform: Transform,
+    pub frame_locked_to_atoms: bool,
 }
 
 impl Tessellatable for ClusterFrameGadget {

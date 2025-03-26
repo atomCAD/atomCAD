@@ -106,15 +106,39 @@ impl SceneComposer {
   }
 
   fn sync_gadget_to_model(&mut self) {
-    if let Some(gadget) = &self.selected_frame_gadget {
-      let selected_cluster_ids = self.get_selected_cluster_ids();
+    let selected_cluster_ids = self.get_selected_cluster_ids();
+
+    if let Some(gadget) = &mut self.selected_frame_gadget {
       
+      // Calculate the delta transform from last_synced_transform to the current transform
+      let delta_transform = gadget.transform.delta_from(&gadget.last_synced_transform);
+      
+      // Transform all atoms in all selected clusters if frame is locked to atoms
+      if gadget.frame_locked_to_atoms {
+        for cluster_id in &selected_cluster_ids {
+          if let Some(cluster) = self.model.clusters.get(&cluster_id) {
+            // Get all atom IDs in the cluster
+            let atom_ids: Vec<u64> = cluster.atom_ids.iter().copied().collect();
+            
+            // Apply the delta transform to each atom in the cluster using transform_atom
+            for atom_id in atom_ids {
+              self.model.transform_atom(atom_id, &delta_transform.rotation, &delta_transform.translation);
+            }
+          }
+        }
+      }
+
+      // Update the frame transform for single selection
       if selected_cluster_ids.len() == 1 {
         let cluster_id = selected_cluster_ids[0];
         if let Some(cluster) = self.model.clusters.get_mut(&cluster_id) {
           cluster.frame_transform = gadget.transform.clone();
+          cluster.frame_locked_to_atoms = gadget.frame_locked_to_atoms;
         }
       }
+
+      // Update the last synced transform
+      gadget.last_synced_transform = gadget.transform.clone();
     }
   }
 
@@ -133,7 +157,11 @@ impl SceneComposer {
         .collect();
     
     if selected_clusters.len() == 1 {
-        self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget { transform: selected_clusters[0].frame_transform.clone() }));
+        self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget {
+          transform: selected_clusters[0].frame_transform.clone(),
+          last_synced_transform: selected_clusters[0].frame_transform.clone(),
+          frame_locked_to_atoms: selected_clusters[0].frame_locked_to_atoms
+        }));
         return;
     }
     
@@ -153,7 +181,11 @@ impl SceneComposer {
         avg_rotation = DQuat::IDENTITY;
     }
 
-    self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget { transform: Transform::new(avg_translation, avg_rotation) }));
+    self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget {
+      transform: Transform::new(avg_translation, avg_rotation),
+      last_synced_transform: Transform::new(avg_translation, avg_rotation),
+      frame_locked_to_atoms: true
+    }));
   }
 }
 
