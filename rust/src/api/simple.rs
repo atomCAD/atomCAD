@@ -756,6 +756,26 @@ pub fn rotate_around_local_axis(axis_index: u32, angle_degrees: f64) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn is_frame_locked_to_atoms() -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      return instance.scene_composer.is_frame_locked_to_atoms();
+    }
+  }
+  
+  false
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_frame_locked_to_atoms(locked: bool) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.scene_composer.set_frame_locked_to_atoms(locked);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn greet(name: String) -> String {
     format!("Hello, {name}!")
 }

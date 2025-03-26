@@ -46,6 +46,8 @@ impl SceneComposer {
     self.selected_frame_gadget.as_ref().map(|gadget| gadget.transform.clone())
   }
 
+
+  
   pub fn translate_along_local_axis(&mut self, axis_index: u32, translation: f64) {
     if let Some(gadget) = self.selected_frame_gadget.as_mut() {
       let dir = match axis_index {
@@ -79,6 +81,18 @@ impl SceneComposer {
       
       // Apply the rotation to the current rotation
       gadget.transform.rotation = rotation * gadget.transform.rotation;
+      self.sync_gadget_to_model();
+    }
+  }
+
+  pub fn is_frame_locked_to_atoms(&self) -> bool {
+    // Return the frame_locked_to_atoms value if a frame gadget is selected, otherwise return false
+    self.selected_frame_gadget.as_ref().map_or(false, |gadget| gadget.frame_locked_to_atoms)
+  }
+
+  pub fn set_frame_locked_to_atoms(&mut self, locked: bool) {
+    if let Some(gadget) = self.selected_frame_gadget.as_mut() {
+      gadget.frame_locked_to_atoms = locked;
       self.sync_gadget_to_model();
     }
   }

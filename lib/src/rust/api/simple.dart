@@ -229,5 +229,11 @@ void rotateAroundLocalAxis(
     RustLib.instance.api.crateApiSimpleRotateAroundLocalAxis(
         axisIndex: axisIndex, angleDegrees: angleDegrees);
 
+bool isFrameLockedToAtoms() =>
+    RustLib.instance.api.crateApiSimpleIsFrameLockedToAtoms();
+
+void setFrameLockedToAtoms({required bool locked}) =>
+    RustLib.instance.api.crateApiSimpleSetFrameLockedToAtoms(locked: locked);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

@@ -39,6 +39,14 @@ class SceneComposerModel extends ChangeNotifier {
     return simple.getSelectedFrameTransform();
   }
 
+  bool isFrameLockedToAtoms() {
+    return simple.isFrameLockedToAtoms();
+  }
+
+  void setFrameLockedToAtoms(bool locked) {
+    simple.setFrameLockedToAtoms(locked: locked);
+  }
+
   void setSelectedFrameTransform(APITransform transform) {
     print(
         "setSelectedFrameTransform ${transform.translation.x} ${transform.translation.y} ${transform.translation.z}");
