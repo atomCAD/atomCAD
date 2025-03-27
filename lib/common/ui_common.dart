@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// UI Common styling for the Flutter CAD application
-/// 
+///
 /// This file contains shared styling elements, colors, and themes
 /// to maintain consistency across the application.
 
@@ -11,23 +11,27 @@ class AppColors {
   static final primaryAccent = Colors.blueGrey[700];
   static final primaryAccentLight = Colors.blueGrey[500];
   static final primaryAccentDark = Colors.blueGrey[800];
-  
+
   // Axis colors
   static const xAxisColor = Colors.deepOrange;
   static const yAxisColor = Colors.green;
   static const zAxisColor = Colors.blue;
-  
+
   // Text colors
   static final textPrimary = Colors.grey[900];
   static final textSecondary = Colors.grey[700];
   static final textOnDark = Colors.white;
-  
+
   // Selection colors
   static final selectionBackground = primaryAccent;
   static final selectionForeground = Colors.white;
-  
+
   // Divider colors
   static const dividerColor = Colors.black12;
+
+  // Background colors
+  static final sectionHeaderBackground = Colors.grey[600];
+  static final sectionHeaderForeground = Colors.white;
 }
 
 /// Text Styles
@@ -35,11 +39,11 @@ class AppTextStyles {
   // Regular text
   static const regular = TextStyle(fontSize: 14);
   static const small = TextStyle(fontSize: 13);
-  
+
   // Widget labels
   static const label = TextStyle(fontSize: 13);
   static const inputField = TextStyle(fontSize: 14);
-  
+
   // Button text
   static const buttonText = TextStyle(
     fontSize: 13,
@@ -53,16 +57,16 @@ class AppSpacing {
   static const small = 4.0;
   static const medium = 8.0;
   static const large = 16.0;
-  
+
   // Widget specific padding
   static const fieldContentPadding = EdgeInsets.symmetric(
     horizontal: 6,
     vertical: 2,
   );
-  
+
   // Visual density modifiers
   static const compactVerticalDensity = VisualDensity(vertical: -2);
-  
+
   // Standard widget sizes
   static const buttonHeight = 28.0;
   static const smallButtonWidth = 66.0;
@@ -81,7 +85,7 @@ class AppButtonStyles {
     textStyle: AppTextStyles.buttonText,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
   );
-  
+
   // Disabled button style (useful for maintaining consistent height)
   static final disabled = ElevatedButton.styleFrom(
     backgroundColor: Colors.grey[300],

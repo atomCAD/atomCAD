@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 import 'package:flutter_cad/scene_composer/cluster_list_panel.dart';
 import 'package:flutter_cad/scene_composer/scene_selection_data_widget.dart';
+import 'package:flutter_cad/common/section.dart';
 
 /// The scene composer editor.
 class SceneComposer extends StatefulWidget {
@@ -103,17 +104,27 @@ class _SceneComposerState extends State<SceneComposer> {
         Expanded(
           child: Row(
             children: [
-              // Left panel - Cluster List
+              // Left panel
               SizedBox(
                 width: 300,
                 child: Column(
                   children: [
-                    Expanded(
-                      child: ClusterListPanel(model: model),
+                    Section(
+                      title: 'Tools',
+                      content: Text('Tools go here'),
                     ),
-                    const Divider(
-                        height: 1, thickness: 1, color: Colors.black12),
-                    SceneSelectionDataWidget(model: model),
+                    Expanded(
+                      child: Section(
+                        title: 'Clusters',
+                        content: ClusterListPanel(model: model),
+                        expand: true,
+                      ),
+                    ),
+                    Section(
+                      title: 'Default tool',
+                      content: SceneSelectionDataWidget(model: model),
+                      addBottomPadding: false,
+                    ),
                   ],
                 ),
               ),

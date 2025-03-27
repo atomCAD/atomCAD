@@ -22,7 +22,7 @@ class SceneSelectionDataWidget extends StatefulWidget {
 class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
   // Constants for axis values
   static const List<String> _axisOptions = ['X', 'Y', 'Z'];
-  
+
   SceneComposerView? sceneComposerView;
   APITransform? _stagedTransform;
   String _selectedTranslationAxis = 'X';
@@ -55,20 +55,28 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
   // Convert axis name (X, Y, Z) to index (0, 1, 2)
   int _getAxisIndex(String axisName) {
     switch (axisName) {
-      case 'X': return 0;
-      case 'Y': return 1;
-      case 'Z': return 2;
-      default: return 0; // Default to X axis
+      case 'X':
+        return 0;
+      case 'Y':
+        return 1;
+      case 'Z':
+        return 2;
+      default:
+        return 0; // Default to X axis
     }
   }
 
   // Get the color for a specific axis
   Color _getAxisColor(String axisName) {
     switch (axisName) {
-      case 'X': return AppColors.xAxisColor;
-      case 'Y': return AppColors.yAxisColor;
-      case 'Z': return AppColors.zAxisColor;
-      default: return Colors.blueGrey;
+      case 'X':
+        return AppColors.xAxisColor;
+      case 'Y':
+        return AppColors.yAxisColor;
+      case 'Z':
+        return AppColors.zAxisColor;
+      default:
+        return Colors.blueGrey;
     }
   }
 
@@ -244,7 +252,8 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                 final value = double.tryParse(
                                     _translationValueController.text);
                                 if (value != null) {
-                                  final axisIndex = _getAxisIndex(_selectedTranslationAxis);
+                                  final axisIndex =
+                                      _getAxisIndex(_selectedTranslationAxis);
                                   model.translateAlongLocalAxis(
                                       axisIndex, value);
                                   // Update staged transform after modification
@@ -302,7 +311,8 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                                 final value = double.tryParse(
                                     _rotationValueController.text);
                                 if (value != null) {
-                                  final axisIndex = _getAxisIndex(_selectedRotationAxis);
+                                  final axisIndex =
+                                      _getAxisIndex(_selectedRotationAxis);
                                   model.rotateAroundLocalAxis(axisIndex, value);
                                   // Update staged transform after modification
                                   _updateStagedTransform();
@@ -314,34 +324,36 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 10),
                 const Divider(height: 1),
-                const SizedBox(height: 10),
-                
+                const SizedBox(height: 2),
+
                 // Frame lock to atoms toggle
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Lock frame to atoms:', style: AppTextStyles.label),
+                    const Text('Lock frame to atoms:',
+                        style: AppTextStyles.label),
                     const SizedBox(width: 10),
                     IconButton(
                       icon: Icon(
-                        model.isFrameLockedToAtoms() 
-                            ? Icons.lock 
+                        model.isFrameLockedToAtoms()
+                            ? Icons.lock
                             : Icons.lock_open,
-                        color: model.isFrameLockedToAtoms() 
-                            ? Colors.blue 
+                        color: model.isFrameLockedToAtoms()
+                            ? Colors.blue
                             : Colors.grey,
                       ),
-                      tooltip: model.isFrameLockedToAtoms() 
-                          ? 'Frame is locked to atoms' 
+                      tooltip: model.isFrameLockedToAtoms()
+                          ? 'Frame is locked to atoms'
                           : 'Frame is not locked to atoms',
                       onPressed: _stagedTransform == null
                           ? null
                           : () {
                               // Toggle the frame lock state
-                              model.setFrameLockedToAtoms(!model.isFrameLockedToAtoms());
+                              model.setFrameLockedToAtoms(
+                                  !model.isFrameLockedToAtoms());
                             },
                     ),
                   ],
