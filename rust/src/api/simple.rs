@@ -9,7 +9,17 @@ use glam::f64::DVec3;
 use glam::f64::DQuat;
 use glam::i32::IVec3;
 use std::collections::HashMap;
-use super::api_types::{APICuboidData, APIVec2, APISphereData, APIHalfSpaceData, APIGeoTransData, APIAtomTransData, SelectModifier, APITransform};
+use super::api_types::{
+  APICuboidData,
+  APIVec2,
+  APISphereData,
+  APIHalfSpaceData,
+  APIGeoTransData,
+  APIAtomTransData,
+  SelectModifier,
+  APITransform,
+  APISceneComposerTool
+};
 use super::api_types::APIVec3;
 use super::api_types::APIIVec3;
 use super::api_types::APICamera;
@@ -773,6 +783,37 @@ pub fn set_frame_locked_to_atoms(locked: bool) {
       instance.scene_composer.set_frame_locked_to_atoms(locked);
     }
   }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_active_scene_composer_tool() -> APISceneComposerTool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      return instance.scene_composer.get_active_tool();
+    }
+  }
+  // Default fallback
+  APISceneComposerTool::Default
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_scene_composer_tool(tool: APISceneComposerTool) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.scene_composer.set_active_tool(tool);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_available_scene_composer_tools() -> Vec<APISceneComposerTool> {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      return instance.scene_composer.get_available_tools();
+    }
+  }
+  // Default fallback - only Default tool available
+  vec![APISceneComposerTool::Default]
 }
 
 #[flutter_rust_bridge::frb(sync)]

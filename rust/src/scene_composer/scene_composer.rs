@@ -11,10 +11,23 @@ use crate::util::transform::Transform;
 use crate::common::atomic_structure_utils::{auto_create_bonds, detect_bonded_substructures};
 use crate::api::api_types::SelectModifier;
 use crate::scene_composer::cluster_frame_gadget::ClusterFrameGadget;
+use crate::api::api_types::APISceneComposerTool;
+
+pub enum SceneComposerTool {
+  Default,
+  Align(AlignToolState),
+}
+
+struct AlignToolState {
+  // IDs of atoms used as reference to align the frame
+  // can contain 0 to 3 elements (3 elements when all reference atoms are chosen)
+  pub reference_atom_ids: Vec<u64>,
+}
 
 pub struct SceneComposer {
     pub model: AtomicStructure,
     pub selected_frame_gadget: Option<Box<ClusterFrameGadget>>,
+    pub active_tool: SceneComposerTool,
 }
 
 impl SceneComposer {
@@ -22,6 +35,7 @@ impl SceneComposer {
     Self {
       model: AtomicStructure::new(),
       selected_frame_gadget: None,
+      active_tool: SceneComposerTool::Default,
     }
   }
 
@@ -111,6 +125,33 @@ impl SceneComposer {
     self.recreate_selected_frame_gadget();
   }
 
+  pub fn set_active_tool(&mut self, tool: APISceneComposerTool) {
+    self.active_tool = match tool {
+      APISceneComposerTool::Default => SceneComposerTool::Default,
+      APISceneComposerTool::Align => SceneComposerTool::Align(AlignToolState {
+        reference_atom_ids: Vec::new(),
+      }),
+    };
+  }
+
+  pub fn get_active_tool(&self) -> APISceneComposerTool {
+    match &self.active_tool {
+      SceneComposerTool::Default => APISceneComposerTool::Default,
+      SceneComposerTool::Align(_) => APISceneComposerTool::Align,
+    }
+  }
+
+  pub fn get_available_tools(&self) -> Vec<APISceneComposerTool> {
+    let mut available_tools = vec![APISceneComposerTool::Default];
+
+    if !self.get_selected_cluster_ids().is_empty() {
+      available_tools.push(APISceneComposerTool::Align);
+    }
+
+    available_tools
+  }
+
+  
   fn get_selected_cluster_ids(&self) -> Vec<u64> {
     self.model.clusters
       .iter()

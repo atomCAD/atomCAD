@@ -235,5 +235,14 @@ bool isFrameLockedToAtoms() =>
 void setFrameLockedToAtoms({required bool locked}) =>
     RustLib.instance.api.crateApiSimpleSetFrameLockedToAtoms(locked: locked);
 
+APISceneComposerTool getActiveSceneComposerTool() =>
+    RustLib.instance.api.crateApiSimpleGetActiveSceneComposerTool();
+
+void setActiveSceneComposerTool({required APISceneComposerTool tool}) =>
+    RustLib.instance.api.crateApiSimpleSetActiveSceneComposerTool(tool: tool);
+
+List<APISceneComposerTool> getAvailableSceneComposerTools() =>
+    RustLib.instance.api.crateApiSimpleGetAvailableSceneComposerTools();
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

@@ -137,6 +137,12 @@ class APIHalfSpaceData {
           shift == other.shift;
 }
 
+enum APISceneComposerTool {
+  default_,
+  align,
+  ;
+}
+
 class APISphereData {
   final APIIVec3 center;
   final int radius;

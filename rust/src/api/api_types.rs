@@ -112,3 +112,8 @@ pub struct APITransform {
   pub translation: APIVec3,
   pub rotation: APIVec3, // intrinsic euler angles in degrees
 }
+
+pub enum APISceneComposerTool {
+  Default,
+  Align,
+}

@@ -44,6 +44,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
 
   @protected
+  APISceneComposerTool dco_decode_api_scene_composer_tool(dynamic raw);
+
+  @protected
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
@@ -117,6 +120,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<APISceneComposerTool> dco_decode_list_api_scene_composer_tool(
+      dynamic raw);
 
   @protected
   List<ClusterView> dco_decode_list_cluster_view(dynamic raw);
@@ -229,6 +236,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
 
   @protected
+  APISceneComposerTool sse_decode_api_scene_composer_tool(
+      SseDeserializer deserializer);
+
+  @protected
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
@@ -310,6 +321,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<APISceneComposerTool> sse_decode_list_api_scene_composer_tool(
+      SseDeserializer deserializer);
 
   @protected
   List<ClusterView> sse_decode_list_cluster_view(SseDeserializer deserializer);
@@ -437,6 +452,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_scene_composer_tool(
+      APISceneComposerTool self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
@@ -519,6 +538,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_scene_composer_tool(
+      List<APISceneComposerTool> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_cluster_view(
