@@ -378,20 +378,27 @@ class NodeView {
 
 class SceneComposerView {
   final List<ClusterView> clusters;
+  final APISceneComposerTool activeTool;
+  final List<APISceneComposerTool> availableTools;
 
   const SceneComposerView({
     required this.clusters,
+    required this.activeTool,
+    required this.availableTools,
   });
 
   @override
-  int get hashCode => clusters.hashCode;
+  int get hashCode =>
+      clusters.hashCode ^ activeTool.hashCode ^ availableTools.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SceneComposerView &&
           runtimeType == other.runtimeType &&
-          clusters == other.clusters;
+          clusters == other.clusters &&
+          activeTool == other.activeTool &&
+          availableTools == other.availableTools;
 }
 
 enum SelectModifier {

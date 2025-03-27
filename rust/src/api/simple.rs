@@ -712,6 +712,8 @@ pub fn get_scene_composer_view() -> Option<SceneComposerView> {
 
     let mut scene_composer_view = SceneComposerView {
       clusters: Vec::new(),
+      active_tool: cad_instance.scene_composer.get_active_tool(),
+      available_tools: cad_instance.scene_composer.get_available_tools(),
     };
 
     for cluster in cad_instance.scene_composer.model.clusters.values() {
@@ -786,34 +788,12 @@ pub fn set_frame_locked_to_atoms(locked: bool) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_active_scene_composer_tool() -> APISceneComposerTool {
-  unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      return instance.scene_composer.get_active_tool();
-    }
-  }
-  // Default fallback
-  APISceneComposerTool::Default
-}
-
-#[flutter_rust_bridge::frb(sync)]
 pub fn set_active_scene_composer_tool(tool: APISceneComposerTool) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.scene_composer.set_active_tool(tool);
     }
   }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_available_scene_composer_tools() -> Vec<APISceneComposerTool> {
-  unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      return instance.scene_composer.get_available_tools();
-    }
-  }
-  // Default fallback - only Default tool available
-  vec![APISceneComposerTool::Default]
 }
 
 #[flutter_rust_bridge::frb(sync)]

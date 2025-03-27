@@ -104,10 +104,6 @@ pub struct ClusterView {
   pub selected: bool,
 }
 
-pub struct SceneComposerView {
-  pub clusters: Vec<ClusterView>,
-}
-
 pub struct APITransform {
   pub translation: APIVec3,
   pub rotation: APIVec3, // intrinsic euler angles in degrees
@@ -116,4 +112,10 @@ pub struct APITransform {
 pub enum APISceneComposerTool {
   Default,
   Align,
+}
+
+pub struct SceneComposerView {
+  pub clusters: Vec<ClusterView>,
+  pub active_tool: APISceneComposerTool,
+  pub available_tools: Vec<APISceneComposerTool>,
 }
