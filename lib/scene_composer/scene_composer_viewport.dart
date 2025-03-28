@@ -23,17 +23,27 @@ class _SceneComposerViewportState
   void onDefaultClick(Offset pointerPos) {
     final ray = getRayFromPointerPos(pointerPos);
 
-    final selectModifier = HardwareKeyboard.instance.isControlPressed
-        ? SelectModifier.toggle
-        : HardwareKeyboard.instance.isShiftPressed
-            ? SelectModifier.expand
-            : SelectModifier.replace;
+    final activeTool = widget.model.sceneComposerView?.activeTool;
 
-    widget.model.selectClusterByRay(
-      ray.start,
-      ray.direction,
-      selectModifier,
-    );
-    renderingNeeded();
+    if (activeTool == APISceneComposerTool.align) {
+      if (widget.model.selectAlignAtomByRay(ray.start, ray.direction) != null) {
+        renderingNeeded();
+      }
+    } else if (activeTool == APISceneComposerTool.default_) {
+      final selectModifier = HardwareKeyboard.instance.isControlPressed
+          ? SelectModifier.toggle
+          : HardwareKeyboard.instance.isShiftPressed
+              ? SelectModifier.expand
+              : SelectModifier.replace;
+
+      if (widget.model.selectClusterByRay(
+            ray.start,
+            ray.direction,
+            selectModifier,
+          ) !=
+          null) {
+        renderingNeeded();
+      }
+    }
   }
 }

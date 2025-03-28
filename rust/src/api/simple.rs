@@ -793,7 +793,9 @@ pub fn select_align_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Option<
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       let ray_start_dvec3 = from_api_vec3(&ray_start);
       let ray_dir_dvec3 = from_api_vec3(&ray_dir);
-      return cad_instance.scene_composer.select_align_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
+      let ret = cad_instance.scene_composer.select_align_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
+      refresh_renderer(cad_instance, "", false);
+      return ret;
     }
   }
   None
