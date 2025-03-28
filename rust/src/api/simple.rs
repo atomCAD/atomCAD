@@ -788,6 +788,18 @@ pub fn set_frame_locked_to_atoms(locked: bool) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn select_align_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Option<u64> {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      let ray_start_dvec3 = from_api_vec3(&ray_start);
+      let ray_dir_dvec3 = from_api_vec3(&ray_dir);
+      return cad_instance.scene_composer.select_align_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
+    }
+  }
+  None
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_active_scene_composer_tool(tool: APISceneComposerTool) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {

@@ -235,6 +235,11 @@ bool isFrameLockedToAtoms() =>
 void setFrameLockedToAtoms({required bool locked}) =>
     RustLib.instance.api.crateApiSimpleSetFrameLockedToAtoms(locked: locked);
 
+BigInt? selectAlignAtomByRay(
+        {required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api
+        .crateApiSimpleSelectAlignAtomByRay(rayStart: rayStart, rayDir: rayDir);
+
 void setActiveSceneComposerTool({required APISceneComposerTool tool}) =>
     RustLib.instance.api.crateApiSimpleSetActiveSceneComposerTool(tool: tool);
 

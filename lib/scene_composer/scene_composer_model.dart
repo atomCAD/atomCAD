@@ -40,6 +40,16 @@ class SceneComposerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  BigInt? selectAlignAtomByRay(
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    final ret = simple.selectAlignAtomByRay(
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+    );
+    refreshFromKernel();
+    return ret;
+  }
+
   APITransform? getSelectedFrameTransform() {
     return simple.getSelectedFrameTransform();
   }
