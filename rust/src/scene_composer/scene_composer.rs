@@ -125,6 +125,8 @@ impl SceneComposer {
     self.recreate_selected_frame_gadget();
   }
 
+
+  
   pub fn set_active_tool(&mut self, tool: APISceneComposerTool) {
     self.active_tool = match tool {
       APISceneComposerTool::Default => SceneComposerTool::Default,
@@ -151,6 +153,40 @@ impl SceneComposer {
     available_tools
   }
 
+  pub fn select_align_atom_by_id(&mut self, atom_id: u64) -> bool {
+    match &mut self.active_tool {
+      SceneComposerTool::Align(align_state) => {
+        // Check if the atom exists in the model
+        if self.model.get_atom(atom_id).is_none() {
+          return false;
+        }
+
+        // If we already have 3 reference atoms and are adding a fourth,
+        // clear the list and add this as the first atom of a new selection
+        if align_state.reference_atom_ids.len() >= 3 {
+          align_state.reference_atom_ids.clear();
+        }
+
+        // Add the atom ID to our reference list
+        align_state.reference_atom_ids.push(atom_id);
+        true
+      },
+      _ => false, // Not in align tool mode
+    }
+  }
+  
+  // Returns the atom id that was selected for alignment, or None if no atom was hit
+  pub fn select_align_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
+    // Find the atom along the ray
+    let selected_atom_id = self.model.hit_test(ray_start, ray_dir)?;
+    
+    // Try to select this atom for alignment
+    if self.select_align_atom_by_id(selected_atom_id) {
+      Some(selected_atom_id)
+    } else {
+      None
+    }
+  }
   
   fn get_selected_cluster_ids(&self) -> Vec<u64> {
     self.model.clusters
