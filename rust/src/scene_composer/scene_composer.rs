@@ -169,6 +169,10 @@ impl SceneComposer {
 
         // Add the atom ID to our reference list
         align_state.reference_atom_ids.push(atom_id);
+        
+        // Try to align the frame to the reference atoms
+        self.align_frame_to_atoms();
+        
         true
       },
       _ => false, // Not in align tool mode
@@ -186,6 +190,95 @@ impl SceneComposer {
     } else {
       None
     }
+  }
+  
+  // Aligns the selected frame to the reference atoms based on how many atoms are selected
+  fn align_frame_to_atoms(&mut self) {
+    if self.selected_frame_gadget.is_none() {
+      return;
+    }
+
+    let reference_atom_ids = match &self.active_tool {
+      SceneComposerTool::Align(align_state) => &align_state.reference_atom_ids,
+      _ => return, // Not in align tool mode
+    };
+
+    if reference_atom_ids.is_empty() {
+      return;
+    }
+    
+    // Get atom positions
+    let mut atom_positions: Vec<DVec3> = Vec::new();
+    for atom_id in reference_atom_ids {
+      if let Some(atom) = self.model.get_atom(*atom_id) {
+        atom_positions.push(atom.position);
+      } else {
+        // Skip invalid atom IDs
+        continue;
+      }
+    }
+
+    if atom_positions.is_empty() {
+      return;
+    }
+
+    let current_transform = self.selected_frame_gadget.as_ref().unwrap().transform.clone();
+    let mut new_transform = current_transform.clone();
+    
+    // Perform alignment based on how many atoms we have
+    if atom_positions.len() >= 1 {
+      // First atom: Set position to this atom
+      new_transform.translation = atom_positions[0];
+    }
+    
+    if atom_positions.len() >= 2 {
+      // Second atom: Orient X axis from first to second atom
+      let x_axis = (atom_positions[1] - atom_positions[0]).normalize();
+      
+      // Find the rotation from the current X axis (1,0,0 in local space) to the desired X axis
+      let current_x_axis = new_transform.rotation.mul_vec3(DVec3::new(1.0, 0.0, 0.0));
+      
+      // Calculate rotation to align current X axis with desired X axis
+      let rotation_to_x = DQuat::from_rotation_arc(current_x_axis, x_axis);
+      
+      // Apply this rotation to the current rotation
+      new_transform.rotation = rotation_to_x * new_transform.rotation;
+    }
+    
+    if atom_positions.len() >= 3 {
+      // Calculate the current X axis in global coordinates
+      let global_x_axis = new_transform.rotation.mul_vec3(DVec3::new(1.0, 0.0, 0.0));
+      
+      // Vector from atom1 to atom3
+      let atom1_to_atom3 = atom_positions[2] - atom_positions[0];
+      
+      // Project atom1_to_atom3 onto the X axis to get the component along X
+      let projection = atom1_to_atom3.dot(global_x_axis) * global_x_axis;
+
+      let perpendicular = atom1_to_atom3 - projection;
+
+      if perpendicular.length_squared() > 0.00001 {
+        let new_z_axis = perpendicular.normalize();
+        
+        // Get the current Z axis in global coordinates
+        let global_z_axis = new_transform.rotation.mul_vec3(DVec3::new(0.0, 0.0, 1.0));
+
+        let angle = global_z_axis.angle_between(new_z_axis);
+        
+        // Determine rotation direction (cross product gives the axis of rotation)
+        let cross = global_z_axis.cross(new_z_axis);
+        let sign = if cross.dot(global_x_axis) < 0.0 { -1.0 } else { 1.0 };
+        
+        // Create a rotation quaternion around the X axis
+        let x_rotation = DQuat::from_axis_angle(global_x_axis, sign * angle);
+        
+        // Apply this rotation to align the Z axis with the new_z_axis
+        new_transform.rotation = x_rotation * new_transform.rotation;
+      }
+    }
+    
+    // Update the frame transform
+    self.set_selected_frame_transform(new_transform);
   }
   
   fn get_selected_cluster_ids(&self) -> Vec<u64> {
