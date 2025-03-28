@@ -35,6 +35,11 @@ class SceneComposerModel extends ChangeNotifier {
     return ret;
   }
 
+  void setActiveTool(APISceneComposerTool tool) {
+    simple.setActiveSceneComposerTool(tool: tool);
+    refreshFromKernel();
+  }
+
   APITransform? getSelectedFrameTransform() {
     return simple.getSelectedFrameTransform();
   }

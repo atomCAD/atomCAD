@@ -5,6 +5,7 @@ import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 import 'package:flutter_cad/scene_composer/cluster_list_panel.dart';
 import 'package:flutter_cad/scene_composer/scene_selection_data_widget.dart';
 import 'package:flutter_cad/common/section.dart';
+import 'package:flutter_cad/scene_composer/scene_composer_tools_panel.dart';
 
 /// The scene composer editor.
 class SceneComposer extends StatefulWidget {
@@ -111,7 +112,8 @@ class _SceneComposerState extends State<SceneComposer> {
                   children: [
                     Section(
                       title: 'Tools',
-                      content: Text('Tools go here'),
+                      content: SceneComposerToolsPanel(model: model),
+                      addBottomPadding: true,
                     ),
                     Expanded(
                       child: Section(
@@ -121,7 +123,7 @@ class _SceneComposerState extends State<SceneComposer> {
                       ),
                     ),
                     Section(
-                      title: 'Default tool',
+                      title: 'Active tool',
                       content: SceneSelectionDataWidget(model: model),
                       addBottomPadding: false,
                     ),
