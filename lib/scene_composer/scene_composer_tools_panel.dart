@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// A widget that displays tool selection icons in a horizontal row.
 class SceneComposerToolsPanel extends StatelessWidget {
@@ -57,9 +58,7 @@ class SceneComposerToolsPanel extends StatelessWidget {
                 child: Tooltip(
                   message: tooltip,
                   child: Material(
-                    color: isActive
-                        ? Colors.blue.withOpacity(0.2)
-                        : Colors.transparent,
+                    color: isActive ? AppColors.primaryAccent : Colors.transparent,
                     borderRadius: BorderRadius.circular(4.0),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(4.0),
@@ -69,15 +68,9 @@ class SceneComposerToolsPanel extends StatelessWidget {
                       },
                       child: Container(
                         padding: const EdgeInsets.all(8.0),
-                        decoration: BoxDecoration(
-                          border: isActive
-                              ? Border.all(color: Colors.blue, width: 2.0)
-                              : null,
-                          borderRadius: BorderRadius.circular(4.0),
-                        ),
                         child: Icon(
                           iconData,
-                          color: isActive ? Colors.blue : Colors.black87,
+                          color: isActive ? AppColors.textOnDark : AppColors.textPrimary,
                           size: 24.0,
                         ),
                       ),
