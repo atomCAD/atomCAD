@@ -10,6 +10,9 @@ use crate::renderer::mesh::Material;
 pub const GADGET_LENGTH: f64 = 6.0;
 pub const AXIS_RADIUS: f64 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;
+pub const AXIS_CONE_RADIUS: f64 = 0.3;
+pub const AXIS_ARROW_CONE_LENGTH: f64 = 0.6;
+pub const AXIS_ARROW_CONE_OFFSET: f64 = 0.1;
 
 #[derive(Clone)]
 pub struct ClusterFrameGadget {
@@ -55,13 +58,17 @@ impl Gadget for ClusterFrameGadget {
 
 impl ClusterFrameGadget {
     fn tessellate_axis_arrow(&self, output_mesh: &mut Mesh, axis_dir: &DVec3, albedo: &Vec3) {
-        tessellator::tessellate_cylinder(
+        tessellator::tessellate_arrow(
             output_mesh,
-            &(self.transform.translation + axis_dir * GADGET_LENGTH),
             &self.transform.translation,
+            axis_dir,
             AXIS_RADIUS,
+            AXIS_CONE_RADIUS,
             AXIS_DIVISIONS,
-            &Material::new(albedo, 0.4, 0.8), 
-            true);        
+            GADGET_LENGTH,
+            AXIS_ARROW_CONE_LENGTH,
+            AXIS_ARROW_CONE_OFFSET,
+            &Material::new(albedo, 0.4, 0.8));
+
     }
 }

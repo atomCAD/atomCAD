@@ -336,3 +336,119 @@ pub fn tessellate_grid(
     );
   }
 }
+
+pub fn tessellate_cone(
+    output_mesh: &mut Mesh,
+    apex: &DVec3,
+    base_center: &DVec3,
+    radius: f64,
+    divisions: u32,
+    material: &Material,
+    include_base: bool) {
+  
+  let dir = (apex - base_center).normalize();
+  let down = -dir;
+  let rotation = DQuat::from_rotation_arc(DVec3::new(0.0, 1.0, 0.0), dir);
+  
+  // Base vertices indices will start here
+  let base_index_start = output_mesh.vertices.len() as u32;
+  
+  // First pass: create base vertices in a circular pattern
+  let mut base_positions = Vec::with_capacity(divisions as usize);
+  let mut base_normals = Vec::with_capacity(divisions as usize);
+  
+  for x in 0..divisions {
+    let u = (x as f64) / (divisions as f64); // u runs from 0 to 1
+    let theta = u * 2.0 * std::f64::consts::PI; // From 0 to 2*PI
+
+    // Calculate the position on the base circle
+    let circle_point = DVec3::new(theta.sin(), 0.0, theta.cos());
+    let base_position = base_center + rotation.mul_vec3(circle_point * radius);
+    base_positions.push(base_position);
+    
+    // Calculate normal for this segment
+    // The normal is perpendicular to both:
+    // 1. The vector from apex to base point
+    // 2. The tangent vector to the circle at that point
+    let apex_to_base = base_position - *apex;
+    let tangent = DVec3::new(theta.cos(), 0.0, -theta.sin());
+    let rotated_tangent = rotation.mul_vec3(tangent);
+    let normal = apex_to_base.cross(rotated_tangent).normalize();
+    base_normals.push(normal);
+    
+    // Add the base vertex with its normal
+    output_mesh.add_vertex(Vertex::new(
+      &base_position.as_vec3(),
+      &normal.as_vec3(),
+      material,
+    ));
+  }
+  
+  // Second pass: create triangles with separate apex vertices for each segment
+  for x in 0..divisions {
+    let current_base_index = base_index_start + x;
+    let next_base_index = base_index_start + ((x + 1) % divisions);
+    
+    // Calculate the normal for this apex instance - use the same normal as the face
+    // This is the average of the two base normals for smooth shading
+    let apex_normal = (base_normals[x as usize] + base_normals[((x + 1) % divisions) as usize]) * 0.5;
+    
+    // Add a new apex vertex with this specific normal
+    let apex_index = output_mesh.add_vertex(Vertex::new(
+      &apex.as_vec3(),
+      &apex_normal.as_vec3(),
+      material,
+    ));
+    
+    // Create triangular face connecting the base vertices to this specific apex vertex
+    output_mesh.add_triangle(
+      apex_index,
+      current_base_index,
+      next_base_index
+    );
+  }
+
+  // Optionally create the base circle
+  if include_base {
+    tessellate_circle_sheet(
+      output_mesh,
+      base_center,
+      &down,
+      radius,
+      divisions,
+      material,
+    );
+  }
+}
+
+pub fn tessellate_arrow(
+  output_mesh: &mut Mesh,
+  start_center: &DVec3,
+  axis_dir: &DVec3,
+  cylinder_radius: f64,
+  cone_radius: f64,
+  divisions: u32,
+  cylinder_length: f64,
+  cone_length: f64,
+  cone_offset: f64,
+  material: &Material) {
+    tessellate_cylinder(
+      output_mesh,
+      &(start_center + axis_dir * cylinder_length),
+      &start_center,
+      cylinder_radius,
+      divisions,
+      material,
+      true
+    );
+
+    tessellate_cone(
+      output_mesh,
+      &(start_center + axis_dir * (cylinder_length - cone_offset + cone_length)),
+      &(start_center + axis_dir * (cylinder_length - cone_offset)),
+      cone_radius,
+      divisions,
+      material,
+      true
+    );
+}
