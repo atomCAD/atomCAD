@@ -6,6 +6,7 @@ use crate::renderer::tessellator::tessellator;
 use glam::f64::DVec3;
 use glam::f32::Vec3;
 use crate::renderer::mesh::Material;
+use crate::util::hit_test_utils;
 
 pub const GADGET_LENGTH: f64 = 6.0;
 pub const AXIS_RADIUS: f64 = 0.1;
@@ -39,8 +40,25 @@ impl Tessellatable for ClusterFrameGadget {
 
 
 impl Gadget for ClusterFrameGadget {
+    // Returns the index of the handle that was hit, or None if no handle was hit
+    // handle 0: x axis translate handle
+    // handle 1: y axis translate handle
+    // handle 2: z axis translate handle
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
-        todo!();
+        let x_axis_dir = self.transform.rotation.mul_vec3(DVec3::new(1.0, 0.0, 0.0));
+        let y_axis_dir = self.transform.rotation.mul_vec3(DVec3::new(0.0, 1.0, 0.0));
+        let z_axis_dir = self.transform.rotation.mul_vec3(DVec3::new(0.0, 0.0, 1.0));
+        
+        if self.axis_arrow_hit_test(&x_axis_dir, &ray_origin, &ray_direction) {
+            return Some(0);
+        }
+        if self.axis_arrow_hit_test(&y_axis_dir, &ray_origin, &ray_direction) {
+            return Some(1);
+        }
+        if self.axis_arrow_hit_test(&z_axis_dir, &ray_origin, &ray_direction) {
+            return Some(2);
+        }
+        None
     }
 
     fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
@@ -69,6 +87,26 @@ impl ClusterFrameGadget {
             AXIS_ARROW_CONE_LENGTH,
             AXIS_ARROW_CONE_OFFSET,
             &Material::new(albedo, 0.4, 0.8));
+    }
 
+    fn axis_arrow_hit_test(
+        &self,
+        axis_dir: &DVec3,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3) -> bool {
+        match hit_test_utils::arrow_hit_test(
+            &self.transform.translation,
+            axis_dir,
+            AXIS_RADIUS,
+            AXIS_CONE_RADIUS,
+            GADGET_LENGTH,
+            AXIS_ARROW_CONE_LENGTH,
+            AXIS_ARROW_CONE_OFFSET,
+            ray_origin,
+            ray_direction
+        ) {
+            Some(_) => true,
+            None => false
+        }
     }
 }

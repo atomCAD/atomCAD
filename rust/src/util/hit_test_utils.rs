@@ -101,6 +101,8 @@ pub fn get_point_distance_to_ray(
     (*point - closest_point).length()
 }
 
+// If the ray hits the cylinder, returns the distance from the ray origin to the intersection point
+// If the ray does not hit the cylinder, returns None
 pub fn cylinder_hit_test(
     cylinder_top_center: &DVec3,
     cylinder_bottom_center: &DVec3,
@@ -246,4 +248,189 @@ fn cylinder_caps_intersection(
     } else {
         None
     }
+}
+
+// If the ray hits the cone, returns the distance from the ray origin to the intersection point
+// If the ray does not hit the cone, returns None
+pub fn cone_hit_test(
+    apex: &DVec3,
+    base_center: &DVec3,
+    radius: f64,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3) -> Option<f64> {
+    
+    // Step 1: Calculate cone properties
+    let cone_axis = *apex - *base_center;
+    let cone_height = cone_axis.length();
+    let cone_axis_normalized = cone_axis.normalize();
+    
+    // The half-angle of the cone (from axis to surface)
+    let cone_angle = (radius / cone_height).atan();
+    let cos_sqr = cone_angle.cos().powi(2);
+    
+    // Step 2: Create a rotation that maps the cone axis to the y-axis (0,1,0)
+    let y_axis = DVec3::new(0.0, 1.0, 0.0);
+    let quat = DQuat::from_rotation_arc(cone_axis_normalized, y_axis);
+    
+    // Step 3: Transform the ray to the cone's local space where cone axis is along y
+    // and apex is at (0,0,0)
+    let base_to_origin = *ray_origin - *base_center;
+    let local_ray_origin = quat.mul_vec3(base_to_origin);
+    let local_ray_direction = quat.mul_vec3(*ray_direction);
+    
+    // In local space, the apex is at (0, cone_height, 0) and base center is at (0, 0, 0)
+    
+    // Step 4: Test intersection with the conical surface
+    // Equation of cone with apex at (0, cone_height, 0) and base at y=0:
+    // x²+z² = (cone_height - y)² * (radius/cone_height)²
+    
+    // Extract components
+    let ox = local_ray_origin.x;
+    let oy = local_ray_origin.y;
+    let oz = local_ray_origin.z;
+    let dx = local_ray_direction.x;
+    let dy = local_ray_direction.y;
+    let dz = local_ray_direction.z;
+    
+    // Ratio of radius to height squared (tan²)
+    let k = (radius / cone_height).powi(2);
+    
+    // Coefficients for the quadratic equation: at² + bt + c = 0
+    let a = dx * dx + dz * dz - k * dy * dy;
+    let b = 2.0 * (ox * dx + oz * dz - k * dy * (cone_height - oy));
+    let c = ox * ox + oz * oz - k * (cone_height - oy).powi(2);
+    
+    // Check if we have a valid solution to the quadratic equation
+    let discriminant = b * b - 4.0 * a * c;
+    
+    // If a is very close to 0, ray is parallel to the cone surface
+    if a.abs() < 1e-6 {
+        if b.abs() < 1e-6 {
+            // Ray lies on the cone surface or doesn't intersect
+            return None;
+        }
+        // Linear equation: bt + c = 0
+        let t = -c / b;
+        if t <= 0.0 {
+            return None; // Intersection behind ray origin
+        }
+        
+        // Check if intersection is between apex and base
+        let hit_y = oy + t * dy;
+        if hit_y < 0.0 || hit_y > cone_height {
+            return None; // Outside cone's height bounds
+        }
+        
+        return Some(t); // Valid intersection
+    }
+    
+    if discriminant < 0.0 {
+        // No real solutions, ray doesn't intersect cone
+        return None;
+    }
+    
+    // Calculate intersection points
+    let discriminant_sqrt = discriminant.sqrt();
+    let t1 = (-b - discriminant_sqrt) / (2.0 * a);
+    let t2 = (-b + discriminant_sqrt) / (2.0 * a);
+    
+    // We need to find the t value that represents the closest valid intersection
+    let mut t_cone = std::f64::MAX;
+    let mut found = false;
+    
+    // Check if t1 is a valid intersection (within cone height)
+    if t1 > 0.0 {
+        let hit_y = oy + t1 * dy;
+        if hit_y >= 0.0 && hit_y <= cone_height {
+            // Calculate the x,z coordinates at this height to ensure it's within the cone radius at this height
+            let y_ratio = (cone_height - hit_y) / cone_height;
+            let radius_at_y = radius * y_ratio;
+            let hit_x = ox + t1 * dx;
+            let hit_z = oz + t1 * dz;
+            
+            if hit_x * hit_x + hit_z * hit_z <= radius_at_y * radius_at_y {
+                t_cone = t1;
+                found = true;
+            }
+        }
+    }
+    
+    // Check if t2 is a valid intersection and closer (within cone height)
+    if t2 > 0.0 && t2 < t_cone {
+        let hit_y = oy + t2 * dy;
+        if hit_y >= 0.0 && hit_y <= cone_height {
+            // Calculate the x,z coordinates at this height to ensure it's within the cone radius at this height
+            let y_ratio = (cone_height - hit_y) / cone_height;
+            let radius_at_y = radius * y_ratio;
+            let hit_x = ox + t2 * dx;
+            let hit_z = oz + t2 * dz;
+            
+            if hit_x * hit_x + hit_z * hit_z <= radius_at_y * radius_at_y {
+                t_cone = t2;
+                found = true;
+            }
+        }
+    }
+    
+    // Step 5: Test intersection with the base cap (the circle at the bottom)
+    let mut t_cap = None;
+    
+    // Skip base cap intersection test if ray is parallel to the base plane
+    if dy.abs() > 1e-6 {
+        // Base cap (y = 0)
+        let t_base = -oy / dy;
+        if t_base > 0.0 {
+            let hit_x = ox + t_base * dx;
+            let hit_z = oz + t_base * dz;
+            // Check if hit point is within the circle of the base
+            if hit_x * hit_x + hit_z * hit_z <= radius * radius {
+                t_cap = Some(t_base);
+            }
+        }
+    }
+    
+    // Return the closest intersection point (either with the cone surface or base cap)
+    match (found, t_cap) {
+        (true, Some(t_cap_val)) => Some(t_cone.min(t_cap_val)),
+        (true, None) => Some(t_cone),
+        (false, Some(t_cap_val)) => Some(t_cap_val),
+        (false, None) => None,
+    }
+}
+
+pub fn arrow_hit_test(
+    start_center: &DVec3,
+    axis_dir: &DVec3,
+    cylinder_radius: f64,
+    cone_radius: f64,
+    cylinder_length: f64,
+    cone_length: f64,
+    cone_offset: f64,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3) -> Option<f64> {
+
+    let cone_hit = cone_hit_test(
+        &(start_center + axis_dir * (cylinder_length - cone_offset + cone_length)),
+        &(start_center + axis_dir * (cylinder_length - cone_offset)),
+        cone_radius,
+        ray_origin,
+        ray_direction
+    );
+
+    if cone_hit.is_some() {
+        return cone_hit;
+    }
+
+    let cylinder_hit = cylinder_hit_test(
+        &(start_center + axis_dir * cylinder_length),
+        &start_center,
+        cylinder_radius,
+        ray_origin,
+        ray_direction);
+
+    if cylinder_hit.is_some() {
+        return cylinder_hit;
+    }
+
+    return None;
 }
