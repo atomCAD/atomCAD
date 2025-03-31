@@ -96,10 +96,6 @@ impl Gadget for ClusterFrameGadget {
             &ray_origin,
             &ray_direction);
         if handle_index == 3 || handle_index == 4 || handle_index == 5 {
-            println!("o: {}", offset - self.dragging_offset);
-            println!("axis_dir: {}", axis_dir);
-            let q = DQuat::from_axis_angle(axis_dir, offset - self.dragging_offset);
-            println!("q: {}", q);
             self.transform.rotation =  DQuat::from_axis_angle(axis_dir, offset - self.dragging_offset).mul_quat(self.drag_start_rotation).normalize();
         } else {
             self.transform.translation += axis_dir * (offset - self.dragging_offset);
