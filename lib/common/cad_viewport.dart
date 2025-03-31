@@ -92,6 +92,11 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   CameraTransform? _dragStartCameraTransform;
   double _cameraMovePerPixel = 0.0;
 
+  bool isGadgetDragging = false;
+
+  int draggedGadgetHandle =
+      -1; // Relevant when _dragState == ViewportDragState.gadgetDrag
+
   void onPointerSignal(PointerSignalEvent pointerSignal) {
     if (pointerSignal is PointerScrollEvent) {
       scroll(pointerSignal.localPosition, pointerSignal.scrollDelta.dy);
@@ -277,14 +282,51 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     _dragStartPointerPos = pointerPos;
   }
 
-  void defaultDrag(Offset pointerPos) {}
+  void defaultDrag(Offset pointerPos) {
+    if (isGadgetDragging) {
+      dragGadget(pointerPos);
+    }
+  }
+
+  void dragGadget(Offset pointerPos) {
+    final ray = getRayFromPointerPos(pointerPos);
+    gadgetDrag(
+        nodeNetworkName: "sample", // TODO: this should not be needed
+        handleIndex: draggedGadgetHandle,
+        rayOrigin: Vector3ToAPIVec3(ray.start),
+        rayDirection: Vector3ToAPIVec3(ray.direction));
+    syncGadgetData(nodeNetworkName: "sample");
+    renderingNeeded();
+    refreshFromKernel(); // Refresh other widgets when dragging a gadget
+  }
+
+  void refreshFromKernel() {}
 
   void startPrimaryDrag(Offset pointerPos) {
     dragState = ViewportDragState.defaultDrag;
     _dragStartPointerPos = pointerPos;
+
+    final ray = getRayFromPointerPos(pointerPos);
+
+    final hitResult = gadgetHitTest(
+        rayOrigin: Vector3ToAPIVec3(ray.start),
+        rayDirection: Vector3ToAPIVec3(ray.direction));
+
+    if (hitResult != null) {
+      print("Hit result: $hitResult");
+      isGadgetDragging = true;
+      draggedGadgetHandle = hitResult;
+      gadgetStartDrag(
+          nodeNetworkName: "sample", // TODO: this should not be needed
+          handleIndex: draggedGadgetHandle,
+          rayOrigin: Vector3ToAPIVec3(ray.start),
+          rayDirection: Vector3ToAPIVec3(ray.direction));
+      renderingNeeded();
+    }
   }
 
   void endDrag(Offset pointerPos) {
+    final oldDragState = dragState;
     var wasClick =
         ((pointerPos - _dragStartPointerPos).distance < _clickThreshold);
     if (wasClick) {
@@ -292,6 +334,13 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     }
 
     dragState = ViewportDragState.noDrag;
+
+    if (oldDragState == ViewportDragState.defaultDrag && isGadgetDragging) {
+      gadgetEndDrag(
+          nodeNetworkName: "sample"); // TODO: this should not be needed
+      renderingNeeded();
+      isGadgetDragging = false;
+    }
   }
 
   void onClick(Offset pointerPos) {

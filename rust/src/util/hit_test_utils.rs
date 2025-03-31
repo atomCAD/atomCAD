@@ -323,7 +323,7 @@ pub fn cone_hit_test(
         
         return Some(t); // Valid intersection
     }
-    
+
     if discriminant < 0.0 {
         // No real solutions, ray doesn't intersect cone
         return None;
@@ -342,16 +342,9 @@ pub fn cone_hit_test(
     if t1 > 0.0 {
         let hit_y = oy + t1 * dy;
         if hit_y >= 0.0 && hit_y <= cone_height {
-            // Calculate the x,z coordinates at this height to ensure it's within the cone radius at this height
-            let y_ratio = (cone_height - hit_y) / cone_height;
-            let radius_at_y = radius * y_ratio;
-            let hit_x = ox + t1 * dx;
-            let hit_z = oz + t1 * dz;
-            
-            if hit_x * hit_x + hit_z * hit_z <= radius_at_y * radius_at_y {
-                t_cone = t1;
-                found = true;
-            }
+            //println!("t1: {} hit_y: {}", t1, hit_y);
+            t_cone = t1;
+            found = true;
         }
     }
     
@@ -359,16 +352,9 @@ pub fn cone_hit_test(
     if t2 > 0.0 && t2 < t_cone {
         let hit_y = oy + t2 * dy;
         if hit_y >= 0.0 && hit_y <= cone_height {
-            // Calculate the x,z coordinates at this height to ensure it's within the cone radius at this height
-            let y_ratio = (cone_height - hit_y) / cone_height;
-            let radius_at_y = radius * y_ratio;
-            let hit_x = ox + t2 * dx;
-            let hit_z = oz + t2 * dz;
-            
-            if hit_x * hit_x + hit_z * hit_z <= radius_at_y * radius_at_y {
-                t_cone = t2;
-                found = true;
-            }
+            //println!("t2: {} hit_y: {}", t2, hit_y);
+            t_cone = t2;
+            found = true;
         }
     }
     

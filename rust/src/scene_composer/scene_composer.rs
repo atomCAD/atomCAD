@@ -1,5 +1,6 @@
 use crate::common::atomic_structure::AtomicStructure;
 use crate::common::atomic_structure::Cluster;
+use crate::common::gadget::Gadget;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::scene::Scene;
@@ -289,7 +290,7 @@ impl SceneComposer {
       .collect()
   }
 
-  fn sync_gadget_to_model(&mut self) {
+  pub fn sync_gadget_to_model(&mut self) {
     let selected_cluster_ids = self.get_selected_cluster_ids();
 
     if let Some(gadget) = &mut self.selected_frame_gadget {
@@ -344,7 +345,9 @@ impl SceneComposer {
         self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget {
           transform: selected_clusters[0].frame_transform.clone(),
           last_synced_transform: selected_clusters[0].frame_transform.clone(),
-          frame_locked_to_atoms: selected_clusters[0].frame_locked_to_atoms
+          frame_locked_to_atoms: selected_clusters[0].frame_locked_to_atoms,
+          drag_start_rotation: DQuat::IDENTITY,
+          dragging_offset: 0.0
         }));
         return;
     }
@@ -368,8 +371,39 @@ impl SceneComposer {
     self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget {
       transform: Transform::new(avg_translation, avg_rotation),
       last_synced_transform: Transform::new(avg_translation, avg_rotation),
-      frame_locked_to_atoms: true
+      frame_locked_to_atoms: true,
+      drag_start_rotation: DQuat::IDENTITY,
+      dragging_offset: 0.0
     }));
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------------
+  // --- Gadget delegation methods                                                                                        ---
+  // -------------------------------------------------------------------------------------------------------------------------
+
+  pub fn gadget_hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    if let Some(gadget) = &self.selected_frame_gadget {
+      return gadget.hit_test(ray_origin, ray_direction);
+    }
+    None
+  }
+
+  pub fn gadget_start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    if let Some(gadget) = &mut self.selected_frame_gadget {
+      gadget.start_drag(handle_index, ray_origin, ray_direction);
+    }
+  }
+
+  pub fn gadget_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    if let Some(gadget) = &mut self.selected_frame_gadget {
+      gadget.drag(handle_index, ray_origin, ray_direction);
+    }
+  }
+
+  pub fn gadget_end_drag(&mut self) {
+    if let Some(gadget) = &mut self.selected_frame_gadget {
+      gadget.end_drag();
+    }
   }
 }
 

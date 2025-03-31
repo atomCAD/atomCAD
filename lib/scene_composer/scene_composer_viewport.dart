@@ -46,4 +46,9 @@ class _SceneComposerViewportState
       }
     }
   }
+
+  @override
+  void refreshFromKernel() {
+    widget.model.refreshFromKernel();
+  }
 }

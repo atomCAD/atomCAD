@@ -631,7 +631,16 @@ pub fn delete_selected(node_network_name: String) {
 pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i32> {
   unsafe {
     let instance = CAD_INSTANCE.as_ref()?;
-    instance.structure_designer.gadget_hit_test(from_api_vec3(&ray_origin), from_api_vec3(&ray_direction))
+
+    match instance.active_editor {
+      Editor::StructureDesigner => {
+        return instance.structure_designer.gadget_hit_test(from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+      },
+      Editor::SceneComposer => {
+        return instance.scene_composer.gadget_hit_test(from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+      },
+      Editor::None => { None }
+    }
   }
 }
 
@@ -639,7 +648,17 @@ pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i3
 pub fn gadget_start_drag(node_network_name: String, handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
-    instance.structure_designer.gadget_start_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+
+    match instance.active_editor {
+      Editor::StructureDesigner => {
+        instance.structure_designer.gadget_start_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+      },
+      Editor::SceneComposer => {
+        instance.scene_composer.gadget_start_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+      },
+      Editor::None => {}
+    }
+
     refresh_renderer(instance, &node_network_name, false);
   }
 }
@@ -648,8 +667,18 @@ pub fn gadget_start_drag(node_network_name: String, handle_index: i32, ray_origi
 pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
-    instance.structure_designer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-    refresh_renderer(instance, &node_network_name, true);
+
+    match instance.active_editor {
+      Editor::StructureDesigner => {
+        instance.structure_designer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+        refresh_renderer(instance, &node_network_name, true);
+      },
+      Editor::SceneComposer => {
+        instance.scene_composer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
+        refresh_renderer(instance, &node_network_name, false);
+      },
+      Editor::None => {}
+    }
   }
 }
 
@@ -657,7 +686,16 @@ pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: API
 pub fn gadget_end_drag(node_network_name: String) {
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
-    instance.structure_designer.gadget_end_drag();
+
+    match instance.active_editor {
+      Editor::StructureDesigner => {
+        instance.structure_designer.gadget_end_drag();
+      },
+      Editor::SceneComposer => {
+        instance.scene_composer.gadget_end_drag();
+      },
+      Editor::None => {}
+    }
     refresh_renderer(instance, &node_network_name, false);
   }
 }
@@ -666,7 +704,16 @@ pub fn gadget_end_drag(node_network_name: String) {
 pub fn sync_gadget_data(node_network_name: String) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      return instance.structure_designer.sync_gadget_data(&node_network_name);
+      match instance.active_editor {
+        Editor::StructureDesigner => {
+          return instance.structure_designer.sync_gadget_data(&node_network_name);
+        },
+        Editor::SceneComposer => {
+          instance.scene_composer.sync_gadget_to_model();
+          return true;
+        },
+        Editor::None => { false }
+      }
     } else {
       false
     }
