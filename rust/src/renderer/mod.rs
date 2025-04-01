@@ -4,3 +4,4 @@ pub mod mesh;
 pub mod gpu_mesh;
 pub mod tessellator;
 pub mod camera;
+pub mod line_mesh;

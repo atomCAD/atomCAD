@@ -4,13 +4,15 @@ use wgpu::util::DeviceExt;
 use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
+use super::gpu_mesh::MeshType;
+use crate::renderer::line_mesh::LineVertex;
+use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
 use super::tessellator::surface_point_tessellator;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
 use glam::f64::DVec3;
-use glam::f64::DMat4;
 use crate::common::scene::Scene;
 use std::time::Instant;
 use std::sync::Mutex;
@@ -55,9 +57,11 @@ const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 pub struct Renderer  {
     device: Device,
     queue: Queue,
-    pipeline: RenderPipeline,  
+    triangle_pipeline: RenderPipeline,  
+    line_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
+    background_mesh: GPUMesh,
     texture: Texture,
     texture_view: TextureView,
     depth_texture: Texture,
@@ -99,8 +103,9 @@ impl Renderer {
             .await
             .expect("Failed to create device");
 
-        let main_mesh = GPUMesh::new_empty(&device);
-        let lightweight_mesh = GPUMesh::new_empty(&device);
+        let main_mesh = GPUMesh::new_empty_triangle_mesh(&device);
+        let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device);
+        let background_mesh = GPUMesh::new_empty_line_mesh(&device);
 
         let texture_size = Extent3d {
             width: width,
@@ -133,10 +138,16 @@ impl Renderer {
           }
         );
 
-        // Shader module
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
+        // Triangle shader module
+        let triangle_shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Triangle Shader"),
             source: ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
+        });
+
+        // Line shader module
+        let line_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Line Shader"),
+            source: ShaderSource::Wgsl(include_str!("line_mesh.wgsl").into()),
         });
 
         let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -166,18 +177,19 @@ impl Renderer {
           label: Some("camera_bind_group"),
         });
 
-        // Pipeline setup
+        // Pipeline layout - shared between triangle and line pipelines
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&camera_bind_group_layout],
             push_constant_ranges: &[],
         });
 
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+        // Triangle pipeline
+        let triangle_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Triangle Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: VertexState {
-                module: &shader,
+                module: &triangle_shader,
                 entry_point: Some("vs_main"),
                 buffers: &[
                   Vertex::desc(),
@@ -185,7 +197,7 @@ impl Renderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
-                module: &shader,
+                module: &triangle_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
@@ -207,38 +219,89 @@ impl Renderer {
               conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-              format: DEPTH_FORMAT,
-              depth_write_enabled: true,
-              depth_compare: wgpu::CompareFunction::Less, // Typical for 3D rendering
-              stencil: wgpu::StencilState::default(),
-              bias: wgpu::DepthBiasState::default(),
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState {
-              count: 1, // 2.
-              mask: !0, // 3.
-              alpha_to_coverage_enabled: false, // 4.
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
             },
             multiview: None,
             cache: None,
         });
 
-        Self {
-            device,
-            queue,
-            pipeline,
-            main_mesh,
-            lightweight_mesh,
-            texture,
-            texture_view,
-            depth_texture,
-            depth_texture_view,
-            output_buffer,
-            texture_size,
-            camera,
-            camera_buffer,
-            camera_bind_group,
-            render_mutex: Mutex::new(()),
-        }
+        // Line pipeline
+        let line_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Line Render Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &line_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[
+                  LineVertex::desc(),
+                ],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &line_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::REPLACE),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+              topology: wgpu::PrimitiveTopology::LineList,
+              strip_index_format: None,
+              front_face: wgpu::FrontFace::Ccw,
+              cull_mode: None, // Don't cull lines
+              polygon_mode: wgpu::PolygonMode::Fill,
+              unclipped_depth: false,
+              conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        let result = Self {
+          device,
+          queue,
+          triangle_pipeline,
+          line_pipeline,
+          main_mesh,
+          lightweight_mesh,
+          background_mesh,
+          texture,
+          texture_view,
+          depth_texture,
+          depth_texture_view,
+          output_buffer,
+          texture_size,
+          camera,
+          camera_buffer,
+          camera_bind_group,
+          render_mutex: Mutex::new(()),
+        };
+
+        result
     }
 
     pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
@@ -333,6 +396,20 @@ impl Renderer {
         println!("refresh took: {:?}", start_time.elapsed());
     }
 
+    pub fn refresh_background(&mut self) {
+        let _lock = self.render_mutex.lock().unwrap();
+        
+        // Create a new LineMesh for the coordinate system
+        let mut line_mesh = LineMesh::new();
+        
+        // Use the coordinate system tessellator to populate it
+        crate::renderer::tessellator::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh);
+        
+        // Update the background mesh with the line mesh
+        self.background_mesh = GPUMesh::new_empty_line_mesh(&self.device);
+        self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "background");
+    }
+
     pub fn render(&mut self) -> Vec<u8> {
         // Acquire lock before rendering
         let _lock = self.render_mutex.lock().unwrap();
@@ -373,8 +450,11 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
-            render_pass.set_pipeline(&self.pipeline);
+            // Set camera bind group (shared for both pipelines)
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            
+            // Draw background mesh
+            self.render_mesh(&mut render_pass, &self.background_mesh);
             
             // Draw main mesh
             self.render_mesh(&mut render_pass, &self.main_mesh);
@@ -416,7 +496,7 @@ impl Renderer {
 
         // Get the data and handle alignment if needed
         let data = if aligned_bytes_per_row != bytes_per_row {
-            let mut aligned_data = buffer_slice.get_mapped_range();
+            let aligned_data = buffer_slice.get_mapped_range();
             let mut data = Vec::with_capacity((bytes_per_row * self.texture_size.height) as usize);
             
             // Extract each row, skipping the padding
@@ -441,6 +521,16 @@ impl Renderer {
     // Private helper method to render a GPU mesh
     fn render_mesh<'a>(&self, render_pass: &mut RenderPass<'a>, mesh: &GPUMesh) {
         if mesh.num_indices > 0 {
+            // Set the appropriate pipeline based on mesh type
+            match mesh.mesh_type {
+                MeshType::Triangles => {
+                    render_pass.set_pipeline(&self.triangle_pipeline);
+                },
+                MeshType::Lines => {
+                    render_pass.set_pipeline(&self.line_pipeline);
+                }
+            }
+
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
