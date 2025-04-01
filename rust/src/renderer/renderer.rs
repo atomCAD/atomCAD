@@ -79,13 +79,14 @@ impl Renderer {
         //let start_time = Instant::now();
 
         let camera = Camera {
-          // position the camera 20 units back
+          // position the camera at new coordinates
           // +z is out of the screen
-          eye: DVec3::new(0.0, 0.0, 20.0),
+          eye: DVec3::new(0.0, 10.0, 30.0),
           // have it look at the origin
           target: DVec3::new(0.0, 0.0, 0.0),
-          // which way is "up"
-          up: DVec3::new(0.0, 1.0, 0.0),
+          // calculate up vector perpendicular to (target - eye)
+          // The view direction is (0,-10,-30), so a perpendicular vector with positive y is (0,0.95,-0.32)
+          up: DVec3::new(0.0, 0.95, -0.32),
           aspect: width as f64 / height as f64,
           fovy: std::f64::consts::PI * 0.15,
           znear: 0.5,
