@@ -15,6 +15,19 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
 
     let atom_ids: Vec<u64> = structure.atoms.keys().cloned().collect();
     
+    let mut max_atom_radius = 0.0;
+    for &atom_id in &atom_ids {
+        if let Some(atom) = structure.get_atom(atom_id) {
+            let atom_radius = ATOM_INFO.get(&atom.atomic_number)
+                .unwrap_or(&DEFAULT_ATOM_INFO)
+                .radius;
+            
+            if atom_radius > max_atom_radius {
+                max_atom_radius = atom_radius;
+            }
+        }
+    }
+
     for &atom_id in &atom_ids {
         if let Some(atom) = structure.get_atom(atom_id) {
             let atom_pos = atom.position;
@@ -22,12 +35,12 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
                 .unwrap_or(&DEFAULT_ATOM_INFO)
                 .radius;
             
-            // Get maximum possible bond distance for this atom
-            // We need to use a larger radius to find all potential bonds
-            // since we don't know the radius of the other atoms yet
-            let max_search_radius = (atom_radius + MAX_SUPPORTED_ATOMIC_RADIUS ) * BOND_DISTANCE_MULTIPLIER;
+            // MAke the maximum possible bond distance for this atom the search radius.
+            // We need to use the max atom radius
+            // since we don't know the radius of the other atom here
+            let search_radius = (atom_radius + max_atom_radius + 0.01) * BOND_DISTANCE_MULTIPLIER;
             
-            let nearby_atoms = structure.get_atoms_in_radius(&atom_pos, max_search_radius);
+            let nearby_atoms = structure.get_atoms_in_radius(&atom_pos, search_radius);
             
             // Check each nearby atom
             for &nearby_atom_id in &nearby_atoms {
