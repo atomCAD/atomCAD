@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
-import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/common/ui_common.dart';
+import 'package:flutter_cad/scene_composer/transform_control_widget.dart';
 
 /// A widget that displays and allows editing of the selected frame transformation.
 class SceneSelectionDataWidget extends StatefulWidget {
@@ -152,58 +152,12 @@ class _SceneSelectionDataWidgetState extends State<SceneSelectionDataWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Translation section
-                Vec3Input(
-                  label: 'Translation',
-                  value: _stagedTransform?.translation ??
-                      APIVec3(x: 0, y: 0, z: 0),
-                  onChanged: (value) {
-                    print("onChanged ${value.x} ${value.y} ${value.z}");
-                    setState(() {
-                      if (_stagedTransform != null) {
-                        _stagedTransform = APITransform(
-                          translation: value,
-                          rotation: _stagedTransform!.rotation,
-                        );
-                      }
-                    });
+                // Transform control section
+                TransformControlWidget(
+                  initialTransform: _stagedTransform,
+                  onApplyTransform: (transform) {
+                    model.setSelectedFrameTransform(transform);
                   },
-                ),
-
-                const SizedBox(height: 6),
-
-                // Rotation section
-                Vec3Input(
-                  label: 'Rotation',
-                  value:
-                      _stagedTransform?.rotation ?? APIVec3(x: 0, y: 0, z: 0),
-                  onChanged: (value) {
-                    setState(() {
-                      if (_stagedTransform != null) {
-                        _stagedTransform = APITransform(
-                          translation: _stagedTransform!.translation,
-                          rotation: value,
-                        );
-                      }
-                    });
-                  },
-                ),
-
-                const SizedBox(height: 6),
-
-                // Apply button
-                SizedBox(
-                  width: double.infinity,
-                  height: 32,
-                  child: ElevatedButton(
-                    onPressed: _stagedTransform == null
-                        ? null
-                        : () {
-                            model.setSelectedFrameTransform(_stagedTransform!);
-                          },
-                    style: AppButtonStyles.primary,
-                    child: const Text('Apply Transform'),
-                  ),
                 ),
 
                 const SizedBox(height: 10),
