@@ -75,6 +75,15 @@ class SceneComposerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  APITransform getCameraTransform() {
+    return simple.getCameraTransform();
+  }
+
+  void setCameraTransform(APITransform transform) {
+    simple.setCameraTransform(transform: transform);
+    refreshFromKernel();
+  }
+
   void translateAlongLocalAxis(int axisIndex, double translation) {
     simple.translateAlongLocalAxis(
         axisIndex: axisIndex, translation: translation);

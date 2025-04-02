@@ -6,6 +6,9 @@ import 'package:flutter_cad/scene_composer/cluster_list_panel.dart';
 import 'package:flutter_cad/scene_composer/scene_selection_data_widget.dart';
 import 'package:flutter_cad/common/section.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_tools_panel.dart';
+import 'package:flutter_cad/scene_composer/transform_control_widget.dart';
+import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:provider/provider.dart';
 
 /// The scene composer editor.
 class SceneComposer extends StatefulWidget {
@@ -20,11 +23,20 @@ class _SceneComposerState extends State<SceneComposer> {
   final _viewportKey = GlobalKey();
 
   late SceneComposerModel model;
+  APITransform? _stagedCameraTransform;
+  SceneComposerView? _sceneComposerView;
 
   @override
   void initState() {
     super.initState();
     model = SceneComposerModel();
+    _updateStagedCameraTransform();
+  }
+
+  void _updateStagedCameraTransform() {
+    setState(() {
+      _stagedCameraTransform = model.getCameraTransform();
+    });
   }
 
   Future<void> _importXYZ() async {
@@ -68,97 +80,120 @@ class _SceneComposerState extends State<SceneComposer> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          height: 30,
-          decoration: const BoxDecoration(
-            color: Colors.grey,
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.black26,
-                width: 1,
+    return ChangeNotifierProvider.value(
+      value: model,
+      child: Column(
+        children: [
+          Container(
+            height: 30,
+            decoration: const BoxDecoration(
+              color: Colors.grey,
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.black26,
+                  width: 1,
+                ),
               ),
             ),
-          ),
-          child: Row(
-            children: [
-              MenuAnchor(
-                builder: (context, controller, child) {
-                  return TextButton(
-                    onPressed: () {
-                      if (controller.isOpen) {
-                        controller.close();
-                      } else {
-                        controller.open();
-                      }
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    child: const Text('File'),
-                  );
-                },
-                menuChildren: [
-                  MenuItemButton(
-                    onPressed: _importXYZ,
-                    child: const Text('Import XYZ'),
-                  ),
-                  MenuItemButton(
-                    onPressed: _exportXYZ,
-                    child: const Text('Export XYZ'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Row(
-            children: [
-              // Left panel
-              SizedBox(
-                width: 300,
-                child: Column(
-                  children: [
-                    Section(
-                      title: 'Tools',
-                      content: SceneComposerToolsPanel(model: model),
-                      addBottomPadding: true,
-                    ),
-                    Expanded(
-                      child: Section(
-                        title: 'Clusters',
-                        content: ClusterListPanel(model: model),
-                        expand: true,
+            child: Row(
+              children: [
+                MenuAnchor(
+                  builder: (context, controller, child) {
+                    return TextButton(
+                      onPressed: () {
+                        if (controller.isOpen) {
+                          controller.close();
+                        } else {
+                          controller.open();
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.black87,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                       ),
+                      child: const Text('File'),
+                    );
+                  },
+                  menuChildren: [
+                    MenuItemButton(
+                      onPressed: _importXYZ,
+                      child: const Text('Import XYZ'),
                     ),
-                    Section(
-                      title: 'Active tool',
-                      content: SceneSelectionDataWidget(model: model),
-                      addBottomPadding: false,
+                    MenuItemButton(
+                      onPressed: _exportXYZ,
+                      child: const Text('Export XYZ'),
                     ),
                   ],
                 ),
-              ),
-              // Vertical divider
-              const VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: Colors.black12,
-              ),
-              // Main viewport
-              Expanded(
-                child: SceneComposerViewport(
-                  key: _viewportKey,
-                  model: model,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+          Expanded(
+            child: Row(
+              children: [
+                // Left panel
+                SizedBox(
+                  width: 300,
+                  child: Column(
+                    children: [
+                      Section(
+                        title: 'Tools',
+                        content: SceneComposerToolsPanel(model: model),
+                        addBottomPadding: true,
+                      ),
+                      Expanded(
+                        child: Section(
+                          title: 'Clusters',
+                          content: ClusterListPanel(model: model),
+                          expand: true,
+                        ),
+                      ),
+                      Consumer<SceneComposerModel>(
+                        builder: (context, sceneModel, child) {
+                          // Update staged camera transform when the model view changes
+                          if (_sceneComposerView != sceneModel.sceneComposerView) {
+                            _stagedCameraTransform = sceneModel.getCameraTransform();
+                          }
+                          _sceneComposerView = sceneModel.sceneComposerView;
+                          
+                          return Section(
+                            title: 'Camera',
+                            content: TransformControlWidget(
+                              initialTransform: _stagedCameraTransform,
+                              onApplyTransform: (transform) {
+                                sceneModel.setCameraTransform(transform);
+                              },
+                            ),
+                            addBottomPadding: true,
+                          );
+                        },
+                      ),
+                      Section(
+                        title: 'Active tool',
+                        content: SceneSelectionDataWidget(model: model),
+                        addBottomPadding: false,
+                      ),
+                    ],
+                  ),
+                ),
+                // Vertical divider
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: Colors.black12,
+                ),
+                // Main viewport
+                Expanded(
+                  child: SceneComposerViewport(
+                    key: _viewportKey,
+                    model: model,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

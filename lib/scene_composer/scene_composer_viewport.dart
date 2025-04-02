@@ -1,8 +1,5 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/cad_viewport.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_cad/src/rust/api/simple.dart';
-import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 
@@ -45,6 +42,18 @@ class _SceneComposerViewportState
         renderingNeeded();
       }
     }
+  }
+
+  @override
+  int transformDraggedGadgetHandle(int handleIndex) {
+    // If the shift key ispressed when we start the drag of the axes,
+    // we rotate instead of translating.
+    if (handleIndex >= 0 &&
+        handleIndex <= 2 &&
+        HardwareKeyboard.instance.isShiftPressed) {
+      return handleIndex + 3;
+    }
+    return handleIndex;
   }
 
   @override

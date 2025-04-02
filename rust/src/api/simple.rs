@@ -814,7 +814,7 @@ pub fn get_camera_transform() -> APITransform {
       return to_api_transform(&transform);
     }
     // Return identity transform as fallback
-    APITransform::default()
+    to_api_transform(&Transform::default())
   }
 }
 

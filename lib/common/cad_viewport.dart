@@ -155,6 +155,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void _moveCameraAndRender(
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) {
     moveCamera(eye: eye, target: target, up: up);
+    refreshFromKernel();
     renderingNeeded();
   }
 
@@ -315,7 +316,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     if (hitResult != null) {
       print("Hit result: $hitResult");
       isGadgetDragging = true;
-      draggedGadgetHandle = hitResult;
+      draggedGadgetHandle = transformDraggedGadgetHandle(hitResult);
       gadgetStartDrag(
           nodeNetworkName: "sample", // TODO: this should not be needed
           handleIndex: draggedGadgetHandle,
@@ -323,6 +324,10 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
           rayDirection: Vector3ToAPIVec3(ray.direction));
       renderingNeeded();
     }
+  }
+
+  int transformDraggedGadgetHandle(int handleIndex) {
+    return handleIndex;
   }
 
   void endDrag(Offset pointerPos) {
