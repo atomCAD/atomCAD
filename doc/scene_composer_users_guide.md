@@ -93,3 +93,10 @@ When the default tool is active you can also move the frame from the UI:
 
 In the align tool, you can align selected clusters to atoms.
 In the align tool panel you can read the instructions to select the 3 atoms to align to.
+
+- When selecting the first atom, the frame's origin is set to the atom's position. MAke sure to have the 'lock frame to atoms' turned off if you want to align the frame to atoms in the selection!
+- When selecting the second atom, the frame's x axis is set to the vector from the first atom to the second atom.
+- When selecting the third atom, the frame's y axis is set in such a way that the 3 atoms are all on the local XZ plane of the frame.
+
+When 3 atoms are selected, the frame is fully aligned to the 3 atoms. Now if you select an atom again,
+the process starts over.
