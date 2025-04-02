@@ -222,6 +222,12 @@ void setSelectedFrameTransform({required APITransform transform}) =>
     RustLib.instance.api
         .crateApiSimpleSetSelectedFrameTransform(transform: transform);
 
+APITransform getCameraTransform() =>
+    RustLib.instance.api.crateApiSimpleGetCameraTransform();
+
+void setCameraTransform({required APITransform transform}) =>
+    RustLib.instance.api.crateApiSimpleSetCameraTransform(transform: transform);
+
 void translateAlongLocalAxis(
         {required int axisIndex, required double translation}) =>
     RustLib.instance.api.crateApiSimpleTranslateAlongLocalAxis(

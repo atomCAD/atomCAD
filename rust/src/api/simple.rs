@@ -807,6 +807,29 @@ pub fn set_selected_frame_transform(transform: APITransform) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_camera_transform() -> APITransform {
+  unsafe {
+    if let Some(instance) = &CAD_INSTANCE {
+      let transform = instance.renderer.get_camera_transform();
+      return to_api_transform(&transform);
+    }
+    // Return identity transform as fallback
+    APITransform::default()
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_camera_transform(transform: APITransform) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let transform = from_api_transform(&transform);
+      instance.renderer.set_camera_transform(&transform);
+      refresh_renderer(instance, "", false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn translate_along_local_axis(axis_index: u32, translation: f64) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {

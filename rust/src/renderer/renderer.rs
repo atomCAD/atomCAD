@@ -545,6 +545,72 @@ impl Renderer {
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
 
+    /// Get the camera transform representation
+    /// 
+    /// Returns a Transform where:
+    /// - translation corresponds to the camera eye position
+    /// - rotation orients from the identity orientation (looking down -Z with up as +Y)
+    ///   to the current camera orientation
+    pub fn get_camera_transform(&self) -> crate::util::transform::Transform {
+        use crate::util::transform::Transform;
+
+        // For the camera transform, translation is just the eye position
+        let translation = self.camera.eye;
+
+        // Calculate the rotation quaternion that transforms from the identity orientation
+        // (where forward is -Z and up is +Y) to the current camera orientation
+
+        // First, calculate the camera's basis vectors
+        let forward = (self.camera.target - self.camera.eye).normalize();
+        let right = forward.cross(self.camera.up).normalize();
+        let up = right.cross(forward).normalize(); // Recalculate up to ensure orthogonality
+
+        // The identity orientation has:
+        // forward = (0, 0, -1)
+        // up = (0, 1, 0)
+        // right = (1, 0, 0)
+
+        // Create a rotation that transforms from identity to current orientation
+        // We need to construct a quaternion from these basis vectors
+        let mat = DMat4::from_cols(
+            DVec4::new(right.x, right.y, right.z, 0.0),
+            DVec4::new(up.x, up.y, up.z, 0.0),
+            DVec4::new(-forward.x, -forward.y, -forward.z, 0.0), // Negate forward since -Z is forward
+            DVec4::new(0.0, 0.0, 0.0, 1.0)
+        );
+
+        // Extract quaternion from the rotation matrix
+        let rotation = DQuat::from_mat4(&mat);
+
+        Transform::new(translation, rotation)
+    }
+
+    /// Set the camera from a transform representation
+    /// 
+    /// The transform's:
+    /// - translation becomes the camera eye position
+    /// - rotation orients from the identity view (looking down -Z with up as +Y)
+    ///   to the desired camera orientation
+    pub fn set_camera_transform(&mut self, transform: &crate::util::transform::Transform) {
+        // Set eye position directly from translation
+        self.camera.eye = transform.translation;
+
+        // The identity view looks down -Z with up as +Y
+        let identity_forward = DVec3::new(0.0, 0.0, -1.0);
+        let identity_up = DVec3::new(0.0, 1.0, 0.0);
+
+        // Apply rotation to get current orientation vectors
+        let forward = transform.rotation.mul_vec3(identity_forward);
+        let up = transform.rotation.mul_vec3(identity_up);
+
+        // Calculate target from eye and forward
+        self.camera.target = self.camera.eye + forward;
+        self.camera.up = up;
+
+        // Update the GPU buffers
+        self.update_camera_buffer();
+    }
+
     // Helper method to create texture
     fn create_texture(device: &Device, texture_size: &Extent3d) -> Texture {
         device.create_texture(&TextureDescriptor {
