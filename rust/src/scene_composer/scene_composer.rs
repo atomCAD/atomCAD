@@ -428,7 +428,7 @@ impl SceneComposer {
         for (i, atom_id) in reference_atom_ids.iter().enumerate() {
           if let Some(atom) = self.model.get_atom(*atom_id) {
             result.push_str(&format!(
-              "Atom {}: id: {} X: {} Y: {} Z: {}\n",
+              "Atom {}: id: {}\nX: {:.6} Y: {:.6} Z: {:.6}\n",
               i + 1,
               atom_id,
               atom.position.x,

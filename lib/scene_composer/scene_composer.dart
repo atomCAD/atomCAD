@@ -168,10 +168,34 @@ class _SceneComposerState extends State<SceneComposer> {
                           );
                         },
                       ),
-                      Section(
-                        title: 'Active tool',
-                        content: SceneSelectionDataWidget(model: model),
-                        addBottomPadding: false,
+                      Consumer<SceneComposerModel>(
+                        builder: (context, sceneModel, child) {
+                          final activeTool = sceneModel.sceneComposerView?.activeTool;
+                          
+                          if (activeTool == APISceneComposerTool.align) {
+                            return Section(
+                              title: 'Align tool',
+                              content: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(
+                                  sceneModel.alignToolStateText,
+                                  style: const TextStyle(
+                                    fontSize: 14, 
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              addBottomPadding: false,
+                            );
+                          } else {
+                            // Default tool or null
+                            return Section(
+                              title: 'Default tool',
+                              content: SceneSelectionDataWidget(model: sceneModel),
+                              addBottomPadding: false,
+                            );
+                          }
+                        },
                       ),
                     ],
                   ),

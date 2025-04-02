@@ -6,6 +6,7 @@ import 'package:flutter_cad/common/api_utils.dart';
 
 class SceneComposerModel extends ChangeNotifier {
   SceneComposerView? sceneComposerView;
+  String alignToolStateText = '';
 
   SceneComposerModel() {
     refreshFromKernel();
@@ -98,10 +99,7 @@ class SceneComposerModel extends ChangeNotifier {
 
   void refreshFromKernel() {
     sceneComposerView = simple.getSceneComposerView();
+    alignToolStateText = simple.getAlignToolStateText();
     notifyListeners();
-  }
-
-  String getAlignToolStateText() {
-    return simple.getAlignToolStateText();
   }
 }
