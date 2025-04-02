@@ -409,6 +409,47 @@ impl SceneComposer {
       gadget.end_drag();
     }
   }
+
+  pub fn get_align_tool_state_text(&self) -> String {
+    // Check if the active tool is the align tool
+    match &self.active_tool {
+      SceneComposerTool::Align(align_state) => {
+        let reference_atom_ids = &align_state.reference_atom_ids;
+        
+        // If no atoms are selected
+        if reference_atom_ids.is_empty() {
+          return String::from("Please select atom 1!");
+        }
+        
+        // Start building the output string
+        let mut result = String::new();
+        
+        // Add information for each selected atom
+        for (i, atom_id) in reference_atom_ids.iter().enumerate() {
+          if let Some(atom) = self.model.get_atom(*atom_id) {
+            result.push_str(&format!(
+              "Atom {}: id: {} X: {} Y: {} Z: {}\n",
+              i + 1,
+              atom_id,
+              atom.position.x,
+              atom.position.y,
+              atom.position.z
+            ));
+          }
+        }
+        
+        // Add appropriate prompt based on how many atoms are selected
+        if reference_atom_ids.len() == 1 {
+          result.push_str("Please select atom 2!");
+        } else if reference_atom_ids.len() == 2 {
+          result.push_str("Please select atom 3!");
+        }
+        
+        result
+      },
+      _ => String::new(), // Not in align tool mode, return empty string
+    }
+  }
 }
 
 impl<'a> Scene<'a> for SceneComposer {

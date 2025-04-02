@@ -100,4 +100,8 @@ class SceneComposerModel extends ChangeNotifier {
     sceneComposerView = simple.getSceneComposerView();
     notifyListeners();
   }
+
+  String getAlignToolStateText() {
+    return simple.getAlignToolStateText();
+  }
 }

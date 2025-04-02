@@ -893,6 +893,22 @@ pub fn set_active_scene_composer_tool(tool: APISceneComposerTool) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_align_tool_state_text() -> String {
+  let start_time = Instant::now();
+  
+  let result = unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      cad_instance.scene_composer.get_align_tool_state_text()
+    } else {
+      String::new()
+    }
+  };
+  
+  println!("get_align_tool_state_text took: {:?}", start_time.elapsed());
+  result
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn greet(name: String) -> String {
     format!("Hello, {name}!")
 }

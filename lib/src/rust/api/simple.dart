@@ -252,5 +252,8 @@ BigInt? selectAlignAtomByRay(
 void setActiveSceneComposerTool({required APISceneComposerTool tool}) =>
     RustLib.instance.api.crateApiSimpleSetActiveSceneComposerTool(tool: tool);
 
+String getAlignToolStateText() =>
+    RustLib.instance.api.crateApiSimpleGetAlignToolStateText();
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
