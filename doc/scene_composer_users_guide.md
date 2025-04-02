@@ -52,6 +52,8 @@ You can navigate in the viewport the following way:
 
 ## Tools Panel
 
+![Tools panel](./scene_composer_users_guide_images/tools.png)
+
 The tools panel contains the following tools:
 
 - Default tool
@@ -59,20 +61,35 @@ The tools panel contains the following tools:
 
 ### Default Tool
 
+![Default tool](./scene_composer_users_guide_images/default_tool.png)
+
 In the default tool, you can select clusters and move them in the 3D viewport using local frame gadgets.
 
 Clicking on an atom when in this tool, will select the cluster that contains the atom.
 Shift click adds to the selection.
 Control click inverts the selection for the newly selected cluster.
 
+
+![Gadget](./scene_composer_users_guide_images/gadget.png)
+
 When a set of clusters is selected, you can move them in the 3D viewport using local frame gadget.
 Dragging the local axes the frame is moved along the axis.
 Control dragging the local axes the frame is rotated around the axis.
 Dragging the cylinder at the end of the axes also rotates around the axis.
 
+Clicking on the icon at 'Lock frame to atoms' will lock or unlock the frame to the atoms in the selection.
+Move the frame in an unlocked state when you want to align the frame to atoms in the selection. (For this,
+you can use the align tool in an unlocked state.)
+Move the frame in a locked state when you want to move the atoms in the selection.
+
+When the default tool is active you can also move the frame from the UI:
+- You can set the absolute global position and orientation.
+- You can translate along an axis with an exact amount in Angstroms.
+- You can rotate around an axis with an exact amount in degrees.
+
 ### Align Tool
+
+![Align tool](./scene_composer_users_guide_images/align_tool.png)
 
 In the align tool, you can align selected clusters to atoms.
 In the align tool panel you can read the instructions to select the 3 atoms to align to.
-
-
