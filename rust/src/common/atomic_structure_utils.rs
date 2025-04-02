@@ -1,7 +1,6 @@
 use crate::common::atomic_structure::AtomicStructure;
 use crate::common::common_constants::ATOM_INFO;
 use crate::common::common_constants::DEFAULT_ATOM_INFO;
-use crate::common::common_constants::MAX_SUPPORTED_ATOMIC_RADIUS;
 
 use glam::f64::DVec3;
 use std::collections::HashSet;

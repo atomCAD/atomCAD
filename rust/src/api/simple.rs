@@ -732,6 +732,17 @@ pub fn import_xyz(file_path: &str) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn export_xyz(file_path: &str) -> bool {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.scene_composer.export_xyz(file_path).is_ok()
+    } else {
+      false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn select_cluster_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> Option<u64> {
   unsafe {
     let instance = CAD_INSTANCE.as_mut()?;

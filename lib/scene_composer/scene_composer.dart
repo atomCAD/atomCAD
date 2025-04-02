@@ -49,9 +49,21 @@ class _SceneComposerState extends State<SceneComposer> {
     }
   }
 
-  void _exportXYZ() {
-    // TODO: Implement XYZ file export functionality
-    debugPrint('Export XYZ file selected');
+  Future<void> _exportXYZ() async {
+    // Open file picker for saving XYZ files
+    String? outputPath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save XYZ File',
+      fileName: 'scene.xyz',
+      type: FileType.custom,
+      allowedExtensions: ['xyz'],
+    );
+
+    if (outputPath != null) {
+      debugPrint('Exporting XYZ file to: $outputPath');
+      model.exportXyz(outputPath);
+    } else {
+      debugPrint('XYZ file export canceled');
+    }
   }
 
   @override

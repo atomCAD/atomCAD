@@ -6,6 +6,8 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::scene::Scene;
 use crate::common::xyz_loader::load_xyz;
 use crate::common::xyz_loader::XyzError;
+use crate::common::xyz_saver::save_xyz;
+use crate::common::xyz_saver::XyzSaveError;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
 use crate::util::transform::Transform;
@@ -47,8 +49,10 @@ impl SceneComposer {
     Ok(())
   }
 
+  pub fn export_xyz(&self, file_path: &str) -> Result<(), XyzSaveError> {
+    save_xyz(&self.model, file_path)
+  }
 
-  
   pub fn set_selected_frame_transform(&mut self, transform: Transform) {
     if let Some(gadget) = self.selected_frame_gadget.as_mut() {
         gadget.transform = transform;

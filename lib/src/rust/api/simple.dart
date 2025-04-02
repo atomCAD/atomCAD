@@ -197,6 +197,9 @@ bool syncGadgetData({required String nodeNetworkName}) => RustLib.instance.api
 void importXyz({required String filePath}) =>
     RustLib.instance.api.crateApiSimpleImportXyz(filePath: filePath);
 
+bool exportXyz({required String filePath}) =>
+    RustLib.instance.api.crateApiSimpleExportXyz(filePath: filePath);
+
 BigInt? selectClusterByRay(
         {required APIVec3 rayStart,
         required APIVec3 rayDir,

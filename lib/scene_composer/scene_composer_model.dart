@@ -16,6 +16,11 @@ class SceneComposerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void exportXyz(String filePath) {
+    simple.exportXyz(filePath: filePath);
+    refreshFromKernel();
+  }
+
   void selectClusterById(BigInt clusterId, SelectModifier selectModifier) {
     simple.selectClusterById(
       clusterId: clusterId,
