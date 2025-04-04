@@ -22,7 +22,7 @@ impl AddAtomCommand {
 impl Command for AddAtomCommand {
   fn execute(&mut self, model: &mut AtomicStructure, is_redo: bool) {
     if !is_redo {
-      self.atom_id = model.obtain_next_id();
+      self.atom_id = model.obtain_next_atom_id();
     }
     model.add_atom_with_id(self.atom_id, self.atomic_number, self.position, 1);
   }

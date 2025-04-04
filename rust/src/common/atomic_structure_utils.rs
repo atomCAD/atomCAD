@@ -102,9 +102,10 @@ pub fn detect_bonded_substructures(structure: &mut AtomicStructure) -> Vec<u64> 
         if visited.contains(&start_atom_id) {
             continue;
         }
-        
+
         // Create a new cluster for this connected component
-        let cluster_id = structure.add_cluster(&format!("Cluster_{}", new_cluster_ids.len() + 1));
+        let cluster_id = structure.obtain_next_cluster_id();
+        structure.add_cluster_with_id(cluster_id, &format!("Cluster_{}", cluster_id));
         new_cluster_ids.push(cluster_id);
         
         // Perform depth-first search to find all connected atoms

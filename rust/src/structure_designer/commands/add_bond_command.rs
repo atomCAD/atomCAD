@@ -22,7 +22,7 @@ impl AddBondCommand {
 impl Command for AddBondCommand {
   fn execute(&mut self, model: &mut AtomicStructure, is_redo: bool) {
     if !is_redo {
-      self.bond_id = model.obtain_next_id();
+      self.bond_id = model.obtain_next_bond_id();
     }
     model.add_bond_with_id(self.bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
   }

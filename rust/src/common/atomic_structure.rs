@@ -44,7 +44,9 @@ pub struct Cluster {
 #[derive(Clone)]
 pub struct AtomicStructure {
   pub frame_transform: Transform,
-  pub next_id: u64,
+  pub next_atom_id: u64,
+  pub next_bond_id: u64,
+  pub next_cluster_id: u64,
   pub atoms: HashMap<u64, Atom>,
   // Sparse grid of atoms
   pub grid: HashMap<(i32, i32, i32), Vec<u64>>,
@@ -58,7 +60,9 @@ impl AtomicStructure {
   pub fn new() -> Self {
     let mut ret = Self {
       frame_transform: Transform::default(),
-      next_id: 1,
+      next_atom_id: 1,
+      next_bond_id: 1,
+      next_cluster_id: 1,
       atoms: HashMap::new(),
       grid: HashMap::new(),
       bonds: HashMap::new(),
@@ -98,14 +102,26 @@ impl AtomicStructure {
     self.dirty_atom_ids.insert(atom_id);
   }
 
-  pub fn obtain_next_id(&mut self) -> u64 {
-    let ret = self.next_id;
-    self.next_id += 1;
+  pub fn obtain_next_atom_id(&mut self) -> u64 {
+    let ret = self.next_atom_id;
+    self.next_atom_id += 1;
+    return ret;
+  }
+
+  pub fn obtain_next_bond_id(&mut self) -> u64 {
+    let ret = self.next_bond_id;
+    self.next_bond_id += 1;
+    return ret;
+  }
+
+  pub fn obtain_next_cluster_id(&mut self) -> u64 {
+    let ret = self.next_cluster_id;
+    self.next_cluster_id += 1;
     return ret;
   }
 
   pub fn add_cluster(&mut self, name: &str) -> u64 {
-    let id = self.obtain_next_id();
+    let id = self.obtain_next_cluster_id();
     self.add_cluster_with_id(id, name);
     id
   }
@@ -177,7 +193,7 @@ impl AtomicStructure {
   }
 
   pub fn add_atom(&mut self, atomic_number: i32, position: DVec3, cluster_id: u64) -> u64 {
-    let id = self.obtain_next_id();
+    let id = self.obtain_next_atom_id();
     self.add_atom_with_id(id, atomic_number, position, cluster_id);
     id
   }
@@ -255,7 +271,7 @@ impl AtomicStructure {
   }
 
   pub fn add_bond(&mut self, atom_id1: u64, atom_id2: u64, multiplicity: i32) -> u64 {
-    let id = self.obtain_next_id();
+    let id = self.obtain_next_bond_id();
     self.add_bond_with_id(id, atom_id1, atom_id2, multiplicity);
     id
   }
