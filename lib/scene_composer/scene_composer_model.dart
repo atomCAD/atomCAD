@@ -17,6 +17,11 @@ class SceneComposerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void newModel() {
+    simple.sceneComposerNewModel();
+    refreshFromKernel();
+  }
+
   void exportXyz(String filePath) {
     simple.exportXyz(filePath: filePath);
     refreshFromKernel();

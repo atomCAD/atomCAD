@@ -116,6 +116,12 @@ class _SceneComposerState extends State<SceneComposer> {
                   },
                   menuChildren: [
                     MenuItemButton(
+                      onPressed: () {
+                        model.newModel();
+                      },
+                      child: const Text('New Scene'),
+                    ),
+                    MenuItemButton(
                       onPressed: _importXYZ,
                       child: const Text('Import XYZ'),
                     ),

@@ -42,6 +42,12 @@ impl SceneComposer {
     }
   }
 
+  pub fn new_model(&mut self) {
+    self.model = AtomicStructure::new();
+    self.selected_frame_gadget = None;
+    self.active_tool = SceneComposerTool::Default;
+  }
+
   pub fn import_xyz(&mut self, file_path: &str) -> Result<(), XyzError> {
     let mut model = load_xyz(&file_path)?;
     auto_create_bonds(&mut model);

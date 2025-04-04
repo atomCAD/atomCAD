@@ -255,5 +255,8 @@ void setActiveSceneComposerTool({required APISceneComposerTool tool}) =>
 String getAlignToolStateText() =>
     RustLib.instance.api.crateApiSimpleGetAlignToolStateText();
 
+void sceneComposerNewModel() =>
+    RustLib.instance.api.crateApiSimpleSceneComposerNewModel();
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);

@@ -904,8 +904,17 @@ pub fn get_align_tool_state_text() -> String {
     }
   };
   
-  println!("get_align_tool_state_text took: {:?}", start_time.elapsed());
   result
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn scene_composer_new_model() {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.scene_composer.new_model();
+      refresh_renderer(instance, "", false);
+    }
+  }
 }
 
 #[flutter_rust_bridge::frb(sync)]
