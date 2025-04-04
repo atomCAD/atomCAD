@@ -23,11 +23,14 @@ The menu bar is the topmost part of the UI, the viewport is the right part of th
 
 The menu bar contains the following items:
 
+- File/New Scene
 - File/Import XYZ
 - File/Export XYZ
 
 When an XYZ file is imported, bonds are automatically detected based on atom proximity. Also, clusters are automatically
 created based on bound structures.
+After you imported an XYZ file, you can import other ones on top of it.
+If you want to start a new scene, you can use the 'New Scene' option.
 
 ## Clusters Panel
 
