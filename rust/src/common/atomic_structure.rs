@@ -575,4 +575,97 @@ impl AtomicStructure {
     
     updated_clusters
   }
+
+  /// Adds another atomic structure to this one, ensuring all IDs remain distinct.
+  /// 
+  /// This method copies atoms, bonds, and clusters from the other structure into this one,
+  /// assigning new IDs to all elements to avoid conflicts. Clusters remain separate -
+  /// atoms from the other structure will remain in their original clusters, but with new cluster IDs.
+  /// 
+  /// If a cluster's name follows the pattern 'Cluster_{id}', it will be updated to use the new cluster ID.
+  ///
+  /// # Arguments
+  ///
+  /// * `other` - The other atomic structure to add to this one
+  ///
+  /// # Returns
+  ///
+  /// A mapping of old IDs to new IDs for atoms, bonds, and clusters
+  pub fn add_atomic_structure(&mut self, other: &AtomicStructure) -> (HashMap<u64, u64>, HashMap<u64, u64>, HashMap<u64, u64>) {
+    let mut atom_id_map: HashMap<u64, u64> = HashMap::new();
+    let mut bond_id_map: HashMap<u64, u64> = HashMap::new();
+    let mut cluster_id_map: HashMap<u64, u64> = HashMap::new();
+    
+    // First, create new clusters with new IDs
+    for (old_cluster_id, cluster) in &other.clusters {
+      let new_cluster_id = self.obtain_next_cluster_id();
+      cluster_id_map.insert(*old_cluster_id, new_cluster_id);
+      
+      // Create the new cluster
+      let mut new_name = cluster.name.clone();
+      
+      // Update name if it follows the 'Cluster_{id}' pattern
+      if let Some(captures) = regex::Regex::new(r"^Cluster_(\d+)$").unwrap().captures(&cluster.name) {
+        new_name = format!("Cluster_{}", new_cluster_id);
+      }
+      
+      self.clusters.insert(new_cluster_id, Cluster {
+        id: new_cluster_id,
+        name: new_name,
+        atom_ids: HashSet::new(), // Will be populated when adding atoms
+        selected: cluster.selected,
+        frame_transform: cluster.frame_transform.clone(),
+        frame_locked_to_atoms: cluster.frame_locked_to_atoms,
+      });
+    }
+    
+    // Add atoms with new IDs
+    for (old_atom_id, atom) in &other.atoms {
+      let new_atom_id = self.obtain_next_atom_id();
+      atom_id_map.insert(*old_atom_id, new_atom_id);
+      
+      // Get the new cluster ID for this atom
+      let new_cluster_id = *cluster_id_map.get(&atom.cluster_id).unwrap_or(&1); // Default to first cluster if mapping not found
+      
+      // Add the atom with the new ID and cluster ID
+      self.add_atom_with_id(
+        new_atom_id,
+        atom.atomic_number,
+        atom.position,
+        new_cluster_id
+      );
+      
+      // Copy selected state
+      if let Some(new_atom) = self.atoms.get_mut(&new_atom_id) {
+        new_atom.selected = atom.selected;
+      }
+    }
+    
+    // Add bonds with new IDs
+    for (old_bond_id, bond) in &other.bonds {
+      // Get the new atom IDs
+      if let (Some(&new_atom_id1), Some(&new_atom_id2)) = 
+          (atom_id_map.get(&bond.atom_id1), atom_id_map.get(&bond.atom_id2)) {
+        
+        let new_bond_id = self.obtain_next_bond_id();
+        bond_id_map.insert(*old_bond_id, new_bond_id);
+        
+        // Add the bond with the new IDs
+        self.add_bond_with_id(
+          new_bond_id,
+          new_atom_id1,
+          new_atom_id2,
+          bond.multiplicity
+        );
+        
+        // Copy selected state
+        if let Some(new_bond) = self.bonds.get_mut(&new_bond_id) {
+          new_bond.selected = bond.selected;
+        }
+      }
+    }
+    
+    // Return the ID mappings
+    (atom_id_map, bond_id_map, cluster_id_map)
+  }
 }

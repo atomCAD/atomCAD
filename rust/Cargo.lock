@@ -1066,6 +1066,7 @@ dependencies = [
  "glam",
  "lazy_static",
  "lru",
+ "regex",
  "thiserror 2.0.12",
  "tokio",
  "wgpu",

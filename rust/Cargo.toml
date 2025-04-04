@@ -16,3 +16,4 @@ bytemuck = { version = "1.16", features = [ "derive" ] }
 glam = "0.29.2"
 lru = "0.12.1"
 thiserror = "2.0.12"
+regex = "1.5.4"

@@ -87,10 +87,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
 ///
 /// * `structure` - The atomic structure to analyze and modify
 ///
-/// # Returns
-///
-/// A vector of cluster IDs created during the process
-pub fn detect_bonded_substructures(structure: &mut AtomicStructure) -> Vec<u64> {
+pub fn detect_bonded_substructures(structure: &mut AtomicStructure) {
 
     let mut visited: HashSet<u64> = HashSet::new();
     let mut new_cluster_ids: Vec<u64> = Vec::new();
@@ -103,10 +100,14 @@ pub fn detect_bonded_substructures(structure: &mut AtomicStructure) -> Vec<u64> 
             continue;
         }
 
-        // Create a new cluster for this connected component
-        let cluster_id = structure.obtain_next_cluster_id();
-        structure.add_cluster_with_id(cluster_id, &format!("Cluster_{}", cluster_id));
-        new_cluster_ids.push(cluster_id);
+        // Create a new cluster for this connected component if necessary
+        let mut cluster_id: u64 = 1;
+        if structure.clusters.len() == 1 && structure.clusters.values().next().unwrap().name == "default" {
+            structure.clusters.values_mut().next().unwrap().name = format!("Cluster_1");
+        } else {
+            cluster_id = structure.obtain_next_cluster_id();
+            structure.add_cluster_with_id(cluster_id, &format!("Cluster_{}", cluster_id));
+        }
         
         // Perform depth-first search to find all connected atoms
         let mut stack: Vec<u64> = vec![start_atom_id];
@@ -140,7 +141,5 @@ pub fn detect_bonded_substructures(structure: &mut AtomicStructure) -> Vec<u64> 
 
     structure.remove_empty_clusters();
     structure.calculate_all_clusters_default_frame_transforms();
-    
-    new_cluster_ids
 }
 
