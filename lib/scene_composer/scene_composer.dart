@@ -139,7 +139,7 @@ class _SceneComposerState extends State<SceneComposer> {
               children: [
                 // Left panel
                 SizedBox(
-                  width: 300,
+                  width: 340,
                   child: Column(
                     children: [
                       Section(
@@ -157,11 +157,13 @@ class _SceneComposerState extends State<SceneComposer> {
                       Consumer<SceneComposerModel>(
                         builder: (context, sceneModel, child) {
                           // Update staged camera transform when the model view changes
-                          if (_sceneComposerView != sceneModel.sceneComposerView) {
-                            _stagedCameraTransform = sceneModel.getCameraTransform();
+                          if (_sceneComposerView !=
+                              sceneModel.sceneComposerView) {
+                            _stagedCameraTransform =
+                                sceneModel.getCameraTransform();
                           }
                           _sceneComposerView = sceneModel.sceneComposerView;
-                          
+
                           return Section(
                             title: 'Camera',
                             content: TransformControlWidget(
@@ -176,8 +178,9 @@ class _SceneComposerState extends State<SceneComposer> {
                       ),
                       Consumer<SceneComposerModel>(
                         builder: (context, sceneModel, child) {
-                          final activeTool = sceneModel.sceneComposerView?.activeTool;
-                          
+                          final activeTool =
+                              sceneModel.sceneComposerView?.activeTool;
+
                           if (activeTool == APISceneComposerTool.align) {
                             return Section(
                               title: 'Align tool',
@@ -186,7 +189,7 @@ class _SceneComposerState extends State<SceneComposer> {
                                 child: Text(
                                   sceneModel.alignToolStateText,
                                   style: const TextStyle(
-                                    fontSize: 14, 
+                                    fontSize: 14,
                                     fontFamily: 'monospace',
                                   ),
                                 ),
@@ -197,7 +200,8 @@ class _SceneComposerState extends State<SceneComposer> {
                             // Default tool or null
                             return Section(
                               title: 'Default tool',
-                              content: SceneSelectionDataWidget(model: sceneModel),
+                              content:
+                                  SceneSelectionDataWidget(model: sceneModel),
                               addBottomPadding: false,
                             );
                           }

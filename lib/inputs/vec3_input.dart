@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
@@ -7,12 +8,16 @@ class Vec3Input extends StatefulWidget {
   final String label;
   final APIVec3 value;
   final ValueChanged<APIVec3> onChanged;
+  
+  /// Optional callback triggered when a value is successfully pasted
+  final VoidCallback? onPasted;
 
   const Vec3Input({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.onPasted,
   });
 
   @override
@@ -259,9 +264,67 @@ class _Vec3InputState extends State<Vec3Input> {
                 ),
               ),
             ),
+            const SizedBox(width: 4),
+            // Copy button
+            SizedBox(
+              width: AppSpacing.smallButtonWidth / 2,
+              height: AppSpacing.buttonHeight,
+              child: Tooltip(
+                message: 'Copy',
+                child: ElevatedButton(
+                  style: AppButtonStyles.primary,
+                  onPressed: _copyToClipboard,
+                  child: const Text('C', style: AppTextStyles.buttonText),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            // Paste button
+            SizedBox(
+              width: AppSpacing.smallButtonWidth / 2,
+              height: AppSpacing.buttonHeight,
+              child: Tooltip(
+                message: 'Paste',
+                child: ElevatedButton(
+                  style: AppButtonStyles.primary,
+                  onPressed: _pasteFromClipboard,
+                  child: const Text('P', style: AppTextStyles.buttonText),
+                ),
+              ),
+            ),
           ],
         ),
       ],
     );
+  }
+
+  // Copy the current values to the clipboard as space-separated string
+  void _copyToClipboard() {
+    final String value = '${widget.value.x.toStringAsFixed(6)} ${widget.value.y.toStringAsFixed(6)} ${widget.value.z.toStringAsFixed(6)}';
+    Clipboard.setData(ClipboardData(text: value));
+  }
+
+  // Parse space-separated values from clipboard and update the widget
+  void _pasteFromClipboard() async {
+    final ClipboardData? clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    if (clipboardData != null && clipboardData.text != null) {
+      final String text = clipboardData.text!;
+      final List<String> parts = text.trim().split(RegExp(r'\s+'));
+      
+      if (parts.length >= 3) {
+        final double? x = double.tryParse(parts[0]);
+        final double? y = double.tryParse(parts[1]);
+        final double? z = double.tryParse(parts[2]);
+        
+        if (x != null && y != null && z != null) {
+          widget.onChanged(APIVec3(x: x, y: y, z: z));
+          
+          // Notify parent that a value was successfully pasted
+          if (widget.onPasted != null) {
+            widget.onPasted!();
+          }
+        }
+      }
+    }
   }
 }

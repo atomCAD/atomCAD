@@ -69,6 +69,12 @@ class _TransformControlWidgetState extends State<TransformControlWidget> {
               }
             });
           },
+          onPasted: () {
+            // Automatically apply transform when values are pasted
+            if (_stagedTransform != null) {
+              widget.onApplyTransform(_stagedTransform!);
+            }
+          },
         ),
 
         const SizedBox(height: 6),
@@ -91,6 +97,12 @@ class _TransformControlWidgetState extends State<TransformControlWidget> {
                 );
               }
             });
+          },
+          onPasted: () {
+            // Automatically apply transform when values are pasted
+            if (_stagedTransform != null) {
+              widget.onApplyTransform(_stagedTransform!);
+            }
           },
         ),
 
