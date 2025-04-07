@@ -119,3 +119,12 @@ pub struct SceneComposerView {
   pub active_tool: APISceneComposerTool,
   pub available_tools: Vec<APISceneComposerTool>,
 }
+
+pub struct AtomView {
+  pub id: u64,
+  pub atomic_number: i32,
+  pub symbol: String,
+  pub cluster_id: u64,
+  pub cluster_name: String,
+  pub position: APIVec3,
+}

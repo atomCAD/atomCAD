@@ -141,8 +141,10 @@ impl SceneComposer {
     self.recreate_selected_frame_gadget();
   }
 
+  pub fn get_atom_id_by_ray(&self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
+    self.model.hit_test(ray_start, ray_dir)
+  }
 
-  
   pub fn set_active_tool(&mut self, tool: APISceneComposerTool) {
     self.active_tool = match tool {
       APISceneComposerTool::Default => SceneComposerTool::Default,

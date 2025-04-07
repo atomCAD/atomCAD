@@ -30,6 +30,7 @@ use super::api_types::NodeNetworkView;
 use super::api_types::Editor;
 use super::api_types::SceneComposerView;
 use super::api_types::ClusterView;
+use super::api_types::AtomView;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::node_data::sphere_data::SphereData;
 use crate::structure_designer::node_data::cuboid_data::CuboidData;
@@ -906,6 +907,49 @@ pub fn get_align_tool_state_text() -> String {
   
   result
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_scene_composer_atom_by_id(atom_id: u64) -> Option<AtomView> {
+  unsafe {
+    let instance = CAD_INSTANCE.as_ref()?;
+    
+    // Get the atom from the model
+    let atom = instance.scene_composer.model.get_atom(atom_id)?;
+    
+    // Get the cluster from the model
+    let cluster = instance.scene_composer.model.get_cluster(atom.cluster_id)?;
+    
+    // Get the atom symbol from atomic number using ATOM_INFO hashmap
+    let symbol = crate::common::common_constants::ATOM_INFO.get(&atom.atomic_number)
+      .map_or_else(
+        || crate::common::common_constants::DEFAULT_ATOM_INFO.symbol.clone(),
+        |atom_info| atom_info.symbol.clone()
+      );
+    
+    // Convert the atom to an AtomView
+    Some(AtomView {
+      id: atom.id,
+      atomic_number: atom.atomic_number,
+      symbol: symbol.to_string(),
+      cluster_id: atom.cluster_id,
+      cluster_name: cluster.name.clone(),
+      position: to_api_vec3(&atom.position),
+    })
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_scene_composer_atom_by_ray(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<AtomView> {
+  unsafe {
+    let instance = CAD_INSTANCE.as_ref()?;
+    
+    // Get the atom from the model
+    let atom_id = instance.scene_composer.get_atom_id_by_ray(&from_api_vec3(&ray_origin), &from_api_vec3(&ray_direction))?;
+    
+    get_scene_composer_atom_by_id(atom_id)
+  }
+}
+
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn scene_composer_new_model() {
