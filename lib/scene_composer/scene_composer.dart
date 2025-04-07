@@ -7,6 +7,7 @@ import 'package:flutter_cad/scene_composer/scene_selection_data_widget.dart';
 import 'package:flutter_cad/common/section.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_tools_panel.dart';
 import 'package:flutter_cad/scene_composer/transform_control_widget.dart';
+import 'package:flutter_cad/scene_composer/atom_info_widget.dart';
 import 'package:flutter_cad/src/rust/api/api_types.dart';
 import 'package:provider/provider.dart';
 
@@ -194,6 +195,12 @@ class _SceneComposerState extends State<SceneComposer> {
                                   ),
                                 ),
                               ),
+                              addBottomPadding: false,
+                            );
+                          } else if (activeTool == APISceneComposerTool.atomInfo) {
+                            return Section(
+                              title: 'Atom Information',
+                              content: AtomInfoWidget(model: sceneModel),
                               addBottomPadding: false,
                             );
                           } else {
