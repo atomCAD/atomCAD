@@ -50,6 +50,14 @@ class SceneComposerToolsPanel extends StatelessWidget {
                   iconData = Icons.align_horizontal_center;
                   tooltip = 'Align Tool';
                   break;
+                case APISceneComposerTool.atomInfo:
+                  iconData = Icons.info_outline;
+                  tooltip = 'Atom Info Tool';
+                  break;
+                case APISceneComposerTool.distance:
+                  iconData = Icons.straighten;
+                  tooltip = 'Distance Tool';
+                  break;
               }
 
               // Return a styled button for each tool

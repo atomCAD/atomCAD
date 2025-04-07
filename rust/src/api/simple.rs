@@ -909,22 +909,46 @@ pub fn get_align_tool_state_text() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_scene_composer_atom_by_id(atom_id: u64) -> Option<AtomView> {
+pub fn select_atom_info_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Option<u64> {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      let ray_start_dvec3 = from_api_vec3(&ray_start);
+      let ray_dir_dvec3 = from_api_vec3(&ray_dir);
+      let ret = cad_instance.scene_composer.select_atom_info_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
+      refresh_renderer(cad_instance, "", false);
+      return ret;
+    }
+  }
+  None
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_scene_composer_atom_info() -> Option<AtomView> {
   unsafe {
     let instance = CAD_INSTANCE.as_ref()?;
-    
+
+    let atom_id = instance.scene_composer.get_atom_info_atom_id()?;
+
     // Get the atom from the model
     let atom = instance.scene_composer.model.get_atom(atom_id)?;
     
     // Get the cluster from the model
     let cluster = instance.scene_composer.model.get_cluster(atom.cluster_id)?;
-    
-    // Get the atom symbol from atomic number using ATOM_INFO hashmap
-    let symbol = crate::common::common_constants::ATOM_INFO.get(&atom.atomic_number)
-      .map_or_else(
-        || crate::common::common_constants::DEFAULT_ATOM_INFO.symbol.clone(),
-        |atom_info| atom_info.symbol.clone()
-      );
+
+    // Extract atom information from ATOM_INFO hashmap or use defaults
+    let atom_info = crate::common::common_constants::ATOM_INFO.get(&atom.atomic_number);
+    let (symbol, element_name, covalent_radius) = atom_info.map_or_else(
+        || (
+            crate::common::common_constants::DEFAULT_ATOM_INFO.symbol.clone(),
+            crate::common::common_constants::DEFAULT_ATOM_INFO.element_name.clone(),
+            crate::common::common_constants::DEFAULT_ATOM_INFO.radius
+        ),
+        |info| (
+            info.symbol.clone(),
+            info.element_name.clone(),
+            info.radius
+        )
+    );
     
     // Convert the atom to an AtomView
     Some(AtomView {
@@ -934,19 +958,9 @@ pub fn get_scene_composer_atom_by_id(atom_id: u64) -> Option<AtomView> {
       cluster_id: atom.cluster_id,
       cluster_name: cluster.name.clone(),
       position: to_api_vec3(&atom.position),
+      element_name: element_name,
+      covalent_radius: covalent_radius,
     })
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_scene_composer_atom_by_ray(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<AtomView> {
-  unsafe {
-    let instance = CAD_INSTANCE.as_ref()?;
-    
-    // Get the atom from the model
-    let atom_id = instance.scene_composer.get_atom_id_by_ray(&from_api_vec3(&ray_origin), &from_api_vec3(&ray_direction))?;
-    
-    get_scene_composer_atom_by_id(atom_id)
   }
 }
 

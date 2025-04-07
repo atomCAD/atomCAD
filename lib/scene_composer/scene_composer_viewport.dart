@@ -26,6 +26,11 @@ class _SceneComposerViewportState
       if (widget.model.selectAlignAtomByRay(ray.start, ray.direction) != null) {
         renderingNeeded();
       }
+    } else if (activeTool == APISceneComposerTool.atomInfo) {
+      if (widget.model.selectAtomInfoAtomByRay(ray.start, ray.direction) !=
+          null) {
+        renderingNeeded();
+      }
     } else if (activeTool == APISceneComposerTool.default_) {
       final selectModifier = HardwareKeyboard.instance.isControlPressed
           ? SelectModifier.toggle

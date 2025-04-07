@@ -112,6 +112,8 @@ pub struct APITransform {
 pub enum APISceneComposerTool {
   Default,
   Align,
+  AtomInfo,
+  Distance,
 }
 
 pub struct SceneComposerView {
@@ -127,4 +129,6 @@ pub struct AtomView {
   pub cluster_id: u64,
   pub cluster_name: String,
   pub position: APIVec3,
+  pub element_name: String,
+  pub covalent_radius: f64,
 }

@@ -62,6 +62,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIVec3 dco_decode_apii_vec_3(dynamic raw);
 
   @protected
+  AtomView dco_decode_atom_view(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -90,6 +93,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3 dco_decode_box_autoadd_api_vec_3(dynamic raw);
+
+  @protected
+  AtomView dco_decode_box_autoadd_atom_view(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_i_32(dynamic raw);
@@ -166,6 +172,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
+
+  @protected
+  AtomView? dco_decode_opt_box_autoadd_atom_view(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
@@ -255,6 +264,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIVec3 sse_decode_apii_vec_3(SseDeserializer deserializer);
 
   @protected
+  AtomView sse_decode_atom_view(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -289,6 +301,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3 sse_decode_box_autoadd_api_vec_3(SseDeserializer deserializer);
+
+  @protected
+  AtomView sse_decode_box_autoadd_atom_view(SseDeserializer deserializer);
 
   @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
@@ -376,6 +391,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APITransform? sse_decode_opt_box_autoadd_api_transform(
       SseDeserializer deserializer);
+
+  @protected
+  AtomView? sse_decode_opt_box_autoadd_atom_view(SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
@@ -471,6 +489,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_apii_vec_3(APIIVec3 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_atom_view(AtomView self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -506,6 +527,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_api_vec_3(APIVec3 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_atom_view(
+      AtomView self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
@@ -596,6 +621,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_transform(
       APITransform? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_atom_view(
+      AtomView? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);

@@ -19,12 +19,22 @@ use crate::api::api_types::APISceneComposerTool;
 pub enum SceneComposerTool {
   Default,
   Align(AlignToolState),
+  AtomInfo(AtomInfoToolState),
+  Distance(DistanceToolState),
 }
 
-struct AlignToolState {
+pub struct AlignToolState {
   // IDs of atoms used as reference to align the frame
   // can contain 0 to 3 elements (3 elements when all reference atoms are chosen)
   pub reference_atom_ids: Vec<u64>,
+}
+
+pub struct AtomInfoToolState {
+  pub atom_id: Option<u64>,
+}
+
+pub struct DistanceToolState {
+  pub atom_ids: Vec<u64>,
 }
 
 pub struct SceneComposer {
@@ -141,15 +151,17 @@ impl SceneComposer {
     self.recreate_selected_frame_gadget();
   }
 
-  pub fn get_atom_id_by_ray(&self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
-    self.model.hit_test(ray_start, ray_dir)
-  }
-
   pub fn set_active_tool(&mut self, tool: APISceneComposerTool) {
     self.active_tool = match tool {
       APISceneComposerTool::Default => SceneComposerTool::Default,
       APISceneComposerTool::Align => SceneComposerTool::Align(AlignToolState {
         reference_atom_ids: Vec::new(),
+      }),
+      APISceneComposerTool::AtomInfo => SceneComposerTool::AtomInfo(AtomInfoToolState {
+        atom_id: None,
+      }),
+      APISceneComposerTool::Distance => SceneComposerTool::Distance(DistanceToolState {
+        atom_ids: Vec::new(),
       }),
     };
   }
@@ -158,6 +170,8 @@ impl SceneComposer {
     match &self.active_tool {
       SceneComposerTool::Default => APISceneComposerTool::Default,
       SceneComposerTool::Align(_) => APISceneComposerTool::Align,
+      SceneComposerTool::AtomInfo(_) => APISceneComposerTool::AtomInfo,
+      SceneComposerTool::Distance(_) => APISceneComposerTool::Distance,
     }
   }
 
@@ -167,6 +181,9 @@ impl SceneComposer {
     if !self.get_selected_cluster_ids().is_empty() {
       available_tools.push(APISceneComposerTool::Align);
     }
+
+    available_tools.push(APISceneComposerTool::AtomInfo);
+    available_tools.push(APISceneComposerTool::Distance);
 
     available_tools
   }
@@ -209,7 +226,45 @@ impl SceneComposer {
       None
     }
   }
-  
+
+  pub fn select_atom_info_atom_by_id(&mut self, atom_id: u64) -> bool {
+    match &mut self.active_tool {
+      SceneComposerTool::AtomInfo(atom_info_state) => {
+        // Check if the atom exists in the model
+        if self.model.get_atom(atom_id).is_none() {
+          return false;
+        }
+
+        atom_info_state.atom_id = Some(atom_id);
+
+        true
+      },
+      _ => false, // Not in align tool mode
+    }
+  }
+
+  // Returns the atom id that was selected for alignment, or None if no atom was hit
+  pub fn select_atom_info_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
+    let selected_atom_id = self.model.hit_test(ray_start, ray_dir)?;
+    
+    // Try to select this atom for alignment
+    if self.select_atom_info_atom_by_id(selected_atom_id) {
+      Some(selected_atom_id)
+    } else {
+      None
+    }
+  }
+
+  pub fn get_atom_info_atom_id(&self) -> Option<u64> {
+    // Check if the active tool is the align tool
+    match &self.active_tool {
+      SceneComposerTool::AtomInfo(atom_info_state) => {
+        atom_info_state.atom_id
+      },
+      _ => None,
+    }
+  }
+
   // Aligns the selected frame to the reference atoms based on how many atoms are selected
   fn align_frame_to_atoms(&mut self) {
     if self.selected_frame_gadget.is_none() {

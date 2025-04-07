@@ -140,6 +140,8 @@ class APIHalfSpaceData {
 enum APISceneComposerTool {
   default_,
   align,
+  atomInfo,
+  distance,
   ;
 }
 
@@ -252,6 +254,53 @@ class APIIVec3 {
           x == other.x &&
           y == other.y &&
           z == other.z;
+}
+
+class AtomView {
+  final BigInt id;
+  final int atomicNumber;
+  final String symbol;
+  final BigInt clusterId;
+  final String clusterName;
+  final APIVec3 position;
+  final String elementName;
+  final double covalentRadius;
+
+  const AtomView({
+    required this.id,
+    required this.atomicNumber,
+    required this.symbol,
+    required this.clusterId,
+    required this.clusterName,
+    required this.position,
+    required this.elementName,
+    required this.covalentRadius,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      atomicNumber.hashCode ^
+      symbol.hashCode ^
+      clusterId.hashCode ^
+      clusterName.hashCode ^
+      position.hashCode ^
+      elementName.hashCode ^
+      covalentRadius.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AtomView &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          atomicNumber == other.atomicNumber &&
+          symbol == other.symbol &&
+          clusterId == other.clusterId &&
+          clusterName == other.clusterName &&
+          position == other.position &&
+          elementName == other.elementName &&
+          covalentRadius == other.covalentRadius;
 }
 
 class ClusterView {
