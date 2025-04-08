@@ -61,6 +61,8 @@ The tools panel contains the following tools:
 
 - Default tool
 - Align tool
+- Atom Info tool
+- Distance tool
 
 ### Default Tool
 
@@ -103,3 +105,17 @@ In the align tool panel you can read the instructions to select the 3 atoms to a
 
 When 3 atoms are selected, the frame is fully aligned to the 3 atoms. Now if you select an atom again,
 the process starts over.
+
+### Atom Info Tool
+
+![Atom Info tool](./scene_composer_users_guide_images/atom_info_tool.png)
+
+The atom info tool shows information about the selected atom. (You can select an atom using left mouse click.)
+
+#### Distance Tool
+
+![Distance tool](./scene_composer_users_guide_images/distance_tool.png)
+
+The distance tool shows the distance between the selected atom and the mouse cursor.
+You can select the atoms using left mouse click.
+
