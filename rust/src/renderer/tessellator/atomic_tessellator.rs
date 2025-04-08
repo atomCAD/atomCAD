@@ -24,12 +24,12 @@ const BAS_STICK_RADIUS: f64 = 0.1;
 // color for marked atoms (bright yellow)
 const MARKED_ATOM_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
 
-pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S) {
+pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S) {
   for (id, atom) in atomic_structure.atoms.iter() {
-    tessellate_atom(output_mesh, atomic_structure, &atom, params, scene.is_atom_marked(*id));
+    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, scene.is_atom_marked(*id));
   }
   for (_id, bond) in atomic_structure.bonds.iter() {
-    tessellate_bond(output_mesh, atomic_structure, &bond, params);
+    tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
   }
 }
 
@@ -39,11 +39,12 @@ pub fn get_displayed_atom_radius(atom: &Atom) -> f64 {
   atom_info.radius * BAS_ATOM_RADIUS_FACTOR
 }
 
-pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, is_marked: bool) {
+pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, is_marked: bool) {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
-  let selected = atom.selected || _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
+  let cluster_selected = _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
+  let selected = atom.selected || cluster_selected;
 
   let color = if is_marked {
     // Yellow color for marked atoms
@@ -55,7 +56,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &
   };
 
   tessellator::tessellate_sphere(
-    output_mesh,
+    if cluster_selected { selected_clusters_mesh } else { output_mesh },
     &atom.position,
     get_displayed_atom_radius(atom),
     params.sphere_horizontal_divisions,
@@ -67,11 +68,18 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &
   );
 }
 
-pub fn tessellate_bond(output_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
+pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
   let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
   let atom_pos2 = model.get_atom(bond.atom_id2).unwrap().position;
+
+  let cluster_id1 = model.get_atom(bond.atom_id1).unwrap().cluster_id;
+  let cluster_id2 = model.get_atom(bond.atom_id2).unwrap().cluster_id;
+
+  let cluster_selected1 = model.get_cluster(cluster_id1).is_some() && model.get_cluster(cluster_id1).unwrap().selected;
+  let cluster_selected2 = model.get_cluster(cluster_id2).is_some() && model.get_cluster(cluster_id2).unwrap().selected;
+
   tessellator::tessellate_cylinder(
-    output_mesh,
+    if cluster_selected1 && cluster_selected2 { selected_clusters_mesh } else { output_mesh },
     &atom_pos2,
     &atom_pos1,
     BAS_STICK_RADIUS,

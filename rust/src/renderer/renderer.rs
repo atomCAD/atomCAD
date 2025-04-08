@@ -63,6 +63,7 @@ pub struct Renderer  {
     triangle_pipeline: RenderPipeline,  
     line_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
+    selected_clusters_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
     background_mesh: GPUMesh,
     texture: Texture,
@@ -108,6 +109,8 @@ impl Renderer {
             .expect("Failed to create device");
 
         let main_mesh = GPUMesh::new_empty_triangle_mesh(&device);
+        let selected_clusters_mesh = GPUMesh::new_empty_triangle_mesh(&device);
+        
         let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device);
         let background_mesh = GPUMesh::new_empty_line_mesh(&device);
 
@@ -291,6 +294,7 @@ impl Renderer {
           triangle_pipeline,
           line_pipeline,
           main_mesh,
+          selected_clusters_mesh,
           lightweight_mesh,
           background_mesh,
           texture,
@@ -376,6 +380,7 @@ impl Renderer {
         if !lightweight {
             // Tessellate everything except tessellatable into main buffers
             let mut mesh = Mesh::new();
+            let mut selected_clusters_mesh = Mesh::new();
 
             let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
                 sphere_horizontal_divisions: 10,
@@ -384,7 +389,7 @@ impl Renderer {
             };
 
             for atomic_structure in scene.atomic_structures() {
-                atomic_tessellator::tessellate_atomic_structure(&mut mesh, atomic_structure, &atomic_tessellation_params, scene);
+                atomic_tessellator::tessellate_atomic_structure(&mut mesh, &mut selected_clusters_mesh, atomic_structure, &atomic_tessellation_params, scene);
             }
 
             for surface_point_cloud in scene.surface_point_clouds() {
@@ -395,6 +400,7 @@ impl Renderer {
 
             // Update main GPU mesh
             self.main_mesh.update_from_mesh(&self.device, &mesh, "Main");
+            self.selected_clusters_mesh.update_from_mesh(&self.device, &selected_clusters_mesh, "Selected Clusters");
         }
 
         println!("refresh took: {:?}", start_time.elapsed());
@@ -462,6 +468,9 @@ impl Renderer {
             
             // Draw main mesh
             self.render_mesh(&mut render_pass, &self.main_mesh);
+
+            // Draw selected clusters mesh
+            self.render_mesh(&mut render_pass, &self.selected_clusters_mesh);
             
             // Draw lightweight mesh
             self.render_mesh(&mut render_pass, &self.lightweight_mesh);
