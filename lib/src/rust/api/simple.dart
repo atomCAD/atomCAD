@@ -255,6 +255,9 @@ void setActiveSceneComposerTool({required APISceneComposerTool tool}) =>
 String getAlignToolStateText() =>
     RustLib.instance.api.crateApiSimpleGetAlignToolStateText();
 
+String getDistanceToolStateText() =>
+    RustLib.instance.api.crateApiSimpleGetDistanceToolStateText();
+
 BigInt? selectAtomInfoAtomByRay(
         {required APIVec3 rayStart, required APIVec3 rayDir}) =>
     RustLib.instance.api.crateApiSimpleSelectAtomInfoAtomByRay(
@@ -262,6 +265,11 @@ BigInt? selectAtomInfoAtomByRay(
 
 AtomView? getSceneComposerAtomInfo() =>
     RustLib.instance.api.crateApiSimpleGetSceneComposerAtomInfo();
+
+BigInt? selectDistanceAtomByRay(
+        {required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api.crateApiSimpleSelectDistanceAtomByRay(
+        rayStart: rayStart, rayDir: rayDir);
 
 void sceneComposerNewModel() =>
     RustLib.instance.api.crateApiSimpleSceneComposerNewModel();

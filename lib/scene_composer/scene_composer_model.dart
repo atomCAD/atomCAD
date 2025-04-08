@@ -7,6 +7,7 @@ import 'package:flutter_cad/common/api_utils.dart';
 class SceneComposerModel extends ChangeNotifier {
   SceneComposerView? sceneComposerView;
   String alignToolStateText = '';
+  String distanceToolStateText = '';
   AtomView? atomInfoView;
 
   SceneComposerModel() {
@@ -55,6 +56,16 @@ class SceneComposerModel extends ChangeNotifier {
   BigInt? selectAlignAtomByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     final ret = simple.selectAlignAtomByRay(
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+    );
+    refreshFromKernel();
+    return ret;
+  }
+
+  BigInt? selectDistanceAtomByRay(
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    final ret = simple.selectDistanceAtomByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
     );
@@ -116,6 +127,7 @@ class SceneComposerModel extends ChangeNotifier {
   void refreshFromKernel() {
     sceneComposerView = simple.getSceneComposerView();
     alignToolStateText = simple.getAlignToolStateText();
+    distanceToolStateText = simple.getDistanceToolStateText();
     atomInfoView = simple.getSceneComposerAtomInfo();
     notifyListeners();
   }

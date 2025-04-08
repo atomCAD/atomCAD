@@ -197,7 +197,24 @@ class _SceneComposerState extends State<SceneComposer> {
                               ),
                               addBottomPadding: false,
                             );
-                          } else if (activeTool == APISceneComposerTool.atomInfo) {
+                          } else if (activeTool ==
+                              APISceneComposerTool.distance) {
+                            return Section(
+                              title: 'Distance tool',
+                              content: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(
+                                  sceneModel.distanceToolStateText,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              addBottomPadding: false,
+                            );
+                          } else if (activeTool ==
+                              APISceneComposerTool.atomInfo) {
                             return Section(
                               title: 'Atom Information',
                               content: AtomInfoWidget(model: sceneModel),

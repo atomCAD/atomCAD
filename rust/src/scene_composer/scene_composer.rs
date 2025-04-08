@@ -265,6 +265,42 @@ impl SceneComposer {
     }
   }
 
+  pub fn select_distance_atom_by_id(&mut self, atom_id: u64) -> bool {
+    match &mut self.active_tool {
+      SceneComposerTool::Distance(distance_state) => {
+        // Check if the atom exists in the model
+        if self.model.get_atom(atom_id).is_none() {
+          return false;
+        }
+
+        // If we already have 2 reference atoms and are adding a third,
+        // clear the list and add this as the first atom of a new selection
+        if distance_state.atom_ids.len() >= 2 {
+          distance_state.atom_ids.clear();
+        }
+
+        // Add the atom ID to our reference list
+        distance_state.atom_ids.push(atom_id);
+        
+        true
+      },
+      _ => false, // Not in distance tool mode
+    }
+  }
+  
+  // Returns the atom id that was selected for distance, or None if no atom was hit
+  pub fn select_distance_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
+    // Find the atom along the ray
+    let selected_atom_id = self.model.hit_test(ray_start, ray_dir)?;
+    
+    // Try to select this atom for distance
+    if self.select_distance_atom_by_id(selected_atom_id) {
+      Some(selected_atom_id)
+    } else {
+      None
+    }
+  }
+
   // Aligns the selected frame to the reference atoms based on how many atoms are selected
   fn align_frame_to_atoms(&mut self) {
     if self.selected_frame_gadget.is_none() {
@@ -518,7 +554,51 @@ impl SceneComposer {
       _ => String::new(), // Not in align tool mode, return empty string
     }
   }
+
+pub fn get_distance_tool_state_text(&self) -> String {
+  // Check if the active tool is the distance tool
+  match &self.active_tool {
+    SceneComposerTool::Distance(distance_state) => {
+      
+      // If no atoms are selected
+      if distance_state.atom_ids.is_empty() {
+        return String::from("Please select atom 1!");
+      }
+      
+      // Start building the output string
+      let mut result = String::new();
+      
+      // Add information for each selected atom
+      for (i, atom_id) in distance_state.atom_ids.iter().enumerate() {
+        if let Some(atom) = self.model.get_atom(*atom_id) {
+          result.push_str(&format!(
+            "Atom {}: id: {}\nX: {:.6} Y: {:.6} Z: {:.6}\n",
+            i + 1,
+            atom_id,
+            atom.position.x,
+            atom.position.y,
+            atom.position.z
+          ));
+        }
+      }
+      
+      // Add appropriate prompt based on how many atoms are selected
+      if distance_state.atom_ids.len() == 1 {
+        result.push_str("Please select atom 2!");
+      } else {
+        let atom1 = self.model.get_atom(distance_state.atom_ids[0]).unwrap();
+        let atom2 = self.model.get_atom(distance_state.atom_ids[1]).unwrap();
+        let distance = atom1.position.distance(atom2.position);
+        result.push_str(&format!("Distance: {:.6}", distance));
+      }
+
+      result
+    },
+    _ => String::new(), // Not in distance tool mode, return empty string
+  }
 }
+}
+
 
 impl<'a> Scene<'a> for SceneComposer {
   fn atomic_structures(&self) -> Box<dyn Iterator<Item = &AtomicStructure> + '_> {

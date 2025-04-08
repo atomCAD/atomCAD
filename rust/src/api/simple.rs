@@ -909,6 +909,21 @@ pub fn get_align_tool_state_text() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_distance_tool_state_text() -> String {
+  let start_time = Instant::now();
+  
+  let result = unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      cad_instance.scene_composer.get_distance_tool_state_text()
+    } else {
+      String::new()
+    }
+  };
+
+  result
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn select_atom_info_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Option<u64> {
   unsafe {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
@@ -964,6 +979,19 @@ pub fn get_scene_composer_atom_info() -> Option<AtomView> {
   }
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_distance_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Option<u64> {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      let ray_start_dvec3 = from_api_vec3(&ray_start);
+      let ray_dir_dvec3 = from_api_vec3(&ray_dir);
+      let ret = cad_instance.scene_composer.select_distance_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
+      refresh_renderer(cad_instance, "", false);
+      return ret;
+    }
+  }
+  None
+}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn scene_composer_new_model() {
