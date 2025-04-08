@@ -605,6 +605,25 @@ impl<'a> Scene<'a> for SceneComposer {
     Box::new(std::iter::once(&self.model))
   }
 
+  fn is_atom_marked(&self, atom_id: u64) -> bool {
+    match &self.active_tool {
+      SceneComposerTool::Align(align_state) => {
+        // For Align tool, check if the atom is in the reference_atom_ids list
+        align_state.reference_atom_ids.contains(&atom_id)
+      },
+      SceneComposerTool::AtomInfo(atom_info_state) => {
+        // For AtomInfo tool, check if the atom is the one selected
+        atom_info_state.atom_id == Some(atom_id)
+      },
+      SceneComposerTool::Distance(distance_state) => {
+        // For Distance tool, check if the atom is in the atom_ids list
+        distance_state.atom_ids.contains(&atom_id)
+      },
+      // Default tool doesn't mark any atoms
+      SceneComposerTool::Default => false,
+    }
+  }
+
   fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_> {
       Box::new(std::iter::empty())
   }

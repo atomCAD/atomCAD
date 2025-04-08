@@ -889,6 +889,7 @@ pub fn set_active_scene_composer_tool(tool: APISceneComposerTool) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.scene_composer.set_active_tool(tool);
+      refresh_renderer(instance, "", false);
     }
   }
 }

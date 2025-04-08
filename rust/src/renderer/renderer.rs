@@ -384,7 +384,7 @@ impl Renderer {
             };
 
             for atomic_structure in scene.atomic_structures() {
-                atomic_tessellator::tessellate_atomic_structure(&mut mesh, atomic_structure, &atomic_tessellation_params);
+                atomic_tessellator::tessellate_atomic_structure(&mut mesh, atomic_structure, &atomic_tessellation_params, scene);
             }
 
             for surface_point_cloud in scene.surface_point_clouds() {
