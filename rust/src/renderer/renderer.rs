@@ -37,6 +37,36 @@ struct CameraUniform {
     _padding1: u32,
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct ModelUniform {
+    model_matrix: [[f32; 4]; 4],
+    normal_matrix: [[f32; 4]; 4],
+}
+
+impl ModelUniform {
+    fn new() -> Self {
+        Self {
+            model_matrix: Mat4::IDENTITY.to_cols_array_2d(),
+            normal_matrix: Mat4::IDENTITY.to_cols_array_2d(),
+        }
+    }
+
+    fn update_from_transform(&mut self, transform: &crate::util::transform::Transform) {
+        // Convert the transform to a model matrix
+        let translation = transform.translation.as_vec3();
+        let rotation = transform.rotation.as_quat();
+        
+        // Create the model matrix
+        let model_matrix = Mat4::from_rotation_translation(rotation, translation);
+        self.model_matrix = model_matrix.to_cols_array_2d();
+        
+        // Calculate the normal matrix (inverse transpose of the model matrix)
+        let normal_matrix = model_matrix.inverse().transpose();
+        self.normal_matrix = normal_matrix.to_cols_array_2d();
+    }
+}
+
 impl CameraUniform {
   fn new() -> Self {
       Self {

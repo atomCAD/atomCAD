@@ -8,6 +8,13 @@ struct CameraUniform {
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
 
+struct ModelUniform {
+  model_matrix: mat4x4<f32>,
+  normal_matrix: mat4x4<f32>,  // For transforming normals
+};
+@group(1) @binding(0)
+var<uniform> model: ModelUniform;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -59,9 +66,14 @@ fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
-    output.clip_position = camera.view_proj * vec4<f32>(input.position, 1.0);
-    output.world_position = input.position;
-    output.normal = normalize(input.normal);
+    
+    // Apply model transform to position and normal
+    let model_position = (model.model_matrix * vec4<f32>(input.position, 1.0)).xyz;
+    let model_normal = normalize((model.normal_matrix * vec4<f32>(input.normal, 0.0)).xyz);
+    
+    output.clip_position = camera.view_proj * vec4<f32>(model_position, 1.0);
+    output.world_position = model_position;
+    output.normal = model_normal;
     output.roughness = input.roughness;
     output.metallic = input.metallic;
     output.albedo = input.albedo;
