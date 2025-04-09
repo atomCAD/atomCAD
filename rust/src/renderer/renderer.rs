@@ -107,6 +107,7 @@ pub struct Renderer  {
     camera_bind_group: wgpu::BindGroup,
     model_buffer: wgpu::Buffer,
     model_bind_group: wgpu::BindGroup,
+    pub selected_clusters_transform: crate::util::transform::Transform,
     render_mutex: Mutex<()>,
 }
 
@@ -377,6 +378,7 @@ impl Renderer {
           camera_bind_group,
           model_buffer,
           model_bind_group,
+          selected_clusters_transform: crate::util::transform::Transform::default(),
           render_mutex: Mutex::new(()),
         };
 
@@ -534,16 +536,20 @@ impl Renderer {
             // Set camera bind group (shared for both pipelines)
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
-            // Draw background mesh
+            // Draw background mesh with identity transform
+            self.update_model_buffer_identity(&self.queue, &self.model_buffer);
             self.render_mesh(&mut render_pass, &self.background_mesh);
             
-            // Draw main mesh
+            // Draw main mesh with identity transform
+            self.update_model_buffer_identity(&self.queue, &self.model_buffer);
             self.render_mesh(&mut render_pass, &self.main_mesh);
 
-            // Draw selected clusters mesh
+            // Draw selected clusters mesh with its transform
+            self.update_model_buffer(&self.queue, &self.model_buffer, &self.selected_clusters_transform);
             self.render_mesh(&mut render_pass, &self.selected_clusters_mesh);
             
-            // Draw lightweight mesh
+            // Use identity transform for lightweight mesh
+            self.update_model_buffer_identity(&self.queue, &self.model_buffer);
             self.render_mesh(&mut render_pass, &self.lightweight_mesh);
         }
 
@@ -614,6 +620,9 @@ impl Renderer {
                     render_pass.set_pipeline(&self.line_pipeline);
                 }
             }
+            
+            // Set the model bind group - needed for model transformations
+            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -626,6 +635,19 @@ impl Renderer {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.refresh(&self.camera);
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
+    }
+    
+    // Helper method to update model buffer with an identity transform
+    fn update_model_buffer_identity(&self, queue: &wgpu::Queue, model_buffer: &wgpu::Buffer) {
+        let model_uniform = ModelUniform::new(); // Default is identity
+        queue.write_buffer(model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
+    }
+    
+    // Helper method to update model buffer with a specific transform
+    fn update_model_buffer(&self, queue: &wgpu::Queue, model_buffer: &wgpu::Buffer, transform: &crate::util::transform::Transform) {
+        let mut model_uniform = ModelUniform::new();
+        model_uniform.update_from_transform(transform);
+        queue.write_buffer(model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
     }
 
     /// Get the camera transform representation
@@ -666,6 +688,14 @@ impl Renderer {
         let rotation = DQuat::from_mat4(&mat);
 
         Transform::new(translation, rotation)
+    }
+
+
+    /// Update the transform used for the selected clusters mesh
+    pub fn set_selected_clusters_transform(&mut self, transform: &crate::util::transform::Transform) {
+        // This should be thread-safe as it's just updating a field value
+        // The actual GPU update happens in the render method which is protected by the render_mutex
+        self.selected_clusters_transform = transform.clone();
     }
 
     /// Set the camera from a transform representation
