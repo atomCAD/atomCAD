@@ -105,6 +105,8 @@ pub struct Renderer  {
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    model_buffer: wgpu::Buffer,
+    model_bind_group: wgpu::BindGroup,
     render_mutex: Mutex<()>,
 }
 
@@ -202,6 +204,22 @@ impl Renderer {
           ],
           label: Some("camera_bind_group_layout"),
         });
+        
+        let model_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+          entries: &[
+              wgpu::BindGroupLayoutEntry {
+                  binding: 0,
+                  visibility: wgpu::ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                  ty: wgpu::BindingType::Buffer {
+                      ty: wgpu::BufferBindingType::Uniform,
+                      has_dynamic_offset: false,
+                      min_binding_size: None,
+                  },
+                  count: None,
+              }
+          ],
+          label: Some("model_bind_group_layout"),
+        });
 
         let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
           layout: &camera_bind_group_layout,
@@ -213,11 +231,32 @@ impl Renderer {
           ],
           label: Some("camera_bind_group"),
         });
+        
+        // Create and initialize model buffer with identity transform
+        let model_uniform = ModelUniform::new();
+        let model_buffer = device.create_buffer_init(
+          &wgpu::util::BufferInitDescriptor {
+              label: Some("Model Buffer"),
+              contents: bytemuck::cast_slice(&[model_uniform]),
+              usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+          }
+        );
+        
+        let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+          layout: &model_bind_group_layout,
+          entries: &[
+              wgpu::BindGroupEntry {
+                  binding: 0,
+                  resource: model_buffer.as_entire_binding(),
+              }
+          ],
+          label: Some("model_bind_group"),
+        });
 
         // Pipeline layout - shared between triangle and line pipelines
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[&camera_bind_group_layout],
+            bind_group_layouts: &[&camera_bind_group_layout, &model_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -336,6 +375,8 @@ impl Renderer {
           camera,
           camera_buffer,
           camera_bind_group,
+          model_buffer,
+          model_bind_group,
           render_mutex: Mutex::new(()),
         };
 
