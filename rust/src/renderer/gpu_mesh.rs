@@ -12,17 +12,19 @@ pub enum MeshType {
     Lines,
 }
 
-/// Represents a mesh on the GPU with vertex and index buffers
+/// Represents a mesh on the GPU with vertex and index buffers and its own transform
 pub struct GPUMesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
     pub mesh_type: MeshType,
+    pub model_buffer: wgpu::Buffer,
+    pub model_bind_group: wgpu::BindGroup,
 }
 
 impl GPUMesh {
     /// Creates a new empty GPUMesh
-    pub fn new_empty(device: &Device, mesh_type: MeshType) -> Self {
+    pub fn new_empty(device: &Device, mesh_type: MeshType, model_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         // Create minimal empty buffers
         let (vertex_buffer, vertex_label) = match mesh_type {
             MeshType::Triangles => {
@@ -55,22 +57,46 @@ impl GPUMesh {
             }
         );
 
+        // Create and initialize model buffer with identity transform
+        let model_uniform = super::model_uniform::ModelUniform::new();
+        let model_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Mesh Model Buffer"),
+                contents: bytemuck::cast_slice(&[model_uniform]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+        
+        // Create the model bind group for this mesh
+        let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: model_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: model_buffer.as_entire_binding(),
+                }
+            ],
+            label: Some("Mesh Model Bind Group"),
+        });
+
         Self {
             vertex_buffer,
             index_buffer,
             num_indices: 0,
             mesh_type,
+            model_buffer,
+            model_bind_group,
         }
     }
 
     /// Creates a new empty triangle mesh
-    pub fn new_empty_triangle_mesh(device: &Device) -> Self {
-        Self::new_empty(device, MeshType::Triangles)
+    pub fn new_empty_triangle_mesh(device: &Device, model_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+        Self::new_empty(device, MeshType::Triangles, model_bind_group_layout)
     }
 
     /// Creates a new empty line mesh
-    pub fn new_empty_line_mesh(device: &Device) -> Self {
-        Self::new_empty(device, MeshType::Lines)
+    pub fn new_empty_line_mesh(device: &Device, model_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+        Self::new_empty(device, MeshType::Lines, model_bind_group_layout)
     }
 
     /// Updates the GPUMesh from a CPU Triangle Mesh
@@ -100,6 +126,8 @@ impl GPUMesh {
         );
 
         self.num_indices = mesh.indices.len() as u32;
+        
+        // Note: The model buffer and bind group remain unchanged
     }
 
     /// Updates the GPUMesh from a CPU Line Mesh
@@ -129,5 +157,26 @@ impl GPUMesh {
         );
 
         self.num_indices = line_mesh.indices.len() as u32;
+        
+        // Note: The model buffer and bind group remain unchanged
+    }
+
+    /// Update the model transform for this mesh
+    pub fn update_transform(&self, queue: &wgpu::Queue, transform: &crate::util::transform::Transform) {
+        // Create and update a model uniform with the transform
+        let mut model_uniform = super::model_uniform::ModelUniform::new();
+        model_uniform.update_from_transform(transform);
+        
+        // Write the updated uniform data to the buffer
+        queue.write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
+    }
+    
+    /// Set an identity transform for this mesh
+    pub fn set_identity_transform(&self, queue: &wgpu::Queue) {
+        // Create a default model uniform (identity transform)
+        let model_uniform = super::model_uniform::ModelUniform::new();
+        
+        // Write the identity transform to the buffer
+        queue.write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
     }
 }
