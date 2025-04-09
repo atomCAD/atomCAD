@@ -536,6 +536,9 @@ impl Renderer {
             // Set camera bind group (shared for both pipelines)
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
+            // Set the model bind group - needed for model transformations
+            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
+
             // Draw background mesh with identity transform
             self.update_model_buffer_identity(&self.queue, &self.model_buffer);
             self.render_mesh(&mut render_pass, &self.background_mesh);
@@ -620,9 +623,6 @@ impl Renderer {
                     render_pass.set_pipeline(&self.line_pipeline);
                 }
             }
-            
-            // Set the model bind group - needed for model transformations
-            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -645,6 +645,7 @@ impl Renderer {
     
     // Helper method to update model buffer with a specific transform
     fn update_model_buffer(&self, queue: &wgpu::Queue, model_buffer: &wgpu::Buffer, transform: &crate::util::transform::Transform) {
+        print!("Updating model buffer with transform translation: {:?}", transform.translation);
         let mut model_uniform = ModelUniform::new();
         model_uniform.update_from_transform(transform);
         queue.write_buffer(model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));

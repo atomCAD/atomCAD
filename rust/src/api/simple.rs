@@ -677,7 +677,12 @@ pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: API
       },
       Editor::SceneComposer => {
         instance.scene_composer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-        refresh_renderer(instance, &node_network_name, false);
+
+        if instance.scene_composer.selected_frame_gadget.as_ref().unwrap().frame_locked_to_atoms {
+          let selected_clusters_transform = instance.scene_composer.selected_frame_gadget.as_ref().unwrap().get_selected_clusters_transform();
+          instance.renderer.set_selected_clusters_transform(&selected_clusters_transform);
+        }
+        refresh_renderer(instance, &node_network_name, true);
       },
       Editor::None => {}
     }

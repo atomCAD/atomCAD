@@ -22,6 +22,7 @@ pub const ROTATOR_CYLINDER_LENGTH: f64 = 0.6;
 #[derive(Clone)]
 pub struct ClusterFrameGadget {
     pub transform: Transform,
+    pub start_drag_transform: Transform,
     pub last_synced_transform: Transform,
     pub frame_locked_to_atoms: bool,
     pub dragging_offset: f64, // used during dragging
@@ -86,6 +87,7 @@ impl Gadget for ClusterFrameGadget {
             &axis_dir,
             &ray_origin,
             &ray_direction);
+        self.start_drag_transform = self.transform.clone();
     }
 
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
@@ -108,6 +110,11 @@ impl Gadget for ClusterFrameGadget {
 }
 
 impl ClusterFrameGadget {
+
+    pub fn get_selected_clusters_transform(&self) -> Transform {
+        return self.transform.delta_from(&self.start_drag_transform);
+    }
+
     fn tessellate_axis_arrow(&self, output_mesh: &mut Mesh, axis_dir: &DVec3, albedo: &Vec3) {
 
         let material = Material::new(albedo, 0.4, 0.8);
