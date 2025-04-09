@@ -699,6 +699,7 @@ pub fn gadget_end_drag(node_network_name: String) {
         instance.structure_designer.gadget_end_drag();
       },
       Editor::SceneComposer => {
+        instance.renderer.set_selected_clusters_transform(&Transform::default());
         instance.scene_composer.gadget_end_drag();
       },
       Editor::None => {}

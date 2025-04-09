@@ -116,11 +116,13 @@ impl Renderer {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    // Make sure visibility matches the shader expectations (both vertex and fragment)
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(std::mem::size_of::<crate::renderer::gpu_mesh::ModelUniform>() as u64).unwrap()),
+                        // Remove explicit min_binding_size to match shader expectation
+                        min_binding_size: None,
                     },
                     count: None,
                 },

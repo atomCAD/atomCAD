@@ -452,7 +452,7 @@ impl SceneComposer {
     if selected_clusters.len() == 1 {
         self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget {
           transform: selected_clusters[0].frame_transform.clone(),
-          start_drag_transform: selected_clusters[0].frame_transform.clone(),
+          start_drag_transform: None,
           last_synced_transform: selected_clusters[0].frame_transform.clone(),
           frame_locked_to_atoms: selected_clusters[0].frame_locked_to_atoms,
           drag_start_rotation: DQuat::IDENTITY,
@@ -479,7 +479,7 @@ impl SceneComposer {
 
     self.selected_frame_gadget = Some(Box::new(ClusterFrameGadget {
       transform: Transform::new(avg_translation, avg_rotation),
-      start_drag_transform: Transform::new(avg_translation, avg_rotation),
+      start_drag_transform: None,
       last_synced_transform: Transform::new(avg_translation, avg_rotation),
       frame_locked_to_atoms: true,
       drag_start_rotation: DQuat::IDENTITY,
