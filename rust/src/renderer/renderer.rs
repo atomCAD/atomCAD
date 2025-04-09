@@ -37,36 +37,6 @@ struct CameraUniform {
     _padding1: u32,
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct ModelUniform {
-    model_matrix: [[f32; 4]; 4],
-    normal_matrix: [[f32; 4]; 4],
-}
-
-impl ModelUniform {
-    fn new() -> Self {
-        Self {
-            model_matrix: Mat4::IDENTITY.to_cols_array_2d(),
-            normal_matrix: Mat4::IDENTITY.to_cols_array_2d(),
-        }
-    }
-
-    fn update_from_transform(&mut self, transform: &crate::util::transform::Transform) {
-        // Convert the transform to a model matrix
-        let translation = transform.translation.as_vec3();
-        let rotation = transform.rotation.as_quat();
-        
-        // Create the model matrix
-        let model_matrix = Mat4::from_rotation_translation(rotation, translation);
-        self.model_matrix = model_matrix.to_cols_array_2d();
-        
-        // Calculate the normal matrix (inverse transpose of the model matrix)
-        let normal_matrix = model_matrix.inverse().transpose();
-        self.normal_matrix = normal_matrix.to_cols_array_2d();
-    }
-}
-
 impl CameraUniform {
   fn new() -> Self {
       Self {
@@ -105,8 +75,7 @@ pub struct Renderer  {
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    model_buffer: wgpu::Buffer,
-    model_bind_group: wgpu::BindGroup,
+    model_bind_group_layout: wgpu::BindGroupLayout,
     pub selected_clusters_transform: crate::util::transform::Transform,
     render_mutex: Mutex<()>,
 }
@@ -141,11 +110,29 @@ impl Renderer {
             .await
             .expect("Failed to create device");
 
-        let main_mesh = GPUMesh::new_empty_triangle_mesh(&device);
-        let selected_clusters_mesh = GPUMesh::new_empty_triangle_mesh(&device);
+        // Create model bind group layout first, as it's needed for GPUMesh initialization
+        let model_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Model Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(std::num::NonZeroU64::new(std::mem::size_of::<crate::renderer::gpu_mesh::ModelUniform>() as u64).unwrap()),
+                    },
+                    count: None,
+                },
+            ],
+        });
         
-        let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device);
-        let background_mesh = GPUMesh::new_empty_line_mesh(&device);
+        // Initialize meshes with the model_bind_group_layout
+        let main_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
+        let selected_clusters_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
+        
+        let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
+        let background_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
 
         let texture_size = Extent3d {
             width: width,
@@ -233,26 +220,8 @@ impl Renderer {
           label: Some("camera_bind_group"),
         });
         
-        // Create and initialize model buffer with identity transform
-        let model_uniform = ModelUniform::new();
-        let model_buffer = device.create_buffer_init(
-          &wgpu::util::BufferInitDescriptor {
-              label: Some("Model Buffer"),
-              contents: bytemuck::cast_slice(&[model_uniform]),
-              usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-          }
-        );
-        
-        let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-          layout: &model_bind_group_layout,
-          entries: &[
-              wgpu::BindGroupEntry {
-                  binding: 0,
-                  resource: model_buffer.as_entire_binding(),
-              }
-          ],
-          label: Some("model_bind_group"),
-        });
+        // Model bind group layout is already created above
+        // Each mesh now has its own model buffer and bind group
 
         // Pipeline layout - shared between triangle and line pipelines
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -376,8 +345,7 @@ impl Renderer {
           camera,
           camera_buffer,
           camera_bind_group,
-          model_buffer,
-          model_bind_group,
+          model_bind_group_layout,
           selected_clusters_transform: crate::util::transform::Transform::default(),
           render_mutex: Mutex::new(()),
         };

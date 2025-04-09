@@ -2,6 +2,38 @@ use wgpu::{BufferUsages, Device, util::DeviceExt};
 use bytemuck;
 use super::mesh::Mesh;
 use crate::renderer::line_mesh::LineMesh;
+use glam::Mat4;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ModelUniform {
+    model_matrix: [[f32; 4]; 4],
+    normal_matrix: [[f32; 4]; 4],
+}
+
+impl ModelUniform {
+    pub fn new() -> Self {
+        Self {
+            model_matrix: Mat4::IDENTITY.to_cols_array_2d(),
+            normal_matrix: Mat4::IDENTITY.to_cols_array_2d(),
+        }
+    }
+
+    pub fn update_from_transform(&mut self, transform: &crate::util::transform::Transform) {
+        // Convert the transform to a model matrix
+        let model = transform.to_model_matrix();
+        self.model_matrix = model.to_cols_array_2d();
+        
+        // Compute the normal matrix (inverse transpose of the model matrix)
+        // For orthogonal transforms, this can be simplified
+        if transform.is_orthogonal() {
+            self.normal_matrix = model.to_cols_array_2d();
+        } else {
+            let normal = model.inverse().transpose();
+            self.normal_matrix = normal.to_cols_array_2d();
+        }
+    }
+}
 
 /// Specifies the type of mesh for rendering purposes
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -164,7 +196,7 @@ impl GPUMesh {
     /// Update the model transform for this mesh
     pub fn update_transform(&self, queue: &wgpu::Queue, transform: &crate::util::transform::Transform) {
         // Create and update a model uniform with the transform
-        let mut model_uniform = super::model_uniform::ModelUniform::new();
+        let mut model_uniform = ModelUniform::new();
         model_uniform.update_from_transform(transform);
         
         // Write the updated uniform data to the buffer
@@ -174,7 +206,7 @@ impl GPUMesh {
     /// Set an identity transform for this mesh
     pub fn set_identity_transform(&self, queue: &wgpu::Queue) {
         // Create a default model uniform (identity transform)
-        let model_uniform = super::model_uniform::ModelUniform::new();
+        let model_uniform = ModelUniform::new();
         
         // Write the identity transform to the buffer
         queue.write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
