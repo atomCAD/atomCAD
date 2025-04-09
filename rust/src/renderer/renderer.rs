@@ -416,6 +416,8 @@ impl Renderer {
 
         // Update lightweight GPU mesh
         self.lightweight_mesh.update_from_mesh(&self.device, &lightweight_mesh, "Lightweight");
+        // Set the identity transform for the lightweight mesh
+        self.lightweight_mesh.set_identity_transform(&self.queue);
 
         // Only refresh main buffers when not in lightweight mode
         if !lightweight {
@@ -442,6 +444,12 @@ impl Renderer {
             // Update main GPU mesh
             self.main_mesh.update_from_mesh(&self.device, &mesh, "Main");
             self.selected_clusters_mesh.update_from_mesh(&self.device, &selected_clusters_mesh, "Selected Clusters");
+            
+            // Set identity transform for main mesh
+            self.main_mesh.set_identity_transform(&self.queue);
+            
+            // Apply the current selected clusters transform
+            self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
         }
 
         println!("refresh took: {:?}", start_time.elapsed());
@@ -457,8 +465,10 @@ impl Renderer {
         crate::renderer::tessellator::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh);
         
         // Update the background mesh with the line mesh
-        self.background_mesh = GPUMesh::new_empty_line_mesh(&self.device);
-        self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "background");
+        self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "Background");
+        
+        // Set identity transform for the background mesh
+        self.background_mesh.set_identity_transform(&self.queue);
     }
 
     pub fn render(&mut self) -> Vec<u8> {
@@ -504,23 +514,22 @@ impl Renderer {
             // Set camera bind group (shared for both pipelines)
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
-            // Set the model bind group - needed for model transformations
-            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
-
-            // Draw background mesh with identity transform
-            self.update_model_buffer_identity(&self.queue, &self.model_buffer);
+            // Each mesh now has its own model bind group
+            
+            // Set identity transform for background mesh and render it
+            self.background_mesh.set_identity_transform(&self.queue);
             self.render_mesh(&mut render_pass, &self.background_mesh);
             
-            // Draw main mesh with identity transform
-            self.update_model_buffer_identity(&self.queue, &self.model_buffer);
+            // Set identity transform for main mesh and render it
+            self.main_mesh.set_identity_transform(&self.queue);
             self.render_mesh(&mut render_pass, &self.main_mesh);
 
-            // Draw selected clusters mesh with its transform
-            self.update_model_buffer(&self.queue, &self.model_buffer, &self.selected_clusters_transform);
+            // Update selected clusters mesh with its transform and render it
+            self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
             self.render_mesh(&mut render_pass, &self.selected_clusters_mesh);
             
-            // Use identity transform for lightweight mesh
-            self.update_model_buffer_identity(&self.queue, &self.model_buffer);
+            // Set identity transform for lightweight mesh and render it
+            self.lightweight_mesh.set_identity_transform(&self.queue);
             self.render_mesh(&mut render_pass, &self.lightweight_mesh);
         }
 
@@ -592,6 +601,9 @@ impl Renderer {
                 }
             }
 
+            // Set the mesh's model bind group (index 1)
+            render_pass.set_bind_group(1, &mesh.model_bind_group, &[]);
+            
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
@@ -605,19 +617,7 @@ impl Renderer {
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
     
-    // Helper method to update model buffer with an identity transform
-    fn update_model_buffer_identity(&self, queue: &wgpu::Queue, model_buffer: &wgpu::Buffer) {
-        let model_uniform = ModelUniform::new(); // Default is identity
-        queue.write_buffer(model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
-    }
-    
-    // Helper method to update model buffer with a specific transform
-    fn update_model_buffer(&self, queue: &wgpu::Queue, model_buffer: &wgpu::Buffer, transform: &crate::util::transform::Transform) {
-        print!("Updating model buffer with transform translation: {:?}", transform.translation);
-        let mut model_uniform = ModelUniform::new();
-        model_uniform.update_from_transform(transform);
-        queue.write_buffer(model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
-    }
+    // These methods are no longer needed as each mesh now manages its own model buffer
 
     /// Get the camera transform representation
     /// 
@@ -665,6 +665,9 @@ impl Renderer {
         // This should be thread-safe as it's just updating a field value
         // The actual GPU update happens in the render method which is protected by the render_mutex
         self.selected_clusters_transform = transform.clone();
+        
+        // For immediate visual feedback, we could update the mesh's transform buffer here too
+        // But we'll keep it in the render method for consistency and to avoid race conditions
     }
 
     /// Set the camera from a transform representation

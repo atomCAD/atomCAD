@@ -21,18 +21,18 @@ impl ModelUniform {
 
     pub fn update_from_transform(&mut self, transform: &crate::util::transform::Transform) {
         // Convert the transform to a model matrix
-        let model = transform.to_model_matrix();
-        self.model_matrix = model.to_cols_array_2d();
+        let translation = transform.translation.as_vec3();
+        let rotation = transform.rotation.as_quat();
         
-        // Compute the normal matrix (inverse transpose of the model matrix)
-        // For orthogonal transforms, this can be simplified
-        if transform.is_orthogonal() {
-            self.normal_matrix = model.to_cols_array_2d();
-        } else {
-            let normal = model.inverse().transpose();
-            self.normal_matrix = normal.to_cols_array_2d();
-        }
+        // Create the model matrix
+        let model_matrix = Mat4::from_rotation_translation(rotation, translation);
+        self.model_matrix = model_matrix.to_cols_array_2d();
+        
+        // Calculate the normal matrix (inverse transpose of the model matrix)
+        let normal_matrix = model_matrix.inverse().transpose();
+        self.normal_matrix = normal_matrix.to_cols_array_2d();
     }
+
 }
 
 /// Specifies the type of mesh for rendering purposes
@@ -90,7 +90,7 @@ impl GPUMesh {
         );
 
         // Create and initialize model buffer with identity transform
-        let model_uniform = super::model_uniform::ModelUniform::new();
+        let model_uniform = ModelUniform::new();
         let model_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Mesh Model Buffer"),
