@@ -48,6 +48,14 @@ class SceneComposerModel extends ChangeNotifier {
     return ret;
   }
 
+  void renameCluster(BigInt clusterId, String newName) {
+    simple.sceneComposerRenameCluster(
+      clusterId: clusterId,
+      newName: newName,
+    );
+    refreshFromKernel();
+  }
+
   void setActiveTool(APISceneComposerTool tool) {
     simple.setActiveSceneComposerTool(tool: tool);
     refreshFromKernel();

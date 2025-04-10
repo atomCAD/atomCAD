@@ -169,9 +169,17 @@ impl AtomicStructure {
     }
   }
 
+  pub fn rename_cluster(&mut self, cluster_id: u64, new_name: &str) {
+    if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+      cluster.name = new_name.to_string();
+    }
+  }
+
   /// Removes all clusters that have no atoms (empty atom_ids sets)
   /// 
   /// # Returns
+  /// 
+  /// A vector containing the IDs of the removed clusters
   /// 
   /// A vector containing the IDs of the removed clusters
   pub fn remove_empty_clusters(&mut self) -> Vec<u64> {
@@ -386,6 +394,8 @@ impl AtomicStructure {
     return closest_atom_position;
   }
 
+
+  
   fn remove_from_bond_arr(&mut self, atom_id: u64, bond_id: u64) {
     let bond_ids = &mut self.atoms.get_mut(&atom_id).unwrap().bond_ids;
     if let Some(pos) = bond_ids.iter().position(|&x| x == bond_id) {

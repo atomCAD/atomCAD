@@ -814,6 +814,15 @@ pub fn set_selected_frame_transform(transform: APITransform) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn scene_composer_rename_cluster(cluster_id: u64, new_name: String) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.scene_composer.model.rename_cluster(cluster_id, &new_name);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_camera_transform() -> APITransform {
   unsafe {
     if let Some(instance) = &CAD_INSTANCE {

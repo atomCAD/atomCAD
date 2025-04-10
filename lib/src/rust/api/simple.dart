@@ -222,6 +222,11 @@ void setSelectedFrameTransform({required APITransform transform}) =>
     RustLib.instance.api
         .crateApiSimpleSetSelectedFrameTransform(transform: transform);
 
+void sceneComposerRenameCluster(
+        {required BigInt clusterId, required String newName}) =>
+    RustLib.instance.api.crateApiSimpleSceneComposerRenameCluster(
+        clusterId: clusterId, newName: newName);
+
 APITransform getCameraTransform() =>
     RustLib.instance.api.crateApiSimpleGetCameraTransform();
 
