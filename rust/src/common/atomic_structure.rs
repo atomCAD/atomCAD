@@ -141,9 +141,18 @@ impl AtomicStructure {
     self.clusters.get(&cluster_id)
   }
 
-  pub fn select_cluster(&mut self, cluster_id: u64, select_modifier: SelectModifier) {
+  pub fn select_cluster(&mut self, cluster_id: u64, select_modifier: SelectModifier) -> HashSet<u64> {
+    let mut inverted_cluster_ids = HashSet::new();
+    
     match select_modifier {
       SelectModifier::Replace => {
+        // Track currently selected clusters that will be deselected
+        for (id, cluster) in self.clusters.iter() {
+          if cluster.selected {
+            inverted_cluster_ids.insert(*id);
+          }
+        }
+        
         // Deselect all clusters
         for (_, cluster) in self.clusters.iter_mut() {
           cluster.selected = false;
@@ -151,6 +160,14 @@ impl AtomicStructure {
         
         // Select the specified cluster if it exists
         if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+          // Check if it was previously unselected (will be inverted)
+          if !cluster.selected {
+            inverted_cluster_ids.insert(cluster_id);
+          } else {
+            // If it was previously selected, it's not actually inverted
+            // (deselected then selected again)
+            inverted_cluster_ids.remove(&cluster_id);
+          }
           cluster.selected = true;
         }
       },
@@ -158,13 +175,29 @@ impl AtomicStructure {
         // Toggle selection state of the specified cluster
         if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
           cluster.selected = !cluster.selected;
+          // Add this cluster to the inverted set
+          inverted_cluster_ids.insert(cluster_id);
         }
       },
       SelectModifier::Expand => {
         // Add the specified cluster to the selection
         if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+          // Only track as inverted if we're changing its state from unselected to selected
+          if !cluster.selected {
+            inverted_cluster_ids.insert(cluster_id);
+          }
           cluster.selected = true;
         }
+      }
+    }
+    
+    inverted_cluster_ids
+  }
+
+  pub fn invert_cluster_selections(&mut self, inverted_cluster_ids: &HashSet<u64>) {
+    for cluster_id in inverted_cluster_ids {
+      if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
+        cluster.selected = !cluster.selected;
       }
     }
   }

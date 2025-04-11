@@ -15,6 +15,8 @@ use crate::common::atomic_structure_utils::{auto_create_bonds, detect_bonded_sub
 use crate::api::api_types::SelectModifier;
 use crate::scene_composer::cluster_frame_gadget::ClusterFrameGadget;
 use crate::api::api_types::APISceneComposerTool;
+use std::collections::HashSet;
+use crate::scene_composer::commands::scene_composer_command::SceneComposerCommand;
 
 pub enum SceneComposerTool {
   Default,
@@ -41,6 +43,8 @@ pub struct SceneComposer {
     pub model: AtomicStructure,
     pub selected_frame_gadget: Option<Box<ClusterFrameGadget>>,
     pub active_tool: SceneComposerTool,
+    pub history: Vec<Box<dyn SceneComposerCommand>>,
+    pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
 }
 
 impl SceneComposer {
@@ -49,6 +53,8 @@ impl SceneComposer {
       model: AtomicStructure::new(),
       selected_frame_gadget: None,
       active_tool: SceneComposerTool::Default,
+      history: Vec::new(),
+      next_history_index: 0,
     }
   }
 
@@ -146,10 +152,16 @@ impl SceneComposer {
     Some(cluster_id)
   }
 
-  pub fn select_cluster_by_id(&mut self, cluster_id: u64, select_modifier: SelectModifier) {
-    self.model.select_cluster(cluster_id, select_modifier);
+  pub fn select_cluster_by_id(&mut self, cluster_id: u64, select_modifier: SelectModifier) -> HashSet<u64> {
+    let inverted_cluster_ids = self.model.select_cluster(cluster_id, select_modifier);
     self.recreate_selected_frame_gadget();
+    inverted_cluster_ids
   }
+
+  pub fn invert_cluster_selections(&mut self, inverted_cluster_ids: &HashSet<u64>) {
+    self.model.invert_cluster_selections(inverted_cluster_ids);
+    self.recreate_selected_frame_gadget();
+  } 
 
   pub fn set_active_tool(&mut self, tool: APISceneComposerTool) {
     self.active_tool = match tool {
@@ -433,6 +445,38 @@ impl SceneComposer {
       // Update the last synced transform
       gadget.last_synced_transform = gadget.transform.clone();
     }
+  }
+
+  pub fn get_history_size(&self) -> usize {
+    self.history.len()
+  }
+
+  pub fn execute_command(&mut self, mut command: Box<dyn SceneComposerCommand>) -> & Box<dyn SceneComposerCommand> {
+    if self.history.len() > self.next_history_index {
+      self.history.drain(self.next_history_index..);
+    }
+    command.execute(&mut self.model, false);
+    self.history.push(command);
+    self.next_history_index = self.history.len();
+
+    & self.history[self.history.len() - 1]
+  }
+
+  pub fn undo(&mut self) -> bool {
+    if self.next_history_index == 0 {
+      return false;
+    }
+    self.next_history_index -= 1;
+    self.history[self.next_history_index].undo(self);
+    return true;
+  }
+
+  pub fn redo(&mut self) -> bool {
+    if self.next_history_index >= self.history.len() {
+      return false;
+    }
+    self.history[self.next_history_index].execute(self, true);
+    return true;
   }
 
   fn recreate_selected_frame_gadget(&mut self) {
