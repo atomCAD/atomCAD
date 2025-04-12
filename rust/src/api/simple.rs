@@ -330,7 +330,7 @@ pub fn add_atom(atomic_number: i32, position: APIVec3) {
 pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
   unsafe {
     if let Some(cad_instance) = &CAD_INSTANCE {
-      let model = &cad_instance.scene_composer.model;
+      let model = &cad_instance.scene_composer.model.model;
       return to_api_vec3(&model.find_pivot_point(&from_api_vec3(&ray_start), &from_api_vec3(&ray_dir)));
     } else {
       return APIVec3{
@@ -678,8 +678,8 @@ pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: API
       Editor::SceneComposer => {
         instance.scene_composer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
 
-        if instance.scene_composer.selected_frame_gadget.as_ref().unwrap().frame_locked_to_atoms {
-          let selected_clusters_transform = instance.scene_composer.selected_frame_gadget.as_ref().unwrap().get_selected_clusters_transform();
+        if instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().frame_locked_to_atoms {
+          let selected_clusters_transform = instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().get_selected_clusters_transform();
           instance.renderer.set_selected_clusters_transform(&selected_clusters_transform);
         }
         refresh_renderer(instance, &node_network_name, true);
@@ -717,7 +717,7 @@ pub fn sync_gadget_data(node_network_name: String) -> bool {
           return instance.structure_designer.sync_gadget_data(&node_network_name);
         },
         Editor::SceneComposer => {
-          instance.scene_composer.sync_gadget_to_model();
+          instance.scene_composer.model.sync_gadget_to_model();
           return true;
         },
         Editor::None => { false }
@@ -778,11 +778,11 @@ pub fn get_scene_composer_view() -> Option<SceneComposerView> {
 
     let mut scene_composer_view = SceneComposerView {
       clusters: Vec::new(),
-      active_tool: cad_instance.scene_composer.get_active_tool(),
+      active_tool: cad_instance.scene_composer.model.get_active_tool(),
       available_tools: cad_instance.scene_composer.get_available_tools(),
     };
 
-    for cluster in cad_instance.scene_composer.model.clusters.values() {
+    for cluster in cad_instance.scene_composer.model.model.clusters.values() {
       scene_composer_view.clusters.push(ClusterView {
         id: cluster.id,
         name: cluster.name.clone(),
@@ -798,7 +798,7 @@ pub fn get_scene_composer_view() -> Option<SceneComposerView> {
 pub fn get_selected_frame_transform() -> Option<APITransform> {
   unsafe {
     let instance = CAD_INSTANCE.as_ref()?;
-    let transform = instance.scene_composer.get_selected_frame_transform()?;
+    let transform = instance.scene_composer.model.get_selected_frame_transform()?;
     Some(to_api_transform(&transform))
   }
 }
@@ -817,7 +817,7 @@ pub fn set_selected_frame_transform(transform: APITransform) {
 pub fn scene_composer_rename_cluster(cluster_id: u64, new_name: String) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      instance.scene_composer.model.rename_cluster(cluster_id, &new_name);
+      instance.scene_composer.model.model.rename_cluster(cluster_id, &new_name);
     }
   }
 }
@@ -869,7 +869,7 @@ pub fn rotate_around_local_axis(axis_index: u32, angle_degrees: f64) {
 pub fn is_frame_locked_to_atoms() -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      return instance.scene_composer.is_frame_locked_to_atoms();
+      return instance.scene_composer.model.is_frame_locked_to_atoms();
     }
   }
   
@@ -961,10 +961,10 @@ pub fn get_scene_composer_atom_info() -> Option<AtomView> {
     let atom_id = instance.scene_composer.get_atom_info_atom_id()?;
 
     // Get the atom from the model
-    let atom = instance.scene_composer.model.get_atom(atom_id)?;
+    let atom = instance.scene_composer.model.model.get_atom(atom_id)?;
     
     // Get the cluster from the model
-    let cluster = instance.scene_composer.model.get_cluster(atom.cluster_id)?;
+    let cluster = instance.scene_composer.model.model.get_cluster(atom.cluster_id)?;
 
     // Extract atom information from ATOM_INFO hashmap or use defaults
     let atom_info = crate::common::common_constants::ATOM_INFO.get(&atom.atomic_number);

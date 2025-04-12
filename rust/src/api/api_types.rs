@@ -8,6 +8,7 @@ pub enum Editor {
   SceneComposer
 }
 
+#[derive(Clone)]
 pub enum SelectModifier {
   Replace,
   Toggle,
@@ -109,6 +110,7 @@ pub struct APITransform {
   pub rotation: APIVec3, // intrinsic euler angles in degrees
 }
 
+#[derive(Clone)]
 pub enum APISceneComposerTool {
   Default,
   Align,

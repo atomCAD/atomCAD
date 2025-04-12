@@ -1,7 +1,7 @@
 
 use crate::api::api_types::SelectModifier;
 use std::collections::HashSet;
-use crate::scene_composer::scene_composer::SceneComposer;
+use crate::scene_composer::scene_composer_model::SceneComposerModel;
 use crate::scene_composer::commands::scene_composer_command::SceneComposerCommand;
 
 pub struct SelectClusterCommand {
@@ -20,14 +20,14 @@ impl SelectClusterCommand {
 }
 
 impl SceneComposerCommand for SelectClusterCommand {
-  fn execute(&mut self, scene_composer: &mut SceneComposer, is_redo: bool) {
-    let inverted_cluster_ids = scene_composer.select_cluster_by_id(self.cluster_id, self.select_modifier);
+  fn execute(&mut self, model: &mut SceneComposerModel, is_redo: bool) {
+    let inverted_cluster_ids = model.select_cluster_by_id(self.cluster_id, self.select_modifier.clone());
     if !is_redo {
       self.inverted_cluster_selections = inverted_cluster_ids;
     }
   }
 
-  fn undo(&mut self, scene_composer: &mut SceneComposer) {
-    scene_composer.invert_cluster_selections(&self.inverted_cluster_selections);
+  fn undo(&mut self, model: &mut SceneComposerModel) {
+    model.invert_cluster_selections(&self.inverted_cluster_selections);
   }
 }
