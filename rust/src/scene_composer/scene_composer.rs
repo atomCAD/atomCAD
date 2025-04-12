@@ -401,6 +401,14 @@ impl SceneComposer {
     return true;
   }
 
+  pub fn is_undo_available(&self) -> bool {
+    self.next_history_index > 0
+  }
+
+  pub fn is_redo_available(&self) -> bool {
+    self.next_history_index < self.history.len()
+  }
+
   pub fn add_executed_command(&mut self, command: Box<dyn SceneComposerCommand>) -> & Box<dyn SceneComposerCommand> {
     if self.history.len() > self.next_history_index {
       self.history.drain(self.next_history_index..);

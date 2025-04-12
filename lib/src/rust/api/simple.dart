@@ -212,6 +212,12 @@ void selectClusterById(
     RustLib.instance.api.crateApiSimpleSelectClusterById(
         clusterId: clusterId, selectModifier: selectModifier);
 
+bool sceneComposerUndo() =>
+    RustLib.instance.api.crateApiSimpleSceneComposerUndo();
+
+bool sceneComposerRedo() =>
+    RustLib.instance.api.crateApiSimpleSceneComposerRedo();
+
 SceneComposerView? getSceneComposerView() =>
     RustLib.instance.api.crateApiSimpleGetSceneComposerView();
 

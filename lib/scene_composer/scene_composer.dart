@@ -132,6 +132,42 @@ class _SceneComposerState extends State<SceneComposer> {
                     ),
                   ],
                 ),
+                Consumer<SceneComposerModel>(
+                  builder: (context, model, child) {
+                    return MenuAnchor(
+                      builder: (context, controller, child) {
+                        return TextButton(
+                          onPressed: () {
+                            if (controller.isOpen) {
+                              controller.close();
+                            } else {
+                              controller.open();
+                            }
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black87,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          child: const Text('Edit'),
+                        );
+                      },
+                      menuChildren: [
+                        MenuItemButton(
+                          onPressed: model.sceneComposerView?.isUndoAvailable == true
+                              ? () => model.undo()
+                              : null,
+                          child: const Text('Undo'),
+                        ),
+                        MenuItemButton(
+                          onPressed: model.sceneComposerView?.isRedoAvailable == true
+                              ? () => model.redo()
+                              : null,
+                          child: const Text('Redo'),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -246,6 +282,42 @@ class _SceneComposerState extends State<SceneComposer> {
                     key: _viewportKey,
                     model: model,
                   ),
+                ),
+                Consumer<SceneComposerModel>(
+                  builder: (context, model, child) {
+                    return MenuAnchor(
+                      builder: (context, controller, child) {
+                        return TextButton(
+                          onPressed: () {
+                            if (controller.isOpen) {
+                              controller.close();
+                            } else {
+                              controller.open();
+                            }
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black87,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          child: const Text('Edit'),
+                        );
+                      },
+                      menuChildren: [
+                        MenuItemButton(
+                          onPressed: model.sceneComposerView?.isUndoAvailable == true
+                              ? () => model.undo()
+                              : null,
+                          child: const Text('Undo'),
+                        ),
+                        MenuItemButton(
+                          onPressed: model.sceneComposerView?.isRedoAvailable == true
+                              ? () => model.redo()
+                              : null,
+                          child: const Text('Redo'),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

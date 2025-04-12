@@ -6,6 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`
+
 class APIAtomTransData {
   final APIVec3 translation;
   final APIVec3 rotation;
@@ -429,16 +431,24 @@ class SceneComposerView {
   final List<ClusterView> clusters;
   final APISceneComposerTool activeTool;
   final List<APISceneComposerTool> availableTools;
+  final bool isUndoAvailable;
+  final bool isRedoAvailable;
 
   const SceneComposerView({
     required this.clusters,
     required this.activeTool,
     required this.availableTools,
+    required this.isUndoAvailable,
+    required this.isRedoAvailable,
   });
 
   @override
   int get hashCode =>
-      clusters.hashCode ^ activeTool.hashCode ^ availableTools.hashCode;
+      clusters.hashCode ^
+      activeTool.hashCode ^
+      availableTools.hashCode ^
+      isUndoAvailable.hashCode ^
+      isRedoAvailable.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -447,7 +457,9 @@ class SceneComposerView {
           runtimeType == other.runtimeType &&
           clusters == other.clusters &&
           activeTool == other.activeTool &&
-          availableTools == other.availableTools;
+          availableTools == other.availableTools &&
+          isUndoAvailable == other.isUndoAvailable &&
+          isRedoAvailable == other.isRedoAvailable;
 }
 
 enum SelectModifier {

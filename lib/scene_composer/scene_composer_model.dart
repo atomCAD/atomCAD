@@ -132,6 +132,16 @@ class SceneComposerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void undo() {
+    simple.sceneComposerUndo();
+    refreshFromKernel();
+  }
+
+  void redo() {
+    simple.sceneComposerRedo();
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     sceneComposerView = simple.getSceneComposerView();
     alignToolStateText = simple.getAlignToolStateText();

@@ -122,6 +122,8 @@ pub struct SceneComposerView {
   pub clusters: Vec<ClusterView>,
   pub active_tool: APISceneComposerTool,
   pub available_tools: Vec<APISceneComposerTool>,
+  pub is_undo_available: bool,
+  pub is_redo_available: bool,
 }
 
 pub struct AtomView {

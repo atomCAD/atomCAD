@@ -772,6 +772,26 @@ pub fn select_cluster_by_id(cluster_id: u64, select_modifier: SelectModifier) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn scene_composer_undo() -> bool {
+  unsafe {
+    let instance = CAD_INSTANCE.as_mut().unwrap();
+    let result = instance.scene_composer.undo();
+    refresh_renderer(instance, "", false);
+    result
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn scene_composer_redo() -> bool {
+  unsafe {
+    let instance = CAD_INSTANCE.as_mut().unwrap();
+    let result = instance.scene_composer.redo();
+    refresh_renderer(instance, "", false);
+    result
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_scene_composer_view() -> Option<SceneComposerView> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
@@ -780,6 +800,8 @@ pub fn get_scene_composer_view() -> Option<SceneComposerView> {
       clusters: Vec::new(),
       active_tool: cad_instance.scene_composer.model.get_active_tool(),
       available_tools: cad_instance.scene_composer.get_available_tools(),
+      is_undo_available: cad_instance.scene_composer.is_undo_available(),
+      is_redo_available: cad_instance.scene_composer.is_redo_available(),
     };
 
     for cluster in cad_instance.scene_composer.model.model.clusters.values() {
