@@ -50,7 +50,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
     // Yellow color for marked atoms
     MARKED_ATOM_COLOR
   } else if selected {
-    Vec3::new(0.0, 0.0, atom_info.color.length())
+    to_selected_color(&atom_info.color)
   } else { 
     atom_info.color
   };
@@ -63,9 +63,13 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
     params.sphere_vertical_divisions,
     &Material::new(
       &color, 
-      0.8,
+      if selected { 0.2 } else { 0.8 },
       0.0),
   );
+}
+
+fn to_selected_color(color: &Vec3) -> Vec3 {
+  color * 0.7
 }
 
 pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
