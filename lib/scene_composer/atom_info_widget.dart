@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_cad/src/rust/api/scene_composer_api_types.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:provider/provider.dart';
 
@@ -20,7 +21,7 @@ class AtomInfoWidget extends StatelessWidget {
       child: Consumer<SceneComposerModel>(
         builder: (context, sceneModel, child) {
           final AtomView? atomInfo = sceneModel.atomInfoView;
-          
+
           if (atomInfo == null) {
             return const Center(
               child: Text(
@@ -29,17 +30,21 @@ class AtomInfoWidget extends StatelessWidget {
               ),
             );
           }
-          
+
           return Padding(
             padding: const EdgeInsets.all(8.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildInfoRow('ID:', atomInfo.id.toString()),
-                _buildInfoRow('Element:', '${atomInfo.symbol} (${atomInfo.elementName})'),
-                _buildInfoRow('Atomic Number:', atomInfo.atomicNumber.toString()),
-                _buildInfoRow('Covalent radius:', atomInfo.covalentRadius.toString()),
-                _buildInfoRow('Cluster:', '${atomInfo.clusterName} (${atomInfo.clusterId})'),
+                _buildInfoRow(
+                    'Element:', '${atomInfo.symbol} (${atomInfo.elementName})'),
+                _buildInfoRow(
+                    'Atomic Number:', atomInfo.atomicNumber.toString()),
+                _buildInfoRow(
+                    'Covalent radius:', atomInfo.covalentRadius.toString()),
+                _buildInfoRow('Cluster:',
+                    '${atomInfo.clusterName} (${atomInfo.clusterId})'),
                 const SizedBox(height: 8),
                 Text(
                   'Position:',

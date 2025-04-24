@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 
 /// A reusable widget for editing IVec3 values
 class IVec3Input extends StatefulWidget {
@@ -64,16 +64,16 @@ class _IVec3InputState extends State<IVec3Input> {
     if (newValue != null) {
       switch (axis) {
         case 'x':
-          widget.onChanged(APIIVec3(
-              x: newValue, y: widget.value.y, z: widget.value.z));
+          widget.onChanged(
+              APIIVec3(x: newValue, y: widget.value.y, z: widget.value.z));
           break;
         case 'y':
-          widget.onChanged(APIIVec3(
-              x: widget.value.x, y: newValue, z: widget.value.z));
+          widget.onChanged(
+              APIIVec3(x: widget.value.x, y: newValue, z: widget.value.z));
           break;
         case 'z':
-          widget.onChanged(APIIVec3(
-              x: widget.value.x, y: widget.value.y, z: newValue));
+          widget.onChanged(
+              APIIVec3(x: widget.value.x, y: widget.value.y, z: newValue));
           break;
       }
     }

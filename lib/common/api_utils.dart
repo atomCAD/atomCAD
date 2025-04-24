@@ -1,4 +1,4 @@
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:vector_math/vector_math.dart' as vector_math;
 import 'package:flutter/material.dart';
 

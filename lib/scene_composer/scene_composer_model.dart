@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
-import 'package:flutter_cad/src/rust/api/simple.dart' as simple;
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_cad/src/rust/api/scene_composer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/scene_composer_api.dart'
+    as scene_composer_api;
+import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:vector_math/vector_math.dart' as vector_math;
 import 'package:flutter_cad/common/api_utils.dart';
 
@@ -15,22 +18,22 @@ class SceneComposerModel extends ChangeNotifier {
   }
 
   void importXyz(String filePath) {
-    simple.importXyz(filePath: filePath);
+    scene_composer_api.importXyz(filePath: filePath);
     refreshFromKernel();
   }
 
   void newModel() {
-    simple.sceneComposerNewModel();
+    scene_composer_api.sceneComposerNewModel();
     refreshFromKernel();
   }
 
   void exportXyz(String filePath) {
-    simple.exportXyz(filePath: filePath);
+    scene_composer_api.exportXyz(filePath: filePath);
     refreshFromKernel();
   }
 
   void selectClusterById(BigInt clusterId, SelectModifier selectModifier) {
-    simple.selectClusterById(
+    scene_composer_api.selectClusterById(
       clusterId: clusterId,
       selectModifier: selectModifier,
     );
@@ -39,7 +42,7 @@ class SceneComposerModel extends ChangeNotifier {
 
   BigInt? selectClusterByRay(vector_math.Vector3 rayStart,
       vector_math.Vector3 rayDir, SelectModifier selectModifier) {
-    final ret = simple.selectClusterByRay(
+    final ret = scene_composer_api.selectClusterByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
       selectModifier: selectModifier,
@@ -49,7 +52,7 @@ class SceneComposerModel extends ChangeNotifier {
   }
 
   void renameCluster(BigInt clusterId, String newName) {
-    simple.sceneComposerRenameCluster(
+    scene_composer_api.sceneComposerRenameCluster(
       clusterId: clusterId,
       newName: newName,
     );
@@ -57,13 +60,13 @@ class SceneComposerModel extends ChangeNotifier {
   }
 
   void setActiveTool(APISceneComposerTool tool) {
-    simple.setActiveSceneComposerTool(tool: tool);
+    scene_composer_api.setActiveSceneComposerTool(tool: tool);
     refreshFromKernel();
   }
 
   BigInt? selectAlignAtomByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
-    final ret = simple.selectAlignAtomByRay(
+    final ret = scene_composer_api.selectAlignAtomByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
     );
@@ -73,7 +76,7 @@ class SceneComposerModel extends ChangeNotifier {
 
   BigInt? selectDistanceAtomByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
-    final ret = simple.selectDistanceAtomByRay(
+    final ret = scene_composer_api.selectDistanceAtomByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
     );
@@ -83,7 +86,7 @@ class SceneComposerModel extends ChangeNotifier {
 
   BigInt? selectAtomInfoAtomByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
-    final ret = simple.selectAtomInfoAtomByRay(
+    final ret = scene_composer_api.selectAtomInfoAtomByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
     );
@@ -92,61 +95,61 @@ class SceneComposerModel extends ChangeNotifier {
   }
 
   APITransform? getSelectedFrameTransform() {
-    return simple.getSelectedFrameTransform();
+    return scene_composer_api.getSelectedFrameTransform();
   }
 
   bool isFrameLockedToAtoms() {
-    return simple.isFrameLockedToAtoms();
+    return scene_composer_api.isFrameLockedToAtoms();
   }
 
   void setFrameLockedToAtoms(bool locked) {
-    simple.setFrameLockedToAtoms(locked: locked);
+    scene_composer_api.setFrameLockedToAtoms(locked: locked);
     refreshFromKernel();
   }
 
   void setSelectedFrameTransform(APITransform transform) {
     print(
         "setSelectedFrameTransform ${transform.translation.x} ${transform.translation.y} ${transform.translation.z}");
-    simple.setSelectedFrameTransform(transform: transform);
+    scene_composer_api.setSelectedFrameTransform(transform: transform);
     refreshFromKernel();
   }
 
   APITransform getCameraTransform() {
-    return simple.getCameraTransform();
+    return common_api.getCameraTransform();
   }
 
   void setCameraTransform(APITransform transform) {
-    simple.setCameraTransform(transform: transform);
+    common_api.setCameraTransform(transform: transform);
     refreshFromKernel();
   }
 
   void translateAlongLocalAxis(int axisIndex, double translation) {
-    simple.translateAlongLocalAxis(
+    scene_composer_api.translateAlongLocalAxis(
         axisIndex: axisIndex, translation: translation);
     refreshFromKernel();
   }
 
   void rotateAroundLocalAxis(int axisIndex, double angleDegrees) {
-    simple.rotateAroundLocalAxis(
+    scene_composer_api.rotateAroundLocalAxis(
         axisIndex: axisIndex, angleDegrees: angleDegrees);
     refreshFromKernel();
   }
 
   void undo() {
-    simple.sceneComposerUndo();
+    scene_composer_api.sceneComposerUndo();
     refreshFromKernel();
   }
 
   void redo() {
-    simple.sceneComposerRedo();
+    scene_composer_api.sceneComposerRedo();
     refreshFromKernel();
   }
 
   void refreshFromKernel() {
-    sceneComposerView = simple.getSceneComposerView();
-    alignToolStateText = simple.getAlignToolStateText();
-    distanceToolStateText = simple.getDistanceToolStateText();
-    atomInfoView = simple.getSceneComposerAtomInfo();
+    sceneComposerView = scene_composer_api.getSceneComposerView();
+    alignToolStateText = scene_composer_api.getAlignToolStateText();
+    distanceToolStateText = scene_composer_api.getDistanceToolStateText();
+    atomInfoView = scene_composer_api.getSceneComposerAtomInfo();
     notifyListeners();
   }
 }

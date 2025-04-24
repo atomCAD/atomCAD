@@ -8,7 +8,8 @@ import 'package:flutter_cad/common/section.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_tools_panel.dart';
 import 'package:flutter_cad/scene_composer/transform_control_widget.dart';
 import 'package:flutter_cad/scene_composer/atom_info_widget.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_cad/src/rust/api/scene_composer_api_types.dart';
 import 'package:provider/provider.dart';
 
 /// The scene composer editor.
@@ -153,15 +154,17 @@ class _SceneComposerState extends State<SceneComposer> {
                       },
                       menuChildren: [
                         MenuItemButton(
-                          onPressed: model.sceneComposerView?.isUndoAvailable == true
-                              ? () => model.undo()
-                              : null,
+                          onPressed:
+                              model.sceneComposerView?.isUndoAvailable == true
+                                  ? () => model.undo()
+                                  : null,
                           child: const Text('Undo'),
                         ),
                         MenuItemButton(
-                          onPressed: model.sceneComposerView?.isRedoAvailable == true
-                              ? () => model.redo()
-                              : null,
+                          onPressed:
+                              model.sceneComposerView?.isRedoAvailable == true
+                                  ? () => model.redo()
+                                  : null,
                           child: const Text('Redo'),
                         ),
                       ],
@@ -282,42 +285,6 @@ class _SceneComposerState extends State<SceneComposer> {
                     key: _viewportKey,
                     model: model,
                   ),
-                ),
-                Consumer<SceneComposerModel>(
-                  builder: (context, model, child) {
-                    return MenuAnchor(
-                      builder: (context, controller, child) {
-                        return TextButton(
-                          onPressed: () {
-                            if (controller.isOpen) {
-                              controller.close();
-                            } else {
-                              controller.open();
-                            }
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.black87,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                          ),
-                          child: const Text('Edit'),
-                        );
-                      },
-                      menuChildren: [
-                        MenuItemButton(
-                          onPressed: model.sceneComposerView?.isUndoAvailable == true
-                              ? () => model.undo()
-                              : null,
-                          child: const Text('Undo'),
-                        ),
-                        MenuItemButton(
-                          onPressed: model.sceneComposerView?.isRedoAvailable == true
-                              ? () => model.redo()
-                              : null,
-                          child: const Text('Redo'),
-                        ),
-                      ],
-                    );
-                  },
                 ),
               ],
             ),

@@ -3,8 +3,12 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
-import 'api/api_types.dart';
-import 'api/simple.dart';
+import 'api/common_api.dart';
+import 'api/common_api_types.dart';
+import 'api/scene_composer_api.dart';
+import 'api/scene_composer_api_types.dart';
+import 'api/structure_designer_api.dart';
+import 'api/structure_designer_api_types.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -58,7 +62,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
   @override
   Future<void> executeRustInitializers() async {
-    await api.crateApiSimpleInitApp();
+    await api.crateApiCommonApiInitApp();
   }
 
   @override
@@ -69,7 +73,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => 1580696939;
+  int get rustContentHash => -1528421611;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -80,184 +84,186 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  void crateApiSimpleAddAtom(
+  void crateApiStructureDesignerApiAddAtom(
       {required int atomicNumber, required APIVec3 position});
 
-  BigInt crateApiSimpleAddNode(
+  BigInt crateApiStructureDesignerApiAddNode(
       {required String nodeNetworkName,
       required String nodeTypeName,
       required APIVec2 position});
 
-  void crateApiSimpleClearSelection({required String nodeNetworkName});
+  void crateApiStructureDesignerApiClearSelection(
+      {required String nodeNetworkName});
 
-  void crateApiSimpleConnectNodes(
+  void crateApiStructureDesignerApiConnectNodes(
       {required String nodeNetworkName,
       required BigInt sourceNodeId,
       required BigInt destNodeId,
       required BigInt destParamIndex});
 
-  void crateApiSimpleDeleteSelected({required String nodeNetworkName});
-
-  bool crateApiSimpleExportXyz({required String filePath});
-
-  APIVec3 crateApiSimpleFindPivotPoint(
-      {required APIVec3 rayStart, required APIVec3 rayDir});
-
-  void crateApiSimpleGadgetDrag(
-      {required String nodeNetworkName,
-      required int handleIndex,
-      required APIVec3 rayOrigin,
-      required APIVec3 rayDirection});
-
-  void crateApiSimpleGadgetEndDrag({required String nodeNetworkName});
-
-  int? crateApiSimpleGadgetHitTest(
-      {required APIVec3 rayOrigin, required APIVec3 rayDirection});
-
-  void crateApiSimpleGadgetStartDrag(
-      {required String nodeNetworkName,
-      required int handleIndex,
-      required APIVec3 rayOrigin,
-      required APIVec3 rayDirection});
-
-  String crateApiSimpleGetAlignToolStateText();
-
-  APIAtomTransData? crateApiSimpleGetAtomTransData(
-      {required String nodeNetworkName, required BigInt nodeId});
-
-  APICamera? crateApiSimpleGetCamera();
-
-  APITransform crateApiSimpleGetCameraTransform();
-
-  APICuboidData? crateApiSimpleGetCuboidData(
-      {required String nodeNetworkName, required BigInt nodeId});
-
-  String crateApiSimpleGetDistanceToolStateText();
-
-  APIGeoTransData? crateApiSimpleGetGeoTransData(
-      {required String nodeNetworkName, required BigInt nodeId});
-
-  APIHalfSpaceData? crateApiSimpleGetHalfSpaceData(
-      {required String nodeNetworkName, required BigInt nodeId});
-
-  NodeNetworkView? crateApiSimpleGetNodeNetworkView(
+  void crateApiStructureDesignerApiDeleteSelected(
       {required String nodeNetworkName});
 
-  List<String>? crateApiSimpleGetNodeTypeNames();
+  bool crateApiSceneComposerApiExportXyz({required String filePath});
 
-  AtomView? crateApiSimpleGetSceneComposerAtomInfo();
+  APIVec3 crateApiCommonApiFindPivotPoint(
+      {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  SceneComposerView? crateApiSimpleGetSceneComposerView();
+  void crateApiCommonApiGadgetDrag(
+      {required String nodeNetworkName,
+      required int handleIndex,
+      required APIVec3 rayOrigin,
+      required APIVec3 rayDirection});
 
-  APITransform? crateApiSimpleGetSelectedFrameTransform();
+  void crateApiCommonApiGadgetEndDrag({required String nodeNetworkName});
 
-  APISphereData? crateApiSimpleGetSphereData(
+  int? crateApiCommonApiGadgetHitTest(
+      {required APIVec3 rayOrigin, required APIVec3 rayDirection});
+
+  void crateApiCommonApiGadgetStartDrag(
+      {required String nodeNetworkName,
+      required int handleIndex,
+      required APIVec3 rayOrigin,
+      required APIVec3 rayDirection});
+
+  String crateApiSceneComposerApiGetAlignToolStateText();
+
+  APIAtomTransData? crateApiStructureDesignerApiGetAtomTransData(
       {required String nodeNetworkName, required BigInt nodeId});
 
-  String crateApiSimpleGreet({required String name});
+  APICamera? crateApiCommonApiGetCamera();
 
-  void crateApiSimpleImportXyz({required String filePath});
+  APITransform crateApiCommonApiGetCameraTransform();
 
-  Future<void> crateApiSimpleInitApp();
+  APICuboidData? crateApiStructureDesignerApiGetCuboidData(
+      {required String nodeNetworkName, required BigInt nodeId});
 
-  bool crateApiSimpleIsFrameLockedToAtoms();
+  String crateApiSceneComposerApiGetDistanceToolStateText();
 
-  void crateApiSimpleMoveCamera(
+  APIGeoTransData? crateApiStructureDesignerApiGetGeoTransData(
+      {required String nodeNetworkName, required BigInt nodeId});
+
+  APIHalfSpaceData? crateApiStructureDesignerApiGetHalfSpaceData(
+      {required String nodeNetworkName, required BigInt nodeId});
+
+  NodeNetworkView? crateApiStructureDesignerApiGetNodeNetworkView(
+      {required String nodeNetworkName});
+
+  List<String>? crateApiStructureDesignerApiGetNodeTypeNames();
+
+  AtomView? crateApiSceneComposerApiGetSceneComposerAtomInfo();
+
+  SceneComposerView? crateApiSceneComposerApiGetSceneComposerView();
+
+  APITransform? crateApiSceneComposerApiGetSelectedFrameTransform();
+
+  APISphereData? crateApiStructureDesignerApiGetSphereData(
+      {required String nodeNetworkName, required BigInt nodeId});
+
+  String crateApiCommonApiGreet({required String name});
+
+  void crateApiSceneComposerApiImportXyz({required String filePath});
+
+  Future<void> crateApiCommonApiInitApp();
+
+  bool crateApiSceneComposerApiIsFrameLockedToAtoms();
+
+  void crateApiCommonApiMoveCamera(
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up});
 
-  void crateApiSimpleMoveNode(
+  void crateApiStructureDesignerApiMoveNode(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIVec2 position});
 
-  double crateApiSimpleProvideTexture({required int texturePtr});
+  double crateApiCommonApiProvideTexture({required int texturePtr});
 
-  void crateApiSimpleRotateAroundLocalAxis(
+  void crateApiSceneComposerApiRotateAroundLocalAxis(
       {required int axisIndex, required double angleDegrees});
 
-  void crateApiSimpleSceneComposerNewModel();
+  void crateApiSceneComposerApiSceneComposerNewModel();
 
-  bool crateApiSimpleSceneComposerRedo();
+  bool crateApiSceneComposerApiSceneComposerRedo();
 
-  void crateApiSimpleSceneComposerRenameCluster(
+  void crateApiSceneComposerApiSceneComposerRenameCluster(
       {required BigInt clusterId, required String newName});
 
-  bool crateApiSimpleSceneComposerUndo();
+  bool crateApiSceneComposerApiSceneComposerUndo();
 
-  BigInt? crateApiSimpleSelectAlignAtomByRay(
+  BigInt? crateApiSceneComposerApiSelectAlignAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  BigInt? crateApiSimpleSelectAtomInfoAtomByRay(
+  BigInt? crateApiSceneComposerApiSelectAtomInfoAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  void crateApiSimpleSelectClusterById(
+  void crateApiSceneComposerApiSelectClusterById(
       {required BigInt clusterId, required SelectModifier selectModifier});
 
-  BigInt? crateApiSimpleSelectClusterByRay(
+  BigInt? crateApiSceneComposerApiSelectClusterByRay(
       {required APIVec3 rayStart,
       required APIVec3 rayDir,
       required SelectModifier selectModifier});
 
-  BigInt? crateApiSimpleSelectDistanceAtomByRay(
+  BigInt? crateApiSceneComposerApiSelectDistanceAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  bool crateApiSimpleSelectNode(
+  bool crateApiStructureDesignerApiSelectNode(
       {required String nodeNetworkName, required BigInt nodeId});
 
-  bool crateApiSimpleSelectWire(
+  bool crateApiStructureDesignerApiSelectWire(
       {required String nodeNetworkName,
       required BigInt sourceNodeId,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex});
 
-  void crateApiSimpleSetActiveEditor({required Editor editor});
+  void crateApiCommonApiSetActiveEditor({required Editor editor});
 
-  void crateApiSimpleSetActiveSceneComposerTool(
+  void crateApiSceneComposerApiSetActiveSceneComposerTool(
       {required APISceneComposerTool tool});
 
-  void crateApiSimpleSetAtomTransData(
+  void crateApiStructureDesignerApiSetAtomTransData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIAtomTransData data});
 
-  void crateApiSimpleSetCameraTransform({required APITransform transform});
+  void crateApiCommonApiSetCameraTransform({required APITransform transform});
 
-  void crateApiSimpleSetCuboidData(
+  void crateApiStructureDesignerApiSetCuboidData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APICuboidData data});
 
-  void crateApiSimpleSetFrameLockedToAtoms({required bool locked});
+  void crateApiSceneComposerApiSetFrameLockedToAtoms({required bool locked});
 
-  void crateApiSimpleSetGeoTransData(
+  void crateApiStructureDesignerApiSetGeoTransData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIGeoTransData data});
 
-  void crateApiSimpleSetHalfSpaceData(
+  void crateApiStructureDesignerApiSetHalfSpaceData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIHalfSpaceData data});
 
-  void crateApiSimpleSetNodeDisplay(
+  void crateApiStructureDesignerApiSetNodeDisplay(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required bool isDisplayed});
 
-  void crateApiSimpleSetSelectedFrameTransform(
+  void crateApiSceneComposerApiSetSelectedFrameTransform(
       {required APITransform transform});
 
-  void crateApiSimpleSetSphereData(
+  void crateApiStructureDesignerApiSetSphereData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APISphereData data});
 
-  Future<void> crateApiSimpleSetViewportSize(
+  Future<void> crateApiCommonApiSetViewportSize(
       {required int width, required int height});
 
-  bool crateApiSimpleSyncGadgetData({required String nodeNetworkName});
+  bool crateApiCommonApiSyncGadgetData({required String nodeNetworkName});
 
-  void crateApiSimpleTranslateAlongLocalAxis(
+  void crateApiSceneComposerApiTranslateAlongLocalAxis(
       {required int axisIndex, required double translation});
 }
 
@@ -270,7 +276,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  void crateApiSimpleAddAtom(
+  void crateApiStructureDesignerApiAddAtom(
       {required int atomicNumber, required APIVec3 position}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -283,19 +289,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleAddAtomConstMeta,
+      constMeta: kCrateApiStructureDesignerApiAddAtomConstMeta,
       argValues: [atomicNumber, position],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleAddAtomConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiStructureDesignerApiAddAtomConstMeta =>
+      const TaskConstMeta(
         debugName: "add_atom",
         argNames: ["atomicNumber", "position"],
       );
 
   @override
-  BigInt crateApiSimpleAddNode(
+  BigInt crateApiStructureDesignerApiAddNode(
       {required String nodeNetworkName,
       required String nodeTypeName,
       required APIVec2 position}) {
@@ -311,19 +318,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_u_64,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleAddNodeConstMeta,
+      constMeta: kCrateApiStructureDesignerApiAddNodeConstMeta,
       argValues: [nodeNetworkName, nodeTypeName, position],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleAddNodeConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiStructureDesignerApiAddNodeConstMeta =>
+      const TaskConstMeta(
         debugName: "add_node",
         argNames: ["nodeNetworkName", "nodeTypeName", "position"],
       );
 
   @override
-  void crateApiSimpleClearSelection({required String nodeNetworkName}) {
+  void crateApiStructureDesignerApiClearSelection(
+      {required String nodeNetworkName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -334,20 +343,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleClearSelectionConstMeta,
+      constMeta: kCrateApiStructureDesignerApiClearSelectionConstMeta,
       argValues: [nodeNetworkName],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleClearSelectionConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiClearSelectionConstMeta =>
       const TaskConstMeta(
         debugName: "clear_selection",
         argNames: ["nodeNetworkName"],
       );
 
   @override
-  void crateApiSimpleConnectNodes(
+  void crateApiStructureDesignerApiConnectNodes(
       {required String nodeNetworkName,
       required BigInt sourceNodeId,
       required BigInt destNodeId,
@@ -365,13 +374,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleConnectNodesConstMeta,
+      constMeta: kCrateApiStructureDesignerApiConnectNodesConstMeta,
       argValues: [nodeNetworkName, sourceNodeId, destNodeId, destParamIndex],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleConnectNodesConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiStructureDesignerApiConnectNodesConstMeta =>
+      const TaskConstMeta(
         debugName: "connect_nodes",
         argNames: [
           "nodeNetworkName",
@@ -382,7 +392,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  void crateApiSimpleDeleteSelected({required String nodeNetworkName}) {
+  void crateApiStructureDesignerApiDeleteSelected(
+      {required String nodeNetworkName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -393,20 +404,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleDeleteSelectedConstMeta,
+      constMeta: kCrateApiStructureDesignerApiDeleteSelectedConstMeta,
       argValues: [nodeNetworkName],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleDeleteSelectedConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiDeleteSelectedConstMeta =>
       const TaskConstMeta(
         debugName: "delete_selected",
         argNames: ["nodeNetworkName"],
       );
 
   @override
-  bool crateApiSimpleExportXyz({required String filePath}) {
+  bool crateApiSceneComposerApiExportXyz({required String filePath}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -417,19 +428,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleExportXyzConstMeta,
+      constMeta: kCrateApiSceneComposerApiExportXyzConstMeta,
       argValues: [filePath],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleExportXyzConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSceneComposerApiExportXyzConstMeta =>
+      const TaskConstMeta(
         debugName: "export_xyz",
         argNames: ["filePath"],
       );
 
   @override
-  APIVec3 crateApiSimpleFindPivotPoint(
+  APIVec3 crateApiCommonApiFindPivotPoint(
       {required APIVec3 rayStart, required APIVec3 rayDir}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -442,20 +454,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_api_vec_3,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleFindPivotPointConstMeta,
+      constMeta: kCrateApiCommonApiFindPivotPointConstMeta,
       argValues: [rayStart, rayDir],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleFindPivotPointConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiFindPivotPointConstMeta =>
       const TaskConstMeta(
         debugName: "find_pivot_point",
         argNames: ["rayStart", "rayDir"],
       );
 
   @override
-  void crateApiSimpleGadgetDrag(
+  void crateApiCommonApiGadgetDrag(
       {required String nodeNetworkName,
       required int handleIndex,
       required APIVec3 rayOrigin,
@@ -473,13 +485,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGadgetDragConstMeta,
+      constMeta: kCrateApiCommonApiGadgetDragConstMeta,
       argValues: [nodeNetworkName, handleIndex, rayOrigin, rayDirection],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGadgetDragConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiCommonApiGadgetDragConstMeta =>
+      const TaskConstMeta(
         debugName: "gadget_drag",
         argNames: [
           "nodeNetworkName",
@@ -490,7 +503,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  void crateApiSimpleGadgetEndDrag({required String nodeNetworkName}) {
+  void crateApiCommonApiGadgetEndDrag({required String nodeNetworkName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -501,20 +514,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGadgetEndDragConstMeta,
+      constMeta: kCrateApiCommonApiGadgetEndDragConstMeta,
       argValues: [nodeNetworkName],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGadgetEndDragConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiGadgetEndDragConstMeta =>
       const TaskConstMeta(
         debugName: "gadget_end_drag",
         argNames: ["nodeNetworkName"],
       );
 
   @override
-  int? crateApiSimpleGadgetHitTest(
+  int? crateApiCommonApiGadgetHitTest(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -527,20 +540,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_i_32,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGadgetHitTestConstMeta,
+      constMeta: kCrateApiCommonApiGadgetHitTestConstMeta,
       argValues: [rayOrigin, rayDirection],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGadgetHitTestConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiGadgetHitTestConstMeta =>
       const TaskConstMeta(
         debugName: "gadget_hit_test",
         argNames: ["rayOrigin", "rayDirection"],
       );
 
   @override
-  void crateApiSimpleGadgetStartDrag(
+  void crateApiCommonApiGadgetStartDrag(
       {required String nodeNetworkName,
       required int handleIndex,
       required APIVec3 rayOrigin,
@@ -558,13 +571,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGadgetStartDragConstMeta,
+      constMeta: kCrateApiCommonApiGadgetStartDragConstMeta,
       argValues: [nodeNetworkName, handleIndex, rayOrigin, rayDirection],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGadgetStartDragConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiGadgetStartDragConstMeta =>
       const TaskConstMeta(
         debugName: "gadget_start_drag",
         argNames: [
@@ -576,7 +589,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiSimpleGetAlignToolStateText() {
+  String crateApiSceneComposerApiGetAlignToolStateText() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -586,20 +599,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_String,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetAlignToolStateTextConstMeta,
+      constMeta: kCrateApiSceneComposerApiGetAlignToolStateTextConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetAlignToolStateTextConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiGetAlignToolStateTextConstMeta =>
       const TaskConstMeta(
         debugName: "get_align_tool_state_text",
         argNames: [],
       );
 
   @override
-  APIAtomTransData? crateApiSimpleGetAtomTransData(
+  APIAtomTransData? crateApiStructureDesignerApiGetAtomTransData(
       {required String nodeNetworkName, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -612,20 +625,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_api_atom_trans_data,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetAtomTransDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiGetAtomTransDataConstMeta,
       argValues: [nodeNetworkName, nodeId],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetAtomTransDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiGetAtomTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_atom_trans_data",
         argNames: ["nodeNetworkName", "nodeId"],
       );
 
   @override
-  APICamera? crateApiSimpleGetCamera() {
+  APICamera? crateApiCommonApiGetCamera() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -635,19 +648,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_api_camera,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetCameraConstMeta,
+      constMeta: kCrateApiCommonApiGetCameraConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetCameraConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiCommonApiGetCameraConstMeta => const TaskConstMeta(
         debugName: "get_camera",
         argNames: [],
       );
 
   @override
-  APITransform crateApiSimpleGetCameraTransform() {
+  APITransform crateApiCommonApiGetCameraTransform() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -657,20 +670,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_api_transform,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetCameraTransformConstMeta,
+      constMeta: kCrateApiCommonApiGetCameraTransformConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetCameraTransformConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiGetCameraTransformConstMeta =>
       const TaskConstMeta(
         debugName: "get_camera_transform",
         argNames: [],
       );
 
   @override
-  APICuboidData? crateApiSimpleGetCuboidData(
+  APICuboidData? crateApiStructureDesignerApiGetCuboidData(
       {required String nodeNetworkName, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -683,20 +696,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_api_cuboid_data,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetCuboidDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiGetCuboidDataConstMeta,
       argValues: [nodeNetworkName, nodeId],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetCuboidDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiGetCuboidDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_cuboid_data",
         argNames: ["nodeNetworkName", "nodeId"],
       );
 
   @override
-  String crateApiSimpleGetDistanceToolStateText() {
+  String crateApiSceneComposerApiGetDistanceToolStateText() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -706,20 +719,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_String,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetDistanceToolStateTextConstMeta,
+      constMeta: kCrateApiSceneComposerApiGetDistanceToolStateTextConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetDistanceToolStateTextConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_distance_tool_state_text",
-        argNames: [],
-      );
+  TaskConstMeta
+      get kCrateApiSceneComposerApiGetDistanceToolStateTextConstMeta =>
+          const TaskConstMeta(
+            debugName: "get_distance_tool_state_text",
+            argNames: [],
+          );
 
   @override
-  APIGeoTransData? crateApiSimpleGetGeoTransData(
+  APIGeoTransData? crateApiStructureDesignerApiGetGeoTransData(
       {required String nodeNetworkName, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -732,20 +746,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_api_geo_trans_data,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetGeoTransDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiGetGeoTransDataConstMeta,
       argValues: [nodeNetworkName, nodeId],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetGeoTransDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiGetGeoTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_geo_trans_data",
         argNames: ["nodeNetworkName", "nodeId"],
       );
 
   @override
-  APIHalfSpaceData? crateApiSimpleGetHalfSpaceData(
+  APIHalfSpaceData? crateApiStructureDesignerApiGetHalfSpaceData(
       {required String nodeNetworkName, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -758,20 +772,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_api_half_space_data,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetHalfSpaceDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiGetHalfSpaceDataConstMeta,
       argValues: [nodeNetworkName, nodeId],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetHalfSpaceDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiGetHalfSpaceDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_half_space_data",
         argNames: ["nodeNetworkName", "nodeId"],
       );
 
   @override
-  NodeNetworkView? crateApiSimpleGetNodeNetworkView(
+  NodeNetworkView? crateApiStructureDesignerApiGetNodeNetworkView(
       {required String nodeNetworkName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -783,20 +797,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_node_network_view,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetNodeNetworkViewConstMeta,
+      constMeta: kCrateApiStructureDesignerApiGetNodeNetworkViewConstMeta,
       argValues: [nodeNetworkName],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetNodeNetworkViewConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiGetNodeNetworkViewConstMeta =>
       const TaskConstMeta(
         debugName: "get_node_network_view",
         argNames: ["nodeNetworkName"],
       );
 
   @override
-  List<String>? crateApiSimpleGetNodeTypeNames() {
+  List<String>? crateApiStructureDesignerApiGetNodeTypeNames() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -806,20 +820,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_list_String,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetNodeTypeNamesConstMeta,
+      constMeta: kCrateApiStructureDesignerApiGetNodeTypeNamesConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetNodeTypeNamesConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiGetNodeTypeNamesConstMeta =>
       const TaskConstMeta(
         debugName: "get_node_type_names",
         argNames: [],
       );
 
   @override
-  AtomView? crateApiSimpleGetSceneComposerAtomInfo() {
+  AtomView? crateApiSceneComposerApiGetSceneComposerAtomInfo() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -829,20 +843,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_atom_view,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetSceneComposerAtomInfoConstMeta,
+      constMeta: kCrateApiSceneComposerApiGetSceneComposerAtomInfoConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetSceneComposerAtomInfoConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_scene_composer_atom_info",
-        argNames: [],
-      );
+  TaskConstMeta
+      get kCrateApiSceneComposerApiGetSceneComposerAtomInfoConstMeta =>
+          const TaskConstMeta(
+            debugName: "get_scene_composer_atom_info",
+            argNames: [],
+          );
 
   @override
-  SceneComposerView? crateApiSimpleGetSceneComposerView() {
+  SceneComposerView? crateApiSceneComposerApiGetSceneComposerView() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -852,20 +867,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_scene_composer_view,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetSceneComposerViewConstMeta,
+      constMeta: kCrateApiSceneComposerApiGetSceneComposerViewConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetSceneComposerViewConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiGetSceneComposerViewConstMeta =>
       const TaskConstMeta(
         debugName: "get_scene_composer_view",
         argNames: [],
       );
 
   @override
-  APITransform? crateApiSimpleGetSelectedFrameTransform() {
+  APITransform? crateApiSceneComposerApiGetSelectedFrameTransform() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -875,20 +890,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_api_transform,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetSelectedFrameTransformConstMeta,
+      constMeta: kCrateApiSceneComposerApiGetSelectedFrameTransformConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetSelectedFrameTransformConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_selected_frame_transform",
-        argNames: [],
-      );
+  TaskConstMeta
+      get kCrateApiSceneComposerApiGetSelectedFrameTransformConstMeta =>
+          const TaskConstMeta(
+            debugName: "get_selected_frame_transform",
+            argNames: [],
+          );
 
   @override
-  APISphereData? crateApiSimpleGetSphereData(
+  APISphereData? crateApiStructureDesignerApiGetSphereData(
       {required String nodeNetworkName, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -901,20 +917,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_api_sphere_data,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGetSphereDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiGetSphereDataConstMeta,
       argValues: [nodeNetworkName, nodeId],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGetSphereDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiGetSphereDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_sphere_data",
         argNames: ["nodeNetworkName", "nodeId"],
       );
 
   @override
-  String crateApiSimpleGreet({required String name}) {
+  String crateApiCommonApiGreet({required String name}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -925,19 +941,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_String,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleGreetConstMeta,
+      constMeta: kCrateApiCommonApiGreetConstMeta,
       argValues: [name],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleGreetConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiCommonApiGreetConstMeta => const TaskConstMeta(
         debugName: "greet",
         argNames: ["name"],
       );
 
   @override
-  void crateApiSimpleImportXyz({required String filePath}) {
+  void crateApiSceneComposerApiImportXyz({required String filePath}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -948,19 +964,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleImportXyzConstMeta,
+      constMeta: kCrateApiSceneComposerApiImportXyzConstMeta,
       argValues: [filePath],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleImportXyzConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSceneComposerApiImportXyzConstMeta =>
+      const TaskConstMeta(
         debugName: "import_xyz",
         argNames: ["filePath"],
       );
 
   @override
-  Future<void> crateApiSimpleInitApp() {
+  Future<void> crateApiCommonApiInitApp() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -971,19 +988,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleInitAppConstMeta,
+      constMeta: kCrateApiCommonApiInitAppConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleInitAppConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiCommonApiInitAppConstMeta => const TaskConstMeta(
         debugName: "init_app",
         argNames: [],
       );
 
   @override
-  bool crateApiSimpleIsFrameLockedToAtoms() {
+  bool crateApiSceneComposerApiIsFrameLockedToAtoms() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -993,20 +1010,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleIsFrameLockedToAtomsConstMeta,
+      constMeta: kCrateApiSceneComposerApiIsFrameLockedToAtomsConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleIsFrameLockedToAtomsConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiIsFrameLockedToAtomsConstMeta =>
       const TaskConstMeta(
         debugName: "is_frame_locked_to_atoms",
         argNames: [],
       );
 
   @override
-  void crateApiSimpleMoveCamera(
+  void crateApiCommonApiMoveCamera(
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1020,19 +1037,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleMoveCameraConstMeta,
+      constMeta: kCrateApiCommonApiMoveCameraConstMeta,
       argValues: [eye, target, up],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleMoveCameraConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiCommonApiMoveCameraConstMeta =>
+      const TaskConstMeta(
         debugName: "move_camera",
         argNames: ["eye", "target", "up"],
       );
 
   @override
-  void crateApiSimpleMoveNode(
+  void crateApiStructureDesignerApiMoveNode(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIVec2 position}) {
@@ -1048,19 +1066,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleMoveNodeConstMeta,
+      constMeta: kCrateApiStructureDesignerApiMoveNodeConstMeta,
       argValues: [nodeNetworkName, nodeId, position],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleMoveNodeConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiStructureDesignerApiMoveNodeConstMeta =>
+      const TaskConstMeta(
         debugName: "move_node",
         argNames: ["nodeNetworkName", "nodeId", "position"],
       );
 
   @override
-  double crateApiSimpleProvideTexture({required int texturePtr}) {
+  double crateApiCommonApiProvideTexture({required int texturePtr}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1071,20 +1090,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_f_64,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleProvideTextureConstMeta,
+      constMeta: kCrateApiCommonApiProvideTextureConstMeta,
       argValues: [texturePtr],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleProvideTextureConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiProvideTextureConstMeta =>
       const TaskConstMeta(
         debugName: "provide_texture",
         argNames: ["texturePtr"],
       );
 
   @override
-  void crateApiSimpleRotateAroundLocalAxis(
+  void crateApiSceneComposerApiRotateAroundLocalAxis(
       {required int axisIndex, required double angleDegrees}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1097,20 +1116,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleRotateAroundLocalAxisConstMeta,
+      constMeta: kCrateApiSceneComposerApiRotateAroundLocalAxisConstMeta,
       argValues: [axisIndex, angleDegrees],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleRotateAroundLocalAxisConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiRotateAroundLocalAxisConstMeta =>
       const TaskConstMeta(
         debugName: "rotate_around_local_axis",
         argNames: ["axisIndex", "angleDegrees"],
       );
 
   @override
-  void crateApiSimpleSceneComposerNewModel() {
+  void crateApiSceneComposerApiSceneComposerNewModel() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1120,20 +1139,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSceneComposerNewModelConstMeta,
+      constMeta: kCrateApiSceneComposerApiSceneComposerNewModelConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSceneComposerNewModelConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSceneComposerNewModelConstMeta =>
       const TaskConstMeta(
         debugName: "scene_composer_new_model",
         argNames: [],
       );
 
   @override
-  bool crateApiSimpleSceneComposerRedo() {
+  bool crateApiSceneComposerApiSceneComposerRedo() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1143,20 +1162,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSceneComposerRedoConstMeta,
+      constMeta: kCrateApiSceneComposerApiSceneComposerRedoConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSceneComposerRedoConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSceneComposerRedoConstMeta =>
       const TaskConstMeta(
         debugName: "scene_composer_redo",
         argNames: [],
       );
 
   @override
-  void crateApiSimpleSceneComposerRenameCluster(
+  void crateApiSceneComposerApiSceneComposerRenameCluster(
       {required BigInt clusterId, required String newName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1169,20 +1188,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSceneComposerRenameClusterConstMeta,
+      constMeta: kCrateApiSceneComposerApiSceneComposerRenameClusterConstMeta,
       argValues: [clusterId, newName],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSceneComposerRenameClusterConstMeta =>
-      const TaskConstMeta(
-        debugName: "scene_composer_rename_cluster",
-        argNames: ["clusterId", "newName"],
-      );
+  TaskConstMeta
+      get kCrateApiSceneComposerApiSceneComposerRenameClusterConstMeta =>
+          const TaskConstMeta(
+            debugName: "scene_composer_rename_cluster",
+            argNames: ["clusterId", "newName"],
+          );
 
   @override
-  bool crateApiSimpleSceneComposerUndo() {
+  bool crateApiSceneComposerApiSceneComposerUndo() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1192,20 +1212,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSceneComposerUndoConstMeta,
+      constMeta: kCrateApiSceneComposerApiSceneComposerUndoConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSceneComposerUndoConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSceneComposerUndoConstMeta =>
       const TaskConstMeta(
         debugName: "scene_composer_undo",
         argNames: [],
       );
 
   @override
-  BigInt? crateApiSimpleSelectAlignAtomByRay(
+  BigInt? crateApiSceneComposerApiSelectAlignAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1218,20 +1238,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_u_64,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSelectAlignAtomByRayConstMeta,
+      constMeta: kCrateApiSceneComposerApiSelectAlignAtomByRayConstMeta,
       argValues: [rayStart, rayDir],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSelectAlignAtomByRayConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSelectAlignAtomByRayConstMeta =>
       const TaskConstMeta(
         debugName: "select_align_atom_by_ray",
         argNames: ["rayStart", "rayDir"],
       );
 
   @override
-  BigInt? crateApiSimpleSelectAtomInfoAtomByRay(
+  BigInt? crateApiSceneComposerApiSelectAtomInfoAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1244,20 +1264,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_u_64,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSelectAtomInfoAtomByRayConstMeta,
+      constMeta: kCrateApiSceneComposerApiSelectAtomInfoAtomByRayConstMeta,
       argValues: [rayStart, rayDir],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSelectAtomInfoAtomByRayConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSelectAtomInfoAtomByRayConstMeta =>
       const TaskConstMeta(
         debugName: "select_atom_info_atom_by_ray",
         argNames: ["rayStart", "rayDir"],
       );
 
   @override
-  void crateApiSimpleSelectClusterById(
+  void crateApiSceneComposerApiSelectClusterById(
       {required BigInt clusterId, required SelectModifier selectModifier}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1270,20 +1290,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSelectClusterByIdConstMeta,
+      constMeta: kCrateApiSceneComposerApiSelectClusterByIdConstMeta,
       argValues: [clusterId, selectModifier],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSelectClusterByIdConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSelectClusterByIdConstMeta =>
       const TaskConstMeta(
         debugName: "select_cluster_by_id",
         argNames: ["clusterId", "selectModifier"],
       );
 
   @override
-  BigInt? crateApiSimpleSelectClusterByRay(
+  BigInt? crateApiSceneComposerApiSelectClusterByRay(
       {required APIVec3 rayStart,
       required APIVec3 rayDir,
       required SelectModifier selectModifier}) {
@@ -1299,20 +1319,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_u_64,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSelectClusterByRayConstMeta,
+      constMeta: kCrateApiSceneComposerApiSelectClusterByRayConstMeta,
       argValues: [rayStart, rayDir, selectModifier],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSelectClusterByRayConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSelectClusterByRayConstMeta =>
       const TaskConstMeta(
         debugName: "select_cluster_by_ray",
         argNames: ["rayStart", "rayDir", "selectModifier"],
       );
 
   @override
-  BigInt? crateApiSimpleSelectDistanceAtomByRay(
+  BigInt? crateApiSceneComposerApiSelectDistanceAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1325,20 +1345,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_opt_box_autoadd_u_64,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSelectDistanceAtomByRayConstMeta,
+      constMeta: kCrateApiSceneComposerApiSelectDistanceAtomByRayConstMeta,
       argValues: [rayStart, rayDir],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSelectDistanceAtomByRayConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSelectDistanceAtomByRayConstMeta =>
       const TaskConstMeta(
         debugName: "select_distance_atom_by_ray",
         argNames: ["rayStart", "rayDir"],
       );
 
   @override
-  bool crateApiSimpleSelectNode(
+  bool crateApiStructureDesignerApiSelectNode(
       {required String nodeNetworkName, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1351,19 +1371,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSelectNodeConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSelectNodeConstMeta,
       argValues: [nodeNetworkName, nodeId],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSelectNodeConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiStructureDesignerApiSelectNodeConstMeta =>
+      const TaskConstMeta(
         debugName: "select_node",
         argNames: ["nodeNetworkName", "nodeId"],
       );
 
   @override
-  bool crateApiSimpleSelectWire(
+  bool crateApiStructureDesignerApiSelectWire(
       {required String nodeNetworkName,
       required BigInt sourceNodeId,
       required BigInt destinationNodeId,
@@ -1381,7 +1402,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSelectWireConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSelectWireConstMeta,
       argValues: [
         nodeNetworkName,
         sourceNodeId,
@@ -1392,7 +1413,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSelectWireConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiStructureDesignerApiSelectWireConstMeta =>
+      const TaskConstMeta(
         debugName: "select_wire",
         argNames: [
           "nodeNetworkName",
@@ -1403,7 +1425,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  void crateApiSimpleSetActiveEditor({required Editor editor}) {
+  void crateApiCommonApiSetActiveEditor({required Editor editor}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1414,20 +1436,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetActiveEditorConstMeta,
+      constMeta: kCrateApiCommonApiSetActiveEditorConstMeta,
       argValues: [editor],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetActiveEditorConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiSetActiveEditorConstMeta =>
       const TaskConstMeta(
         debugName: "set_active_editor",
         argNames: ["editor"],
       );
 
   @override
-  void crateApiSimpleSetActiveSceneComposerTool(
+  void crateApiSceneComposerApiSetActiveSceneComposerTool(
       {required APISceneComposerTool tool}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1439,20 +1461,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetActiveSceneComposerToolConstMeta,
+      constMeta: kCrateApiSceneComposerApiSetActiveSceneComposerToolConstMeta,
       argValues: [tool],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetActiveSceneComposerToolConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_active_scene_composer_tool",
-        argNames: ["tool"],
-      );
+  TaskConstMeta
+      get kCrateApiSceneComposerApiSetActiveSceneComposerToolConstMeta =>
+          const TaskConstMeta(
+            debugName: "set_active_scene_composer_tool",
+            argNames: ["tool"],
+          );
 
   @override
-  void crateApiSimpleSetAtomTransData(
+  void crateApiStructureDesignerApiSetAtomTransData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIAtomTransData data}) {
@@ -1468,20 +1491,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetAtomTransDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSetAtomTransDataConstMeta,
       argValues: [nodeNetworkName, nodeId, data],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetAtomTransDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiSetAtomTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_atom_trans_data",
         argNames: ["nodeNetworkName", "nodeId", "data"],
       );
 
   @override
-  void crateApiSimpleSetCameraTransform({required APITransform transform}) {
+  void crateApiCommonApiSetCameraTransform({required APITransform transform}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1492,20 +1515,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetCameraTransformConstMeta,
+      constMeta: kCrateApiCommonApiSetCameraTransformConstMeta,
       argValues: [transform],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetCameraTransformConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiSetCameraTransformConstMeta =>
       const TaskConstMeta(
         debugName: "set_camera_transform",
         argNames: ["transform"],
       );
 
   @override
-  void crateApiSimpleSetCuboidData(
+  void crateApiStructureDesignerApiSetCuboidData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APICuboidData data}) {
@@ -1521,20 +1544,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetCuboidDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSetCuboidDataConstMeta,
       argValues: [nodeNetworkName, nodeId, data],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetCuboidDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiSetCuboidDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_cuboid_data",
         argNames: ["nodeNetworkName", "nodeId", "data"],
       );
 
   @override
-  void crateApiSimpleSetFrameLockedToAtoms({required bool locked}) {
+  void crateApiSceneComposerApiSetFrameLockedToAtoms({required bool locked}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1545,20 +1568,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetFrameLockedToAtomsConstMeta,
+      constMeta: kCrateApiSceneComposerApiSetFrameLockedToAtomsConstMeta,
       argValues: [locked],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetFrameLockedToAtomsConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiSetFrameLockedToAtomsConstMeta =>
       const TaskConstMeta(
         debugName: "set_frame_locked_to_atoms",
         argNames: ["locked"],
       );
 
   @override
-  void crateApiSimpleSetGeoTransData(
+  void crateApiStructureDesignerApiSetGeoTransData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIGeoTransData data}) {
@@ -1574,20 +1597,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetGeoTransDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSetGeoTransDataConstMeta,
       argValues: [nodeNetworkName, nodeId, data],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetGeoTransDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiSetGeoTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_geo_trans_data",
         argNames: ["nodeNetworkName", "nodeId", "data"],
       );
 
   @override
-  void crateApiSimpleSetHalfSpaceData(
+  void crateApiStructureDesignerApiSetHalfSpaceData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APIHalfSpaceData data}) {
@@ -1603,20 +1626,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetHalfSpaceDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSetHalfSpaceDataConstMeta,
       argValues: [nodeNetworkName, nodeId, data],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetHalfSpaceDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiSetHalfSpaceDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_half_space_data",
         argNames: ["nodeNetworkName", "nodeId", "data"],
       );
 
   @override
-  void crateApiSimpleSetNodeDisplay(
+  void crateApiStructureDesignerApiSetNodeDisplay(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required bool isDisplayed}) {
@@ -1632,20 +1655,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetNodeDisplayConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSetNodeDisplayConstMeta,
       argValues: [nodeNetworkName, nodeId, isDisplayed],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetNodeDisplayConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiSetNodeDisplayConstMeta =>
       const TaskConstMeta(
         debugName: "set_node_display",
         argNames: ["nodeNetworkName", "nodeId", "isDisplayed"],
       );
 
   @override
-  void crateApiSimpleSetSelectedFrameTransform(
+  void crateApiSceneComposerApiSetSelectedFrameTransform(
       {required APITransform transform}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1657,20 +1680,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetSelectedFrameTransformConstMeta,
+      constMeta: kCrateApiSceneComposerApiSetSelectedFrameTransformConstMeta,
       argValues: [transform],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetSelectedFrameTransformConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_selected_frame_transform",
-        argNames: ["transform"],
-      );
+  TaskConstMeta
+      get kCrateApiSceneComposerApiSetSelectedFrameTransformConstMeta =>
+          const TaskConstMeta(
+            debugName: "set_selected_frame_transform",
+            argNames: ["transform"],
+          );
 
   @override
-  void crateApiSimpleSetSphereData(
+  void crateApiStructureDesignerApiSetSphereData(
       {required String nodeNetworkName,
       required BigInt nodeId,
       required APISphereData data}) {
@@ -1686,20 +1710,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetSphereDataConstMeta,
+      constMeta: kCrateApiStructureDesignerApiSetSphereDataConstMeta,
       argValues: [nodeNetworkName, nodeId, data],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetSphereDataConstMeta =>
+  TaskConstMeta get kCrateApiStructureDesignerApiSetSphereDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_sphere_data",
         argNames: ["nodeNetworkName", "nodeId", "data"],
       );
 
   @override
-  Future<void> crateApiSimpleSetViewportSize(
+  Future<void> crateApiCommonApiSetViewportSize(
       {required int width, required int height}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -1713,20 +1737,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSetViewportSizeConstMeta,
+      constMeta: kCrateApiCommonApiSetViewportSizeConstMeta,
       argValues: [width, height],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSetViewportSizeConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiSetViewportSizeConstMeta =>
       const TaskConstMeta(
         debugName: "set_viewport_size",
         argNames: ["width", "height"],
       );
 
   @override
-  bool crateApiSimpleSyncGadgetData({required String nodeNetworkName}) {
+  bool crateApiCommonApiSyncGadgetData({required String nodeNetworkName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1737,20 +1761,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleSyncGadgetDataConstMeta,
+      constMeta: kCrateApiCommonApiSyncGadgetDataConstMeta,
       argValues: [nodeNetworkName],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleSyncGadgetDataConstMeta =>
+  TaskConstMeta get kCrateApiCommonApiSyncGadgetDataConstMeta =>
       const TaskConstMeta(
         debugName: "sync_gadget_data",
         argNames: ["nodeNetworkName"],
       );
 
   @override
-  void crateApiSimpleTranslateAlongLocalAxis(
+  void crateApiSceneComposerApiTranslateAlongLocalAxis(
       {required int axisIndex, required double translation}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1763,13 +1787,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiSimpleTranslateAlongLocalAxisConstMeta,
+      constMeta: kCrateApiSceneComposerApiTranslateAlongLocalAxisConstMeta,
       argValues: [axisIndex, translation],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiSimpleTranslateAlongLocalAxisConstMeta =>
+  TaskConstMeta get kCrateApiSceneComposerApiTranslateAlongLocalAxisConstMeta =>
       const TaskConstMeta(
         debugName: "translate_along_local_axis",
         argNames: ["axisIndex", "translation"],

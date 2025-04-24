@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/src/rust/api/simple.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
 
 class AddNodePopup extends StatefulWidget {
   const AddNodePopup({super.key});

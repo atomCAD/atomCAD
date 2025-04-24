@@ -1,3 +1,3 @@
-rust_input: crate::api
+rust_input: crate::api::common_api_types,crate::api::structure_designer_api_types,crate::api::scene_composer_api_types,crate::api::common_api,crate::api::scene_composer_api,crate::api::structure_designer_api
 rust_root: rust/
 dart_output: lib/src/rust

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/graph_model.dart';
-import 'package:flutter_cad/src/rust/api/simple.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';

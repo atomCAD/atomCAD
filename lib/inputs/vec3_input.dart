@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
 /// A reusable widget for editing Vec3 (floating point) values
@@ -8,7 +8,7 @@ class Vec3Input extends StatefulWidget {
   final String label;
   final APIVec3 value;
   final ValueChanged<APIVec3> onChanged;
-  
+
   /// Optional callback triggered when a value is successfully pasted
   final VoidCallback? onPasted;
 
@@ -28,33 +28,36 @@ class _Vec3InputState extends State<Vec3Input> {
   late TextEditingController _xController;
   late TextEditingController _yController;
   late TextEditingController _zController;
-  
+
   // Add FocusNodes to track focus
   late FocusNode _xFocus;
   late FocusNode _yFocus;
   late FocusNode _zFocus;
-  
+
   // Track which field is currently being edited
   String? _currentlyEditingAxis;
 
   @override
   void initState() {
     super.initState();
-    _xController = TextEditingController(text: widget.value.x.toStringAsFixed(6));
-    _yController = TextEditingController(text: widget.value.y.toStringAsFixed(6));
-    _zController = TextEditingController(text: widget.value.z.toStringAsFixed(6));
-    
+    _xController =
+        TextEditingController(text: widget.value.x.toStringAsFixed(6));
+    _yController =
+        TextEditingController(text: widget.value.y.toStringAsFixed(6));
+    _zController =
+        TextEditingController(text: widget.value.z.toStringAsFixed(6));
+
     // Initialize focus nodes
     _xFocus = FocusNode();
     _yFocus = FocusNode();
     _zFocus = FocusNode();
-    
+
     // Add listeners to focus nodes
     _xFocus.addListener(_handleXFocusChange);
     _yFocus.addListener(_handleYFocusChange);
     _zFocus.addListener(_handleZFocusChange);
   }
-  
+
   // Handle focus changes
   void _handleXFocusChange() {
     if (_xFocus.hasFocus) {
@@ -63,7 +66,7 @@ class _Vec3InputState extends State<Vec3Input> {
       _currentlyEditingAxis = null;
     }
   }
-  
+
   void _handleYFocusChange() {
     if (_yFocus.hasFocus) {
       _currentlyEditingAxis = 'y';
@@ -71,7 +74,7 @@ class _Vec3InputState extends State<Vec3Input> {
       _currentlyEditingAxis = null;
     }
   }
-  
+
   void _handleZFocusChange() {
     if (_zFocus.hasFocus) {
       _currentlyEditingAxis = 'z';
@@ -83,20 +86,20 @@ class _Vec3InputState extends State<Vec3Input> {
   @override
   void didUpdateWidget(Vec3Input oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     // Only update controllers if NOT currently editing this specific axis
     if (_currentlyEditingAxis != 'x' && oldWidget.value.x != widget.value.x) {
       final selection = _xController.selection;
       _xController.text = widget.value.x.toStringAsFixed(6);
       _xController.selection = selection;
     }
-    
+
     if (_currentlyEditingAxis != 'y' && oldWidget.value.y != widget.value.y) {
       final selection = _yController.selection;
       _yController.text = widget.value.y.toStringAsFixed(6);
       _yController.selection = selection;
     }
-    
+
     if (_currentlyEditingAxis != 'z' && oldWidget.value.z != widget.value.z) {
       final selection = _zController.selection;
       _zController.text = widget.value.z.toStringAsFixed(6);
@@ -109,7 +112,7 @@ class _Vec3InputState extends State<Vec3Input> {
     _xController.dispose();
     _yController.dispose();
     _zController.dispose();
-    
+
     // Clean up focus nodes
     _xFocus.removeListener(_handleXFocusChange);
     _yFocus.removeListener(_handleYFocusChange);
@@ -117,7 +120,7 @@ class _Vec3InputState extends State<Vec3Input> {
     _xFocus.dispose();
     _yFocus.dispose();
     _zFocus.dispose();
-    
+
     super.dispose();
   }
 
@@ -126,16 +129,16 @@ class _Vec3InputState extends State<Vec3Input> {
     if (newValue != null) {
       switch (axis) {
         case 'x':
-          widget.onChanged(APIVec3(
-              x: newValue, y: widget.value.y, z: widget.value.z));
+          widget.onChanged(
+              APIVec3(x: newValue, y: widget.value.y, z: widget.value.z));
           break;
         case 'y':
-          widget.onChanged(APIVec3(
-              x: widget.value.x, y: newValue, z: widget.value.z));
+          widget.onChanged(
+              APIVec3(x: widget.value.x, y: newValue, z: widget.value.z));
           break;
         case 'z':
-          widget.onChanged(APIVec3(
-              x: widget.value.x, y: widget.value.y, z: newValue));
+          widget.onChanged(
+              APIVec3(x: widget.value.x, y: widget.value.y, z: newValue));
           break;
       }
     }
@@ -300,25 +303,27 @@ class _Vec3InputState extends State<Vec3Input> {
 
   // Copy the current values to the clipboard as space-separated string
   void _copyToClipboard() {
-    final String value = '${widget.value.x.toStringAsFixed(6)} ${widget.value.y.toStringAsFixed(6)} ${widget.value.z.toStringAsFixed(6)}';
+    final String value =
+        '${widget.value.x.toStringAsFixed(6)} ${widget.value.y.toStringAsFixed(6)} ${widget.value.z.toStringAsFixed(6)}';
     Clipboard.setData(ClipboardData(text: value));
   }
 
   // Parse space-separated values from clipboard and update the widget
   void _pasteFromClipboard() async {
-    final ClipboardData? clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    final ClipboardData? clipboardData =
+        await Clipboard.getData(Clipboard.kTextPlain);
     if (clipboardData != null && clipboardData.text != null) {
       final String text = clipboardData.text!;
       final List<String> parts = text.trim().split(RegExp(r'\s+'));
-      
+
       if (parts.length >= 3) {
         final double? x = double.tryParse(parts[0]);
         final double? y = double.tryParse(parts[1]);
         final double? z = double.tryParse(parts[2]);
-        
+
         if (x != null && y != null && z != null) {
           widget.onChanged(APIVec3(x: x, y: y, z: z));
-          
+
           // Notify parent that a value was successfully pasted
           if (widget.onPasted != null) {
             widget.onPasted!();

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::util::hit_test_utils;
 use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
-use crate::api::api_types::SelectModifier;
+use crate::api::scene_composer_api_types::SelectModifier;
 
 // Bigger than most realistically possible bonds, so a neighbouring atom will be in the same cell
 // or in a neighbouring cell most of the time. This is important for performance reasons.

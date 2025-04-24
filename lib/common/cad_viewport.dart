@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:texture_rgba_renderer/texture_rgba_renderer.dart';
-import 'package:flutter_cad/src/rust/api/simple.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:vector_math/vector_math.dart' as vector_math;

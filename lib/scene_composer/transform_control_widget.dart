@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/inputs/vec3_input.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
 /// A reusable widget that displays and allows editing of transformation data.
 class TransformControlWidget extends StatefulWidget {
   /// The initial transform to display and edit
   final APITransform? initialTransform;
-  
+
   /// Callback when the "Apply Transform" button is pressed
   final Function(APITransform) onApplyTransform;
-  
+
   /// Optional title for the widget
   final String title;
 

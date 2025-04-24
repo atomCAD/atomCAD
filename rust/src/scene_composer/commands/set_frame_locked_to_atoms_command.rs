@@ -1,6 +1,5 @@
 use crate::scene_composer::scene_composer_model::SceneComposerModel;
 use crate::scene_composer::commands::scene_composer_command::SceneComposerCommand;
-use crate::api::api_types::APISceneComposerTool;
 
 pub struct SetFrameLockedToAtomsCommand {
   pub locked: bool,

@@ -3,8 +3,8 @@ import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/scene_composer/scene_composer.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
-import 'package:flutter_cad/src/rust/api/simple.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {

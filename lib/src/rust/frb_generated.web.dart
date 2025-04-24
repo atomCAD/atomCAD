@@ -6,8 +6,12 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
-import 'api/api_types.dart';
-import 'api/simple.dart';
+import 'api/common_api.dart';
+import 'api/common_api_types.dart';
+import 'api/scene_composer_api.dart';
+import 'api/scene_composer_api_types.dart';
+import 'api/structure_designer_api.dart';
+import 'api/structure_designer_api_types.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';

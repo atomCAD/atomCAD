@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/structure_designer/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/graph_model.dart';

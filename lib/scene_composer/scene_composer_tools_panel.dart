@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/src/rust/api/api_types.dart';
+import 'package:flutter_cad/src/rust/api/scene_composer_api_types.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/ui_common.dart';
@@ -66,7 +66,8 @@ class SceneComposerToolsPanel extends StatelessWidget {
                 child: Tooltip(
                   message: tooltip,
                   child: Material(
-                    color: isActive ? AppColors.primaryAccent : Colors.transparent,
+                    color:
+                        isActive ? AppColors.primaryAccent : Colors.transparent,
                     borderRadius: BorderRadius.circular(4.0),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(4.0),
@@ -78,7 +79,9 @@ class SceneComposerToolsPanel extends StatelessWidget {
                         padding: const EdgeInsets.all(8.0),
                         child: Icon(
                           iconData,
-                          color: isActive ? AppColors.textOnDark : AppColors.textPrimary,
+                          color: isActive
+                              ? AppColors.textOnDark
+                              : AppColors.textPrimary,
                           size: 24.0,
                         ),
                       ),

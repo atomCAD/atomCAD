@@ -1,5 +1,5 @@
 
-use crate::api::api_types::SelectModifier;
+use crate::api::scene_composer_api_types::SelectModifier;
 use std::collections::HashSet;
 use crate::scene_composer::scene_composer_model::SceneComposerModel;
 use crate::scene_composer::commands::scene_composer_command::SceneComposerCommand;
