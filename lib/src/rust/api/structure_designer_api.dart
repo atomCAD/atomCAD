@@ -16,29 +16,19 @@ NodeNetworkView? getNodeNetworkView({required String nodeNetworkName}) =>
     RustLib.instance.api.crateApiStructureDesignerApiGetNodeNetworkView(
         nodeNetworkName: nodeNetworkName);
 
-void moveNode(
-        {required String nodeNetworkName,
-        required BigInt nodeId,
-        required APIVec2 position}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiMoveNode(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId, position: position);
+void moveNode({required BigInt nodeId, required APIVec2 position}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerApiMoveNode(nodeId: nodeId, position: position);
 
-BigInt addNode(
-        {required String nodeNetworkName,
-        required String nodeTypeName,
-        required APIVec2 position}) =>
+BigInt addNode({required String nodeTypeName, required APIVec2 position}) =>
     RustLib.instance.api.crateApiStructureDesignerApiAddNode(
-        nodeNetworkName: nodeNetworkName,
-        nodeTypeName: nodeTypeName,
-        position: position);
+        nodeTypeName: nodeTypeName, position: position);
 
 void connectNodes(
-        {required String nodeNetworkName,
-        required BigInt sourceNodeId,
+        {required BigInt sourceNodeId,
         required BigInt destNodeId,
         required BigInt destParamIndex}) =>
     RustLib.instance.api.crateApiStructureDesignerApiConnectNodes(
-        nodeNetworkName: nodeNetworkName,
         sourceNodeId: sourceNodeId,
         destNodeId: destNodeId,
         destParamIndex: destParamIndex);
@@ -49,94 +39,68 @@ List<String>? getNodeTypeNames() =>
 List<String>? getNodeNetworkNames() =>
     RustLib.instance.api.crateApiStructureDesignerApiGetNodeNetworkNames();
 
-void setNodeDisplay(
-        {required String nodeNetworkName,
-        required BigInt nodeId,
-        required bool isDisplayed}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiSetNodeDisplay(
-        nodeNetworkName: nodeNetworkName,
-        nodeId: nodeId,
-        isDisplayed: isDisplayed);
+void setActiveNodeNetwork({required String nodeNetworkName}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiSetActiveNodeNetwork(
+        nodeNetworkName: nodeNetworkName);
 
-bool selectNode({required String nodeNetworkName, required BigInt nodeId}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiSelectNode(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+void setNodeDisplay({required BigInt nodeId, required bool isDisplayed}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiSetNodeDisplay(
+        nodeId: nodeId, isDisplayed: isDisplayed);
+
+bool selectNode({required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiSelectNode(nodeId: nodeId);
 
 bool selectWire(
-        {required String nodeNetworkName,
-        required BigInt sourceNodeId,
+        {required BigInt sourceNodeId,
         required BigInt destinationNodeId,
         required BigInt destinationArgumentIndex}) =>
     RustLib.instance.api.crateApiStructureDesignerApiSelectWire(
-        nodeNetworkName: nodeNetworkName,
         sourceNodeId: sourceNodeId,
         destinationNodeId: destinationNodeId,
         destinationArgumentIndex: destinationArgumentIndex);
 
-void clearSelection({required String nodeNetworkName}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiClearSelection(
-        nodeNetworkName: nodeNetworkName);
+void clearSelection() =>
+    RustLib.instance.api.crateApiStructureDesignerApiClearSelection();
 
-APICuboidData? getCuboidData(
-        {required String nodeNetworkName, required BigInt nodeId}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiGetCuboidData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+APICuboidData? getCuboidData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerApiGetCuboidData(nodeId: nodeId);
 
-APISphereData? getSphereData(
-        {required String nodeNetworkName, required BigInt nodeId}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiGetSphereData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+APISphereData? getSphereData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerApiGetSphereData(nodeId: nodeId);
 
-APIHalfSpaceData? getHalfSpaceData(
-        {required String nodeNetworkName, required BigInt nodeId}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiGetHalfSpaceData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+APIHalfSpaceData? getHalfSpaceData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerApiGetHalfSpaceData(nodeId: nodeId);
 
-APIGeoTransData? getGeoTransData(
-        {required String nodeNetworkName, required BigInt nodeId}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiGetGeoTransData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+APIGeoTransData? getGeoTransData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerApiGetGeoTransData(nodeId: nodeId);
 
-APIAtomTransData? getAtomTransData(
-        {required String nodeNetworkName, required BigInt nodeId}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiGetAtomTransData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId);
+APIAtomTransData? getAtomTransData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerApiGetAtomTransData(nodeId: nodeId);
 
-void setCuboidData(
-        {required String nodeNetworkName,
-        required BigInt nodeId,
-        required APICuboidData data}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiSetCuboidData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+void setCuboidData({required BigInt nodeId, required APICuboidData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerApiSetCuboidData(nodeId: nodeId, data: data);
 
-void setSphereData(
-        {required String nodeNetworkName,
-        required BigInt nodeId,
-        required APISphereData data}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiSetSphereData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+void setSphereData({required BigInt nodeId, required APISphereData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerApiSetSphereData(nodeId: nodeId, data: data);
 
 void setHalfSpaceData(
-        {required String nodeNetworkName,
-        required BigInt nodeId,
-        required APIHalfSpaceData data}) =>
+        {required BigInt nodeId, required APIHalfSpaceData data}) =>
     RustLib.instance.api.crateApiStructureDesignerApiSetHalfSpaceData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+        nodeId: nodeId, data: data);
 
-void setGeoTransData(
-        {required String nodeNetworkName,
-        required BigInt nodeId,
-        required APIGeoTransData data}) =>
+void setGeoTransData({required BigInt nodeId, required APIGeoTransData data}) =>
     RustLib.instance.api.crateApiStructureDesignerApiSetGeoTransData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+        nodeId: nodeId, data: data);
 
 void setAtomTransData(
-        {required String nodeNetworkName,
-        required BigInt nodeId,
-        required APIAtomTransData data}) =>
+        {required BigInt nodeId, required APIAtomTransData data}) =>
     RustLib.instance.api.crateApiStructureDesignerApiSetAtomTransData(
-        nodeNetworkName: nodeNetworkName, nodeId: nodeId, data: data);
+        nodeId: nodeId, data: data);
 
-void deleteSelected({required String nodeNetworkName}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiDeleteSelected(
-        nodeNetworkName: nodeNetworkName);
+void deleteSelected() =>
+    RustLib.instance.api.crateApiStructureDesignerApiDeleteSelected();

@@ -5,13 +5,11 @@ import 'package:flutter_cad/inputs/vec3_input.dart';
 
 /// Editor widget for atom_trans nodes
 class AtomTransEditor extends StatefulWidget {
-  final String nodeNetworkName;
   final BigInt nodeId;
   final APIAtomTransData? data;
 
   const AtomTransEditor({
     super.key,
-    required this.nodeNetworkName,
     required this.nodeId,
     required this.data,
   });
@@ -48,7 +46,6 @@ class AtomTransEditorState extends State<AtomTransEditor> {
   void _applyChanges() {
     if (_stagedData != null) {
       setAtomTransData(
-        nodeNetworkName: widget.nodeNetworkName,
         nodeId: widget.nodeId,
         data: _stagedData!,
       );

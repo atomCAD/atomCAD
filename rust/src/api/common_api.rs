@@ -87,7 +87,7 @@ async fn initialize_cad_instance_async() {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       cad_instance.renderer.refresh_background();
       add_sample_network(&mut cad_instance.structure_designer);
-      let scene = cad_instance.structure_designer.generate_scene("sample", false);
+      let scene = cad_instance.structure_designer.generate_scene(false);
       cad_instance.renderer.refresh(&scene, false);
     }
   }
@@ -213,7 +213,7 @@ pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i3
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn gadget_start_drag(node_network_name: String, handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
+pub fn gadget_start_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
 
@@ -227,19 +227,19 @@ pub fn gadget_start_drag(node_network_name: String, handle_index: i32, ray_origi
       Editor::None => {}
     }
 
-    refresh_renderer(instance, &node_network_name, false);
+    refresh_renderer(instance, false);
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
+pub fn gadget_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
 
     match instance.active_editor {
       Editor::StructureDesigner => {
         instance.structure_designer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-        refresh_renderer(instance, &node_network_name, true);
+        refresh_renderer(instance, true);
       },
       Editor::SceneComposer => {
         instance.scene_composer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
@@ -248,7 +248,7 @@ pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: API
           let selected_clusters_transform = instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().get_selected_clusters_transform();
           instance.renderer.set_selected_clusters_transform(&selected_clusters_transform);
         }
-        refresh_renderer(instance, &node_network_name, true);
+        refresh_renderer(instance, true);
       },
       Editor::None => {}
     }
@@ -256,7 +256,7 @@ pub fn gadget_drag(node_network_name: String, handle_index: i32, ray_origin: API
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn gadget_end_drag(node_network_name: String) {
+pub fn gadget_end_drag() {
   unsafe {
     let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
 
@@ -270,17 +270,17 @@ pub fn gadget_end_drag(node_network_name: String) {
       },
       Editor::None => {}
     }
-    refresh_renderer(instance, &node_network_name, false);
+    refresh_renderer(instance, false);
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn sync_gadget_data(node_network_name: String) -> bool {
+pub fn sync_gadget_data() -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       match instance.active_editor {
         Editor::StructureDesigner => {
-          return instance.structure_designer.sync_gadget_data(&node_network_name);
+          return instance.structure_designer.sync_gadget_data();
         },
         Editor::SceneComposer => {
           instance.scene_composer.model.sync_gadget_to_model();
@@ -312,7 +312,7 @@ pub fn set_camera_transform(transform: APITransform) {
     if let Some(instance) = &mut CAD_INSTANCE {
       let transform = from_api_transform(&transform);
       instance.renderer.set_camera_transform(&transform);
-      refresh_renderer(instance, "", false);
+      refresh_renderer(instance, false);
     }
   }
 }

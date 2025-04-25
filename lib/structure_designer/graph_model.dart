@@ -61,7 +61,6 @@ class GraphModel extends ChangeNotifier {
     if (nodeNetworkView != null) {
       final node = nodeNetworkView!.nodes[nodeId]!;
       moveNode(
-          nodeNetworkName: nodeNetworkView!.name,
           nodeId: nodeId,
           position: APIVec2(x: node.position.x, y: node.position.y));
       refreshFromKernel();
@@ -86,7 +85,6 @@ class GraphModel extends ChangeNotifier {
     final inPin = pin1.pinIndex < 0 ? pin2 : pin1;
 
     connectNodes(
-      nodeNetworkName: nodeNetworkView!.name,
       sourceNodeId: outPin.nodeId,
       destNodeId: inPin.nodeId,
       destParamIndex: BigInt.from(inPin.pinIndex),
@@ -101,7 +99,6 @@ class GraphModel extends ChangeNotifier {
     if (nodeNetworkView != null) {
       if (!nodeNetworkView!.nodes[nodeId]!.selected) {
         selectNode(
-          nodeNetworkName: nodeNetworkView!.name,
           nodeId: nodeId,
         );
       }
@@ -114,7 +111,6 @@ class GraphModel extends ChangeNotifier {
     if (nodeNetworkView == null) return;
     //TODO: only select a wire if not already selected.
     selectWire(
-        nodeNetworkName: nodeNetworkView!.name,
         sourceNodeId: sourceNodeId,
         destinationNodeId: destNodeId,
         destinationArgumentIndex: destParamIndex);
@@ -127,7 +123,6 @@ class GraphModel extends ChangeNotifier {
     if (node == null) return;
 
     setNodeDisplay(
-      nodeNetworkName: nodeNetworkView!.name,
       nodeId: nodeId,
       isDisplayed: !node.displayed,
     );
@@ -136,14 +131,13 @@ class GraphModel extends ChangeNotifier {
 
   void removeSelected() {
     if (nodeNetworkView == null) return;
-    deleteSelected(nodeNetworkName: nodeNetworkView!.name);
+    deleteSelected();
     refreshFromKernel();
   }
 
   BigInt createNode(String nodeTypeName, Offset position) {
     if (nodeNetworkView == null) return BigInt.zero;
     final nodeId = addNode(
-      nodeNetworkName: nodeNetworkView!.name,
       nodeTypeName: nodeTypeName,
       position: APIVec2(x: position.dx, y: position.dy),
     );

@@ -73,7 +73,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => 1597938154;
+  int get rustContentHash => 337421677;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -88,21 +88,16 @@ abstract class RustLibApi extends BaseApi {
       {required int atomicNumber, required APIVec3 position});
 
   BigInt crateApiStructureDesignerApiAddNode(
-      {required String nodeNetworkName,
-      required String nodeTypeName,
-      required APIVec2 position});
+      {required String nodeTypeName, required APIVec2 position});
 
-  void crateApiStructureDesignerApiClearSelection(
-      {required String nodeNetworkName});
+  void crateApiStructureDesignerApiClearSelection();
 
   void crateApiStructureDesignerApiConnectNodes(
-      {required String nodeNetworkName,
-      required BigInt sourceNodeId,
+      {required BigInt sourceNodeId,
       required BigInt destNodeId,
       required BigInt destParamIndex});
 
-  void crateApiStructureDesignerApiDeleteSelected(
-      {required String nodeNetworkName});
+  void crateApiStructureDesignerApiDeleteSelected();
 
   bool crateApiSceneComposerApiExportXyz({required String filePath});
 
@@ -110,41 +105,39 @@ abstract class RustLibApi extends BaseApi {
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
   void crateApiCommonApiGadgetDrag(
-      {required String nodeNetworkName,
-      required int handleIndex,
+      {required int handleIndex,
       required APIVec3 rayOrigin,
       required APIVec3 rayDirection});
 
-  void crateApiCommonApiGadgetEndDrag({required String nodeNetworkName});
+  void crateApiCommonApiGadgetEndDrag();
 
   int? crateApiCommonApiGadgetHitTest(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection});
 
   void crateApiCommonApiGadgetStartDrag(
-      {required String nodeNetworkName,
-      required int handleIndex,
+      {required int handleIndex,
       required APIVec3 rayOrigin,
       required APIVec3 rayDirection});
 
   String crateApiSceneComposerApiGetAlignToolStateText();
 
   APIAtomTransData? crateApiStructureDesignerApiGetAtomTransData(
-      {required String nodeNetworkName, required BigInt nodeId});
+      {required BigInt nodeId});
 
   APICamera? crateApiCommonApiGetCamera();
 
   APITransform crateApiCommonApiGetCameraTransform();
 
   APICuboidData? crateApiStructureDesignerApiGetCuboidData(
-      {required String nodeNetworkName, required BigInt nodeId});
+      {required BigInt nodeId});
 
   String crateApiSceneComposerApiGetDistanceToolStateText();
 
   APIGeoTransData? crateApiStructureDesignerApiGetGeoTransData(
-      {required String nodeNetworkName, required BigInt nodeId});
+      {required BigInt nodeId});
 
   APIHalfSpaceData? crateApiStructureDesignerApiGetHalfSpaceData(
-      {required String nodeNetworkName, required BigInt nodeId});
+      {required BigInt nodeId});
 
   List<String>? crateApiStructureDesignerApiGetNodeNetworkNames();
 
@@ -160,7 +153,7 @@ abstract class RustLibApi extends BaseApi {
   APITransform? crateApiSceneComposerApiGetSelectedFrameTransform();
 
   APISphereData? crateApiStructureDesignerApiGetSphereData(
-      {required String nodeNetworkName, required BigInt nodeId});
+      {required BigInt nodeId});
 
   String crateApiCommonApiGreet({required String name});
 
@@ -174,9 +167,7 @@ abstract class RustLibApi extends BaseApi {
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up});
 
   void crateApiStructureDesignerApiMoveNode(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIVec2 position});
+      {required BigInt nodeId, required APIVec2 position});
 
   double crateApiCommonApiProvideTexture({required int texturePtr});
 
@@ -209,61 +200,50 @@ abstract class RustLibApi extends BaseApi {
   BigInt? crateApiSceneComposerApiSelectDistanceAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  bool crateApiStructureDesignerApiSelectNode(
-      {required String nodeNetworkName, required BigInt nodeId});
+  bool crateApiStructureDesignerApiSelectNode({required BigInt nodeId});
 
   bool crateApiStructureDesignerApiSelectWire(
-      {required String nodeNetworkName,
-      required BigInt sourceNodeId,
+      {required BigInt sourceNodeId,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex});
 
   void crateApiCommonApiSetActiveEditor({required Editor editor});
 
+  void crateApiStructureDesignerApiSetActiveNodeNetwork(
+      {required String nodeNetworkName});
+
   void crateApiSceneComposerApiSetActiveSceneComposerTool(
       {required APISceneComposerTool tool});
 
   void crateApiStructureDesignerApiSetAtomTransData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIAtomTransData data});
+      {required BigInt nodeId, required APIAtomTransData data});
 
   void crateApiCommonApiSetCameraTransform({required APITransform transform});
 
   void crateApiStructureDesignerApiSetCuboidData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APICuboidData data});
+      {required BigInt nodeId, required APICuboidData data});
 
   void crateApiSceneComposerApiSetFrameLockedToAtoms({required bool locked});
 
   void crateApiStructureDesignerApiSetGeoTransData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIGeoTransData data});
+      {required BigInt nodeId, required APIGeoTransData data});
 
   void crateApiStructureDesignerApiSetHalfSpaceData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIHalfSpaceData data});
+      {required BigInt nodeId, required APIHalfSpaceData data});
 
   void crateApiStructureDesignerApiSetNodeDisplay(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required bool isDisplayed});
+      {required BigInt nodeId, required bool isDisplayed});
 
   void crateApiSceneComposerApiSetSelectedFrameTransform(
       {required APITransform transform});
 
   void crateApiStructureDesignerApiSetSphereData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APISphereData data});
+      {required BigInt nodeId, required APISphereData data});
 
   Future<void> crateApiCommonApiSetViewportSize(
       {required int width, required int height});
 
-  bool crateApiCommonApiSyncGadgetData({required String nodeNetworkName});
+  bool crateApiCommonApiSyncGadgetData();
 
   void crateApiSceneComposerApiTranslateAlongLocalAxis(
       {required int axisIndex, required double translation});
@@ -305,13 +285,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   BigInt crateApiStructureDesignerApiAddNode(
-      {required String nodeNetworkName,
-      required String nodeTypeName,
-      required APIVec2 position}) {
+      {required String nodeTypeName, required APIVec2 position}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_String(nodeTypeName, serializer);
         sse_encode_box_autoadd_api_vec_2(position, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
@@ -321,7 +298,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiAddNodeConstMeta,
-      argValues: [nodeNetworkName, nodeTypeName, position],
+      argValues: [nodeTypeName, position],
       apiImpl: this,
     ));
   }
@@ -329,16 +306,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiAddNodeConstMeta =>
       const TaskConstMeta(
         debugName: "add_node",
-        argNames: ["nodeNetworkName", "nodeTypeName", "position"],
+        argNames: ["nodeTypeName", "position"],
       );
 
   @override
-  void crateApiStructureDesignerApiClearSelection(
-      {required String nodeNetworkName}) {
+  void crateApiStructureDesignerApiClearSelection() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
       },
       codec: SseCodec(
@@ -346,7 +321,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiClearSelectionConstMeta,
-      argValues: [nodeNetworkName],
+      argValues: [],
       apiImpl: this,
     ));
   }
@@ -354,19 +329,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiClearSelectionConstMeta =>
       const TaskConstMeta(
         debugName: "clear_selection",
-        argNames: ["nodeNetworkName"],
+        argNames: [],
       );
 
   @override
   void crateApiStructureDesignerApiConnectNodes(
-      {required String nodeNetworkName,
-      required BigInt sourceNodeId,
+      {required BigInt sourceNodeId,
       required BigInt destNodeId,
       required BigInt destParamIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(sourceNodeId, serializer);
         sse_encode_u_64(destNodeId, serializer);
         sse_encode_usize(destParamIndex, serializer);
@@ -377,7 +350,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiConnectNodesConstMeta,
-      argValues: [nodeNetworkName, sourceNodeId, destNodeId, destParamIndex],
+      argValues: [sourceNodeId, destNodeId, destParamIndex],
       apiImpl: this,
     ));
   }
@@ -385,21 +358,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiConnectNodesConstMeta =>
       const TaskConstMeta(
         debugName: "connect_nodes",
-        argNames: [
-          "nodeNetworkName",
-          "sourceNodeId",
-          "destNodeId",
-          "destParamIndex"
-        ],
+        argNames: ["sourceNodeId", "destNodeId", "destParamIndex"],
       );
 
   @override
-  void crateApiStructureDesignerApiDeleteSelected(
-      {required String nodeNetworkName}) {
+  void crateApiStructureDesignerApiDeleteSelected() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
       },
       codec: SseCodec(
@@ -407,7 +373,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiDeleteSelectedConstMeta,
-      argValues: [nodeNetworkName],
+      argValues: [],
       apiImpl: this,
     ));
   }
@@ -415,7 +381,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiDeleteSelectedConstMeta =>
       const TaskConstMeta(
         debugName: "delete_selected",
-        argNames: ["nodeNetworkName"],
+        argNames: [],
       );
 
   @override
@@ -470,14 +436,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiCommonApiGadgetDrag(
-      {required String nodeNetworkName,
-      required int handleIndex,
+      {required int handleIndex,
       required APIVec3 rayOrigin,
       required APIVec3 rayDirection}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_i_32(handleIndex, serializer);
         sse_encode_box_autoadd_api_vec_3(rayOrigin, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDirection, serializer);
@@ -488,7 +452,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiCommonApiGadgetDragConstMeta,
-      argValues: [nodeNetworkName, handleIndex, rayOrigin, rayDirection],
+      argValues: [handleIndex, rayOrigin, rayDirection],
       apiImpl: this,
     ));
   }
@@ -496,20 +460,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCommonApiGadgetDragConstMeta =>
       const TaskConstMeta(
         debugName: "gadget_drag",
-        argNames: [
-          "nodeNetworkName",
-          "handleIndex",
-          "rayOrigin",
-          "rayDirection"
-        ],
+        argNames: ["handleIndex", "rayOrigin", "rayDirection"],
       );
 
   @override
-  void crateApiCommonApiGadgetEndDrag({required String nodeNetworkName}) {
+  void crateApiCommonApiGadgetEndDrag() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
       },
       codec: SseCodec(
@@ -517,7 +475,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiCommonApiGadgetEndDragConstMeta,
-      argValues: [nodeNetworkName],
+      argValues: [],
       apiImpl: this,
     ));
   }
@@ -525,7 +483,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCommonApiGadgetEndDragConstMeta =>
       const TaskConstMeta(
         debugName: "gadget_end_drag",
-        argNames: ["nodeNetworkName"],
+        argNames: [],
       );
 
   @override
@@ -556,14 +514,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiCommonApiGadgetStartDrag(
-      {required String nodeNetworkName,
-      required int handleIndex,
+      {required int handleIndex,
       required APIVec3 rayOrigin,
       required APIVec3 rayDirection}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_i_32(handleIndex, serializer);
         sse_encode_box_autoadd_api_vec_3(rayOrigin, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDirection, serializer);
@@ -574,7 +530,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiCommonApiGadgetStartDragConstMeta,
-      argValues: [nodeNetworkName, handleIndex, rayOrigin, rayDirection],
+      argValues: [handleIndex, rayOrigin, rayDirection],
       apiImpl: this,
     ));
   }
@@ -582,12 +538,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCommonApiGadgetStartDragConstMeta =>
       const TaskConstMeta(
         debugName: "gadget_start_drag",
-        argNames: [
-          "nodeNetworkName",
-          "handleIndex",
-          "rayOrigin",
-          "rayDirection"
-        ],
+        argNames: ["handleIndex", "rayOrigin", "rayDirection"],
       );
 
   @override
@@ -615,11 +566,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   APIAtomTransData? crateApiStructureDesignerApiGetAtomTransData(
-      {required String nodeNetworkName, required BigInt nodeId}) {
+      {required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
       },
@@ -628,7 +578,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiGetAtomTransDataConstMeta,
-      argValues: [nodeNetworkName, nodeId],
+      argValues: [nodeId],
       apiImpl: this,
     ));
   }
@@ -636,7 +586,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiGetAtomTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_atom_trans_data",
-        argNames: ["nodeNetworkName", "nodeId"],
+        argNames: ["nodeId"],
       );
 
   @override
@@ -686,11 +636,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   APICuboidData? crateApiStructureDesignerApiGetCuboidData(
-      {required String nodeNetworkName, required BigInt nodeId}) {
+      {required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
       },
@@ -699,7 +648,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiGetCuboidDataConstMeta,
-      argValues: [nodeNetworkName, nodeId],
+      argValues: [nodeId],
       apiImpl: this,
     ));
   }
@@ -707,7 +656,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiGetCuboidDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_cuboid_data",
-        argNames: ["nodeNetworkName", "nodeId"],
+        argNames: ["nodeId"],
       );
 
   @override
@@ -736,11 +685,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   APIGeoTransData? crateApiStructureDesignerApiGetGeoTransData(
-      {required String nodeNetworkName, required BigInt nodeId}) {
+      {required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
       },
@@ -749,7 +697,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiGetGeoTransDataConstMeta,
-      argValues: [nodeNetworkName, nodeId],
+      argValues: [nodeId],
       apiImpl: this,
     ));
   }
@@ -757,16 +705,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiGetGeoTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_geo_trans_data",
-        argNames: ["nodeNetworkName", "nodeId"],
+        argNames: ["nodeId"],
       );
 
   @override
   APIHalfSpaceData? crateApiStructureDesignerApiGetHalfSpaceData(
-      {required String nodeNetworkName, required BigInt nodeId}) {
+      {required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
       },
@@ -775,7 +722,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiGetHalfSpaceDataConstMeta,
-      argValues: [nodeNetworkName, nodeId],
+      argValues: [nodeId],
       apiImpl: this,
     ));
   }
@@ -783,7 +730,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiGetHalfSpaceDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_half_space_data",
-        argNames: ["nodeNetworkName", "nodeId"],
+        argNames: ["nodeId"],
       );
 
   @override
@@ -930,11 +877,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   APISphereData? crateApiStructureDesignerApiGetSphereData(
-      {required String nodeNetworkName, required BigInt nodeId}) {
+      {required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
       },
@@ -943,7 +889,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiGetSphereDataConstMeta,
-      argValues: [nodeNetworkName, nodeId],
+      argValues: [nodeId],
       apiImpl: this,
     ));
   }
@@ -951,7 +897,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiGetSphereDataConstMeta =>
       const TaskConstMeta(
         debugName: "get_sphere_data",
-        argNames: ["nodeNetworkName", "nodeId"],
+        argNames: ["nodeId"],
       );
 
   @override
@@ -1076,13 +1022,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerApiMoveNode(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIVec2 position}) {
+      {required BigInt nodeId, required APIVec2 position}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_vec_2(position, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
@@ -1092,7 +1035,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiMoveNodeConstMeta,
-      argValues: [nodeNetworkName, nodeId, position],
+      argValues: [nodeId, position],
       apiImpl: this,
     ));
   }
@@ -1100,7 +1043,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiMoveNodeConstMeta =>
       const TaskConstMeta(
         debugName: "move_node",
-        argNames: ["nodeNetworkName", "nodeId", "position"],
+        argNames: ["nodeId", "position"],
       );
 
   @override
@@ -1383,12 +1326,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  bool crateApiStructureDesignerApiSelectNode(
-      {required String nodeNetworkName, required BigInt nodeId}) {
+  bool crateApiStructureDesignerApiSelectNode({required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44)!;
       },
@@ -1397,7 +1338,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSelectNodeConstMeta,
-      argValues: [nodeNetworkName, nodeId],
+      argValues: [nodeId],
       apiImpl: this,
     ));
   }
@@ -1405,19 +1346,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiSelectNodeConstMeta =>
       const TaskConstMeta(
         debugName: "select_node",
-        argNames: ["nodeNetworkName", "nodeId"],
+        argNames: ["nodeId"],
       );
 
   @override
   bool crateApiStructureDesignerApiSelectWire(
-      {required String nodeNetworkName,
-      required BigInt sourceNodeId,
+      {required BigInt sourceNodeId,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(sourceNodeId, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
         sse_encode_usize(destinationArgumentIndex, serializer);
@@ -1428,12 +1367,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSelectWireConstMeta,
-      argValues: [
-        nodeNetworkName,
-        sourceNodeId,
-        destinationNodeId,
-        destinationArgumentIndex
-      ],
+      argValues: [sourceNodeId, destinationNodeId, destinationArgumentIndex],
       apiImpl: this,
     ));
   }
@@ -1442,7 +1376,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "select_wire",
         argNames: [
-          "nodeNetworkName",
           "sourceNodeId",
           "destinationNodeId",
           "destinationArgumentIndex"
@@ -1474,13 +1407,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiStructureDesignerApiSetActiveNodeNetwork(
+      {required String nodeNetworkName}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nodeNetworkName, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiStructureDesignerApiSetActiveNodeNetworkConstMeta,
+      argValues: [nodeNetworkName],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerApiSetActiveNodeNetworkConstMeta =>
+          const TaskConstMeta(
+            debugName: "set_active_node_network",
+            argNames: ["nodeNetworkName"],
+          );
+
+  @override
   void crateApiSceneComposerApiSetActiveSceneComposerTool(
       {required APISceneComposerTool tool}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_api_scene_composer_tool(tool, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1501,23 +1460,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerApiSetAtomTransData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIAtomTransData data}) {
+      {required BigInt nodeId, required APIAtomTransData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_atom_trans_data(data, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSetAtomTransDataConstMeta,
-      argValues: [nodeNetworkName, nodeId, data],
+      argValues: [nodeId, data],
       apiImpl: this,
     ));
   }
@@ -1525,7 +1481,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiSetAtomTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_atom_trans_data",
-        argNames: ["nodeNetworkName", "nodeId", "data"],
+        argNames: ["nodeId", "data"],
       );
 
   @override
@@ -1534,7 +1490,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_transform(transform, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1554,23 +1510,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerApiSetCuboidData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APICuboidData data}) {
+      {required BigInt nodeId, required APICuboidData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_cuboid_data(data, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSetCuboidDataConstMeta,
-      argValues: [nodeNetworkName, nodeId, data],
+      argValues: [nodeId, data],
       apiImpl: this,
     ));
   }
@@ -1578,7 +1531,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiSetCuboidDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_cuboid_data",
-        argNames: ["nodeNetworkName", "nodeId", "data"],
+        argNames: ["nodeId", "data"],
       );
 
   @override
@@ -1587,7 +1540,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_bool(locked, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1607,23 +1560,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerApiSetGeoTransData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIGeoTransData data}) {
+      {required BigInt nodeId, required APIGeoTransData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_geo_trans_data(data, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSetGeoTransDataConstMeta,
-      argValues: [nodeNetworkName, nodeId, data],
+      argValues: [nodeId, data],
       apiImpl: this,
     ));
   }
@@ -1631,28 +1581,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiSetGeoTransDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_geo_trans_data",
-        argNames: ["nodeNetworkName", "nodeId", "data"],
+        argNames: ["nodeId", "data"],
       );
 
   @override
   void crateApiStructureDesignerApiSetHalfSpaceData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APIHalfSpaceData data}) {
+      {required BigInt nodeId, required APIHalfSpaceData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_half_space_data(data, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSetHalfSpaceDataConstMeta,
-      argValues: [nodeNetworkName, nodeId, data],
+      argValues: [nodeId, data],
       apiImpl: this,
     ));
   }
@@ -1660,28 +1607,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiSetHalfSpaceDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_half_space_data",
-        argNames: ["nodeNetworkName", "nodeId", "data"],
+        argNames: ["nodeId", "data"],
       );
 
   @override
   void crateApiStructureDesignerApiSetNodeDisplay(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required bool isDisplayed}) {
+      {required BigInt nodeId, required bool isDisplayed}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_bool(isDisplayed, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSetNodeDisplayConstMeta,
-      argValues: [nodeNetworkName, nodeId, isDisplayed],
+      argValues: [nodeId, isDisplayed],
       apiImpl: this,
     ));
   }
@@ -1689,7 +1633,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiSetNodeDisplayConstMeta =>
       const TaskConstMeta(
         debugName: "set_node_display",
-        argNames: ["nodeNetworkName", "nodeId", "isDisplayed"],
+        argNames: ["nodeId", "isDisplayed"],
       );
 
   @override
@@ -1699,7 +1643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_transform(transform, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 56)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1720,23 +1664,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerApiSetSphereData(
-      {required String nodeNetworkName,
-      required BigInt nodeId,
-      required APISphereData data}) {
+      {required BigInt nodeId, required APISphereData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_sphere_data(data, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 56)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 57)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiSetSphereDataConstMeta,
-      argValues: [nodeNetworkName, nodeId, data],
+      argValues: [nodeId, data],
       apiImpl: this,
     ));
   }
@@ -1744,7 +1685,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiSetSphereDataConstMeta =>
       const TaskConstMeta(
         debugName: "set_sphere_data",
-        argNames: ["nodeNetworkName", "nodeId", "data"],
+        argNames: ["nodeId", "data"],
       );
 
   @override
@@ -1756,7 +1697,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(width, serializer);
         sse_encode_u_32(height, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 57, port: port_);
+            funcId: 58, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1775,19 +1716,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  bool crateApiCommonApiSyncGadgetData({required String nodeNetworkName}) {
+  bool crateApiCommonApiSyncGadgetData() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiCommonApiSyncGadgetDataConstMeta,
-      argValues: [nodeNetworkName],
+      argValues: [],
       apiImpl: this,
     ));
   }
@@ -1795,7 +1735,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCommonApiSyncGadgetDataConstMeta =>
       const TaskConstMeta(
         debugName: "sync_gadget_data",
-        argNames: ["nodeNetworkName"],
+        argNames: [],
       );
 
   @override
@@ -1806,7 +1746,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(axisIndex, serializer);
         sse_encode_f_64(translation, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 60)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,

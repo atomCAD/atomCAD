@@ -18,7 +18,7 @@ pub fn scene_composer_undo() -> bool {
   unsafe {
     let instance = CAD_INSTANCE.as_mut().unwrap();
     let result = instance.scene_composer.undo();
-    refresh_renderer(instance, "", false);
+    refresh_renderer(instance, false);
     result
   }
 }
@@ -28,7 +28,7 @@ pub fn scene_composer_redo() -> bool {
   unsafe {
     let instance = CAD_INSTANCE.as_mut().unwrap();
     let result = instance.scene_composer.redo();
-    refresh_renderer(instance, "", false);
+    refresh_renderer(instance, false);
     result
   }
 }
@@ -72,7 +72,7 @@ pub fn set_selected_frame_transform(transform: APITransform) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.scene_composer.set_selected_frame_transform(from_api_transform(&transform));
-      refresh_renderer(instance, "", false);
+      refresh_renderer(instance, false);
     }
   }
 }
@@ -91,7 +91,7 @@ pub fn import_xyz(file_path: &str) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.scene_composer.import_xyz(file_path).unwrap();
-      refresh_renderer(cad_instance, "", false);
+      refresh_renderer(cad_instance, false);
     }
   }
 }
@@ -115,7 +115,7 @@ pub fn select_cluster_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_modifi
       &from_api_vec3(&ray_start),
       &from_api_vec3(&ray_dir),
       select_modifier);
-    refresh_renderer(instance, "", false);
+    refresh_renderer(instance, false);
     selected_cluster
   }
 }
@@ -125,7 +125,7 @@ pub fn select_cluster_by_id(cluster_id: u64, select_modifier: SelectModifier) {
   unsafe {
     let instance = CAD_INSTANCE.as_mut().unwrap();
     instance.scene_composer.select_cluster_by_id(cluster_id, select_modifier);
-    refresh_renderer(instance, "", false);
+    refresh_renderer(instance, false);
   }
 }
 
@@ -134,7 +134,7 @@ pub fn translate_along_local_axis(axis_index: u32, translation: f64) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.scene_composer.translate_along_local_axis(axis_index, translation);
-      refresh_renderer(instance, "", false);
+      refresh_renderer(instance, false);
     }
   }
 }
@@ -144,7 +144,7 @@ pub fn rotate_around_local_axis(axis_index: u32, angle_degrees: f64) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.scene_composer.rotate_around_local_axis(axis_index, angle_degrees);
-      refresh_renderer(instance, "", false);
+      refresh_renderer(instance, false);
     }
   }
 }
@@ -176,7 +176,7 @@ pub fn select_align_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Option<
       let ray_start_dvec3 = from_api_vec3(&ray_start);
       let ray_dir_dvec3 = from_api_vec3(&ray_dir);
       let ret = cad_instance.scene_composer.select_align_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
-      refresh_renderer(cad_instance, "", false);
+      refresh_renderer(cad_instance, false);
       return ret;
     }
   }
@@ -188,7 +188,7 @@ pub fn set_active_scene_composer_tool(tool: APISceneComposerTool) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.scene_composer.set_active_tool(tool);
-      refresh_renderer(instance, "", false);
+      refresh_renderer(instance, false);
     }
   }
 }
@@ -230,7 +230,7 @@ pub fn select_atom_info_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Opt
       let ray_start_dvec3 = from_api_vec3(&ray_start);
       let ray_dir_dvec3 = from_api_vec3(&ray_dir);
       let ret = cad_instance.scene_composer.select_atom_info_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
-      refresh_renderer(cad_instance, "", false);
+      refresh_renderer(cad_instance, false);
       return ret;
     }
   }
@@ -286,7 +286,7 @@ pub fn select_distance_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> Opti
       let ray_start_dvec3 = from_api_vec3(&ray_start);
       let ray_dir_dvec3 = from_api_vec3(&ray_dir);
       let ret = cad_instance.scene_composer.select_distance_atom_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
-      refresh_renderer(cad_instance, "", false);
+      refresh_renderer(cad_instance, false);
       return ret;
     }
   }
@@ -298,7 +298,7 @@ pub fn scene_composer_new_model() {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.scene_composer.new_model();
-      refresh_renderer(instance, "", false);
+      refresh_renderer(instance, false);
     }
   }
 }

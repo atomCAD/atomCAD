@@ -5,13 +5,11 @@ import 'package:flutter_cad/inputs/ivec3_input.dart';
 
 /// Editor widget for geo_trans nodes
 class GeoTransEditor extends StatefulWidget {
-  final String nodeNetworkName;
   final BigInt nodeId;
   final APIGeoTransData? data;
 
   const GeoTransEditor({
     super.key,
-    required this.nodeNetworkName,
     required this.nodeId,
     required this.data,
   });
@@ -48,7 +46,6 @@ class GeoTransEditorState extends State<GeoTransEditor> {
   void _applyChanges() {
     if (_stagedData != null) {
       setGeoTransData(
-        nodeNetworkName: widget.nodeNetworkName,
         nodeId: widget.nodeId,
         data: _stagedData!,
       );

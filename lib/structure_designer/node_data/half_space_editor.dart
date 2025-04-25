@@ -6,13 +6,11 @@ import 'package:flutter_cad/inputs/int_input.dart';
 
 /// Editor widget for half_space nodes
 class HalfSpaceEditor extends StatefulWidget {
-  final String nodeNetworkName;
   final BigInt nodeId;
   final APIHalfSpaceData? data;
 
   const HalfSpaceEditor({
     super.key,
-    required this.nodeNetworkName,
     required this.nodeId,
     required this.data,
   });
@@ -49,7 +47,6 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
   void _applyChanges() {
     if (_stagedData != null) {
       setHalfSpaceData(
-        nodeNetworkName: widget.nodeNetworkName,
         nodeId: widget.nodeId,
         data: _stagedData!,
       );

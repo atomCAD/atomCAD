@@ -45,59 +45,49 @@ class NodeDataWidget extends StatelessWidget {
             case 'cuboid':
               // Fetch the cuboid data here in the parent widget
               final cuboidData = getCuboidData(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
               );
 
               return CuboidEditor(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
                 data: cuboidData,
               );
             case 'sphere':
               // Fetch the sphere data here in the parent widget
               final sphereData = getSphereData(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
               );
               return SphereEditor(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
                 data: sphereData,
               );
             case 'half_space':
               // Fetch the half space data here in the parent widget
               final halfSpaceData = getHalfSpaceData(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
               );
 
               return HalfSpaceEditor(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
                 data: halfSpaceData,
               );
             case 'geo_trans':
               // Fetch the geo transformation data here in the parent widget
               final geoTransData = getGeoTransData(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
               );
 
               return GeoTransEditor(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
                 data: geoTransData,
               );
             case 'atom_trans':
               // Fetch the atom transformation data here in the parent widget
               final atomTransData = getAtomTransData(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
               );
 
               return AtomTransEditor(
-                nodeNetworkName: nodeNetworkView.name,
                 nodeId: selectedNode.id,
                 data: atomTransData,
               );

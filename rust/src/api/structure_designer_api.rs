@@ -93,30 +93,30 @@ pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkVie
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn move_node(node_network_name: &str, node_id: u64, position: APIVec2) {
+pub fn move_node(node_id: u64, position: APIVec2) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
-      cad_instance.structure_designer.move_node(node_network_name, node_id, from_api_vec2(&position));
+      cad_instance.structure_designer.move_node(node_id, from_api_vec2(&position));
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_node(node_network_name: &str, node_type_name: &str, position: APIVec2) -> u64 {
+pub fn add_node(node_type_name: &str, position: APIVec2) -> u64 {
     unsafe {
         if let Some(cad_instance) = &mut CAD_INSTANCE {
-            return cad_instance.structure_designer.add_node(node_network_name, node_type_name, from_api_vec2(&position));
+            return cad_instance.structure_designer.add_node(node_type_name, from_api_vec2(&position));
         }
     }
     0
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn connect_nodes(node_network_name: &str, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
+pub fn connect_nodes(source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
-      cad_instance.structure_designer.connect_nodes(node_network_name, source_node_id, dest_node_id, dest_param_index);
-      refresh_renderer(cad_instance, &node_network_name, false);
+      cad_instance.structure_designer.connect_nodes(source_node_id, dest_node_id, dest_param_index);
+      refresh_renderer(cad_instance, false);
     }
   }
 }
@@ -138,21 +138,30 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_node_display(node_network_name: String, node_id: u64, is_displayed: bool) {
+pub fn set_active_node_network(node_network_name: &str) {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      instance.structure_designer.set_node_display(&node_network_name, node_id, is_displayed);
-      refresh_renderer(instance, &node_network_name, false);
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.structure_designer.set_active_node_network_name(node_network_name);
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_node(node_network_name: String, node_id: u64) -> bool {
+pub fn set_node_display(node_id: u64, is_displayed: bool) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      let ret = instance.structure_designer.select_node(&node_network_name, node_id);
-      refresh_renderer(instance, &node_network_name, false);
+      instance.structure_designer.set_node_display(node_id, is_displayed);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_node(node_id: u64) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let ret = instance.structure_designer.select_node(node_id);
+      refresh_renderer(instance, false);
       ret
     } else {
       false
@@ -161,11 +170,11 @@ pub fn select_node(node_network_name: String, node_id: u64) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_wire(node_network_name: String, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+pub fn select_wire(source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      let ret = instance.structure_designer.select_wire(&node_network_name, source_node_id, destination_node_id, destination_argument_index);
-      refresh_renderer(instance, &node_network_name, false);
+      let ret = instance.structure_designer.select_wire(source_node_id, destination_node_id, destination_argument_index);
+      refresh_renderer(instance, false);
       ret
     } else {
       false
@@ -174,20 +183,20 @@ pub fn select_wire(node_network_name: String, source_node_id: u64, destination_n
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_selection(node_network_name: String) {
+pub fn clear_selection() {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      instance.structure_designer.clear_selection(&node_network_name);
-      refresh_renderer(instance, &node_network_name, false);
+      instance.structure_designer.clear_selection();
+      refresh_renderer(instance, false);
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_cuboid_data(node_network_name: String, node_id: u64) -> Option<APICuboidData> {
+pub fn get_cuboid_data(node_id: u64) -> Option<APICuboidData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    let node_data = cad_instance.structure_designer.get_node_network_data(&node_network_name, node_id)?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
     let cuboid_data = node_data.as_any_ref().downcast_ref::<CuboidData>()?;
     return Some(APICuboidData {
       min_corner: to_api_ivec3(&cuboid_data.min_corner),
@@ -197,10 +206,10 @@ pub fn get_cuboid_data(node_network_name: String, node_id: u64) -> Option<APICub
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_sphere_data(node_network_name: String, node_id: u64) -> Option<APISphereData> {
+pub fn get_sphere_data(node_id: u64) -> Option<APISphereData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    let node_data = cad_instance.structure_designer.get_node_network_data(&node_network_name, node_id)?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
     let sphere_data = node_data.as_any_ref().downcast_ref::<SphereData>()?;
     return Some(APISphereData {
       center: to_api_ivec3(&sphere_data.center),
@@ -210,10 +219,10 @@ pub fn get_sphere_data(node_network_name: String, node_id: u64) -> Option<APISph
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_half_space_data(node_network_name: String, node_id: u64) -> Option<APIHalfSpaceData> {
+pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    let node_data = cad_instance.structure_designer.get_node_network_data(&node_network_name, node_id)?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
     let half_space_data = node_data.as_any_ref().downcast_ref::<HalfSpaceData>()?;
     return Some(APIHalfSpaceData {
       miller_index: to_api_ivec3(&half_space_data.miller_index),
@@ -223,10 +232,10 @@ pub fn get_half_space_data(node_network_name: String, node_id: u64) -> Option<AP
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_geo_trans_data(node_network_name: String, node_id: u64) -> Option<APIGeoTransData> {
+pub fn get_geo_trans_data(node_id: u64) -> Option<APIGeoTransData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    let node_data = cad_instance.structure_designer.get_node_network_data(&node_network_name, node_id)?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
     let geo_trans_data = node_data.as_any_ref().downcast_ref::<GeoTransData>()?;
     return Some(APIGeoTransData {
       transform_only_frame: geo_trans_data.transform_only_frame,
@@ -237,10 +246,10 @@ pub fn get_geo_trans_data(node_network_name: String, node_id: u64) -> Option<API
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_trans_data(node_network_name: String, node_id: u64) -> Option<APIAtomTransData> {
+pub fn get_atom_trans_data(node_id: u64) -> Option<APIAtomTransData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    let node_data = cad_instance.structure_designer.get_node_network_data(&node_network_name, node_id)?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
     let atom_trans_data = node_data.as_any_ref().downcast_ref::<AtomTransData>()?;
     return Some(APIAtomTransData {
       translation: to_api_vec3(&atom_trans_data.translation),
@@ -250,49 +259,49 @@ pub fn get_atom_trans_data(node_network_name: String, node_id: u64) -> Option<AP
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_cuboid_data(node_network_name: String, node_id: u64, data: APICuboidData) {
+pub fn set_cuboid_data(node_id: u64, data: APICuboidData) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let cuboid_data = Box::new(CuboidData {
         min_corner: from_api_ivec3(&data.min_corner),
         extent: from_api_ivec3(&data.extent),
       });
-      instance.structure_designer.set_node_network_data(&node_network_name, node_id, cuboid_data);
-      refresh_renderer(instance, &node_network_name, false);
+      instance.structure_designer.set_node_network_data(node_id, cuboid_data);
+      refresh_renderer(instance, false);
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sphere_data(node_network_name: String, node_id: u64, data: APISphereData) {
+pub fn set_sphere_data(node_id: u64, data: APISphereData) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let sphere_data = Box::new(SphereData {
         center: from_api_ivec3(&data.center),
         radius: data.radius,
       });
-      instance.structure_designer.set_node_network_data(&node_network_name, node_id, sphere_data);
-      refresh_renderer(instance, &node_network_name, false);
+      instance.structure_designer.set_node_network_data(node_id, sphere_data);
+      refresh_renderer(instance, false);
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_half_space_data(node_network_name: String, node_id: u64, data: APIHalfSpaceData) {
+pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let half_space_data = Box::new(HalfSpaceData {
         miller_index: from_api_ivec3(&data.miller_index),
         shift: data.shift,
       });
-      instance.structure_designer.set_node_network_data(&node_network_name, node_id, half_space_data);
-      refresh_renderer(instance, &node_network_name, false);
+      instance.structure_designer.set_node_network_data(node_id, half_space_data);
+      refresh_renderer(instance, false);
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_geo_trans_data(node_network_name: String, node_id: u64, data: APIGeoTransData) {
+pub fn set_geo_trans_data(node_id: u64, data: APIGeoTransData) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let geo_trans_data = Box::new(GeoTransData {
@@ -300,32 +309,32 @@ pub fn set_geo_trans_data(node_network_name: String, node_id: u64, data: APIGeoT
         translation: from_api_ivec3(&data.translation),
         rotation: from_api_ivec3(&data.rotation),
       });
-      instance.structure_designer.set_node_network_data(&node_network_name, node_id, geo_trans_data);
-      refresh_renderer(instance, &node_network_name, false);
+      instance.structure_designer.set_node_network_data(node_id, geo_trans_data);
+      refresh_renderer(instance, false);
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_trans_data(node_network_name: String, node_id: u64, data: APIAtomTransData) {
+pub fn set_atom_trans_data(node_id: u64, data: APIAtomTransData) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let atom_trans_data = Box::new(AtomTransData {
         translation: from_api_vec3(&data.translation),
         rotation: from_api_vec3(&data.rotation),
       });
-      instance.structure_designer.set_node_network_data(&node_network_name, node_id, atom_trans_data);
-      refresh_renderer(instance, &node_network_name, false);
+      instance.structure_designer.set_node_network_data(node_id, atom_trans_data);
+      refresh_renderer(instance, false);
     }
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn delete_selected(node_network_name: String) {
+pub fn delete_selected() {
   unsafe {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
-      cad_instance.structure_designer.delete_selected(&node_network_name);
-      refresh_renderer(cad_instance, &node_network_name, false);
+      cad_instance.structure_designer.delete_selected();
+      refresh_renderer(cad_instance, false);
     }
   }
 }

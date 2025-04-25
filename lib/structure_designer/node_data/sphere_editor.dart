@@ -6,13 +6,11 @@ import 'package:flutter_cad/inputs/int_input.dart';
 
 /// Editor widget for sphere nodes
 class SphereEditor extends StatefulWidget {
-  final String nodeNetworkName;
   final BigInt nodeId;
   final APISphereData? data;
 
   const SphereEditor({
     super.key,
-    required this.nodeNetworkName,
     required this.nodeId,
     required this.data,
   });
@@ -49,7 +47,6 @@ class SphereEditorState extends State<SphereEditor> {
   void _applyChanges() {
     if (_stagedData != null) {
       setSphereData(
-        nodeNetworkName: widget.nodeNetworkName,
         nodeId: widget.nodeId,
         data: _stagedData!,
       );

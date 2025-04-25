@@ -100,23 +100,23 @@ pub fn add_sample_model(kernel: &mut StructureDesigner) {
     kernel.add_atom(6, DVec3::new(1.3, 3.0, 0.0));
     kernel.add_bond(atom_id1, atom_id2, 1);
 }
-  
+
 pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.add_node_network("sample");
-    let cuboid_id = kernel.add_node("sample", "cuboid", DVec2::new(30.0, 30.0));
-    let sphere_id = kernel.add_node("sample", "sphere", DVec2::new(100.0, 100.0));
-    let diff_id_1 = kernel.add_node("sample", "diff", DVec2::new(300.0, 80.0));
-    let diff_id_2 = kernel.add_node("sample", "diff", DVec2::new(500.0, 80.0));
+    let cuboid_id = kernel.add_node("cuboid", DVec2::new(30.0, 30.0));
+    let sphere_id = kernel.add_node("sphere", DVec2::new(100.0, 100.0));
+    let diff_id_1 = kernel.add_node("diff", DVec2::new(300.0, 80.0));
+    let diff_id_2 = kernel.add_node("diff", DVec2::new(500.0, 80.0));
   
-    kernel.connect_nodes("sample", cuboid_id, diff_id_1, 0);
-    kernel.connect_nodes("sample", sphere_id, diff_id_1, 1);
-    kernel.connect_nodes("sample", diff_id_1, diff_id_2, 1);
+    kernel.connect_nodes(cuboid_id, diff_id_1, 0);
+    kernel.connect_nodes(sphere_id, diff_id_1, 1);
+    kernel.connect_nodes(diff_id_1, diff_id_2, 1);
 }
 
-  pub fn refresh_renderer(cad_instance: &mut CADInstance, node_network_name: &str, lightweight: bool) {
+  pub fn refresh_renderer(cad_instance: &mut CADInstance, lightweight: bool) {
     match cad_instance.active_editor {
       Editor::StructureDesigner => {
-        let scene = cad_instance.structure_designer.generate_scene(node_network_name, lightweight);
+        let scene = cad_instance.structure_designer.generate_scene(lightweight);
         cad_instance.renderer.refresh(&scene, lightweight);
       },
       Editor::SceneComposer => {

@@ -293,11 +293,10 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void dragGadget(Offset pointerPos) {
     final ray = getRayFromPointerPos(pointerPos);
     gadgetDrag(
-        nodeNetworkName: "sample", // TODO: this should not be needed
         handleIndex: draggedGadgetHandle,
         rayOrigin: Vector3ToAPIVec3(ray.start),
         rayDirection: Vector3ToAPIVec3(ray.direction));
-    syncGadgetData(nodeNetworkName: "sample");
+    syncGadgetData();
     renderingNeeded();
     refreshFromKernel(); // Refresh other widgets when dragging a gadget
   }
@@ -319,7 +318,6 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       isGadgetDragging = true;
       draggedGadgetHandle = transformDraggedGadgetHandle(hitResult);
       gadgetStartDrag(
-          nodeNetworkName: "sample", // TODO: this should not be needed
           handleIndex: draggedGadgetHandle,
           rayOrigin: Vector3ToAPIVec3(ray.start),
           rayDirection: Vector3ToAPIVec3(ray.direction));
@@ -342,8 +340,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     dragState = ViewportDragState.noDrag;
 
     if (oldDragState == ViewportDragState.defaultDrag && isGadgetDragging) {
-      gadgetEndDrag(
-          nodeNetworkName: "sample"); // TODO: this should not be needed
+      gadgetEndDrag();
       renderingNeeded();
       isGadgetDragging = false;
     }

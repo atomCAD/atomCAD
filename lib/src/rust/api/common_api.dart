@@ -39,32 +39,26 @@ int? gadgetHitTest(
         rayOrigin: rayOrigin, rayDirection: rayDirection);
 
 void gadgetStartDrag(
-        {required String nodeNetworkName,
-        required int handleIndex,
+        {required int handleIndex,
         required APIVec3 rayOrigin,
         required APIVec3 rayDirection}) =>
     RustLib.instance.api.crateApiCommonApiGadgetStartDrag(
-        nodeNetworkName: nodeNetworkName,
         handleIndex: handleIndex,
         rayOrigin: rayOrigin,
         rayDirection: rayDirection);
 
 void gadgetDrag(
-        {required String nodeNetworkName,
-        required int handleIndex,
+        {required int handleIndex,
         required APIVec3 rayOrigin,
         required APIVec3 rayDirection}) =>
     RustLib.instance.api.crateApiCommonApiGadgetDrag(
-        nodeNetworkName: nodeNetworkName,
         handleIndex: handleIndex,
         rayOrigin: rayOrigin,
         rayDirection: rayDirection);
 
-void gadgetEndDrag({required String nodeNetworkName}) => RustLib.instance.api
-    .crateApiCommonApiGadgetEndDrag(nodeNetworkName: nodeNetworkName);
+void gadgetEndDrag() => RustLib.instance.api.crateApiCommonApiGadgetEndDrag();
 
-bool syncGadgetData({required String nodeNetworkName}) => RustLib.instance.api
-    .crateApiCommonApiSyncGadgetData(nodeNetworkName: nodeNetworkName);
+bool syncGadgetData() => RustLib.instance.api.crateApiCommonApiSyncGadgetData();
 
 APITransform getCameraTransform() =>
     RustLib.instance.api.crateApiCommonApiGetCameraTransform();

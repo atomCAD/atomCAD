@@ -5,13 +5,11 @@ import 'package:flutter_cad/inputs/ivec3_input.dart';
 
 /// Editor widget for cuboid nodes
 class CuboidEditor extends StatefulWidget {
-  final String nodeNetworkName;
   final BigInt nodeId;
   final APICuboidData? data;
 
   const CuboidEditor({
     super.key,
-    required this.nodeNetworkName,
     required this.nodeId,
     required this.data,
   });
@@ -48,7 +46,6 @@ class CuboidEditorState extends State<CuboidEditor> {
   void _applyChanges() {
     if (_stagedData != null) {
       setCuboidData(
-        nodeNetworkName: widget.nodeNetworkName,
         nodeId: widget.nodeId,
         data: _stagedData!,
       );

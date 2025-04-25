@@ -23,6 +23,7 @@ pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
   pub gadget: Option<Box<dyn NodeNetworkGadget>>,
+  pub active_node_network_name: Option<String>,
 }
 
 impl StructureDesigner {
@@ -39,9 +40,12 @@ impl StructureDesigner {
       node_type_registry,
       network_evaluator,
       gadget: None,
+      active_node_network_name: None,
     }
   }
+}
 
+impl StructureDesigner {
   pub fn get_atomic_structure(&self) -> &AtomicStructure {
     &self.model
   }
@@ -78,15 +82,23 @@ impl StructureDesigner {
     return true;
   }
 
-  // Generates the scene to be rendered according to the displayed nodes of the given node network
-  pub fn generate_scene(&mut self, node_network_name: &str, lightweight: bool) -> StructureDesignerScene {
+  // Generates the scene to be rendered according to the displayed nodes of the active node network
+  pub fn generate_scene(&mut self, lightweight: bool) -> StructureDesignerScene {
 
     let mut scene: StructureDesignerScene = StructureDesignerScene::new();
 
+    
+
     if !lightweight {
+      // Check if node_network_name exists
+      let node_network_name = match &self.active_node_network_name {
+        Some(name) => name,
+        None => return scene, // Return empty scene if node_network_name is None
+      };
+      
       let network = match self.node_type_registry.node_networks.get(node_network_name) {
         Some(network) => network,
-        None => return StructureDesignerScene::new(),
+        None => return scene,
       };
       for node_id in &network.displayed_node_ids {
         scene.merge(self.network_evaluator.generate_scene(node_network_name, *node_id, &self.node_type_registry));
@@ -135,7 +147,12 @@ impl StructureDesigner {
     ));
   }
 
-  pub fn add_node(&mut self, node_network_name: &str, node_type_name: &str, position: DVec2) -> u64 {
+  pub fn add_node(&mut self, node_type_name: &str, position: DVec2) -> u64 {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return 0,
+    };
     // First get the node type info
     let (num_parameters, node_data) = match self.node_type_registry.get_node_type(node_type_name) {
       Some(node_type) => {
@@ -153,13 +170,23 @@ impl StructureDesigner {
     }
   }
 
-  pub fn move_node(&mut self, node_network_name: &str, node_id: u64, position: DVec2) {
+  pub fn move_node(&mut self, node_id: u64, position: DVec2) {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.move_node(node_id, position);
     }
   }
 
-  pub fn connect_nodes(&mut self, node_network_name: &str, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
+  pub fn connect_nodes(&mut self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
     // First validate the connection
     let dest_param_is_multi = {
       // Get the network
@@ -197,21 +224,36 @@ impl StructureDesigner {
     }
   }
 
-  pub fn set_node_network_data(&mut self, network_name: &str, node_id: u64, data: Box<dyn NodeData>) {
+  pub fn set_node_network_data(&mut self, node_id: u64, data: Box<dyn NodeData>) {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_network_data(node_id, data);
       self.gadget = network.provide_gadget();
     }
   }
 
-  pub fn get_node_network_data(&self, network_name: &str, node_id: u64) -> Option<&dyn NodeData> {
+  pub fn get_node_network_data(&self, node_id: u64) -> Option<&dyn NodeData> {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return None,
+    };
     self.node_type_registry
       .node_networks
       .get(network_name)
       .and_then(|network| network.get_node_network_data(node_id))
   }
 
-  pub fn get_node_network_data_mut(&mut self, network_name: &str, node_id: u64) -> Option<&mut dyn NodeData> {
+  pub fn get_node_network_data_mut(&mut self, node_id: u64) -> Option<&mut dyn NodeData> {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return None,
+    };
     self.node_type_registry
       .node_networks
       .get_mut(network_name)
@@ -222,13 +264,28 @@ impl StructureDesigner {
     &self.network_evaluator
   }
 
-  pub fn set_node_display(&mut self, network_name: &str, node_id: u64, is_displayed: bool) {
+  // Sets the active node network name
+  pub fn set_active_node_network_name(&mut self, node_network_name: &str) {
+    self.active_node_network_name = Some(node_network_name.to_string());
+  }
+
+  pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_display(node_id, is_displayed);
     }
   }
 
-  pub fn sync_gadget_data(&mut self, network_name: &str) -> bool {
+  pub fn sync_gadget_data(&mut self) -> bool {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       if let Some(node_id) = &network.selected_node_id {
         let data = network.get_node_network_data_mut(*node_id);
@@ -244,7 +301,12 @@ impl StructureDesigner {
     }
   }
 
-  pub fn select_node(&mut self, network_name: &str, node_id: u64) -> bool {
+  pub fn select_node(&mut self, node_id: u64) -> bool {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       let ret = network.select_node(node_id);
       self.gadget = network.provide_gadget();
@@ -254,7 +316,12 @@ impl StructureDesigner {
     }
   }
 
-  pub fn select_wire(&mut self, network_name: &str, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  pub fn select_wire(&mut self, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       let ret = network.select_wire(source_node_id, destination_node_id, destination_argument_index);
       self.gadget = network.provide_gadget();
@@ -264,14 +331,24 @@ impl StructureDesigner {
     }
   }
 
-  pub fn clear_selection(&mut self, network_name: &str) {
+  pub fn clear_selection(&mut self) {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.clear_selection();
       self.gadget = network.provide_gadget();
     }
   }
 
-  pub fn delete_selected(&mut self, node_network_name: &str) {
+  pub fn delete_selected(&mut self) {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.delete_selected();
     }
