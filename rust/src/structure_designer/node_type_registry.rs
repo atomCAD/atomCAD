@@ -199,7 +199,14 @@ impl NodeTypeRegistry {
     );
 
     names
-}
+  }
+
+  pub fn get_node_network_names(&self) -> Vec<String> {
+    self.node_networks
+            .values()
+            .map(|network| network.node_type.name.clone())
+            .collect()
+  }
 
   pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {
     let node_type = self.built_in_node_types.get(node_type_name);

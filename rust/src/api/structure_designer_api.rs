@@ -130,6 +130,14 @@ pub fn get_node_type_names() -> Option<Vec<String>> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_node_network_names() -> Option<Vec<String>> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    return Some(cad_instance.structure_designer.node_type_registry.get_node_network_names());
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_node_display(node_network_name: String, node_id: u64, is_displayed: bool) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {

@@ -46,6 +46,9 @@ void connectNodes(
 List<String>? getNodeTypeNames() =>
     RustLib.instance.api.crateApiStructureDesignerApiGetNodeTypeNames();
 
+List<String>? getNodeNetworkNames() =>
+    RustLib.instance.api.crateApiStructureDesignerApiGetNodeNetworkNames();
+
 void setNodeDisplay(
         {required String nodeNetworkName,
         required BigInt nodeId,
