@@ -141,8 +141,7 @@ abstract class RustLibApi extends BaseApi {
 
   List<String>? crateApiStructureDesignerApiGetNodeNetworkNames();
 
-  NodeNetworkView? crateApiStructureDesignerApiGetNodeNetworkView(
-      {required String nodeNetworkName});
+  NodeNetworkView? crateApiStructureDesignerApiGetNodeNetworkView();
 
   List<String>? crateApiStructureDesignerApiGetNodeTypeNames();
 
@@ -757,12 +756,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  NodeNetworkView? crateApiStructureDesignerApiGetNodeNetworkView(
-      {required String nodeNetworkName}) {
+  NodeNetworkView? crateApiStructureDesignerApiGetNodeNetworkView() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(nodeNetworkName, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
       },
       codec: SseCodec(
@@ -770,7 +767,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerApiGetNodeNetworkViewConstMeta,
-      argValues: [nodeNetworkName],
+      argValues: [],
       apiImpl: this,
     ));
   }
@@ -778,7 +775,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiStructureDesignerApiGetNodeNetworkViewConstMeta =>
       const TaskConstMeta(
         debugName: "get_node_network_view",
-        argNames: ["nodeNetworkName"],
+        argNames: [],
       );
 
   @override

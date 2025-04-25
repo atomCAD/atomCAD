@@ -730,13 +730,10 @@ fn wire__crate__api__structure_designer_api__get_node_network_view_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_node_network_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer_api::get_node_network_view(
-                        api_node_network_name,
-                    ),
+                    crate::api::structure_designer_api::get_node_network_view(),
                 )?;
                 Ok(output_ok)
             })())

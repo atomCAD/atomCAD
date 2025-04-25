@@ -43,7 +43,8 @@ class GraphModel extends ChangeNotifier {
   GraphModel();
 
   void init(String nodeNetworkName) {
-    nodeNetworkView = getNodeNetworkView(nodeNetworkName: nodeNetworkName);
+    setActiveNodeNetwork(nodeNetworkName: nodeNetworkName);
+    nodeNetworkView = getNodeNetworkView();
   }
 
   // Called on each small update when dragging a node
@@ -147,8 +148,7 @@ class GraphModel extends ChangeNotifier {
 
   void refreshFromKernel() {
     if (nodeNetworkView != null) {
-      nodeNetworkView =
-          getNodeNetworkView(nodeNetworkName: nodeNetworkView!.name);
+      nodeNetworkView = getNodeNetworkView();
       notifyListeners();
     }
   }

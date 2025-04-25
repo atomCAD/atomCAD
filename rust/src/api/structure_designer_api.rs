@@ -36,10 +36,16 @@ pub fn add_atom(atomic_number: i32, position: APIVec3) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_node_network_view(node_network_name: String) -> Option<NodeNetworkView> {
+pub fn get_node_network_view() -> Option<NodeNetworkView> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    let node_network = cad_instance.structure_designer.node_type_registry.node_networks.get(&node_network_name)?;
+
+    let node_network_name = match &cad_instance.structure_designer.active_node_network_name {
+      Some(name) => name,
+      None => return None,
+    };
+
+    let node_network = cad_instance.structure_designer.node_type_registry.node_networks.get(node_network_name)?;
 
     let mut node_network_view = NodeNetworkView {
       name: node_network.node_type.name.clone(),

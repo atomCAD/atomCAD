@@ -103,6 +103,7 @@ pub fn add_sample_model(kernel: &mut StructureDesigner) {
 
 pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.add_node_network("sample");
+    kernel.set_active_node_network_name("sample");
     let cuboid_id = kernel.add_node("cuboid", DVec2::new(30.0, 30.0));
     let sphere_id = kernel.add_node("sphere", DVec2::new(100.0, 100.0));
     let diff_id_1 = kernel.add_node("diff", DVec2::new(300.0, 80.0));

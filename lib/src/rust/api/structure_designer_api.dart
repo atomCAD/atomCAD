@@ -12,9 +12,8 @@ void addAtom({required int atomicNumber, required APIVec3 position}) =>
     RustLib.instance.api.crateApiStructureDesignerApiAddAtom(
         atomicNumber: atomicNumber, position: position);
 
-NodeNetworkView? getNodeNetworkView({required String nodeNetworkName}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiGetNodeNetworkView(
-        nodeNetworkName: nodeNetworkName);
+NodeNetworkView? getNodeNetworkView() =>
+    RustLib.instance.api.crateApiStructureDesignerApiGetNodeNetworkView();
 
 void moveNode({required BigInt nodeId, required APIVec2 position}) => RustLib
     .instance.api
