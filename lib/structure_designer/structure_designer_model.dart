@@ -48,6 +48,7 @@ class StructureDesignerModel extends ChangeNotifier {
     structure_designer_api.setActiveNodeNetwork(
         nodeNetworkName: nodeNetworkName);
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
+    nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
   }
 
   void setActiveNodeNetwork(String nodeNetworkName) {

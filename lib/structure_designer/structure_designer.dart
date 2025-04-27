@@ -3,6 +3,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart'
 import 'package:flutter_cad/structure_designer/node_network.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list_panel.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -26,32 +27,52 @@ class _StructureDesignerState extends State<StructureDesigner> {
     // Initialize the graph model here
     graphModel.init("sample");
 
-    return Column(
+    return Row(
       children: [
-        Expanded(
-          flex: 2,
-          child: StructureDesignerViewport(graphModel: graphModel),
+        // Node Networks List Panel (left sidebar)
+        Container(
+          width: 200,
+          decoration: const BoxDecoration(
+            border: Border(
+              right: BorderSide(
+                color: Colors.grey,
+                width: 1,
+              ),
+            ),
+          ),
+          child: NodeNetworksListPanel(model: graphModel),
         ),
+        // Main content area
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Column(
             children: [
               Expanded(
-                flex: 4,
-                child: NodeNetwork(graphModel: graphModel),
+                flex: 2,
+                child: StructureDesignerViewport(graphModel: graphModel),
               ),
-              Container(
-                width: 300,
-                padding: const EdgeInsets.all(8.0),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: Colors.grey,
-                      width: 1,
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: NodeNetwork(graphModel: graphModel),
                     ),
-                  ),
+                    Container(
+                      width: 300,
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                            color: Colors.grey,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: NodeDataWidget(graphModel: graphModel),
+                    ),
+                  ],
                 ),
-                child: NodeDataWidget(graphModel: graphModel),
               ),
             ],
           ),
