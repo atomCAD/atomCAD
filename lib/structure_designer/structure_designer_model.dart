@@ -37,6 +37,7 @@ class DraggedWire {
 
 /// Manages the entire node graph.
 class StructureDesignerModel extends ChangeNotifier {
+  List<String> nodeNetworkNames = [];
   NodeNetworkView? nodeNetworkView;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
 
@@ -149,6 +150,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void refreshFromKernel() {
     if (nodeNetworkView != null) {
       nodeNetworkView = getNodeNetworkView();
+      nodeNetworkNames = getNodeNetworkNames() ?? [];
       notifyListeners();
     }
   }
