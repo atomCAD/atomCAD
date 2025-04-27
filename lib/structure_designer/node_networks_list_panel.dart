@@ -1,26 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
-import 'package:flutter_cad/src/rust/api/scene_composer_api_types.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
-/// A widget that displays a list of clusters from the SceneComposerModel.
-class ClusterListPanel extends StatefulWidget {
-  final SceneComposerModel model;
+/// A widget that displays a list of node networks from the StructureDesignerModel.
+class NodeNetworksListPanel extends StatefulWidget {
+  final StructureDesignerModel model;
 
-  const ClusterListPanel({
+  const NodeNetworksListPanel({
     super.key,
     required this.model,
   });
 
   @override
-  State<ClusterListPanel> createState() => _ClusterListPanelState();
+  State<NodeNetworksListPanel> createState() => _NodeNetworksListPanelState();
 }
 
-class _ClusterListPanelState extends State<ClusterListPanel> {
-  // Track which cluster is being renamed (if any)
-  BigInt? _editingClusterId;
+class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
+  // Track which node network is being renamed (if any)
+  String? _editingNetworkName;
   final TextEditingController _renameController = TextEditingController();
   final FocusNode _renameFocusNode = FocusNode();
 
@@ -35,29 +33,30 @@ class _ClusterListPanelState extends State<ClusterListPanel> {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: widget.model,
-      child: Consumer<SceneComposerModel>(
+      child: Consumer<StructureDesignerModel>(
         builder: (context, model, child) {
-          final clusters = model.sceneComposerView?.clusters;
+          final nodeNetworks = model.nodeNetworkNames;
+          final activeNetworkName = model.nodeNetworkView?.name;
 
-          if (clusters == null || clusters.isEmpty) {
+          if (nodeNetworks.isEmpty) {
             return const Center(
-              child: Text('No clusters available'),
+              child: Text('No node networks available'),
             );
           }
 
           return ListView.builder(
-            itemCount: clusters.length,
+            itemCount: nodeNetworks.length,
             itemBuilder: (context, index) {
-              final cluster = clusters[index];
-
-              bool isEditing = _editingClusterId == cluster.id;
+              final networkName = nodeNetworks[index];
+              final bool isActive = networkName == activeNetworkName;
+              final bool isEditing = _editingNetworkName == networkName;
 
               // Create a context menu for right-click actions
               return Builder(
                 builder: (BuildContext itemContext) {
                   return GestureDetector(
                     onSecondaryTap: () {
-                      // Get the render box from the current item context, not the list context
+                      // Get the render box from the current item context
                       final RenderBox itemBox =
                           itemContext.findRenderObject() as RenderBox;
                       final Offset offset = itemBox.localToGlobal(Offset.zero);
@@ -89,13 +88,13 @@ class _ClusterListPanelState extends State<ClusterListPanel> {
                         ],
                       ).then((value) {
                         if (value == 'rename') {
-                          _startRenaming(cluster);
+                          _startRenaming(networkName);
                         }
                       });
                     },
                     // Add double tap for renaming
                     onDoubleTap: () {
-                      _startRenaming(cluster);
+                      _startRenaming(networkName);
                     },
                     child: ListTile(
                       dense: true,
@@ -122,10 +121,10 @@ class _ClusterListPanelState extends State<ClusterListPanel> {
                               },
                             )
                           : Text(
-                              cluster.name,
+                              networkName,
                               style: AppTextStyles.regular,
                             ),
-                      selected: cluster.selected,
+                      selected: isActive,
                       selectedTileColor: AppColors.selectionBackground,
                       selectedColor: AppColors.selectionForeground,
                       onTap: () {
@@ -133,16 +132,9 @@ class _ClusterListPanelState extends State<ClusterListPanel> {
                           return; // Don't change selection when in edit mode
                         }
 
-                        // Determine the selection modifier based on pressed keys
-                        final selectModifier =
-                            HardwareKeyboard.instance.isControlPressed
-                                ? SelectModifier.toggle
-                                : HardwareKeyboard.instance.isShiftPressed
-                                    ? SelectModifier.expand
-                                    : SelectModifier.replace;
-
-                        // Call the model's selectCluster method
-                        model.selectClusterById(cluster.id, selectModifier);
+                        // Set the active node network
+                        model.setActiveNodeNetwork(networkName);
+                        model.refreshFromKernel();
                       },
                     ),
                   );
@@ -155,11 +147,11 @@ class _ClusterListPanelState extends State<ClusterListPanel> {
     );
   }
 
-  // Start the rename process for a cluster
-  void _startRenaming(ClusterView cluster) {
+  // Start the rename process for a node network
+  void _startRenaming(String networkName) {
     setState(() {
-      _editingClusterId = cluster.id;
-      _renameController.text = cluster.name;
+      _editingNetworkName = networkName;
+      _renameController.text = networkName;
     });
     // This will make the TextField select all text when it gets focus
     _renameController.selection = TextSelection(
@@ -169,18 +161,18 @@ class _ClusterListPanelState extends State<ClusterListPanel> {
   }
 
   // Apply the rename and exit edit mode
-  void _commitRename(SceneComposerModel model) {
-    if (_editingClusterId != null) {
+  void _commitRename(StructureDesignerModel model) {
+    if (_editingNetworkName != null) {
       final newName = _renameController.text;
-      if (newName.isNotEmpty) {
-        model.renameCluster(_editingClusterId!, newName);
+      if (newName.isNotEmpty && newName != _editingNetworkName) {
+        model.renameNodeNetwork(_editingNetworkName!, newName);
       }
 
       // Explicitly unfocus before removing the text field
       _renameFocusNode.unfocus();
 
       setState(() {
-        _editingClusterId = null;
+        _editingNetworkName = null;
       });
     }
   }
