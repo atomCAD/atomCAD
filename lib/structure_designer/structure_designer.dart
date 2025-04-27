@@ -4,6 +4,7 @@ import 'package:flutter_cad/structure_designer/node_network.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list_panel.dart';
+import 'package:flutter_cad/common/section.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -40,7 +41,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
               ),
             ),
           ),
-          child: NodeNetworksListPanel(model: graphModel),
+          child: Section(
+            title: 'Node networks',
+            content: NodeNetworksListPanel(model: graphModel),
+            expand: true,
+          ),
         ),
         // Main content area
         Expanded(
