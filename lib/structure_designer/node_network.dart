@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/structure_designer/add_node_popup.dart';
-import 'package:flutter_cad/structure_designer/graph_model.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 // Node dimensions and layout constants
 const double NODE_WIDTH = 130.0;
@@ -50,7 +50,7 @@ Color getDataTypeColor(String dataType) {
 
 /// The main node network widget.
 class NodeNetwork extends StatelessWidget {
-  final GraphModel graphModel;
+  final StructureDesignerModel graphModel;
   final focusNode = FocusNode();
 
   NodeNetwork({super.key, required this.graphModel});
@@ -59,7 +59,7 @@ class NodeNetwork extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: graphModel,
-      child: Consumer<GraphModel>(
+      child: Consumer<StructureDesignerModel>(
         builder: (context, model, child) {
           return Focus(
             focusNode: focusNode,
@@ -189,12 +189,13 @@ class PinWidget extends StatelessWidget {
             if (nodeNetworkBox != null) {
               final position =
                   nodeNetworkBox.globalToLocal(details.globalPosition);
-              Provider.of<GraphModel>(context, listen: false)
+              Provider.of<StructureDesignerModel>(context, listen: false)
                   .dragWire(pinReference, position);
             }
           },
           onDragEnd: (details) {
-            Provider.of<GraphModel>(context, listen: false).cancelDragWire();
+            Provider.of<StructureDesignerModel>(context, listen: false)
+                .cancelDragWire();
           },
         );
       },
@@ -206,7 +207,7 @@ class PinWidget extends StatelessWidget {
       },
       onAcceptWithDetails: (details) {
         //print("Connected pin ${details.data} to pin $pinReference");
-        Provider.of<GraphModel>(context, listen: false)
+        Provider.of<StructureDesignerModel>(context, listen: false)
             .connectPins(details.data, pinReference);
       },
     );
@@ -252,19 +253,21 @@ class NodeWidget extends StatelessWidget {
               // Title Bar
               GestureDetector(
                 onTapDown: (details) {
-                  final model = Provider.of<GraphModel>(context, listen: false);
+                  final model = Provider.of<StructureDesignerModel>(context,
+                      listen: false);
                   model.setSelectedNode(node.id);
                 },
                 onPanStart: (details) {
-                  final model = Provider.of<GraphModel>(context, listen: false);
+                  final model = Provider.of<StructureDesignerModel>(context,
+                      listen: false);
                   model.setSelectedNode(node.id);
                 },
                 onPanUpdate: (details) {
-                  Provider.of<GraphModel>(context, listen: false)
+                  Provider.of<StructureDesignerModel>(context, listen: false)
                       .dragNodePosition(node.id, details.delta);
                 },
                 onPanEnd: (details) {
-                  Provider.of<GraphModel>(context, listen: false)
+                  Provider.of<StructureDesignerModel>(context, listen: false)
                       .updateNodePosition(node.id);
                 },
                 child: Container(
@@ -289,8 +292,9 @@ class NodeWidget extends StatelessWidget {
                       ),
                       GestureDetector(
                         onTap: () {
-                          final model =
-                              Provider.of<GraphModel>(context, listen: false);
+                          final model = Provider.of<StructureDesignerModel>(
+                              context,
+                              listen: false);
                           model.toggleNodeDisplay(node.id);
                         },
                         child: Icon(
@@ -361,7 +365,7 @@ class WireHitResult {
 }
 
 class WirePainter extends CustomPainter {
-  final GraphModel graphModel;
+  final StructureDesignerModel graphModel;
 
   WirePainter(this.graphModel);
 

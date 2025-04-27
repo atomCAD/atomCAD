@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/structure_designer/graph_model.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
@@ -11,7 +11,7 @@ import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.
 class NodeDataWidget extends StatelessWidget {
-  final GraphModel graphModel;
+  final StructureDesignerModel graphModel;
 
   const NodeDataWidget({
     super.key,
@@ -23,7 +23,7 @@ class NodeDataWidget extends StatelessWidget {
     // Listen to changes in the graph model
     return ChangeNotifierProvider.value(
       value: graphModel,
-      child: Consumer<GraphModel>(
+      child: Consumer<StructureDesignerModel>(
         builder: (context, model, child) {
           final nodeNetworkView = model.nodeNetworkView;
           if (nodeNetworkView == null) return const SizedBox.shrink();

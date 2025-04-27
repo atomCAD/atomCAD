@@ -1,8 +1,8 @@
-import 'package:flutter_cad/structure_designer/graph_model.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/cad_viewport.dart';
 
 class StructureDesignerViewport extends CadViewport {
-  final GraphModel graphModel;
+  final StructureDesignerModel graphModel;
 
   const StructureDesignerViewport({
     super.key,

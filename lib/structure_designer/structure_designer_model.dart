@@ -36,11 +36,11 @@ class DraggedWire {
 }
 
 /// Manages the entire node graph.
-class GraphModel extends ChangeNotifier {
+class StructureDesignerModel extends ChangeNotifier {
   NodeNetworkView? nodeNetworkView;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
 
-  GraphModel();
+  StructureDesignerModel();
 
   void init(String nodeNetworkName) {
     setActiveNodeNetwork(nodeNetworkName: nodeNetworkName);

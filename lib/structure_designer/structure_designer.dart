@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart';
 import 'package:flutter_cad/structure_designer/node_network.dart';
-import 'package:flutter_cad/structure_designer/graph_model.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
 /// The structure designer editor.
@@ -13,12 +13,12 @@ class StructureDesigner extends StatefulWidget {
 }
 
 class _StructureDesignerState extends State<StructureDesigner> {
-  late GraphModel graphModel;
+  late StructureDesignerModel graphModel;
 
   @override
   void initState() {
     super.initState();
-    graphModel = GraphModel();
+    graphModel = StructureDesignerModel();
   }
 
   @override
