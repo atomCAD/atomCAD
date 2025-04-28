@@ -429,16 +429,28 @@ impl StructureDesigner {
   /// Determines the output type using the NodeTypeRegistry and updates the network's output_type.
   /// 
   /// # Parameters
-  /// * `node_id` - The ID of the node to set as the return node
+  /// * `node_id` - The ID of the node to set as the return node, or None to clear the return node
   /// 
   /// # Returns
-  /// Returns true if the node exists and was set as the return node, false otherwise.
-  pub fn set_return_node_id(&mut self, node_id: u64) -> bool {
+  /// Returns true if the operation was successful, false otherwise.
+  pub fn set_return_node_id(&mut self, node_id: Option<u64>) -> bool {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
       Some(name) => name,
       None => return false,
     };
+    
+    // If node_id is None, clear the return node
+    if node_id.is_none() {
+      if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+        network.return_node_id = None;
+        return true;
+      }
+      return false;
+    }
+    
+    // Unwrap the node_id as we know it's Some
+    let node_id_unwrapped = node_id.unwrap();
     
     // Get the node from the network to determine its type
     let node_type_name = {
@@ -447,7 +459,7 @@ impl StructureDesigner {
         None => return false,
       };
       
-      match network.nodes.get(&node_id) {
+      match network.nodes.get(&node_id_unwrapped) {
         Some(node) => node.node_type_name.clone(),
         None => return false,
       }
@@ -461,7 +473,7 @@ impl StructureDesigner {
     
     // Set the return node with the determined output type
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      network.set_return_node(node_id, output_type)
+      network.set_return_node(node_id_unwrapped, output_type)
     } else {
       false
     }

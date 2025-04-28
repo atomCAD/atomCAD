@@ -56,6 +56,26 @@ class NodeNetwork extends StatelessWidget {
 
   NodeNetwork({super.key, required this.graphModel});
 
+  /// Checks if the given position is on top of any node
+  bool _isClickOnNode(StructureDesignerModel model, Offset position) {
+    if (model.nodeNetworkView == null) return false;
+    
+    for (final node in model.nodeNetworkView!.nodes.values) {
+      final nodeRect = Rect.fromLTWH(
+        node.position.x, 
+        node.position.y, 
+        NODE_WIDTH, 
+        // Approximate height calculation based on number of input pins
+        NODE_VERT_WIRE_OFFSET + (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM)
+      );
+      
+      if (nodeRect.contains(position)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -83,9 +103,13 @@ class NodeNetwork extends StatelessWidget {
                   focusNode.requestFocus();
                 },
                 onSecondaryTapDown: (details) async {
-                  String? selectedNode = await showAddNodePopup(context);
-                  if (selectedNode != null) {
-                    model.createNode(selectedNode, details.localPosition);
+                  // Only show add node popup if clicked on empty space (not on a node)
+                  // The nodes have their own context menu handling
+                  if (!_isClickOnNode(model, details.localPosition)) {
+                    String? selectedNode = await showAddNodePopup(context);
+                    if (selectedNode != null) {
+                      model.createNode(selectedNode, details.localPosition);
+                    }
                   }
                   focusNode.requestFocus();
                 },
@@ -270,6 +294,41 @@ class NodeWidget extends StatelessWidget {
                 onPanEnd: (details) {
                   Provider.of<StructureDesignerModel>(context, listen: false)
                       .updateNodePosition(node.id);
+                },
+                onSecondaryTapDown: (details) {
+                  final model = Provider.of<StructureDesignerModel>(context, listen: false);
+                  model.setSelectedNode(node.id);
+                  
+                  final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+                  final RelativeRect position = RelativeRect.fromRect(
+                    Rect.fromPoints(
+                      details.globalPosition,
+                      details.globalPosition,
+                    ),
+                    Offset.zero & overlay.size,
+                  );
+                  
+                  showMenu(
+                    context: context,
+                    position: position,
+                    items: [
+                      PopupMenuItem(
+                        value: 'return',
+                        child: Text(node.returnNode ? 'Unset as return node' : 'Set as return node'),
+                      ),
+                    ],
+                  ).then((value) {
+                    if (value == 'return') {
+                      final model = Provider.of<StructureDesignerModel>(context, listen: false);
+                      if (node.returnNode) {
+                        // Unset as return node (pass null to clear the return node)
+                        model.setReturnNodeId(null);
+                      } else {
+                        // Set as return node (pass the node ID)
+                        model.setReturnNodeId(node.id);
+                      }
+                    }
+                  });
                 },
                 child: Container(
                   padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),

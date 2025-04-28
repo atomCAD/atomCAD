@@ -111,5 +111,5 @@ void setAtomTransData(
 void deleteSelected() =>
     RustLib.instance.api.crateApiStructureDesignerApiDeleteSelected();
 
-bool setReturnNodeId({required BigInt nodeId}) => RustLib.instance.api
+bool setReturnNodeId({BigInt? nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerApiSetReturnNodeId(nodeId: nodeId);

@@ -238,7 +238,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerApiSetNodeDisplay(
       {required BigInt nodeId, required bool isDisplayed});
 
-  bool crateApiStructureDesignerApiSetReturnNodeId({required BigInt nodeId});
+  bool crateApiStructureDesignerApiSetReturnNodeId({BigInt? nodeId});
 
   void crateApiSceneComposerApiSetSelectedFrameTransform(
       {required APITransform transform});
@@ -1690,11 +1690,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  bool crateApiStructureDesignerApiSetReturnNodeId({required BigInt nodeId}) {
+  bool crateApiStructureDesignerApiSetReturnNodeId({BigInt? nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_64(nodeId, serializer);
+        sse_encode_opt_box_autoadd_u_64(nodeId, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
       },
       codec: SseCodec(

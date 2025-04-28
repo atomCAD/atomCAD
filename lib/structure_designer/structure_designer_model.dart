@@ -122,7 +122,7 @@ class StructureDesignerModel extends ChangeNotifier {
       oldName: oldName,
       newName: newName,
     );
-    
+
     if (success) {
       // If this was the active network, update the view
       if (nodeNetworkView != null && nodeNetworkView!.name == oldName) {
@@ -133,12 +133,17 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  void setReturnNodeId(BigInt? nodeId) {
+    structure_designer_api.setReturnNodeId(nodeId: nodeId);
+    refreshFromKernel();
+  }
+
   void addNewNodeNetwork() {
     structure_designer_api.addNewNodeNetwork();
-    
+
     // Refresh the list of node networks
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
-    
+
     // If we want to automatically set the new network as active,
     // we would need to get its name first (it's the last one in the list)
     if (nodeNetworkNames.isNotEmpty) {
