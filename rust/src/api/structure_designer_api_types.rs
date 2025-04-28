@@ -20,6 +20,7 @@ pub struct InputPinView {
     pub output_type: String,
     pub selected: bool,
     pub displayed: bool,
+    pub return_node: bool,
   }
   
   pub struct WireView {
