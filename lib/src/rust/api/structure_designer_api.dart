@@ -38,9 +38,16 @@ List<String>? getNodeTypeNames() =>
 List<String>? getNodeNetworkNames() =>
     RustLib.instance.api.crateApiStructureDesignerApiGetNodeNetworkNames();
 
+void addNewNodeNetwork() =>
+    RustLib.instance.api.crateApiStructureDesignerApiAddNewNodeNetwork();
+
 void setActiveNodeNetwork({required String nodeNetworkName}) =>
     RustLib.instance.api.crateApiStructureDesignerApiSetActiveNodeNetwork(
         nodeNetworkName: nodeNetworkName);
+
+bool renameNodeNetwork({required String oldName, required String newName}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiRenameNodeNetwork(
+        oldName: oldName, newName: newName);
 
 void setNodeDisplay({required BigInt nodeId, required bool isDisplayed}) =>
     RustLib.instance.api.crateApiStructureDesignerApiSetNodeDisplay(

@@ -136,6 +136,17 @@ impl StructureDesigner {
 
   // node network methods
 
+  pub fn add_new_node_network(&mut self) {
+    // Generate a unique name for the new node network
+    let mut name = "untitled".to_string();
+    let mut i = 1;
+    while self.node_type_registry.node_networks.contains_key(&name) {
+      name = format!("untitled{}", i);
+      i += 1;
+    }
+    self.add_node_network(&name);
+  }
+  
   pub fn add_node_network(&mut self, node_network_name: &str) {
     self.node_type_registry.add_node_network(NodeNetwork::new(
       NodeType {
@@ -145,6 +156,37 @@ impl StructureDesigner {
         node_data_creator: || Box::new(NoData {}),
       }
     ));
+  }
+
+  pub fn rename_node_network(&mut self, old_name: &str, new_name: &str) -> bool {
+    // Check if the old network exists and the new name doesn't already exist
+    if !self.node_type_registry.node_networks.contains_key(old_name) {
+      return false; // Old network doesn't exist
+    }
+    if self.node_type_registry.node_networks.contains_key(new_name) {
+      return false; // New name already exists
+    }
+
+    // Take the network out of the registry
+    let mut network = match self.node_type_registry.node_networks.remove(old_name) {
+      Some(network) => network,
+      None => return false, // Should never happen because we checked contains_key above
+    };
+
+    // Update the network's internal node type name
+    network.node_type.name = new_name.to_string();
+
+    // Add the network back with the new name
+    self.node_type_registry.node_networks.insert(new_name.to_string(), network);
+
+    // Update the active_node_network_name if it was the renamed network
+    if let Some(active_name) = &self.active_node_network_name {
+      if active_name == old_name {
+        self.active_node_network_name = Some(new_name.to_string());
+      }
+    }
+
+    true
   }
 
   pub fn add_node(&mut self, node_type_name: &str, position: DVec2) -> u64 {

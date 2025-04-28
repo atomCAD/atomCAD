@@ -144,11 +144,30 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn add_new_node_network() {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.structure_designer.add_new_node_network();
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_active_node_network(node_network_name: &str) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.structure_designer.set_active_node_network_name(node_network_name);
     }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn rename_node_network(old_name: &str, new_name: &str) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      return instance.structure_designer.rename_node_network(old_name, new_name);
+    }
+    false
   }
 }
 
