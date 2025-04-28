@@ -26,6 +26,7 @@ const double NODE_BORDER_WIDTH_NORMAL = 2.0;
 const double NODE_BORDER_RADIUS = 8.0;
 const Color NODE_TITLE_COLOR_SELECTED = Color(0xFFD84315); // Colors.orange[800]
 const Color NODE_TITLE_COLOR_NORMAL = Color(0xFF37474F); // Colors.blueGrey[800]
+const Color NODE_TITLE_COLOR_RETURN = Color(0xFF0D47A1); // Dark blue
 
 // Wire appearance constants
 const double WIRE_WIDTH_SELECTED = 4.0;
@@ -275,7 +276,9 @@ class NodeWidget extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: node.selected
                         ? NODE_TITLE_COLOR_SELECTED
-                        : NODE_TITLE_COLOR_NORMAL,
+                        : (node.returnNode
+                            ? NODE_TITLE_COLOR_RETURN
+                            : NODE_TITLE_COLOR_NORMAL),
                     borderRadius: BorderRadius.vertical(
                         top: Radius.circular(NODE_BORDER_RADIUS - 2)),
                   ),
