@@ -136,13 +136,29 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                           controller: _renameController,
                                           focusNode: _renameFocusNode,
                                           autofocus: true,
-                                          style: AppTextStyles.regular,
-                                          decoration: const InputDecoration(
+                                          // Use appropriate text color based on selection state
+                                          style: isActive
+                                              ? AppTextStyles.regular.copyWith(
+                                                  color: AppColors.textOnDark)
+                                              : AppTextStyles.regular,
+                                          decoration: InputDecoration(
                                             isDense: true,
                                             contentPadding:
-                                                EdgeInsets.symmetric(
+                                                const EdgeInsets.symmetric(
                                                     vertical: 8),
-                                            border: OutlineInputBorder(),
+                                            // Use appropriate border color based on selection state
+                                            border: OutlineInputBorder(
+                                              borderSide: BorderSide(
+                                                color: isActive
+                                                    ? Colors.white70
+                                                    : Colors.grey,
+                                              ),
+                                            ),
+                                            // Use appropriate fill color based on selection state
+                                            filled: true,
+                                            fillColor: isActive
+                                                ? AppColors.selectionBackground
+                                                : Colors.white,
                                           ),
                                           onSubmitted: (value) {
                                             _commitRename(model);
