@@ -38,109 +38,144 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
           final nodeNetworks = model.nodeNetworkNames;
           final activeNetworkName = model.nodeNetworkView?.name;
 
-          if (nodeNetworks.isEmpty) {
-            return const Center(
-              child: Text('No node networks available'),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: nodeNetworks.length,
-            itemBuilder: (context, index) {
-              final networkName = nodeNetworks[index];
-              final bool isActive = networkName == activeNetworkName;
-              final bool isEditing = _editingNetworkName == networkName;
-
-              // Create a context menu for right-click actions
-              return Builder(
-                builder: (BuildContext itemContext) {
-                  return GestureDetector(
-                    onSecondaryTap: () {
-                      // Get the render box from the current item context
-                      final RenderBox itemBox =
-                          itemContext.findRenderObject() as RenderBox;
-                      final Offset offset = itemBox.localToGlobal(Offset.zero);
-
-                      // Size of the screen and item
-                      final Size itemSize = itemBox.size;
-                      final Size screenSize = MediaQuery.of(context).size;
-
-                      // Calculate the position with respect to the screen edges
-                      final RelativeRect position = RelativeRect.fromLTRB(
-                        offset.dx, // Left edge of the item
-                        offset.dy, // Top edge of the item
-                        screenSize.width -
-                            (offset.dx +
-                                itemSize.width), // Distance from right edge
-                        screenSize.height -
-                            (offset.dy +
-                                itemSize.height), // Distance from bottom edge
-                      );
-
-                      showMenu(
-                        context: context,
-                        position: position,
-                        items: [
-                          PopupMenuItem(
-                            value: 'rename',
-                            child: const Text('Rename'),
-                          ),
-                        ],
-                      ).then((value) {
-                        if (value == 'rename') {
-                          _startRenaming(networkName);
-                        }
-                      });
+          // Create a column to contain both button and list
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Add network button
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: AppSpacing.buttonHeight,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      model.addNewNodeNetwork();
                     },
-                    // Add double tap for renaming
-                    onDoubleTap: () {
-                      _startRenaming(networkName);
-                    },
-                    child: ListTile(
-                      dense: true,
-                      visualDensity: AppSpacing.compactVerticalDensity,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 0),
-                      title: isEditing
-                          ? TextField(
-                              controller: _renameController,
-                              focusNode: _renameFocusNode,
-                              autofocus: true,
-                              style: AppTextStyles.regular,
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                contentPadding:
-                                    EdgeInsets.symmetric(vertical: 8),
-                                border: OutlineInputBorder(),
-                              ),
-                              onSubmitted: (value) {
-                                _commitRename(model);
-                              },
-                              onEditingComplete: () {
-                                _commitRename(model);
-                              },
-                            )
-                          : Text(
-                              networkName,
-                              style: AppTextStyles.regular,
-                            ),
-                      selected: isActive,
-                      selectedTileColor: AppColors.selectionBackground,
-                      selectedColor: AppColors.selectionForeground,
-                      onTap: () {
-                        if (isEditing) {
-                          return; // Don't change selection when in edit mode
-                        }
+                    icon: Icon(Icons.add, size: 16, color: AppColors.textOnDark),
+                    label: const Text('Add network'),
+                    style: AppButtonStyles.primary,
+                  ),
+                ),
+              ),
+              // Divider between button and list
+              const Divider(height: 1),
+              // Node networks list
+              Expanded(
+                child: nodeNetworks.isEmpty
+                    ? const Center(
+                        child: Text('No node networks available'),
+                      )
+                    : ListView.builder(
+                        itemCount: nodeNetworks.length,
+                        itemBuilder: (context, index) {
+                          final networkName = nodeNetworks[index];
+                          final bool isActive =
+                              networkName == activeNetworkName;
+                          final bool isEditing =
+                              _editingNetworkName == networkName;
 
-                        // Set the active node network
-                        model.setActiveNodeNetwork(networkName);
-                        model.refreshFromKernel();
-                      },
-                    ),
-                  );
-                },
-              );
-            },
+                          // Create a context menu for right-click actions
+                          return Builder(
+                            builder: (BuildContext itemContext) {
+                              return GestureDetector(
+                                onSecondaryTap: () {
+                                  // Get the render box from the current item context
+                                  final RenderBox itemBox = itemContext
+                                      .findRenderObject() as RenderBox;
+                                  final Offset offset =
+                                      itemBox.localToGlobal(Offset.zero);
+
+                                  // Size of the screen and item
+                                  final Size itemSize = itemBox.size;
+                                  final Size screenSize =
+                                      MediaQuery.of(context).size;
+
+                                  // Calculate the position with respect to the screen edges
+                                  final RelativeRect position =
+                                      RelativeRect.fromLTRB(
+                                    offset.dx, // Left edge of the item
+                                    offset.dy, // Top edge of the item
+                                    screenSize.width -
+                                        (offset.dx +
+                                            itemSize
+                                                .width), // Distance from right edge
+                                    screenSize.height -
+                                        (offset.dy +
+                                            itemSize
+                                                .height), // Distance from bottom edge
+                                  );
+
+                                  showMenu(
+                                    context: context,
+                                    position: position,
+                                    items: [
+                                      PopupMenuItem(
+                                        value: 'rename',
+                                        child: const Text('Rename'),
+                                      ),
+                                    ],
+                                  ).then((value) {
+                                    if (value == 'rename') {
+                                      _startRenaming(networkName);
+                                    }
+                                  });
+                                },
+                                // Add double tap for renaming
+                                onDoubleTap: () {
+                                  _startRenaming(networkName);
+                                },
+                                child: ListTile(
+                                  dense: true,
+                                  visualDensity:
+                                      AppSpacing.compactVerticalDensity,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 0),
+                                  title: isEditing
+                                      ? TextField(
+                                          controller: _renameController,
+                                          focusNode: _renameFocusNode,
+                                          autofocus: true,
+                                          style: AppTextStyles.regular,
+                                          decoration: const InputDecoration(
+                                            isDense: true,
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                    vertical: 8),
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          onSubmitted: (value) {
+                                            _commitRename(model);
+                                          },
+                                          onEditingComplete: () {
+                                            _commitRename(model);
+                                          },
+                                        )
+                                      : Text(
+                                          networkName,
+                                          style: AppTextStyles.regular,
+                                        ),
+                                  selected: isActive,
+                                  selectedTileColor:
+                                      AppColors.selectionBackground,
+                                  selectedColor: AppColors.selectionForeground,
+                                  onTap: () {
+                                    if (isEditing) {
+                                      return; // Don't change selection when in edit mode
+                                    }
+
+                                    // Set the active node network
+                                    model.setActiveNodeNetwork(networkName);
+                                    model.refreshFromKernel();
+                                  },
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
