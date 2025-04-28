@@ -363,3 +363,16 @@ pub fn delete_selected() {
     }
   }
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_return_node_id(node_id: u64) -> bool {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      let result = cad_instance.structure_designer.set_return_node_id(node_id);
+      refresh_renderer(cad_instance, false);
+      result
+    } else {
+      false
+    }
+  }
+}

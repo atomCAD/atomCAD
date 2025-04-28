@@ -424,4 +424,46 @@ impl StructureDesigner {
       gadget.end_drag();
     }
   }
+
+  /// Sets a node as the return node for the active network.
+  /// Determines the output type using the NodeTypeRegistry and updates the network's output_type.
+  /// 
+  /// # Parameters
+  /// * `node_id` - The ID of the node to set as the return node
+  /// 
+  /// # Returns
+  /// Returns true if the node exists and was set as the return node, false otherwise.
+  pub fn set_return_node_id(&mut self, node_id: u64) -> bool {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    
+    // Get the node from the network to determine its type
+    let node_type_name = {
+      let network = match self.node_type_registry.node_networks.get(network_name) {
+        Some(network) => network,
+        None => return false,
+      };
+      
+      match network.nodes.get(&node_id) {
+        Some(node) => node.node_type_name.clone(),
+        None => return false,
+      }
+    };
+    
+    // Get the output type from the node type registry
+    let output_type = match self.node_type_registry.get_node_type(&node_type_name) {
+      Some(node_type) => node_type.output_type,
+      None => return false,
+    };
+    
+    // Set the return node with the determined output type
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      network.set_return_node(node_id, output_type)
+    } else {
+      false
+    }
+  }
 }

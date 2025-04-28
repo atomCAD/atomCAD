@@ -1,6 +1,6 @@
 use crate::structure_designer::node_data::node_data::NodeData;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum DataType {
   Geometry,
   Atomic

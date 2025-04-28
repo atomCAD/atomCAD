@@ -208,4 +208,26 @@ impl NodeNetwork {
       }
     }
   }
+
+  /// Sets a node as the return node for this network and updates the output_type.
+  /// 
+  /// # Parameters
+  /// * `node_id` - The ID of the node to set as the return node
+  /// * `output_type` - The output type to set for this network
+  /// 
+  /// # Returns
+  /// Returns true if the node exists and was set as the return node, false otherwise.
+  pub fn set_return_node(&mut self, node_id: u64, output_type: crate::structure_designer::node_type::DataType) -> bool {
+    if self.nodes.contains_key(&node_id) {
+      // Set this node as the return node
+      self.return_node_id = Some(node_id);
+      
+      // Update the output_type of the network
+      self.node_type.output_type = output_type;
+      
+      true
+    } else {
+      false
+    }
+  }
 }

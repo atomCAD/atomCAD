@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -403304448;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2107288633;
 
 // Section: executor
 
@@ -1953,6 +1953,38 @@ fn wire__crate__api__structure_designer_api__set_node_display_impl(
         },
     )
 }
+fn wire__crate__api__structure_designer_api__set_return_node_id_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_return_node_id",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::structure_designer_api::set_return_node_id(api_node_id),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -2795,7 +2827,7 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         30 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        60 => {
+        61 => {
             wire__crate__api__common_api__set_viewport_size_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -3018,18 +3050,23 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(
+        58 => wire__crate__api__structure_designer_api__set_return_node_id_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__structure_designer_api__set_sphere_data_impl(
+        59 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(
+        60 => wire__crate__api__structure_designer_api__set_sphere_data_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        62 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(
             ptr,
             rust_vec_len,
             data_len,
