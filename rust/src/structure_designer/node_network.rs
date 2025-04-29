@@ -1,16 +1,9 @@
 use glam::f64::DVec2;
-use glam::f64::DVec3;
-use glam::i32::IVec3;
+use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_data::node_data::NodeData;
-use crate::structure_designer::node_data::no_data::NoData;
-use crate::structure_designer::node_data::sphere_data::SphereData;
-use crate::structure_designer::node_data::cuboid_data::CuboidData;
-use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
-use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
-use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
 
 #[derive(Serialize, Deserialize)]
