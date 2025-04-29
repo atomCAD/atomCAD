@@ -1,16 +1,13 @@
 use std::collections::HashMap;
+use std::fs;
+use std::io;
+use std::path::Path;
 use super::node_type::DataType;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
 use super::node_network::NodeNetwork;
 use super::node_data::node_data::NodeData;
 use super::node_data::no_data::NoData;
-use super::node_data::sphere_data::SphereData;
-use super::node_data::cuboid_data::CuboidData;
-use super::node_data::half_space_data::HalfSpaceData;
-use super::node_data::geo_trans_data::GeoTransData;
-use super::node_data::atom_trans_data::AtomTransData;
-use super::node_data::parameter_data::ParameterData;
 use glam::{IVec3, DVec3};
 
 pub struct NodeTypeRegistry {

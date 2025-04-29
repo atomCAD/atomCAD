@@ -13,6 +13,14 @@ pub fn data_type_to_str(data_type: &DataType) -> String {
   }
 }
 
+pub fn str_to_data_type(s: &str) -> Option<DataType> {
+  match s {
+    "Geometry" => Some(DataType::Geometry),
+    "Atomic" => Some(DataType::Atomic),
+    _ => None
+  }
+}
+
 pub struct Parameter {
   pub name: String,
   pub data_type: DataType,

@@ -13,6 +13,7 @@ use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
 
+#[derive(Serialize, Deserialize)]
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
   pub argument_node_ids: HashSet<u64>, // Set of node ids for which the output is referenced
@@ -26,6 +27,7 @@ impl Argument {
   }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Wire {
     pub source_node_id: u64,
     pub destination_node_id: u64,
@@ -39,6 +41,8 @@ pub struct Node {
   pub arguments: Vec<Argument>,
   pub data: Box<dyn NodeData>,
 }
+
+
 
 /*
  * A node network is a network of nodes used by users to create geometries and atomic structures.
@@ -54,6 +58,8 @@ pub struct NodeNetwork {
   pub selected_node_id: Option<u64>, // Currently selected node, if any
   pub selected_wire: Option<Wire>, // Currently selected wire
 }
+
+
 
 impl NodeNetwork {
 
