@@ -51,6 +51,16 @@ class StructureDesignerModel extends ChangeNotifier {
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
   }
 
+  void saveNodeNetworks(String filePath) {
+    structure_designer_api.saveNodeNetworks(filePath: filePath);
+    refreshFromKernel();
+  }
+
+  void loadNodeNetworks(String filePath) {
+    structure_designer_api.loadNodeNetworks(filePath: filePath);
+    refreshFromKernel();
+  }
+
   void setActiveNodeNetwork(String nodeNetworkName) {
     structure_designer_api.setActiveNodeNetwork(
         nodeNetworkName: nodeNetworkName);
