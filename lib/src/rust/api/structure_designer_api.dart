@@ -113,3 +113,9 @@ void deleteSelected() =>
 
 bool setReturnNodeId({BigInt? nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerApiSetReturnNodeId(nodeId: nodeId);
+
+bool saveNodeNetworks({required String filePath}) => RustLib.instance.api
+    .crateApiStructureDesignerApiSaveNodeNetworks(filePath: filePath);
+
+bool loadNodeNetworks({required String filePath}) => RustLib.instance.api
+    .crateApiStructureDesignerApiLoadNodeNetworks(filePath: filePath);

@@ -24,6 +24,7 @@ use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
+use crate::structure_designer::node_networks_serialization;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn add_atom(atomic_number: i32, position: APIVec3) {
@@ -372,6 +373,47 @@ pub fn set_return_node_id(node_id: Option<u64>) -> bool {
       let result = cad_instance.structure_designer.set_return_node_id(node_id);
       refresh_renderer(cad_instance, false);
       result
+    } else {
+      false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn save_node_networks(file_path: String) -> bool {
+  unsafe {
+    if let Some(ref cad_instance) = CAD_INSTANCE {
+      // Call the serialization function directly
+      match node_networks_serialization::save_node_networks_to_file(
+        &cad_instance.structure_designer.node_type_registry,
+        &file_path
+      ) {
+        Ok(_) => true,
+        Err(_) => false
+      }
+    } else {
+      false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn load_node_networks(file_path: String) -> bool {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      // Call the serialization function directly
+      let result = node_networks_serialization::load_node_networks_from_file(
+        &mut cad_instance.structure_designer.node_type_registry,
+        &file_path
+      );
+      
+      // Refresh the renderer to reflect any loaded structures
+      refresh_renderer(cad_instance, false);
+      
+      match result {
+        Ok(_) => true,
+        Err(_) => false
+      }
     } else {
       false
     }

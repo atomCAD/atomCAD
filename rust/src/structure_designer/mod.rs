@@ -9,3 +9,4 @@ pub mod node_data;
 pub mod evaluator;
 pub mod gadgets;
 pub mod structure_designer_scene;
+pub mod node_networks_serialization;

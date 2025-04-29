@@ -4,7 +4,6 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use serde::{Serialize, Deserialize};
 use glam::f64::DVec2;
-
 use crate::structure_designer::node_type::{DataType, NodeType, Parameter, data_type_to_str, str_to_data_type};
 use crate::structure_designer::node_network::{NodeNetwork, Node, Argument, Wire};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -289,15 +288,15 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork) -> i
     Ok(network)
 }
 
-/// Saves all node networks from a NodeTypeRegistry to a JSON file
+/// Saves node networks from a NodeTypeRegistry to a JSON file
 /// 
 /// # Parameters
 /// * `registry` - The NodeTypeRegistry to save
-/// * `path` - The file path to save to
+/// * `file_path` - The file path to save to as a string
 /// 
 /// # Returns
 /// * `io::Result<()>` - Ok if the save operation was successful, Err otherwise
-pub fn save_node_networks_to_file<P: AsRef<Path>>(registry: &NodeTypeRegistry, path: P) -> io::Result<()> {
+pub fn save_node_networks_to_file(registry: &NodeTypeRegistry, file_path: &str) -> io::Result<()> {
     // Convert the node networks to a serializable format
     let mut serializable_networks = Vec::new();
     
@@ -315,9 +314,13 @@ pub fn save_node_networks_to_file<P: AsRef<Path>>(registry: &NodeTypeRegistry, p
     // Serialize to JSON
     let json_data = serde_json::to_string_pretty(&serializable_registry)?;
     
+    // Create the parent directory if it doesn't exist
+    if let Some(parent) = Path::new(file_path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
     // Write to file
-    let mut file = fs::File::create(path)?;
-    file.write_all(json_data.as_bytes())?;
+    fs::write(file_path, json_data)?;
     
     Ok(())
 }
@@ -326,13 +329,13 @@ pub fn save_node_networks_to_file<P: AsRef<Path>>(registry: &NodeTypeRegistry, p
 /// 
 /// # Parameters
 /// * `registry` - The NodeTypeRegistry to load into
-/// * `path` - The file path to load from
+/// * `file_path` - The file path to load from as a string
 /// 
 /// # Returns
 /// * `io::Result<()>` - Ok if the load operation was successful, Err otherwise
-pub fn load_node_networks_from_file<P: AsRef<Path>>(registry: &mut NodeTypeRegistry, path: P) -> io::Result<()> {
+pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: &str) -> io::Result<()> {
     // Read the file content
-    let mut file = fs::File::open(path)?;
+    let mut file = fs::File::open(file_path)?;
     let mut json_data = String::new();
     file.read_to_string(&mut json_data)?;
     
@@ -348,6 +351,8 @@ pub fn load_node_networks_from_file<P: AsRef<Path>>(registry: &mut NodeTypeRegis
         ));
     }
     
+    registry.node_networks.clear();
+
     // Process each network
     for (name, serializable_network) in serializable_registry.node_networks {
         let network = serializable_to_node_network(&serializable_network)?;
