@@ -6,3 +6,4 @@ pub mod xyz_saver;
 pub mod common_constants;
 pub mod atomic_structure_utils;
 pub mod gadget;
+pub mod serialization_utils;
