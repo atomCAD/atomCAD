@@ -44,9 +44,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   StructureDesignerModel();
 
-  void init(String nodeNetworkName) {
-    structure_designer_api.setActiveNodeNetwork(
-        nodeNetworkName: nodeNetworkName);
+  void init() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
   }
@@ -202,10 +200,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void refreshFromKernel() {
-    if (nodeNetworkView != null) {
-      nodeNetworkView = structure_designer_api.getNodeNetworkView();
-      nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
-      notifyListeners();
-    }
+    nodeNetworkView = structure_designer_api.getNodeNetworkView();
+    nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+    notifyListeners();
   }
 }

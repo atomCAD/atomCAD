@@ -52,7 +52,8 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                     onPressed: () {
                       model.addNewNodeNetwork();
                     },
-                    icon: Icon(Icons.add, size: 16, color: AppColors.textOnDark),
+                    icon:
+                        Icon(Icons.add, size: 16, color: AppColors.textOnDark),
                     label: const Text('Add network'),
                     style: AppButtonStyles.primary,
                   ),
@@ -176,13 +177,17 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                       AppColors.selectionBackground,
                                   selectedColor: AppColors.selectionForeground,
                                   onTap: () {
+                                    print(
+                                        'Tapped on $networkName isEditing: $isEditing');
+
                                     if (isEditing) {
                                       return; // Don't change selection when in edit mode
                                     }
 
                                     // Set the active node network
                                     model.setActiveNodeNetwork(networkName);
-                                    model.refreshFromKernel();
+                                    print(
+                                        'model.nodeNetworkView?.name: ${model.nodeNetworkView?.name}');
                                   },
                                 ),
                               );

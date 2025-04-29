@@ -23,12 +23,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
   void initState() {
     super.initState();
     graphModel = StructureDesignerModel();
+    graphModel.init();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Initialize the graph model here
-    graphModel.init("sample");
 
     return Column(
       children: [
@@ -138,7 +137,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
         ),
       ],
     );
-}
+  }
 
   Future<void> _loadDesign() async {
     // Open file picker for CNND files

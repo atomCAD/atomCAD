@@ -14,6 +14,8 @@ use crate::structure_designer::node_data::no_data::NoData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
+use super::node_networks_serialization;
+use std::io;
 use std::ops::Deref;
 
 pub struct StructureDesigner {
@@ -307,10 +309,12 @@ impl StructureDesigner {
   }
 
   // Sets the active node network name
-  pub fn set_active_node_network_name(&mut self, node_network_name: &str) {
-    self.active_node_network_name = Some(node_network_name.to_string());
+  pub fn set_active_node_network_name(&mut self, node_network_name: Option<String>) {
+    self.active_node_network_name = node_network_name;
   }
+}
 
+impl StructureDesigner {
   pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
@@ -477,5 +481,24 @@ impl StructureDesigner {
     } else {
       false
     }
+  }
+
+  // Saves node networks to a file
+  pub fn save_node_networks(&self, file_path: &str) -> std::io::Result<()> {
+    node_networks_serialization::save_node_networks_to_file(&self.node_type_registry, file_path)
+  }
+
+  // Loads node networks from a file
+  // Resets the active_node_network_name to None
+  pub fn load_node_networks(&mut self, file_path: &str) -> std::io::Result<()> {
+    let result = node_networks_serialization::load_node_networks_from_file(
+      &mut self.node_type_registry, 
+      file_path
+    );
+    
+    // Reset active node network to None
+    self.set_active_node_network_name(None);
+    
+    result
   }
 }

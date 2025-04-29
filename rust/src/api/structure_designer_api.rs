@@ -158,7 +158,7 @@ pub fn add_new_node_network() {
 pub fn set_active_node_network(node_network_name: &str) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
-      cad_instance.structure_designer.set_active_node_network_name(node_network_name);
+      cad_instance.structure_designer.set_active_node_network_name(Some(node_network_name.to_string()));
     }
   }
 }
@@ -383,11 +383,8 @@ pub fn set_return_node_id(node_id: Option<u64>) -> bool {
 pub fn save_node_networks(file_path: String) -> bool {
   unsafe {
     if let Some(ref cad_instance) = CAD_INSTANCE {
-      // Call the serialization function directly
-      match node_networks_serialization::save_node_networks_to_file(
-        &cad_instance.structure_designer.node_type_registry,
-        &file_path
-      ) {
+      // Call the method in StructureDesigner
+      match cad_instance.structure_designer.save_node_networks(&file_path) {
         Ok(_) => true,
         Err(_) => false
       }
@@ -401,11 +398,8 @@ pub fn save_node_networks(file_path: String) -> bool {
 pub fn load_node_networks(file_path: String) -> bool {
   unsafe {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
-      // Call the serialization function directly
-      let result = node_networks_serialization::load_node_networks_from_file(
-        &mut cad_instance.structure_designer.node_type_registry,
-        &file_path
-      );
+      // Call the method in StructureDesigner
+      let result = cad_instance.structure_designer.load_node_networks(&file_path);
       
       // Refresh the renderer to reflect any loaded structures
       refresh_renderer(cad_instance, false);
