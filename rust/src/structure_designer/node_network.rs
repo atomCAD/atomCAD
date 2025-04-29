@@ -6,7 +6,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
   pub argument_node_ids: HashSet<u64>, // Set of node ids for which the output is referenced

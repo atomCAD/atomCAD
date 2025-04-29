@@ -3,18 +3,20 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::Path;
 use serde::{Serialize, Deserialize};
+use serde_json;
 use glam::f64::DVec2;
-use crate::structure_designer::node_type::{DataType, NodeType, Parameter, data_type_to_str, str_to_data_type};
-use crate::structure_designer::node_network::{NodeNetwork, Node, Argument, Wire};
-use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::node_data::node_data::NodeData;
-use crate::structure_designer::node_data::no_data::NoData;
-use crate::structure_designer::node_data::sphere_data::SphereData;
-use crate::structure_designer::node_data::cuboid_data::CuboidData;
-use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
-use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
-use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
-use crate::structure_designer::node_data::parameter_data::ParameterData;
+use crate::common::serialization_utils::dvec2_serializer;
+use super::node_type::{NodeType, Parameter, DataType, data_type_to_str, str_to_data_type};
+use super::node_network::{NodeNetwork, Node, Argument, Wire};
+use super::node_type_registry::NodeTypeRegistry;
+use super::node_data::node_data::NodeData;
+use super::node_data::no_data::NoData;
+use super::node_data::sphere_data::SphereData;
+use super::node_data::cuboid_data::CuboidData;
+use super::node_data::half_space_data::HalfSpaceData;
+use super::node_data::geo_trans_data::GeoTransData;
+use super::node_data::atom_trans_data::AtomTransData;
+use super::node_data::parameter_data::ParameterData;
 
 // The current version of the serialization format
 const SERIALIZATION_VERSION: u32 = 1;
@@ -40,6 +42,7 @@ pub struct SerializableNodeType {
 pub struct SerializableNode {
     pub id: u64,
     pub node_type_name: String,
+    #[serde(with = "dvec2_serializer")]
     pub position: DVec2,
     pub arguments: Vec<Argument>,
     // Use a string type tag and direct JSON value for the polymorphic data
@@ -116,6 +119,9 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
     })
 }
 
+//  &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
+
+
 /// Converts a Node to a SerializableNode, handling the polymorphic NodeData
 /// 
 /// # Returns
@@ -127,42 +133,42 @@ pub fn node_to_serializable(id: u64, node: &Node) -> io::Result<SerializableNode
     // Convert the node data to a JSON value based on type
     let (data_type, json_data) = match node_type_name.as_str() {
         "cuboid" => {
-            if let Some(data) = node.data.as_any().downcast_ref::<CuboidData>() {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<CuboidData>() {
                 ("cuboid".to_string(), serde_json::to_value(data)?)
             } else {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for cuboid"));
             }
         },
         "sphere" => {
-            if let Some(data) = node.data.as_any().downcast_ref::<SphereData>() {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<SphereData>() {
                 ("sphere".to_string(), serde_json::to_value(data)?)
             } else {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for sphere"));
             }
         },
         "half_space" => {
-            if let Some(data) = node.data.as_any().downcast_ref::<HalfSpaceData>() {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<HalfSpaceData>() {
                 ("half_space".to_string(), serde_json::to_value(data)?)
             } else {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for half_space"));
             }
         },
         "geo_trans" => {
-            if let Some(data) = node.data.as_any().downcast_ref::<GeoTransData>() {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<GeoTransData>() {
                 ("geo_trans".to_string(), serde_json::to_value(data)?)
             } else {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for geo_trans"));
             }
         },
         "atom_trans" => {
-            if let Some(data) = node.data.as_any().downcast_ref::<AtomTransData>() {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<AtomTransData>() {
                 ("atom_trans".to_string(), serde_json::to_value(data)?)
             } else {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for atom_trans"));
             }
         },
         "parameter" => {
-            if let Some(data) = node.data.as_any().downcast_ref::<ParameterData>() {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<ParameterData>() {
                 ("parameter".to_string(), serde_json::to_value(data)?)
             } else {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for parameter"));
