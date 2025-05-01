@@ -7,10 +7,43 @@ use std::collections::HashSet;
 use crate::util::hit_test_utils;
 use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
 use crate::api::scene_composer_api_types::SelectModifier;
+use std::hash::{Hash, Hasher};
+use serde::{Serialize, Deserialize};
 
 // Bigger than most realistically possible bonds, so a neighbouring atom will be in the same cell
 // or in a neighbouring cell most of the time. This is important for performance reasons.
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
+
+// A reference to a bond, used for commands
+#[derive(Clone,Debug, Serialize, Deserialize)]
+pub struct BondReference {
+  pub atom_id1: u64,
+  pub atom_id2: u64,
+}
+
+impl PartialEq for BondReference {
+  fn eq(&self, other: &Self) -> bool {
+    // Order doesn't matter for bonds: (1,2) == (2,1)
+    (self.atom_id1 == other.atom_id1 && self.atom_id2 == other.atom_id2) ||
+    (self.atom_id1 == other.atom_id2 && self.atom_id2 == other.atom_id1)
+  }
+}
+
+impl Eq for BondReference {}
+
+impl Hash for BondReference {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    // Ensure consistent hash regardless of atom order
+    // Hash the smaller ID first, then the larger ID
+    let (smaller, larger) = if self.atom_id1 < self.atom_id2 {
+      (self.atom_id1, self.atom_id2)
+    } else {
+      (self.atom_id2, self.atom_id1)
+    };
+    smaller.hash(state);
+    larger.hash(state);
+  }
+}
 
 #[derive(Clone)]
 pub struct Bond {
@@ -92,6 +125,33 @@ impl AtomicStructure {
 
   pub fn get_bond(&self, bond_id: u64) -> Option<&Bond> {
     self.bonds.get(&bond_id)
+  }
+
+  // Helper method to get a bond ID from a BondReference
+  fn get_bond_id_by_reference(&self, bond_reference: &BondReference) -> Option<u64> {
+    // Get the first atom
+    if let Some(atom) = self.get_atom(bond_reference.atom_id1) {
+      // Search through its bonds for one that connects to atom_id2
+      for bond_id in &atom.bond_ids {
+        if let Some(bond) = self.get_bond(*bond_id) {
+          if (bond.atom_id1 == bond_reference.atom_id1 && bond.atom_id2 == bond_reference.atom_id2) ||
+             (bond.atom_id1 == bond_reference.atom_id2 && bond.atom_id2 == bond_reference.atom_id1) {
+            return Some(*bond_id);
+          }
+        }
+      }
+    }
+    None
+  }
+
+  pub fn get_bond_by_reference(&self, bond_reference: &BondReference) -> Option<&Bond> {
+    self.get_bond_id_by_reference(bond_reference)
+      .and_then(|bond_id| self.bonds.get(&bond_id))
+  }
+
+  pub fn get_mut_bond_by_reference(&mut self, bond_reference: &BondReference) -> Option<&mut Bond> {
+    self.get_bond_id_by_reference(bond_reference)
+      .and_then(move |bond_id| self.bonds.get_mut(&bond_id))
   }
 
   pub fn clean(&mut self) {
@@ -350,27 +410,27 @@ impl AtomicStructure {
   }
 
   // Ignores non-existing atoms or bonds
-  pub fn select(&mut self, atom_ids: &Vec<u64>, bond_ids: &Vec<u64>, unselect: bool) {
+  pub fn select(&mut self, atom_ids: &Vec<u64>, bond_references: &Vec<BondReference>, unselect: bool) {
     for atom_id in atom_ids {
       if let Some(atom) = self.atoms.get_mut(atom_id) {
         atom.selected = !unselect;
       }
     }
-    for bond_id in bond_ids {
-      if let Some(bond) = self.bonds.get_mut(bond_id) {
+    for bond_reference in bond_references {
+      if let Some(bond) = self.get_mut_bond_by_reference(&bond_reference) {
         bond.selected = !unselect;
       }
     }
   }
 
-  pub fn select_by_maps(&mut self, atom_selections: &HashMap<u64, bool>, bond_selections: &HashMap<u64, bool>) {
+  pub fn select_by_maps(&mut self, atom_selections: &HashMap<u64, bool>, bond_selections: &HashMap<BondReference, bool>) {
     for (key, value) in atom_selections {
       if let Some(atom) = self.atoms.get_mut(key) {
         atom.selected = *value;
       }
     }
     for (key, value) in bond_selections {
-      if let Some(bond) = self.bonds.get_mut(key) {
+      if let Some(bond) = self.get_mut_bond_by_reference(&key) {
         bond.selected = *value;
       }
     }

@@ -1,22 +1,25 @@
-use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::path::Path;
 use serde::{Serialize, Deserialize};
 use serde_json;
 use glam::f64::DVec2;
 use crate::common::serialization_utils::dvec2_serializer;
-use super::node_type::{NodeType, Parameter, DataType, data_type_to_str, str_to_data_type};
-use super::node_network::{NodeNetwork, Node, Argument, Wire};
-use super::node_type_registry::NodeTypeRegistry;
-use super::node_data::node_data::NodeData;
-use super::node_data::no_data::NoData;
-use super::node_data::sphere_data::SphereData;
-use super::node_data::cuboid_data::CuboidData;
-use super::node_data::half_space_data::HalfSpaceData;
-use super::node_data::geo_trans_data::GeoTransData;
-use super::node_data::atom_trans_data::AtomTransData;
-use super::node_data::parameter_data::ParameterData;
+use super::super::node_type::{NodeType, Parameter, data_type_to_str, str_to_data_type};
+use super::super::node_network::{NodeNetwork, Node, Argument};
+use super::super::node_type_registry::NodeTypeRegistry;
+use super::super::node_data::node_data::NodeData;
+use super::super::node_data::no_data::NoData;
+use super::super::node_data::sphere_data::SphereData;
+use super::super::node_data::cuboid_data::CuboidData;
+use super::super::node_data::half_space_data::HalfSpaceData;
+use super::super::node_data::geo_trans_data::GeoTransData;
+use super::super::node_data::atom_trans_data::AtomTransData;
+use super::super::node_data::parameter_data::ParameterData;
+use super::super::node_data::edit_atom_data::EditAtomData;
+use super::edit_atom_data_serialization::edit_atom_data_to_serializable;
+use super::edit_atom_data_serialization::serializable_to_edit_atom_data;
+use super::edit_atom_data_serialization::SerializableEditAtomData;
 
 // The current version of the serialization format
 const SERIALIZATION_VERSION: u32 = 1;
@@ -174,6 +177,14 @@ pub fn node_to_serializable(id: u64, node: &Node) -> io::Result<SerializableNode
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for parameter"));
             }
         },
+        "edit_atom" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<EditAtomData>() {
+                let serializable_data = edit_atom_data_to_serializable(data)?;
+                ("edit_atom".to_string(), serde_json::to_value(serializable_data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"));
+            }
+        },
         _ => {
             // For nodes with NoData or other types we don't specifically handle
             ("no_data".to_string(), serde_json::json!({}))
@@ -219,11 +230,15 @@ pub fn serializable_to_node(serializable: &SerializableNode) -> io::Result<Node>
             Box::new(atom_trans_data)
         },
         "parameter" => {
-            let parameter_data: ParameterData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(parameter_data)
+            let param_data: ParameterData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(param_data)
+        },
+        "edit_atom" => {
+            let serializable_data: SerializableEditAtomData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(serializable_to_edit_atom_data(&serializable_data)?)
         },
         _ => {
-            // Default to NoData for unrecognized types
+            // Default to NoData for unknown types
             Box::new(NoData {})
         }
     };

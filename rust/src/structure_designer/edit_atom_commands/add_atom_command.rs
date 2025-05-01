@@ -1,12 +1,16 @@
 use glam::f64::DVec3;
-use super::super::command::Command;
+use super::super::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
+use serde::{Serialize, Deserialize};
+use crate::common::serialization_utils::dvec3_serializer;
 
 /*
  * Command to add an atom with the given atomic number and position.
  */
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AddAtomCommand {
   pub atomic_number: i32,
+  #[serde(with = "dvec3_serializer")]
   pub position: DVec3,
 
   // undo information
@@ -19,7 +23,7 @@ impl AddAtomCommand {
   }
 }
 
-impl Command for AddAtomCommand {
+impl EditAtomCommand for AddAtomCommand {
   fn execute(&mut self, model: &mut AtomicStructure, is_redo: bool) {
     if !is_redo {
       self.atom_id = model.obtain_next_atom_id();

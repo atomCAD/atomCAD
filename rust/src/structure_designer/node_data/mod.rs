@@ -6,3 +6,4 @@ pub mod cuboid_data;
 pub mod sphere_data;
 pub mod half_space_data;
 pub mod no_data;
+pub mod edit_atom_data;

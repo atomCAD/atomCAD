@@ -6,7 +6,6 @@ use crate::api::structure_designer_api_types::InputPinView;
 use crate::api::structure_designer_api_types::NodeView;
 use crate::api::structure_designer_api_types::WireView;
 use crate::api::common_api_types::APIVec2;
-use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer_api_types::APIHalfSpaceData;
@@ -24,17 +23,6 @@ use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
-use crate::structure_designer::node_networks_serialization;
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn add_atom(atomic_number: i32, position: APIVec3) {
-  unsafe {
-    if let Some(cad_instance) = &mut CAD_INSTANCE {
-      cad_instance.structure_designer.add_atom(atomic_number, from_api_vec3(&position));
-      //cad_instance.renderer.refresh(cad_instance.kernel.get_atomic_structure());
-    }
-  }
-}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {

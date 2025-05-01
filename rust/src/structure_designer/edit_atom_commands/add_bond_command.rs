@@ -1,9 +1,11 @@
-use super::super::command::Command;
+use super::super::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
+use serde::{Serialize, Deserialize};
 
 /*
  * Command to add a bond between the given atoms with the given multiplicity (1-3).
  */
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AddBondCommand {
   pub atom_id1: u64,
   pub atom_id2: u64,
@@ -19,7 +21,7 @@ impl AddBondCommand {
   }
 }
 
-impl Command for AddBondCommand {
+impl EditAtomCommand for AddBondCommand {
   fn execute(&mut self, model: &mut AtomicStructure, is_redo: bool) {
     if !is_redo {
       self.bond_id = model.obtain_next_bond_id();

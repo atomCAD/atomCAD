@@ -361,6 +361,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     //_addAtom(pointerPos);
   }
 
+/*
   // Add an atom at a fix distance from the camera eye
   void _addAtom(Offset pointerPos) {
     // First determine the position of the atom to be placed.
@@ -381,7 +382,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     addAtom(atomicNumber: 6, position: Vector3ToAPIVec3(atomPos));
     renderingNeeded();
   }
-
+*/
   void scroll(Offset pointerPos, double scrollDeltaY) {
     if (dragState != ViewportDragState.noDrag) {
       // Do not interfere with move or rotate

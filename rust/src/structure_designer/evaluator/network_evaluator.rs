@@ -20,6 +20,7 @@ use crate::structure_designer::node_data::parameter_data::ParameterData;
 use crate::structure_designer::node_data::sphere_data::SphereData;
 use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
+use crate::common::crystal_utils::in_crystal_pos_to_id;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
@@ -431,7 +432,8 @@ impl NetworkEvaluator {
           }
 
           let atom_id = if has_atom {
-            let id = atomic_structure.add_atom(CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 1);
+            let id = in_crystal_pos_to_id(&absolute_pos);
+            atomic_structure.add_atom_with_id(id, CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 1);
             atom_pos_to_id.insert(absolute_pos, id);
             id
           } else { 0 };

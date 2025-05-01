@@ -1,7 +1,7 @@
 pub mod structure_designer;
 pub mod common_constants;
-pub mod command;
-pub mod commands;
+pub mod edit_atom_command;
+pub mod edit_atom_commands;
 pub mod node_type;
 pub mod node_network;
 pub mod node_type_registry;
@@ -9,4 +9,4 @@ pub mod node_data;
 pub mod evaluator;
 pub mod gadgets;
 pub mod structure_designer_scene;
-pub mod node_networks_serialization;
+pub mod serialization;

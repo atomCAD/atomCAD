@@ -94,13 +94,6 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   pub static mut CAD_INSTANCE: Option<CADInstance> = None;
 
 
-pub fn add_sample_model(kernel: &mut StructureDesigner) {
-    let atom_id1 = kernel.add_atom(6, DVec3::new(-1.3, 0.0, 0.0));
-    let atom_id2 = kernel.add_atom(6, DVec3::new(1.3, 0.0, 0.0));
-    kernel.add_atom(6, DVec3::new(1.3, 3.0, 0.0));
-    kernel.add_bond(atom_id1, atom_id2, 1);
-}
-
 pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.add_node_network("sample");
     kernel.set_active_node_network_name(Some("sample".to_string()));

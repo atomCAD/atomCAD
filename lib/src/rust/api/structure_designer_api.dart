@@ -8,10 +8,6 @@ import 'common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-void addAtom({required int atomicNumber, required APIVec3 position}) =>
-    RustLib.instance.api.crateApiStructureDesignerApiAddAtom(
-        atomicNumber: atomicNumber, position: position);
-
 NodeNetworkView? getNodeNetworkView() =>
     RustLib.instance.api.crateApiStructureDesignerApiGetNodeNetworkView();
 

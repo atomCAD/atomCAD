@@ -1,10 +1,6 @@
 use crate::common::atomic_structure::AtomicStructure;
-use super::command::Command;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
-use super::commands::add_atom_command::AddAtomCommand;
-use super::commands::add_bond_command::AddBondCommand;
-use super::commands::select_command::SelectCommand;
 use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
@@ -14,14 +10,9 @@ use crate::structure_designer::node_data::no_data::NoData;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
-use super::node_networks_serialization;
-use std::io;
-use std::ops::Deref;
+use crate::structure_designer::serialization::node_networks_serialization;
 
 pub struct StructureDesigner {
-  pub model: AtomicStructure,
-  pub history: Vec<Box<dyn Command>>,
-  pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
   pub gadget: Option<Box<dyn NodeNetworkGadget>>,
@@ -36,9 +27,6 @@ impl StructureDesigner {
     let network_evaluator = NetworkEvaluator::new();
 
     Self {
-      model: AtomicStructure::new(),
-      history: Vec::new(),
-      next_history_index: 0,
       node_type_registry,
       network_evaluator,
       gadget: None,
@@ -48,41 +36,6 @@ impl StructureDesigner {
 }
 
 impl StructureDesigner {
-  pub fn get_atomic_structure(&self) -> &AtomicStructure {
-    &self.model
-  }
-
-  pub fn get_history_size(&self) -> usize {
-    self.history.len()
-  }
-
-  pub fn execute_command(&mut self, mut command: Box<dyn Command>) -> & Box<dyn Command> {
-    if self.history.len() > self.next_history_index {
-      self.history.drain(self.next_history_index..);
-    }
-    command.execute(&mut self.model, false);
-    self.history.push(command);
-    self.next_history_index = self.history.len();
-
-    & self.history[self.history.len() - 1]
-  }
-
-  pub fn undo(&mut self) -> bool {
-    if self.next_history_index == 0 {
-      return false;
-    }
-    self.next_history_index -= 1;
-    self.history[self.next_history_index].undo(&mut self.model);
-    return true;
-  }
-
-  pub fn redo(&mut self) -> bool {
-    if self.next_history_index >= self.history.len() {
-      return false;
-    }
-    self.history[self.next_history_index].execute(&mut self.model, true);
-    return true;
-  }
 
   // Generates the scene to be rendered according to the displayed nodes of the active node network
   pub fn generate_scene(&mut self, lightweight: bool) -> StructureDesignerScene {
@@ -117,6 +70,7 @@ impl StructureDesigner {
   // -------------------------------------------------------------------------------------------------------------------------
   // -------------------------------------------------------------------------------------------------------------------------
 
+  /*
   // Issue an AddAtomCommand
   pub fn add_atom(&mut self, atomic_number: i32, position: DVec3) -> u64 {
     let executed_command = self.execute_command(Box::new(AddAtomCommand::new(atomic_number, position)));
@@ -135,6 +89,7 @@ impl StructureDesigner {
   pub fn select(&mut self, atom_ids: Vec<u64>, bond_ids: Vec<u64>, unselect: bool) {
     self.execute_command(Box::new(SelectCommand::new(atom_ids, bond_ids, unselect)));
   }
+  */
 
   // node network methods
 
