@@ -20,6 +20,7 @@ use crate::structure_designer::node_data::parameter_data::ParameterData;
 use crate::structure_designer::node_data::sphere_data::SphereData;
 use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
+use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::common::crystal_utils::in_crystal_pos_to_id;
 
 const SAMPLES_PER_UNIT: i32 = 4;
@@ -153,6 +154,9 @@ impl NetworkEvaluator {
     if node.node_type_name == "geo_to_atom" {
       return vec![self.eval_geo_to_atom(network_stack, node_id, registry)];
     }
+    if node.node_type_name == "edit_atom" {
+      return vec![self.eval_edit_atom(network_stack, node_id, registry)];
+    }
     if node.node_type_name == "atom_trans" {
       return vec![self.eval_atom_trans(network_stack, node_id, registry)];
     }
@@ -236,6 +240,25 @@ impl NetworkEvaluator {
       return NetworkResult::Atomic(result_atomic_structure);
     }
     return NetworkResult::None;
+  }
+
+  fn eval_edit_atom<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+    let input_val = if node.arguments[0].argument_node_ids.is_empty() {
+      return NetworkResult::Atomic(AtomicStructure::new());
+    } else {
+      let input_node_id = node.arguments[0].get_node_id().unwrap();
+      self.evaluate(network_stack, input_node_id, registry)[0].clone()
+    };
+
+    if let NetworkResult::Atomic(mut atomic_structure) = input_val {
+      let edit_atom_data = &node.data.as_any_ref().downcast_ref::<EditAtomData>().unwrap();
+
+      edit_atom_data.eval(&mut atomic_structure);
+      return NetworkResult::Atomic(atomic_structure);
+    }
+    return NetworkResult::Atomic(AtomicStructure::new());
   }
 
   // generates diamond molecule from geometry in an optimized way

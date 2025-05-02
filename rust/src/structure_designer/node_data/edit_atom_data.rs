@@ -6,15 +6,13 @@ use crate::common::atomic_structure::AtomicStructure;
 pub struct EditAtomData {
     pub history: Vec<Box<dyn EditAtomCommand>>,
     pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
-    pub model: AtomicStructure,
 }
 
 impl EditAtomData {
-    pub fn new(model: AtomicStructure) -> Self {
+    pub fn new() -> Self {
         Self {
             history: Vec::new(),
             next_history_index: 0,
-            model
         }
     }
 
@@ -22,11 +20,16 @@ impl EditAtomData {
       self.history.len()
     }
   
-    pub fn execute_command(&mut self, mut command: Box<dyn EditAtomCommand>) -> & Box<dyn EditAtomCommand> {
+    pub fn eval(&self, atomic_structure: &mut AtomicStructure) {
+      for i in 0..self.next_history_index {
+        self.history[i].execute(atomic_structure);
+      }
+    }
+
+    pub fn add_command(&mut self, command: Box<dyn EditAtomCommand>) -> & Box<dyn EditAtomCommand> {
       if self.history.len() > self.next_history_index {
         self.history.drain(self.next_history_index..);
       }
-      command.execute(&mut self.model, false);
       self.history.push(command);
       self.next_history_index = self.history.len();
   
@@ -38,7 +41,6 @@ impl EditAtomData {
         return false;
       }
       self.next_history_index -= 1;
-      self.history[self.next_history_index].undo(&mut self.model);
       return true;
     }
   
@@ -46,7 +48,7 @@ impl EditAtomData {
       if self.next_history_index >= self.history.len() {
         return false;
       }
-      self.history[self.next_history_index].execute(&mut self.model, true);
+      self.next_history_index += 1;
       return true;
     }
 }

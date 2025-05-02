@@ -10,6 +10,8 @@ use super::node_data::sphere_data::SphereData;
 use super::node_data::half_space_data::HalfSpaceData;
 use super::node_data::geo_trans_data::GeoTransData;
 use super::node_data::atom_trans_data::AtomTransData;
+use super::node_data::edit_atom_data::EditAtomData;
+use super::super::common::atomic_structure::AtomicStructure;
 use glam::{IVec3, DVec3};
 
 pub struct NodeTypeRegistry {
@@ -162,7 +164,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
-      node_data_creator: || Box::new(NoData {}),
+      node_data_creator: || Box::new(EditAtomData::new()),
     });
 
     ret.add_node_type(NodeType {

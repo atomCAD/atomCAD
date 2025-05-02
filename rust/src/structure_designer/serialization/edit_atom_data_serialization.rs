@@ -79,6 +79,5 @@ pub fn serializable_to_edit_atom_data(serializable: &SerializableEditAtomData) -
     Ok(EditAtomData {
         history: commands,
         next_history_index: serializable.next_history_index,
-        model: AtomicStructure::new(),
     })
 }
