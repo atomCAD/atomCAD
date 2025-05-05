@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 
 /// UI Common styling for the Flutter CAD application
 ///
@@ -105,4 +107,12 @@ class AppInputDecorations {
     isDense: true,
     labelStyle: AppTextStyles.label,
   );
+}
+
+SelectModifier getSelectModifierFromKeyboard() {
+  return HardwareKeyboard.instance.isControlPressed
+      ? SelectModifier.toggle
+      : HardwareKeyboard.instance.isShiftPressed
+          ? SelectModifier.expand
+          : SelectModifier.replace;
 }

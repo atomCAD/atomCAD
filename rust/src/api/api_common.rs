@@ -107,11 +107,16 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.connect_nodes(diff_id_1, diff_id_2, 1);
 }
 
+  pub fn refresh_structure_designer(cad_instance: &mut CADInstance, lightweight: bool) {
+    let scene = cad_instance.structure_designer.generate_scene(lightweight);
+    cad_instance.renderer.refresh(&scene, lightweight);
+    cad_instance.structure_designer.last_generated_structure_designer_scene = scene;
+  }
+
   pub fn refresh_renderer(cad_instance: &mut CADInstance, lightweight: bool) {
     match cad_instance.active_editor {
       Editor::StructureDesigner => {
-        let scene = cad_instance.structure_designer.generate_scene(lightweight);
-        cad_instance.renderer.refresh(&scene, lightweight);
+        refresh_structure_designer(cad_instance, lightweight);
       },
       Editor::SceneComposer => {
         cad_instance.renderer.refresh(&cad_instance.scene_composer, lightweight);

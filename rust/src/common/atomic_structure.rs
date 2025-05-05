@@ -6,13 +6,23 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::util::hit_test_utils;
 use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
-use crate::api::scene_composer_api_types::SelectModifier;
+use crate::api::common_api_types::SelectModifier;
 use std::hash::{Hash, Hasher};
 use serde::{Serialize, Deserialize};
 
 // Bigger than most realistically possible bonds, so a neighbouring atom will be in the same cell
 // or in a neighbouring cell most of the time. This is important for performance reasons.
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
+
+fn apply_select_modifier(in_selected: bool, select_modifier: &SelectModifier) -> bool {
+  match select_modifier {
+    SelectModifier::Replace => true,
+    SelectModifier::Expand => true,
+    SelectModifier::Toggle => !in_selected,
+  }
+}
+
+  
 
 // A reference to a bond, used for commands
 #[derive(Clone,Debug, Serialize, Deserialize)]
@@ -86,6 +96,7 @@ pub struct AtomicStructure {
   pub bonds: HashMap<u64, Bond>,
   pub dirty_atom_ids: HashSet<u64>,
   pub clusters: BTreeMap<u64, Cluster>,
+  pub from_selected_node: bool,
 }
 
 impl AtomicStructure {
@@ -101,6 +112,7 @@ impl AtomicStructure {
       bonds: HashMap::new(),
       dirty_atom_ids: HashSet::new(),
       clusters: BTreeMap::new(),
+      from_selected_node: false,
     };
     ret.add_cluster("default");
     ret
@@ -410,15 +422,25 @@ impl AtomicStructure {
   }
 
   // Ignores non-existing atoms or bonds
-  pub fn select(&mut self, atom_ids: &Vec<u64>, bond_references: &Vec<BondReference>, unselect: bool) {
+  pub fn select(&mut self, atom_ids: &Vec<u64>, bond_references: &Vec<BondReference>, select_modifier: SelectModifier) {
+    // If select_modifier is Replace, first unselect all the currently selected atoms and bonds
+    if select_modifier == SelectModifier::Replace {
+      for atom in self.atoms.values_mut() {
+        atom.selected = false;
+      }
+      for bond in self.bonds.values_mut() {
+        bond.selected = false;
+      }
+    }
+
     for atom_id in atom_ids {
       if let Some(atom) = self.atoms.get_mut(atom_id) {
-        atom.selected = !unselect;
+        atom.selected = apply_select_modifier(atom.selected, &select_modifier);
       }
     }
     for bond_reference in bond_references {
       if let Some(bond) = self.get_mut_bond_by_reference(&bond_reference) {
-        bond.selected = !unselect;
+        bond.selected = apply_select_modifier(bond.selected, &select_modifier);
       }
     }
   }

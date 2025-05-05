@@ -1,3 +1,4 @@
+use serde::{Serialize, Deserialize};
 
 pub enum Editor {
   None,
@@ -37,3 +38,9 @@ pub struct APITransform {
   pub rotation: APIVec3, // intrinsic euler angles in degrees
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SelectModifier {
+  Replace,
+  Toggle,
+  Expand
+}

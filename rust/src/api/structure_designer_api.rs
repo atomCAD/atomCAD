@@ -6,6 +6,7 @@ use crate::api::structure_designer_api_types::InputPinView;
 use crate::api::structure_designer_api_types::NodeView;
 use crate::api::structure_designer_api_types::WireView;
 use crate::api::common_api_types::APIVec2;
+use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer_api_types::APIHalfSpaceData;
@@ -23,6 +24,7 @@ use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
+use crate::api::common_api_types::SelectModifier;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -194,6 +196,31 @@ pub fn select_wire(source_node_id: u64, destination_node_id: u64, destination_ar
     } else {
       false
     }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn is_edit_atom_active() -> bool {
+  unsafe {
+    if let Some(instance) = &CAD_INSTANCE {
+      instance.structure_designer.is_edit_atom_active()
+    } else {
+      false
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> Option<u64> {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let ray_start_vec3 = from_api_vec3(&ray_start);
+      let ray_dir_vec3 = from_api_vec3(&ray_dir);
+      let result = instance.structure_designer.select_atom_by_ray(&ray_start_vec3, &ray_dir_vec3, select_modifier);
+      refresh_renderer(instance, false);
+      return result;
+    }
+    None
   }
 }
 

@@ -1,12 +1,5 @@
 use crate::api::common_api_types::APIVec3;
 
-#[derive(Clone)]
-pub enum SelectModifier {
-  Replace,
-  Toggle,
-  Expand
-}
-
 pub struct ClusterView {
     pub id: u64,
     pub name: String,

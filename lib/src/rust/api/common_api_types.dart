@@ -6,6 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `eq`, `fmt`
+
 class APICamera {
   final APIVec3 eye;
   final APIVec3 target;
@@ -143,5 +145,12 @@ enum Editor {
   none,
   structureDesigner,
   sceneComposer,
+  ;
+}
+
+enum SelectModifier {
+  replace,
+  toggle,
+  expand,
   ;
 }

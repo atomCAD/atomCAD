@@ -3,7 +3,7 @@ use glam::f64::DVec3;
 use glam::f64::DQuat;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::scene_composer::cluster_frame_gadget::ClusterFrameGadget;
-use crate::api::scene_composer_api_types::SelectModifier;
+use crate::api::common_api_types::SelectModifier;
 use std::collections::HashSet;
 use crate::common::atomic_structure::Cluster;
 use crate::util::transform::Transform;

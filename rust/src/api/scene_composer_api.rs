@@ -6,7 +6,7 @@ use crate::api::common_api_types::APITransform;
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
 use crate::api::common_api_types::APIVec3;
-use crate::api::scene_composer_api_types::SelectModifier;
+use crate::api::common_api_types::SelectModifier;
 use crate::api::scene_composer_api_types::APISceneComposerTool;
 use std::time::Instant;
 use crate::api::api_common::from_api_vec3;

@@ -1,7 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/cad_viewport.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/scene_composer_api_types.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 class SceneComposerViewport extends CadViewport {
   final SceneComposerModel model;
@@ -37,11 +39,7 @@ class _SceneComposerViewportState
         renderingNeeded();
       }
     } else if (activeTool == APISceneComposerTool.default_) {
-      final selectModifier = HardwareKeyboard.instance.isControlPressed
-          ? SelectModifier.toggle
-          : HardwareKeyboard.instance.isShiftPressed
-              ? SelectModifier.expand
-              : SelectModifier.replace;
+      final selectModifier = getSelectModifierFromKeyboard();
 
       if (widget.model.selectClusterByRay(
             ray.start,

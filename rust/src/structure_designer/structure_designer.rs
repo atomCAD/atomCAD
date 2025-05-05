@@ -7,16 +7,21 @@ use super::node_type::DataType;
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::node_data::no_data::NoData;
+use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
+use crate::structure_designer::edit_atom_commands::select_command::SelectCommand;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
+use crate::api::common_api_types::SelectModifier;
+use std::any::Any;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
   pub gadget: Option<Box<dyn NodeNetworkGadget>>,
   pub active_node_network_name: Option<String>,
+  pub last_generated_structure_designer_scene: StructureDesignerScene,
 }
 
 impl StructureDesigner {
@@ -31,18 +36,24 @@ impl StructureDesigner {
       network_evaluator,
       gadget: None,
       active_node_network_name: None,
+      last_generated_structure_designer_scene: StructureDesignerScene::new(),
     }
   }
 }
 
 impl StructureDesigner {
 
+  // Returns the first atomic structure generated from a selected node, if any
+  pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
+    // Find the first atomic structure with from_selected_node = true
+    self.last_generated_structure_designer_scene.atomic_structures.iter()
+      .find(|structure| structure.from_selected_node)
+  }
+
   // Generates the scene to be rendered according to the displayed nodes of the active node network
   pub fn generate_scene(&mut self, lightweight: bool) -> StructureDesignerScene {
 
     let mut scene: StructureDesignerScene = StructureDesignerScene::new();
-
-    
 
     if !lightweight {
       // Check if node_network_name exists
@@ -65,6 +76,107 @@ impl StructureDesigner {
     }
 
     return scene;
+  }
+
+  // Returns the atom id of the atom that was selected or deselected, or None if no atom was hit
+  pub fn select_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3, select_modifier: SelectModifier) -> Option<u64> {
+    let atomic_structure = self.get_atomic_structure_from_selected_node();
+    if atomic_structure.is_none() {
+      return None;
+    }
+    let atomic_structure = atomic_structure.unwrap();
+    let selected_atom_id = atomic_structure.hit_test(ray_start, ray_dir)?; 
+    self.select_atom_by_id(selected_atom_id, select_modifier);
+    Some(selected_atom_id)
+  }
+
+  // Selects an atom by its ID using the active edit_atom node
+  pub fn select_atom_by_id(&mut self, atom_id: u64, select_modifier: SelectModifier) {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    
+    // Get the active node network
+    let network = match self.node_type_registry.node_networks.get_mut(network_name) {
+      Some(network) => network,
+      None => return,
+    };
+    
+    // Get the selected node ID
+    let selected_node_id = match network.selected_node_id {
+      Some(id) => id,
+      None => return,
+    };
+    
+    // Get the selected node's type name
+    let node_type_name = match network.nodes.get(&selected_node_id) {
+      Some(node) => &node.node_type_name,
+      None => return,
+    };
+    
+    // Check if the node is an edit_atom node
+    if node_type_name != "edit_atom" {
+      return;
+    }
+    
+    // Get the node data and cast it to EditAtomData
+    let node_data = match network.get_node_network_data_mut(selected_node_id) {
+      Some(data) => data,
+      None => return,
+    };
+    
+    // Try to downcast to EditAtomData
+    let edit_atom_data = match node_data.as_any_mut().downcast_mut::<EditAtomData>() {
+      Some(data) => data,
+      None => return,
+    };
+    
+    // Create the SelectCommand with the selected atom ID
+    let select_command = Box::new(SelectCommand::new(
+      vec![atom_id],         // atom_ids
+      vec![],                // bond_references (empty)
+      select_modifier        // select_modifier
+    ));
+    
+    // Add the command to the edit_atom_data
+    edit_atom_data.add_command(select_command);
+  }
+
+  // Returns true if the selected node is displayed and has an 'edit_atom' node type name
+  pub fn is_edit_atom_active(&self) -> bool {
+    // Check if active_node_network_name exists
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    
+    // Get the active node network
+    let network = match self.node_type_registry.node_networks.get(network_name) {
+      Some(network) => network,
+      None => return false,
+    };
+    
+    // Check if there's a selected node ID
+    let selected_node_id = match network.selected_node_id {
+      Some(id) => id,
+      None => return false,
+    };
+    
+    // Check if the selected node is displayed
+    if !network.displayed_node_ids.contains(&selected_node_id) {
+      return false;
+    }
+    
+    // Get the selected node's type name
+    let node_type_name = match network.nodes.get(&selected_node_id) {
+      Some(node) => &node.node_type_name,
+      None => return false,
+    };
+    
+    // Return true only if the node's type name is 'edit_atom'
+    node_type_name == "edit_atom"
   }
 
   // -------------------------------------------------------------------------------------------------------------------------

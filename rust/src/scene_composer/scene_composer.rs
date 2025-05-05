@@ -12,7 +12,7 @@ use glam::f64::DVec3;
 use glam::f64::DQuat;
 use crate::util::transform::Transform;
 use crate::common::atomic_structure_utils::{auto_create_bonds, detect_bonded_substructures};
-use crate::api::scene_composer_api_types::SelectModifier;
+use crate::api::common_api_types::SelectModifier;
 use crate::api::scene_composer_api_types::APISceneComposerTool;
 use crate::scene_composer::commands::scene_composer_command::SceneComposerCommand;
 use crate::scene_composer::scene_composer_model::SceneComposerModel;

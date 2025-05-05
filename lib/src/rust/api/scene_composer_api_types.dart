@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`
 
 enum APISceneComposerTool {
   default_,
@@ -121,11 +121,4 @@ class SceneComposerView {
           availableTools == other.availableTools &&
           isUndoAvailable == other.isUndoAvailable &&
           isRedoAvailable == other.isRedoAvailable;
-}
-
-enum SelectModifier {
-  replace,
-  toggle,
-  expand,
-  ;
 }

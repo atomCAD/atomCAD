@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1490604111;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1464404471;
 
 // Section: executor
 
@@ -987,6 +987,36 @@ fn wire__crate__api__common_api__init_app_impl(
         },
     )
 }
+fn wire__crate__api__structure_designer_api__is_edit_atom_active_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "is_edit_atom_active",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::structure_designer_api::is_edit_atom_active())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__scene_composer_api__is_frame_locked_to_atoms_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1416,6 +1446,46 @@ fn wire__crate__api__scene_composer_api__select_align_atom_by_ray_impl(
         },
     )
 }
+fn wire__crate__api__structure_designer_api__select_atom_by_ray_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "select_atom_by_ray",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ray_start =
+                <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_ray_dir =
+                <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_select_modifier =
+                <crate::api::common_api_types::SelectModifier>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::structure_designer_api::select_atom_by_ray(
+                        api_ray_start,
+                        api_ray_dir,
+                        api_select_modifier,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__scene_composer_api__select_atom_info_atom_by_ray_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1477,9 +1547,7 @@ fn wire__crate__api__scene_composer_api__select_cluster_by_id_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_cluster_id = <u64>::sse_decode(&mut deserializer);
             let api_select_modifier =
-                <crate::api::scene_composer_api_types::SelectModifier>::sse_decode(
-                    &mut deserializer,
-                );
+                <crate::api::common_api_types::SelectModifier>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
@@ -1519,9 +1587,7 @@ fn wire__crate__api__scene_composer_api__select_cluster_by_ray_impl(
             let api_ray_dir =
                 <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
             let api_select_modifier =
-                <crate::api::scene_composer_api_types::SelectModifier>::sse_decode(
-                    &mut deserializer,
-                );
+                <crate::api::common_api_types::SelectModifier>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok =
@@ -2787,14 +2853,14 @@ impl SseDecode for crate::api::scene_composer_api_types::SceneComposerView {
     }
 }
 
-impl SseDecode for crate::api::scene_composer_api_types::SelectModifier {
+impl SseDecode for crate::api::common_api_types::SelectModifier {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
-            0 => crate::api::scene_composer_api_types::SelectModifier::Replace,
-            1 => crate::api::scene_composer_api_types::SelectModifier::Toggle,
-            2 => crate::api::scene_composer_api_types::SelectModifier::Expand,
+            0 => crate::api::common_api_types::SelectModifier::Replace,
+            1 => crate::api::common_api_types::SelectModifier::Toggle,
+            2 => crate::api::common_api_types::SelectModifier::Expand,
             _ => unreachable!("Invalid variant for SelectModifier: {}", inner),
         };
     }
@@ -2859,7 +2925,7 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         29 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        62 => {
+        64 => {
             wire__crate__api__common_api__set_viewport_size_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -2970,144 +3036,154 @@ fn pde_ffi_dispatcher_sync_impl(
         ),
         27 => wire__crate__api__common_api__greet_impl(ptr, rust_vec_len, data_len),
         28 => wire__crate__api__scene_composer_api__import_xyz_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__scene_composer_api__is_frame_locked_to_atoms_impl(
+        30 => wire__crate__api__structure_designer_api__is_edit_atom_active_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__structure_designer_api__load_node_networks_impl(
+        31 => wire__crate__api__scene_composer_api__is_frame_locked_to_atoms_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__common_api__move_camera_impl(ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__structure_designer_api__move_node_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__common_api__provide_texture_impl(ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__structure_designer_api__rename_node_network_impl(
+        32 => wire__crate__api__structure_designer_api__load_node_networks_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__scene_composer_api__rotate_around_local_axis_impl(
+        33 => wire__crate__api__common_api__move_camera_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__structure_designer_api__move_node_impl(ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__common_api__provide_texture_impl(ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__structure_designer_api__rename_node_network_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__structure_designer_api__save_node_networks_impl(
+        37 => wire__crate__api__scene_composer_api__rotate_around_local_axis_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__scene_composer_api__scene_composer_new_model_impl(
+        38 => wire__crate__api__structure_designer_api__save_node_networks_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__scene_composer_api__scene_composer_redo_impl(
+        39 => wire__crate__api__scene_composer_api__scene_composer_new_model_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__scene_composer_api__scene_composer_rename_cluster_impl(
+        40 => wire__crate__api__scene_composer_api__scene_composer_redo_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__scene_composer_api__scene_composer_undo_impl(
+        41 => wire__crate__api__scene_composer_api__scene_composer_rename_cluster_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__scene_composer_api__select_align_atom_by_ray_impl(
+        42 => wire__crate__api__scene_composer_api__scene_composer_undo_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__scene_composer_api__select_atom_info_atom_by_ray_impl(
+        43 => wire__crate__api__scene_composer_api__select_align_atom_by_ray_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__scene_composer_api__select_cluster_by_id_impl(
+        44 => wire__crate__api__structure_designer_api__select_atom_by_ray_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__scene_composer_api__select_cluster_by_ray_impl(
+        45 => wire__crate__api__scene_composer_api__select_atom_info_atom_by_ray_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__scene_composer_api__select_distance_atom_by_ray_impl(
+        46 => wire__crate__api__scene_composer_api__select_cluster_by_id_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => {
+        47 => wire__crate__api__scene_composer_api__select_cluster_by_ray_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        48 => wire__crate__api__scene_composer_api__select_distance_atom_by_ray_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        49 => {
             wire__crate__api__structure_designer_api__select_node_impl(ptr, rust_vec_len, data_len)
         }
-        48 => {
+        50 => {
             wire__crate__api__structure_designer_api__select_wire_impl(ptr, rust_vec_len, data_len)
         }
-        49 => wire__crate__api__common_api__set_active_editor_impl(ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__structure_designer_api__set_active_node_network_impl(
+        51 => wire__crate__api__common_api__set_active_editor_impl(ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__structure_designer_api__set_active_node_network_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__crate__api__scene_composer_api__set_active_scene_composer_tool_impl(
+        53 => wire__crate__api__scene_composer_api__set_active_scene_composer_tool_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__structure_designer_api__set_atom_trans_data_impl(
+        54 => wire__crate__api__structure_designer_api__set_atom_trans_data_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__structure_designer_api__set_cuboid_data_impl(
+        55 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__structure_designer_api__set_cuboid_data_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__scene_composer_api__set_frame_locked_to_atoms_impl(
+        57 => wire__crate__api__scene_composer_api__set_frame_locked_to_atoms_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__structure_designer_api__set_geo_trans_data_impl(
+        58 => wire__crate__api__structure_designer_api__set_geo_trans_data_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__api__structure_designer_api__set_half_space_data_impl(
+        59 => wire__crate__api__structure_designer_api__set_half_space_data_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__structure_designer_api__set_node_display_impl(
+        60 => wire__crate__api__structure_designer_api__set_node_display_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__structure_designer_api__set_return_node_id_impl(
+        61 => wire__crate__api__structure_designer_api__set_return_node_id_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(
+        62 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__structure_designer_api__set_sphere_data_impl(
+        63 => wire__crate__api__structure_designer_api__set_sphere_data_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(
+        65 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(
             ptr,
             rust_vec_len,
             data_len,
@@ -3526,7 +3602,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::scene_composer_api_types::Sce
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::scene_composer_api_types::SelectModifier {
+impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::SelectModifier {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::Replace => 0.into_dart(),
@@ -3537,13 +3613,13 @@ impl flutter_rust_bridge::IntoDart for crate::api::scene_composer_api_types::Sel
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::scene_composer_api_types::SelectModifier
+    for crate::api::common_api_types::SelectModifier
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::scene_composer_api_types::SelectModifier>
-    for crate::api::scene_composer_api_types::SelectModifier
+impl flutter_rust_bridge::IntoIntoDart<crate::api::common_api_types::SelectModifier>
+    for crate::api::common_api_types::SelectModifier
 {
-    fn into_into_dart(self) -> crate::api::scene_composer_api_types::SelectModifier {
+    fn into_into_dart(self) -> crate::api::common_api_types::SelectModifier {
         self
     }
 }
@@ -4040,14 +4116,14 @@ impl SseEncode for crate::api::scene_composer_api_types::SceneComposerView {
     }
 }
 
-impl SseEncode for crate::api::scene_composer_api_types::SelectModifier {
+impl SseEncode for crate::api::common_api_types::SelectModifier {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(
             match self {
-                crate::api::scene_composer_api_types::SelectModifier::Replace => 0,
-                crate::api::scene_composer_api_types::SelectModifier::Toggle => 1,
-                crate::api::scene_composer_api_types::SelectModifier::Expand => 2,
+                crate::api::common_api_types::SelectModifier::Replace => 0,
+                crate::api::common_api_types::SelectModifier::Toggle => 1,
+                crate::api::common_api_types::SelectModifier::Expand => 2,
                 _ => {
                     unimplemented!("");
                 }

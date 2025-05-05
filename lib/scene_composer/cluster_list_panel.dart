@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/scene_composer/scene_composer_model.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/scene_composer_api_types.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 

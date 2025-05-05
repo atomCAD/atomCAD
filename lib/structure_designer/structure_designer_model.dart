@@ -3,6 +3,8 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer_api.dart'
     as structure_designer_api;
+import 'package:vector_math/vector_math.dart' as vector_math;
+import 'package:flutter_cad/common/api_utils.dart';
 
 class PinReference {
   BigInt nodeId;
@@ -47,6 +49,20 @@ class StructureDesignerModel extends ChangeNotifier {
   void init() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+  }
+
+  bool isEditAtomActive() {
+    return structure_designer_api.isEditAtomActive();
+  }
+
+  void selectAtomByRay(vector_math.Vector3 rayStart, vector_math.Vector3 rayDir,
+      SelectModifier selectModifier) {
+    structure_designer_api.selectAtomByRay(
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+      selectModifier: selectModifier,
+    );
+    refreshFromKernel();
   }
 
   void saveNodeNetworks(String filePath) {

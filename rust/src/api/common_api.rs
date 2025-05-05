@@ -17,6 +17,7 @@ use crate::api::api_common::refresh_renderer;
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
 use crate::api::common_api_types::APITransform;
+use crate::api::api_common::refresh_structure_designer;
 
 const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
@@ -87,8 +88,7 @@ async fn initialize_cad_instance_async() {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       cad_instance.renderer.refresh_background();
       add_sample_network(&mut cad_instance.structure_designer);
-      let scene = cad_instance.structure_designer.generate_scene(false);
-      cad_instance.renderer.refresh(&scene, false);
+      refresh_structure_designer(cad_instance, false);
     }
   }
 }

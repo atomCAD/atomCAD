@@ -61,6 +61,16 @@ bool selectWire(
         destinationNodeId: destinationNodeId,
         destinationArgumentIndex: destinationArgumentIndex);
 
+bool isEditAtomActive() =>
+    RustLib.instance.api.crateApiStructureDesignerApiIsEditAtomActive();
+
+BigInt? selectAtomByRay(
+        {required APIVec3 rayStart,
+        required APIVec3 rayDir,
+        required SelectModifier selectModifier}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiSelectAtomByRay(
+        rayStart: rayStart, rayDir: rayDir, selectModifier: selectModifier);
+
 void clearSelection() =>
     RustLib.instance.api.crateApiStructureDesignerApiClearSelection();
 
