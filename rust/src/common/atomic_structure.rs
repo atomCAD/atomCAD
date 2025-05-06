@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::util::hit_test_utils;
 use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
+use crate::renderer::tessellator::atomic_tessellator::BAS_STICK_RADIUS;
 use crate::api::common_api_types::SelectModifier;
 use std::hash::{Hash, Hasher};
 use serde::{Serialize, Deserialize};
@@ -14,6 +15,17 @@ use serde::{Serialize, Deserialize};
 // or in a neighbouring cell most of the time. This is important for performance reasons.
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
 
+/// Represents the result of a hit test against an atomic structure
+#[derive(Debug, Clone, PartialEq)]
+pub enum HitTestResult {
+    /// An atom was hit, containing the atom's ID and the distance to the hit point
+    Atom(u64, f64),
+    /// A bond was hit, containing the bond's ID and the distance to the hit point
+    Bond(u64, f64),
+    /// Nothing was hit
+    None,
+}
+
 fn apply_select_modifier(in_selected: bool, select_modifier: &SelectModifier) -> bool {
   match select_modifier {
     SelectModifier::Replace => true,
@@ -21,8 +33,6 @@ fn apply_select_modifier(in_selected: bool, select_modifier: &SelectModifier) ->
     SelectModifier::Toggle => !in_selected,
   }
 }
-
-  
 
 // A reference to a bond, used for commands
 #[derive(Clone,Debug, Serialize, Deserialize)]
@@ -137,6 +147,16 @@ impl AtomicStructure {
 
   pub fn get_bond(&self, bond_id: u64) -> Option<&Bond> {
     self.bonds.get(&bond_id)
+  }
+  
+  /// Creates a BondReference from a bond ID
+  ///
+  /// Returns None if the bond ID doesn't exist
+  pub fn get_bond_reference_by_id(&self, bond_id: u64) -> Option<BondReference> {
+    self.get_bond(bond_id).map(|bond| BondReference {
+      atom_id1: bond.atom_id1,
+      atom_id2: bond.atom_id2,
+    })
   }
 
   // Helper method to get a bond ID from a BondReference
@@ -458,17 +478,46 @@ impl AtomicStructure {
     }
   }
 
-  pub fn hit_test(&self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
+  /// Tests if a ray hits any atom or bond in the structure
+  /// 
+  /// Returns the closest hit with its distance, or HitTestResult::None if nothing was hit
+  pub fn hit_test(&self, ray_start: &DVec3, ray_dir: &DVec3) -> HitTestResult {
+    let mut closest_hit: Option<(HitTestResult, f64)> = None;
+
+    // Check atoms
     for atom in self.atoms.values() {
-      if let Some(_distance) = hit_test_utils::sphere_hit_test(
+      if let Some(distance) = hit_test_utils::sphere_hit_test(
           &atom.position, 
           get_displayed_atom_radius(atom), 
           ray_start, 
           ray_dir) {
-        return Some(atom.id);
+        // If this hit is closer than our current closest, replace it
+        if closest_hit.is_none() || distance < closest_hit.as_ref().unwrap().1 {
+          closest_hit = Some((HitTestResult::Atom(atom.id, distance), distance));
+        }
       }
     }
-    None
+    
+    // Check bonds
+    for bond in self.bonds.values() {
+      if let Some(distance) = hit_test_utils::cylinder_hit_test(
+          &self.get_atom(bond.atom_id1).unwrap().position,
+          &self.get_atom(bond.atom_id2).unwrap().position,
+          BAS_STICK_RADIUS,
+          ray_start,
+          ray_dir) {
+        // If this hit is closer than our current closest, replace it
+        if closest_hit.is_none() || distance < closest_hit.as_ref().unwrap().1 {
+          closest_hit = Some((HitTestResult::Bond(bond.id, distance), distance));
+        }
+      }
+    }
+    
+    // Return the closest hit or None if nothing was hit
+    match closest_hit {
+      Some((hit_result, _)) => hit_result,
+      None => HitTestResult::None,
+    }
   }
 
   pub fn find_pivot_point(&self, ray_start: &DVec3, ray_dir: &DVec3) -> DVec3 {

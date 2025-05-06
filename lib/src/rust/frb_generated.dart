@@ -73,7 +73,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => 1464404471;
+  int get rustContentHash => 2055161022;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -193,13 +193,13 @@ abstract class RustLibApi extends BaseApi {
   BigInt? crateApiSceneComposerApiSelectAlignAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  BigInt? crateApiStructureDesignerApiSelectAtomByRay(
+  BigInt? crateApiSceneComposerApiSelectAtomInfoAtomByRay(
+      {required APIVec3 rayStart, required APIVec3 rayDir});
+
+  bool crateApiStructureDesignerApiSelectAtomOrBondByRay(
       {required APIVec3 rayStart,
       required APIVec3 rayDir,
       required SelectModifier selectModifier});
-
-  BigInt? crateApiSceneComposerApiSelectAtomInfoAtomByRay(
-      {required APIVec3 rayStart, required APIVec3 rayDir});
 
   void crateApiSceneComposerApiSelectClusterById(
       {required BigInt clusterId, required SelectModifier selectModifier});
@@ -1327,35 +1327,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  BigInt? crateApiStructureDesignerApiSelectAtomByRay(
-      {required APIVec3 rayStart,
-      required APIVec3 rayDir,
-      required SelectModifier selectModifier}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_box_autoadd_api_vec_3(rayStart, serializer);
-        sse_encode_box_autoadd_api_vec_3(rayDir, serializer);
-        sse_encode_select_modifier(selectModifier, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44)!;
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_opt_box_autoadd_u_64,
-        decodeErrorData: null,
-      ),
-      constMeta: kCrateApiStructureDesignerApiSelectAtomByRayConstMeta,
-      argValues: [rayStart, rayDir, selectModifier],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiStructureDesignerApiSelectAtomByRayConstMeta =>
-      const TaskConstMeta(
-        debugName: "select_atom_by_ray",
-        argNames: ["rayStart", "rayDir", "selectModifier"],
-      );
-
-  @override
   BigInt? crateApiSceneComposerApiSelectAtomInfoAtomByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir}) {
     return handler.executeSync(SyncTask(
@@ -1363,7 +1334,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_vec_3(rayStart, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDir, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 45)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_box_autoadd_u_64,
@@ -1380,6 +1351,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "select_atom_info_atom_by_ray",
         argNames: ["rayStart", "rayDir"],
       );
+
+  @override
+  bool crateApiStructureDesignerApiSelectAtomOrBondByRay(
+      {required APIVec3 rayStart,
+      required APIVec3 rayDir,
+      required SelectModifier selectModifier}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_box_autoadd_api_vec_3(rayStart, serializer);
+        sse_encode_box_autoadd_api_vec_3(rayDir, serializer);
+        sse_encode_select_modifier(selectModifier, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 45)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiStructureDesignerApiSelectAtomOrBondByRayConstMeta,
+      argValues: [rayStart, rayDir, selectModifier],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerApiSelectAtomOrBondByRayConstMeta =>
+          const TaskConstMeta(
+            debugName: "select_atom_or_bond_by_ray",
+            argNames: ["rayStart", "rayDir", "selectModifier"],
+          );
 
   @override
   void crateApiSceneComposerApiSelectClusterById(

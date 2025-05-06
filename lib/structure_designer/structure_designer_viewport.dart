@@ -23,7 +23,7 @@ class _StructureDesignerViewportState
     if (widget.graphModel.isEditAtomActive()) {
       final ray = getRayFromPointerPos(pointerPos);
       final selectModifier = getSelectModifierFromKeyboard();
-      widget.graphModel.selectAtomByRay(
+      widget.graphModel.selectAtomOrBondByRay(
         ray.start,
         ray.direction,
         selectModifier,

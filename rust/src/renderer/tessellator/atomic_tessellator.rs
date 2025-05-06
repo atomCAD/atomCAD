@@ -19,7 +19,7 @@ pub struct AtomicTessellatorParams {
 const BAS_ATOM_RADIUS_FACTOR: f64 = 0.5;
 
 // radius of a bond cylinder (stick) in the 'balls and sticks' view
-const BAS_STICK_RADIUS: f64 = 0.1; 
+pub const BAS_STICK_RADIUS: f64 = 0.1; 
 
 // color for marked atoms (bright yellow)
 const MARKED_ATOM_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
@@ -69,7 +69,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
 }
 
 fn to_selected_color(color: &Vec3) -> Vec3 {
-  color * 0.7
+  color * 0.5
 }
 
 pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
@@ -82,13 +82,24 @@ pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   let cluster_selected1 = model.get_cluster(cluster_id1).is_some() && model.get_cluster(cluster_id1).unwrap().selected;
   let cluster_selected2 = model.get_cluster(cluster_id2).is_some() && model.get_cluster(cluster_id2).unwrap().selected;
 
+  let selected = bond.selected || cluster_selected1 || cluster_selected2;
+
+  let color = if selected {
+    to_selected_color(&Vec3::new(0.8, 0.8, 0.8))
+  } else {
+    Vec3::new(0.8, 0.8, 0.8)
+  };
+
   tessellator::tessellate_cylinder(
     if cluster_selected1 && cluster_selected2 { selected_clusters_mesh } else { output_mesh },
     &atom_pos2,
     &atom_pos1,
     BAS_STICK_RADIUS,
     params.cylinder_divisions,
-    &Material::new(&Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8),
+    &Material::new(
+      &color, 
+      if selected { 0.2 } else { 0.8 }, 
+      0.0),
     false,
   );
 }

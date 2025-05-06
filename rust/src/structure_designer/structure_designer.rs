@@ -14,7 +14,8 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::api::common_api_types::SelectModifier;
-use std::any::Any;
+use crate::common::atomic_structure::BondReference;
+use crate::common::atomic_structure::HitTestResult;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -78,57 +79,70 @@ impl StructureDesigner {
     return scene;
   }
 
-  // Returns the atom id of the atom that was selected or deselected, or None if no atom was hit
-  pub fn select_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3, select_modifier: SelectModifier) -> Option<u64> {
+  // Returns whether an atom or a bond was hit or not.
+  pub fn select_atom_or_bond_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3, select_modifier: SelectModifier) -> bool {
     let atomic_structure = self.get_atomic_structure_from_selected_node();
     if atomic_structure.is_none() {
-      return None;
+      return false;
     }
     let atomic_structure = atomic_structure.unwrap();
-    let selected_atom_id = atomic_structure.hit_test(ray_start, ray_dir)?; 
-    self.select_atom_by_id(selected_atom_id, select_modifier);
-    Some(selected_atom_id)
+    
+    // Use the unified hit_test function instead of separate atom and bond tests
+    match atomic_structure.hit_test(ray_start, ray_dir) {
+      HitTestResult::Atom(atom_id, _distance) => {
+        self.select_atom_by_id(atom_id, select_modifier);
+        true
+      },
+      HitTestResult::Bond(bond_id, _distance) => {
+        // Get a proper bond reference from the bond ID
+        if let Some(bond_reference) = atomic_structure.get_bond_reference_by_id(bond_id) {
+          self.select_bond_by_reference(&bond_reference, select_modifier);
+          true
+        } else {
+          // Bond ID was valid during hit test but no longer exists
+          false
+        }
+      },
+      HitTestResult::None => false
+    }
+  }
+
+  /// Gets the EditAtomData for the currently active edit_atom node
+  /// 
+  /// Returns None if:
+  /// - There is no active node network
+  /// - No node is selected in the active network
+  /// - The selected node is not an edit_atom node
+  /// - The EditAtomData cannot be retrieved or cast
+  pub fn get_active_edit_atom_data_mut(&mut self) -> Option<&mut EditAtomData> {
+    // Get active node network name
+    let network_name = self.active_node_network_name.as_ref()?;
+    
+    // Get the active node network
+    let network = self.node_type_registry.node_networks.get_mut(network_name)?;
+    
+    // Get the selected node ID
+    let selected_node_id = network.selected_node_id?;
+    
+    // Get the selected node's type name
+    let node_type_name = network.nodes.get(&selected_node_id)?.node_type_name.as_str();
+    
+    // Check if the node is an edit_atom node
+    if node_type_name != "edit_atom" {
+      return None;
+    }
+    
+    // Get the node data and cast it to EditAtomData
+    let node_data = network.get_node_network_data_mut(selected_node_id)?;
+    
+    // Try to downcast to EditAtomData
+    node_data.as_any_mut().downcast_mut::<EditAtomData>()
   }
 
   // Selects an atom by its ID using the active edit_atom node
   pub fn select_atom_by_id(&mut self, atom_id: u64, select_modifier: SelectModifier) {
-    // Early return if active_node_network_name is None
-    let network_name = match &self.active_node_network_name {
-      Some(name) => name,
-      None => return,
-    };
-    
-    // Get the active node network
-    let network = match self.node_type_registry.node_networks.get_mut(network_name) {
-      Some(network) => network,
-      None => return,
-    };
-    
-    // Get the selected node ID
-    let selected_node_id = match network.selected_node_id {
-      Some(id) => id,
-      None => return,
-    };
-    
-    // Get the selected node's type name
-    let node_type_name = match network.nodes.get(&selected_node_id) {
-      Some(node) => &node.node_type_name,
-      None => return,
-    };
-    
-    // Check if the node is an edit_atom node
-    if node_type_name != "edit_atom" {
-      return;
-    }
-    
-    // Get the node data and cast it to EditAtomData
-    let node_data = match network.get_node_network_data_mut(selected_node_id) {
-      Some(data) => data,
-      None => return,
-    };
-    
-    // Try to downcast to EditAtomData
-    let edit_atom_data = match node_data.as_any_mut().downcast_mut::<EditAtomData>() {
+    // Get the EditAtomData from the active edit_atom node
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
       Some(data) => data,
       None => return,
     };
@@ -141,6 +155,22 @@ impl StructureDesigner {
     ));
     
     // Add the command to the edit_atom_data
+    edit_atom_data.add_command(select_command);
+  }
+
+  // Selects a bond by its ID using the active edit_atom node
+  pub fn select_bond_by_reference(&mut self, bond_reference: &BondReference, select_modifier: SelectModifier) {
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+
+    let select_command = Box::new(SelectCommand::new(
+      vec![],
+      vec![bond_reference.clone()],
+      select_modifier
+    ));
+    
     edit_atom_data.add_command(select_command);
   }
 

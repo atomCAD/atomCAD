@@ -55,9 +55,9 @@ class StructureDesignerModel extends ChangeNotifier {
     return structure_designer_api.isEditAtomActive();
   }
 
-  void selectAtomByRay(vector_math.Vector3 rayStart, vector_math.Vector3 rayDir,
-      SelectModifier selectModifier) {
-    structure_designer_api.selectAtomByRay(
+  void selectAtomOrBondByRay(vector_math.Vector3 rayStart,
+      vector_math.Vector3 rayDir, SelectModifier selectModifier) {
+    structure_designer_api.selectAtomOrBondByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
       selectModifier: selectModifier,

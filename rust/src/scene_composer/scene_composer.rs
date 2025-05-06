@@ -1,5 +1,5 @@
 use crate::common::atomic_structure::AtomicStructure;
-use crate::common::atomic_structure::Cluster;
+use crate::common::atomic_structure::HitTestResult;
 use crate::common::gadget::Gadget;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::renderer::tessellator::tessellator::Tessellatable;
@@ -105,11 +105,16 @@ impl SceneComposer {
 
   // Returns the cluster id of the cluster that was selected or deselected, or None if no cluster was hit
   pub fn select_cluster_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3, select_modifier: SelectModifier) -> Option<u64> {
-    let selected_atom_id = self.model.model.hit_test(ray_start, ray_dir)?; 
-    let atom = self.model.model.get_atom(selected_atom_id)?;
-    let cluster_id = atom.cluster_id;
-    self.select_cluster_by_id(atom.cluster_id, select_modifier);
-    Some(cluster_id)
+    // Use the new hit_test method but only process atom hits
+    match self.model.model.hit_test(ray_start, ray_dir) {
+      HitTestResult::Atom(atom_id, _distance) => {
+        let atom = self.model.model.get_atom(atom_id)?;
+        let cluster_id = atom.cluster_id;
+        self.select_cluster_by_id(cluster_id, select_modifier);
+        Some(cluster_id)
+      },
+      _ => None // Ignore bond hits or no hits
+    }
   }
 
   pub fn get_available_tools(&self) -> Vec<APISceneComposerTool> {
@@ -153,12 +158,15 @@ impl SceneComposer {
   
   // Returns the atom id that was selected for alignment, or None if no atom was hit
   pub fn select_align_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
-    // Find the atom along the ray
-    let selected_atom_id = self.model.model.hit_test(ray_start, ray_dir)?;
+    // Find the atom along the ray, ignoring bond hits
+    let atom_id = match self.model.model.hit_test(ray_start, ray_dir) {
+      HitTestResult::Atom(id, _) => id,
+      _ => return None // Return early if not an atom hit
+    };
     
     // Try to select this atom for alignment
-    if self.select_align_atom_by_id(selected_atom_id) {
-      Some(selected_atom_id)
+    if self.select_align_atom_by_id(atom_id) {
+      Some(atom_id)
     } else {
       None
     }
@@ -182,11 +190,15 @@ impl SceneComposer {
 
   // Returns the atom id that was selected for alignment, or None if no atom was hit
   pub fn select_atom_info_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
-    let selected_atom_id = self.model.model.hit_test(ray_start, ray_dir)?;
+    // Find the atom along the ray, ignoring bond hits
+    let atom_id = match self.model.model.hit_test(ray_start, ray_dir) {
+      HitTestResult::Atom(id, _) => id,
+      _ => return None // Return early if not an atom hit
+    };
     
-    // Try to select this atom for alignment
-    if self.select_atom_info_atom_by_id(selected_atom_id) {
-      Some(selected_atom_id)
+    // Try to select this atom for info display
+    if self.select_atom_info_atom_by_id(atom_id) {
+      Some(atom_id)
     } else {
       None
     }
@@ -227,12 +239,15 @@ impl SceneComposer {
   
   // Returns the atom id that was selected for distance, or None if no atom was hit
   pub fn select_distance_atom_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<u64> {
-    // Find the atom along the ray
-    let selected_atom_id = self.model.model.hit_test(ray_start, ray_dir)?;
+    // Find the atom along the ray, ignoring bond hits
+    let atom_id = match self.model.model.hit_test(ray_start, ray_dir) {
+      HitTestResult::Atom(id, _) => id,
+      _ => return None // Return early if not an atom hit
+    };
     
     // Try to select this atom for distance
-    if self.select_distance_atom_by_id(selected_atom_id) {
-      Some(selected_atom_id)
+    if self.select_distance_atom_by_id(atom_id) {
+      Some(atom_id)
     } else {
       None
     }

@@ -211,16 +211,16 @@ pub fn is_edit_atom_active() -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_atom_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> Option<u64> {
+pub fn select_atom_or_bond_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let ray_start_vec3 = from_api_vec3(&ray_start);
       let ray_dir_vec3 = from_api_vec3(&ray_dir);
-      let result = instance.structure_designer.select_atom_by_ray(&ray_start_vec3, &ray_dir_vec3, select_modifier);
+      let result = instance.structure_designer.select_atom_or_bond_by_ray(&ray_start_vec3, &ray_dir_vec3, select_modifier);
       refresh_renderer(instance, false);
       return result;
     }
-    None
+    false
   }
 }
 
