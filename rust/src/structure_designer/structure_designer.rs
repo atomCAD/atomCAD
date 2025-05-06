@@ -108,19 +108,18 @@ impl StructureDesigner {
     }
   }
 
-  /// Gets the EditAtomData for the currently active edit_atom node
+  /// Helper method to get the selected node ID of an edit_atom node
   /// 
   /// Returns None if:
   /// - There is no active node network
   /// - No node is selected in the active network
   /// - The selected node is not an edit_atom node
-  /// - The EditAtomData cannot be retrieved or cast
-  pub fn get_active_edit_atom_data_mut(&mut self) -> Option<&mut EditAtomData> {
+  fn get_active_edit_atom_node_id(&self) -> Option<u64> {
     // Get active node network name
     let network_name = self.active_node_network_name.as_ref()?;
     
     // Get the active node network
-    let network = self.node_type_registry.node_networks.get_mut(network_name)?;
+    let network = self.node_type_registry.node_networks.get(network_name)?;
     
     // Get the selected node ID
     let selected_node_id = network.selected_node_id?;
@@ -133,8 +132,38 @@ impl StructureDesigner {
       return None;
     }
     
+    Some(selected_node_id)
+  }
+
+  /// Gets the EditAtomData for the currently active edit_atom node (immutable)
+  /// 
+  /// Returns None if:
+  /// - There is no active node network
+  /// - No node is selected in the active network
+  /// - The selected node is not an edit_atom node
+  /// - The EditAtomData cannot be retrieved or cast
+  pub fn get_active_edit_atom_data(&self) -> Option<&EditAtomData> {
+    let selected_node_id = self.get_active_edit_atom_node_id()?;
+    
     // Get the node data and cast it to EditAtomData
-    let node_data = network.get_node_network_data_mut(selected_node_id)?;
+    let node_data = self.get_node_network_data(selected_node_id)?;
+    
+    // Try to downcast to EditAtomData
+    node_data.as_any_ref().downcast_ref::<EditAtomData>()
+  }
+
+  /// Gets the EditAtomData for the currently active edit_atom node (mutable)
+  /// 
+  /// Returns None if:
+  /// - There is no active node network
+  /// - No node is selected in the active network
+  /// - The selected node is not an edit_atom node
+  /// - The EditAtomData cannot be retrieved or cast
+  pub fn get_active_edit_atom_data_mut(&mut self) -> Option<&mut EditAtomData> {
+    let selected_node_id = self.get_active_edit_atom_node_id()?;
+    
+    // Get the node data and cast it to EditAtomData
+    let node_data = self.get_node_network_data_mut(selected_node_id)?;
     
     // Try to downcast to EditAtomData
     node_data.as_any_mut().downcast_mut::<EditAtomData>()

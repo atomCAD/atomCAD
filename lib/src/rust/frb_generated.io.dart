@@ -42,6 +42,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICuboidData dco_decode_api_cuboid_data(dynamic raw);
 
   @protected
+  APIEditAtomTool dco_decode_api_edit_atom_tool(dynamic raw);
+
+  @protected
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
 
   @protected
@@ -79,6 +82,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw);
+
+  @protected
+  APIEditAtomTool dco_decode_box_autoadd_api_edit_atom_tool(dynamic raw);
 
   @protected
   APIGeoTransData dco_decode_box_autoadd_api_geo_trans_data(dynamic raw);
@@ -166,6 +172,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw);
 
   @protected
+  APIEditAtomTool? dco_decode_opt_box_autoadd_api_edit_atom_tool(dynamic raw);
+
+  @protected
   APIGeoTransData? dco_decode_opt_box_autoadd_api_geo_trans_data(dynamic raw);
 
   @protected
@@ -243,6 +252,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer);
 
   @protected
+  APIEditAtomTool sse_decode_api_edit_atom_tool(SseDeserializer deserializer);
+
+  @protected
   APIGeoTransData sse_decode_api_geo_trans_data(SseDeserializer deserializer);
 
   @protected
@@ -282,6 +294,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICuboidData sse_decode_box_autoadd_api_cuboid_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIEditAtomTool sse_decode_box_autoadd_api_edit_atom_tool(
       SseDeserializer deserializer);
 
   @protected
@@ -381,6 +397,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIEditAtomTool? sse_decode_opt_box_autoadd_api_edit_atom_tool(
+      SseDeserializer deserializer);
+
+  @protected
   APIGeoTransData? sse_decode_opt_box_autoadd_api_geo_trans_data(
       SseDeserializer deserializer);
 
@@ -466,6 +486,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_cuboid_data(APICuboidData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_edit_atom_tool(
+      APIEditAtomTool self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_geo_trans_data(
       APIGeoTransData self, SseSerializer serializer);
 
@@ -509,6 +533,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_cuboid_data(
       APICuboidData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_edit_atom_tool(
+      APIEditAtomTool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_geo_trans_data(
@@ -609,6 +637,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_cuboid_data(
       APICuboidData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_edit_atom_tool(
+      APIEditAtomTool? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_geo_trans_data(

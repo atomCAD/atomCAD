@@ -128,3 +128,10 @@ bool saveNodeNetworks({required String filePath}) => RustLib.instance.api
 
 bool loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerApiLoadNodeNetworks(filePath: filePath);
+
+APIEditAtomTool? getActiveEditAtomTool() =>
+    RustLib.instance.api.crateApiStructureDesignerApiGetActiveEditAtomTool();
+
+bool setActiveEditAtomTool({required APIEditAtomTool tool}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerApiSetActiveEditAtomTool(tool: tool);

@@ -4,6 +4,13 @@ use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APIVec3;
 use std::collections::HashMap;
 
+#[derive(Clone)]
+pub enum APIEditAtomTool {
+  Default,
+  AddAtom,
+  AddBond,
+}
+
 pub struct InputPinView {
     pub name: String,
     pub data_type: String,

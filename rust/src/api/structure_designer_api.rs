@@ -12,6 +12,8 @@ use crate::api::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer_api_types::APIHalfSpaceData;
 use crate::api::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer_api_types::APIAtomTransData;
+use crate::api::structure_designer_api_types::APIEditAtomTool;
+use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::sphere_data::SphereData;
@@ -225,7 +227,7 @@ pub fn select_atom_or_bond_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_m
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn delete_Selected_atoms_and_bonds() {
+pub fn delete_selected_atoms_and_bonds() {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       instance.structure_designer.delete_selected_atoms_and_bonds();
@@ -436,5 +438,31 @@ pub fn load_node_networks(file_path: String) -> bool {
     } else {
       false
     }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_active_edit_atom_tool() -> Option<APIEditAtomTool> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    
+    // Get the edit atom data and return its active tool
+    let edit_atom_data = cad_instance.structure_designer.get_active_edit_atom_data()?;
+    Some(edit_atom_data.get_active_tool())
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_edit_atom_tool(tool: APIEditAtomTool) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      // Get the edit atom data and set its active tool
+      if let Some(edit_atom_data) = instance.structure_designer.get_active_edit_atom_data_mut() {
+        edit_atom_data.set_active_tool(tool);
+        refresh_renderer(instance, false);
+        return true;
+      }
+    }
+    false
   }
 }

@@ -2,10 +2,30 @@ use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
+use crate::api::structure_designer_api_types::APIEditAtomTool;
+
+pub struct DefaultToolState {
+  pub replacement_atomic_number: i32,
+}
+
+pub struct AddAtomToolState {
+  pub atomic_number: i32,
+}
+
+pub struct AddBondToolState {
+  pub last_atom_id: Option<u64>,
+}
+
+pub enum EditAtomTool {
+  Default(DefaultToolState),
+  AddAtom(AddAtomToolState),
+  AddBond(AddBondToolState),
+}
 
 pub struct EditAtomData {
     pub history: Vec<Box<dyn EditAtomCommand>>,
     pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
+    pub active_tool: EditAtomTool,
 }
 
 impl EditAtomData {
@@ -13,6 +33,9 @@ impl EditAtomData {
         Self {
             history: Vec::new(),
             next_history_index: 0,
+            active_tool: EditAtomTool::Default(DefaultToolState {
+                replacement_atomic_number: 6, // Default to carbon
+            }),
         }
     }
 
@@ -51,7 +74,37 @@ impl EditAtomData {
       self.next_history_index += 1;
       return true;
     }
+    
+    pub fn set_active_tool(&mut self, api_tool: APIEditAtomTool) {
+        self.active_tool = match api_tool {
+            APIEditAtomTool::Default => {
+                EditAtomTool::Default(DefaultToolState {
+                    replacement_atomic_number: 6, // Default to carbon
+                })
+            },
+            APIEditAtomTool::AddAtom => {
+                EditAtomTool::AddAtom(AddAtomToolState {
+                    atomic_number: 6, // Default to carbon
+                })
+            },
+            APIEditAtomTool::AddBond => {
+                EditAtomTool::AddBond(AddBondToolState {
+                    last_atom_id: None,
+                })
+            },
+        }
+    }
+
+    pub fn get_active_tool(&self) -> APIEditAtomTool {
+        match &self.active_tool {
+            EditAtomTool::Default(_) => APIEditAtomTool::Default,
+            EditAtomTool::AddAtom(_) => APIEditAtomTool::AddAtom,
+            EditAtomTool::AddBond(_) => APIEditAtomTool::AddBond,
+        }
+    }
 }
+
+
 
 impl NodeData for EditAtomData {
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {

@@ -6,6 +6,8 @@ use std::io;
 use crate::structure_designer::edit_atom_command::EditAtomCommand;
 use serde_json;
 use crate::common::atomic_structure::AtomicStructure;
+use crate::structure_designer::node_data::edit_atom_data::EditAtomTool;
+use crate::structure_designer::node_data::edit_atom_data::DefaultToolState;
 
 /// Serializable representation of an EditAtomCommand, which uses type tagging
 #[derive(Serialize, Deserialize)]
@@ -79,5 +81,8 @@ pub fn serializable_to_edit_atom_data(serializable: &SerializableEditAtomData) -
     Ok(EditAtomData {
         history: commands,
         next_history_index: serializable.next_history_index,
+        active_tool: EditAtomTool::Default(DefaultToolState {
+            replacement_atomic_number: 6,
+        }),
     })
 }
