@@ -9,6 +9,7 @@ use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::node_data::no_data::NoData;
 use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::structure_designer::edit_atom_commands::select_command::SelectCommand;
+use crate::structure_designer::edit_atom_commands::delete_command::DeleteCommand;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
@@ -156,6 +157,17 @@ impl StructureDesigner {
     
     // Add the command to the edit_atom_data
     edit_atom_data.add_command(select_command);
+  }
+
+  pub fn delete_selected_atoms_and_bonds(&mut self) {
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+    
+    let delete_command = Box::new(DeleteCommand::new());
+    
+    edit_atom_data.add_command(delete_command);
   }
 
   // Selects a bond by its ID using the active edit_atom node

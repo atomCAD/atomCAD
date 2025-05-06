@@ -225,6 +225,16 @@ pub fn select_atom_or_bond_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_m
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn delete_Selected_atoms_and_bonds() {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.structure_designer.delete_selected_atoms_and_bonds();
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn clear_selection() {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {

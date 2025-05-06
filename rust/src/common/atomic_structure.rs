@@ -352,19 +352,24 @@ impl AtomicStructure {
     self.make_atom_dirty(id);
   }
 
-  // Right now it can only delete atoms without bonds
-  // Delete the bonds before calling this function
-  // TODO: delete bonds in the method first.
   pub fn delete_atom(&mut self, id: u64) {
-    let pos = if let Some(atom) = self.atoms.get(&id) {
+    // Get the atom and collect its bond IDs before removing it
+    let (pos, bond_ids) = if let Some(atom) = self.atoms.get(&id) {
       // Remove atom ID from its cluster's atom_ids HashSet if the cluster exists
       if let Some(cluster) = self.clusters.get_mut(&atom.cluster_id) {
         cluster.atom_ids.remove(&id);
       }
-      Some(atom.position)
+      // Clone the bond IDs to avoid borrow issues when deleting bonds
+      let bond_ids = atom.bond_ids.clone();
+      (Some(atom.position), bond_ids)
     } else {
-      None
+      (None, Vec::new())
     };
+    
+    // Delete all bonds connected to this atom
+    for bond_id in bond_ids {
+      self.delete_bond(bond_id);
+    }
     
     // Remove from the grid cell
     if let Some(pos) = pos {
