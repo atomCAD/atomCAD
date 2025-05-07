@@ -69,3 +69,8 @@ void setCameraTransform({required APITransform transform}) =>
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiCommonApiGreet(name: name);
+
+/// Returns a list of all chemical elements with their atomic numbers and names,
+/// ordered by atomic number
+List<ElementSummary> getAllElements() =>
+    RustLib.instance.api.crateApiCommonApiGetAllElements();

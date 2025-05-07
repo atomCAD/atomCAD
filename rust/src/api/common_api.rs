@@ -17,7 +17,9 @@ use crate::api::api_common::refresh_renderer;
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
 use crate::api::common_api_types::APITransform;
+use crate::api::common_api_types::ElementSummary;
 use crate::api::api_common::refresh_structure_designer;
+use crate::common::common_constants::ATOM_INFO;
 
 const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
@@ -319,7 +321,26 @@ pub fn set_camera_transform(transform: APITransform) {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn greet(name: String) -> String {
-    format!("Hello, {name}!")
+  name + " from Rust! 安 😊"
+}
+
+/// Returns a list of all chemical elements with their atomic numbers and names,
+/// ordered by atomic number
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_all_elements() -> Vec<ElementSummary> {
+  // Get all chemical elements from the ATOM_INFO map
+  // Convert to Vec, sort by atomic_number, and map to ElementSummary
+  let mut elements: Vec<ElementSummary> = ATOM_INFO.values()
+    .map(|atom_info| ElementSummary {
+      atomic_number: atom_info.atomic_number,
+      element_name: atom_info.element_name.clone(),
+    })
+    .collect();
+  
+  // Sort by atomic number to ensure correct order
+  elements.sort_by_key(|element| element.atomic_number);
+  
+  elements
 }
 
 #[flutter_rust_bridge::frb(init)]

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `eq`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `fmt`, `fmt`
 
 class APICamera {
   final APIVec3 eye;
@@ -146,6 +146,27 @@ enum Editor {
   structureDesigner,
   sceneComposer,
   ;
+}
+
+class ElementSummary {
+  final int atomicNumber;
+  final String elementName;
+
+  const ElementSummary({
+    required this.atomicNumber,
+    required this.elementName,
+  });
+
+  @override
+  int get hashCode => atomicNumber.hashCode ^ elementName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ElementSummary &&
+          runtimeType == other.runtimeType &&
+          atomicNumber == other.atomicNumber &&
+          elementName == other.elementName;
 }
 
 enum SelectModifier {

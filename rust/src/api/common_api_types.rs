@@ -44,3 +44,9 @@ pub enum SelectModifier {
   Toggle,
   Expand
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElementSummary {
+  pub atomic_number: i32,
+  pub element_name: String,
+}

@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/common/select_element_widget.dart';
 
 /// Editor widget for edit_atom nodes
 class EditAtomEditor extends StatefulWidget {
@@ -23,12 +24,16 @@ class EditAtomEditor extends StatefulWidget {
 
 class _EditAtomEditorState extends State<EditAtomEditor> {
   APIEditAtomData? _stagedData;
+  int? _replacementAtomicNumber;
+  int? _addAtomAtomicNumber;
 
   @override
   void initState() {
     super.initState();
     setState(() {
       _stagedData = widget.data;
+      _replacementAtomicNumber = widget.data?.replacementAtomicNumber;
+      _addAtomAtomicNumber = widget.data?.addAtomToolAtomicNumber;
     });
   }
 
@@ -38,6 +43,8 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
     if (oldWidget.data != widget.data) {
       setState(() {
         _stagedData = widget.data;
+        _replacementAtomicNumber = widget.data?.replacementAtomicNumber;
+        _addAtomAtomicNumber = widget.data?.addAtomToolAtomicNumber;
       });
     }
   }
@@ -49,38 +56,193 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
     }
 
     return Padding(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.all(AppSpacing.medium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Edit Atom Tools',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 16),
+          // Header with title and undo/redo buttons
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildToolButton(
-                context, 
-                APIEditAtomTool.default_, 
-                'Default',
-                Icons.pan_tool,
-              ),
-              const SizedBox(width: 8),
-              _buildToolButton(
-                context, 
-                APIEditAtomTool.addAtom, 
-                'Add Atom',
-                Icons.add_circle_outline,
-              ),
-              const SizedBox(width: 8),
-              _buildToolButton(
-                context, 
-                APIEditAtomTool.addBond, 
-                'Add Bond',
-                Icons.connecting_airports,
+              Text('Edit Atom Tools',
+                  style: Theme.of(context).textTheme.titleMedium),
+              // Undo/Redo buttons
+              Row(
+                children: [
+                  // Undo button
+                  IconButton(
+                    icon: const Icon(Icons.undo),
+                    onPressed: _stagedData!.canUndo
+                        ? () {
+                            widget.model.editAtomUndo();
+                          }
+                        : null,
+                    tooltip: 'Undo',
+                    color: _stagedData!.canUndo
+                        ? AppColors.primaryAccent
+                        : Colors.grey,
+                  ),
+                  // Redo button
+                  IconButton(
+                    icon: const Icon(Icons.redo),
+                    onPressed: _stagedData!.canRedo
+                        ? () {
+                            widget.model.editAtomRedo();
+                          }
+                        : null,
+                    tooltip: 'Redo',
+                    color: _stagedData!.canRedo
+                        ? AppColors.primaryAccent
+                        : Colors.grey,
+                  ),
+                ],
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.large),
+          // Tool buttons row
+          Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: _buildToolButton(
+                  context,
+                  APIEditAtomTool.default_,
+                  'Default',
+                  Icons.pan_tool,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: _buildToolButton(
+                  context,
+                  APIEditAtomTool.addAtom,
+                  'Add Atom',
+                  Icons.add_circle_outline,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: _buildToolButton(
+                  context,
+                  APIEditAtomTool.addBond,
+                  'Add Bond',
+                  Icons.connecting_airports,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.large),
+          // Tool-specific UI elements
+          _buildToolSpecificUI(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildToolSpecificUI() {
+    // Display different UI elements based on the active tool
+    switch (_stagedData!.activeTool) {
+      case APIEditAtomTool.default_:
+        return _buildDefaultToolUI();
+      case APIEditAtomTool.addAtom:
+        return _buildAddAtomToolUI();
+      case APIEditAtomTool.addBond:
+        return const SizedBox.shrink(); // No additional UI for Add Bond
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildDefaultToolUI() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.medium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Default Tool Settings',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: AppSpacing.medium),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectElementWidget(
+                    value: _replacementAtomicNumber,
+                    onChanged: (int? newValue) {
+                      setState(() {
+                        _replacementAtomicNumber = newValue;
+                      });
+                    },
+                    label: 'Replace selected atoms with',
+                    hint: 'Select an element',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: AppSpacing.buttonHeight,
+                  child: ElevatedButton(
+                    onPressed: _replacementAtomicNumber == null
+                        ? null
+                        : () {
+                            // Call the replaceSelectedAtoms method with the selected atomic number
+                            widget.model.replaceSelectedAtoms(
+                                _replacementAtomicNumber!);
+                          },
+                    style: AppButtonStyles.primary,
+                    child: const Text('Replace'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            SizedBox(
+              width: double.infinity,
+              height: AppSpacing.buttonHeight,
+              child: ElevatedButton(
+                onPressed: () {
+                  // Call the deleteSelectedAtomsAndBonds method
+                  widget.model.deleteSelectedAtomsAndBonds();
+                },
+                style: AppButtonStyles.primary,
+                child: const Text('Delete Selected'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddAtomToolUI() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.medium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Add Atom Settings',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: AppSpacing.medium),
+            SelectElementWidget(
+              value: _addAtomAtomicNumber,
+              onChanged: (int? newValue) {
+                setState(() {
+                  _addAtomAtomicNumber = newValue;
+                  // We'll implement the API call later
+                });
+              },
+              label: 'Element to add:',
+              hint: 'Select an element',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -108,9 +270,7 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
             padding: const EdgeInsets.all(8.0),
             child: Icon(
               iconData,
-              color: isActive 
-                  ? AppColors.textOnDark 
-                  : AppColors.textPrimary,
+              color: isActive ? AppColors.textOnDark : AppColors.textPrimary,
               size: 24.0,
             ),
           ),

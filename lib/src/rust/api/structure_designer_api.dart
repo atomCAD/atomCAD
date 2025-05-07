@@ -74,6 +74,16 @@ bool selectAtomOrBondByRay(
 void deleteSelectedAtomsAndBonds() => RustLib.instance.api
     .crateApiStructureDesignerApiDeleteSelectedAtomsAndBonds();
 
+void replaceSelectedAtoms({required int atomicNumber}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiReplaceSelectedAtoms(
+        atomicNumber: atomicNumber);
+
+void editAtomUndo() =>
+    RustLib.instance.api.crateApiStructureDesignerApiEditAtomUndo();
+
+void editAtomRedo() =>
+    RustLib.instance.api.crateApiStructureDesignerApiEditAtomRedo();
+
 void clearSelection() =>
     RustLib.instance.api.crateApiStructureDesignerApiClearSelection();
 

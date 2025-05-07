@@ -211,6 +211,30 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void deleteSelectedAtomsAndBonds() {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.deleteSelectedAtomsAndBonds();
+    refreshFromKernel();
+  }
+
+  void replaceSelectedAtoms(int atomicNumber) {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.replaceSelectedAtoms(atomicNumber: atomicNumber);
+    refreshFromKernel();
+  }
+
+  void editAtomUndo() {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.editAtomUndo();
+    refreshFromKernel();
+  }
+
+  void editAtomRedo() {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.editAtomRedo();
+    refreshFromKernel();
+  }
+
   BigInt createNode(String nodeTypeName, Offset position) {
     if (nodeNetworkView == null) return BigInt.zero;
     final nodeId = structure_designer_api.addNode(

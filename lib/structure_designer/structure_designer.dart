@@ -28,7 +28,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
   @override
   Widget build(BuildContext context) {
-
     return Column(
       children: [
         // Menu bar
@@ -102,10 +101,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 child: Column(
                   children: [
                     Expanded(
-                      flex: 2,
+                      flex: 20,
                       child: StructureDesignerViewport(graphModel: graphModel),
                     ),
                     Expanded(
+                      flex: 11,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [

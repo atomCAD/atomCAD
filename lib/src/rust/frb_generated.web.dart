@@ -134,6 +134,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Editor dco_decode_editor(dynamic raw);
 
   @protected
+  ElementSummary dco_decode_element_summary(dynamic raw);
+
+  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -151,6 +154,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ClusterView> dco_decode_list_cluster_view(dynamic raw);
+
+  @protected
+  List<ElementSummary> dco_decode_list_element_summary(dynamic raw);
 
   @protected
   List<InputPinView> dco_decode_list_input_pin_view(dynamic raw);
@@ -364,6 +370,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Editor sse_decode_editor(SseDeserializer deserializer);
 
   @protected
+  ElementSummary sse_decode_element_summary(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -381,6 +390,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ClusterView> sse_decode_list_cluster_view(SseDeserializer deserializer);
+
+  @protected
+  List<ElementSummary> sse_decode_list_element_summary(
+      SseDeserializer deserializer);
 
   @protected
   List<InputPinView> sse_decode_list_input_pin_view(
@@ -615,6 +628,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_editor(Editor self, SseSerializer serializer);
 
   @protected
+  void sse_encode_element_summary(
+      ElementSummary self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -633,6 +650,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_cluster_view(
       List<ClusterView> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_element_summary(
+      List<ElementSummary> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_input_pin_view(

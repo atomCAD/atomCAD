@@ -615,14 +615,33 @@ impl AtomicStructure {
   }
 
   pub fn remove_lone_atoms(&mut self) {
-    let lone_atom_ids: Vec<u64> = self.atoms
-      .iter()
-      .filter(|(_, atom)| atom.bond_ids.is_empty())
-      .map(|(id, _)| *id)
+    let lone_atoms: Vec<u64> = self.atoms.values()
+      .filter(|atom| atom.bond_ids.is_empty())
+      .map(|atom| atom.id)
       .collect();
-
-    for atom_id in lone_atom_ids {
+    
+    for atom_id in lone_atoms {
       self.delete_atom(atom_id);
+    }
+  }
+
+  /// Replaces the atomic number of an atom with a new value
+  ///
+  /// # Arguments
+  ///
+  /// * `atom_id` - The ID of the atom to modify
+  /// * `atomic_number` - The new atomic number to set
+  ///
+  /// # Returns
+  ///
+  /// `true` if the atom was found and updated, `false` otherwise
+  pub fn replace_atom(&mut self, atom_id: u64, atomic_number: i32) -> bool {
+    if let Some(atom) = self.atoms.get_mut(&atom_id) {
+      atom.atomic_number = atomic_number;
+      self.make_atom_dirty(atom_id);
+      true
+    } else {
+      false
     }
   }
 

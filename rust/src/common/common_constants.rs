@@ -52,7 +52,7 @@ pub fn create_atom_info(atomic_number: i32, symbol: &str, element_name: &str, ra
 }
 
 /// Contains the registry of all chemical elements in the system
-pub fn get_all_elements() -> Vec<AtomInfo> {
+fn get_all_elements() -> Vec<AtomInfo> {
     vec![
         // Elements are ordered by atomic number
 

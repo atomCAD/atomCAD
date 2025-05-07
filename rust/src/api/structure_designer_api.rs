@@ -239,6 +239,36 @@ pub fn delete_selected_atoms_and_bonds() {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn replace_selected_atoms(atomic_number: i32) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.structure_designer.replace_selected_atoms(atomic_number);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn edit_atom_undo() {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.structure_designer.edit_atom_undo();
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn edit_atom_redo() {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.structure_designer.edit_atom_redo();
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn clear_selection() {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {

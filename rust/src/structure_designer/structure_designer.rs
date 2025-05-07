@@ -10,6 +10,7 @@ use crate::structure_designer::node_data::no_data::NoData;
 use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::structure_designer::edit_atom_commands::select_command::SelectCommand;
 use crate::structure_designer::edit_atom_commands::delete_command::DeleteCommand;
+use crate::structure_designer::edit_atom_commands::replace_command::ReplaceCommand;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
@@ -198,6 +199,34 @@ impl StructureDesigner {
     
     edit_atom_data.add_command(delete_command);
   }
+
+  // Replaces all selected atoms with the specified atomic number
+  pub fn replace_selected_atoms(&mut self, atomic_number: i32) {
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+    
+    let replace_command = Box::new(ReplaceCommand::new(atomic_number));
+    
+    edit_atom_data.add_command(replace_command);
+  }
+
+  pub fn edit_atom_undo(&mut self) {
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+    edit_atom_data.undo();
+  }
+
+  pub fn edit_atom_redo(&mut self) {
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+    edit_atom_data.redo();
+  }    
 
   // Selects a bond by its ID using the active edit_atom node
   pub fn select_bond_by_reference(&mut self, bond_reference: &BondReference, select_modifier: SelectModifier) {
