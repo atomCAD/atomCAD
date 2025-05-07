@@ -75,6 +75,14 @@ impl EditAtomData {
       return true;
     }
     
+    pub fn can_undo(&self) -> bool {
+        self.next_history_index > 0
+    }
+    
+    pub fn can_redo(&self) -> bool {
+        self.next_history_index < self.history.len()
+    }
+    
     pub fn set_active_tool(&mut self, api_tool: APIEditAtomTool) {
         self.active_tool = match api_tool {
             APIEditAtomTool::Default => {

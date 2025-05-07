@@ -42,6 +42,7 @@ class DraggedWire {
 class StructureDesignerModel extends ChangeNotifier {
   List<String> nodeNetworkNames = [];
   NodeNetworkView? nodeNetworkView;
+  APIEditAtomTool activeEditAtomTool = APIEditAtomTool.default_;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
 
   StructureDesignerModel();
@@ -53,6 +54,11 @@ class StructureDesignerModel extends ChangeNotifier {
 
   bool isEditAtomActive() {
     return structure_designer_api.isEditAtomActive();
+  }
+
+  void setActiveEditAtomTool(APIEditAtomTool tool) {
+    structure_designer_api.setActiveEditAtomTool(tool: tool);
+    refreshFromKernel();
   }
 
   void selectAtomOrBondByRay(vector_math.Vector3 rayStart,
@@ -218,6 +224,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+    activeEditAtomTool = structure_designer_api.getActiveEditAtomTool();
     notifyListeners();
   }
 }

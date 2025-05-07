@@ -68,3 +68,12 @@ pub struct InputPinView {
     pub translation: APIVec3,
     pub rotation: APIVec3, // intrinsic euler angles in radians
   }
+
+  pub struct APIEditAtomData {
+    pub active_tool: APIEditAtomTool,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub bond_tool_last_atom_id: Option<u64>,
+    pub replacement_atomic_number: Option<i32>,
+    pub add_atom_tool_atomic_number: Option<i32>,
+  }

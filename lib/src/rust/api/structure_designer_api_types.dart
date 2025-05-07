@@ -51,6 +51,45 @@ class APICuboidData {
           extent == other.extent;
 }
 
+class APIEditAtomData {
+  final APIEditAtomTool activeTool;
+  final bool canUndo;
+  final bool canRedo;
+  final BigInt? bondToolLastAtomId;
+  final int? replacementAtomicNumber;
+  final int? addAtomToolAtomicNumber;
+
+  const APIEditAtomData({
+    required this.activeTool,
+    required this.canUndo,
+    required this.canRedo,
+    this.bondToolLastAtomId,
+    this.replacementAtomicNumber,
+    this.addAtomToolAtomicNumber,
+  });
+
+  @override
+  int get hashCode =>
+      activeTool.hashCode ^
+      canUndo.hashCode ^
+      canRedo.hashCode ^
+      bondToolLastAtomId.hashCode ^
+      replacementAtomicNumber.hashCode ^
+      addAtomToolAtomicNumber.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIEditAtomData &&
+          runtimeType == other.runtimeType &&
+          activeTool == other.activeTool &&
+          canUndo == other.canUndo &&
+          canRedo == other.canRedo &&
+          bondToolLastAtomId == other.bondToolLastAtomId &&
+          replacementAtomicNumber == other.replacementAtomicNumber &&
+          addAtomToolAtomicNumber == other.addAtomToolAtomicNumber;
+}
+
 enum APIEditAtomTool {
   default_,
   addAtom,

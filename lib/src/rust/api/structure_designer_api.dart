@@ -95,6 +95,10 @@ APIAtomTransData? getAtomTransData({required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerApiGetAtomTransData(nodeId: nodeId);
 
+APIEditAtomData? getEditAtomData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerApiGetEditAtomData(nodeId: nodeId);
+
 void setCuboidData({required BigInt nodeId, required APICuboidData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerApiSetCuboidData(nodeId: nodeId, data: data);

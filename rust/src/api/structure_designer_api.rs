@@ -12,13 +12,15 @@ use crate::api::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer_api_types::APIHalfSpaceData;
 use crate::api::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer_api_types::APIAtomTransData;
+use crate::api::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer_api_types::APIEditAtomTool;
-use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::sphere_data::SphereData;
 use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::geo_trans_data::GeoTransData;
+use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
+use crate::structure_designer::node_data::edit_atom_data::EditAtomTool;
 use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 use crate::api::api_common::to_api_vec2;
 use crate::api::api_common::from_api_vec2;
@@ -308,6 +310,42 @@ pub fn get_atom_trans_data(node_id: u64) -> Option<APIAtomTransData> {
     return Some(APIAtomTransData {
       translation: to_api_vec3(&atom_trans_data.translation),
       rotation: to_api_vec3(&atom_trans_data.rotation),
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let edit_atom_data = node_data.as_any_ref().downcast_ref::<EditAtomData>()?;
+    // Get the appropriate values based on the active tool
+    let (replacement_atomic_number, add_atom_tool_atomic_number, bond_tool_last_atom_id) = match &edit_atom_data.active_tool {
+      EditAtomTool::Default(state) => (
+        Some(state.replacement_atomic_number),
+        None,
+        None
+      ),
+      EditAtomTool::AddAtom(state) => (
+        None,
+        Some(state.atomic_number),
+        None
+      ),
+      EditAtomTool::AddBond(state) => (
+        None,
+        None,
+        state.last_atom_id
+      ),
+    };
+    
+    return Some(APIEditAtomData {
+      active_tool: edit_atom_data.get_active_tool(),
+      can_undo: edit_atom_data.can_undo(),
+      can_redo: edit_atom_data.can_redo(),
+      bond_tool_last_atom_id,
+      replacement_atomic_number,
+      add_atom_tool_atomic_number,
     });
   }
 }
