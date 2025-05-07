@@ -42,7 +42,7 @@ class DraggedWire {
 class StructureDesignerModel extends ChangeNotifier {
   List<String> nodeNetworkNames = [];
   NodeNetworkView? nodeNetworkView;
-  APIEditAtomTool activeEditAtomTool = APIEditAtomTool.default_;
+  APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
 
   StructureDesignerModel();

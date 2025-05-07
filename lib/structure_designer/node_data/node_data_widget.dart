@@ -7,6 +7,7 @@ import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
+import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.
@@ -90,6 +91,17 @@ class NodeDataWidget extends StatelessWidget {
               return AtomTransEditor(
                 nodeId: selectedNode.id,
                 data: atomTransData,
+              );
+            case 'edit_atom':
+              // Fetch the edit atom data here in the parent widget
+              final editAtomData = getEditAtomData(
+                nodeId: selectedNode.id,
+              );
+
+              return EditAtomEditor(
+                nodeId: selectedNode.id,
+                data: editAtomData,
+                model: graphModel,
               );
             default:
               return Center(
