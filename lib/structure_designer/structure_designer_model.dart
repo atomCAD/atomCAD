@@ -251,6 +251,18 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.addAtomByRay(
+      atomicNumber: atomicNumber,
+      planeNormal: Vector3ToAPIVec3(planeNormal),
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
+
   BigInt createNode(String nodeTypeName, Offset position) {
     if (nodeNetworkView == null) return BigInt.zero;
     final nodeId = structure_designer_api.addNode(

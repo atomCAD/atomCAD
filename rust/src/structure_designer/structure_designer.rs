@@ -11,6 +11,7 @@ use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::structure_designer::edit_atom_commands::select_command::SelectCommand;
 use crate::structure_designer::edit_atom_commands::delete_command::DeleteCommand;
 use crate::structure_designer::edit_atom_commands::replace_command::ReplaceCommand;
+use crate::structure_designer::edit_atom_commands::add_atom_command::AddAtomCommand;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
@@ -198,6 +199,61 @@ impl StructureDesigner {
     let delete_command = Box::new(DeleteCommand::new());
     
     edit_atom_data.add_command(delete_command);
+  }
+
+  pub fn add_atom_by_ray(&mut self, atomic_number: i32, plane_normal: &DVec3, ray_start: &DVec3, ray_dir: &DVec3) {
+    // Get the atomic structure from the selected node
+    let atomic_structure = match self.get_atomic_structure_from_selected_node() {
+      Some(structure) => structure,
+      None => return,
+    };
+    
+    // Find the closest atom to the ray
+    let closest_atom_position = atomic_structure.find_closest_atom_to_ray(ray_start, ray_dir);
+    
+    // Calculate the plane distance and intersection point
+    let default_distance = 5.0; // Default distance to use if no atom was hit
+    let plane_distance = match closest_atom_position {
+      Some(atom_pos) => plane_normal.dot(atom_pos), // Plane passes through closest atom
+      None => plane_normal.dot(*ray_start) + default_distance, // Plane at default distance
+    };
+    
+    // Calculate the intersection of the ray with the plane
+    // For a plane equation: plane_normal·point = plane_distance
+    // And a ray equation: point = ray_start + t*ray_dir
+    // Solving for t: plane_normal·(ray_start + t*ray_dir) = plane_distance
+    // t = (plane_distance - plane_normal·ray_start) / (plane_normal·ray_dir)
+    let denominator = plane_normal.dot(*ray_dir);
+    
+    // Check if ray is parallel to the plane (or nearly so)
+    if denominator.abs() < 1e-6 {
+      return; // Ray is parallel to the plane, no intersection
+    }
+    
+    let t = (plane_distance - plane_normal.dot(*ray_start)) / denominator;
+    
+    // Check if intersection is behind the ray origin
+    if t < 0.0 {
+      return; // Intersection is behind the ray origin
+    }
+    
+    // Calculate the intersection point
+    let intersection_point = *ray_start + *ray_dir * t;
+    
+    // Add the atom at the calculated position
+    self.add_atom(atomic_number, intersection_point);
+  }
+
+
+  pub fn add_atom(&mut self, atomic_number: i32, position: DVec3) {
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+    
+    let add_atom_command = Box::new(AddAtomCommand::new(atomic_number, position));
+    
+    edit_atom_data.add_command(add_atom_command);
   }
 
   // Replaces all selected atoms with the specified atomic number

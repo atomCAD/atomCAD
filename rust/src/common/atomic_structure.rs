@@ -535,7 +535,7 @@ impl AtomicStructure {
     }
   }
 
-  pub fn find_pivot_point(&self, ray_start: &DVec3, ray_dir: &DVec3) -> DVec3 {
+  pub fn find_closest_atom_to_ray(&self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<DVec3> {
     // Find closest atom to ray.
     // Linear search for now. We will use space partitioning later.
     
@@ -565,15 +565,21 @@ impl AtomicStructure {
         }
     }
 
-    // If no atom was found, return the ray origin.
     if closest_distance_squared == f64::MAX {
-        return DVec3::new(0.0, 0.0, 0.0);
+        return None;
     }
 
-    return closest_atom_position;
+    return Some(closest_atom_position);
   }
 
-
+  pub fn find_pivot_point(&self, ray_start: &DVec3, ray_dir: &DVec3) -> DVec3 {
+    let closest_atom_position = self.find_closest_atom_to_ray(ray_start, ray_dir);
+    return if closest_atom_position.is_some() {
+      closest_atom_position.unwrap()
+    } else {
+      DVec3::new(0.0, 0.0, 0.0)
+    };
+  }
   
   fn remove_from_bond_arr(&mut self, atom_id: u64, bond_id: u64) {
     let bond_ids = &mut self.atoms.get_mut(&atom_id).unwrap().bond_ids;

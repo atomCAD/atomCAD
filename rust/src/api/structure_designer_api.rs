@@ -239,6 +239,19 @@ pub fn delete_selected_atoms_and_bonds() {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn add_atom_by_ray(atomic_number: i32, plane_normal: APIVec3, ray_start: APIVec3, ray_dir: APIVec3) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let plane_normal_vec3 = from_api_vec3(&plane_normal);
+      let ray_start_vec3 = from_api_vec3(&ray_start);
+      let ray_dir_vec3 = from_api_vec3(&ray_dir);
+      instance.structure_designer.add_atom_by_ray(atomic_number, &plane_normal_vec3, &ray_start_vec3, &ray_dir_vec3);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn replace_selected_atoms(atomic_number: i32) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {

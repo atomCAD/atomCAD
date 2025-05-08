@@ -74,6 +74,17 @@ bool selectAtomOrBondByRay(
 void deleteSelectedAtomsAndBonds() => RustLib.instance.api
     .crateApiStructureDesignerApiDeleteSelectedAtomsAndBonds();
 
+void addAtomByRay(
+        {required int atomicNumber,
+        required APIVec3 planeNormal,
+        required APIVec3 rayStart,
+        required APIVec3 rayDir}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiAddAtomByRay(
+        atomicNumber: atomicNumber,
+        planeNormal: planeNormal,
+        rayStart: rayStart,
+        rayDir: rayDir);
+
 void replaceSelectedAtoms({required int atomicNumber}) =>
     RustLib.instance.api.crateApiStructureDesignerApiReplaceSelectedAtoms(
         atomicNumber: atomicNumber);
