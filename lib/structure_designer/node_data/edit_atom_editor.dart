@@ -189,7 +189,7 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                 SizedBox(
                   height: AppSpacing.buttonHeight,
                   child: ElevatedButton(
-                    onPressed: _replacementAtomicNumber == null
+                    onPressed: (_replacementAtomicNumber == null || !_stagedData!.hasSelectedAtoms)
                         ? null
                         : () {
                             // Call the replaceSelectedAtoms method with the selected atomic number
@@ -207,10 +207,12 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
               width: double.infinity,
               height: AppSpacing.buttonHeight,
               child: ElevatedButton(
-                onPressed: () {
-                  // Call the deleteSelectedAtomsAndBonds method
-                  widget.model.deleteSelectedAtomsAndBonds();
-                },
+                onPressed: _stagedData!.hasSelection
+                    ? () {
+                        // Call the deleteSelectedAtomsAndBonds method
+                        widget.model.deleteSelectedAtomsAndBonds();
+                      }
+                    : null,
                 style: AppButtonStyles.primary,
                 child: const Text('Delete Selected'),
               ),

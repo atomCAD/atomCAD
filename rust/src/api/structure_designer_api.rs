@@ -369,6 +369,13 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
       ),
     };
     
+    // Get the atomic structure from the selected node to check for selections
+    let atomic_structure = cad_instance.structure_designer.get_atomic_structure_from_selected_node();
+    
+    // Default values if no atomic structure is found
+    let has_selected_atoms = atomic_structure.map_or(false, |structure| structure.has_selected_atoms());
+    let has_selection = atomic_structure.map_or(false, |structure| structure.has_selection());
+    
     return Some(APIEditAtomData {
       active_tool: edit_atom_data.get_active_tool(),
       can_undo: edit_atom_data.can_undo(),
@@ -376,6 +383,8 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
       bond_tool_last_atom_id,
       replacement_atomic_number,
       add_atom_tool_atomic_number,
+      has_selected_atoms,
+      has_selection,
     });
   }
 }

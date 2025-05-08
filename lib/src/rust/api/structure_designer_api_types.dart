@@ -58,6 +58,8 @@ class APIEditAtomData {
   final BigInt? bondToolLastAtomId;
   final int? replacementAtomicNumber;
   final int? addAtomToolAtomicNumber;
+  final bool hasSelectedAtoms;
+  final bool hasSelection;
 
   const APIEditAtomData({
     required this.activeTool,
@@ -66,6 +68,8 @@ class APIEditAtomData {
     this.bondToolLastAtomId,
     this.replacementAtomicNumber,
     this.addAtomToolAtomicNumber,
+    required this.hasSelectedAtoms,
+    required this.hasSelection,
   });
 
   @override
@@ -75,7 +79,9 @@ class APIEditAtomData {
       canRedo.hashCode ^
       bondToolLastAtomId.hashCode ^
       replacementAtomicNumber.hashCode ^
-      addAtomToolAtomicNumber.hashCode;
+      addAtomToolAtomicNumber.hashCode ^
+      hasSelectedAtoms.hashCode ^
+      hasSelection.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -87,7 +93,9 @@ class APIEditAtomData {
           canRedo == other.canRedo &&
           bondToolLastAtomId == other.bondToolLastAtomId &&
           replacementAtomicNumber == other.replacementAtomicNumber &&
-          addAtomToolAtomicNumber == other.addAtomToolAtomicNumber;
+          addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
+          hasSelectedAtoms == other.hasSelectedAtoms &&
+          hasSelection == other.hasSelection;
 }
 
 enum APIEditAtomTool {

@@ -2263,8 +2263,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIEditAtomData dco_decode_api_edit_atom_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return APIEditAtomData(
       activeTool: dco_decode_api_edit_atom_tool(arr[0]),
       canUndo: dco_decode_bool(arr[1]),
@@ -2272,6 +2272,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       bondToolLastAtomId: dco_decode_opt_box_autoadd_u_64(arr[3]),
       replacementAtomicNumber: dco_decode_opt_box_autoadd_i_32(arr[4]),
       addAtomToolAtomicNumber: dco_decode_opt_box_autoadd_i_32(arr[5]),
+      hasSelectedAtoms: dco_decode_bool(arr[6]),
+      hasSelection: dco_decode_bool(arr[7]),
     );
   }
 
@@ -2876,13 +2878,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_addAtomToolAtomicNumber =
         sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_hasSelectedAtoms = sse_decode_bool(deserializer);
+    var var_hasSelection = sse_decode_bool(deserializer);
     return APIEditAtomData(
         activeTool: var_activeTool,
         canUndo: var_canUndo,
         canRedo: var_canRedo,
         bondToolLastAtomId: var_bondToolLastAtomId,
         replacementAtomicNumber: var_replacementAtomicNumber,
-        addAtomToolAtomicNumber: var_addAtomToolAtomicNumber);
+        addAtomToolAtomicNumber: var_addAtomToolAtomicNumber,
+        hasSelectedAtoms: var_hasSelectedAtoms,
+        hasSelection: var_hasSelection);
   }
 
   @protected
@@ -3581,6 +3587,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_u_64(self.bondToolLastAtomId, serializer);
     sse_encode_opt_box_autoadd_i_32(self.replacementAtomicNumber, serializer);
     sse_encode_opt_box_autoadd_i_32(self.addAtomToolAtomicNumber, serializer);
+    sse_encode_bool(self.hasSelectedAtoms, serializer);
+    sse_encode_bool(self.hasSelection, serializer);
   }
 
   @protected

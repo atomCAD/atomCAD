@@ -2650,6 +2650,8 @@ impl SseDecode for crate::api::structure_designer_api_types::APIEditAtomData {
         let mut var_bondToolLastAtomId = <Option<u64>>::sse_decode(deserializer);
         let mut var_replacementAtomicNumber = <Option<i32>>::sse_decode(deserializer);
         let mut var_addAtomToolAtomicNumber = <Option<i32>>::sse_decode(deserializer);
+        let mut var_hasSelectedAtoms = <bool>::sse_decode(deserializer);
+        let mut var_hasSelection = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer_api_types::APIEditAtomData {
             active_tool: var_activeTool,
             can_undo: var_canUndo,
@@ -2657,6 +2659,8 @@ impl SseDecode for crate::api::structure_designer_api_types::APIEditAtomData {
             bond_tool_last_atom_id: var_bondToolLastAtomId,
             replacement_atomic_number: var_replacementAtomicNumber,
             add_atom_tool_atomic_number: var_addAtomToolAtomicNumber,
+            has_selected_atoms: var_hasSelectedAtoms,
+            has_selection: var_hasSelection,
         };
     }
 }
@@ -3730,6 +3734,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::structure_designer_api_types:
             self.add_atom_tool_atomic_number
                 .into_into_dart()
                 .into_dart(),
+            self.has_selected_atoms.into_into_dart().into_dart(),
+            self.has_selection.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4233,6 +4239,8 @@ impl SseEncode for crate::api::structure_designer_api_types::APIEditAtomData {
         <Option<u64>>::sse_encode(self.bond_tool_last_atom_id, serializer);
         <Option<i32>>::sse_encode(self.replacement_atomic_number, serializer);
         <Option<i32>>::sse_encode(self.add_atom_tool_atomic_number, serializer);
+        <bool>::sse_encode(self.has_selected_atoms, serializer);
+        <bool>::sse_encode(self.has_selection, serializer);
     }
 }
 

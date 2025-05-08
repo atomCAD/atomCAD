@@ -76,4 +76,6 @@ pub struct InputPinView {
     pub bond_tool_last_atom_id: Option<u64>,
     pub replacement_atomic_number: Option<i32>,
     pub add_atom_tool_atomic_number: Option<i32>,
+    pub has_selected_atoms: bool,
+    pub has_selection: bool,
   }

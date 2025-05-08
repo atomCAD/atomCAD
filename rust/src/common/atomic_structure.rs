@@ -111,6 +111,16 @@ pub struct AtomicStructure {
 
 impl AtomicStructure {
 
+  // Checks if there are any selected atoms in the structure
+  pub fn has_selected_atoms(&self) -> bool {
+    self.atoms.values().any(|atom| atom.selected)
+  }
+
+  // Checks if there is any selection (atoms or bonds) in the structure
+  pub fn has_selection(&self) -> bool {
+    self.has_selected_atoms() || self.bonds.values().any(|bond| bond.selected)
+  }
+
   pub fn new() -> Self {
     let mut ret = Self {
       frame_transform: Transform::default(),
