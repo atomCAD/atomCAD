@@ -105,10 +105,12 @@ impl Renderer {
             backend_options: wgpu::BackendOptions {
                 gl: wgpu::GlBackendOptions {
                     gles_minor_version: wgpu::Gles3MinorVersion::default(),
+                    fence_behavior: wgpu::GlFenceBehavior::Normal,
                 },
                 dx12: wgpu::Dx12BackendOptions {
                     shader_compiler: wgpu::Dx12Compiler::default(),
                 },
+                noop: wgpu::NoopBackendOptions { enable: false },
             },
         });
 
@@ -143,21 +145,19 @@ impl Renderer {
             };
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features,
-                    // WebGL doesn't support all of wgpu's features, so if
-                    // we're building for the web we'll have to disable some.
-                    required_limits: if cfg!(target_family = "wasm") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                    memory_hints: wgpu::MemoryHints::Performance,
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features,
+                // WebGL doesn't support all of wgpu's features, so if
+                // we're building for the web we'll have to disable some.
+                required_limits: if cfg!(target_family = "wasm") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits::default()
                 },
-                None,
-            )
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::Off,
+            })
             .await
             .expect("failed to create device");
 
