@@ -84,7 +84,7 @@ impl FxaaPass {
                 params,
                 sampler,
                 texture,
-                size: ((size.width + 7) / 8, (size.height + 7) / 8),
+                size: (size.width.div_ceil(8), size.height.div_ceil(8)),
             },
             og_texture.create_view(&wgpu::TextureViewDescriptor::default()),
         )
@@ -123,7 +123,7 @@ impl FxaaPass {
             &self.sampler,
             input_texture,
         );
-        self.size = ((size.width + 7) / 8, (size.height + 7) / 8);
+        self.size = (size.width.div_ceil(8), size.height.div_ceil(8));
 
         &self.texture
     }

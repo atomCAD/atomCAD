@@ -79,7 +79,7 @@ impl BondBuffer {
 
         let size = wgpu::Extent3d {
             width: cmp::min(texel_count, 2048) as u32,
-            height: ((texel_count + 2047) / 2048) as u32,
+            height: texel_count.div_ceil(2048) as u32,
             depth_or_array_layers: 1,
         };
 
