@@ -127,7 +127,7 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                   context,
                   APIEditAtomTool.addBond,
                   'Add Bond',
-                  Icons.connecting_airports,
+                  Icons.link,
                 ),
               ),
             ],
