@@ -149,3 +149,11 @@ APIEditAtomTool? getActiveEditAtomTool() =>
 bool setActiveEditAtomTool({required APIEditAtomTool tool}) =>
     RustLib.instance.api
         .crateApiStructureDesignerApiSetActiveEditAtomTool(tool: tool);
+
+bool setEditAtomDefaultData({required int replacementAtomicNumber}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiSetEditAtomDefaultData(
+        replacementAtomicNumber: replacementAtomicNumber);
+
+bool setEditAtomAddAtomData({required int atomicNumber}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiSetEditAtomAddAtomData(
+        atomicNumber: atomicNumber);

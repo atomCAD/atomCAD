@@ -534,3 +534,31 @@ pub fn set_active_edit_atom_tool(tool: APIEditAtomTool) -> bool {
     false
   }
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_edit_atom_default_data(replacement_atomic_number: i32) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      if let Some(edit_atom_data) = instance.structure_designer.get_active_edit_atom_data_mut() {
+        let result = edit_atom_data.set_default_tool_atomic_number(replacement_atomic_number);
+        refresh_renderer(instance, false);
+        return result;
+      }
+    }
+    false
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_edit_atom_add_atom_data(atomic_number: i32) -> bool {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      if let Some(edit_atom_data) = instance.structure_designer.get_active_edit_atom_data_mut() {
+        let result = edit_atom_data.set_add_atom_tool_atomic_number(atomic_number);
+        refresh_renderer(instance, false);
+        return result;
+      }
+    }
+    false
+  }
+}

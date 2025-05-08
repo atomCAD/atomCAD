@@ -110,6 +110,26 @@ impl EditAtomData {
             EditAtomTool::AddBond(_) => APIEditAtomTool::AddBond,
         }
     }
+    
+    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i32) -> bool {
+        match &mut self.active_tool {
+            EditAtomTool::Default(state) => {
+                state.replacement_atomic_number = replacement_atomic_number;
+                true
+            },
+            _ => false,
+        }
+    }
+    
+    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i32) -> bool {
+        match &mut self.active_tool {
+            EditAtomTool::AddAtom(state) => {
+                state.atomic_number = atomic_number;
+                true
+            },
+            _ => false,
+        }
+    }
 }
 
 

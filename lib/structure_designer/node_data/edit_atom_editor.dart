@@ -176,9 +176,13 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                       setState(() {
                         _replacementAtomicNumber = newValue;
                       });
+                      if (newValue != null) {
+                        widget.model.setEditAtomDefaultData(newValue);
+                      }
                     },
                     label: 'Replace selected atoms with',
                     hint: 'Select an element',
+                    required: true,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -235,11 +239,14 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
               onChanged: (int? newValue) {
                 setState(() {
                   _addAtomAtomicNumber = newValue;
-                  // We'll implement the API call later
                 });
+                if (newValue != null) {
+                  widget.model.setEditAtomAddAtomData(newValue);
+                }
               },
               label: 'Element to add:',
               hint: 'Select an element',
+              required: true,
             ),
           ],
         ),

@@ -21,6 +21,9 @@ class SelectElementWidget extends StatefulWidget {
 
   /// Optional label text to display above the dropdown
   final String? label;
+  
+  /// If true, the widget will not allow null selection (no "None" option)
+  final bool required;
 
   const SelectElementWidget({
     Key? key,
@@ -28,6 +31,7 @@ class SelectElementWidget extends StatefulWidget {
     required this.onChanged,
     this.hint,
     this.label,
+    this.required = false,
   }) : super(key: key);
 
   @override
@@ -124,13 +128,15 @@ class _SelectElementWidgetState extends State<SelectElementWidget> {
       return [];
     }
     
-    // Add a null option for no selection
-    final items = <DropdownMenuItem<int?>>[
-      DropdownMenuItem<int?>(
+    final items = <DropdownMenuItem<int?>>[];
+    
+    // Add a null option for no selection only if not required
+    if (!widget.required) {
+      items.add(DropdownMenuItem<int?>(
         value: null,
         child: Text('None', style: TextStyle(color: Colors.black87)),
-      ),
-    ];
+      ));
+    }
     
     // Add items for each element
     items.addAll(_elements!.map((element) {
