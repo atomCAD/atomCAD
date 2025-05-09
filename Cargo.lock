@@ -203,10 +203,12 @@ name = "atomcad"
 version = "0.1.0"
 dependencies = [
  "android-activity",
+ "anyhow",
  "atomcad-app",
  "atomcad-ecs",
  "atomcad-gui",
  "atomcad-logging",
+ "atomcad-menu",
  "atomcad-window",
  "atomcad-winit-runner",
  "log",
@@ -238,6 +240,7 @@ dependencies = [
 name = "atomcad-gui"
 version = "0.1.0"
 dependencies = [
+ "atomcad-menu",
  "log",
  "winit",
 ]
@@ -257,6 +260,17 @@ dependencies = [
  "console_log",
  "env_logger",
  "log",
+]
+
+[[package]]
+name = "atomcad-menu"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "atomcad-app",
+ "atomcad-ecs",
+ "atomcad-winit-runner",
+ "winit",
 ]
 
 [[package]]
