@@ -82,3 +82,5 @@ android-activity = { version = "0.6", features = ["game-activity"] }
 objc2 = { workspace = true }
 objc2-app-kit = { workspace = true }
 objc2-foundation = { workspace = true }
+# relauch as bundle
+relaunch = "0.3"
