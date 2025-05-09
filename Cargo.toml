@@ -31,15 +31,21 @@ logging = { package = "atomcad-logging", path = "crates/logging" }
 anyhow = "1"
 # Windowing
 window = { package = "atomcad-window", path = "crates/window" }
+winit = "0.30"
+winit-runner = { package = "atomcad-winit-runner", path = "crates/winit-runner" }
 
 [dependencies]
 # atomCAD
 app = { workspace = true }
+# Entity Component System
+ecs = { workspace = true }
 # Logging
 log = { workspace = true }
 logging = { workspace = true }
 # Windowing
 window = { workspace = true }
+winit = { workspace = true }
+winit-runner = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # Web platform support
