@@ -47,6 +47,18 @@ impl EditAtomData {
       for i in 0..self.next_history_index {
         self.history[i].execute(atomic_structure);
       }
+      
+      // Clear any previously marked atoms first
+      atomic_structure.clear_marked_atoms();
+      
+      // If the active tool is AddBond and there's a last_atom_id, mark that atom
+      if let EditAtomTool::AddBond(state) = &self.active_tool {
+        if let Some(atom_id) = state.last_atom_id {
+          if let Some(atom) = atomic_structure.atoms.get_mut(&atom_id) {
+            atom.marked = true;
+          }
+        }
+      }
     }
 
     pub fn add_command(&mut self, command: Box<dyn EditAtomCommand>) -> & Box<dyn EditAtomCommand> {

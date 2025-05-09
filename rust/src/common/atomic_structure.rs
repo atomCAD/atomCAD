@@ -82,6 +82,7 @@ pub struct Atom {
   pub bond_ids: Vec<u64>,
   pub selected: bool,
   pub cluster_id: u64,
+  pub marked: bool,
 }
 
 #[derive(Clone)]
@@ -194,6 +195,13 @@ impl AtomicStructure {
   pub fn get_mut_bond_by_reference(&mut self, bond_reference: &BondReference) -> Option<&mut Bond> {
     self.get_bond_id_by_reference(bond_reference)
       .and_then(move |bond_id| self.bonds.get_mut(&bond_id))
+  }
+
+  /// Clears the 'marked' property for all atoms in the structure
+  pub fn clear_marked_atoms(&mut self) {
+    for atom in self.atoms.values_mut() {
+      atom.marked = false;
+    }
   }
 
   pub fn clean(&mut self) {
@@ -350,6 +358,7 @@ impl AtomicStructure {
       bond_ids: Vec::new(),
       selected: false,
       cluster_id,
+      marked: false,
     });
 
     self.add_atom_to_grid(id, &position);

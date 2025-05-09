@@ -26,7 +26,7 @@ const MARKED_ATOM_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
 
 pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S) {
   for (id, atom) in atomic_structure.atoms.iter() {
-    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, scene.is_atom_marked(*id));
+    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, atom.marked || scene.is_atom_marked(*id));
   }
   for (_id, bond) in atomic_structure.bonds.iter() {
     tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);

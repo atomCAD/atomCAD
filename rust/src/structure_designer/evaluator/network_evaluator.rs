@@ -119,6 +119,9 @@ impl NetworkEvaluator {
       if let NetworkResult::Atomic(atomic_structure) = result {
         let mut cloned_atomic_structure = atomic_structure.clone();
         cloned_atomic_structure.from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
+        if !cloned_atomic_structure.from_selected_node {
+          cloned_atomic_structure.clear_marked_atoms();
+        }
         scene.atomic_structures.push(cloned_atomic_structure);
       };
 
