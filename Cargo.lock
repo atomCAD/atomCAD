@@ -202,8 +202,10 @@ dependencies = [
 name = "atomcad"
 version = "0.1.0"
 dependencies = [
+ "android-activity",
  "atomcad-app",
  "atomcad-ecs",
+ "atomcad-gui",
  "atomcad-logging",
  "atomcad-window",
  "atomcad-winit-runner",
@@ -230,6 +232,14 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "log",
+]
+
+[[package]]
+name = "atomcad-gui"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "winit",
 ]
 
 [[package]]
