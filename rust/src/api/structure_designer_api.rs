@@ -575,12 +575,24 @@ pub fn set_edit_atom_default_data(replacement_atomic_number: i32) -> bool {
 pub fn set_edit_atom_add_atom_data(atomic_number: i32) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      if let Some(edit_atom_data) = instance.structure_designer.get_active_edit_atom_data_mut() {
-        let result = edit_atom_data.set_add_atom_tool_atomic_number(atomic_number);
+      if let Some(data) = instance.structure_designer.get_active_edit_atom_data_mut() {
+        let ret = data.set_add_atom_tool_atomic_number(atomic_number);
         refresh_renderer(instance, false);
-        return result;
+        return ret;
       }
     }
     false
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn draw_bond_by_ray(ray_start: APIVec3, ray_dir: APIVec3) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let ray_start_dvec3 = from_api_vec3(&ray_start);
+      let ray_dir_dvec3 = from_api_vec3(&ray_dir);
+      instance.structure_designer.draw_bond_by_ray(&ray_start_dvec3, &ray_dir_dvec3);
+      refresh_renderer(instance, false);
+    }
   }
 }

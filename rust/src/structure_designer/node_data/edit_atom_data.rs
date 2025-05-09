@@ -130,6 +130,13 @@ impl EditAtomData {
             _ => false,
         }
     }
+    
+    pub fn get_add_bond_tool_state(&self) -> Option<&AddBondToolState> {
+        match &self.active_tool {
+            EditAtomTool::AddBond(state) => Some(state),
+            _ => None,
+        }
+    }
 }
 
 

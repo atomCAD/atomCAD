@@ -12,6 +12,7 @@ use crate::structure_designer::edit_atom_commands::select_command::SelectCommand
 use crate::structure_designer::edit_atom_commands::delete_command::DeleteCommand;
 use crate::structure_designer::edit_atom_commands::replace_command::ReplaceCommand;
 use crate::structure_designer::edit_atom_commands::add_atom_command::AddAtomCommand;
+use crate::structure_designer::edit_atom_commands::add_bond_command::AddBondCommand;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::gadgets::node_network_gadget::NodeNetworkGadget;
@@ -19,6 +20,7 @@ use crate::structure_designer::serialization::node_networks_serialization;
 use crate::api::common_api_types::SelectModifier;
 use crate::common::atomic_structure::BondReference;
 use crate::common::atomic_structure::HitTestResult;
+use crate::structure_designer::node_data::edit_atom_data::EditAtomTool;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -244,6 +246,53 @@ impl StructureDesigner {
     self.add_atom(atomic_number, intersection_point);
   }
 
+  pub fn draw_bond_by_ray(&mut self, ray_start: &DVec3, ray_dir: &DVec3) {
+    let atomic_structure = match self.get_atomic_structure_from_selected_node() {
+      Some(structure) => structure,
+      None => return,
+    };
+
+    // Find the atom along the ray, ignoring bond hits
+    let atom_id = match atomic_structure.hit_test(ray_start, ray_dir) {
+      HitTestResult::Atom(id, _) => id,
+      _ => return,
+    };
+
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+
+    // Check if we have a last atom ID stored in the tool state
+    if let Some(bond_tool_state) = edit_atom_data.get_add_bond_tool_state() {
+      match bond_tool_state.last_atom_id {
+        Some(last_id) => {
+          // If we're clicking on the same atom again, cancel the bond and reset
+          if last_id == atom_id {
+            // Reset the last atom ID to None
+            if let EditAtomTool::AddBond(state) = &mut edit_atom_data.active_tool {
+              state.last_atom_id = None;
+            }
+          } else {
+            // Create a bond between the last atom and the current atom
+            let add_bond_command = Box::new(AddBondCommand::new(last_id, atom_id, 1));
+            edit_atom_data.add_command(add_bond_command);
+            
+            // Update the last_atom_id to the current atom for continuous bonding
+            if let EditAtomTool::AddBond(state) = &mut edit_atom_data.active_tool {
+              state.last_atom_id = Some(atom_id);
+            }
+          }
+        },
+        None => {
+          // No previous atom selected, store this one
+          if let EditAtomTool::AddBond(state) = &mut edit_atom_data.active_tool {
+            state.last_atom_id = Some(atom_id);
+          }
+        }
+      }
+    }
+  }  
 
   pub fn add_atom(&mut self, atomic_number: i32, position: DVec3) {
     let edit_atom_data = match self.get_active_edit_atom_data_mut() {
@@ -274,6 +323,7 @@ impl StructureDesigner {
       None => return,
     };
     edit_atom_data.undo();
+    self.edit_atom_tool_refresh();
   }
 
   pub fn edit_atom_redo(&mut self) {
@@ -282,7 +332,49 @@ impl StructureDesigner {
       None => return,
     };
     edit_atom_data.redo();
+    self.edit_atom_tool_refresh();
   }    
+
+  fn edit_atom_tool_refresh(&mut self) {
+    // First, get information without mutable borrow
+    let last_atom_id_opt = {
+      // Check if we're in add bond mode and have a last_atom_id
+      if let Some(edit_atom_data) = self.get_active_edit_atom_data() {
+        if let Some(bond_tool_state) = edit_atom_data.get_add_bond_tool_state() {
+          bond_tool_state.last_atom_id
+        } else {
+          return; // Not in add bond mode
+        }
+      } else {
+        return; // No edit atom data
+      }
+    };
+    
+    // If there's no last atom ID, nothing to validate
+    if last_atom_id_opt.is_none() {
+      return;
+    }
+    
+    let last_atom_id = last_atom_id_opt.unwrap();
+    
+    // Check if the atom still exists
+    let atom_exists = {
+      if let Some(atomic_structure) = self.get_atomic_structure_from_selected_node() {
+        atomic_structure.get_atom(last_atom_id).is_some()
+      } else {
+        false
+      }
+    };
+    
+    // If the atom doesn't exist, reset the last_atom_id
+    if !atom_exists {
+      if let Some(edit_atom_data) = self.get_active_edit_atom_data_mut() {
+        if let EditAtomTool::AddBond(state) = &mut edit_atom_data.active_tool {
+          state.last_atom_id = None;
+        }
+      }
+    }
+  }
 
   // Selects a bond by its ID using the active edit_atom node
   pub fn select_bond_by_reference(&mut self, bond_reference: &BondReference, select_modifier: SelectModifier) {

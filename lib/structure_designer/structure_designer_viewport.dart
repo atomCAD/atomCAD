@@ -54,6 +54,12 @@ class _StructureDesignerViewportState
             ray.direction,
           );
         }
+      } else if (activeEditAtomTool == APIEditAtomTool.addBond) {
+        // Add bond tool - create bonds between atoms
+        widget.graphModel.drawBondByRay(
+          ray.start,
+          ray.direction,
+        );
       } else if (activeEditAtomTool == APIEditAtomTool.default_) {
         // Default tool behavior - select atoms/bonds
         final selectModifier = getSelectModifierFromKeyboard();

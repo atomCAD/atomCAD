@@ -168,3 +168,7 @@ bool setEditAtomDefaultData({required int replacementAtomicNumber}) =>
 bool setEditAtomAddAtomData({required int atomicNumber}) =>
     RustLib.instance.api.crateApiStructureDesignerApiSetEditAtomAddAtomData(
         atomicNumber: atomicNumber);
+
+void drawBondByRay({required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api.crateApiStructureDesignerApiDrawBondByRay(
+        rayStart: rayStart, rayDir: rayDir);

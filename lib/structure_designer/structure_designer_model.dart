@@ -262,6 +262,15 @@ class StructureDesignerModel extends ChangeNotifier {
     );
     refreshFromKernel();
   }
+  
+  void drawBondByRay(vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.drawBondByRay(
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
 
   BigInt createNode(String nodeTypeName, Offset position) {
     if (nodeNetworkView == null) return BigInt.zero;
