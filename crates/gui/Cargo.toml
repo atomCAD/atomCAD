@@ -1,0 +1,13 @@
+[package]
+name = "atomcad-gui"
+version = { workspace = true }
+publish = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+# Logging
+log = { workspace = true }
+# Windowing
+winit = { workspace = true }
