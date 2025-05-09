@@ -10,6 +10,7 @@ pub const APP_NAME: &str = "atomCAD";
 fn hello_world(app: &mut App) -> AppExit {
     let _ = app;
     log::info!("Hello, World!");
+    app.update();
     AppExit::Success
 }
 

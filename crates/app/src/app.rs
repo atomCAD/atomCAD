@@ -4,7 +4,11 @@
 
 use crate::{platform::PanicHandlerPlugin, plugin::Plugin, schedule::MainSchedulePlugin};
 use core::num::NonZero;
-use ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
+use ecs::{
+    prelude::*,
+    schedule::{InternedScheduleLabel, ScheduleLabel},
+    system::ScheduleSystem,
+};
 use std::{
     collections::HashSet,
     process::{ExitCode, Termination},
@@ -79,6 +83,13 @@ pub struct App {
     /// the application.  This is set by [`set_runner`](Self::set_runner), and defaults to
     /// [`run_once`].
     runner: RunnerFn,
+    /// The schedule that will be run by [`update`](Self::update), which is called once on each
+    /// iteration through the main loop (or a total of one time if [`run_once`] is your application
+    /// runner).  This is set by [`set_update_schedule`](Self::set_update_schedule), and defaults to
+    /// [`Main`] if the application is includes the [`MainSchedulePlugin`], which is part of the
+    /// default plugin set. If [`None`], calling [`update`](Self::update) will not run any
+    /// schedules.
+    update_schedule: Option<InternedScheduleLabel>,
     /// A set of plugin IDs that have already been registered with the application.  This set is
     /// checked on each call to [`add_plugin`](Self::add_plugin) to ensure that a plugin is not
     /// added to the same application instance more than once, unless [`Plugin::is_unique`] returns
@@ -95,7 +106,7 @@ pub struct App {
 /// headless applications that do not require a main loop, such as command-line utilities, and is
 /// the default behavior of a newly initialized [`App`].
 pub fn run_once(app: &mut App) -> AppExit {
-    let _ = app;
+    app.update();
     AppExit::Success
 }
 
@@ -128,6 +139,7 @@ impl App {
         Self {
             name,
             runner: Box::new(run_once),
+            update_schedule: None,
             unique_plugins: HashSet::new(),
             plugins: Vec::new(),
             world,
@@ -177,6 +189,14 @@ impl App {
     /// current application name, do so directly via the [`name`](Self::name) field.
     pub fn set_name(&mut self, name: String) -> &mut Self {
         self.name = name;
+        self
+    }
+
+    /// Change the schedule that will be run by [`update`](Self::update), which is called once on
+    /// each iteration through the main loop.
+    pub fn set_update_schedule(&mut self, label: impl ScheduleLabel) -> &mut Self {
+        let label = label.intern();
+        self.update_schedule = Some(label);
         self
     }
 
@@ -235,6 +255,18 @@ impl App {
         }
 
         self
+    }
+
+    /// Runs the update schedule, which is called once on each iteration through the main loop (or a
+    /// total of one time if [`run_once`] is your application runner).  This method is called
+    /// automatically by the default runner, but can be called manually if you are using a custom
+    /// runner.
+    pub fn update(&mut self) {
+        if let Some(label) = self.update_schedule
+            && let Err(e) = self.world.try_run_schedule(label)
+        {
+            log::error!("Error running update schedule {:?}: {:?}", label, e);
+        }
     }
 
     /// Run the application's event processing loop by calling its [runner](Self::set_runner).  On
@@ -324,6 +356,31 @@ impl ContainsWorld for App {
     /// repository of program state.  The world is managed by the [`ecs`] ECS library.
     fn world_mut(&mut self) -> &mut World {
         &mut self.world
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_once() {
+        use crate::schedule::Update;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let run_count = Arc::new(AtomicUsize::new(0));
+        assert_eq!(run_count.load(Ordering::SeqCst), 0);
+        {
+            let run_count = run_count.clone();
+            App::new("test".into())
+                .add_systems(Update, move || {
+                    run_count.fetch_add(1, Ordering::SeqCst);
+                })
+                .run();
+        }
+        assert_eq!(run_count.load(Ordering::SeqCst), 1);
     }
 }
 
