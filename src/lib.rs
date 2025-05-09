@@ -462,9 +462,28 @@ impl ApplicationHandler for Application<'_> {
 }
 
 fn runner(app: &mut App) -> AppExit {
+    // The winit event loop *must* be created before using the trampoline in the relaunch crate, as
+    // otherwise the winit hooks will not be injected into the NSApplication object.
     let WinitEventLoop(event_loop) = app
         .remove_non_send::<WinitEventLoop<()>>()
         .expect("Cannot find EventLoop in world");
+    // Relaunch as a bundle on macOS if we are running directly from the command line.
+    #[cfg(target_os = "macos")]
+    match relaunch::Trampoline::new("atomCAD", "org.atomcad.atomCAD")
+        .bundle(relaunch::InstallDir::Temp)
+    {
+        Err(error) => {
+            log::warn!("Failed to relaunch as bundle: {}", error);
+            // Although something seriously wrong happened, there is no reason yet to bail out.
+            // Continue startup and see how far we get.
+        }
+        Ok(app) => {
+            log::debug!(
+                "Application relaunched successfully from {}",
+                app.bundle_path.to_str().unwrap()
+            );
+        }
+    }
     let mut app = Application::new(app, StartupAction::FirstTime);
     match event_loop.run_app(&mut app) {
         Ok(_) => {
