@@ -2,7 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::atomcad::ContainsWorld;
+use super::ContainsWorld;
 use bevy_ecs::{message::MessageRegistry, prelude::*};
 
 pub trait MessageManager {
