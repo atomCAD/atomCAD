@@ -1,0 +1,20 @@
+[package]
+name = "atomcad-render"
+version = { workspace = true }
+publish = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+# Async
+pollster = { workspace = true }
+# Graphics
+wgpu = { workspace = true }
+wgpu-types = { workspace = true }
+# Logging
+log = { workspace = true }
+# Rust
+thiserror = { workspace = true }
+# Windowing
+winit = { workspace = true }
