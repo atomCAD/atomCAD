@@ -31,8 +31,11 @@ macro_rules! impl_as_bytes {
     };
 }
 
+// Implement AsBytes for built-in types
+impl_as_bytes!((), u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
+
+// Implement AsBytes for ultraviolet types
 impl_as_bytes!(
-    (),
     ultraviolet::Vec2,
     ultraviolet::Vec3,
     ultraviolet::Mat2,
