@@ -17,6 +17,8 @@ edition = "2021"
 members = ["crates/*"]
 
 [workspace.dependencies]
+# Async
+pollster = "0.4"
 # atomCAD
 app = { package = "atomcad-app", path = "crates/app" }
 common = { package = "atomcad-common", path = "crates/common" }
@@ -27,6 +29,9 @@ bevy_ecs = "0.16"
 ecs = { package = "atomcad-ecs", path = "crates/ecs" }
 # Input
 keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
+# Graphics
+render = { package = "atomcad-render", path = "crates/render" }
+wgpu = "25"
 # Logging
 log = "0.4"
 logging = { package = "atomcad-logging", path = "crates/logging" }
@@ -34,6 +39,7 @@ logging = { package = "atomcad-logging", path = "crates/logging" }
 ultraviolet = { version = "0.10" }
 # Rust
 anyhow = "1"
+thiserror = "2"
 static_assertions = "1"
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -53,6 +59,9 @@ objc2-foundation = "0.3"
 app = { workspace = true }
 # Entity Component System
 ecs = { workspace = true }
+# Graphics
+render = { workspace = true }
+wgpu = { workspace = true }
 # Logging
 log = { workspace = true }
 logging = { workspace = true }
