@@ -23,7 +23,7 @@ use std::{
 
 /// The status code to use when exiting the application.  It is the value returned by the
 /// application runner, and passed back to the callee of [`App::run()`].
-#[derive(Message, Clone, Copy, PartialEq, Eq)]
+#[derive(Message, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AppExit {
     /// The application exited successfully.  This results in a status code of 0 on POSIX systems.
     Success,
@@ -399,25 +399,221 @@ impl ContainsWorld for App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schedule::{Last, PreStartup, Startup, Update};
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
 
+    /// Create and configure a basic App.
+    #[test]
+    fn test_app_creation_and_configuration() {
+        // Create a new app with a name.
+        let mut app = App::new("MyTestApp".into());
+
+        // App configuration methods can be chained for a fluent API.
+        app.set_name("RenamedApp".into())
+            .set_update_schedule(Update)
+            .set_runner(|_| AppExit::Success);
+
+        // App names are used for UI and logging purposes.
+        assert_eq!(app.name(), "RenamedApp");
+    }
+
+    /// Use run_once for a single execution of systems.
     #[test]
     fn test_run_once() {
-        use crate::schedule::Update;
-        use std::sync::{
-            Arc,
-            atomic::{AtomicUsize, Ordering},
-        };
-        let run_count = Arc::new(AtomicUsize::new(0));
-        assert_eq!(run_count.load(Ordering::SeqCst), 0);
-        {
-            let run_count = run_count.clone();
-            App::new("test".into())
-                .add_systems(Update, move || {
-                    run_count.fetch_add(1, Ordering::SeqCst);
-                })
-                .run();
+        // Create a counter to track how many times our systems run.
+        let update_counter = Arc::new(AtomicUsize::new(0));
+
+        // Create a new app
+        let mut app = App::new("RunOnceTest".into());
+
+        // Add a system to the Update schedule that increments the counter
+        let counter = update_counter.clone();
+        app.add_systems(Update, move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        });
+
+        // Use run_once function explicitly
+        let exit_code = run_once(&mut app);
+        assert_eq!(exit_code, AppExit::Success);
+        assert_eq!(update_counter.load(Ordering::SeqCst), 1);
+
+        // Run the system again
+        let exit_code = run_once(&mut app);
+        assert_eq!(exit_code, AppExit::Success);
+        assert_eq!(update_counter.load(Ordering::SeqCst), 2);
+
+        // run_once is the default runner, so we can just call run()
+        let exit_code = app.run();
+        assert_eq!(exit_code, AppExit::Success);
+        assert_eq!(update_counter.load(Ordering::SeqCst), 3);
+    }
+
+    /// Add and run systems in proper schedules.
+    #[test]
+    fn test_system_scheduling() {
+        // Every time a system runs it appends a unique debugging string to this vector.
+        let exec_order = Arc::new(Mutex::new(Vec::new()));
+
+        // Create a new app.
+        let mut app = App::new("ScheduleDemo".into());
+
+        // Add systems to different schedules to demonstrate execution order.
+        // Note that we're adding them out of order to show that schedule order
+        // is determined by the framework, not by the order of registration.
+        app.add_systems(Last, {
+            let exec_order = exec_order.clone();
+            move || exec_order.lock().unwrap().push("last")
+        });
+
+        app.add_systems(Update, {
+            let exec_order = exec_order.clone();
+            move || exec_order.lock().unwrap().push("update")
+        });
+
+        app.add_systems(Startup, {
+            let exec_order = exec_order.clone();
+            move || exec_order.lock().unwrap().push("startup")
+        });
+
+        app.add_systems(PreStartup, {
+            let exec_order = exec_order.clone();
+            move || exec_order.lock().unwrap().push("prestartup")
+        });
+
+        // Running the app will execute all systems in the proper order
+        app.run();
+
+        // The execution order demonstrates the framework's schedule ordering
+        assert_eq!(
+            *exec_order.lock().unwrap(),
+            vec!["prestartup", "startup", "update", "last"]
+        );
+    }
+
+    /// Shows how to use the application plugin system
+    #[test]
+    fn test_plugin_system() {
+        // Define a simple plugin for testing
+        struct CounterPlugin(Arc<AtomicUsize>);
+
+        impl Plugin for CounterPlugin {
+            fn register(&self, app: &mut App) {
+                // Plugins can modify the app during registration
+                self.0.fetch_add(1, Ordering::SeqCst);
+                app.add_systems(Update, move || {
+                    // Systems added by plugins work like any other system
+                });
+            }
         }
-        assert_eq!(run_count.load(Ordering::SeqCst), 1);
+
+        struct NonUniquePlugin;
+        impl Plugin for NonUniquePlugin {
+            fn register(&self, _app: &mut App) {}
+            fn is_unique(&self) -> bool {
+                false
+            }
+        }
+
+        // Using a plugin to configure the app
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut app = App::new("PluginDemo".into());
+
+        // Adding a plugin calls its register method
+        app.add_plugin(CounterPlugin(counter.clone()));
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+
+        // Non-unique plugins can be added multiple times
+        app.add_plugin(NonUniquePlugin);
+        app.add_plugin(NonUniquePlugin);
+
+        // The app can be further configured after adding plugins
+        app.set_update_schedule(Update);
+    }
+
+    /// Use custom runners and control loop behavior.
+    #[test]
+    fn test_custom_runners() {
+        // Tracking whether our custom runner was called
+        static RUNNER_CALLED: AtomicBool = AtomicBool::new(false);
+
+        // Define a custom application runner
+        let mut app = App::new("RunnerDemo".into());
+        app.set_runner(|app| {
+            RUNNER_CALLED.store(true, Ordering::SeqCst);
+
+            // Custom runners can control exactly how systems are executed
+            app.update(); // Run one cycle of systems
+
+            // Custom runners decide when and how to terminate
+            AppExit::Success
+        });
+
+        // run() transfers control to the runner
+        app.run();
+        assert!(RUNNER_CALLED.load(Ordering::SeqCst));
+
+        // Example of a headless app with no update schedule
+        let mut headless_app = App::empty("HeadlessDemo".into());
+        static SYSTEM_RAN: AtomicBool = AtomicBool::new(false);
+
+        // Without a schedule, systems won't execute during update()
+        headless_app.add_systems(Update, || {
+            SYSTEM_RAN.store(true, Ordering::SeqCst);
+        });
+
+        headless_app.update();
+        assert!(!SYSTEM_RAN.load(Ordering::SeqCst));
+    }
+
+    /// Demonstrates how application shutdown works
+    #[test]
+    fn test_app_exit() {
+        // Scenario 1: App exits successfully
+        let mut app = App::new("ExitDemo".into());
+
+        // Systems can request app termination by sending an AppExit event
+        app.add_systems(Update, |mut exit: MessageWriter<AppExit>| {
+            exit.write(AppExit::Success);
+        });
+
+        app.set_runner(|app| {
+            // Loop forever until the app is instructed to exit.
+            // (Will exit on the very first run through.)
+            loop {
+                app.update();
+                if let Some(exit) = app.should_exit() {
+                    return exit;
+                }
+            }
+        });
+
+        // When run() returns, it provides the exit status
+        let result = app.run();
+        assert_eq!(result, AppExit::Success);
+
+        // Scenario 2: App exits with an error code
+        let mut app = App::new("ErrorExitDemo".into());
+        let error_code = NonZero::new(42).unwrap();
+
+        app.add_systems(Update, move |mut exit: MessageWriter<AppExit>| {
+            // You can provide specific error codes for different error conditions
+            exit.write(AppExit::Error(error_code));
+        });
+
+        // The error code is preserved and returned to the caller
+        let result = app.run();
+        assert_eq!(result, AppExit::Error(error_code));
+
+        // How exit codes map to process exit codes:
+        let success_exit = AppExit::Success;
+        let error_exit = AppExit::Error(NonZero::new(75).unwrap());
+
+        // AppExit implements Termination for integration with main()
+        assert_eq!(success_exit.report(), ExitCode::SUCCESS);
+        assert_eq!(error_exit.report(), ExitCode::from(75));
     }
 }
 
