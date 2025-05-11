@@ -2,7 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::atomcad::world::ContainsWorld;
+use super::ContainsWorld;
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel, world::error::TryRunScheduleError};
 
 /// Schedules are stored within the [`Schedules`] resource in the [`World`].

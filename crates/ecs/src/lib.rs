@@ -27,14 +27,14 @@
 //! See [`bevy_ecs`] for more information on what an `Entity Component System` is and how to use it.
 pub use bevy_ecs::*;
 
-mod atomcad;
-pub use atomcad::*;
+mod ecs;
+pub use ecs::*;
 
 /// Most commonly used types, suitable for glob import.
 pub mod prelude {
     pub use bevy_ecs::prelude::*;
     // atomcad re-exports must come after bevy_ecs re-exports
-    pub use crate::atomcad::*;
+    pub use crate::ecs::*;
 }
 
 // End of File
