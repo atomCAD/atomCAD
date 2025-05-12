@@ -108,6 +108,7 @@ pub struct AtomicStructure {
   pub dirty_atom_ids: HashSet<u64>,
   pub clusters: BTreeMap<u64, Cluster>,
   pub from_selected_node: bool,
+  pub selection_transform: Option<Transform>,
 }
 
 impl AtomicStructure {
@@ -134,6 +135,7 @@ impl AtomicStructure {
       dirty_atom_ids: HashSet::new(),
       clusters: BTreeMap::new(),
       from_selected_node: false,
+      selection_transform: None,
     };
     ret.add_cluster("default");
     ret
@@ -384,7 +386,7 @@ impl AtomicStructure {
     } else {
       (None, Vec::new())
     };
-    
+
     // Delete all bonds connected to this atom
     for bond_id in bond_ids {
       self.delete_bond(bond_id);

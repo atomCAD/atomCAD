@@ -1,5 +1,6 @@
 use super::super::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure_utils::calc_selection_transform;
 use serde::{Serialize, Deserialize};
 
 /*
@@ -41,5 +42,7 @@ impl EditAtomCommand for DeleteCommand {
     for atom_id in selected_atom_ids {
       model.delete_atom(atom_id);
     }
+
+    model.selection_transform = calc_selection_transform(model);
   }
 }

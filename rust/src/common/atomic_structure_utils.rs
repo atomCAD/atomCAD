@@ -1,8 +1,9 @@
 use crate::common::atomic_structure::AtomicStructure;
 use crate::common::common_constants::ATOM_INFO;
 use crate::common::common_constants::DEFAULT_ATOM_INFO;
+use crate::util::transform::Transform;
 
-use glam::f64::DVec3;
+use glam::f64::{DVec3, DQuat};
 use std::collections::HashSet;
 
 // Bond distance multiplier - slightly larger than 1.0 to account for variations in bond distances
@@ -141,5 +142,107 @@ pub fn detect_bonded_substructures(structure: &mut AtomicStructure) {
 
     structure.remove_empty_clusters();
     structure.calculate_all_clusters_default_frame_transforms();
+}
+
+/// Calculates a transform that represents a local coordinate system aligned to selected atoms.
+/// This transform can be used as a basis for translation/rotation gadgets.
+///
+/// # Parameters
+///
+/// * `structure` - The atomic structure containing selected atoms
+///
+/// # Returns
+///
+/// * `Option<Transform>` - A transform if atoms are selected, None otherwise
+///   - Translation is set to the average position of selected atoms
+///   - Rotation is set based on the number of selected atoms:
+///     - 1 atom: Identity rotation
+///     - 2 atoms: X-axis aligned with the vector between atoms
+///     - 3 atoms: X-Z plane containing all three atom centers
+///     - 4+ atoms: Identity rotation
+///
+pub fn calc_selection_transform(structure: &AtomicStructure) -> Option<Transform> {
+    // Get selected atom IDs
+    let selected_atom_ids: Vec<u64> = structure.atoms.iter()
+        .filter(|(_, atom)| atom.selected)
+        .map(|(id, _)| *id)
+        .collect();
+
+    if selected_atom_ids.is_empty() {
+        return None;
+    }
+
+    // Get atom positions
+    let mut atom_positions: Vec<DVec3> = Vec::new();
+    for atom_id in &selected_atom_ids {
+        if let Some(atom) = structure.get_atom(*atom_id) {
+            atom_positions.push(atom.position);
+        }
+    }
+
+    if atom_positions.is_empty() {
+        return None;
+    }
+
+    // Initialize transform with default values
+    let mut transform = Transform::default();
+
+    // Calculate the average position of selected atoms for translation
+    let avg_position = atom_positions.iter().fold(DVec3::ZERO, |acc, pos| acc + *pos) / atom_positions.len() as f64;
+    transform.translation = avg_position;
+
+    // Special case: for 4 or more atoms, use identity rotation
+    if atom_positions.len() >= 4 || atom_positions.len() == 1 {
+        transform.rotation = DQuat::IDENTITY;
+    }
+    // For 2 or 3 atoms, calculate a meaningful orientation
+    else if atom_positions.len() >= 2 {
+        // For two or more atoms, align X axis with the vector between first two atoms
+        let x_axis = (atom_positions[1] - atom_positions[0]).normalize();
+        
+        // Default X axis in local space is (1,0,0)
+        let local_x_axis = DVec3::new(1.0, 0.0, 0.0);
+        
+        // Calculate rotation to align local X axis with desired X axis
+        transform.rotation = DQuat::from_rotation_arc(local_x_axis, x_axis);
+
+        if atom_positions.len() == 3 {
+            // Get the current X axis in global coordinates after the first rotation
+            let global_x_axis = transform.rotation.mul_vec3(local_x_axis);
+            
+            // Vector from atom1 to atom3
+            let atom1_to_atom3 = atom_positions[2] - atom_positions[0];
+            
+            // Project atom1_to_atom3 onto the X axis to get the component along X
+            let projection = atom1_to_atom3.dot(global_x_axis) * global_x_axis;
+            
+            // Get the perpendicular component (this will be in the X-Z plane)
+            let perpendicular = atom1_to_atom3 - projection;
+            
+            // Only proceed if the perpendicular component is significant
+            if perpendicular.length_squared() > 0.00001 {
+                // This will be our desired Z axis
+                let new_z_axis = perpendicular.normalize();
+                
+                // Get the current Z axis in global coordinates
+                let global_z_axis = transform.rotation.mul_vec3(DVec3::new(0.0, 0.0, 1.0));
+                
+                // Calculate angle between current Z and desired Z
+                let angle = global_z_axis.angle_between(new_z_axis);
+                
+                // Determine rotation direction using cross product
+                let cross = global_z_axis.cross(new_z_axis);
+                let sign = if cross.dot(global_x_axis) < 0.0 { -1.0 } else { 1.0 };
+                
+                // Create rotation around X axis
+                let x_rotation = DQuat::from_axis_angle(global_x_axis, sign * angle);
+                
+                // Apply this rotation to align Z axis properly
+                transform.rotation = x_rotation * transform.rotation;
+            }
+        }
+    }
+
+    Some(transform)
 }
 
