@@ -1,4 +1,5 @@
 use crate::common::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
 use super::node_type_registry::NodeTypeRegistry;
@@ -48,6 +49,11 @@ impl StructureDesigner {
 }
 
 impl StructureDesigner {
+
+  pub fn set_last_generated_structure_designer_scene(&mut self, scene: StructureDesignerScene) {
+    self.last_generated_structure_designer_scene = scene;
+    self.refresh_scene_dependent_node_data();
+  }
 
   // Returns the first atomic structure generated from a selected node, if any
   pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
@@ -595,6 +601,22 @@ impl StructureDesigner {
     }
   }
 
+  // Refresh special gadgets that are dependent on the scene, not only on node data.
+  fn refresh_scene_dependent_node_data(&mut self) {
+    self.refresh_scene_dependent_edit_atom_data();
+  }
+  
+  fn refresh_scene_dependent_edit_atom_data(&mut self) {
+    // First calculate the selection transform
+    let selection_transform = self.get_atomic_structure_from_selected_node()
+      .and_then(|atomic_structure| calc_selection_transform(atomic_structure));
+    
+    // Then update the edit atom data with the pre-calculated transform
+    if let Some(edit_atom_data) = self.get_active_edit_atom_data_mut() {
+      edit_atom_data.selection_transform = selection_transform;
+    }
+  }
+
   pub fn get_node_network_data(&self, node_id: u64) -> Option<&dyn NodeData> {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
@@ -689,6 +711,17 @@ impl StructureDesigner {
       ret
     } else {
       false
+    }
+  }
+
+  fn refresh_gadget(&mut self) {
+    // Early return if active_node_network_name is None
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      self.gadget = network.provide_gadget();
     }
   }
 

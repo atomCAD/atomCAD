@@ -84,5 +84,6 @@ pub fn serializable_to_edit_atom_data(serializable: &SerializableEditAtomData) -
         active_tool: EditAtomTool::Default(DefaultToolState {
             replacement_atomic_number: 6,
         }),
+        selection_transform: None,
     })
 }

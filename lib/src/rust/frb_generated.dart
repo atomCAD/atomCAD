@@ -2329,8 +2329,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIEditAtomData dco_decode_api_edit_atom_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return APIEditAtomData(
       activeTool: dco_decode_api_edit_atom_tool(arr[0]),
       canUndo: dco_decode_bool(arr[1]),
@@ -2340,6 +2340,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       addAtomToolAtomicNumber: dco_decode_opt_box_autoadd_i_32(arr[5]),
       hasSelectedAtoms: dco_decode_bool(arr[6]),
       hasSelection: dco_decode_bool(arr[7]),
+      selectionTransform: dco_decode_opt_box_autoadd_api_transform(arr[8]),
     );
   }
 
@@ -2946,6 +2947,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_hasSelectedAtoms = sse_decode_bool(deserializer);
     var var_hasSelection = sse_decode_bool(deserializer);
+    var var_selectionTransform =
+        sse_decode_opt_box_autoadd_api_transform(deserializer);
     return APIEditAtomData(
         activeTool: var_activeTool,
         canUndo: var_canUndo,
@@ -2954,7 +2957,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         replacementAtomicNumber: var_replacementAtomicNumber,
         addAtomToolAtomicNumber: var_addAtomToolAtomicNumber,
         hasSelectedAtoms: var_hasSelectedAtoms,
-        hasSelection: var_hasSelection);
+        hasSelection: var_hasSelection,
+        selectionTransform: var_selectionTransform);
   }
 
   @protected
@@ -3655,6 +3659,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_32(self.addAtomToolAtomicNumber, serializer);
     sse_encode_bool(self.hasSelectedAtoms, serializer);
     sse_encode_bool(self.hasSelection, serializer);
+    sse_encode_opt_box_autoadd_api_transform(
+        self.selectionTransform, serializer);
   }
 
   @protected

@@ -3,6 +3,7 @@ use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::api::structure_designer_api_types::APIEditAtomTool;
+use crate::util::transform::Transform;
 
 pub struct DefaultToolState {
   pub replacement_atomic_number: i32,
@@ -26,6 +27,7 @@ pub struct EditAtomData {
     pub history: Vec<Box<dyn EditAtomCommand>>,
     pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
     pub active_tool: EditAtomTool,
+    pub selection_transform: Option<Transform>,
 }
 
 impl EditAtomData {
@@ -36,6 +38,7 @@ impl EditAtomData {
             active_tool: EditAtomTool::Default(DefaultToolState {
                 replacement_atomic_number: 6, // Default to carbon
             }),
+            selection_transform: None,
         }
     }
 

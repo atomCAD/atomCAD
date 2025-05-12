@@ -2,6 +2,7 @@ use flutter_rust_bridge::frb;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APIVec3;
+use crate::api::common_api_types::APITransform;
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -78,4 +79,5 @@ pub struct InputPinView {
     pub add_atom_tool_atomic_number: Option<i32>,
     pub has_selected_atoms: bool,
     pub has_selection: bool,
+    pub selection_transform: Option<APITransform>,
   }

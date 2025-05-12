@@ -398,6 +398,7 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
       add_atom_tool_atomic_number,
       has_selected_atoms,
       has_selection,
+      selection_transform: edit_atom_data.selection_transform.as_ref().map(|transform| crate::api::api_common::to_api_transform(transform))
     });
   }
 }
