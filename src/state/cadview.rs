@@ -19,7 +19,17 @@ impl Plugin for CadViewPlugin {
 struct OnCadView;
 
 fn setup_cad_view(mut commands: Commands, font_assets: Res<FontAssets>) {
-    commands.spawn((Camera2d, OnCadView));
+    commands.spawn((
+        Camera2d,
+        Camera {
+            // This is the same as the default clear color, which matches
+            // the dark gray color on Bevy's website, but let's make it
+            // explicit in case Bevy ever changes its arbitrary defaults.
+            clear_color: ClearColorConfig::Custom(Color::srgb_u8(43, 44, 47)),
+            ..default()
+        },
+        OnCadView,
+    ));
     commands
         .spawn((
             Node {
