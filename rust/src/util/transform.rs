@@ -1,9 +1,14 @@
 use glam::f64::DVec3;
 use glam::f64::DQuat;
+use serde::{Serialize, Deserialize};
+use crate::common::serialization_utils::dvec3_serializer;
+use crate::common::serialization_utils::dquat_serializer;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transform {
+  #[serde(with = "dvec3_serializer")]
   pub translation: DVec3,
+  #[serde(with = "dquat_serializer")]
   pub rotation: DQuat,
 }
 
@@ -37,6 +42,37 @@ impl Transform {
     let delta_translation = self.translation + self.rotation.mul_vec3(from_inv.translation);
     
     Transform::new(delta_translation, delta_rotation)
+  }
+  
+  /// Apply a relative transform to this transform
+  /// 
+  /// This applies the given relative transform to the current transform (self).
+  /// After this operation, self will represent the combined transformation.
+  /// 
+  /// # Arguments
+  /// * `rel_transform` - The relative transform to apply to this transform
+  pub fn apply(&mut self, rel_transform: &Transform) {
+    // For rotation: self.rotation = rel_transform.rotation * self.rotation
+    self.rotation = rel_transform.rotation * self.rotation;
+    
+    // For translation: self.translation = rel_transform.translation + rel_transform.rotation * self.translation
+    self.translation = rel_transform.translation + rel_transform.rotation.mul_vec3(self.translation);
+  }
+  
+  /// Apply a relative transform to this transform and return a new Transform
+  /// 
+  /// This creates a new Transform that is the result of applying the given relative transform 
+  /// to this transform. The original transform is not modified.
+  /// 
+  /// # Arguments
+  /// * `rel_transform` - The relative transform to apply to this transform
+  /// 
+  /// # Returns
+  /// A new Transform that is the result of applying the relative transform to this transform
+  pub fn apply_to_new(&self, rel_transform: &Transform) -> Transform {
+    let mut result = self.clone();
+    result.apply(rel_transform);
+    result
   }
   
   /// Apply this transform to a position vector

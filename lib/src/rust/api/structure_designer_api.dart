@@ -95,6 +95,10 @@ void editAtomUndo() =>
 void editAtomRedo() =>
     RustLib.instance.api.crateApiStructureDesignerApiEditAtomRedo();
 
+void transformSelected({required APITransform absTransform}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerApiTransformSelected(absTransform: absTransform);
+
 void clearSelection() =>
     RustLib.instance.api.crateApiStructureDesignerApiClearSelection();
 

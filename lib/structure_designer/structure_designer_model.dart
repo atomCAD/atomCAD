@@ -223,6 +223,12 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void transformSelected(APITransform absTransform) {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.transformSelected(absTransform: absTransform);
+    refreshFromKernel();
+  }
+
   void editAtomUndo() {
     if (nodeNetworkView == null) return;
     structure_designer_api.editAtomUndo();
@@ -262,7 +268,7 @@ class StructureDesignerModel extends ChangeNotifier {
     );
     refreshFromKernel();
   }
-  
+
   void drawBondByRay(vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;
     structure_designer_api.drawBondByRay(

@@ -191,7 +191,8 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                 SizedBox(
                   height: AppSpacing.buttonHeight,
                   child: ElevatedButton(
-                    onPressed: (_replacementAtomicNumber == null || !_stagedData!.hasSelectedAtoms)
+                    onPressed: (_replacementAtomicNumber == null ||
+                            !_stagedData!.hasSelectedAtoms)
                         ? null
                         : () {
                             // Call the replaceSelectedAtoms method with the selected atomic number
@@ -219,7 +220,7 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                 child: const Text('Delete Selected'),
               ),
             ),
-            if (_stagedData!.hasSelection) ...[  
+            if (_stagedData!.hasSelection) ...[
               const SizedBox(height: AppSpacing.large),
               const Divider(),
               const SizedBox(height: AppSpacing.small),
@@ -230,8 +231,7 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                 initialTransform: _stagedData!.selectionTransform,
                 title: 'Transform',
                 onApplyTransform: (APITransform transform) {
-                  // For now, just display the transform data
-                  debugPrint('Applied transform: ${transform.translation}, ${transform.rotation}');
+                  widget.model.transformSelected(transform);
                 },
               ),
             ],

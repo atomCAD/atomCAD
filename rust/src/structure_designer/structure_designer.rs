@@ -1,7 +1,9 @@
 use crate::common::atomic_structure::AtomicStructure;
 use crate::common::atomic_structure_utils::calc_selection_transform;
+use crate::util::transform::Transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
+use super::edit_atom_commands::transform_command::TransformCommand;
 use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
@@ -321,6 +323,48 @@ impl StructureDesigner {
     let replace_command = Box::new(ReplaceCommand::new(atomic_number));
     
     edit_atom_data.add_command(replace_command);
+  }
+
+  /// Transform selected atoms using an absolute transform
+  /// 
+  /// Takes an absolute transform and converts it to a relative transform
+  /// by comparing with the current selection transform. Then creates and
+  /// executes a TransformCommand with that relative transform.
+  /// 
+  /// # Arguments
+  /// * `abs_transform` - The absolute transform to apply
+  pub fn transform_selected(&mut self, abs_transform: &Transform) {
+    // First get the current transform to avoid borrowing issues
+    let current_transform_opt = {
+      // Get the current atomic structure
+      if let Some(structure) = self.get_atomic_structure_from_selected_node() {
+        // Clone the transform if it exists
+        structure.selection_transform.clone()
+      } else {
+        return; // No atomic structure, exit early
+      }
+    };
+    
+    // If we don't have a current transform, we can't proceed
+    let current_transform = match current_transform_opt {
+      Some(transform) => transform,
+      None => return,
+    };
+    
+    // Now get the edit atom data (after we're done with the atomic structure)
+    let edit_atom_data = match self.get_active_edit_atom_data_mut() {
+      Some(data) => data,
+      None => return,
+    };
+    
+    // Calculate the relative transform (delta) needed to go from current to desired absolute transform
+    let relative_transform = abs_transform.delta_from(&current_transform);
+    
+    // Create a transform command with the relative transform
+    let transform_command = Box::new(TransformCommand::new(relative_transform));
+    
+    // Add the command to the edit atom data
+    edit_atom_data.add_command(transform_command);
   }
 
   pub fn edit_atom_undo(&mut self) {

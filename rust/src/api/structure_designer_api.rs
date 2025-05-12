@@ -29,6 +29,8 @@ use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
 use crate::api::common_api_types::SelectModifier;
+use crate::api::api_common::from_api_transform;
+use crate::api::common_api_types::APITransform;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -274,9 +276,22 @@ pub fn edit_atom_undo() {
 #[flutter_rust_bridge::frb(sync)]
 pub fn edit_atom_redo() {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      instance.structure_designer.edit_atom_redo();
-      refresh_renderer(instance, false);
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      cad_instance.structure_designer.edit_atom_redo();
+      refresh_renderer(cad_instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn transform_selected(abs_transform: APITransform) {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      // Convert APITransform to Transform using the existing helper function
+      let transform = from_api_transform(&abs_transform);
+      
+      cad_instance.structure_designer.transform_selected(&transform);
+      refresh_renderer(cad_instance, false);
     }
   }
 }
