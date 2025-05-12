@@ -8,6 +8,7 @@ import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
 
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.
@@ -41,76 +42,86 @@ class NodeDataWidget extends StatelessWidget {
             );
           }
 
-          // Based on the node type, show the appropriate editor
-          switch (selectedNode.nodeTypeName) {
-            case 'cuboid':
-              // Fetch the cuboid data here in the parent widget
-              final cuboidData = getCuboidData(
-                nodeId: selectedNode.id,
-              );
-
-              return CuboidEditor(
-                nodeId: selectedNode.id,
-                data: cuboidData,
-              );
-            case 'sphere':
-              // Fetch the sphere data here in the parent widget
-              final sphereData = getSphereData(
-                nodeId: selectedNode.id,
-              );
-              return SphereEditor(
-                nodeId: selectedNode.id,
-                data: sphereData,
-              );
-            case 'half_space':
-              // Fetch the half space data here in the parent widget
-              final halfSpaceData = getHalfSpaceData(
-                nodeId: selectedNode.id,
-              );
-
-              return HalfSpaceEditor(
-                nodeId: selectedNode.id,
-                data: halfSpaceData,
-              );
-            case 'geo_trans':
-              // Fetch the geo transformation data here in the parent widget
-              final geoTransData = getGeoTransData(
-                nodeId: selectedNode.id,
-              );
-
-              return GeoTransEditor(
-                nodeId: selectedNode.id,
-                data: geoTransData,
-              );
-            case 'atom_trans':
-              // Fetch the atom transformation data here in the parent widget
-              final atomTransData = getAtomTransData(
-                nodeId: selectedNode.id,
-              );
-
-              return AtomTransEditor(
-                nodeId: selectedNode.id,
-                data: atomTransData,
-              );
-            case 'edit_atom':
-              // Fetch the edit atom data here in the parent widget
-              final editAtomData = getEditAtomData(
-                nodeId: selectedNode.id,
-              );
-
-              return EditAtomEditor(
-                nodeId: selectedNode.id,
-                data: editAtomData,
-                model: graphModel,
-              );
-            default:
-              return Center(
-                child: Text(
-                    'No editor available for ${selectedNode.nodeTypeName}'),
-              );
-          }
+          // Wrap the editor widget in a SingleChildScrollView to handle tall editors
+          return Padding(
+            padding: const EdgeInsets.all(2.0),
+            child: SingleChildScrollView(
+              child: _buildNodeEditor(selectedNode, model),
+            ),
+          );
         },
       ),
     );
+  }
+
+  // Helper method to build the appropriate editor based on node type
+  Widget _buildNodeEditor(NodeView selectedNode, StructureDesignerModel model) {
+    // Based on the node type, show the appropriate editor
+    switch (selectedNode.nodeTypeName) {
+      case 'cuboid':
+        // Fetch the cuboid data here in the parent widget
+        final cuboidData = getCuboidData(
+          nodeId: selectedNode.id,
+        );
+
+        return CuboidEditor(
+          nodeId: selectedNode.id,
+          data: cuboidData,
+        );
+      case 'sphere':
+        // Fetch the sphere data here in the parent widget
+        final sphereData = getSphereData(
+          nodeId: selectedNode.id,
+        );
+        return SphereEditor(
+          nodeId: selectedNode.id,
+          data: sphereData,
+        );
+      case 'half_space':
+        // Fetch the half space data here in the parent widget
+        final halfSpaceData = getHalfSpaceData(
+          nodeId: selectedNode.id,
+        );
+
+        return HalfSpaceEditor(
+          nodeId: selectedNode.id,
+          data: halfSpaceData,
+        );
+      case 'geo_trans':
+        // Fetch the geo transformation data here in the parent widget
+        final geoTransData = getGeoTransData(
+          nodeId: selectedNode.id,
+        );
+
+        return GeoTransEditor(
+          nodeId: selectedNode.id,
+          data: geoTransData,
+        );
+      case 'atom_trans':
+        // Fetch the atom transformation data here in the parent widget
+        final atomTransData = getAtomTransData(
+          nodeId: selectedNode.id,
+        );
+
+        return AtomTransEditor(
+          nodeId: selectedNode.id,
+          data: atomTransData,
+        );
+      case 'edit_atom':
+        // Fetch the edit atom data here in the parent widget
+        final editAtomData = getEditAtomData(
+          nodeId: selectedNode.id,
+        );
+
+        return EditAtomEditor(
+          nodeId: selectedNode.id,
+          data: editAtomData,
+          model: model,
+        );
+      default:
+        return Center(
+          child: Text('No editor available for ${selectedNode.nodeTypeName}'),
+        );
+    }
   }
 }

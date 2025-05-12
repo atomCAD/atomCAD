@@ -4,6 +4,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/select_element_widget.dart';
+import 'package:flutter_cad/scene_composer/transform_control_widget.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 
 /// Editor widget for edit_atom nodes
 class EditAtomEditor extends StatefulWidget {
@@ -217,6 +219,22 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                 child: const Text('Delete Selected'),
               ),
             ),
+            if (_stagedData!.hasSelection) ...[  
+              const SizedBox(height: AppSpacing.large),
+              const Divider(),
+              const SizedBox(height: AppSpacing.small),
+              Text('Transform Selected Atoms',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: AppSpacing.medium),
+              TransformControlWidget(
+                initialTransform: _stagedData!.selectionTransform,
+                title: 'Transform',
+                onApplyTransform: (APITransform transform) {
+                  // For now, just display the transform data
+                  debugPrint('Applied transform: ${transform.translation}, ${transform.rotation}');
+                },
+              ),
+            ],
           ],
         ),
       ),
