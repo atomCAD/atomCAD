@@ -9,11 +9,9 @@ use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::common::atomic_structure::AtomicStructure;
-use crate::util::timer::Timer;
-use std::collections::HashMap;
-use lru::LruCache;
-use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
+use crate::structure_designer::common_constants;
+use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::util::transform::Transform;
 use crate::structure_designer::node_data::parameter_data::ParameterData;
@@ -23,6 +21,9 @@ use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::common::crystal_utils::in_crystal_pos_to_id;
 use crate::structure_designer::node_data::geo_to_atom_data::GeoToAtomData;
+use std::collections::HashMap;
+use lru::LruCache;
+use crate::util::timer::Timer;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
@@ -107,6 +108,54 @@ pub struct NetworkEvaluator {
  * It delegates implicit geometry evaluation to ImplicitEvaluator.
  */
 impl NetworkEvaluator {
+  // Returns the unit cell size for a given element pair
+  // If the pair has a known measured unit cell size, returns that
+  // Otherwise, estimates based on covalent radii
+  fn get_unit_cell_size(&self, primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
+    // Check if we have measured data for this pair
+    if let Some(size) = common_constants::UNIT_CELL_SIZES.get(&(primary_atomic_number, secondary_atomic_number)) {
+      return *size;
+    }
+    
+    // Check if we have measured data with elements in reverse order
+    if let Some(size) = common_constants::UNIT_CELL_SIZES.get(&(secondary_atomic_number, primary_atomic_number)) {
+      return *size;
+    }
+    
+    // If no measured data, estimate based on covalent radii
+    self.estimate_unit_cell_size(primary_atomic_number, secondary_atomic_number)
+  }
+  
+  // Estimates unit cell size based on covalent radii of elements
+  fn estimate_unit_cell_size(&self, primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
+    // Get covalent radii from atom info using direct HashMap access
+    let primary_info = ATOM_INFO.get(&primary_atomic_number);
+    let secondary_info = ATOM_INFO.get(&secondary_atomic_number);
+    
+    if let (Some(primary), Some(secondary)) = (primary_info, secondary_info) {
+      // Calculate estimated bond length based on covalent radii
+      // For zinc blende structures, the bond length is approximately the sum of the covalent radii
+      let bond_length = primary.radius + secondary.radius;
+      
+      // In zinc blende/diamond structures, the unit cell size is approximately 4 times the bond length
+      // between two adjacent atoms, divided by sqrt(3)
+      // This is a simplification based on crystal geometry
+      let estimated_cell_size = (4.0 * bond_length) / (3.0_f64).sqrt();
+      
+      return estimated_cell_size;
+    }
+    
+    // Fallback to diamond unit cell size if atom info not found
+    common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+  }
+  
+  // Returns whether the unit cell size for a given element pair is estimated or measured
+  fn is_unit_cell_size_estimated(&self, primary_atomic_number: i32, secondary_atomic_number: i32) -> bool {
+    // Check if we have measured data for this pair or with reverse order
+    !common_constants::UNIT_CELL_SIZES.contains_key(&(primary_atomic_number, secondary_atomic_number)) &&
+    !common_constants::UNIT_CELL_SIZES.contains_key(&(secondary_atomic_number, primary_atomic_number))
+  }
+
 
   pub fn new() -> Self {
     Self {
@@ -502,7 +551,8 @@ impl NetworkEvaluator {
               ZincBlendeAtomType::Primary => geo_to_atom_data.primary_atomic_number,
               ZincBlendeAtomType::Secondary => geo_to_atom_data.secondary_atomic_number,
             };
-            atomic_structure.add_atom_with_id(id, atomic_number, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 1);
+            let unit_cell_size = self.get_unit_cell_size(geo_to_atom_data.primary_atomic_number, geo_to_atom_data.secondary_atomic_number);
+            atomic_structure.add_atom_with_id(id, atomic_number, crystal_space_pos * unit_cell_size, 1);
             atom_pos_to_id.insert(absolute_pos, id);
             id
           } else { 0 };
