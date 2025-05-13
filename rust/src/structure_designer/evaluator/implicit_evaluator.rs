@@ -1,15 +1,16 @@
 use glam::f64::DVec3;
-use glam::f64::DQuat;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::structure_designer::nodes::sphere::SphereData;
-use crate::structure_designer::nodes::cuboid::CuboidData;
-use crate::structure_designer::nodes::half_space::HalfSpaceData;
-use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
-use std::f64::consts::PI;
+use crate::structure_designer::nodes::cuboid::implicit_eval_cuboid;
+use crate::structure_designer::nodes::sphere::implicit_eval_sphere;
+use crate::structure_designer::nodes::half_space::implicit_eval_half_space;
+use crate::structure_designer::nodes::geo_trans::implicit_eval_geo_trans;
+use crate::structure_designer::nodes::union::implicit_eval_union;
+use crate::structure_designer::nodes::intersect::implicit_eval_intersect;
+use crate::structure_designer::nodes::diff::implicit_eval_diff;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -21,119 +22,6 @@ impl<'a> NetworkStackElement<'a> {
   pub fn get_top_node(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> &'a Node {
     return network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
   }
-}
-
-fn eval_cuboid<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-  let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
-
-  let max_corner = cuboid_data.min_corner + cuboid_data.extent;
-  let x_val = f64::max((cuboid_data.min_corner.x as f64) - sample_point.x, sample_point.x - (max_corner.x as f64));
-  let y_val = f64::max((cuboid_data.min_corner.y as f64) - sample_point.y, sample_point.y - (max_corner.y as f64));
-  let z_val = f64::max((cuboid_data.min_corner.z as f64) - sample_point.z, sample_point.z - (max_corner.z as f64));
-
-  return f64::max(f64::max(x_val, y_val), z_val);
-}
-
-fn eval_sphere<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-  let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
-
-  return (sample_point - DVec3::new(sphere_data.center.x as f64, sphere_data.center.y as f64, sphere_data.center.z as f64)).length() 
-    - (sphere_data.radius as f64);
-}
-
-fn eval_half_space<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-  let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
-  let float_miller = half_space_data.miller_index.as_dvec3();
-  let miller_magnitude = float_miller.length();
-  return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f64)) / miller_magnitude;
-}
-
-fn eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
-    registry: &NodeTypeRegistry,
-    network_stack: &Vec<NetworkStackElement<'a>>,
-    node: &Node,
-    sample_point: &DVec3) -> f64 {
-
-    let mut transformed_point = sample_point.clone(); 
-
-    let geo_trans_data = &node.data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
-
-    if !geo_trans_data.transform_only_frame {
-      let translation = geo_trans_data.translation.as_dvec3();
-      let rotation_euler = geo_trans_data.rotation.as_dvec3() * PI * 0.5;
-  
-      let rotation_quat = DQuat::from_euler(
-          glam::EulerRot::XYX,
-          rotation_euler.x, 
-          rotation_euler.y, 
-          rotation_euler.z);
-  
-      transformed_point = rotation_quat.inverse().mul_vec3(sample_point - translation); 
-    }
-
-    match node.arguments[0].get_node_id() {
-        Some(node_id) => evaluator.implicit_eval(
-            network_stack,
-            node_id, 
-            &transformed_point,
-            registry)[0],
-        None => f64::MAX
-    }
-}
-
-fn eval_union<'a>(
-    evaluator: &ImplicitEvaluator,
-    registry: &NodeTypeRegistry,
-    network_stack: &Vec<NetworkStackElement<'a>>,
-    node: &Node,
-    sample_point: &DVec3) -> f64 {
-  node.arguments[0].argument_node_ids.iter().map(|node_id| {
-    evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-  }).reduce(f64::min).unwrap_or(f64::MAX)
-}
-
-fn eval_intersect<'a>(
-  evaluator: &ImplicitEvaluator,
-  registry: &NodeTypeRegistry,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-    node.arguments[0].argument_node_ids.iter().map(|node_id| {
-      evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-    }).reduce(f64::max).unwrap_or(f64::MIN)
-}
-
-fn eval_diff<'a>(
-  evaluator: &ImplicitEvaluator,
-  registry: &NodeTypeRegistry,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-
-  let ubase = node.arguments[0].argument_node_ids.iter().map(|node_id| {
-    evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-  }).reduce(f64::min).unwrap_or(f64::MAX);
-
-  let usub = node.arguments[1].argument_node_ids.iter().map(|node_id| {
-    evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
-  }).reduce(f64::min).unwrap_or(f64::MAX);
-
-  return f64::max(ubase, -usub)
 }
 
 /*
@@ -151,13 +39,13 @@ impl ImplicitEvaluator {
           built_in_functions: HashMap::new(),    
         };
     
-        ret.built_in_functions.insert("cuboid".to_string(), eval_cuboid);
-        ret.built_in_functions.insert("sphere".to_string(), eval_sphere);
-        ret.built_in_functions.insert("half_space".to_string(), eval_half_space);
-        ret.built_in_functions.insert("union".to_string(), eval_union);
-        ret.built_in_functions.insert("intersect".to_string(), eval_intersect);
-        ret.built_in_functions.insert("diff".to_string(), eval_diff);
-        ret.built_in_functions.insert("geo_trans".to_string(), eval_geo_trans);
+        ret.built_in_functions.insert("cuboid".to_string(), implicit_eval_cuboid);
+        ret.built_in_functions.insert("sphere".to_string(), implicit_eval_sphere);
+        ret.built_in_functions.insert("half_space".to_string(), implicit_eval_half_space);
+        ret.built_in_functions.insert("union".to_string(), implicit_eval_union);
+        ret.built_in_functions.insert("intersect".to_string(), implicit_eval_intersect);
+        ret.built_in_functions.insert("diff".to_string(), implicit_eval_diff);
+        ret.built_in_functions.insert("geo_trans".to_string(), implicit_eval_geo_trans);
     
         return ret;
     }

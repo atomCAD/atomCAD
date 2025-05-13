@@ -10,6 +10,11 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use glam::f64::DQuat;
 use glam::f32::Vec3;
+use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::common::atomic_structure::AtomicStructure;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 pub const GADGET_LENGTH: f64 = 6.0;
 pub const AXIS_RADIUS: f64 = 0.1;
@@ -27,6 +32,32 @@ impl NodeData for AtomTransData {
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
       return Some(Box::new(AtomTransGadget::new(self.translation, self.rotation)));
     }
+}
+
+pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {  
+  let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+  if node.arguments[0].argument_node_ids.is_empty() {
+    return NetworkResult::Atomic(AtomicStructure::new());
+  }
+  let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
+
+  let result = &network_evaluator.evaluate(network_stack, input_molecule_node_id, registry)[0];
+  if let NetworkResult::Atomic(atomic_structure) = result {
+    let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
+
+    let rotation_quat = DQuat::from_euler(
+      glam::EulerRot::XYX,
+      atom_trans_data.rotation.x, 
+      atom_trans_data.rotation.y, 
+      atom_trans_data.rotation.z);
+
+    let mut result_atomic_structure = atomic_structure.clone();
+    result_atomic_structure.transform(&rotation_quat, &atom_trans_data.translation);
+
+    return NetworkResult::Atomic(result_atomic_structure);
+  }
+  return NetworkResult::None;
 }
 
 #[derive(Clone)]

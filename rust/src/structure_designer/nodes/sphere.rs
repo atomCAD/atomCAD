@@ -3,6 +3,16 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
+use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
+use crate::util::transform::Transform;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::common_constants;
+use glam::f64::DQuat;
+use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
+use crate::structure_designer::node_network::Node;
+use glam::f64::DVec3;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SphereData {
@@ -11,10 +21,30 @@ pub struct SphereData {
   pub radius: i32,
 }
 
-
-
 impl NodeData for SphereData {
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
       None
     }
+}
+
+pub fn eval_sphere<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+  let node = NetworkStackElement::get_top_node(network_stack, node_id);
+  let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
+
+  return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
+    sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+    DQuat::IDENTITY,
+  ) });
+}
+
+pub fn implicit_eval_sphere<'a>(
+  _evaluator: &ImplicitEvaluator,
+  _registry: &NodeTypeRegistry,
+  _network_stack: &Vec<NetworkStackElement<'a>>,
+  node: &Node,
+  sample_point: &DVec3) -> f64 {
+  let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
+
+  return (sample_point - DVec3::new(sphere_data.center.x as f64, sphere_data.center.y as f64, sphere_data.center.z as f64)).length() 
+    - (sphere_data.radius as f64);
 }

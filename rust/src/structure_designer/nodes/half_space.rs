@@ -17,6 +17,13 @@ use crate::util::hit_test_utils::get_point_distance_to_ray;
 use crate::structure_designer::common_constants;
 use std::collections::HashSet;
 use crate::common::gadget::Gadget;
+use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
+use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::util::transform::Transform;
+use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
+use crate::structure_designer::node_network::Node;
 
 pub const MAX_MILLER_INDEX: f64 = 6.0;
 pub const GADGET_LENGTH: f64 = 6.0;
@@ -47,6 +54,32 @@ impl NodeData for HalfSpaceData {
       return Some(Box::new(HalfSpaceGadget::new(&self.miller_index, self.shift)));
     }
   
+}
+
+pub fn eval_half_space<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+  let node = NetworkStackElement::get_top_node(network_stack, node_id);
+  let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
+
+
+  let dir = half_space_data.miller_index.as_dvec3().normalize();
+  let shift_handle_offset = ((half_space_data.shift as f64) / half_space_data.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+  return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
+    dir * shift_handle_offset,
+    DQuat::from_rotation_arc(DVec3::Y, dir),
+  )});
+}
+
+pub fn implicit_eval_half_space<'a>(
+  _evaluator: &ImplicitEvaluator,
+  _registry: &NodeTypeRegistry,
+  _network_stack: &Vec<NetworkStackElement<'a>>,
+  node: &Node,
+  sample_point: &DVec3) -> f64 {
+  let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
+  let float_miller = half_space_data.miller_index.as_dvec3();
+  let miller_magnitude = float_miller.length();
+  return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f64)) / miller_magnitude;
 }
 
 #[derive(Clone)]

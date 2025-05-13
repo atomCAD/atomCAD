@@ -1,91 +1,27 @@
 use glam::i32::IVec3;
-use glam::f64::DQuat;
-use glam::f64::DVec3;
 use crate::common::surface_point_cloud::SurfacePoint;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type::DataType;
-use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::common_constants;
-use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::util::transform::Transform;
 use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::structure_designer::nodes::sphere::SphereData;
-use crate::structure_designer::nodes::cuboid::CuboidData;
-use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::edit_atom::EditAtomData;
-use crate::common::crystal_utils::in_crystal_pos_to_id;
-use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
-use std::collections::HashMap;
 use lru::LruCache;
 use crate::util::timer::Timer;
 use crate::util::box_subdivision::subdivide_box;
+use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
+use crate::structure_designer::nodes::sphere::eval_sphere;
+use crate::structure_designer::nodes::cuboid::eval_cuboid;
+use crate::structure_designer::nodes::half_space::eval_half_space;
+use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
 
 const SAMPLES_PER_UNIT: i32 = 4;
-const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
-
-enum ZincBlendeAtomType {
-  Primary,
-  Secondary,
-}
-
-// Relative in-cell positions of the atoms that are part of a cell
-// A position can be part of multiple cells (corner positions are part of 8 cells,
-// face center positions are part of 2 cells, other positions are part of 1 cell).
-// In one cell coordinates go from 0 to 4. (a cell can be thought of 4x4x4 mini cells)
-const IN_CELL_ATOM_POSITIONS: [IVec3; 18] = [
-  // corner positions
-  IVec3::new(0, 0, 0),
-  IVec3::new(4, 0, 0),
-  IVec3::new(0, 4, 0),
-  IVec3::new(0, 0, 4),
-  IVec3::new(4, 4, 0),
-  IVec3::new(4, 0, 4),
-  IVec3::new(0, 4, 4),
-  IVec3::new(4, 4, 4),
-
-  // face center positions
-  IVec3::new(2, 2, 0),
-  IVec3::new(2, 2, 4),
-  IVec3::new(2, 0, 2),
-  IVec3::new(2, 4, 2),
-  IVec3::new(0, 2, 2),
-  IVec3::new(4, 2, 2),
-
-  // other positions
-  IVec3::new(1, 1, 1),
-  IVec3::new(1, 3, 3),
-  IVec3::new(3, 1, 3),
-  IVec3::new(3, 3, 1),
-];
-
-const IN_CELL_ZINCBLENDE_TYPES: [ZincBlendeAtomType; 18] = [
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-  ZincBlendeAtomType::Primary,
-
-  ZincBlendeAtomType::Secondary,
-  ZincBlendeAtomType::Secondary,
-  ZincBlendeAtomType::Secondary,
-  ZincBlendeAtomType::Secondary,
-];
 
 #[derive(Clone)]
 pub struct GeometrySummary {
@@ -107,57 +43,9 @@ pub struct NetworkEvaluator {
  * Node network evaluator.
  * The node network evaluator is able to generate displayable representation for a node in a node network.
  * It delegates implicit geometry evaluation to ImplicitEvaluator.
+ * It delegates node related evaluation to functions in node specific modules.
  */
 impl NetworkEvaluator {
-  // Returns the unit cell size for a given element pair
-  // If the pair has a known measured unit cell size, returns that
-  // Otherwise, estimates based on covalent radii
-  fn get_unit_cell_size(&self, primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
-    // Check if we have measured data for this pair
-    if let Some(size) = common_constants::UNIT_CELL_SIZES.get(&(primary_atomic_number, secondary_atomic_number)) {
-      return *size;
-    }
-    
-    // Check if we have measured data with elements in reverse order
-    if let Some(size) = common_constants::UNIT_CELL_SIZES.get(&(secondary_atomic_number, primary_atomic_number)) {
-      return *size;
-    }
-    
-    // If no measured data, estimate based on covalent radii
-    self.estimate_unit_cell_size(primary_atomic_number, secondary_atomic_number)
-  }
-  
-  // Estimates unit cell size based on covalent radii of elements
-  fn estimate_unit_cell_size(&self, primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
-    // Get covalent radii from atom info using direct HashMap access
-    let primary_info = ATOM_INFO.get(&primary_atomic_number);
-    let secondary_info = ATOM_INFO.get(&secondary_atomic_number);
-    
-    if let (Some(primary), Some(secondary)) = (primary_info, secondary_info) {
-      // Calculate estimated bond length based on covalent radii
-      // For zinc blende structures, the bond length is approximately the sum of the covalent radii
-      let bond_length = primary.radius + secondary.radius;
-      
-      // In zinc blende/diamond structures, the unit cell size is approximately 4 times the bond length
-      // between two adjacent atoms, divided by sqrt(3)
-      // This is a simplification based on crystal geometry
-      let estimated_cell_size = (4.0 * bond_length) / (3.0_f64).sqrt();
-      
-      return estimated_cell_size;
-    }
-    
-    // Fallback to diamond unit cell size if atom info not found
-    common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM
-  }
-  
-  // Returns whether the unit cell size for a given element pair is estimated or measured
-  fn is_unit_cell_size_estimated(&self, primary_atomic_number: i32, secondary_atomic_number: i32) -> bool {
-    // Check if we have measured data for this pair or with reverse order
-    !common_constants::UNIT_CELL_SIZES.contains_key(&(primary_atomic_number, secondary_atomic_number)) &&
-    !common_constants::UNIT_CELL_SIZES.contains_key(&(secondary_atomic_number, primary_atomic_number))
-  }
-
-
   pub fn new() -> Self {
     Self {
       implicit_evaluator: ImplicitEvaluator::new(),
@@ -209,7 +97,7 @@ impl NetworkEvaluator {
     return StructureDesignerScene::new();
   }
 
-  fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> Vec<NetworkResult> {
+  pub fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> Vec<NetworkResult> {
 
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
@@ -226,22 +114,22 @@ impl NetworkEvaluator {
       return args.concat();
     }
     if node.node_type_name == "sphere" {
-      return vec![self.eval_sphere(network_stack, node_id, registry)];
+      return vec![eval_sphere(network_stack, node_id, registry)];
     }
     if node.node_type_name == "cuboid" {
-      return vec![self.eval_cuboid(network_stack, node_id, registry)];
+      return vec![eval_cuboid(network_stack, node_id, registry)];
     }
     if node.node_type_name == "half_space" {
-      return vec![self.eval_half_space(network_stack, node_id, registry)];
+      return vec![eval_half_space(network_stack, node_id, registry)];
     }
     if node.node_type_name == "geo_to_atom" {
-      return vec![self.eval_geo_to_atom(network_stack, node_id, registry)];
+      return vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)];
     }
     if node.node_type_name == "edit_atom" {
       return vec![self.eval_edit_atom(network_stack, node_id, registry)];
     }
     if node.node_type_name == "atom_trans" {
-      return vec![self.eval_atom_trans(network_stack, node_id, registry)];
+      return vec![eval_atom_trans(&self, network_stack, node_id, registry)];
     }
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();
@@ -249,80 +137,6 @@ impl NetworkEvaluator {
       return self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry);
     }
     return vec![NetworkResult::None];
-  }
-
-  fn add_bond(
-    &self,
-    atomic_structure: &mut AtomicStructure,
-    atom_ids: &Vec<u64>,
-    atom_index_1: usize,
-    atom_index_2: usize) {
-      if atom_ids[atom_index_1] == 0 || atom_ids[atom_index_2] == 0 { return; }
-      atomic_structure.add_bond(atom_ids[atom_index_1], atom_ids[atom_index_2], 1);    
-  }
-
-  fn eval_sphere<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
-
-    return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-      sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
-      DQuat::IDENTITY,
-    ) });
-  }
-
-  fn eval_cuboid<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
-
-    let min_corner = cuboid_data.min_corner.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-    let extent = cuboid_data.extent.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-    let center = min_corner + extent / 2.0;
-
-    return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-      center,
-      DQuat::IDENTITY,
-    ) });
-  }
-
-  fn eval_half_space<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
-
-
-    let dir = half_space_data.miller_index.as_dvec3().normalize();
-    let shift_handle_offset = ((half_space_data.shift as f64) / half_space_data.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-
-    return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-      dir * shift_handle_offset,
-      DQuat::from_rotation_arc(DVec3::Y, dir),
-    )});
-  }
-
-  fn eval_atom_trans<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {  
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
-    if node.arguments[0].argument_node_ids.is_empty() {
-      return NetworkResult::Atomic(AtomicStructure::new());
-    }
-    let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
-
-    let result = &self.evaluate(network_stack, input_molecule_node_id, registry)[0];
-    if let NetworkResult::Atomic(atomic_structure) = result {
-      let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
-
-      let rotation_quat = DQuat::from_euler(
-        glam::EulerRot::XYX,
-        atom_trans_data.rotation.x, 
-        atom_trans_data.rotation.y, 
-        atom_trans_data.rotation.z);
-
-      let mut result_atomic_structure = atomic_structure.clone();
-      result_atomic_structure.transform(&rotation_quat, &atom_trans_data.translation);
-
-      return NetworkResult::Atomic(result_atomic_structure);
-    }
-    return NetworkResult::None;
   }
 
   fn eval_edit_atom<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
@@ -342,186 +156,6 @@ impl NetworkEvaluator {
       return NetworkResult::Atomic(atomic_structure);
     }
     return NetworkResult::Atomic(AtomicStructure::new());
-  }
-
-  // generates diamond molecule from geometry in an optimized way
-  fn eval_geo_to_atom<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
-    if node.arguments[0].argument_node_ids.is_empty() {
-      return NetworkResult::Atomic(AtomicStructure::new());
-    }
-
-    let geo_node_id = node.arguments[0].get_node_id().unwrap();
-
-    let mut atomic_structure = AtomicStructure::new();
-
-    // id:0 means there is no atom there
-    let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
-
-    let geo_to_atom_data = node.data.as_any_ref().downcast_ref::<GeoToAtomData>().unwrap();
-
-    self.process_box_for_atomic(
-      geo_to_atom_data,
-      network_stack,
-      geo_node_id,
-      registry,
-      &common_constants::IMPLICIT_VOLUME_MIN,
-      &(common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN),
-      &mut atom_pos_to_id,
-      &mut atomic_structure
-    );
-
-    atomic_structure.remove_lone_atoms();
-    return NetworkResult::Atomic(atomic_structure);
-  }
-
-  fn process_box_for_atomic<'a>(
-    &self,
-    geo_to_atom_data: &GeoToAtomData,
-    network_stack: &Vec<NetworkStackElement<'a>>,
-    geo_node_id: u64,
-    registry: &NodeTypeRegistry,
-    start_pos: &IVec3,
-    size: &IVec3,
-    atom_pos_to_id: &mut HashMap<IVec3, u64>,
-    atomic_structure: &mut AtomicStructure) {
-
-    let epsilon: f64 = 0.001;
-
-    // Calculate the center point of the box
-    let center_point = start_pos.as_dvec3() + size.as_dvec3() / 2.0;
-
-    // Evaluate SDF at the center point
-    let sdf_value = self.implicit_evaluator.implicit_eval(network_stack, geo_node_id, &center_point, registry)[0];
-  
-    let half_diagonal = size.as_dvec3().length() / 2.0;
-
-    // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
-    if sdf_value > half_diagonal + DIAMOND_SAMPLE_THRESHOLD + epsilon {
-      return;
-    }
-
-    // If SDF value is less than -half diagonal, the whole box is filled
-    let filled = sdf_value < (-half_diagonal - epsilon);
-  
-    // Determine if we should subdivide in each dimension (size >= 4)
-    let should_subdivide_x = size.x >= 2;
-    let should_subdivide_y = size.y >= 2;
-    let should_subdivide_z = size.z >= 2;
-
-    // If the whole box is filled or we can't subdivide in any direction, process each cell individually
-    if filled || (!should_subdivide_x && !should_subdivide_y && !should_subdivide_z) {
-        // Process each cell within the box
-        for x in 0..size.x {
-            for y in 0..size.y {
-                for z in 0..size.z {
-                    let cell_pos = IVec3::new(
-                        start_pos.x + x,
-                        start_pos.y + y,
-                        start_pos.z + z
-                    );
-                    self.process_cell_for_atomic(
-                        geo_to_atom_data,
-                        network_stack,
-                        geo_node_id,
-                        registry,
-                        &cell_pos,
-                        atom_pos_to_id,
-                        atomic_structure,
-                        filled,
-                    );
-                }
-            }
-        }
-        return;
-    }
-
-    // Otherwise, subdivide the box and recursively process each subdivision
-    let subdivisions = subdivide_box(
-        start_pos,
-        size,
-        should_subdivide_x,
-        should_subdivide_y,
-        should_subdivide_z
-    );
-    
-    // Process each subdivision recursively
-    for (sub_start, sub_size) in subdivisions {
-        self.process_box_for_atomic(
-            geo_to_atom_data,
-            network_stack,
-            geo_node_id,
-            registry,
-            &sub_start,
-            &sub_size,
-            atom_pos_to_id,
-            atomic_structure
-        );
-    }
-  }
-
-  fn process_cell_for_atomic<'a>(
-    &self,
-    geo_to_atom_data: &GeoToAtomData,
-    network_stack: &Vec<NetworkStackElement<'a>>,
-    geo_node_id: u64,
-    registry: &NodeTypeRegistry,
-    int_pos: &IVec3,
-    atom_pos_to_id: &mut HashMap<IVec3, u64>,
-    atomic_structure: &mut AtomicStructure,
-    filled: bool,) {
-      let cell_start_position = int_pos * 4;
-
-      let mut atom_ids = Vec::new();
-      for i in 0..IN_CELL_ATOM_POSITIONS.len() {
-        let pos = &IN_CELL_ATOM_POSITIONS[i];
-        let atom_type = &IN_CELL_ZINCBLENDE_TYPES[i];
-        let absolute_pos = cell_start_position + *pos;
-        if let Some(id) = atom_pos_to_id.get(&absolute_pos) {
-          atom_ids.push(*id);
-        } else {
-          let crystal_space_pos = absolute_pos.as_dvec3() / 4.0;
-          let mut has_atom = filled;
-          if !has_atom {
-            let value = self.implicit_evaluator.implicit_eval(network_stack, geo_node_id, &crystal_space_pos, registry)[0];
-            has_atom = value < DIAMOND_SAMPLE_THRESHOLD;
-          }
-
-          let atom_id = if has_atom {
-            let id = in_crystal_pos_to_id(&absolute_pos);
-            let atomic_number = match atom_type {
-              ZincBlendeAtomType::Primary => geo_to_atom_data.primary_atomic_number,
-              ZincBlendeAtomType::Secondary => geo_to_atom_data.secondary_atomic_number,
-            };
-            let unit_cell_size = self.get_unit_cell_size(geo_to_atom_data.primary_atomic_number, geo_to_atom_data.secondary_atomic_number);
-            atomic_structure.add_atom_with_id(id, atomic_number, crystal_space_pos * unit_cell_size, 1);
-            atom_pos_to_id.insert(absolute_pos, id);
-            id
-          } else { 0 };
-          atom_ids.push(atom_id);
-        }
-      }
-
-      self.add_bond(atomic_structure, &atom_ids, 14, 0);
-      self.add_bond(atomic_structure, &atom_ids, 14, 8);
-      self.add_bond(atomic_structure, &atom_ids, 14, 10);
-      self.add_bond(atomic_structure, &atom_ids, 14, 12);
-
-      self.add_bond(atomic_structure, &atom_ids, 15, 6);
-      self.add_bond(atomic_structure, &atom_ids, 15, 9);
-      self.add_bond(atomic_structure, &atom_ids, 15, 11);
-      self.add_bond(atomic_structure, &atom_ids, 15, 12);
-
-      self.add_bond(atomic_structure, &atom_ids, 16, 5);
-      self.add_bond(atomic_structure, &atom_ids, 16, 9);
-      self.add_bond(atomic_structure, &atom_ids, 16, 10);
-      self.add_bond(atomic_structure, &atom_ids, 16, 13);
-
-      self.add_bond(atomic_structure, &atom_ids, 17, 4);
-      self.add_bond(atomic_structure, &atom_ids, 17, 8);
-      self.add_bond(atomic_structure, &atom_ids, 17, 11);
-      self.add_bond(atomic_structure, &atom_ids, 17, 13);
   }
 
   pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> StructureDesignerScene {
