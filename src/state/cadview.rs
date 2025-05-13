@@ -2,8 +2,8 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{AppState, FontAssets};
-use bevy::{app::App, prelude::*};
+use crate::AppState;
+use bevy::prelude::*;
 
 pub struct CadViewPlugin;
 
@@ -18,47 +18,36 @@ impl Plugin for CadViewPlugin {
 #[derive(Component)]
 struct OnCadView;
 
-fn setup_cad_view(mut commands: Commands, font_assets: Res<FontAssets>) {
+fn setup_cad_view(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // Spawn a 3D camera
     commands.spawn((
-        Camera2d,
-        Camera {
-            // This is the same as the default clear color, which matches
-            // the dark gray color on Bevy's website, but let's make it
-            // explicit in case Bevy ever changes its arbitrary defaults.
-            clear_color: ClearColorConfig::Custom(Color::srgb_u8(43, 44, 47)),
-            ..default()
-        },
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         OnCadView,
     ));
-    commands
-        .spawn((
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                ..default()
-            },
-            OnCadView,
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Text::new("Hello, world!"),
-                TextFont {
-                    font: font_assets.fira_sans_bold.clone(),
-                    font_size: 64.0,
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-                Node {
-                    margin: UiRect::all(Val::Auto),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-            ));
-        });
+
+    // Add a light
+    commands.spawn((
+        PointLight {
+            intensity: 1500.0,
+            shadows_enabled: true,
+            ..default()
+        },
+        Transform::from_xyz(4.0, 8.0, 4.0),
+        OnCadView,
+    ));
+
+    // Add a box centered at the origin
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+        MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        OnCadView,
+    ));
 }
 
 fn cleanup_cad_view(mut commands: Commands, entities: Query<Entity, With<OnCadView>>) {
