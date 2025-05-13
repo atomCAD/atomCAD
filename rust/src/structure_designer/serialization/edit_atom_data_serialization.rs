@@ -1,12 +1,12 @@
 use serde::{Serialize, Deserialize};
-use crate::structure_designer::edit_atom_commands::select_command::SelectCommand;
-use crate::structure_designer::edit_atom_commands::add_bond_command::AddBondCommand;
-use crate::structure_designer::nodes::edit_atom::EditAtomData;
+use crate::structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
+use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::AddBondCommand;
+use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use std::io;
-use crate::structure_designer::edit_atom_command::EditAtomCommand;
+use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use serde_json;
-use crate::structure_designer::nodes::edit_atom::EditAtomTool;
-use crate::structure_designer::nodes::edit_atom::DefaultToolState;
+use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
+use crate::structure_designer::nodes::edit_atom::edit_atom::DefaultToolState;
 
 /// Serializable representation of an EditAtomCommand, which uses type tagging
 #[derive(Serialize, Deserialize)]

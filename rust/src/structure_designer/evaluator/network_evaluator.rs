@@ -11,7 +11,6 @@ use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::util::transform::Transform;
 use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::structure_designer::nodes::edit_atom::EditAtomData;
 use lru::LruCache;
 use crate::util::timer::Timer;
 use crate::util::box_subdivision::subdivide_box;
@@ -20,6 +19,7 @@ use crate::structure_designer::nodes::sphere::eval_sphere;
 use crate::structure_designer::nodes::cuboid::eval_cuboid;
 use crate::structure_designer::nodes::half_space::eval_half_space;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
+use crate::structure_designer::nodes::edit_atom::edit_atom::eval_edit_atom;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 
@@ -126,7 +126,7 @@ impl NetworkEvaluator {
       return vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)];
     }
     if node.node_type_name == "edit_atom" {
-      return vec![self.eval_edit_atom(network_stack, node_id, registry)];
+      return vec![eval_edit_atom(&self, network_stack, node_id, registry)];
     }
     if node.node_type_name == "atom_trans" {
       return vec![eval_atom_trans(&self, network_stack, node_id, registry)];
@@ -137,25 +137,6 @@ impl NetworkEvaluator {
       return self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry);
     }
     return vec![NetworkResult::None];
-  }
-
-  fn eval_edit_atom<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
-    let input_val = if node.arguments[0].argument_node_ids.is_empty() {
-      return NetworkResult::Atomic(AtomicStructure::new());
-    } else {
-      let input_node_id = node.arguments[0].get_node_id().unwrap();
-      self.evaluate(network_stack, input_node_id, registry)[0].clone()
-    };
-
-    if let NetworkResult::Atomic(mut atomic_structure) = input_val {
-      let edit_atom_data = &node.data.as_any_ref().downcast_ref::<EditAtomData>().unwrap();
-
-      edit_atom_data.eval(&mut atomic_structure);
-      return NetworkResult::Atomic(atomic_structure);
-    }
-    return NetworkResult::Atomic(AtomicStructure::new());
   }
 
   pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> StructureDesignerScene {

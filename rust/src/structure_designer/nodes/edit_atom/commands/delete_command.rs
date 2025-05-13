@@ -1,4 +1,4 @@
-use super::super::edit_atom_command::EditAtomCommand;
+use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::common::atomic_structure_utils::calc_selection_transform;
 use serde::{Serialize, Deserialize};

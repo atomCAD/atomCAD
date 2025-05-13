@@ -3,19 +3,19 @@ use crate::common::atomic_structure_utils::calc_selection_transform;
 use crate::util::transform::Transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
-use super::edit_atom_commands::transform_command::TransformCommand;
+use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
 use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_data::NoData;
-use crate::structure_designer::nodes::edit_atom::EditAtomData;
-use crate::structure_designer::edit_atom_commands::select_command::SelectCommand;
-use crate::structure_designer::edit_atom_commands::delete_command::DeleteCommand;
-use crate::structure_designer::edit_atom_commands::replace_command::ReplaceCommand;
-use crate::structure_designer::edit_atom_commands::add_atom_command::AddAtomCommand;
-use crate::structure_designer::edit_atom_commands::add_bond_command::AddBondCommand;
+use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
+use crate::structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
+use crate::structure_designer::nodes::edit_atom::commands::delete_command::DeleteCommand;
+use crate::structure_designer::nodes::edit_atom::commands::replace_command::ReplaceCommand;
+use crate::structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
+use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::AddBondCommand;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
@@ -23,7 +23,7 @@ use crate::structure_designer::serialization::node_networks_serialization;
 use crate::api::common_api_types::SelectModifier;
 use crate::common::atomic_structure::BondReference;
 use crate::common::atomic_structure::HitTestResult;
-use crate::structure_designer::nodes::edit_atom::EditAtomTool;
+use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,

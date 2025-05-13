@@ -1,7 +1,5 @@
 pub mod structure_designer;
 pub mod common_constants;
-pub mod edit_atom_command;
-pub mod edit_atom_commands;
 pub mod node_type;
 pub mod node_network;
 pub mod node_type_registry;

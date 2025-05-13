@@ -1,9 +1,13 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::edit_atom_command::EditAtomCommand;
+use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::api::structure_designer_api_types::APIEditAtomTool;
 use crate::util::transform::Transform;
+use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 pub struct DefaultToolState {
   pub replacement_atomic_number: i32,
@@ -160,4 +164,23 @@ impl NodeData for EditAtomData {
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
       None
     }
+}
+
+pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+  let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+  let input_val = if node.arguments[0].argument_node_ids.is_empty() {
+    return NetworkResult::Atomic(AtomicStructure::new());
+  } else {
+    let input_node_id = node.arguments[0].get_node_id().unwrap();
+    network_evaluator.evaluate(network_stack, input_node_id, registry)[0].clone()
+  };
+
+  if let NetworkResult::Atomic(mut atomic_structure) = input_val {
+    let edit_atom_data = &node.data.as_any_ref().downcast_ref::<EditAtomData>().unwrap();
+
+    edit_atom_data.eval(&mut atomic_structure);
+    return NetworkResult::Atomic(atomic_structure);
+  }
+  return NetworkResult::Atomic(AtomicStructure::new());
 }

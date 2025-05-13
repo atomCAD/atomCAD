@@ -9,7 +9,7 @@ use super::nodes::sphere::SphereData;
 use super::nodes::half_space::HalfSpaceData;
 use super::nodes::geo_trans::GeoTransData;
 use super::nodes::atom_trans::AtomTransData;
-use super::nodes::edit_atom::EditAtomData;
+use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
 use super::node_data::NoData;
 use glam::{IVec3, DVec3};

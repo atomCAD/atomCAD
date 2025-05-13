@@ -16,7 +16,7 @@ use super::super::nodes::half_space::HalfSpaceData;
 use super::super::nodes::geo_trans::GeoTransData;
 use super::super::nodes::atom_trans::AtomTransData;
 use super::super::nodes::parameter::ParameterData;
-use super::super::nodes::edit_atom::EditAtomData;
+use super::super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::edit_atom_data_serialization::edit_atom_data_to_serializable;
 use super::edit_atom_data_serialization::serializable_to_edit_atom_data;
 use super::edit_atom_data_serialization::SerializableEditAtomData;
