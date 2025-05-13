@@ -22,16 +22,21 @@ use crate::structure_designer::node_data::cuboid_data::CuboidData;
 use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
 use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
 use crate::common::crystal_utils::in_crystal_pos_to_id;
+use crate::structure_designer::node_data::geo_to_atom_data::GeoToAtomData;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
-const CARBON: i32 = 6;
 
-// Relative in-cell positions of the carbon atoms that are part of a cell
+enum ZincBlendeAtomType {
+  Primary,
+  Secondary,
+}
+
+// Relative in-cell positions of the atoms that are part of a cell
 // A position can be part of multiple cells (corner positions are part of 8 cells,
 // face center positions are part of 2 cells, other positions are part of 1 cell).
 // In one cell coordinates go from 0 to 4. (a cell can be thought of 4x4x4 mini cells)
-const IN_CELL_CARBON_POSITIONS: [IVec3; 18] = [
+const IN_CELL_ATOM_POSITIONS: [IVec3; 18] = [
   // corner positions
   IVec3::new(0, 0, 0),
   IVec3::new(4, 0, 0),
@@ -55,6 +60,29 @@ const IN_CELL_CARBON_POSITIONS: [IVec3; 18] = [
   IVec3::new(1, 3, 3),
   IVec3::new(3, 1, 3),
   IVec3::new(3, 3, 1),
+];
+
+const IN_CELL_ZINCBLENDE_TYPES: [ZincBlendeAtomType; 18] = [
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+  ZincBlendeAtomType::Primary,
+
+  ZincBlendeAtomType::Secondary,
+  ZincBlendeAtomType::Secondary,
+  ZincBlendeAtomType::Secondary,
+  ZincBlendeAtomType::Secondary,
 ];
 
 #[derive(Clone)]
@@ -281,7 +309,10 @@ impl NetworkEvaluator {
     // id:0 means there is no atom there
     let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
 
+    let geo_to_atom_data = node.data.as_any_ref().downcast_ref::<GeoToAtomData>().unwrap();
+
     self.process_box_for_atomic(
+      geo_to_atom_data,
       network_stack,
       geo_node_id,
       registry,
@@ -297,6 +328,7 @@ impl NetworkEvaluator {
 
   fn process_box_for_atomic<'a>(
     &self,
+    geo_to_atom_data: &GeoToAtomData,
     network_stack: &Vec<NetworkStackElement<'a>>,
     geo_node_id: u64,
     registry: &NodeTypeRegistry,
@@ -340,6 +372,7 @@ impl NetworkEvaluator {
                         start_pos.z + z
                     );
                     self.process_cell_for_atomic(
+                        geo_to_atom_data,
                         network_stack,
                         geo_node_id,
                         registry,
@@ -353,7 +386,7 @@ impl NetworkEvaluator {
         }
         return;
     }
-    
+
     // Otherwise, subdivide the box and recursively process each subdivision
     let subdivisions = self.subdivide_box(
         start_pos,
@@ -366,6 +399,7 @@ impl NetworkEvaluator {
     // Process each subdivision recursively
     for (sub_start, sub_size) in subdivisions {
         self.process_box_for_atomic(
+            geo_to_atom_data,
             network_stack,
             geo_node_id,
             registry,
@@ -437,6 +471,7 @@ impl NetworkEvaluator {
 
   fn process_cell_for_atomic<'a>(
     &self,
+    geo_to_atom_data: &GeoToAtomData,
     network_stack: &Vec<NetworkStackElement<'a>>,
     geo_node_id: u64,
     registry: &NodeTypeRegistry,
@@ -446,11 +481,13 @@ impl NetworkEvaluator {
     filled: bool,) {
       let cell_start_position = int_pos * 4;
 
-      let mut carbon_atom_ids = Vec::new();
-      for pos in &IN_CELL_CARBON_POSITIONS {
+      let mut atom_ids = Vec::new();
+      for i in 0..IN_CELL_ATOM_POSITIONS.len() {
+        let pos = &IN_CELL_ATOM_POSITIONS[i];
+        let atom_type = &IN_CELL_ZINCBLENDE_TYPES[i];
         let absolute_pos = cell_start_position + *pos;
         if let Some(id) = atom_pos_to_id.get(&absolute_pos) {
-          carbon_atom_ids.push(*id);
+          atom_ids.push(*id);
         } else {
           let crystal_space_pos = absolute_pos.as_dvec3() / 4.0;
           let mut has_atom = filled;
@@ -461,34 +498,38 @@ impl NetworkEvaluator {
 
           let atom_id = if has_atom {
             let id = in_crystal_pos_to_id(&absolute_pos);
-            atomic_structure.add_atom_with_id(id, CARBON, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 1);
+            let atomic_number = match atom_type {
+              ZincBlendeAtomType::Primary => geo_to_atom_data.primary_atomic_number,
+              ZincBlendeAtomType::Secondary => geo_to_atom_data.secondary_atomic_number,
+            };
+            atomic_structure.add_atom_with_id(id, atomic_number, crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 1);
             atom_pos_to_id.insert(absolute_pos, id);
             id
           } else { 0 };
-          carbon_atom_ids.push(atom_id);
+          atom_ids.push(atom_id);
         }
       }
 
-      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 0);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 8);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 10);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 14, 12);
+      self.add_bond(atomic_structure, &atom_ids, 14, 0);
+      self.add_bond(atomic_structure, &atom_ids, 14, 8);
+      self.add_bond(atomic_structure, &atom_ids, 14, 10);
+      self.add_bond(atomic_structure, &atom_ids, 14, 12);
 
-      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 6);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 9);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 11);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 15, 12);
+      self.add_bond(atomic_structure, &atom_ids, 15, 6);
+      self.add_bond(atomic_structure, &atom_ids, 15, 9);
+      self.add_bond(atomic_structure, &atom_ids, 15, 11);
+      self.add_bond(atomic_structure, &atom_ids, 15, 12);
 
-      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 5);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 9);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 10);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 16, 13);
+      self.add_bond(atomic_structure, &atom_ids, 16, 5);
+      self.add_bond(atomic_structure, &atom_ids, 16, 9);
+      self.add_bond(atomic_structure, &atom_ids, 16, 10);
+      self.add_bond(atomic_structure, &atom_ids, 16, 13);
 
-      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 4);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 8);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 11);
-      self.add_bond(atomic_structure, &carbon_atom_ids, 17, 13);
-    }
+      self.add_bond(atomic_structure, &atom_ids, 17, 4);
+      self.add_bond(atomic_structure, &atom_ids, 17, 8);
+      self.add_bond(atomic_structure, &atom_ids, 17, 11);
+      self.add_bond(atomic_structure, &atom_ids, 17, 13);
+  }
 
   pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> StructureDesignerScene {
     let mut point_cloud = SurfacePointCloud::new();
