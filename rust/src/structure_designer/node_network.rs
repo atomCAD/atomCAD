@@ -3,8 +3,8 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::node_data::node_data::NodeData;
-use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Argument {

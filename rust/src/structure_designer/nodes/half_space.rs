@@ -1,8 +1,11 @@
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
+use serde::{Serialize, Deserialize};
+use crate::common::serialization_utils::ivec3_serializer;
 use glam::f32::Vec3;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
-use super::node_network_gadget::NodeNetworkGadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
@@ -11,8 +14,6 @@ use crate::util::hit_test_utils::sphere_hit_test;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 use crate::util::hit_test_utils::get_point_distance_to_ray;
-use crate::structure_designer::node_data::half_space_data::HalfSpaceData;
-use crate::structure_designer::node_data::node_data::NodeData;
 use crate::structure_designer::common_constants;
 use std::collections::HashSet;
 use crate::common::gadget::Gadget;
@@ -32,6 +33,21 @@ pub const DIRECTION_HANDLE_LENGTH: f64 = 0.6;
 pub const SHIFT_HANDLE_RADIUS: f64 = 0.4;
 pub const SHIFT_HANDLE_DIVISIONS: u32 = 16;
 pub const SHIFT_HANDLE_LENGTH: f64 = 1.2;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HalfSpaceData {
+  #[serde(with = "ivec3_serializer")]
+  pub miller_index: IVec3,
+  pub shift: i32,
+}
+
+impl NodeData for HalfSpaceData {
+
+    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+      return Some(Box::new(HalfSpaceGadget::new(&self.miller_index, self.shift)));
+    }
+  
+}
 
 #[derive(Clone)]
 pub struct HalfSpaceGadget {

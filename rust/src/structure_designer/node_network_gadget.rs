@@ -1,5 +1,4 @@
-use glam::f64::DVec3;
-use crate::structure_designer::node_data::node_data::NodeData;
+use crate::structure_designer::node_data::NodeData;
 use crate::common::gadget::Gadget;
 
 pub trait NodeNetworkGadget: Gadget {

@@ -3,15 +3,15 @@ use super::node_type::DataType;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
 use super::node_network::NodeNetwork;
-use super::node_data::no_data::NoData;
-use super::node_data::parameter_data::ParameterData;
-use super::node_data::cuboid_data::CuboidData;
-use super::node_data::sphere_data::SphereData;
-use super::node_data::half_space_data::HalfSpaceData;
-use super::node_data::geo_trans_data::GeoTransData;
-use super::node_data::atom_trans_data::AtomTransData;
-use super::node_data::edit_atom_data::EditAtomData;
-use super::node_data::geo_to_atom_data::GeoToAtomData;
+use super::nodes::parameter::ParameterData;
+use super::nodes::cuboid::CuboidData;
+use super::nodes::sphere::SphereData;
+use super::nodes::half_space::HalfSpaceData;
+use super::nodes::geo_trans::GeoTransData;
+use super::nodes::atom_trans::AtomTransData;
+use super::nodes::edit_atom::EditAtomData;
+use super::nodes::geo_to_atom::GeoToAtomData;
+use super::node_data::NoData;
 use glam::{IVec3, DVec3};
 
 pub struct NodeTypeRegistry {

@@ -1,5 +1,5 @@
-use crate::structure_designer::node_data::node_data::NodeData;
-use crate::structure_designer::gadgets::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::api::structure_designer_api_types::APIEditAtomTool;

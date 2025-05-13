@@ -8,9 +8,9 @@ use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
 use super::node_type::NodeType;
-use crate::structure_designer::node_data::node_data::NodeData;
-use crate::structure_designer::node_data::no_data::NoData;
-use crate::structure_designer::node_data::edit_atom_data::EditAtomData;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::NoData;
+use crate::structure_designer::nodes::edit_atom::EditAtomData;
 use crate::structure_designer::edit_atom_commands::select_command::SelectCommand;
 use crate::structure_designer::edit_atom_commands::delete_command::DeleteCommand;
 use crate::structure_designer::edit_atom_commands::replace_command::ReplaceCommand;
@@ -18,12 +18,12 @@ use crate::structure_designer::edit_atom_commands::add_atom_command::AddAtomComm
 use crate::structure_designer::edit_atom_commands::add_bond_command::AddBondCommand;
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
-use super::gadgets::node_network_gadget::NodeNetworkGadget;
+use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::api::common_api_types::SelectModifier;
 use crate::common::atomic_structure::BondReference;
 use crate::common::atomic_structure::HitTestResult;
-use crate::structure_designer::node_data::edit_atom_data::EditAtomTool;
+use crate::structure_designer::nodes::edit_atom::EditAtomTool;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,

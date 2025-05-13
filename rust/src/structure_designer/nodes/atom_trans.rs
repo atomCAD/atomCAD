@@ -1,18 +1,33 @@
-use super::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use glam::f64::DVec3;
+use serde::{Serialize, Deserialize};
+use crate::common::serialization_utils::dvec3_serializer;
 use crate::renderer::mesh::Mesh;
-use crate::structure_designer::node_data::atom_trans_data::AtomTransData;
-use crate::structure_designer::node_data::node_data::NodeData;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
-use glam::f64::DVec3;
 use glam::f64::DQuat;
 use glam::f32::Vec3;
 
 pub const GADGET_LENGTH: f64 = 6.0;
 pub const AXIS_RADIUS: f64 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AtomTransData {
+  #[serde(with = "dvec3_serializer")]
+  pub translation: DVec3,
+  #[serde(with = "dvec3_serializer")]
+  pub rotation: DVec3, // intrinsic euler angles in radians
+}
+
+impl NodeData for AtomTransData {
+    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+      return Some(Box::new(AtomTransGadget::new(self.translation, self.rotation)));
+    }
+}
 
 #[derive(Clone)]
 pub struct AtomTransGadget {
@@ -98,3 +113,4 @@ impl AtomTransGadget {
             self.rotation.z);
     }
 }
+
