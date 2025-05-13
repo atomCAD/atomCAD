@@ -24,6 +24,7 @@ use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
 use std::collections::HashMap;
 use lru::LruCache;
 use crate::util::timer::Timer;
+use crate::util::box_subdivision::subdivide_box;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
@@ -437,7 +438,7 @@ impl NetworkEvaluator {
     }
 
     // Otherwise, subdivide the box and recursively process each subdivision
-    let subdivisions = self.subdivide_box(
+    let subdivisions = subdivide_box(
         start_pos,
         size,
         should_subdivide_x,
@@ -458,64 +459,6 @@ impl NetworkEvaluator {
             atomic_structure
         );
     }
-  }
-
-  fn subdivide_box(
-    &self,
-    start_pos: &IVec3,
-    size: &IVec3,
-    should_subdivide_x: bool,
-    should_subdivide_y: bool,
-    should_subdivide_z: bool
-  ) -> Vec<(IVec3, IVec3)> {
-    let mut result = Vec::new();
-    
-    // Calculate first subdivision sizes
-    let sub_size_x_first = if should_subdivide_x { size.x / 2 } else { size.x };
-    let sub_size_y_first = if should_subdivide_y { size.y / 2 } else { size.y };
-    let sub_size_z_first = if should_subdivide_z { size.z / 2 } else { size.z };
-    
-    // Calculate second subdivision sizes, accounting for remainder
-    let sub_size_x_second = if should_subdivide_x { size.x - sub_size_x_first } else { size.x };
-    let sub_size_y_second = if should_subdivide_y { size.y - sub_size_y_first } else { size.y };
-    let sub_size_z_second = if should_subdivide_z { size.z - sub_size_z_first } else { size.z };
-    
-    // Calculate the number of subdivisions in each direction
-    let subdivisions_x = if should_subdivide_x { 2 } else { 1 };
-    let subdivisions_y = if should_subdivide_y { 2 } else { 1 };
-    let subdivisions_z = if should_subdivide_z { 2 } else { 1 };
-    
-    // Generate all subdivision boxes
-    for dx in 0..subdivisions_x {
-        let sub_size_x = if dx == 0 { sub_size_x_first } else { sub_size_x_second };
-        let offset_x = if dx == 0 { 0 } else { sub_size_x_first };
-        
-        for dy in 0..subdivisions_y {
-            let sub_size_y = if dy == 0 { sub_size_y_first } else { sub_size_y_second };
-            let offset_y = if dy == 0 { 0 } else { sub_size_y_first };
-            
-            for dz in 0..subdivisions_z {
-                let sub_size_z = if dz == 0 { sub_size_z_first } else { sub_size_z_second };
-                let offset_z = if dz == 0 { 0 } else { sub_size_z_first };
-                
-                let sub_start = IVec3::new(
-                    start_pos.x + offset_x,
-                    start_pos.y + offset_y,
-                    start_pos.z + offset_z
-                );
-                
-                let sub_size = IVec3::new(
-                    sub_size_x,
-                    sub_size_y,
-                    sub_size_z
-                );
-                
-                result.push((sub_start, sub_size));
-            }
-        }
-    }
-    
-    result
   }
 
   fn process_cell_for_atomic<'a>(
@@ -661,7 +604,7 @@ impl NetworkEvaluator {
     }
     
     // Otherwise, subdivide the box and recursively process each subdivision
-    let subdivisions = self.subdivide_box(
+    let subdivisions = subdivide_box(
         start_pos,
         size,
         should_subdivide_x,
