@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/structure_designer/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -59,16 +59,16 @@ class NodeNetwork extends StatelessWidget {
   /// Checks if the given position is on top of any node
   bool _isClickOnNode(StructureDesignerModel model, Offset position) {
     if (model.nodeNetworkView == null) return false;
-    
+
     for (final node in model.nodeNetworkView!.nodes.values) {
       final nodeRect = Rect.fromLTWH(
-        node.position.x, 
-        node.position.y, 
-        NODE_WIDTH, 
-        // Approximate height calculation based on number of input pins
-        NODE_VERT_WIRE_OFFSET + (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM)
-      );
-      
+          node.position.x,
+          node.position.y,
+          NODE_WIDTH,
+          // Approximate height calculation based on number of input pins
+          NODE_VERT_WIRE_OFFSET +
+              (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM));
+
       if (nodeRect.contains(position)) {
         return true;
       }
@@ -296,10 +296,13 @@ class NodeWidget extends StatelessWidget {
                       .updateNodePosition(node.id);
                 },
                 onSecondaryTapDown: (details) {
-                  final model = Provider.of<StructureDesignerModel>(context, listen: false);
+                  final model = Provider.of<StructureDesignerModel>(context,
+                      listen: false);
                   model.setSelectedNode(node.id);
-                  
-                  final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+
+                  final RenderBox overlay = Overlay.of(context)
+                      .context
+                      .findRenderObject() as RenderBox;
                   final RelativeRect position = RelativeRect.fromRect(
                     Rect.fromPoints(
                       details.globalPosition,
@@ -307,19 +310,22 @@ class NodeWidget extends StatelessWidget {
                     ),
                     Offset.zero & overlay.size,
                   );
-                  
+
                   showMenu(
                     context: context,
                     position: position,
                     items: [
                       PopupMenuItem(
                         value: 'return',
-                        child: Text(node.returnNode ? 'Unset as return node' : 'Set as return node'),
+                        child: Text(node.returnNode
+                            ? 'Unset as return node'
+                            : 'Set as return node'),
                       ),
                     ],
                   ).then((value) {
                     if (value == 'return') {
-                      final model = Provider.of<StructureDesignerModel>(context, listen: false);
+                      final model = Provider.of<StructureDesignerModel>(context,
+                          listen: false);
                       if (node.returnNode) {
                         // Unset as return node (pass null to clear the return node)
                         model.setReturnNodeId(null);

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
@@ -8,7 +8,7 @@ import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.

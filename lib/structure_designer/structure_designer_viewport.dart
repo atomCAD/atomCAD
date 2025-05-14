@@ -3,11 +3,11 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/cad_viewport.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/ui_common.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api.dart'
+import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
+    as edit_atom_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
-import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/common_api_types.dart';
-import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 class StructureDesignerViewport extends CadViewport {
   final StructureDesignerModel graphModel;
@@ -28,7 +28,7 @@ class _StructureDesignerViewportState
   void onDefaultClick(Offset pointerPos) {
     if (widget.graphModel.isEditAtomActive()) {
       final ray = getRayFromPointerPos(pointerPos);
-      final activeEditAtomTool = structure_designer_api.getActiveEditAtomTool();
+      final activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
 
       // Find the selected node
       final selectedNode = widget.graphModel.nodeNetworkView?.nodes.entries

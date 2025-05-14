@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api.dart'
-    as structure_designer_api;
 import 'package:vector_math/vector_math.dart' as vector_math;
 import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
+    as edit_atom_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as structure_designer_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 class PinReference {
   BigInt nodeId;
@@ -53,17 +55,17 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   bool isEditAtomActive() {
-    return structure_designer_api.isEditAtomActive();
+    return edit_atom_api.isEditAtomActive();
   }
 
   void setActiveEditAtomTool(APIEditAtomTool tool) {
-    structure_designer_api.setActiveEditAtomTool(tool: tool);
+    edit_atom_api.setActiveEditAtomTool(tool: tool);
     refreshFromKernel();
   }
 
   void selectAtomOrBondByRay(vector_math.Vector3 rayStart,
       vector_math.Vector3 rayDir, SelectModifier selectModifier) {
-    structure_designer_api.selectAtomOrBondByRay(
+    edit_atom_api.selectAtomOrBondByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
       selectModifier: selectModifier,
@@ -213,37 +215,37 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void deleteSelectedAtomsAndBonds() {
     if (nodeNetworkView == null) return;
-    structure_designer_api.deleteSelectedAtomsAndBonds();
+    edit_atom_api.deleteSelectedAtomsAndBonds();
     refreshFromKernel();
   }
 
   void replaceSelectedAtoms(int atomicNumber) {
     if (nodeNetworkView == null) return;
-    structure_designer_api.replaceSelectedAtoms(atomicNumber: atomicNumber);
+    edit_atom_api.replaceSelectedAtoms(atomicNumber: atomicNumber);
     refreshFromKernel();
   }
 
   void transformSelected(APITransform absTransform) {
     if (nodeNetworkView == null) return;
-    structure_designer_api.transformSelected(absTransform: absTransform);
+    edit_atom_api.transformSelected(absTransform: absTransform);
     refreshFromKernel();
   }
 
   void editAtomUndo() {
     if (nodeNetworkView == null) return;
-    structure_designer_api.editAtomUndo();
+    edit_atom_api.editAtomUndo();
     refreshFromKernel();
   }
 
   void editAtomRedo() {
     if (nodeNetworkView == null) return;
-    structure_designer_api.editAtomRedo();
+    edit_atom_api.editAtomRedo();
     refreshFromKernel();
   }
 
   bool setEditAtomDefaultData(int replacementAtomicNumber) {
     if (nodeNetworkView == null) return false;
-    final result = structure_designer_api.setEditAtomDefaultData(
+    final result = edit_atom_api.setEditAtomDefaultData(
         replacementAtomicNumber: replacementAtomicNumber);
     refreshFromKernel();
     return result;
@@ -251,8 +253,8 @@ class StructureDesignerModel extends ChangeNotifier {
 
   bool setEditAtomAddAtomData(int atomicNumber) {
     if (nodeNetworkView == null) return false;
-    final result = structure_designer_api.setEditAtomAddAtomData(
-        atomicNumber: atomicNumber);
+    final result =
+        edit_atom_api.setEditAtomAddAtomData(atomicNumber: atomicNumber);
     refreshFromKernel();
     return result;
   }
@@ -260,7 +262,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;
-    structure_designer_api.addAtomByRay(
+    edit_atom_api.addAtomByRay(
       atomicNumber: atomicNumber,
       planeNormal: Vector3ToAPIVec3(planeNormal),
       rayStart: Vector3ToAPIVec3(rayStart),
@@ -271,7 +273,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void drawBondByRay(vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;
-    structure_designer_api.drawBondByRay(
+    edit_atom_api.drawBondByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
     );
@@ -291,7 +293,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
-    activeEditAtomTool = structure_designer_api.getActiveEditAtomTool();
+    activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
     notifyListeners();
   }
 }

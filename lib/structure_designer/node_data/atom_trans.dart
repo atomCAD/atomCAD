@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/inputs/vec3_input.dart';
 
 /// Editor widget for atom_trans nodes
