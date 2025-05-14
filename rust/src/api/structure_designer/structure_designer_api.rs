@@ -1,19 +1,19 @@
 use crate::api::api_common::refresh_renderer;
 use crate::api::api_common::CAD_INSTANCE;
 use crate::api::structure_designer::structure_designer_api_types::NodeNetworkView;
+use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
 use std::collections::HashMap;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
 use crate::api::structure_designer::structure_designer_api_types::NodeView;
 use crate::api::structure_designer::structure_designer_api_types::WireView;
 use crate::api::common_api_types::APIVec2;
-use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
-use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
+use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::sphere::SphereData;
@@ -262,6 +262,37 @@ pub fn get_geo_trans_data(node_id: u64) -> Option<APIGeoTransData> {
       translation: to_api_ivec3(&geo_trans_data.translation),
       rotation: to_api_ivec3(&geo_trans_data.rotation),
     });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_geo_to_atom_data(node_id: u64) -> Option<APIGeoToAtomData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let geo_to_atom_data = node_data.as_any_ref().downcast_ref::<GeoToAtomData>()?;
+    return Some(APIGeoToAtomData {
+      primary_atomic_number: geo_to_atom_data.primary_atomic_number,
+      secondary_atomic_number: geo_to_atom_data.secondary_atomic_number,
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_geo_to_atom_data(node_id: u64, data: APIGeoToAtomData) -> bool {
+  unsafe {
+    if let Some(cad_instance) = &mut CAD_INSTANCE {
+      let node_data_option = cad_instance.structure_designer.get_node_network_data_mut(node_id);
+      if let Some(node_data) = node_data_option {
+        if let Some(geo_to_atom_data) = node_data.as_any_mut().downcast_mut::<GeoToAtomData>() {
+          geo_to_atom_data.primary_atomic_number = data.primary_atomic_number;
+          geo_to_atom_data.secondary_atomic_number = data.secondary_atomic_number;
+          refresh_renderer(cad_instance, false);
+          return true;
+        }
+      }
+    }
+    false
   }
 }
 

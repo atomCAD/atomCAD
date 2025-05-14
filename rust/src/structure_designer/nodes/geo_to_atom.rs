@@ -12,6 +12,7 @@ use crate::util::box_subdivision::subdivide_box;
 use crate::common::crystal_utils::in_crystal_pos_to_id;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::common::common_constants::ATOM_INFO;
+use crate::structure_designer::common_constants::CrystalTypeInfo;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 enum ZincBlendeAtomType {
@@ -279,15 +280,15 @@ fn add_bond(
 // Returns the unit cell size for a given element pair
 // If the pair has a known measured unit cell size, returns that
 // Otherwise, estimates based on covalent radii
-fn get_unit_cell_size(primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
+pub fn get_unit_cell_size(primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
   // Check if we have measured data for this pair
-  if let Some(size) = common_constants::UNIT_CELL_SIZES.get(&(primary_atomic_number, secondary_atomic_number)) {
-    return *size;
+  if let Some(info) = common_constants::CRYSTAL_INFO_MAP.get(&(primary_atomic_number, secondary_atomic_number)) {
+    return info.unit_cell_size;
   }
     
   // Check if we have measured data with elements in reverse order
-  if let Some(size) = common_constants::UNIT_CELL_SIZES.get(&(secondary_atomic_number, primary_atomic_number)) {
-    return *size;
+  if let Some(info) = common_constants::CRYSTAL_INFO_MAP.get(&(secondary_atomic_number, primary_atomic_number)) {
+    return info.unit_cell_size;
   }
     
   // If no measured data, estimate based on covalent radii
@@ -295,7 +296,7 @@ fn get_unit_cell_size(primary_atomic_number: i32, secondary_atomic_number: i32) 
 }
   
 // Estimates unit cell size based on covalent radii of elements
-fn estimate_unit_cell_size(primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
+pub fn estimate_unit_cell_size(primary_atomic_number: i32, secondary_atomic_number: i32) -> f64 {
   // Get covalent radii from atom info using direct HashMap access
   let primary_info = ATOM_INFO.get(&primary_atomic_number);
   let secondary_info = ATOM_INFO.get(&secondary_atomic_number);
@@ -316,10 +317,14 @@ fn estimate_unit_cell_size(primary_atomic_number: i32, secondary_atomic_number: 
   // Fallback to diamond unit cell size if atom info not found
   common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM
 }
-  
+
 // Returns whether the unit cell size for a given element pair is estimated or measured
-fn is_unit_cell_size_estimated(primary_atomic_number: i32, secondary_atomic_number: i32) -> bool {
+pub fn is_unit_cell_size_estimated(primary_atomic_number: i32, secondary_atomic_number: i32) -> bool {
   // Check if we have measured data for this pair or with reverse order
-  !common_constants::UNIT_CELL_SIZES.contains_key(&(primary_atomic_number, secondary_atomic_number)) &&
-  !common_constants::UNIT_CELL_SIZES.contains_key(&(secondary_atomic_number, primary_atomic_number))
+  !common_constants::CRYSTAL_INFO_MAP.contains_key(&(primary_atomic_number, secondary_atomic_number)) &&
+  !common_constants::CRYSTAL_INFO_MAP.contains_key(&(secondary_atomic_number, primary_atomic_number))
+}
+
+pub fn get_crystal_types() -> Vec<CrystalTypeInfo> {
+  common_constants::CRYSTAL_INFO_VEC.clone()
 }

@@ -6,6 +6,7 @@ import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -107,6 +108,17 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: atomTransData,
         );
+      case 'geo_to_atom':
+        // Fetch the geo to atom data here in the parent widget
+        final geoToAtomData = getGeoToAtomData(
+          nodeId: selectedNode.id,
+        );
+
+        return GeoToAtomEditor(
+          nodeId: selectedNode.id,
+          data: geoToAtomData,
+        );
+
       case 'edit_atom':
         // Fetch the edit atom data here in the parent widget
         final editAtomData = getEditAtomData(

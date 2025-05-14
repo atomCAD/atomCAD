@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`
 
 class APIAtomTransData {
   final APIVec3 translation;
@@ -28,6 +28,37 @@ class APIAtomTransData {
           runtimeType == other.runtimeType &&
           translation == other.translation &&
           rotation == other.rotation;
+}
+
+class APICrystalTypeInfo {
+  final int primaryAtomicNumber;
+  final int secondaryAtomicNumber;
+  final double unitCellSize;
+  final String name;
+
+  const APICrystalTypeInfo({
+    required this.primaryAtomicNumber,
+    required this.secondaryAtomicNumber,
+    required this.unitCellSize,
+    required this.name,
+  });
+
+  @override
+  int get hashCode =>
+      primaryAtomicNumber.hashCode ^
+      secondaryAtomicNumber.hashCode ^
+      unitCellSize.hashCode ^
+      name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICrystalTypeInfo &&
+          runtimeType == other.runtimeType &&
+          primaryAtomicNumber == other.primaryAtomicNumber &&
+          secondaryAtomicNumber == other.secondaryAtomicNumber &&
+          unitCellSize == other.unitCellSize &&
+          name == other.name;
 }
 
 class APICuboidData {
@@ -107,6 +138,28 @@ enum APIEditAtomTool {
   addAtom,
   addBond,
   ;
+}
+
+class APIGeoToAtomData {
+  final int primaryAtomicNumber;
+  final int secondaryAtomicNumber;
+
+  const APIGeoToAtomData({
+    required this.primaryAtomicNumber,
+    required this.secondaryAtomicNumber,
+  });
+
+  @override
+  int get hashCode =>
+      primaryAtomicNumber.hashCode ^ secondaryAtomicNumber.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIGeoToAtomData &&
+          runtimeType == other.runtimeType &&
+          primaryAtomicNumber == other.primaryAtomicNumber &&
+          secondaryAtomicNumber == other.secondaryAtomicNumber;
 }
 
 class APIGeoTransData {

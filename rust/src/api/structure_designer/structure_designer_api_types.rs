@@ -65,6 +65,11 @@ pub struct InputPinView {
     pub transform_only_frame: bool,
   }
   
+  pub struct APIGeoToAtomData {
+    pub primary_atomic_number: i32,
+    pub secondary_atomic_number: i32,
+  }
+
   pub struct APIAtomTransData {
     pub translation: APIVec3,
     pub rotation: APIVec3, // intrinsic euler angles in radians
@@ -80,4 +85,12 @@ pub struct InputPinView {
     pub has_selected_atoms: bool,
     pub has_selection: bool,
     pub selection_transform: Option<APITransform>,
+  }
+
+  #[derive(Clone, Debug)]
+  pub struct APICrystalTypeInfo {
+    pub primary_atomic_number: i32,
+    pub secondary_atomic_number: i32,
+    pub unit_cell_size: f64,
+    pub name: String,
   }
