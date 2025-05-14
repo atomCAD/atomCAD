@@ -4,6 +4,7 @@ import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/select_crystal_type_widget.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/geo_to_atom_api.dart';
 
 /// Editor widget for GeoToAtom nodes that allows configuring the crystal structure
 class GeoToAtomEditor extends StatefulWidget {
@@ -54,6 +55,46 @@ class _GeoToAtomEditorState extends State<GeoToAtomEditor> {
         data: _stagedData!,
       );
     }
+  }
+
+  /// Builds a widget that displays the unit cell size and whether it's estimated
+  Widget _buildUnitCellSizeDisplay() {
+    // Get the primary and secondary atomic numbers
+    final primary = _stagedData!.primaryAtomicNumber;
+    final secondary = _stagedData!.secondaryAtomicNumber;
+    
+    // Skip if either is zero (Custom)
+    if (primary == 0 || secondary == 0) {
+      return const SizedBox.shrink();
+    }
+    
+    // Get the unit cell size from the API
+    final unitCellSize = getUnitCellSize(
+      primaryAtomicNumber: primary,
+      secondaryAtomicNumber: secondary,
+    );
+    
+    // Check if it's estimated
+    final isEstimated = isUnitCellSizeEstimated(
+      primaryAtomicNumber: primary,
+      secondaryAtomicNumber: secondary,
+    );
+    
+    // Format the unit cell size with 3 decimal places
+    final formattedSize = unitCellSize.toStringAsFixed(3);
+    
+    // Build the display text
+    final displayText = 'Unit cell size: $formattedSize Å${isEstimated ? ' (estimated)' : ''}';
+    
+    return Text(
+      displayText,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: isEstimated ? FontWeight.normal : FontWeight.w500,
+        fontStyle: isEstimated ? FontStyle.italic : FontStyle.normal,
+        color: isEstimated ? Colors.grey[700] : Colors.black,
+      ),
+    );
   }
 
   @override
@@ -130,6 +171,13 @@ class _GeoToAtomEditorState extends State<GeoToAtomEditor> {
               hint: 'Select secondary element',
               required: true,
             ),
+            
+            const SizedBox(height: AppSpacing.medium),
+            
+            // Unit cell size display
+            if (_stagedData?.primaryAtomicNumber != null && 
+                _stagedData?.secondaryAtomicNumber != null) 
+              _buildUnitCellSizeDisplay(),
           ],
         ),
       ),
