@@ -17,7 +17,7 @@ pub(crate) mod platform_impl;
 pub use platform::{bevy::PlatformTweaks, get_process_name, set_process_name};
 
 mod atoms;
-pub use atoms::{AtomCluster, AtomClusterPlugin};
+pub use atoms::{AtomCluster, AtomClusterPlugin, AtomInstance};
 
 mod start;
 pub use start::start;
