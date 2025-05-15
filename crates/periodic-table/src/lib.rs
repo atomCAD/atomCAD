@@ -147,8 +147,8 @@ impl Element {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
 #[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct ElementRepr {
     pub color: Vec3, // RGB color space
     pub radius: f32, // in angstroms
@@ -157,8 +157,16 @@ pub struct ElementRepr {
 const_assert_eq!(mem::size_of::<ElementRepr>(), 16);
 unsafe impl AsBytes for ElementRepr {}
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct PeriodicTable {
     pub element_reprs: [ElementRepr; Element::MAX as usize],
+}
+
+impl Default for PeriodicTable {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PeriodicTable {
@@ -358,12 +366,6 @@ impl PeriodicTable {
         };
 
         Self { element_reprs }
-    }
-}
-
-impl Default for PeriodicTable {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
