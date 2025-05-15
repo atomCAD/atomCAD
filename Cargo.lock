@@ -353,8 +353,8 @@ dependencies = [
 name = "atomcad-periodic-table"
 version = "0.1.0"
 dependencies = [
- "atomcad-asbytes",
  "bevy",
+ "bytemuck",
  "serde",
  "static_assertions",
 ]

@@ -30,6 +30,7 @@ serde = "1"
 # Utilities
 asbytes = { package = "atomcad-asbytes", path = "crates/asbytes" }
 bitflags = "2"
+bytemuck = "1"
 static_assertions = "1"
 # Windowing
 menu = { package = "atomcad-menu", path = "crates/menu" }
@@ -61,7 +62,7 @@ image.workspace = true
 # Rendering
 wgpu-types.workspace = true
 # Utilities
-bytemuck = "1"
+bytemuck = { workspace = true }
 # Windowing
 menu.workspace = true
 winit.workspace = true
