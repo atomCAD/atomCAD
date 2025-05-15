@@ -30,6 +30,7 @@ serde = "1"
 # Utilities
 asbytes = { package = "atomcad-asbytes", path = "crates/asbytes" }
 bitflags = "2"
+bytemuck = "1"
 static_assertions = "1"
 # Windowing
 menu = { package = "atomcad-menu", path = "crates/menu" }
@@ -49,7 +50,7 @@ opt-level = 3
 [dependencies]
 bevy = { workspace = true }
 # Utilities
-bytemuck = "1"
+bytemuck = { workspace = true }
 # Windowing
 menu = { workspace = true }
 

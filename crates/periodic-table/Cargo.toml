@@ -14,5 +14,5 @@ bevy = { workspace = true }
 # Serialization
 serde = { workspace = true }
 # Utilities
-asbytes = { workspace = true }
+bytemuck = { workspace = true }
 static_assertions = { workspace = true }
