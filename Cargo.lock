@@ -305,6 +305,7 @@ name = "atomcad"
 version = "0.1.0"
 dependencies = [
  "atomcad-menu",
+ "atomcad-periodic-table",
  "base64",
  "bevy",
  "bytemuck",

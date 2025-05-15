@@ -57,6 +57,8 @@ opt-level = 3
 
 [dependencies]
 bevy.workspace = true
+# Chemistry
+periodic-table = { workspace = true }
 # Image
 image.workspace = true
 # Rendering

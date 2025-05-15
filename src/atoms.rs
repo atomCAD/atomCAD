@@ -21,7 +21,7 @@ use bevy::{
             ViewBinnedRenderPhases,
         },
         render_resource::{
-            BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+            BindGroup, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
             BindingType, Buffer, BufferBindingType, BufferInitDescriptor, BufferUsages,
             ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, FragmentState,
             FrontFace, MultisampleState, PipelineCache, PolygonMode, PrimitiveState,
@@ -36,6 +36,7 @@ use bevy::{
     },
 };
 use bytemuck::{Pod, Zeroable};
+use periodic_table::PeriodicTable;
 use wgpu_types::PrimitiveTopology;
 
 // Plugin
@@ -84,14 +85,33 @@ impl Plugin for AtomClusterPlugin {
             contents: bytemuck::cast_slice(&vertices),
             usage: BufferUsages::VERTEX,
         });
-        let atom_geometry_buffers = SharedAtomClusterGpuBuffers { vertex_buffer };
+
+        // Create the periodic table buffer
+        let periodic_table = PeriodicTable::new();
+        let periodic_table_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("periodic_table_buffer"),
+            contents: bytemuck::cast_slice(&[periodic_table]),
+            usage: BufferUsages::UNIFORM,
+        });
+
+        let shared_atom_cluster_buffers = SharedAtomClusterGpuBuffers {
+            vertex_buffer,
+            periodic_table_buffer,
+        };
 
         render_app
-            .insert_resource(atom_geometry_buffers)
+            .insert_resource(shared_atom_cluster_buffers)
             // Requires AssetServer, so can't be done in build()
             .init_resource::<AtomClusterPipeline>()
             .init_resource::<SpecializedRenderPipelines<AtomClusterPipeline>>();
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct AtomInstance {
+    pub position: Vec3,
+    pub kind: u32,
 }
 
 // Component that holds our atom data in the ECS
@@ -99,13 +119,13 @@ impl Plugin for AtomClusterPlugin {
 #[require(VisibilityClass)]
 #[component(on_add = add_visibility_class::<AtomCluster>)]
 pub struct AtomCluster {
-    pub atoms: Vec<Vec4>, // x, y, z, radius
+    pub atoms: Vec<AtomInstance>,
 }
 
 // Extracted component for the render world
 #[derive(Component, Clone)]
 pub struct ExtractedAtomCluster {
-    atoms: Vec<Vec4>,
+    atoms: Vec<AtomInstance>,
 }
 
 impl ExtractComponent for AtomCluster {
@@ -120,13 +140,6 @@ impl ExtractComponent for AtomCluster {
     }
 }
 
-// GPU representation of atom instance data
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct GpuAtomInstance {
-    position_radius: [f32; 4],
-}
-
 // Vertex data for a quad
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -138,6 +151,7 @@ struct QuadVertex {
 #[derive(Resource)]
 struct SharedAtomClusterGpuBuffers {
     vertex_buffer: Buffer,
+    periodic_table_buffer: Buffer,
 }
 
 // GPU buffers for atom cluster
@@ -190,6 +204,17 @@ impl FromWorld for AtomClusterPipeline {
                     },
                     count: None,
                 },
+                // Binding 1: Periodic table
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         );
 
@@ -224,13 +249,22 @@ impl SpecializedRenderPipeline for AtomClusterPipeline {
                     },
                     // Buffer 1: Per-atom instance data
                     VertexBufferLayout {
-                        array_stride: std::mem::size_of::<[f32; 4]>() as u64,
+                        array_stride: std::mem::size_of::<AtomInstance>() as u64,
                         step_mode: VertexStepMode::Instance,
-                        attributes: vec![VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 0,
-                            shader_location: 1,
-                        }],
+                        attributes: vec![
+                            // Position
+                            VertexAttribute {
+                                format: VertexFormat::Float32x3,
+                                offset: 0,
+                                shader_location: 1,
+                            },
+                            // Element ID
+                            VertexAttribute {
+                                format: VertexFormat::Uint32,
+                                offset: 12,
+                                shader_location: 2,
+                            },
+                        ],
                     },
                 ],
                 shader_defs: vec![],
@@ -278,24 +312,15 @@ fn prepare_atom_cluster_buffers(
     render_device: Res<RenderDevice>,
 ) {
     for (entity, atom_cluster) in query.iter() {
-        // Convert atom data to GPU format
-        let instances: Vec<GpuAtomInstance> = atom_cluster
-            .atoms
-            .iter()
-            .map(|atom| GpuAtomInstance {
-                position_radius: atom.to_array(),
-            })
-            .collect();
-
         let instance_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("atom_cluster_instance_buffer"),
-            contents: bytemuck::cast_slice(&instances),
+            contents: bytemuck::cast_slice(&atom_cluster.atoms),
             usage: BufferUsages::VERTEX,
         });
 
         commands.entity(entity).insert(AtomClusterGpuBuffers {
             instance_buffer,
-            instance_count: instances.len() as u32,
+            instance_count: atom_cluster.atoms.len() as u32,
         });
     }
 }
@@ -304,6 +329,7 @@ fn prepare_atom_cluster_buffers(
 fn prepare_atom_cluster_view_bind_groups(
     mut commands: Commands,
     view_uniforms: Res<ViewUniforms>,
+    shared_atom_cluster_buffers: Res<SharedAtomClusterGpuBuffers>,
     pipeline: Res<AtomClusterPipeline>,
     pipeline_cache: Res<PipelineCache>,
     render_device: Res<RenderDevice>,
@@ -313,7 +339,20 @@ fn prepare_atom_cluster_view_bind_groups(
         let bind_group = render_device.create_bind_group(
             Some("atom_cluster_view_bind_group"),
             &pipeline_cache.get_bind_group_layout(&pipeline.bind_group_layout),
-            &BindGroupEntries::single(view_uniforms.uniforms.binding().unwrap()),
+            &[
+                // Binding 0: View uniforms
+                BindGroupEntry {
+                    binding: 0,
+                    resource: view_uniforms.uniforms.binding().unwrap(),
+                },
+                // Binding 1: Periodic table
+                BindGroupEntry {
+                    binding: 1,
+                    resource: shared_atom_cluster_buffers
+                        .periodic_table_buffer
+                        .as_entire_binding(),
+                },
+            ],
         );
 
         commands

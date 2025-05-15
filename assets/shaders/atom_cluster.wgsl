@@ -7,10 +7,23 @@
     view_transformations::position_world_to_clip,
 }
 
+struct ElementProperties {
+    color: vec3<f32>,
+    radius: f32,
+}
+
+struct PeriodicTable {
+    // Elemental identity is low 7 bits of kind, so max 128 elements
+    elements: array<ElementProperties, 118>,
+}
+
+@group(0) @binding(1) var<uniform> periodic_table: PeriodicTable;
+
 struct AtomVertexInput {
     @builtin(vertex_index) index: u32,
     @location(0) quad_position: vec3<f32>,
-    @location(1) atom_pos_kind: vec4<f32>,
+    @location(1) atom_position: vec3<f32>,
+    @location(2) atom_kind: u32,
 }
 
 struct AtomVertexOutput {
@@ -19,14 +32,17 @@ struct AtomVertexOutput {
     @location(1) atom_center: vec3<f32>,
     @location(2) atom_radius: f32,
     @location(3) quad_coord: vec2<f32>,
+    @location(4) color: vec3<f32>,
 }
 
 @vertex
 fn vertex(vertex: AtomVertexInput) -> AtomVertexOutput {
     var out: AtomVertexOutput;
 
-    let atom_center = vertex.atom_pos_kind.xyz;
-    let atom_radius = vertex.atom_pos_kind.w;
+    let atom_center = vertex.atom_position;
+    let element_id = vertex.atom_kind & 0x7Fu; // Extract low 7 bits
+    let element = periodic_table.elements[element_id];
+    let atom_radius = element.radius;
 
     // Get camera right and up vectors in world space
     // Note: view_from_world transforms from world to view space,
@@ -43,13 +59,13 @@ fn vertex(vertex: AtomVertexInput) -> AtomVertexOutput {
     out.atom_center = atom_center;
     out.atom_radius = atom_radius;
     out.quad_coord = vertex.quad_position.xy;
-
+    out.color = element.color;
     return out;
 }
 
 struct FragmentOutput {
-    @location(0) color: vec4<f32>,
     @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
 }
 
 @fragment
@@ -117,19 +133,15 @@ fn fragment(in: AtomVertexOutput) -> FragmentOutput {
     let ao = 1.0 - (dist_sq * 0.2);
 
     // Color based on normal (for debugging) or sphere position
-    var base_color = vec3<f32>(
-        0.5 + 0.5 * sin(in.atom_center.x * 0.5 + 1.0),
-        0.5 + 0.5 * sin(in.atom_center.y * 0.5 + 2.0),
-        0.8
-    );
+    var base_color = in.color;
 
     // Combine lighting
     let ambient = 0.15;
     let lighting = (ambient + diffuse * ao) * base_color + specular + rim * 0.3;
 
     var out: FragmentOutput;
-    out.color = vec4<f32>(lighting, 1.0);
     out.depth = depth;
+    out.color = vec4<f32>(lighting, 1.0);
     return out;
 }
 

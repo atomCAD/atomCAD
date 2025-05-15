@@ -2,7 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{AppState, AtomCluster, AtomClusterPlugin, FontAssets};
+use crate::{AppState, AtomCluster, AtomClusterPlugin, AtomInstance, FontAssets};
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::{camera::primitives::Aabb, prelude::*};
 
@@ -56,24 +56,25 @@ fn setup_cad_view(mut commands: Commands, font_assets: Res<FontAssets>) {
     // Add a sphere cloud
     commands.spawn((
         AtomCluster {
-            atoms: {
-                let mut atoms = Vec::new();
-                for x in -2..=2 {
-                    for y in -2..=2 {
-                        for z in -2..=2 {
-                            // Vary the positions and sizes
-                            atoms.push(Vec4::new(
-                                x as f32 * 5.0,
-                                y as f32 * 5.0,
-                                z as f32 * 5.0,
-                                0.5 + ((x + y + z) % 3) as f32 * 0.5, // Varying radii between 0.5 and 1.5
-                            ));
-                        }
-                    }
-                }
+            atoms: vec![
+                // Water molecule
 
-                atoms
-            },
+                // Oxygen (center)
+                AtomInstance {
+                    position: Vec3::new(0.0, 0.0, 0.0),
+                    kind: 8,
+                },
+                // Hydrogen 1
+                AtomInstance {
+                    position: Vec3::new(-0.757, 0.586, 0.0),
+                    kind: 1,
+                },
+                // Hydrogen 2
+                AtomInstance {
+                    position: Vec3::new(0.757, 0.586, 0.0),
+                    kind: 1,
+                },
+            ],
         },
         Transform::default(),
         Visibility::default(),
