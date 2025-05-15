@@ -296,6 +296,7 @@ dependencies = [
  "atomcad-menu",
  "base64",
  "bevy",
+ "bytemuck",
  "embed-resource",
  "getrandom",
  "icns",
@@ -306,6 +307,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "wasm-bindgen-test",
  "web-sys",
+ "wgpu-types",
  "winit",
 ]
 

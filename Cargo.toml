@@ -41,6 +41,7 @@ objc2-foundation = "0.3"
 # keep the following in sync with Bevy's dependencies
 winit = { version = "0.30", default-features = false }
 image = { version = "0.25", default-features = false }
+wgpu-types = "26"
 
 # Enable a small amount of optimization for our code in debug mode:
 [profile.dev]
@@ -54,6 +55,10 @@ opt-level = 3
 bevy.workspace = true
 # Image
 image.workspace = true
+# Rendering
+wgpu-types.workspace = true
+# Utilities
+bytemuck = "1"
 # Windowing
 menu.workspace = true
 winit.workspace = true
