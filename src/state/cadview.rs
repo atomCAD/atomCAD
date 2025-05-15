@@ -2,18 +2,21 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{AppState, FontAssets};
+use crate::{AppState, AtomCluster, AtomClusterPlugin, FontAssets};
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
-use bevy::prelude::*;
+use bevy::{camera::primitives::Aabb, prelude::*};
 
 pub struct CadViewPlugin;
 
 impl Plugin for CadViewPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(FrameTimeDiagnosticsPlugin {
-            max_history_length: 9,
-            smoothing_factor: 0.2,
-        })
+        app.add_plugins((
+            AtomClusterPlugin,
+            FrameTimeDiagnosticsPlugin {
+                max_history_length: 9,
+                smoothing_factor: 0.2,
+            },
+        ))
         .add_systems(OnEnter(AppState::CadView), setup_cad_view)
         .add_systems(OnExit(AppState::CadView), cleanup_cad_view)
         .add_systems(
@@ -31,12 +34,7 @@ struct OnCadView;
 #[derive(Component)]
 struct FpsText;
 
-fn setup_cad_view(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    font_assets: Res<FontAssets>,
-) {
+fn setup_cad_view(mut commands: Commands, font_assets: Res<FontAssets>) {
     // Spawn a 3D camera
     commands.spawn((
         Camera3d::default(),
@@ -55,11 +53,34 @@ fn setup_cad_view(
         OnCadView,
     ));
 
-    // Add a box centered at the origin
+    // Add a sphere cloud
     commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-        MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
-        Transform::from_xyz(0.0, 0.0, 0.0),
+        AtomCluster {
+            atoms: {
+                let mut atoms = Vec::new();
+                for x in -2..=2 {
+                    for y in -2..=2 {
+                        for z in -2..=2 {
+                            // Vary the positions and sizes
+                            atoms.push(Vec4::new(
+                                x as f32 * 5.0,
+                                y as f32 * 5.0,
+                                z as f32 * 5.0,
+                                0.5 + ((x + y + z) % 3) as f32 * 0.5, // Varying radii between 0.5 and 1.5
+                            ));
+                        }
+                    }
+                }
+
+                atoms
+            },
+        },
+        Transform::default(),
+        Visibility::default(),
+        Aabb {
+            center: Vec3A::ZERO,
+            half_extents: Vec3A::new(1.0, 1.0, 1.0),
+        },
         OnCadView,
     ));
 

@@ -307,6 +307,7 @@ dependencies = [
  "atomcad-menu",
  "base64",
  "bevy",
+ "bytemuck",
  "embed-resource",
  "getrandom 0.4.1",
  "icns",
@@ -318,6 +319,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-test",
  "web-sys",
+ "wgpu-types",
  "winit",
 ]
 

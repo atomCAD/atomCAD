@@ -43,6 +43,8 @@ objc2-foundation = "0.3"
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 # bevyengine/bevy: crates/bevy_image/Cargo.toml
 image = { version = "0.25.2", default-features = false }
+# bevyengine/bevy: crates/bevy_shader/Cargo.toml
+wgpu-types = { version = "27", default-features = false }
 
 # Enable a small amount of optimization for our code in debug mode:
 [profile.dev]
@@ -56,6 +58,10 @@ opt-level = 3
 bevy.workspace = true
 # Image
 image.workspace = true
+# Rendering
+wgpu-types.workspace = true
+# Utilities
+bytemuck = "1"
 # Windowing
 menu.workspace = true
 winit.workspace = true
