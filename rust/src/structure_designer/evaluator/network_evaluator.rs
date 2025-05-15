@@ -18,8 +18,10 @@ use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
 use crate::structure_designer::nodes::sphere::eval_sphere;
 use crate::structure_designer::nodes::cuboid::eval_cuboid;
 use crate::structure_designer::nodes::half_space::eval_half_space;
+use crate::structure_designer::nodes::anchor::eval_anchor;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
 use crate::structure_designer::nodes::edit_atom::edit_atom::eval_edit_atom;
+use crate::structure_designer::nodes::stamp::eval_stamp;
 
 const SAMPLES_PER_UNIT: i32 = 4;
 
@@ -130,6 +132,12 @@ impl NetworkEvaluator {
     }
     if node.node_type_name == "atom_trans" {
       return vec![eval_atom_trans(&self, network_stack, node_id, registry)];
+    }
+    if node.node_type_name == "anchor" {
+      return vec![eval_anchor(&self, network_stack, node_id, registry)];
+    }    
+    if node.node_type_name == "stamp" {
+      return vec![eval_stamp(&self, network_stack, node_id, registry)];
     }
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();

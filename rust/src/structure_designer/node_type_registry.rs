@@ -11,6 +11,8 @@ use super::nodes::geo_trans::GeoTransData;
 use super::nodes::atom_trans::AtomTransData;
 use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
+use super::nodes::anchor::AnchorData;
+use super::nodes::stamp::StampData;
 use super::node_data::NoData;
 use glam::{IVec3, DVec3};
 
@@ -184,6 +186,32 @@ impl NodeTypeRegistry {
         translation: DVec3::new(0.0, 0.0, 0.0),
         rotation: DVec3::new(0.0, 0.0, 0.0),
       }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "anchor".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+              multi: false,
+          },
+      ],
+      output_type: DataType::Atomic,
+      node_data_creator: || Box::new(AnchorData::new()),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "stamp".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "stamp".to_string(),
+              data_type: DataType::Atomic,
+              multi: false,
+          },
+      ],
+      output_type: DataType::Atomic,
+      node_data_creator: || Box::new(StampData::new()),
     });
 
     return ret;

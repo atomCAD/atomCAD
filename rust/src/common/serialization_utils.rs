@@ -89,3 +89,38 @@ pub mod dquat_serializer {
         Ok(DQuat::from_xyzw(x, y, z, w))
     }
 }
+
+/// Module to handle serialization of Option<IVec3> type
+pub mod option_ivec3_serializer {
+    use super::*;
+    
+    pub fn serialize<S>(option_vec: &Option<IVec3>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match option_vec {
+            Some(vec) => ivec3_serializer::serialize(vec, serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+    
+    // Helper enum to handle multiple deserialization cases
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IVec3OrNull {
+        Vec(#[serde(with = "ivec3_serializer")] IVec3),
+        Null(Option<()>),
+    }
+    
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<IVec3>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Use serde's untagged enum to handle both cases without moving the deserializer
+        match IVec3OrNull::deserialize(deserializer)? {
+            IVec3OrNull::Vec(vec) => Ok(Some(vec)),
+            IVec3OrNull::Null(None) => Ok(None),
+            _ => Err(serde::de::Error::custom("Expected IVec3 or null")),
+        }
+    }
+}

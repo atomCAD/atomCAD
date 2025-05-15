@@ -1,6 +1,7 @@
 use crate::util::transform::Transform;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
+use glam::IVec3;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -109,6 +110,7 @@ pub struct AtomicStructure {
   pub clusters: BTreeMap<u64, Cluster>,
   pub from_selected_node: bool,
   pub selection_transform: Option<Transform>,
+  pub anchor_position: Option<IVec3>,
 }
 
 impl AtomicStructure {
@@ -136,6 +138,7 @@ impl AtomicStructure {
       clusters: BTreeMap::new(),
       from_selected_node: false,
       selection_transform: None,
+      anchor_position: None,
     };
     ret.add_cluster("default");
     ret

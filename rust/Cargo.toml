@@ -19,3 +19,4 @@ thiserror = "2.0.12"
 regex = "1.5.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_with = "3.5.1"
