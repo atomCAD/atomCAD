@@ -27,12 +27,13 @@ struct AtomVertexInput {
 }
 
 struct AtomVertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
+    @builtin(position) position: vec4<f32>,
     @location(0) world_position: vec3<f32>,
-    @location(1) atom_center: vec3<f32>,
-    @location(2) atom_radius: f32,
-    @location(3) quad_coord: vec2<f32>,
-    @location(4) color: vec3<f32>,
+    @location(1) quad_coord: vec2<f32>,
+    @location(2) @interpolate(flat) atom_center: vec3<f32>,
+    @location(3) @interpolate(flat) atom_radius: f32,
+    @location(4) @interpolate(flat) color: vec3<f32>,
+    @location(5) clip_position: vec4<f32>,
 }
 
 @vertex
@@ -54,8 +55,11 @@ fn vertex(vertex: AtomVertexInput) -> AtomVertexOutput {
     let world_offset = (vertex.quad_position.x * right + vertex.quad_position.y * up) * atom_radius;
     let world_position = atom_center + world_offset;
 
-    out.clip_position = position_world_to_clip(world_position);
+    let clip_position = position_world_to_clip(world_position);
+
+    out.position = clip_position;
     out.world_position = world_position;
+    out.clip_position = clip_position;
     out.atom_center = atom_center;
     out.atom_radius = atom_radius;
     out.quad_coord = vertex.quad_position.xy;
@@ -107,42 +111,29 @@ fn fragment(in: AtomVertexOutput) -> FragmentOutput {
         discard;
     }
 
+    // Calculate the sphere surface z-offset (in quad space)
+    let z_normalized = sqrt(1.0 - dist_sq);
+    let z_offset = z_normalized * in.atom_radius;
+
+    // Adjust clip position using projection matrix
+    let proj = view.clip_from_view;
+    let adjusted_clip_pos = in.clip_position + proj[2] * z_offset;
+    let depth = adjusted_clip_pos.z / adjusted_clip_pos.w;
+
     let hit_point = ray_origin + t * ray_dir;
     let normal = normalize(hit_point - in.atom_center);
 
-    // Calculate proper depth
-    let clip_pos = position_world_to_clip(hit_point);
-    let depth = clip_pos.z / clip_pos.w;
-
-    // Improved lighting with rim lighting
-    let light_dir = normalize(vec3<f32>(0.5, 1.0, 0.3));
-    let view_dir = normalize(ray_origin - hit_point);
-
-    let n_dot_l = dot(normal, light_dir);
-    let diffuse = max(n_dot_l, 0.0);
-
-    // Rim lighting for better sphere definition
-    let rim_power = 1.0 - max(dot(normal, view_dir), 0.0);
-    let rim = pow(rim_power, 3.0) * 0.5;
-
-    // Simple specular (Blinn-Phong)
-    let half_dir = normalize(light_dir + view_dir);
-    let specular = pow(max(dot(normal, half_dir), 0.0), 32.0) * 0.5;
-
-    // Ambient occlusion approximation based on screen position
-    let ao = 1.0 - (dist_sq * 0.2);
-
-    // Color based on normal (for debugging) or sphere position
-    var base_color = in.color;
-
-    // Combine lighting
-    let ambient = 0.15;
-    let lighting = (ambient + diffuse * ao) * base_color + specular + rim * 0.3;
+    // Simple lighting
+    let brightness = map(z_normalized, 0.0, 1.0, 0.25, 1.0);
 
     var out: FragmentOutput;
     out.depth = depth;
-    out.color = vec4<f32>(lighting, 1.0);
+    out.color = vec4<f32>(in.color * brightness, 1.0);
     return out;
+}
+
+fn map(value: f32, low1: f32, high1: f32, low2: f32, high2: f32) -> f32 {
+    return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
 }
 
 // End of File
