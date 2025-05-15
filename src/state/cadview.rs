@@ -2,7 +2,9 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{AppState, AtomCluster, AtomClusterPlugin, AtomInstance, FontAssets};
+use crate::{
+    AppState, AtomCluster, AtomClusterPlugin, AtomInstance, CadCamera, CadCameraPlugin, FontAssets,
+};
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::{camera::primitives::Aabb, prelude::*};
 
@@ -12,6 +14,7 @@ impl Plugin for CadViewPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             AtomClusterPlugin,
+            CadCameraPlugin,
             FrameTimeDiagnosticsPlugin {
                 max_history_length: 9,
                 smoothing_factor: 0.2,
@@ -36,9 +39,22 @@ struct FpsText;
 
 fn setup_cad_view(mut commands: Commands, font_assets: Res<FontAssets>) {
     // Spawn a 3D camera
+    let camera_position = Vec3::new(0.0, 1.5, 5.0);
+    let focus_point = Vec3::ZERO;
+    let distance = camera_position.distance(focus_point);
+    let delta = camera_position - focus_point;
+    let theta = delta.x.atan2(delta.z);
+    let phi = (delta.y / distance).asin();
+    let spherical_coords = Vec2::new(theta, phi);
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_translation(camera_position).looking_at(focus_point, Vec3::Y),
+        CadCamera {
+            focus_point,
+            distance,
+            spherical_coords,
+            ..default()
+        },
         OnCadView,
     ));
 
