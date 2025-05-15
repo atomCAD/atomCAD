@@ -4,8 +4,8 @@
 
 use std::mem;
 
-use asbytes::AsBytes;
 use bevy::math::Vec3;
+use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
 
@@ -148,17 +148,16 @@ impl Element {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct ElementProperties {
     pub color: Vec3, // RGB color space
     pub radius: f32, // in angstroms
 }
 
 const_assert_eq!(mem::size_of::<ElementProperties>(), 16);
-unsafe impl AsBytes for ElementProperties {}
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct PeriodicTable {
     pub element_reprs: [ElementProperties; Element::MAX as usize],
 }
