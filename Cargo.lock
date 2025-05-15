@@ -269,6 +269,7 @@ dependencies = [
  "atomcad-menu",
  "base64 0.22.1",
  "bevy",
+ "bytemuck",
  "embed-resource",
  "getrandom 0.3.3",
  "icns",

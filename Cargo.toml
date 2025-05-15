@@ -48,6 +48,8 @@ opt-level = 3
 
 [dependencies]
 bevy = { workspace = true }
+# Utilities
+bytemuck = "1"
 # Windowing
 menu = { workspace = true }
 
