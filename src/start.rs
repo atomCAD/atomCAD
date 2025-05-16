@@ -4,8 +4,11 @@
 
 use crate::{APP_NAME, AppPlugin, PlatformTweaks};
 use bevy::{prelude::*, window::PresentMode, winit::WinitSettings};
+use event_loop_waker::{EventLoopWakerPlugin, setup_ctrlc_handler};
 
 pub fn start() -> AppExit {
+    setup_ctrlc_handler();
+
     let window_plugin = WindowPlugin {
         primary_window: Some(Window {
             title: APP_NAME.into(),
@@ -23,6 +26,7 @@ pub fn start() -> AppExit {
         .insert_resource(WinitSettings::desktop_app())
         .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
+        .add_plugins(EventLoopWakerPlugin)
         .add_plugins(AppPlugin)
         .run()
 }
