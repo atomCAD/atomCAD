@@ -52,8 +52,8 @@ impl Default for CadCamera {
             zoom_sensitivity: 0.1,
             min_distance: 1.0,
             max_distance: 100.0,
-            min_pitch: -std::f32::consts::FRAC_PI_2,
-            max_pitch: std::f32::consts::FRAC_PI_2,
+            min_pitch: -std::f32::consts::FRAC_PI_2 + 0.001,
+            max_pitch: std::f32::consts::FRAC_PI_2 - 0.001,
         }
     }
 }
