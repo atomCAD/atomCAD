@@ -602,22 +602,33 @@ impl AtomicStructure {
     }
   }
   
-  /// Transform a single atom by applying rotation and translation.
+  /// Sets the position of an atom directly.
   /// Updates the atom position in the grid and marks it as dirty.
   ///
   /// # Arguments
   ///
-  /// * `atom_id` - The ID of the atom to transform
-  /// * `rotation` - The rotation to apply
-  /// * `translation` - The translation to apply
+  /// * `atom_id` - The ID of the atom to update
+  /// * `new_position` - The new position to set
   ///
   /// # Returns
   ///
-  /// `true` if the atom was found and transformed, `false` otherwise
-  pub fn transform_atom(&mut self, atom_id: u64, rotation: &DQuat, translation: &DVec3) -> bool {
+  /// `true` if the atom was found and updated, `false` otherwise
+  pub fn set_atom_position(&mut self, atom_id: u64, new_position: DVec3) -> bool {
+    // Epsilon for determining if a position change is significant
+    // 1e-5 Angstroms is far below physical significance but above numerical error
+    const POSITION_EPSILON: f64 = 1e-5;
+    
+    // Find the atom and update its position if the change is significant
     let positions = if let Some(atom) = self.atoms.get_mut(&atom_id) {
       let old_position = atom.position;
-      atom.position = rotation.mul_vec3(atom.position) + *translation;
+      
+      // Check if the position change is significant
+      if old_position.distance_squared(new_position) < POSITION_EPSILON * POSITION_EPSILON {
+        // Position change is too small to be significant, skip update
+        return true;
+      }
+      
+      atom.position = new_position;
       Some((old_position, atom.position))
     } else {
       None
@@ -633,7 +644,32 @@ impl AtomicStructure {
       false
     }
   }
+
+  /// Transform a single atom by applying rotation and translation.
+  /// Updates the atom position in the grid and marks it as dirty.
+  ///
+  /// # Arguments
+  ///
+  /// * `atom_id` - The ID of the atom to transform
+  /// * `rotation` - The rotation to apply
+  /// * `translation` - The translation to apply
+  ///
+  /// # Returns
+  ///
+  /// `true` if the atom was found and transformed, `false` otherwise
+  pub fn transform_atom(&mut self, atom_id: u64, rotation: &DQuat, translation: &DVec3) -> bool {
+    // Calculate the new position based on rotation and translation
+    if let Some(atom) = self.atoms.get(&atom_id) {
+      let new_position = rotation.mul_vec3(atom.position) + *translation;
+      self.set_atom_position(atom_id, new_position)
+    } else {
+      false
+    }
+  }
   
+  
+
+
   pub fn transform(&mut self, rotation: &DQuat, translation: &DVec3) {
     // First, collect all atom IDs that will be transformed
     let atom_ids: Vec<u64> = self.atoms.keys().cloned().collect();

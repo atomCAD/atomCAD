@@ -204,11 +204,16 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "stamp".to_string(),
       parameters: vec![
-          Parameter {
-              name: "stamp".to_string(),
-              data_type: DataType::Atomic,
-              multi: false,
-          },
+        Parameter {
+          name: "crystal".to_string(),
+          data_type: DataType::Atomic,
+          multi: false,
+        },
+        Parameter {
+          name: "stamp".to_string(),
+          data_type: DataType::Atomic,
+          multi: false,
+        },
       ],
       output_type: DataType::Atomic,
       node_data_creator: || Box::new(StampData::new()),
