@@ -53,6 +53,10 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   let cluster_selected = _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
   let selected = atom.selected || cluster_selected;
 
+  //if selected {
+  //  println!("Atom {} selected: {}", atom.id, selected);
+  //}
+
   let color = match display_state {
     AtomDisplayState::Marked => {
       // Yellow color for marked atoms

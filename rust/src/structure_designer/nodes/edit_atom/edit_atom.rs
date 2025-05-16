@@ -61,15 +61,17 @@ impl EditAtomData {
       self.history.len()
     }
   
-    pub fn eval(&self, atomic_structure: &mut AtomicStructure) {
+    pub fn eval(&self, atomic_structure: &mut AtomicStructure, decorate: bool) {
       for i in 0..self.next_history_index {
         self.history[i].execute(atomic_structure);
       }
 
       // If the active tool is AddBond and there's a last_atom_id, mark that atom
-      if let EditAtomTool::AddBond(state) = &self.active_tool {
-        if let Some(atom_id) = state.last_atom_id {
-          atomic_structure.decorator.atom_display_states.insert(atom_id, AtomDisplayState::Marked);
+      if decorate {
+        if let EditAtomTool::AddBond(state) = &self.active_tool {
+          if let Some(atom_id) = state.last_atom_id {
+            atomic_structure.decorator.atom_display_states.insert(atom_id, AtomDisplayState::Marked);
+          }
         }
       }
     }
@@ -170,7 +172,7 @@ impl NodeData for EditAtomData {
     }
 }
 
-pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
   let input_val = if node.arguments[0].argument_node_ids.is_empty() {
@@ -183,7 +185,7 @@ pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &
   if let NetworkResult::Atomic(mut atomic_structure) = input_val {
     let edit_atom_data = &node.data.as_any_ref().downcast_ref::<EditAtomData>().unwrap();
 
-    edit_atom_data.eval(&mut atomic_structure);
+    edit_atom_data.eval(&mut atomic_structure, decorate);
     return NetworkResult::Atomic(atomic_structure);
   }
   return NetworkResult::Atomic(AtomicStructure::new());

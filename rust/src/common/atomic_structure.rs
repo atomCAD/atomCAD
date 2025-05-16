@@ -26,8 +26,6 @@ pub enum AtomDisplayState {
 #[derive(Clone)]
 pub struct AtomicStructureDecorator {
     pub atom_display_states: HashMap<u64, AtomDisplayState>,
-
-
 }
 
 impl AtomicStructureDecorator {

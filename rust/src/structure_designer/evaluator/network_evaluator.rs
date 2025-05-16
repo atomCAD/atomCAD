@@ -124,7 +124,7 @@ impl NetworkEvaluator {
       return vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)];
     }
     if node.node_type_name == "edit_atom" {
-      return vec![eval_edit_atom(&self, network_stack, node_id, registry)];
+      return vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate)];
     }
     if node.node_type_name == "atom_trans" {
       return vec![eval_atom_trans(&self, network_stack, node_id, registry)];
