@@ -2,6 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
+use crate::pdb::PdbAsset;
 use bevy::asset::LoadState;
 use bevy::prelude::*;
 
@@ -31,6 +32,31 @@ impl AssetLibrary for FontAssets {
 
     fn all_loaded(&self, asset_server: &AssetServer) -> bool {
         let handles = [&self.fira_sans_bold, &self.fira_sans_regular];
+
+        handles.iter().all(|handle| {
+            matches!(
+                asset_server.get_load_state(*handle),
+                Some(LoadState::Loaded)
+            )
+        })
+    }
+}
+
+/// Resource that holds all PDB assets for the application
+#[derive(Resource, Default)]
+pub struct PdbAssets {
+    pub neon_pump_imm: Handle<PdbAsset>,
+}
+
+impl AssetLibrary for PdbAssets {
+    fn load(asset_server: &AssetServer) -> Self {
+        PdbAssets {
+            neon_pump_imm: asset_server.load("pdb/neon_pump_imm.pdb"),
+        }
+    }
+
+    fn all_loaded(&self, asset_server: &AssetServer) -> bool {
+        let handles = [&self.neon_pump_imm];
 
         handles.iter().all(|handle| {
             matches!(

@@ -30,6 +30,7 @@ serde = "1"
 bitflags = "2"
 bytemuck = "1"
 static_assertions = "1"
+thiserror = "2"
 # Windowing
 menu = { package = "atomcad-menu", path = "crates/menu" }
 # macOS platform support
@@ -50,8 +51,11 @@ bevy = { workspace = true }
 event-loop-waker = { workspace = true }
 # Chemistry
 periodic-table = { workspace = true }
+# Parsing
+nom = "8"
 # Utilities
 bytemuck = { workspace = true }
+thiserror = { workspace = true }
 # Windowing
 menu = { workspace = true }
 
