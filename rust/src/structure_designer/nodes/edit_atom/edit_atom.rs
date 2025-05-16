@@ -503,7 +503,7 @@ fn select_atom_by_id(structure_designer: &mut StructureDesigner, atom_id: u64, s
     vec![],                // bond_references (empty)
     select_modifier        // select_modifier
   ));
-    
+
   // Add the command to the edit_atom_data
   edit_atom_data.add_command(select_command);
 }

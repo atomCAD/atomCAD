@@ -83,9 +83,11 @@ impl NetworkEvaluator {
 
       let mut scene = StructureDesignerScene::new();
 
-      let result = &self.evaluate(&network_stack, node_id, registry, network_stack.last().unwrap().node_network.selected_node_id == Some(node_id))[0];
+      let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
+      let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node)[0];
       if let NetworkResult::Atomic(atomic_structure) = result {
-        let cloned_atomic_structure = atomic_structure.clone();
+        let mut cloned_atomic_structure = atomic_structure.clone();
+        cloned_atomic_structure.from_selected_node = from_selected_node;
         scene.atomic_structures.push(cloned_atomic_structure);
       };
 
