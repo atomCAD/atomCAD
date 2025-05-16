@@ -12,15 +12,15 @@ pub use app::{AppPlugin, AppState};
 pub mod assets;
 use assets::FontAssets;
 
+mod atoms;
+pub use atoms::{AtomCluster, AtomClusterPlugin, AtomInstance};
+
 pub mod camera;
 pub use camera::{CadCamera, CadCameraPlugin};
 
 pub mod platform;
 pub(crate) mod platform_impl;
 pub use platform::{bevy::PlatformTweaks, get_process_name, set_process_name};
-
-mod atoms;
-pub use atoms::{AtomCluster, AtomClusterPlugin, AtomInstance};
 
 mod start;
 pub use start::start;
