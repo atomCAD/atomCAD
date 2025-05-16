@@ -24,12 +24,15 @@ event-loop-waker = { package = "atomcad-event-loop-waker", path = "crates/event-
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 # Input
 keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
+# Parsing
+nom = "8"
 # Serialization
 serde = "1"
 # Utilities
 bitflags = "2"
 bytemuck = "1"
 static_assertions = "1"
+thiserror = "2"
 # Windowing
 menu = { package = "atomcad-menu", path = "crates/menu" }
 # macOS platform support
@@ -60,10 +63,13 @@ event-loop-waker = { workspace = true }
 periodic-table = { workspace = true }
 # Image
 image.workspace = true
+# Parsing
+nom.workspace = true
 # Rendering
 wgpu-types.workspace = true
 # Utilities
 bytemuck = { workspace = true }
+thiserror = { workspace = true }
 # Windowing
 menu.workspace = true
 winit.workspace = true

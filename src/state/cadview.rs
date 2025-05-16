@@ -3,7 +3,8 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::{
-    AppState, AtomCluster, AtomClusterPlugin, AtomInstance, CadCamera, CadCameraPlugin, FontAssets,
+    AppState, AtomClusterPlugin, CadCamera, CadCameraPlugin, FontAssets, PdbAsset, PdbAssets,
+    PdbLoaderPlugin,
 };
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::{camera::primitives::Aabb, prelude::*};
@@ -14,6 +15,7 @@ impl Plugin for CadViewPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             AtomClusterPlugin,
+            PdbLoaderPlugin,
             CadCameraPlugin,
             FrameTimeDiagnosticsPlugin {
                 max_history_length: 9,
@@ -37,9 +39,14 @@ struct OnCadView;
 #[derive(Component)]
 struct FpsText;
 
-fn setup_cad_view(mut commands: Commands, font_assets: Res<FontAssets>) {
+fn setup_cad_view(
+    mut commands: Commands,
+    font_assets: Res<FontAssets>,
+    pdb_handles: Res<PdbAssets>,
+    pdb_assets: Res<Assets<PdbAsset>>,
+) {
     // Spawn a 3D camera
-    let camera_position = Vec3::new(0.0, 1.5, 5.0);
+    let camera_position = Vec3::new(0.0, 30.0, 100.0);
     let focus_point = Vec3::ZERO;
     let distance = camera_position.distance(focus_point);
     let delta = camera_position - focus_point;
@@ -70,28 +77,11 @@ fn setup_cad_view(mut commands: Commands, font_assets: Res<FontAssets>) {
     ));
 
     // Add a sphere cloud
+    let neon_pump_imm = pdb_assets
+        .get(&pdb_handles.neon_pump_imm)
+        .expect("Neon pump asset not loaded.");
     commands.spawn((
-        AtomCluster {
-            atoms: vec![
-                // Water molecule
-
-                // Oxygen (center)
-                AtomInstance {
-                    position: Vec3::new(0.0, 0.0, 0.0),
-                    kind: 8,
-                },
-                // Hydrogen 1
-                AtomInstance {
-                    position: Vec3::new(-0.757, 0.586, 0.0),
-                    kind: 1,
-                },
-                // Hydrogen 2
-                AtomInstance {
-                    position: Vec3::new(0.757, 0.586, 0.0),
-                    kind: 1,
-                },
-            ],
-        },
+        neon_pump_imm.atom_cluster.clone(),
         Transform::default(),
         Visibility::default(),
         Aabb {

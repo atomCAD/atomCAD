@@ -10,13 +10,16 @@ mod app;
 pub use app::{AppPlugin, AppState};
 
 pub mod assets;
-use assets::FontAssets;
+use assets::{FontAssets, PdbAssets};
 
 mod atoms;
 pub use atoms::{AtomCluster, AtomClusterPlugin, AtomInstance};
 
 pub mod camera;
 pub use camera::{CadCamera, CadCameraPlugin};
+
+mod pdb;
+pub use pdb::{PdbAsset, PdbLoaderPlugin};
 
 pub mod platform;
 pub(crate) mod platform_impl;

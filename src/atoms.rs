@@ -12,6 +12,7 @@ use bevy::{
     },
     mesh::VertexBufferLayout,
     prelude::*,
+    reflect::Reflect,
     render::{
         Render, RenderApp, RenderSystems,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
@@ -44,7 +45,9 @@ pub struct AtomClusterPlugin;
 
 impl Plugin for AtomClusterPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ExtractComponentPlugin::<AtomCluster>::default());
+        app.register_type::<AtomInstance>()
+            .register_type::<AtomCluster>()
+            .add_plugins(ExtractComponentPlugin::<AtomCluster>::default());
         app.sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawAtomCluster>()
             .add_systems(
@@ -108,14 +111,14 @@ impl Plugin for AtomClusterPlugin {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, Reflect)]
 pub struct AtomInstance {
     pub position: Vec3,
     pub kind: u32,
 }
 
 // Component that holds our atom data in the ECS
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Reflect)]
 #[require(VisibilityClass)]
 #[component(on_add = add_visibility_class::<AtomCluster>)]
 pub struct AtomCluster {
