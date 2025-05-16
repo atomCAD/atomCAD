@@ -34,10 +34,10 @@ fn check_asset_loading(
     let fonts_loaded = font_asset_handles.all_loaded(&asset_server);
     let pdb_loaded = pdb_asset_handles.all_loaded(&asset_server);
 
-    // If all assets are loaded, transition to the SplashScreen state
+    // If all assets are loaded, transition to the CadView state
     if fonts_loaded && pdb_loaded {
-        info!("All assets loaded successfully, transitioning to SplashScreen state");
-        next_state.set(AppState::SplashScreen);
+        info!("All assets loaded successfully, transitioning to CadView state");
+        next_state.set(AppState::CadView);
     }
 }
 
