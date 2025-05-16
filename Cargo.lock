@@ -304,6 +304,7 @@ dependencies = [
 name = "atomcad"
 version = "0.1.0"
 dependencies = [
+ "atomcad-event-loop-waker",
  "atomcad-menu",
  "atomcad-periodic-table",
  "base64",
@@ -322,6 +323,14 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winit",
+]
+
+[[package]]
+name = "atomcad-event-loop-waker"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "ctrlc",
 ]
 
 [[package]]

@@ -19,6 +19,7 @@ members = ["crates/*"]
 [workspace.dependencies]
 # Bevy
 bevy = "0.18"
+event-loop-waker = { package = "atomcad-event-loop-waker", path = "crates/event-loop-waker" }
 # Chemistry
 periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-table" }
 # Input
@@ -54,6 +55,7 @@ opt-level = 3
 
 [dependencies]
 bevy.workspace = true
+event-loop-waker = { workspace = true }
 # Chemistry
 periodic-table = { workspace = true }
 # Image
