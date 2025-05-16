@@ -4,8 +4,11 @@
 
 use crate::{APP_NAME, AppPlugin, PlatformTweaks};
 use bevy::{asset::AssetMetaCheck, prelude::*, window::PresentMode, winit::WinitSettings};
+use event_loop_waker::{EventLoopWakerPlugin, setup_ctrlc_handler};
 
 pub fn start() -> AppExit {
+    setup_ctrlc_handler();
+
     let asset_plugin = AssetPlugin {
         // Prevents the overhead of checking for meta files,
         // which on web is an expensive 404 and clutters logs.
@@ -30,6 +33,7 @@ pub fn start() -> AppExit {
         .insert_resource(WinitSettings::desktop_app())
         .add_plugins(default_plugins)
         .add_plugins(PlatformTweaks)
+        .add_plugins(EventLoopWakerPlugin)
         .add_plugins(AppPlugin)
         .run()
 }
