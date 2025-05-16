@@ -42,7 +42,7 @@ pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: 
   }
   let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
 
-  let result = &network_evaluator.evaluate(network_stack, input_molecule_node_id, registry)[0];
+  let result = &network_evaluator.evaluate(network_stack, input_molecule_node_id, registry, false)[0];
   if let NetworkResult::Atomic(atomic_structure) = result {
     let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 

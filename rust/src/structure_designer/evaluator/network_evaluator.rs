@@ -83,13 +83,9 @@ impl NetworkEvaluator {
 
       let mut scene = StructureDesignerScene::new();
 
-      let result = &self.evaluate(&network_stack, node_id, registry)[0];
+      let result = &self.evaluate(&network_stack, node_id, registry, network_stack.last().unwrap().node_network.selected_node_id == Some(node_id))[0];
       if let NetworkResult::Atomic(atomic_structure) = result {
-        let mut cloned_atomic_structure = atomic_structure.clone();
-        cloned_atomic_structure.from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
-        if !cloned_atomic_structure.from_selected_node {
-          cloned_atomic_structure.clear_marked_atoms();
-        }
+        let cloned_atomic_structure = atomic_structure.clone();
         scene.atomic_structures.push(cloned_atomic_structure);
       };
 
@@ -99,7 +95,7 @@ impl NetworkEvaluator {
     return StructureDesignerScene::new();
   }
 
-  pub fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> Vec<NetworkResult> {
+  pub fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool) -> Vec<NetworkResult> {
 
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
@@ -111,7 +107,7 @@ impl NetworkEvaluator {
       parent_network_stack.pop();
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
       let args : Vec<Vec<NetworkResult>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
-        self.evaluate(&parent_network_stack, arg_node_id, registry)
+        self.evaluate(&parent_network_stack, arg_node_id, registry, false)
       }).collect();
       return args.concat();
     }
@@ -142,7 +138,7 @@ impl NetworkEvaluator {
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
-      return self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry);
+      return self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry, false);
     }
     return vec![NetworkResult::None];
   }

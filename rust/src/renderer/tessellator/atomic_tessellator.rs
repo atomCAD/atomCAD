@@ -3,6 +3,7 @@ use crate::renderer::mesh::Material;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::common::atomic_structure::Atom;
 use crate::common::atomic_structure::Bond;
+use crate::common::atomic_structure::AtomDisplayState;
 use crate::common::common_constants::DEFAULT_ATOM_INFO;
 use crate::common::common_constants::ATOM_INFO;
 use crate::common::scene::Scene;
@@ -26,7 +27,13 @@ const MARKED_ATOM_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
 
 pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S) {
   for (id, atom) in atomic_structure.atoms.iter() {
-    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, atom.marked || scene.is_atom_marked(*id));
+    // Get display state from the decorator and override it to Marked if scene.is_atom_marked is true
+    let mut display_state = atomic_structure.decorator.get_atom_display_state(*id);
+    if scene.is_atom_marked(*id) {
+      display_state = AtomDisplayState::Marked;
+    }
+    
+    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state);
   }
   for (_id, bond) in atomic_structure.bonds.iter() {
     tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
@@ -39,20 +46,25 @@ pub fn get_displayed_atom_radius(atom: &Atom) -> f64 {
   atom_info.radius * BAS_ATOM_RADIUS_FACTOR
 }
 
-pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, is_marked: bool) {
+pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState) {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
   let cluster_selected = _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
   let selected = atom.selected || cluster_selected;
 
-  let color = if is_marked {
-    // Yellow color for marked atoms
-    MARKED_ATOM_COLOR
-  } else if selected {
-    to_selected_color(&atom_info.color)
-  } else { 
-    atom_info.color
+  let color = match display_state {
+    AtomDisplayState::Marked => {
+      // Yellow color for marked atoms
+      MARKED_ATOM_COLOR
+    },
+    AtomDisplayState::Normal => {
+      if selected {
+        to_selected_color(&atom_info.color)
+      } else { 
+        atom_info.color
+      }
+    }
   };
 
   tessellator::tessellate_sphere(

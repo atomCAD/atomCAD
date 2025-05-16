@@ -36,7 +36,7 @@ pub fn eval_anchor<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec
     return NetworkResult::Atomic(AtomicStructure::new());
   } else {
     let input_node_id = node.arguments[0].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry)[0].clone()
+    network_evaluator.evaluate(network_stack, input_node_id, registry, false)[0].clone()
   };
 
   if let NetworkResult::Atomic(mut atomic_structure) = input_val {

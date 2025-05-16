@@ -49,14 +49,14 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
     NetworkResult::Atomic(AtomicStructure::new())
   } else {
     let input_node_id = node.arguments[0].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry)[0].clone()
+    network_evaluator.evaluate(network_stack, input_node_id, registry, false)[0].clone()
   };
 
   let stamp_val = if node.arguments[1].argument_node_ids.is_empty() {
     return crystal_val;
   } else {
     let input_node_id = node.arguments[1].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry)[0].clone()
+    network_evaluator.evaluate(network_stack, input_node_id, registry, false)[0].clone()
   };
 
   if let NetworkResult::Atomic(stamp_structure) = stamp_val {

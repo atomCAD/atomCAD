@@ -1,7 +1,7 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
-use crate::common::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
@@ -19,7 +19,6 @@ use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::Add
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
 use crate::common::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
-
 
 pub struct DefaultToolState {
   pub replacement_atomic_number: i32,
@@ -66,16 +65,11 @@ impl EditAtomData {
       for i in 0..self.next_history_index {
         self.history[i].execute(atomic_structure);
       }
-      
-      // Clear any previously marked atoms first
-      atomic_structure.clear_marked_atoms();
-      
+
       // If the active tool is AddBond and there's a last_atom_id, mark that atom
       if let EditAtomTool::AddBond(state) = &self.active_tool {
         if let Some(atom_id) = state.last_atom_id {
-          if let Some(atom) = atomic_structure.atoms.get_mut(&atom_id) {
-            atom.marked = true;
-          }
+          atomic_structure.decorator.atom_display_states.insert(atom_id, AtomDisplayState::Marked);
         }
       }
     }
@@ -183,7 +177,7 @@ pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &
     return NetworkResult::Atomic(AtomicStructure::new());
   } else {
     let input_node_id = node.arguments[0].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry)[0].clone()
+    network_evaluator.evaluate(network_stack, input_node_id, registry, false)[0].clone()
   };
 
   if let NetworkResult::Atomic(mut atomic_structure) = input_val {
