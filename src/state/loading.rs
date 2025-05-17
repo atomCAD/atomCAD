@@ -3,7 +3,7 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::AppState;
-use crate::assets::{AssetLibrary, FontAssets, PdbAssets, load_assets};
+use crate::assets::{AssetLibrary, FontAssetHandles, PdbAssetHandles, load_assets};
 use bevy::app::App;
 use bevy::prelude::*;
 
@@ -13,8 +13,8 @@ impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         app
             // Initialize asset loading when entering the Loading state
-            .add_systems(OnEnter(AppState::Loading), load_assets::<FontAssets>)
-            .add_systems(OnEnter(AppState::Loading), load_assets::<PdbAssets>)
+            .add_systems(OnEnter(AppState::Loading), load_assets::<FontAssetHandles>)
+            .add_systems(OnEnter(AppState::Loading), load_assets::<PdbAssetHandles>)
             // Continuously check if assets are ready while in the Loading state
             .add_systems(
                 Update,
@@ -27,12 +27,12 @@ impl Plugin for LoadingPlugin {
 fn check_asset_loading(
     mut next_state: ResMut<NextState<AppState>>,
     asset_server: Res<AssetServer>,
-    font_assets: Res<FontAssets>,
-    pdb_assets: Res<PdbAssets>,
+    font_asset_handles: Res<FontAssetHandles>,
+    pdb_asset_handles: Res<PdbAssetHandles>,
 ) {
     // Check if font assets are loaded
-    let fonts_loaded = font_assets.all_loaded(&asset_server);
-    let pdb_loaded = pdb_assets.all_loaded(&asset_server);
+    let fonts_loaded = font_asset_handles.all_loaded(&asset_server);
+    let pdb_loaded = pdb_asset_handles.all_loaded(&asset_server);
 
     // If all assets are loaded, transition to the SplashScreen state
     if fonts_loaded && pdb_loaded {

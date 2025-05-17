@@ -3,8 +3,8 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::{
-    AppState, AtomClusterPlugin, CadCamera, CadCameraPlugin, FontAssets, PdbAsset, PdbAssets,
-    PdbLoaderPlugin,
+    AppState, AtomClusterPlugin, CadCamera, CadCameraPlugin, FontAssetHandles, PdbAsset,
+    PdbAssetHandles, PdbLoaderPlugin,
 };
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::{camera::primitives::Aabb, prelude::*};
@@ -41,8 +41,8 @@ struct FpsText;
 
 fn setup_cad_view(
     mut commands: Commands,
-    font_assets: Res<FontAssets>,
-    pdb_handles: Res<PdbAssets>,
+    font_asset_handles: Res<FontAssetHandles>,
+    pdb_asset_handles: Res<PdbAssetHandles>,
     pdb_assets: Res<Assets<PdbAsset>>,
 ) {
     // Spawn a 3D camera
@@ -78,7 +78,7 @@ fn setup_cad_view(
 
     // Add a sphere cloud
     let neon_pump_imm = pdb_assets
-        .get(&pdb_handles.neon_pump_imm)
+        .get(&pdb_asset_handles.neon_pump_imm)
         .expect("Neon pump asset not loaded.");
     commands.spawn((
         neon_pump_imm.atom_cluster.clone(),
@@ -108,7 +108,7 @@ fn setup_cad_view(
             parent.spawn((
                 Text::new("FPS: --"),
                 TextFont {
-                    font: font_assets.fira_sans_regular.clone(),
+                    font: font_asset_handles.fira_sans_regular.clone(),
                     font_size: 16.0,
                     ..default()
                 },

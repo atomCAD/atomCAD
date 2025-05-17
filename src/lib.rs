@@ -10,7 +10,7 @@ mod app;
 pub use app::{AppPlugin, AppState};
 
 pub mod assets;
-use assets::{FontAssets, PdbAssets};
+use assets::{FontAssetHandles, PdbAssetHandles};
 
 mod atoms;
 pub use atoms::{AtomCluster, AtomClusterPlugin, AtomInstance};

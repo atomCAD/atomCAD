@@ -17,14 +17,14 @@ pub trait AssetLibrary: Resource {
 
 /// Resource that holds all font assets for the application
 #[derive(Resource, Default)]
-pub struct FontAssets {
+pub struct FontAssetHandles {
     pub fira_sans_bold: Handle<Font>,
     pub fira_sans_regular: Handle<Font>,
 }
 
-impl AssetLibrary for FontAssets {
+impl AssetLibrary for FontAssetHandles {
     fn load(asset_server: &AssetServer) -> Self {
-        FontAssets {
+        FontAssetHandles {
             fira_sans_bold: asset_server.load("fonts/FiraSans-Bold.ttf"),
             fira_sans_regular: asset_server.load("fonts/FiraSans-Regular.ttf"),
         }
@@ -44,13 +44,13 @@ impl AssetLibrary for FontAssets {
 
 /// Resource that holds all PDB assets for the application
 #[derive(Resource, Default)]
-pub struct PdbAssets {
+pub struct PdbAssetHandles {
     pub neon_pump_imm: Handle<PdbAsset>,
 }
 
-impl AssetLibrary for PdbAssets {
+impl AssetLibrary for PdbAssetHandles {
     fn load(asset_server: &AssetServer) -> Self {
-        PdbAssets {
+        PdbAssetHandles {
             neon_pump_imm: asset_server.load("pdb/neon_pump_imm.pdb"),
         }
     }
