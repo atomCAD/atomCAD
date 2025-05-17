@@ -2,7 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::{AppState, FontAssets};
+use crate::{AppState, FontAssetHandles};
 use bevy::{app::App, prelude::*};
 
 pub struct SplashScreenPlugin;
@@ -40,7 +40,7 @@ struct OnSplashScreen;
 
 fn setup_splash_screen(
     mut commands: Commands,
-    font_assets: Res<FontAssets>,
+    font_asset_handles: Res<FontAssetHandles>,
     button_colors: Res<ButtonColors>,
 ) {
     commands.spawn((
@@ -70,7 +70,7 @@ fn setup_splash_screen(
             parent.spawn((
                 Text::new("Shape tomorrow's world"),
                 TextFont {
-                    font: font_assets.fira_sans_bold.clone(),
+                    font: font_asset_handles.fira_sans_bold.clone(),
                     font_size: 64.0,
                     ..default()
                 },
@@ -99,7 +99,7 @@ fn setup_splash_screen(
                     parent.spawn((
                         Text::new("Get Started"),
                         TextFont {
-                            font: font_assets.fira_sans_bold.clone(),
+                            font: font_asset_handles.fira_sans_bold.clone(),
                             font_size: 20.0,
                             ..default()
                         },
