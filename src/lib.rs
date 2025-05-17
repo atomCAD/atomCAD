@@ -25,12 +25,16 @@ use winit_runner::{WinitEventLoop, WinitPlugin};
 pub const APP_NAME: &str = "atomCAD";
 
 #[cfg(target_os = "macos")]
-fn set_app_icon() {
+use objc2::rc::Retained;
+#[cfg(target_os = "macos")]
+use objc2_app_kit::NSImage;
+#[cfg(target_os = "macos")]
+fn get_app_icon() -> Retained<NSImage> {
     static ICON_DATA: &[u8] =
         include_bytes!("../build/macos/src/atomCAD.app/Contents/Resources/AppIcon.icns");
     use objc2::AllocAnyThread;
-    use objc2_app_kit::{NSApplication, NSImage};
-    use objc2_foundation::{MainThreadMarker, NSData};
+    use objc2_app_kit::NSImage;
+    use objc2_foundation::NSData;
     use std::{os::raw::c_void, ptr::NonNull};
     let data = unsafe {
         NSData::dataWithBytesNoCopy_length(
@@ -39,11 +43,65 @@ fn set_app_icon() {
         )
     };
     let image = NSImage::alloc();
-    let image = NSImage::initWithData(image, &data).expect("Failed to create NSImage from data.");
+    NSImage::initWithData(image, &data).expect("Failed to create NSImage from data.")
+}
+
+#[cfg(target_os = "macos")]
+fn set_app_icon() {
+    use objc2_app_kit::NSApplication;
+    use objc2_foundation::MainThreadMarker;
+    let image = get_app_icon();
     let mtm = MainThreadMarker::new().expect("Must run on main thread.");
     let app = NSApplication::sharedApplication(mtm);
     unsafe {
         app.setApplicationIconImage(Some(&image));
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn show_about_panel() {
+    use objc2::runtime::{AnyObject, ProtocolObject};
+    use objc2_app_kit::{
+        NSAboutPanelOptionApplicationIcon, NSAboutPanelOptionApplicationName,
+        NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionCredits, NSAboutPanelOptionVersion,
+        NSApplication,
+    };
+    use objc2_foundation::{MainThreadMarker, NSAttributedString, NSMutableDictionary, NSString};
+
+    // This code will display the About panel with the correct icon and version
+    // The icon is set by set_app_icon() and the version is read from Info.plist
+    let mtm = MainThreadMarker::new().expect("Must run on main thread.");
+    let app = NSApplication::sharedApplication(mtm);
+
+    let icon = get_app_icon();
+    let app_name = NSString::from_str(APP_NAME);
+    let build = NSString::from_str("1");
+    let credits = NSAttributedString::from_nsstring(&NSString::from_str("Credits"));
+    let version = NSString::from_str(env!("CARGO_PKG_VERSION"));
+
+    unsafe {
+        let options_dictionary = NSMutableDictionary::new();
+        options_dictionary.setObject_forKey(
+            &*Retained::into_raw(icon) as &AnyObject,
+            ProtocolObject::from_ref(NSAboutPanelOptionApplicationIcon),
+        );
+        options_dictionary.setObject_forKey(
+            &*Retained::into_raw(app_name) as &AnyObject,
+            ProtocolObject::from_ref(NSAboutPanelOptionApplicationName),
+        );
+        options_dictionary.setObject_forKey(
+            &*Retained::into_raw(version) as &AnyObject,
+            ProtocolObject::from_ref(NSAboutPanelOptionApplicationVersion),
+        );
+        options_dictionary.setObject_forKey(
+            &*Retained::into_raw(build) as &AnyObject,
+            ProtocolObject::from_ref(NSAboutPanelOptionVersion),
+        );
+        options_dictionary.setObject_forKey(
+            &*Retained::into_raw(credits) as &AnyObject,
+            ProtocolObject::from_ref(NSAboutPanelOptionCredits),
+        );
+        app.orderFrontStandardAboutPanelWithOptions(&options_dictionary);
     }
 }
 
@@ -164,9 +222,10 @@ impl ApplicationHandler for Application<'_> {
                                     menu::Item::Entry {
                                         title: format!("About {}", APP_NAME),
                                         shortcut: menu::Shortcut::None,
-                                        action: menu::Action::System(
-                                            menu::SystemAction::LaunchAboutWindow,
-                                        ),
+                                        action: menu::Action::User(Arc::new(|| {
+                                            #[cfg(target_os = "macos")]
+                                            show_about_panel();
+                                        })),
                                     },
                                     menu::Item::Separator,
                                     menu::Item::Entry {
