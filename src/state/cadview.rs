@@ -65,18 +65,7 @@ fn setup_cad_view(
         OnCadView,
     ));
 
-    // Add a light
-    commands.spawn((
-        PointLight {
-            intensity: 1500.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_xyz(4.0, 8.0, 4.0),
-        OnCadView,
-    ));
-
-    // Add a sphere cloud
+    // Add an example molecule
     let neon_pump_imm = pdb_assets
         .get(&pdb_asset_handles.neon_pump_imm)
         .expect("Neon pump asset not loaded.");
