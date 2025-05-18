@@ -241,7 +241,10 @@ impl FromWorld for AtomClusterPipeline {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: None,
+                        min_binding_size: Some(
+                            std::num::NonZero::new(std::mem::size_of::<PeriodicTable>() as u64)
+                                .unwrap(),
+                        ),
                     },
                     count: None,
                 },
