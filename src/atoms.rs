@@ -128,17 +128,20 @@ pub struct AtomCluster {
 // Extracted component for the render world
 #[derive(Component, Clone)]
 pub struct ExtractedAtomCluster {
+    transform: Mat4,
     atoms: Vec<AtomInstance>,
 }
 
 impl ExtractComponent for AtomCluster {
-    type QueryData = &'static AtomCluster;
+    type QueryData = (&'static AtomCluster, &'static GlobalTransform);
     type QueryFilter = ();
     type Out = ExtractedAtomCluster;
 
     fn extract_component(item: QueryItem<'_, '_, Self::QueryData>) -> Option<Self::Out> {
+        let (atom_cluster, transform) = item;
         Some(ExtractedAtomCluster {
-            atoms: item.atoms.clone(),
+            transform: transform.to_matrix(),
+            atoms: atom_cluster.atoms.clone(),
         })
     }
 }
@@ -157,9 +160,17 @@ struct SharedAtomClusterGpuBuffers {
     periodic_table_buffer: Buffer,
 }
 
+// Create a world transform uniform buffer for each atom cluster
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct AtomClusterTransform {
+    transform: Mat4,
+}
+
 // GPU buffers for atom cluster
 #[derive(Component)]
 struct AtomClusterGpuBuffers {
+    transform_buffer: Buffer,
     instance_buffer: Buffer,
     instance_count: u32,
 }
@@ -207,9 +218,25 @@ impl FromWorld for AtomClusterPipeline {
                     },
                     count: None,
                 },
-                // Binding 1: Periodic table
+                // Binding 1: Entity global transform
                 BindGroupLayoutEntry {
                     binding: 1,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(
+                            std::num::NonZero::new(
+                                std::mem::size_of::<AtomClusterTransform>() as u64
+                            )
+                            .unwrap(),
+                        ),
+                    },
+                    count: None,
+                },
+                // Binding 2: Periodic table
+                BindGroupLayoutEntry {
+                    binding: 2,
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
@@ -315,6 +342,18 @@ fn prepare_atom_cluster_buffers(
     render_device: Res<RenderDevice>,
 ) {
     for (entity, atom_cluster) in query.iter() {
+        // Create transform buffer
+        let transform = AtomClusterTransform {
+            transform: atom_cluster.transform,
+        };
+
+        let transform_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("atom_cluster_transform_buffer"),
+            contents: bytemuck::cast_slice(&[transform]),
+            usage: BufferUsages::UNIFORM,
+        });
+
+        // Create instance buffer
         let instance_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("atom_cluster_instance_buffer"),
             contents: bytemuck::cast_slice(&atom_cluster.atoms),
@@ -322,6 +361,7 @@ fn prepare_atom_cluster_buffers(
         });
 
         commands.entity(entity).insert(AtomClusterGpuBuffers {
+            transform_buffer,
             instance_buffer,
             instance_count: atom_cluster.atoms.len() as u32,
         });
@@ -336,9 +376,9 @@ fn prepare_atom_cluster_view_bind_groups(
     pipeline: Res<AtomClusterPipeline>,
     pipeline_cache: Res<PipelineCache>,
     render_device: Res<RenderDevice>,
-    views: Query<(Entity, &ViewUniformOffset)>,
+    gpu_buffers: Query<(Entity, &AtomClusterGpuBuffers)>,
 ) {
-    for (entity, _) in views.iter() {
+    for (entity, gpu_buffers) in gpu_buffers.iter() {
         let bind_group = render_device.create_bind_group(
             Some("atom_cluster_view_bind_group"),
             &pipeline_cache.get_bind_group_layout(&pipeline.bind_group_layout),
@@ -348,9 +388,14 @@ fn prepare_atom_cluster_view_bind_groups(
                     binding: 0,
                     resource: view_uniforms.uniforms.binding().unwrap(),
                 },
-                // Binding 1: Periodic table
+                // Binding 1: Entity global transform
                 BindGroupEntry {
                     binding: 1,
+                    resource: gpu_buffers.transform_buffer.as_entire_binding(),
+                },
+                // Binding 2: Periodic table
+                BindGroupEntry {
+                    binding: 2,
                     resource: shared_atom_cluster_buffers
                         .periodic_table_buffer
                         .as_entire_binding(),
@@ -418,31 +463,33 @@ type DrawAtomCluster = (
     // Configures shaders, vertex layout, blend mode, etc.
     SetItemPipeline,
     // Binds the camera/view uniforms to bind group slot 0
-    // Binds the model/transform uniforms to bind group slot 1
-    SetAtomClusterViewBindGroup,
+    // Binds the entity transform to bind group slot 1
+    // Binds the periodic table to bind group slot 2
+    SetAtomClusterBindGroup,
     // Custom render command below
     DrawAtomClusterInstanced,
 );
 
-struct SetAtomClusterViewBindGroup;
+struct SetAtomClusterBindGroup;
 
-impl<P: PhaseItem> RenderCommand<P> for SetAtomClusterViewBindGroup {
+impl<P: PhaseItem> RenderCommand<P> for SetAtomClusterBindGroup {
     type Param = ();
-    type ViewQuery = (
-        &'static ViewUniformOffset,
-        &'static AtomClusterViewBindGroup,
-    );
-    type ItemQuery = ();
+    type ViewQuery = &'static ViewUniformOffset;
+    type ItemQuery = &'static AtomClusterViewBindGroup;
 
     fn render<'w>(
         _item: &P,
-        (view_offset, view_bind_group): (&'w ViewUniformOffset, &'w AtomClusterViewBindGroup),
-        _entity: Option<()>,
+        view_offset: &'w ViewUniformOffset,
+        entity: Option<&'w AtomClusterViewBindGroup>,
         _: (),
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        pass.set_bind_group(0, &view_bind_group.bind_group, &[view_offset.offset]);
-        RenderCommandResult::Success
+        if let Some(view_bind_group) = entity {
+            pass.set_bind_group(0, &view_bind_group.bind_group, &[view_offset.offset]);
+            RenderCommandResult::Success
+        } else {
+            RenderCommandResult::Failure("Missing atom cluster view bind group")
+        }
     }
 }
 
@@ -467,7 +514,6 @@ impl<P: PhaseItem> RenderCommand<P> for DrawAtomClusterInstanced {
             pass.draw(0..4, 0..gpu_buffers.instance_count);
             RenderCommandResult::Success
         } else {
-            warn!("No instance buffers found");
             RenderCommandResult::Failure("No instance buffers found")
         }
     }
