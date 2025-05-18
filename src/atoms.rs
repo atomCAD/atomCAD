@@ -424,7 +424,6 @@ type DrawAtomCluster = (
     DrawAtomClusterInstanced,
 );
 
-// Simpler render command that uses the cached bind group
 struct SetAtomClusterViewBindGroup;
 
 impl<P: PhaseItem> RenderCommand<P> for SetAtomClusterViewBindGroup {
@@ -438,7 +437,7 @@ impl<P: PhaseItem> RenderCommand<P> for SetAtomClusterViewBindGroup {
     fn render<'w>(
         _item: &P,
         (view_offset, view_bind_group): (&'w ViewUniformOffset, &'w AtomClusterViewBindGroup),
-        _entity: Option<()>, // Correct type
+        _entity: Option<()>,
         _: (),
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
