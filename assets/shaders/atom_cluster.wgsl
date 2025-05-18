@@ -7,6 +7,10 @@
     view_transformations::position_world_to_clip,
 }
 
+struct GlobalTransform {
+    matrix: mat4x4<f32>,
+}
+
 struct ElementProperties {
     color: vec3<f32>,
     radius: f32,
@@ -17,7 +21,8 @@ struct PeriodicTable {
     elements: array<ElementProperties, 118>,
 }
 
-@group(0) @binding(1) var<uniform> periodic_table: PeriodicTable;
+@group(0) @binding(1) var<uniform> global_transform: GlobalTransform;
+@group(0) @binding(2) var<uniform> periodic_table: PeriodicTable;
 
 struct AtomVertexInput {
     @builtin(vertex_index) index: u32,
@@ -40,7 +45,11 @@ struct AtomVertexOutput {
 fn vertex(vertex: AtomVertexInput) -> AtomVertexOutput {
     var out: AtomVertexOutput;
 
-    let atom_center = vertex.atom_position;
+    // Transform the atom position from local to world space
+    let local_pos = vec4<f32>(vertex.atom_position, 1.0);
+    let world_pos = global_transform.matrix * local_pos;
+    let atom_center = world_pos.xyz;
+
     let element_id = vertex.atom_kind & 0x7Fu; // Extract low 7 bits
     let element = periodic_table.elements[element_id];
     let atom_radius = element.radius;
