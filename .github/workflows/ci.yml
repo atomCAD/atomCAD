@@ -106,7 +106,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ matrix.platform.slug }}-cargo-build-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ matrix.platform.slug }}-cargo-build-${{ hashFiles('**/Cargo.*') }}
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -172,7 +172,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ubuntu-22.04-cargo-build-${{ hashFiles('**/Cargo.toml') }}
+          key: ubuntu-22.04-cargo-build-${{ hashFiles('**/Cargo.*') }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable 1 month ago
