@@ -2,7 +2,9 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use crate::atoms::{AtomCluster, AtomInstance};
+use std::collections::HashMap;
+
+use crate::{AtomInstance, BondInstance, Molecule};
 use bevy::{
     asset::{AssetLoader, LoadContext},
     prelude::*,
@@ -12,7 +14,7 @@ use thiserror::Error as ThisError;
 
 #[derive(Asset, Clone, Reflect)]
 pub struct PdbAsset {
-    pub atom_cluster: AtomCluster,
+    pub molecule: Molecule,
 }
 
 // Implement the asset loader
@@ -30,7 +32,7 @@ fn parse_float(s: &str) -> Result<f32, std::num::ParseFloatError> {
 }
 
 /// Parse an ATOM or HETATM record using whitespace separation
-fn parse_atom_record(line: &str) -> IResult<&str, AtomInstance> {
+fn parse_atom_record(line: &str) -> IResult<&str, (&str, AtomInstance)> {
     // First, check if the line starts with ATOM or HETATM
     if !line.starts_with("ATOM") && !line.starts_with("HETATM") {
         return Err(nom::Err::Error(nom::error::Error::new(
@@ -50,12 +52,23 @@ fn parse_atom_record(line: &str) -> IResult<&str, AtomInstance> {
         )));
     }
 
+    // Serial number is the first field
+    if tokens.len() < 2 {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            line,
+            nom::error::ErrorKind::Verify,
+        )));
+    }
+    let serial = tokens[1].trim();
+
     // Element symbol is the second field according to user
-    let element = if tokens.len() >= 3 {
-        tokens[2].trim()
-    } else {
-        ""
-    };
+    if tokens.len() < 3 {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            line,
+            nom::error::ErrorKind::Verify,
+        )));
+    }
+    let element = tokens[2].trim();
 
     // Parse X, Y, Z coordinates (should be at positions 5, 6, 7 in tokens)
     let x = parse_float(tokens[5])
@@ -70,12 +83,65 @@ fn parse_atom_record(line: &str) -> IResult<&str, AtomInstance> {
     let element_id = get_element_id(element);
 
     Ok((
-        "",
-        AtomInstance {
-            position: Vec3::new(x, y, z),
-            kind: element_id,
-        },
+        serial,
+        (
+            serial,
+            AtomInstance {
+                position: Vec3::new(x, y, z),
+                kind: element_id,
+            },
+        ),
     ))
+}
+
+// Parse CONECT record
+fn parse_conect_record<'line>(
+    line: &'line str,
+    serial_to_index: &HashMap<&'line str, u32>,
+) -> IResult<&'line str, Vec<BondInstance>> {
+    // First, check if the line starts with CONECT
+    if !line.starts_with("CONECT") {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            line,
+            nom::error::ErrorKind::Tag,
+        )));
+    }
+
+    let tokens: Vec<&str> = line.split_whitespace().collect();
+    if tokens.len() < 3 {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            line,
+            nom::error::ErrorKind::Verify,
+        )));
+    }
+
+    let central_serial = tokens[1].trim();
+
+    // Get the index for the central atom
+    let Some(&central_idx) = serial_to_index.get(&central_serial) else {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            line,
+            nom::error::ErrorKind::Verify,
+        )));
+    };
+
+    let mut bonds = Vec::new();
+
+    // Process all bonded atoms (from position 2 onwards)
+    for token in tokens.iter().skip(2) {
+        let target_serial = token.trim();
+        if let Some(&target_idx) = serial_to_index.get(&target_serial) {
+            // Only add the bond if this direction hasn't been seen yet
+            // (CONECT records sometimes list bonds in both directions)
+            if central_idx < target_idx {
+                bonds.push(BondInstance {
+                    atoms: [central_idx, target_idx],
+                });
+            }
+        }
+    }
+
+    Ok((line, bonds))
 }
 
 #[derive(Debug, ThisError)]
@@ -105,16 +171,43 @@ impl AssetLoader for PdbAssetLoader {
         let content = std::str::from_utf8(&buf)?;
 
         let mut atoms = Vec::new();
+        let mut serial_to_index = HashMap::new();
 
-        // Parse the PDB file and extract all atom records
-        for line in content.lines() {
+        // 1st pass: Parse the PDB file and extract all atom records
+        for (line_idx, line) in content.lines().enumerate() {
             if line.starts_with("ATOM") || line.starts_with("HETATM") {
                 match parse_atom_record(line) {
-                    Ok((_, atom)) => atoms.push(atom),
+                    Ok((_, (serial, atom))) => {
+                        // Map serial number to index in our atoms array
+                        serial_to_index.insert(serial, atoms.len() as u32);
+
+                        // Add the atom to our atoms array
+                        atoms.push(atom);
+                    }
                     Err(e) => {
-                        // Optionally log parsing errors
-                        eprintln!("Error parsing line '{}': {:?}", line, e);
-                        // Continue with next line
+                        return Err(PdbAssetLoaderError::Io(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("Error parsing PDB file on line {line_idx}, '{line}': {e:?}"),
+                        )));
+                    }
+                }
+            }
+        }
+
+        // 2nd pass: Parse the CONECT records and create bonds
+        let mut bonds = Vec::new();
+
+        for (line_idx, line) in content.lines().enumerate() {
+            if line.starts_with("CONECT") {
+                match parse_conect_record(line, &serial_to_index) {
+                    Ok((_, new_bonds)) => {
+                        bonds.extend(new_bonds);
+                    }
+                    Err(e) => {
+                        return Err(PdbAssetLoaderError::Io(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("Error parsing PDB file on line {line_idx}, '{line}': {e:?}"),
+                        )));
                     }
                 }
             }
@@ -136,11 +229,11 @@ impl AssetLoader for PdbAssetLoader {
             atom.position -= avg_position;
         }
 
-        // Create the atom cluster
-        let atom_cluster = AtomCluster { atoms };
+        // Create the molecule from atoms & bonds
+        let molecule = Molecule { atoms, bonds };
 
         // Return the asset with the atom cluster
-        Ok(PdbAsset { atom_cluster })
+        Ok(PdbAsset { molecule })
     }
 
     fn extensions(&self) -> &[&str] {
