@@ -34,7 +34,7 @@ struct AtomVertexInput {
 struct AtomVertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) world_position: vec3<f32>,
-    @location(1) quad_coord: vec2<f32>,
+    @location(1) uv: vec2<f32>,
     @location(2) @interpolate(flat) atom_center: vec3<f32>,
     @location(3) @interpolate(flat) atom_radius: f32,
     @location(4) @interpolate(flat) color: vec3<f32>,
@@ -71,7 +71,7 @@ fn vertex(vertex: AtomVertexInput) -> AtomVertexOutput {
     out.clip_position = clip_position;
     out.atom_center = atom_center;
     out.atom_radius = atom_radius;
-    out.quad_coord = vertex.quad_position.xy;
+    out.uv = vertex.quad_position.xy;
     out.color = element.color;
     return out;
 }
@@ -84,7 +84,7 @@ struct FragmentOutput {
 @fragment
 fn fragment(in: AtomVertexOutput) -> FragmentOutput {
     // Early discard for fragments outside the circle
-    let dist_sq = dot(in.quad_coord, in.quad_coord);
+    let dist_sq = dot(in.uv, in.uv);
     if dist_sq > 1.0 {
         discard;
     }
