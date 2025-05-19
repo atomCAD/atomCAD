@@ -3,7 +3,7 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::{
-    AppState, AtomClusterPlugin, CadCamera, CadCameraPlugin, FontAssetHandles, PdbAsset,
+    AppState, CadCamera, CadCameraPlugin, FontAssetHandles, MoleculeRenderPlugin, PdbAsset,
     PdbAssetHandles, PdbLoaderPlugin,
 };
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
@@ -14,7 +14,7 @@ pub struct CadViewPlugin;
 impl Plugin for CadViewPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            AtomClusterPlugin,
+            MoleculeRenderPlugin,
             PdbLoaderPlugin,
             CadCameraPlugin,
             FrameTimeDiagnosticsPlugin {
@@ -70,7 +70,7 @@ fn setup_cad_view(
         .get(&pdb_asset_handles.neon_pump_imm)
         .expect("Neon pump asset not loaded.");
     commands.spawn((
-        neon_pump_imm.atom_cluster.clone(),
+        neon_pump_imm.molecule.clone(),
         Transform::default(),
         Visibility::default(),
         Aabb {
