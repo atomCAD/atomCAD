@@ -3,11 +3,12 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use crate::{
-    AppState, CadCamera, CadCameraPlugin, FontAssetHandles, MoleculeRenderPlugin, PdbAsset,
-    PdbAssetHandles, PdbLoaderPlugin,
+    AppState, CadCamera, CadCameraPlugin, FontAssetHandles, PdbAsset, PdbAssetHandles,
+    PdbLoaderPlugin,
 };
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
+use molecule::MoleculeRenderPlugin;
 
 pub struct CadViewPlugin;
 

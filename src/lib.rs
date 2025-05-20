@@ -4,7 +4,6 @@
 
 // Bevy uses some very complex types for specifying system inputs.
 // There's just no getting around this, so silence clippy's protestations.
-#![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
 mod app;
@@ -12,9 +11,6 @@ pub use app::{AppPlugin, AppState};
 
 pub mod assets;
 use assets::{FontAssetHandles, PdbAssetHandles};
-
-mod atoms;
-pub use atoms::{AtomInstance, BondInstance, Molecule, MoleculeRenderPlugin};
 
 pub mod camera;
 pub use camera::{CadCamera, CadCameraPlugin};
