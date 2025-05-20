@@ -4,12 +4,12 @@
 
 use std::collections::HashMap;
 
-use crate::{AtomInstance, BondInstance, Molecule};
 use bevy::{
     asset::{AssetLoader, LoadContext},
     prelude::*,
     render::primitives::Aabb,
 };
+use molecule::{AtomInstance, BondInstance, Molecule};
 use nom::IResult;
 use periodic_table::{Element, PeriodicTable};
 use thiserror::Error as ThisError;
