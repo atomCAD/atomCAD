@@ -12,8 +12,9 @@ use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
 use crate::common::atomic_structure::{Atom, AtomicStructure};
 use crate::common::crystal_utils::crystal_rot_to_mat;
-use crate::common::crystal_utils::id_to_in_crystal_pos;
-use crate::common::crystal_utils::in_crystal_pos_to_id;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::common::atomic_structure::HitTestResult;
+use crate::common::crystal_utils::{is_crystal_atom_id, id_to_in_crystal_pos, in_crystal_pos_to_id};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StampPlacement {
@@ -26,6 +27,7 @@ pub struct StampPlacement {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StampData {
   pub stamp_placements: Vec<StampPlacement>,
+  pub selected_stamp_placement: Option<usize>,
 }
 
 impl NodeData for StampData {
@@ -38,6 +40,7 @@ impl StampData {
   pub fn new() -> Self {
       Self {
           stamp_placements: Vec::new(),
+          selected_stamp_placement: None,
       }
   }
 }
@@ -111,4 +114,56 @@ fn calc_dest_pos(
   rotation: &DMat3,
   translation: &DVec3) -> DVec3 {
     rotation.mul_vec3(source_atom.position) + translation
+}
+
+pub fn add_or_select_stamp_placement_by_ray(structure_designer: &mut StructureDesigner, ray_start: &DVec3, ray_dir: &DVec3) {
+  let atomic_structure = match structure_designer.get_atomic_structure_from_selected_node() {
+    Some(structure) => structure,
+    None => return,
+  };
+
+  // Find the atom along the ray, ignoring bond hits
+  let atom_id = match atomic_structure.hit_test(ray_start, ray_dir) {
+    HitTestResult::Atom(id, _) => id,
+    _ => return,
+  };
+
+  let stamp_data = match get_selected_stamp_data_mut(structure_designer) {
+    Some(data) => data,
+    None => return,
+  };
+
+  if !is_crystal_atom_id(atom_id) {
+    return;
+  }
+
+  let position = id_to_in_crystal_pos(atom_id);
+
+  // TODO: not all atom positions can be selected (also depends on whether zinc-blende)
+  // but maybe the whole valiadation business should be thought out, as the stamp input can change
+  // after setting this data, so invalidation should be done generally on input change too.
+
+  // TODO: maybe select existing placement
+
+  stamp_data.stamp_placements.push(StampPlacement {
+    position,
+    x_dir: 0,
+    y_dir: 0,
+  });
+  stamp_data.selected_stamp_placement = Some(stamp_data.stamp_placements.len() - 1);
+}
+
+/// Gets the StampData for the currently selected stamp node (mutable)
+/// 
+/// Returns None if:
+/// - There is no active node network
+/// - No node is selected in the active network
+/// - The selected node is not a stamp node
+/// - The StampData cannot be retrieved or cast
+pub fn get_selected_stamp_data_mut(structure_designer: &mut StructureDesigner) -> Option<&mut StampData> {
+  let selected_node_id = structure_designer.get_selected_node_id_with_type("stamp")?;
+
+  let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;
+    
+  node_data.as_any_mut().downcast_mut::<StampData>()
 }
