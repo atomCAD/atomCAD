@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cad/structure_designer/node_data/anchor_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
@@ -129,6 +130,16 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: editAtomData,
           model: model,
+        );
+      case 'anchor':
+        // Fetch the anchor data here in the parent widget
+        final anchorData = getAnchorData(
+          nodeId: selectedNode.id,
+        );
+
+        return AnchorEditor(
+          nodeId: selectedNode.id,
+          data: anchorData,
         );
       default:
         return Center(
