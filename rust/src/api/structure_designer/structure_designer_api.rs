@@ -497,3 +497,14 @@ pub fn load_node_networks(file_path: String) -> bool {
     }
   }
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn is_node_type_active(node_type: String) -> bool {
+  unsafe {
+    if let Some(instance) = &CAD_INSTANCE {
+      instance.structure_designer.is_node_type_active(&node_type)
+    } else {
+      false
+    }
+  }
+}

@@ -150,3 +150,7 @@ bool saveNodeNetworks({required String filePath}) => RustLib.instance.api
 bool loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
         filePath: filePath);
+
+bool isNodeTypeActive({required String nodeType}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiIsNodeTypeActive(
+        nodeType: nodeType);

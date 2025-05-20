@@ -220,7 +220,7 @@ pub fn select_atom_or_bond_by_ray(structure_designer: &mut StructureDesigner, ra
 }
 
 pub fn delete_selected_atoms_and_bonds(structure_designer: &mut StructureDesigner) {
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -285,7 +285,7 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
     _ => return,
   };
 
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -323,7 +323,7 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
 
 // Replaces all selected atoms with the specified atomic number
 pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic_number: i32) {
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -360,7 +360,7 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
   };
     
   // Now get the edit atom data (after we're done with the atomic structure)
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -376,7 +376,7 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
 }
 
 pub fn edit_atom_undo(structure_designer: &mut StructureDesigner) {
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -385,7 +385,7 @@ pub fn edit_atom_undo(structure_designer: &mut StructureDesigner) {
 }
 
 pub fn edit_atom_redo(structure_designer: &mut StructureDesigner) {
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -401,7 +401,7 @@ pub fn edit_atom_redo(structure_designer: &mut StructureDesigner) {
 /// - The selected node is not an edit_atom node
 /// - The EditAtomData cannot be retrieved or cast
 pub fn get_active_edit_atom_data(structure_designer: &StructureDesigner) -> Option<&EditAtomData> {
-  let selected_node_id = get_active_edit_atom_node_id(structure_designer)?;
+  let selected_node_id = structure_designer.get_selected_node_id_with_type("edit_atom")?;
     
   // Get the node data and cast it to EditAtomData
   let node_data = structure_designer.get_node_network_data(selected_node_id)?;
@@ -410,16 +410,16 @@ pub fn get_active_edit_atom_data(structure_designer: &StructureDesigner) -> Opti
   node_data.as_any_ref().downcast_ref::<EditAtomData>()
 }
 
-/// Gets the EditAtomData for the currently active edit_atom node (mutable)
+/// Gets the EditAtomData for the currently selected edit_atom node (mutable)
 /// 
 /// Returns None if:
 /// - There is no active node network
 /// - No node is selected in the active network
 /// - The selected node is not an edit_atom node
 /// - The EditAtomData cannot be retrieved or cast
-pub fn get_active_edit_atom_data_mut(structure_designer: &mut StructureDesigner) -> Option<&mut EditAtomData> {
-  let selected_node_id = get_active_edit_atom_node_id(structure_designer)?;
-    
+pub fn get_selected_edit_atom_data_mut(structure_designer: &mut StructureDesigner) -> Option<&mut EditAtomData> {
+  let selected_node_id = structure_designer.get_selected_node_id_with_type("edit_atom")?;
+
   // Get the node data and cast it to EditAtomData
   let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;
     
@@ -427,43 +427,8 @@ pub fn get_active_edit_atom_data_mut(structure_designer: &mut StructureDesigner)
   node_data.as_any_mut().downcast_mut::<EditAtomData>()
 }
 
-// Returns true if the selected node is displayed and has an 'edit_atom' node type name
-pub fn is_edit_atom_active(structure_designer: &StructureDesigner) -> bool {
-  // Check if active_node_network_name exists
-  let network_name = match &structure_designer.active_node_network_name {
-    Some(name) => name,
-    None => return false,
-  };
-    
-  // Get the active node network
-  let network = match structure_designer.node_type_registry.node_networks.get(network_name) {
-    Some(network) => network,
-    None => return false,
-  };
-    
-  // Check if there's a selected node ID
-  let selected_node_id = match network.selected_node_id {
-    Some(id) => id,
-    None => return false,
-  };
-    
-  // Check if the selected node is displayed
-  if !network.displayed_node_ids.contains(&selected_node_id) {
-    return false;
-  }
-    
-  // Get the selected node's type name
-  let node_type_name = match network.nodes.get(&selected_node_id) {
-    Some(node) => &node.node_type_name,
-    None => return false,
-  };
-    
-  // Return true only if the node's type name is 'edit_atom'
-  node_type_name == "edit_atom"
-}
-
 fn add_atom(structure_designer: &mut StructureDesigner, atomic_number: i32, position: DVec3) {
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -475,7 +440,7 @@ fn add_atom(structure_designer: &mut StructureDesigner, atomic_number: i32, posi
 
 // Selects a bond by its ID using the active edit_atom node
 fn select_bond_by_reference(structure_designer: &mut StructureDesigner, bond_reference: &BondReference, select_modifier: SelectModifier) {
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -492,7 +457,7 @@ fn select_bond_by_reference(structure_designer: &mut StructureDesigner, bond_ref
 // Selects an atom by its ID using the active edit_atom node
 fn select_atom_by_id(structure_designer: &mut StructureDesigner, atom_id: u64, select_modifier: SelectModifier) {
   // Get the EditAtomData from the active edit_atom node
-  let edit_atom_data = match get_active_edit_atom_data_mut(structure_designer) {
+  let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
   };
@@ -541,37 +506,10 @@ fn edit_atom_tool_refresh(structure_designer: &mut StructureDesigner) {
     
   // If the atom doesn't exist, reset the last_atom_id
   if !atom_exists {
-    if let Some(edit_atom_data) = get_active_edit_atom_data_mut(structure_designer) {
+    if let Some(edit_atom_data) = get_selected_edit_atom_data_mut(structure_designer) {
       if let EditAtomTool::AddBond(state) = &mut edit_atom_data.active_tool {
         state.last_atom_id = None;
       }
     }
   }
-}
-
-/// Helper method to get the selected node ID of an edit_atom node
-/// 
-/// Returns None if:
-/// - There is no active node network
-/// - No node is selected in the active network
-/// - The selected node is not an edit_atom node
-fn get_active_edit_atom_node_id(structure_designer: &StructureDesigner) -> Option<u64> {
-  // Get active node network name
-  let network_name = structure_designer.active_node_network_name.as_ref()?;
-    
-  // Get the active node network
-  let network = structure_designer.node_type_registry.node_networks.get(network_name)?;
-    
-  // Get the selected node ID
-  let selected_node_id = network.selected_node_id?;
-    
-  // Get the selected node's type name
-  let node_type_name = network.nodes.get(&selected_node_id)?.node_type_name.as_str();
-    
-  // Check if the node is an edit_atom node
-  if node_type_name != "edit_atom" {
-    return None;
-  }
-
-  Some(selected_node_id)
 }

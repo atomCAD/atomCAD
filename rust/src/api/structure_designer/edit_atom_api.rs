@@ -9,17 +9,6 @@ use crate::api::api_common::from_api_transform;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn is_edit_atom_active() -> bool {
-  unsafe {
-    if let Some(instance) = &CAD_INSTANCE {
-      edit_atom::is_edit_atom_active(&instance.structure_designer)
-    } else {
-      false
-    }
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
 pub fn select_atom_or_bond_by_ray(ray_start: APIVec3, ray_dir: APIVec3, select_modifier: SelectModifier) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
@@ -127,7 +116,7 @@ pub fn set_active_edit_atom_tool(tool: APIEditAtomTool) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       // Get the edit atom data and set its active tool
-      if let Some(edit_atom_data) = edit_atom::get_active_edit_atom_data_mut(&mut instance.structure_designer) {
+      if let Some(edit_atom_data) = edit_atom::get_selected_edit_atom_data_mut(&mut instance.structure_designer) {
         edit_atom_data.set_active_tool(tool);
         refresh_renderer(instance, false);
         return true;
@@ -141,7 +130,7 @@ pub fn set_active_edit_atom_tool(tool: APIEditAtomTool) -> bool {
 pub fn set_edit_atom_default_data(replacement_atomic_number: i32) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      if let Some(edit_atom_data) = edit_atom::get_active_edit_atom_data_mut(&mut instance.structure_designer) {
+      if let Some(edit_atom_data) = edit_atom::get_selected_edit_atom_data_mut(&mut instance.structure_designer) {
         let result = edit_atom_data.set_default_tool_atomic_number(replacement_atomic_number);
         refresh_renderer(instance, false);
         return result;
@@ -155,7 +144,7 @@ pub fn set_edit_atom_default_data(replacement_atomic_number: i32) -> bool {
 pub fn set_edit_atom_add_atom_data(atomic_number: i32) -> bool {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      if let Some(edit_atom_data) = edit_atom::get_active_edit_atom_data_mut(&mut instance.structure_designer) {
+      if let Some(edit_atom_data) = edit_atom::get_selected_edit_atom_data_mut(&mut instance.structure_designer) {
         let result = edit_atom_data.set_add_atom_tool_atomic_number(atomic_number);
         refresh_renderer(instance, false);
         return result;

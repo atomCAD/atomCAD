@@ -1,5 +1,4 @@
 use crate::structure_designer::nodes::geo_to_atom;
-use crate::api::api_common::CAD_INSTANCE;
 use crate::api::structure_designer::structure_designer_api_types::APICrystalTypeInfo;
 
 /// Returns the unit cell size for a given element pair

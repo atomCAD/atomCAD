@@ -8,9 +8,6 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-bool isEditAtomActive() =>
-    RustLib.instance.api.crateApiStructureDesignerEditAtomApiIsEditAtomActive();
-
 bool selectAtomOrBondByRay(
         {required APIVec3 rayStart,
         required APIVec3 rayDir,

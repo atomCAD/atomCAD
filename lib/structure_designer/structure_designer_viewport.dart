@@ -26,50 +26,64 @@ class _StructureDesignerViewportState
     extends CadViewportState<StructureDesignerViewport> {
   @override
   void onDefaultClick(Offset pointerPos) {
-    if (widget.graphModel.isEditAtomActive()) {
-      final ray = getRayFromPointerPos(pointerPos);
-      final activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
+    if (widget.graphModel.isNodeTypeActive("edit_atom")) {
+      onEditAtomClick(pointerPos);
+    } else if (widget.graphModel.isNodeTypeActive("anchor")) {
+      onAnchorClick(pointerPos);
+    }
+  }
 
-      // Find the selected node
-      final selectedNode = widget.graphModel.nodeNetworkView?.nodes.entries
-          .where((entry) => entry.value.selected)
-          .map((entry) => entry.value)
-          .firstOrNull;
+  void onEditAtomClick(Offset pointerPos) {
+    final ray = getRayFromPointerPos(pointerPos);
+    final activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
 
-      if (activeEditAtomTool == APIEditAtomTool.addAtom) {
-        // Get the atomic number from the current edit atom data
-        final editAtomData = structure_designer_api.getEditAtomData(
-          nodeId: selectedNode?.id ?? BigInt.zero,
-        );
+    // Find the selected node
+    final selectedNode = widget.graphModel.nodeNetworkView?.nodes.entries
+        .where((entry) => entry.value.selected)
+        .map((entry) => entry.value)
+        .firstOrNull;
 
-        if (editAtomData != null) {
-          final camera = common_api.getCamera();
-          final cameraTransform = getCameraTransform(camera);
-          final planeNormal = cameraTransform!.forward;
+    if (activeEditAtomTool == APIEditAtomTool.addAtom) {
+      // Get the atomic number from the current edit atom data
+      final editAtomData = structure_designer_api.getEditAtomData(
+        nodeId: selectedNode?.id ?? BigInt.zero,
+      );
 
-          widget.graphModel.addAtomByRay(
-            editAtomData.addAtomToolAtomicNumber!,
-            planeNormal,
-            ray.start,
-            ray.direction,
-          );
-        }
-      } else if (activeEditAtomTool == APIEditAtomTool.addBond) {
-        // Add bond tool - create bonds between atoms
-        widget.graphModel.drawBondByRay(
+      if (editAtomData != null) {
+        final camera = common_api.getCamera();
+        final cameraTransform = getCameraTransform(camera);
+        final planeNormal = cameraTransform!.forward;
+
+        widget.graphModel.addAtomByRay(
+          editAtomData.addAtomToolAtomicNumber!,
+          planeNormal,
           ray.start,
           ray.direction,
-        );
-      } else if (activeEditAtomTool == APIEditAtomTool.default_) {
-        // Default tool behavior - select atoms/bonds
-        final selectModifier = getSelectModifierFromKeyboard();
-        widget.graphModel.selectAtomOrBondByRay(
-          ray.start,
-          ray.direction,
-          selectModifier,
         );
       }
+    } else if (activeEditAtomTool == APIEditAtomTool.addBond) {
+      // Add bond tool - create bonds between atoms
+      widget.graphModel.drawBondByRay(
+        ray.start,
+        ray.direction,
+      );
+    } else if (activeEditAtomTool == APIEditAtomTool.default_) {
+      // Default tool behavior - select atoms/bonds
+      final selectModifier = getSelectModifierFromKeyboard();
+      widget.graphModel.selectAtomOrBondByRay(
+        ray.start,
+        ray.direction,
+        selectModifier,
+      );
     }
+  }
+
+  void onAnchorClick(Offset pointerPos) {
+    final ray = getRayFromPointerPos(pointerPos);
+    widget.graphModel.selectAnchorAtomByRay(
+      ray.start,
+      ray.direction,
+    );
   }
 
   @override

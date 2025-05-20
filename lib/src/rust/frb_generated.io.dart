@@ -7,6 +7,7 @@ import 'api/common_api.dart';
 import 'api/common_api_types.dart';
 import 'api/scene_composer_api.dart';
 import 'api/scene_composer_api_types.dart';
+import 'api/structure_designer/anchor_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/geo_to_atom_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';

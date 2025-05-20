@@ -4,6 +4,8 @@ import 'package:vector_math/vector_math.dart' as vector_math;
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
     as edit_atom_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/anchor_api.dart'
+    as anchor_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -54,8 +56,17 @@ class StructureDesignerModel extends ChangeNotifier {
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
   }
 
-  bool isEditAtomActive() {
-    return edit_atom_api.isEditAtomActive();
+  void selectAnchorAtomByRay(
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    anchor_api.selectAnchorAtomByRay(
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
+
+  bool isNodeTypeActive(String nodeType) {
+    return structure_designer_api.isNodeTypeActive(nodeType: nodeType);
   }
 
   void setActiveEditAtomTool(APIEditAtomTool tool) {

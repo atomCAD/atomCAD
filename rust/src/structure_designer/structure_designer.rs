@@ -12,7 +12,7 @@ use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
-use crate::structure_designer::nodes::edit_atom::edit_atom::get_active_edit_atom_data_mut;
+use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -51,6 +51,68 @@ impl StructureDesigner {
     // Find the first atomic structure with from_selected_node = true
     self.last_generated_structure_designer_scene.atomic_structures.iter()
       .find(|structure| structure.from_selected_node)
+  }
+
+  /// Helper method to get the selected node ID of a node of a specific type
+  /// 
+  /// Returns None if:
+  /// - There is no active node network
+  /// - No node is selected in the active network
+  /// - The selected node has a different type name than the needed node type name
+  pub fn get_selected_node_id_with_type(&self,  needed_node_type_name: &str) -> Option<u64> {
+    // Get active node network name
+    let network_name = self.active_node_network_name.as_ref()?;
+    
+    // Get the active node network
+    let network = self.node_type_registry.node_networks.get(network_name)?;
+    
+    // Get the selected node ID
+    let selected_node_id = network.selected_node_id?;
+    
+    // Get the selected node's type name
+    let node_type_name = network.nodes.get(&selected_node_id)?.node_type_name.as_str();
+    
+    // Check if the node is an edit_atom node
+    if node_type_name != needed_node_type_name {
+      return None;
+    }
+
+    Some(selected_node_id)
+  }
+
+  // Returns true if the selected node is displayed and has the needed node type name
+  pub fn is_node_type_active(&self, needed_node_type_name: &str) -> bool {
+    // Check if active_node_network_name exists
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    
+    // Get the active node network
+    let network = match self.node_type_registry.node_networks.get(network_name) {
+      Some(network) => network,
+      None => return false,
+    };
+    
+    // Check if there's a selected node ID
+    let selected_node_id = match network.selected_node_id {
+      Some(id) => id,
+      None => return false,
+    };
+    
+    // Check if the selected node is displayed
+    if !network.displayed_node_ids.contains(&selected_node_id) {
+      return false;
+    }
+    
+    // Get the selected node's type name
+    let node_type_name = match network.nodes.get(&selected_node_id) {
+      Some(node) => &node.node_type_name,
+      None => return false,
+    };
+    
+    // Return true only if the node's type name matches the needed node type name
+    node_type_name == needed_node_type_name
   }
 
   // Generates the scene to be rendered according to the displayed nodes of the active node network
@@ -236,7 +298,7 @@ impl StructureDesigner {
       .and_then(|atomic_structure| calc_selection_transform(atomic_structure));
     
     // Then update the edit atom data with the pre-calculated transform
-    if let Some(edit_atom_data) = get_active_edit_atom_data_mut(self) {
+    if let Some(edit_atom_data) = get_selected_edit_atom_data_mut(self) {
       edit_atom_data.selection_transform = selection_transform;
     }
   }
