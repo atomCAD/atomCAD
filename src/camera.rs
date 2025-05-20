@@ -84,14 +84,18 @@ impl CadCamera {
         self.update_position(transform);
     }
 
-    /// Handle zoom movement
-    pub fn zoom(&mut self, transform: &mut Transform, delta: f32) {
-        // Zoom by adjusting distance
-        let zoom_factor = 1.0 - delta * self.zoom_sensitivity;
-        self.distance *= zoom_factor;
+    /// Handle zoom movement along a ray
+    pub fn zoom(&mut self, transform: &mut Transform, delta: f32, ray_direction: Vec3) {
+        // Calculate zoom amount
+        let zoom_amount = delta * self.zoom_sensitivity * self.distance;
 
-        // Update the camera position
-        self.update_position(transform);
+        // Move both the camera and focus point along the ray
+        let zoom_offset = ray_direction * zoom_amount;
+        self.focus_point += zoom_offset;
+        transform.translation += zoom_offset;
+
+        // Update the distance to maintain the same relative distance
+        self.distance = (transform.translation - self.focus_point).length();
     }
 }
 
@@ -157,6 +161,8 @@ fn camera_pan_system(
 /// Handle mouse wheel zoom
 fn camera_zoom_system(
     mut scroll_events: MessageReader<MouseWheel>,
+    windows: Query<&Window>,
+    camera: Query<(&Camera, &GlobalTransform)>,
     mut query: Query<(&mut Transform, &mut CadCamera)>,
 ) {
     let scroll_delta: f32 = scroll_events
@@ -170,9 +176,25 @@ fn camera_zoom_system(
         })
         .fold(0.0, |acc, delta| acc + delta);
 
-    if scroll_delta != 0.0 {
-        for (mut transform, mut cam) in query.iter_mut() {
-            cam.zoom(&mut transform, scroll_delta);
+    if scroll_delta == 0.0 {
+        return;
+    }
+
+    // Get the primary window and camera
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = camera.single() else {
+        return;
+    };
+
+    // Get the mouse position in screen space
+    if let Some(mouse_pos) = window.cursor_position() {
+        // Convert mouse position to world space ray
+        if let Ok(ray) = camera.viewport_to_world(camera_transform, mouse_pos) {
+            for (mut transform, mut cam) in query.iter_mut() {
+                cam.zoom(&mut transform, scroll_delta, ray.direction.into());
+            }
         }
     }
 }
