@@ -49,6 +49,14 @@ impl Default for CadCamera {
     }
 }
 
+impl CadCamera {
+    /// Update camera position based on its current rotation and distance from focus point
+    pub fn update_position(&self, transform: &mut Transform) {
+        let forward = transform.rotation * -Vec3::Z;
+        transform.translation = self.focus_point - forward * self.distance;
+    }
+}
+
 /// Handle mouse rotation (orbit)
 fn camera_orbit_system(
     mut mouse_motion: MessageReader<MouseMotion>,
@@ -83,9 +91,7 @@ fn camera_orbit_system(
             // Apply rotations relative to current orientation
             transform.rotation = current_rotation * yaw * pitch;
 
-            // Update camera position based on new orientation
-            let forward = transform.rotation * -Vec3::Z;
-            transform.translation = cam.focus_point - forward * cam.distance;
+            cam.update_position(&mut transform);
         }
     }
 }
@@ -95,7 +101,7 @@ fn camera_pan_system(
     mut mouse_motion: MessageReader<MouseMotion>,
     buttons: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&Transform, &mut CadCamera)>,
+    mut query: Query<(&mut Transform, &mut CadCamera)>,
 ) {
     // Pan with middle mouse OR Shift+mouse OR right mouse
     let shift_held = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
@@ -114,7 +120,7 @@ fn camera_pan_system(
         .fold(Vec2::ZERO, |acc, delta| acc + delta);
 
     if delta_mouse.is_finite() && delta_mouse != Vec2::ZERO {
-        for (transform, mut cam) in query.iter_mut() {
+        for (mut transform, mut cam) in query.iter_mut() {
             // Calculate pan in screen space
             let right = transform.right();
             let up = transform.up();
@@ -123,6 +129,7 @@ fn camera_pan_system(
                 + up * delta_mouse.y * cam.pan_sensitivity * cam.distance * 0.1;
 
             cam.focus_point += pan_offset;
+            cam.update_position(&mut transform);
         }
     }
 }
@@ -149,9 +156,7 @@ fn camera_zoom_system(
             let zoom_factor = 1.0 - scroll_delta * cam.zoom_sensitivity;
             cam.distance = (cam.distance * zoom_factor).clamp(cam.min_distance, cam.max_distance);
 
-            // Update camera position based on new distance
-            let forward = transform.rotation * -Vec3::Z;
-            transform.translation = cam.focus_point - forward * cam.distance;
+            cam.update_position(&mut transform);
         }
     }
 }
