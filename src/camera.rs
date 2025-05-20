@@ -30,9 +30,6 @@ pub struct CadCamera {
     pub orbit_sensitivity: f32,
     pub pan_sensitivity: f32,
     pub zoom_sensitivity: f32,
-    /// Constraints
-    pub min_distance: f32,
-    pub max_distance: f32,
 }
 
 impl Default for CadCamera {
@@ -43,8 +40,6 @@ impl Default for CadCamera {
             orbit_sensitivity: 0.01,
             pan_sensitivity: 0.02,
             zoom_sensitivity: 0.1,
-            min_distance: 1.0,
-            max_distance: 100.0,
         }
     }
 }
@@ -93,9 +88,7 @@ impl CadCamera {
     pub fn zoom(&mut self, transform: &mut Transform, delta: f32) {
         // Zoom by adjusting distance
         let zoom_factor = 1.0 - delta * self.zoom_sensitivity;
-
-        // Clamp the distance
-        self.distance = (self.distance * zoom_factor).clamp(self.min_distance, self.max_distance);
+        self.distance *= zoom_factor;
 
         // Update the camera position
         self.update_position(transform);
