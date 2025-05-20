@@ -55,6 +55,51 @@ impl CadCamera {
         let forward = transform.rotation * -Vec3::Z;
         transform.translation = self.focus_point - forward * self.distance;
     }
+
+    /// Handle orbit (rotation) movement
+    pub fn orbit(&self, transform: &mut Transform, delta: Vec2) {
+        // Get the current camera orientation
+        let current_rotation = transform.rotation;
+
+        // Create rotation quaternions for yaw and pitch
+        let yaw = Quat::from_rotation_y(-delta.x * self.orbit_sensitivity);
+        let pitch = Quat::from_rotation_x(-delta.y * self.orbit_sensitivity);
+
+        // Apply rotations relative to current orientation
+        transform.rotation = current_rotation * yaw * pitch;
+
+        // Update the camera position
+        self.update_position(transform);
+    }
+
+    /// Handle pan movement
+    pub fn pan(&mut self, transform: &mut Transform, delta: Vec2) {
+        // Calculate pan in screen space
+        let right = transform.right();
+        let up = transform.up();
+
+        // Calculate the pan offset
+        let pan_offset = -right * delta.x * self.pan_sensitivity * self.distance * 0.1
+            + up * delta.y * self.pan_sensitivity * self.distance * 0.1;
+
+        // Update the focus point
+        self.focus_point += pan_offset;
+
+        // Update the camera position
+        self.update_position(transform);
+    }
+
+    /// Handle zoom movement
+    pub fn zoom(&mut self, transform: &mut Transform, delta: f32) {
+        // Zoom by adjusting distance
+        let zoom_factor = 1.0 - delta * self.zoom_sensitivity;
+
+        // Clamp the distance
+        self.distance = (self.distance * zoom_factor).clamp(self.min_distance, self.max_distance);
+
+        // Update the camera position
+        self.update_position(transform);
+    }
 }
 
 /// Handle mouse rotation (orbit)
@@ -62,7 +107,7 @@ fn camera_orbit_system(
     mut mouse_motion: MessageReader<MouseMotion>,
     buttons: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut CadCamera)>,
+    mut query: Query<(&mut Transform, &CadCamera)>,
 ) {
     // Rotate with left mouse (without modifier) OR with Cmd+mouse on Mac
     let shift_held = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
@@ -81,17 +126,7 @@ fn camera_orbit_system(
 
     if delta_mouse.is_finite() && delta_mouse != Vec2::ZERO {
         for (mut transform, cam) in query.iter_mut() {
-            // Get the current camera orientation
-            let current_rotation = transform.rotation;
-
-            // Create rotation quaternions for yaw and pitch
-            let yaw = Quat::from_rotation_y(-delta_mouse.x * cam.orbit_sensitivity);
-            let pitch = Quat::from_rotation_x(-delta_mouse.y * cam.orbit_sensitivity);
-
-            // Apply rotations relative to current orientation
-            transform.rotation = current_rotation * yaw * pitch;
-
-            cam.update_position(&mut transform);
+            cam.orbit(&mut transform, delta_mouse);
         }
     }
 }
@@ -121,15 +156,7 @@ fn camera_pan_system(
 
     if delta_mouse.is_finite() && delta_mouse != Vec2::ZERO {
         for (mut transform, mut cam) in query.iter_mut() {
-            // Calculate pan in screen space
-            let right = transform.right();
-            let up = transform.up();
-
-            let pan_offset = -right * delta_mouse.x * cam.pan_sensitivity * cam.distance * 0.1
-                + up * delta_mouse.y * cam.pan_sensitivity * cam.distance * 0.1;
-
-            cam.focus_point += pan_offset;
-            cam.update_position(&mut transform);
+            cam.pan(&mut transform, delta_mouse);
         }
     }
 }
@@ -152,11 +179,7 @@ fn camera_zoom_system(
 
     if scroll_delta != 0.0 {
         for (mut transform, mut cam) in query.iter_mut() {
-            // Zoom by adjusting distance
-            let zoom_factor = 1.0 - scroll_delta * cam.zoom_sensitivity;
-            cam.distance = (cam.distance * zoom_factor).clamp(cam.min_distance, cam.max_distance);
-
-            cam.update_position(&mut transform);
+            cam.zoom(&mut transform, scroll_delta);
         }
     }
 }
