@@ -1,0 +1,17 @@
+[package]
+name = "atomcad-molecule"
+version.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Bevy
+bevy.workspace = true
+# Chemistry
+periodic-table.workspace = true
+# Rendering
+wgpu-types.workspace = true
+# Utilities
+bytemuck.workspace = true
