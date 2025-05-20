@@ -72,6 +72,9 @@ void clearSelection() => RustLib.instance.api
 APICuboidData? getCuboidData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCuboidData(nodeId: nodeId);
 
+APIAnchorData? getAnchorData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetAnchorData(nodeId: nodeId);
+
 APISphereData? getSphereData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetSphereData(nodeId: nodeId);
 

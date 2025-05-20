@@ -70,7 +70,7 @@ impl EditAtomData {
       if decorate {
         if let EditAtomTool::AddBond(state) = &self.active_tool {
           if let Some(atom_id) = state.last_atom_id {
-            atomic_structure.decorator.atom_display_states.insert(atom_id, AtomDisplayState::Marked);
+            atomic_structure.decorator.set_atom_display_state(atom_id, AtomDisplayState::Marked);
           }
         }
       }

@@ -14,6 +14,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIGeoTransDat
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
+use crate::api::structure_designer::structure_designer_api_types::APIAnchorData;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::sphere::SphereData;
@@ -22,6 +23,7 @@ use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
+use crate::structure_designer::nodes::anchor::AnchorData;
 use crate::api::api_common::to_api_vec2;
 use crate::api::api_common::from_api_vec2;
 use crate::api::api_common::to_api_ivec3;
@@ -221,6 +223,18 @@ pub fn get_cuboid_data(node_id: u64) -> Option<APICuboidData> {
     return Some(APICuboidData {
       min_corner: to_api_ivec3(&cuboid_data.min_corner),
       extent: to_api_ivec3(&cuboid_data.extent),
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_anchor_data(node_id: u64) -> Option<APIAnchorData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let anchor_data = node_data.as_any_ref().downcast_ref::<AnchorData>()?;
+    return Some(APIAnchorData {
+      position: anchor_data.position.map(|pos| to_api_ivec3(&pos)),
     });
   }
 }

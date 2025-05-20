@@ -87,6 +87,10 @@ pub struct InputPinView {
     pub selection_transform: Option<APITransform>,
   }
 
+  pub struct APIAnchorData {
+    pub position: Option<APIIVec3>,
+  }
+
   #[derive(Clone, Debug)]
   pub struct APICrystalTypeInfo {
     pub primary_atomic_number: i32,

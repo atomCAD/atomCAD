@@ -1,4 +1,4 @@
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::{common::atomic_structure::AtomDisplayState, structure_designer::evaluator::network_evaluator::NetworkEvaluator};
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
@@ -8,6 +8,7 @@ use crate::common::atomic_structure::AtomicStructure;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::option_ivec3_serializer;
+use crate::common::crystal_utils::in_crystal_pos_to_id;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnchorData {
@@ -43,6 +44,14 @@ pub fn eval_anchor<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec
     let anchor_data = &node.data.as_any_ref().downcast_ref::<AnchorData>().unwrap();
 
     atomic_structure.anchor_position = anchor_data.position;
+
+    if let Some(pos) = atomic_structure.anchor_position {
+      let anchor_atom_id = in_crystal_pos_to_id(&pos);
+      if atomic_structure.atoms.contains_key(&anchor_atom_id) {
+        atomic_structure.decorator.set_atom_display_state(anchor_atom_id, AtomDisplayState::Marked);
+      }
+    }
+
     return NetworkResult::Atomic(atomic_structure);
   }
   return NetworkResult::Atomic(AtomicStructure::new());

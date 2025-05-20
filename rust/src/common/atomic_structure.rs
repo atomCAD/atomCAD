@@ -35,6 +35,10 @@ impl AtomicStructureDecorator {
         }
     }
     
+    pub fn set_atom_display_state(&mut self, atom_id: u64, state: AtomDisplayState) {
+        self.atom_display_states.insert(atom_id, state);
+    }
+    
     /// Returns the display state for the given atom ID.
     /// If the atom ID is not in the HashMap, returns AtomDisplayState::Normal.
     pub fn get_atom_display_state(&self, atom_id: u64) -> AtomDisplayState {
