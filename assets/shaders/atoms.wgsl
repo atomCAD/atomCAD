@@ -23,6 +23,7 @@ struct PeriodicTable {
 
 @group(0) @binding(1) var<uniform> global_transform: GlobalTransform;
 @group(0) @binding(2) var<uniform> periodic_table: PeriodicTable;
+@group(0) @binding(3) var<uniform> vdw_scale: f32;
 
 struct AtomVertexInput {
     @builtin(vertex_index) index: u32,
@@ -52,7 +53,7 @@ fn vertex(vertex: AtomVertexInput) -> AtomVertexOutput {
 
     let element_id = vertex.atom_kind & 0x7Fu; // Extract low 7 bits
     let element = periodic_table.elements[element_id];
-    let atom_radius = element.radius;
+    let atom_radius = element.radius * vdw_scale;
 
     // Get camera right and up vectors in world space
     // Note: view_from_world transforms from world to view space,

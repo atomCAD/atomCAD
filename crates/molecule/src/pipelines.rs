@@ -211,6 +211,19 @@ fn render_pipeline_from_world<T: MoleculeRenderPipeline>(
                 },
                 count: None,
             },
+            // Binding 3: VDW scale
+            BindGroupLayoutEntry {
+                binding: 3,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(
+                        std::num::NonZero::new(std::mem::size_of::<f32>() as u64).unwrap(),
+                    ),
+                },
+                count: None,
+            },
         ],
     );
 
