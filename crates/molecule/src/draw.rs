@@ -44,7 +44,7 @@ pub(crate) fn queue_molecule_draw_commands(
 
     // Our render entities
     atom_entities: Query<(Entity, &ExtractedAtoms)>,
-    bond_entities: Query<Entity, With<ExtractedBonds>>,
+    bond_entities: Query<(Entity, &ExtractedBonds)>,
 
     // Render phases
     mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
@@ -105,7 +105,13 @@ pub(crate) fn queue_molecule_draw_commands(
                 Opaque3dBinKey {
                     asset_id: AssetId::<Mesh>::invalid().untyped(),
                 },
-                (atom_entity, atoms.main_entity),
+                (
+                    atom_entity,
+                    match atoms.main_entity {
+                        Some(main_entity) => main_entity,
+                        None => atom_entity.into(),
+                    },
+                ),
                 InputUniformIndex::default(),
                 BinnedRenderPhaseType::NonMesh,
                 atom_tick,
@@ -113,7 +119,7 @@ pub(crate) fn queue_molecule_draw_commands(
         }
 
         // Render bonds
-        for bond_entity in bond_entities.iter() {
+        for (bond_entity, bonds) in bond_entities.iter() {
             // Bump tick for bonds
             let bond_tick = *next_bond_tick;
             next_bond_tick.set(bond_tick.get() + 1);
@@ -131,17 +137,13 @@ pub(crate) fn queue_molecule_draw_commands(
                 Opaque3dBinKey {
                     asset_id: AssetId::<Mesh>::invalid().untyped(),
                 },
-                // IMPORTANT: This may be a Bevy bug!
-                //
-                // Note that the entity used below is not the bonds.main_entity, which is what it
-                // should be. For some reason if both the atom pass and the bond pass use the same
-                // main-world entity (which they should), neither one renders. Likewise, if the
-                // main-world entity isn't used for either, then we likewise get a blank screen. ONE
-                // of the two must use the main-world entity, and the other must use a different
-                // value. We arbitrarily pick the render-world entity ID, which should be
-                // meaningless in the main-world. This works, but the whole thing smells like an
-                // upstream bug.
-                (bond_entity, bond_entity.into()),
+                (
+                    bond_entity,
+                    match bonds.main_entity {
+                        Some(main_entity) => main_entity,
+                        None => bond_entity.into(),
+                    },
+                ),
                 // (bond_entity, bonds.main_entity)
                 InputUniformIndex::default(),
                 BinnedRenderPhaseType::NonMesh,
@@ -205,10 +207,15 @@ impl<P: PhaseItem> RenderCommand<P> for DrawAtomsInstanced {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         if let Some(gpu_buffers) = instance_buffers {
-            let shared_buffers = shared_buffers.into_inner();
-            pass.set_vertex_buffer(0, shared_buffers.sphere_billboard_vertex_buffer().slice(..));
-            pass.set_vertex_buffer(1, gpu_buffers.atoms_buffer().slice(..));
-            pass.draw(0..4, 0..gpu_buffers.atoms_count());
+            if gpu_buffers.atoms_count() > 0 {
+                let shared_buffers = shared_buffers.into_inner();
+                pass.set_vertex_buffer(
+                    0,
+                    shared_buffers.sphere_billboard_vertex_buffer().slice(..),
+                );
+                pass.set_vertex_buffer(1, gpu_buffers.atoms_buffer().slice(..));
+                pass.draw(0..4, 0..gpu_buffers.atoms_count());
+            }
             RenderCommandResult::Success
         } else {
             RenderCommandResult::Failure("No atom instance buffers found")
@@ -236,13 +243,15 @@ impl<P: PhaseItem> RenderCommand<P> for DrawBondsInstanced {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         if let Some(gpu_buffers) = instance_buffers {
-            let shared_buffers = shared_buffers.into_inner();
-            pass.set_vertex_buffer(
-                0,
-                shared_buffers.capsule_billboard_vertex_buffer().slice(..),
-            );
-            pass.set_vertex_buffer(1, gpu_buffers.bonds_buffer().slice(..));
-            pass.draw(0..4, 0..gpu_buffers.bonds_count());
+            if gpu_buffers.bonds_count() > 0 {
+                let shared_buffers = shared_buffers.into_inner();
+                pass.set_vertex_buffer(
+                    0,
+                    shared_buffers.capsule_billboard_vertex_buffer().slice(..),
+                );
+                pass.set_vertex_buffer(1, gpu_buffers.bonds_buffer().slice(..));
+                pass.draw(0..4, 0..gpu_buffers.bonds_count());
+            }
             RenderCommandResult::Success
         } else {
             RenderCommandResult::Failure("No bond instance buffers found")

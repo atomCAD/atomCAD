@@ -235,7 +235,7 @@ impl AssetLoader for PdbAssetLoader {
         // Calculate AABB from atom positions including van der Waals radii
         let mut min = Vec3::splat(f32::MAX);
         let mut max = Vec3::splat(f32::MIN);
-        let periodic_table = PeriodicTable::with_vdw_scale(1.0);
+        let periodic_table = PeriodicTable::new();
         for atom in &atoms {
             // Get the van der Waals radius for this atom
             let radius = periodic_table.element_reprs[atom.kind as usize].radius;

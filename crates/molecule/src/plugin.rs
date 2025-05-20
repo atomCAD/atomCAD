@@ -85,7 +85,7 @@ impl Plugin for MoleculeRenderPlugin {
         ];
 
         // Create the periodic table buffer
-        let periodic_table = PeriodicTable::with_vdw_scale(0.25);
+        let periodic_table = PeriodicTable::new();
 
         let shared_molecule_buffers =
             SharedMoleculeGpuBuffers::new(render_device, &vertices, &vertices, &periodic_table);

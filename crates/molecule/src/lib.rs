@@ -8,6 +8,7 @@
 mod assets;
 mod buffers;
 mod components;
+mod config;
 mod draw;
 mod extract;
 mod pipelines;

@@ -22,6 +22,7 @@ use wgpu_types::{PrimitiveTopology, VertexFormat};
 
 use crate::{
     assets::MoleculeShaders,
+    buffers::VdwScaleUniform,
     components::{AtomInstance, DenormalizedBondInstance},
 };
 
@@ -205,6 +206,20 @@ fn render_pipeline_from_world<T: MoleculeRenderPipeline>(
                     has_dynamic_offset: false,
                     min_binding_size: Some(
                         std::num::NonZero::new(std::mem::size_of::<PeriodicTable>() as u64)
+                            .unwrap(),
+                    ),
+                },
+                count: None,
+            },
+            // Binding 3: VDW scale
+            BindGroupLayoutEntry {
+                binding: 3,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(
+                        std::num::NonZero::new(std::mem::size_of::<VdwScaleUniform>() as u64)
                             .unwrap(),
                     ),
                 },

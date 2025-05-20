@@ -500,14 +500,6 @@ impl PeriodicTable {
 
         Self { element_reprs }
     }
-
-    pub fn with_vdw_scale(vdw_scale: f32) -> Self {
-        let mut periodic_table = Self::new();
-        for element_repr in periodic_table.element_reprs.iter_mut() {
-            element_repr.radius *= vdw_scale;
-        }
-        periodic_table
-    }
 }
 
 #[cfg(test)]

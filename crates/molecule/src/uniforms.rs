@@ -79,6 +79,11 @@ pub(crate) fn prepare_atom_uniforms_bind_group(
                         .periodic_table_buffer()
                         .as_entire_binding(),
                 },
+                // Binding 3: VDW scale
+                BindGroupEntry {
+                    binding: 3,
+                    resource: gpu_buffers.vdw_scale_buffer().as_entire_binding(),
+                },
             ],
         );
 
@@ -128,6 +133,11 @@ pub(crate) fn prepare_bond_uniforms_bind_group(
                     resource: shared_molecule_buffers
                         .periodic_table_buffer()
                         .as_entire_binding(),
+                },
+                // Binding 3: VDW scale
+                BindGroupEntry {
+                    binding: 3,
+                    resource: gpu_buffers.vdw_scale_buffer().as_entire_binding(),
                 },
             ],
         );

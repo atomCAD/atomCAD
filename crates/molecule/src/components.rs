@@ -2,6 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
+use crate::config::MoleculeRenderConfig;
 use bevy::{
     camera::visibility::{VisibilityClass, add_visibility_class},
     prelude::*,
@@ -72,6 +73,7 @@ pub struct DenormalizedBondInstance {
 /// ```
 #[derive(Component, Clone, Reflect)]
 #[require(VisibilityClass)]
+#[require(MoleculeRenderConfig)]
 #[component(on_add = add_visibility_class::<Molecule>)]
 pub struct Molecule {
     pub atoms: Vec<AtomInstance>,
