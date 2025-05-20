@@ -7,14 +7,17 @@ use std::collections::HashMap;
 use crate::{AtomInstance, BondInstance, Molecule};
 use bevy::{
     asset::{AssetLoader, LoadContext},
+    camera::primitives::Aabb,
     prelude::*,
 };
 use nom::IResult;
+use periodic_table::{Element, PeriodicTable};
 use thiserror::Error as ThisError;
 
 #[derive(Asset, Clone, Reflect)]
 pub struct PdbAsset {
     pub molecule: Molecule,
+    pub aabb: Aabb,
 }
 
 // Implement the asset loader
@@ -23,7 +26,7 @@ pub struct PdbAssetLoader;
 
 /// Maps element symbols to their atomic numbers (element IDs).
 fn get_element_id(symbol: &str) -> u32 {
-    periodic_table::Element::from_symbol(symbol).map_or(0, |e| e as u32)
+    Element::from_symbol(symbol).map_or(0, |e| e as u32)
 }
 
 /// Parse a float from a string
@@ -229,11 +232,32 @@ impl AssetLoader for PdbAssetLoader {
             atom.position -= avg_position;
         }
 
+        // Calculate AABB from atom positions including van der Waals radii
+        let mut min = Vec3::splat(f32::MAX);
+        let mut max = Vec3::splat(f32::MIN);
+        let periodic_table = PeriodicTable::with_vdw_scale(1.0);
+        for atom in &atoms {
+            // Get the van der Waals radius for this atom
+            let radius = periodic_table.element_reprs[atom.kind as usize].radius;
+
+            // Expand the bounds by the atom's radius
+            min = min.min(atom.position - Vec3::splat(radius));
+            max = max.max(atom.position + Vec3::splat(radius));
+        }
+        let center = (min + max) * 0.5;
+        let half_extents = (max - min) * 0.5;
+
         // Create the molecule from atoms & bonds
         let molecule = Molecule { atoms, bonds };
 
-        // Return the asset with the atom cluster
-        Ok(PdbAsset { molecule })
+        // Return the asset with the molecule and its AABB
+        Ok(PdbAsset {
+            molecule,
+            aabb: Aabb {
+                center: center.into(),
+                half_extents: half_extents.into(),
+            },
+        })
     }
 
     fn extensions(&self) -> &[&str] {
