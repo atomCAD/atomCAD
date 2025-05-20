@@ -7,7 +7,7 @@ use crate::{
     PdbAssetHandles, PdbLoaderPlugin,
 };
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
-use bevy::{camera::primitives::Aabb, prelude::*};
+use bevy::prelude::*;
 
 pub struct CadViewPlugin;
 
@@ -45,9 +45,19 @@ fn setup_cad_view(
     pdb_asset_handles: Res<PdbAssetHandles>,
     pdb_assets: Res<Assets<PdbAsset>>,
 ) {
+    // Add an example molecule
+    let neon_pump_imm = pdb_assets
+        .get(&pdb_asset_handles.neon_pump_imm)
+        .expect("Neon pump asset not loaded.");
+
+    // Get the molecule's AABB
+    let aabb = neon_pump_imm.aabb;
+    let center: Vec3 = aabb.center.into();
+    let half_extents: Vec3 = aabb.half_extents.into();
+
     // Spawn a 3D camera
-    let camera_position = Vec3::new(0.0, 30.0, 100.0);
-    let focus_point = Vec3::ZERO;
+    let camera_position = center + Vec3::new(0.0, half_extents.y * 2.0, half_extents.z * 4.0);
+    let focus_point = center;
     let distance = camera_position.distance(focus_point);
 
     commands.spawn((
@@ -61,18 +71,11 @@ fn setup_cad_view(
         OnCadView,
     ));
 
-    // Add an example molecule
-    let neon_pump_imm = pdb_assets
-        .get(&pdb_asset_handles.neon_pump_imm)
-        .expect("Neon pump asset not loaded.");
     commands.spawn((
         neon_pump_imm.molecule.clone(),
         Transform::default(),
         Visibility::default(),
-        Aabb {
-            center: Vec3A::ZERO,
-            half_extents: Vec3A::new(1.0, 1.0, 1.0),
-        },
+        aabb,
         OnCadView,
     ));
 
