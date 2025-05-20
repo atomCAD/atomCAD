@@ -21,8 +21,17 @@ struct PeriodicTable {
     elements: array<ElementProperties, 118>,
 }
 
+struct VdwScaleUniform {
+    scale: f32,
+    // Padding to meet 16-byte alignment requirement for uniform buffers
+    _pad1: f32,
+    _pad2: f32,
+    _pad3: f32,
+}
+
 @group(0) @binding(1) var<uniform> global_transform: GlobalTransform;
 @group(0) @binding(2) var<uniform> periodic_table: PeriodicTable;
+@group(0) @binding(3) var<uniform> vdw_scale: VdwScaleUniform;
 
 struct AtomVertexInput {
     @builtin(vertex_index) index: u32,
@@ -52,7 +61,7 @@ fn vertex(vertex: AtomVertexInput) -> AtomVertexOutput {
 
     let element_id = vertex.atom_kind & 0x7Fu; // Extract low 7 bits
     let element = periodic_table.elements[element_id];
-    let atom_radius = element.radius;
+    let atom_radius = element.radius * vdw_scale.scale;
 
     // Get camera right and up vectors in world space
     // Note: view_from_world transforms from world to view space,

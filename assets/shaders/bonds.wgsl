@@ -21,8 +21,17 @@ struct PeriodicTable {
     elements: array<ElementProperties, 118>,
 }
 
+struct VdwScaleUniform {
+    scale: f32,
+    // Padding to meet 16-byte alignment requirement for uniform buffers
+    _pad1: f32,
+    _pad2: f32,
+    _pad3: f32,
+}
+
 @group(0) @binding(1) var<uniform> global_transform: GlobalTransform;
 @group(0) @binding(2) var<uniform> periodic_table: PeriodicTable;
+@group(0) @binding(3) var<uniform> vdw_scale: VdwScaleUniform;
 
 struct BondVertexInput {
     @builtin(vertex_index) index: u32,
@@ -63,8 +72,8 @@ fn vertex(vertex: BondVertexInput) -> BondVertexOutput {
     let element_id2 = vertex.atom2_kind & 0x7Fu;
     let element1 = periodic_table.elements[element_id1];
     let element2 = periodic_table.elements[element_id2];
-    let atom1_radius = element1.radius;
-    let atom2_radius = element2.radius;
+    let atom1_radius = element1.radius * vdw_scale.scale;
+    let atom2_radius = element2.radius * vdw_scale.scale;
 
     // Use smaller atom radius * 0.4 for bond thickness
     let bond_radius = min(atom1_radius, atom2_radius) * 0.4;
