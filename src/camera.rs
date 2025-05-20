@@ -26,10 +26,6 @@ pub struct CadCamera {
     pub focus_point: Vec3,
     /// Distance from the focus point
     pub distance: f32,
-    /// Spherical coordinates: (theta, phi) in radians
-    /// theta: rotation around Y axis (yaw)
-    /// phi: rotation from XZ plane (pitch)
-    pub spherical_coords: Vec2,
     /// Camera movement sensitivity
     pub orbit_sensitivity: f32,
     pub pan_sensitivity: f32,
@@ -37,8 +33,6 @@ pub struct CadCamera {
     /// Constraints
     pub min_distance: f32,
     pub max_distance: f32,
-    pub min_pitch: f32, // Prevent gimbal lock
-    pub max_pitch: f32,
 }
 
 impl Default for CadCamera {
@@ -46,14 +40,11 @@ impl Default for CadCamera {
         Self {
             focus_point: Vec3::ZERO,
             distance: 10.0,
-            spherical_coords: Vec2::new(0.0, std::f32::consts::FRAC_PI_4),
             orbit_sensitivity: 0.01,
             pan_sensitivity: 0.02,
             zoom_sensitivity: 0.1,
             min_distance: 1.0,
             max_distance: 100.0,
-            min_pitch: -std::f32::consts::FRAC_PI_2 + 0.001,
-            max_pitch: std::f32::consts::FRAC_PI_2 - 0.001,
         }
     }
 }
@@ -81,15 +72,20 @@ fn camera_orbit_system(
         .fold(Vec2::ZERO, |acc, delta| acc + delta);
 
     if delta_mouse.is_finite() && delta_mouse != Vec2::ZERO {
-        for (mut transform, mut cam) in query.iter_mut() {
-            // Update spherical coordinates
-            cam.spherical_coords.x -= delta_mouse.x * cam.orbit_sensitivity;
-            cam.spherical_coords.y += delta_mouse.y * cam.orbit_sensitivity;
+        for (mut transform, cam) in query.iter_mut() {
+            // Get the current camera orientation
+            let current_rotation = transform.rotation;
 
-            // Clamp pitch to prevent gimbal lock
-            cam.spherical_coords.y = cam.spherical_coords.y.clamp(cam.min_pitch, cam.max_pitch);
+            // Create rotation quaternions for yaw and pitch
+            let yaw = Quat::from_rotation_y(-delta_mouse.x * cam.orbit_sensitivity);
+            let pitch = Quat::from_rotation_x(-delta_mouse.y * cam.orbit_sensitivity);
 
-            update_camera_transform(&mut transform, &cam);
+            // Apply rotations relative to current orientation
+            transform.rotation = current_rotation * yaw * pitch;
+
+            // Update camera position based on new orientation
+            let forward = transform.rotation * -Vec3::Z;
+            transform.translation = cam.focus_point - forward * cam.distance;
         }
     }
 }
@@ -153,75 +149,9 @@ fn camera_zoom_system(
             let zoom_factor = 1.0 - scroll_delta * cam.zoom_sensitivity;
             cam.distance = (cam.distance * zoom_factor).clamp(cam.min_distance, cam.max_distance);
 
-            update_camera_transform(&mut transform, &cam);
-        }
-    }
-}
-
-/// Update camera transform based on spherical coordinates
-fn update_camera_transform(transform: &mut Transform, cam: &CadCamera) {
-    // Convert spherical to Cartesian coordinates
-    let theta = cam.spherical_coords.x;
-    let phi = cam.spherical_coords.y;
-
-    let x = cam.distance * phi.cos() * theta.sin();
-    let y = cam.distance * phi.sin();
-    let z = cam.distance * phi.cos() * theta.cos();
-
-    let position = cam.focus_point + Vec3::new(x, y, z);
-
-    // Update transform
-    transform.translation = position;
-    transform.look_at(cam.focus_point, Vec3::Y);
-}
-
-pub enum ViewDirection {
-    Front,
-    Back,
-    Left,
-    Right,
-    Top,
-    Bottom,
-    Isometric,
-}
-
-/// Helper function to focus on a specific object
-impl CadCamera {
-    pub fn focus_on(&mut self, target: Vec3, distance: Option<f32>) {
-        self.focus_point = target;
-        if let Some(dist) = distance {
-            self.distance = dist.clamp(self.min_distance, self.max_distance);
-        }
-    }
-
-    /// Reset to default view
-    pub fn reset_view(&mut self) {
-        self.focus_point = Vec3::ZERO;
-        self.distance = 10.0;
-        self.spherical_coords = Vec2::new(0.0, std::f32::consts::FRAC_PI_4);
-    }
-
-    /// Set view direction (front, top, side, etc.)
-    pub fn set_view_direction(&mut self, direction: ViewDirection) {
-        match direction {
-            ViewDirection::Front => self.spherical_coords = Vec2::new(0.0, 0.0),
-            ViewDirection::Back => self.spherical_coords = Vec2::new(std::f32::consts::PI, 0.0),
-            ViewDirection::Left => {
-                self.spherical_coords = Vec2::new(-std::f32::consts::FRAC_PI_2, 0.0)
-            }
-            ViewDirection::Right => {
-                self.spherical_coords = Vec2::new(std::f32::consts::FRAC_PI_2, 0.0)
-            }
-            ViewDirection::Top => {
-                self.spherical_coords = Vec2::new(0.0, std::f32::consts::FRAC_PI_2)
-            }
-            ViewDirection::Bottom => {
-                self.spherical_coords = Vec2::new(0.0, -std::f32::consts::FRAC_PI_2)
-            }
-            ViewDirection::Isometric => {
-                self.spherical_coords =
-                    Vec2::new(std::f32::consts::FRAC_PI_4, std::f32::consts::FRAC_PI_4)
-            }
+            // Update camera position based on new distance
+            let forward = transform.rotation * -Vec3::Z;
+            transform.translation = cam.focus_point - forward * cam.distance;
         }
     }
 }
