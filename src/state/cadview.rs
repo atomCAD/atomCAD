@@ -49,17 +49,13 @@ fn setup_cad_view(
     let camera_position = Vec3::new(0.0, 30.0, 100.0);
     let focus_point = Vec3::ZERO;
     let distance = camera_position.distance(focus_point);
-    let delta = camera_position - focus_point;
-    let theta = delta.x.atan2(delta.z);
-    let phi = (delta.y / distance).asin();
-    let spherical_coords = Vec2::new(theta, phi);
+
     commands.spawn((
         Camera3d::default(),
         Transform::from_translation(camera_position).looking_at(focus_point, Vec3::Y),
         CadCamera {
             focus_point,
             distance,
-            spherical_coords,
             ..default()
         },
         OnCadView,
