@@ -10,7 +10,9 @@ import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/stamp_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.
@@ -140,6 +142,17 @@ class NodeDataWidget extends StatelessWidget {
         return AnchorEditor(
           nodeId: selectedNode.id,
           data: anchorData,
+        );
+      case 'stamp':
+        // Fetch the stamp data here in the parent widget
+        final stampView = getStampView(
+          nodeId: selectedNode.id,
+        );
+
+        return StampEditor(
+          nodeId: selectedNode.id,
+          data: stampView,
+          model: model,
         );
       default:
         return Center(

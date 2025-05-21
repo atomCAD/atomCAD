@@ -15,13 +15,14 @@ class AnchorEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text('Anchor position', 
               style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _buildAnchorPositionDisplay(),
         ],
       ),
@@ -31,7 +32,7 @@ class AnchorEditor extends StatelessWidget {
   Widget _buildAnchorPositionDisplay() {
     if (data == null || data!.position == null) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8.0),
+        padding: EdgeInsets.symmetric(vertical: 4.0),
         child: Text('No anchor selected yet.'),
       );
     }
@@ -44,8 +45,9 @@ class AnchorEditor extends StatelessWidget {
 
     return Card(
       elevation: 1,
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
@@ -59,10 +61,10 @@ class AnchorEditor extends StatelessWidget {
   }
 
   Widget _buildCoordinateDisplay(String label, double value) {
-    return Column(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
+        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
         Text(value.toStringAsFixed(2)),
       ],
     );

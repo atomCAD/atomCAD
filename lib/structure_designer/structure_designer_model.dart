@@ -76,6 +76,29 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setStampXDir(BigInt nodeId, int xDir) {
+    stamp_api.setStampXDir(
+      nodeId: nodeId,
+      xDir: xDir,
+    );
+    refreshFromKernel();
+  }
+
+  void setStampYDir(BigInt nodeId, int yDir) {
+    stamp_api.setStampYDir(
+      nodeId: nodeId,
+      yDir: yDir,
+    );
+    refreshFromKernel();
+  }
+
+  void deleteSelectedStampPlacement(BigInt nodeId) {
+    stamp_api.deleteSelectedStampPlacement(
+      nodeId: nodeId,
+    );
+    refreshFromKernel();
+  }
+
   bool isNodeTypeActive(String nodeType) {
     return structure_designer_api.isNodeTypeActive(nodeType: nodeType);
   }
