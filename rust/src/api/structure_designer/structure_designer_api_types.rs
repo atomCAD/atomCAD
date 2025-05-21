@@ -98,3 +98,13 @@ pub struct InputPinView {
     pub unit_cell_size: f64,
     pub name: String,
   }
+
+  pub struct APIStampPlacement {
+    pub position: APIIVec3,
+    pub x_dir: i32, // +x, -x, +y, -y, +z, -z: 6 possibilities
+    pub y_dir: i32, // 4 possibilities
+  }
+
+  pub struct APIStampView {
+    pub selected_stamp_placement: Option<APIStampPlacement>,
+  }

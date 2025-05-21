@@ -167,3 +167,47 @@ pub fn get_selected_stamp_data_mut(structure_designer: &mut StructureDesigner) -
     
   node_data.as_any_mut().downcast_mut::<StampData>()
 }
+
+/// Sets the x_dir of the selected stamp placement
+/// 
+/// The x_dir parameter specifies the direction (+x, -x, +y, -y, +z, -z).
+pub fn set_x_dir(structure_designer: &mut StructureDesigner, node_id: u64, x_dir: i32) {
+  let Some(node_data) = structure_designer.get_node_network_data_mut(node_id) else { return };
+  
+  let Some(stamp_data) = node_data.as_any_mut().downcast_mut::<StampData>() else { return };
+  
+  let Some(index) = stamp_data.selected_stamp_placement else { return };
+  
+  if index < stamp_data.stamp_placements.len() {
+    stamp_data.stamp_placements[index].x_dir = x_dir;
+  }
+}
+
+/// Sets the y_dir of the selected stamp placement
+/// 
+/// The y_dir parameter specifies the direction.
+pub fn set_y_dir(structure_designer: &mut StructureDesigner, node_id: u64, y_dir: i32) {
+  let Some(node_data) = structure_designer.get_node_network_data_mut(node_id) else { return };
+  
+  let Some(stamp_data) = node_data.as_any_mut().downcast_mut::<StampData>() else { return };
+  
+  let Some(index) = stamp_data.selected_stamp_placement else { return };
+  
+  if index < stamp_data.stamp_placements.len() {
+    stamp_data.stamp_placements[index].y_dir = y_dir;
+  }
+}
+
+/// Deletes the currently selected stamp placement
+pub fn delete_selected_stamp_placement(structure_designer: &mut StructureDesigner, node_id: u64) {
+  let Some(node_data) = structure_designer.get_node_network_data_mut(node_id) else { return };
+  
+  let Some(stamp_data) = node_data.as_any_mut().downcast_mut::<StampData>() else { return };
+  
+  let Some(index) = stamp_data.selected_stamp_placement else { return };
+  
+  if index < stamp_data.stamp_placements.len() {
+    stamp_data.stamp_placements.remove(index);
+    stamp_data.selected_stamp_placement = None;
+  }
+}

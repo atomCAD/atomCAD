@@ -6,9 +6,26 @@
 import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'structure_designer_api_types.dart';
 
 void addOrSelectStampPlacementByRay(
         {required APIVec3 rayStart, required APIVec3 rayDir}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStampApiAddOrSelectStampPlacementByRay(
             rayStart: rayStart, rayDir: rayDir);
+
+APIStampView? getStampView({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStampApiGetStampView(nodeId: nodeId);
+
+void setStampXDir({required BigInt nodeId, required int xDir}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStampApiSetStampXDir(nodeId: nodeId, xDir: xDir);
+
+void setStampYDir({required BigInt nodeId, required int yDir}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStampApiSetStampYDir(nodeId: nodeId, yDir: yDir);
+
+void deleteSelectedStampPlacement({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStampApiDeleteSelectedStampPlacement(
+            nodeId: nodeId);

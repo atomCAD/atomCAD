@@ -247,6 +247,48 @@ class APISphereData {
           radius == other.radius;
 }
 
+class APIStampPlacement {
+  final APIIVec3 position;
+  final int xDir;
+  final int yDir;
+
+  const APIStampPlacement({
+    required this.position,
+    required this.xDir,
+    required this.yDir,
+  });
+
+  @override
+  int get hashCode => position.hashCode ^ xDir.hashCode ^ yDir.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIStampPlacement &&
+          runtimeType == other.runtimeType &&
+          position == other.position &&
+          xDir == other.xDir &&
+          yDir == other.yDir;
+}
+
+class APIStampView {
+  final APIStampPlacement? selectedStampPlacement;
+
+  const APIStampView({
+    this.selectedStampPlacement,
+  });
+
+  @override
+  int get hashCode => selectedStampPlacement.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIStampView &&
+          runtimeType == other.runtimeType &&
+          selectedStampPlacement == other.selectedStampPlacement;
+}
+
 class InputPinView {
   final String name;
   final String dataType;

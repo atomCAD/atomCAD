@@ -75,6 +75,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
+  APIStampPlacement dco_decode_api_stamp_placement(dynamic raw);
+
+  @protected
+  APIStampView dco_decode_api_stamp_view(dynamic raw);
+
+  @protected
   APITransform dco_decode_api_transform(dynamic raw);
 
   @protected
@@ -121,6 +127,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw);
+
+  @protected
+  APIStampPlacement dco_decode_box_autoadd_api_stamp_placement(dynamic raw);
+
+  @protected
+  APIStampView dco_decode_box_autoadd_api_stamp_view(dynamic raw);
 
   @protected
   APITransform dco_decode_box_autoadd_api_transform(dynamic raw);
@@ -233,6 +245,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw);
 
   @protected
+  APIStampPlacement? dco_decode_opt_box_autoadd_api_stamp_placement(
+      dynamic raw);
+
+  @protected
+  APIStampView? dco_decode_opt_box_autoadd_api_stamp_view(dynamic raw);
+
+  @protected
   APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
 
   @protected
@@ -334,6 +353,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
+  APIStampPlacement sse_decode_api_stamp_placement(
+      SseDeserializer deserializer);
+
+  @protected
+  APIStampView sse_decode_api_stamp_view(SseDeserializer deserializer);
+
+  @protected
   APITransform sse_decode_api_transform(SseDeserializer deserializer);
 
   @protected
@@ -388,6 +414,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISphereData sse_decode_box_autoadd_api_sphere_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIStampPlacement sse_decode_box_autoadd_api_stamp_placement(
+      SseDeserializer deserializer);
+
+  @protected
+  APIStampView sse_decode_box_autoadd_api_stamp_view(
       SseDeserializer deserializer);
 
   @protected
@@ -517,6 +551,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIStampPlacement? sse_decode_opt_box_autoadd_api_stamp_placement(
+      SseDeserializer deserializer);
+
+  @protected
+  APIStampView? sse_decode_opt_box_autoadd_api_stamp_view(
+      SseDeserializer deserializer);
+
+  @protected
   APITransform? sse_decode_opt_box_autoadd_api_transform(
       SseDeserializer deserializer);
 
@@ -627,6 +669,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_stamp_placement(
+      APIStampPlacement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_stamp_view(APIStampView self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_transform(APITransform self, SseSerializer serializer);
 
   @protected
@@ -683,6 +732,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_sphere_data(
       APISphereData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_stamp_placement(
+      APIStampPlacement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_stamp_view(
+      APIStampView self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_transform(
@@ -815,6 +872,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_sphere_data(
       APISphereData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_stamp_placement(
+      APIStampPlacement? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_stamp_view(
+      APIStampView? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_transform(
