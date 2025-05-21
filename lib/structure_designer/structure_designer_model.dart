@@ -9,6 +9,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/anchor_api.dart'
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart'
+    as stamp_api;
 
 class PinReference {
   BigInt nodeId;
@@ -59,6 +61,15 @@ class StructureDesignerModel extends ChangeNotifier {
   void selectAnchorAtomByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     anchor_api.selectAnchorAtomByRay(
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
+
+  void addOrSelectStampPlacementByRay(
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    stamp_api.addOrSelectStampPlacementByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
     );
