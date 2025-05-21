@@ -21,6 +21,7 @@ const ATOM_GRID_CELL_SIZE: f64 = 4.0;
 pub enum AtomDisplayState {
     Normal,
     Marked,
+    SecondaryMarked,
 }
 
 #[derive(Clone)]

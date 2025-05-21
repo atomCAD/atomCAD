@@ -589,6 +589,12 @@ impl<'a> Scene<'a> for SceneComposer {
     }
   }
 
+  fn is_atom_secondary_marked(&self, atom_id: u64) -> bool {
+    // Secondary marking logic could be added here if needed for any tools
+    // For now, no atoms are secondary marked
+    false
+  }
+
   fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_> {
       Box::new(std::iter::empty())
   }

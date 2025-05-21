@@ -9,6 +9,7 @@ use crate::common::common_constants::ATOM_INFO;
 use crate::common::scene::Scene;
 use super::tessellator;
 use glam::f32::Vec3;
+use glam::f64::DVec3;
 
 pub struct AtomicTessellatorParams {
   pub sphere_horizontal_divisions: u32, // number sections when dividing by horizontal lines
@@ -22,8 +23,10 @@ const BAS_ATOM_RADIUS_FACTOR: f64 = 0.5;
 // radius of a bond cylinder (stick) in the 'balls and sticks' view
 pub const BAS_STICK_RADIUS: f64 = 0.1; 
 
-// color for marked atoms (bright yellow)
-const MARKED_ATOM_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
+// color for primary markers (bright yellow)
+const MARKER_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
+// color for secondary markers (blue)
+const SECONDARY_MARKER_COLOR: Vec3 = Vec3::new(0.0, 0.5, 1.0);
 
 pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S) {
   for (id, atom) in atomic_structure.atoms.iter() {
@@ -31,6 +34,8 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
     let mut display_state = atomic_structure.decorator.get_atom_display_state(*id);
     if scene.is_atom_marked(*id) {
       display_state = AtomDisplayState::Marked;
+    } else if scene.is_atom_secondary_marked(*id) {
+      display_state = AtomDisplayState::SecondaryMarked;
     }
     
     tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state);
@@ -53,24 +58,14 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   let cluster_selected = _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
   let selected = atom.selected || cluster_selected;
 
-  //if selected {
-  //  println!("Atom {} selected: {}", atom.id, selected);
-  //}
-
-  let color = match display_state {
-    AtomDisplayState::Marked => {
-      // Yellow color for marked atoms
-      MARKED_ATOM_COLOR
-    },
-    AtomDisplayState::Normal => {
-      if selected {
-        to_selected_color(&atom_info.color)
-      } else { 
-        atom_info.color
-      }
-    }
+  // Determine atom color based on selection state (not marking state)
+  let atom_color = if selected {
+    to_selected_color(&atom_info.color)
+  } else { 
+    atom_info.color
   };
-
+  
+  // Render the atom sphere with its normal color
   tessellator::tessellate_sphere(
     if cluster_selected { selected_clusters_mesh } else { output_mesh },
     &atom.position,
@@ -78,10 +73,41 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
     params.sphere_horizontal_divisions,
     params.sphere_vertical_divisions,
     &Material::new(
-      &color, 
+      &atom_color, 
       if selected { 0.2 } else { 0.8 },
       0.0),
   );
+  
+  // Add a 3D crosshair for marked atoms
+  match display_state {
+    AtomDisplayState::Marked | AtomDisplayState::SecondaryMarked => {
+      // Select color based on display state
+      let marker_color = match display_state {
+        AtomDisplayState::Marked => MARKER_COLOR,         // Yellow for primary marked atoms
+        AtomDisplayState::SecondaryMarked => SECONDARY_MARKER_COLOR, // Blue for secondary marked atoms
+        _ => unreachable!() // This branch already ensures we're in one of the two marked states
+      };
+      
+      // Calculate crosshair dimensions
+      let radius = get_displayed_atom_radius(atom);
+      let half_length = radius * 1.5;
+      let crosshair_radius = radius * 0.4;
+
+      // Render the crosshair
+      tessellator::tessellate_crosshair_3d(
+        if cluster_selected { selected_clusters_mesh } else { output_mesh },
+        &DVec3::new(atom.position.x, atom.position.y, atom.position.z),
+        half_length,
+        crosshair_radius,
+        params.cylinder_divisions,
+        &Material::new(&marker_color, 1.0, 0.0),
+        true
+      );
+    },
+    AtomDisplayState::Normal => {
+      // No marker for normal atoms
+    }
+  }
 }
 
 fn to_selected_color(color: &Vec3) -> Vec3 {

@@ -288,6 +288,60 @@ pub fn tessellate_cylinder(
   }
 }
 
+pub fn tessellate_crosshair_3d(
+    output_mesh: &mut Mesh,
+    center: &DVec3,
+    half_length: f64,
+    radius: f64,
+    divisions: u32,
+    material: &Material,
+    include_caps: bool) {
+  // Create points for the X-axis cylinder
+  let x_top = center + DVec3::new(half_length, 0.0, 0.0);
+  let x_bottom = center + DVec3::new(-half_length, 0.0, 0.0);
+  
+  // Create points for the Y-axis cylinder
+  let y_top = center + DVec3::new(0.0, half_length, 0.0);
+  let y_bottom = center + DVec3::new(0.0, -half_length, 0.0);
+  
+  // Create points for the Z-axis cylinder
+  let z_top = center + DVec3::new(0.0, 0.0, half_length);
+  let z_bottom = center + DVec3::new(0.0, 0.0, -half_length);
+  
+  // Tessellate the X-axis cylinder
+  tessellate_cylinder(
+    output_mesh,
+    &x_top,
+    &x_bottom,
+    radius,
+    divisions,
+    material,
+    include_caps
+  );
+  
+  // Tessellate the Y-axis cylinder
+  tessellate_cylinder(
+    output_mesh,
+    &y_top,
+    &y_bottom,
+    radius,
+    divisions,
+    material,
+    include_caps
+  );
+  
+  // Tessellate the Z-axis cylinder
+  tessellate_cylinder(
+    output_mesh,
+    &z_top,
+    &z_bottom,
+    radius,
+    divisions,
+    material,
+    include_caps
+  );
+}
+
 pub fn tessellate_grid(
     output_mesh: &mut Mesh,
     center: &DVec3,

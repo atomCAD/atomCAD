@@ -135,7 +135,7 @@ impl NetworkEvaluator {
       return vec![eval_anchor(&self, network_stack, node_id, registry)];
     }    
     if node.node_type_name == "stamp" {
-      return vec![eval_stamp(&self, network_stack, node_id, registry)];
+      return vec![eval_stamp(&self, network_stack, node_id, registry, decorate)];
     }
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();

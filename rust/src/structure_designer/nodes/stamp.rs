@@ -10,7 +10,7 @@ use glam::i32::IVec3;
 use glam::{DMat3, DVec3};
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
-use crate::common::atomic_structure::{Atom, AtomicStructure};
+use crate::common::atomic_structure::{Atom, AtomDisplayState, AtomicStructure};
 use crate::common::crystal_utils::crystal_rot_to_mat;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::atomic_structure::HitTestResult;
@@ -45,7 +45,7 @@ impl StampData {
   }
 }
 
-pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {  
+pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool) -> NetworkResult {  
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
   let crystal_val = if node.arguments[0].argument_node_ids.is_empty() {
@@ -74,8 +74,9 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
     let stamp_data = &node.data.as_any_ref().downcast_ref::<StampData>().unwrap();
     
     if let NetworkResult::Atomic(mut crystal_structure) = crystal_val {
-      for stamp_placement in stamp_data.stamp_placements.iter() {
-        place_stamp(&mut crystal_structure, &stamp_structure, stamp_placement);
+      for (index, stamp_placement) in stamp_data.stamp_placements.iter().enumerate() {
+        let is_selected = stamp_data.selected_stamp_placement.map_or(false, |selected_index| selected_index == index);
+        place_stamp(&mut crystal_structure, &stamp_structure, stamp_placement, decorate, is_selected);
       }
       return NetworkResult::Atomic(crystal_structure);
     }
@@ -87,7 +88,9 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
 fn place_stamp(
   crystal_structure: &mut AtomicStructure,
   stamp_structure: &AtomicStructure,
-  stamp_placement: &StampPlacement) {
+  stamp_placement: &StampPlacement,
+  decorate: bool,
+  selected: bool) {
     let stamping_rotation = crystal_rot_to_mat(stamp_placement.x_dir, stamp_placement.y_dir);
     let stamping_translation = stamp_placement.position - stamp_structure.anchor_position.unwrap();
     let double_stamping_rotation = stamping_rotation.as_dmat3();
@@ -97,6 +100,16 @@ fn place_stamp(
       let dest_pos = calc_dest_pos(atom, &double_stamping_rotation, &double_stamping_translation);
       crystal_structure.replace_atom(dest_atom_id, atom.atomic_number);
       crystal_structure.set_atom_position(dest_atom_id, dest_pos);
+    }
+
+    if decorate {
+      let atom_id = in_crystal_pos_to_id(&stamp_placement.position);
+      if crystal_structure.atoms.contains_key(&atom_id) {
+        crystal_structure.decorator.set_atom_display_state(
+          atom_id, 
+          if selected {AtomDisplayState::Marked} else {AtomDisplayState::SecondaryMarked}
+        );
+      }
     }
 }
 

@@ -41,6 +41,10 @@ impl<'a> Scene<'a> for StructureDesignerScene {
         false // Default implementation: no atom is marked by default
     }
 
+    fn is_atom_secondary_marked(&self, atom_id: u64) -> bool {
+        false // Default implementation: no atom is secondary marked by default
+    }
+
     fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_> {
         Box::new(self.surface_point_clouds.iter())
     }
