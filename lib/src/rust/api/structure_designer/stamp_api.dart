@@ -17,13 +17,9 @@ void addOrSelectStampPlacementByRay(
 APIStampView? getStampView({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStampApiGetStampView(nodeId: nodeId);
 
-void setStampXDir({required BigInt nodeId, required int xDir}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerStampApiSetStampXDir(nodeId: nodeId, xDir: xDir);
-
-void setStampYDir({required BigInt nodeId, required int yDir}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerStampApiSetStampYDir(nodeId: nodeId, yDir: yDir);
+void setStampRotation({required BigInt nodeId, required int rotation}) =>
+    RustLib.instance.api.crateApiStructureDesignerStampApiSetStampRotation(
+        nodeId: nodeId, rotation: rotation);
 
 void deleteSelectedStampPlacement({required BigInt nodeId}) =>
     RustLib.instance.api

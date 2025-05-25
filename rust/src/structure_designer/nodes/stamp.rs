@@ -11,7 +11,7 @@ use glam::{DMat3, DVec3};
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
 use crate::common::atomic_structure::{Atom, AtomDisplayState, AtomicStructure};
-use crate::common::crystal_utils::crystal_rot_to_mat;
+use crate::common::crystal_utils::CRYSTAL_ROTATION_MATRICES;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::atomic_structure::HitTestResult;
 use crate::common::crystal_utils::{is_crystal_atom_id, id_to_in_crystal_pos, in_crystal_pos_to_id};
@@ -20,8 +20,7 @@ use crate::common::crystal_utils::{is_crystal_atom_id, id_to_in_crystal_pos, in_
 pub struct StampPlacement {
   #[serde(with = "ivec3_serializer")]
   pub position: IVec3,
-  pub x_dir: i32, // +x, -x, +y, -y, +z, -z: 6 possibilities
-  pub y_dir: i32, // 4 possibilities
+  pub rotation: i32, // Index into CRYSTAL_ROTATION_MATRICES (0-11)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -91,13 +90,17 @@ fn place_stamp(
   stamp_placement: &StampPlacement,
   decorate: bool,
   selected: bool) {
-    let stamping_rotation = crystal_rot_to_mat(stamp_placement.x_dir, stamp_placement.y_dir);
-    let stamping_translation = stamp_placement.position - stamp_structure.anchor_position.unwrap();
+    let quarter_unit_cell_size = stamp_structure.crystal_meta_data.unit_cell_size * 0.25;
+    let rotation_index = stamp_placement.rotation as usize % 12;
+    let stamping_rotation = CRYSTAL_ROTATION_MATRICES[rotation_index];
     let double_stamping_rotation = stamping_rotation.as_dmat3();
-    let double_stamping_translation = stamping_translation.as_dvec3();
+    let anchor_position = stamp_structure.anchor_position.unwrap();
+    let anchor_position_double = anchor_position.as_dvec3() * quarter_unit_cell_size;
+    let stamp_placement_position_double = stamp_placement.position.as_dvec3() * quarter_unit_cell_size;
+
     for atom in stamp_structure.atoms.values() {
-      let dest_atom_id = calc_dest_atom_id(atom.id, &stamping_rotation, &stamping_translation);
-      let dest_pos = calc_dest_pos(atom, &double_stamping_rotation, &double_stamping_translation);
+      let dest_atom_id = calc_dest_atom_id(atom.id, &stamping_rotation, &anchor_position, &stamp_placement.position);
+      let dest_pos = calc_dest_pos(atom, &double_stamping_rotation, &anchor_position_double, &stamp_placement_position_double);
       crystal_structure.replace_atom(dest_atom_id, atom.atomic_number);
       crystal_structure.set_atom_position(dest_atom_id, dest_pos);
     }
@@ -116,17 +119,20 @@ fn place_stamp(
 fn calc_dest_atom_id(
   source_atom_id: u64,
   rotation: &IMat3,
-  translation: &IVec3) -> u64 {
+  anchor_position: &IVec3,
+  stamp_placement_position: &IVec3) -> u64 {
     let source_pos = id_to_in_crystal_pos(source_atom_id);
-    let dest_pos = rotation.mul(&source_pos) + translation;
+    let dest_pos = rotation.mul(&(source_pos - anchor_position)) + stamp_placement_position;
     in_crystal_pos_to_id(&dest_pos)
 }
 
 fn calc_dest_pos(
   source_atom: &Atom,
   rotation: &DMat3,
-  translation: &DVec3) -> DVec3 {
-    rotation.mul_vec3(source_atom.position) + translation
+  anchor_position: &DVec3,
+  stamp_placement_position: &DVec3,
+) -> DVec3 {
+    rotation.mul_vec3(source_atom.position - anchor_position) + stamp_placement_position
 }
 
 pub fn add_or_select_stamp_placement_by_ray(structure_designer: &mut StructureDesigner, ray_start: &DVec3, ray_dir: &DVec3) {
@@ -160,8 +166,7 @@ pub fn add_or_select_stamp_placement_by_ray(structure_designer: &mut StructureDe
 
   stamp_data.stamp_placements.push(StampPlacement {
     position,
-    x_dir: 0,
-    y_dir: 0,
+    rotation: 0,
   });
   stamp_data.selected_stamp_placement = Some(stamp_data.stamp_placements.len() - 1);
 }
@@ -181,10 +186,10 @@ pub fn get_selected_stamp_data_mut(structure_designer: &mut StructureDesigner) -
   node_data.as_any_mut().downcast_mut::<StampData>()
 }
 
-/// Sets the x_dir of the selected stamp placement
+/// Sets the rotation of the selected stamp placement
 /// 
-/// The x_dir parameter specifies the direction (+x, -x, +y, -y, +z, -z).
-pub fn set_x_dir(structure_designer: &mut StructureDesigner, node_id: u64, x_dir: i32) {
+/// The rotation parameter specifies the index into CRYSTAL_ROTATION_MATRICES (0-11).
+pub fn set_rotation(structure_designer: &mut StructureDesigner, node_id: u64, rotation: i32) {
   let Some(node_data) = structure_designer.get_node_network_data_mut(node_id) else { return };
   
   let Some(stamp_data) = node_data.as_any_mut().downcast_mut::<StampData>() else { return };
@@ -192,22 +197,7 @@ pub fn set_x_dir(structure_designer: &mut StructureDesigner, node_id: u64, x_dir
   let Some(index) = stamp_data.selected_stamp_placement else { return };
   
   if index < stamp_data.stamp_placements.len() {
-    stamp_data.stamp_placements[index].x_dir = x_dir;
-  }
-}
-
-/// Sets the y_dir of the selected stamp placement
-/// 
-/// The y_dir parameter specifies the direction.
-pub fn set_y_dir(structure_designer: &mut StructureDesigner, node_id: u64, y_dir: i32) {
-  let Some(node_data) = structure_designer.get_node_network_data_mut(node_id) else { return };
-  
-  let Some(stamp_data) = node_data.as_any_mut().downcast_mut::<StampData>() else { return };
-  
-  let Some(index) = stamp_data.selected_stamp_placement else { return };
-  
-  if index < stamp_data.stamp_placements.len() {
-    stamp_data.stamp_placements[index].y_dir = y_dir;
+    stamp_data.stamp_placements[index].rotation = rotation % 12;
   }
 }
 

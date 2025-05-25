@@ -21,70 +21,40 @@ class StampEditor extends StatefulWidget {
 }
 
 class _StampEditorState extends State<StampEditor> {
-  // Store which x_dir is currently selected to calculate y_dir options
-  int? _currentXDir;
-
   @override
   void initState() {
     super.initState();
-    _currentXDir = widget.data?.selectedStampPlacement?.xDir;
   }
 
   @override
   void didUpdateWidget(StampEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.data != widget.data) {
-      _currentXDir = widget.data?.selectedStampPlacement?.xDir;
-    }
   }
 
-  // Get all x direction options
-  List<DropdownMenuItem<int>> _getXDirOptions() {
+  // Get all rotation options
+  List<DropdownMenuItem<int>> _getRotationOptions() {
     return [
-      const DropdownMenuItem<int>(value: 0, child: Text('+X')),
-      const DropdownMenuItem<int>(value: 1, child: Text('-X')),
-      const DropdownMenuItem<int>(value: 2, child: Text('+Y')),
-      const DropdownMenuItem<int>(value: 3, child: Text('-Y')),
-      const DropdownMenuItem<int>(value: 4, child: Text('+Z')),
-      const DropdownMenuItem<int>(value: 5, child: Text('-Z')),
+      const DropdownMenuItem<int>(value: 0, child: Text('Identity')),
+      const DropdownMenuItem<int>(value: 1, child: Text('180° around [1 0 0]')),
+      const DropdownMenuItem<int>(value: 2, child: Text('180° around [0 1 0]')),
+      const DropdownMenuItem<int>(value: 3, child: Text('180° around [0 0 1]')),
+      const DropdownMenuItem<int>(
+          value: 4, child: Text('+120° around [1 1 1]')),
+      const DropdownMenuItem<int>(
+          value: 5, child: Text('–120° around [1 1 1]')),
+      const DropdownMenuItem<int>(
+          value: 6, child: Text('+120° around [–1 1 1]')),
+      const DropdownMenuItem<int>(
+          value: 7, child: Text('–120° around [–1 1 1]')),
+      const DropdownMenuItem<int>(
+          value: 8, child: Text('+120° around [1 –1 1]')),
+      const DropdownMenuItem<int>(
+          value: 9, child: Text('–120° around [1 –1 1]')),
+      const DropdownMenuItem<int>(
+          value: 10, child: Text('+120° around [1 1 –1]')),
+      const DropdownMenuItem<int>(
+          value: 11, child: Text('–120° around [1 1 –1]')),
     ];
-  }
-
-  // Get y direction options based on current x_dir selection
-  List<DropdownMenuItem<int>> _getYDirOptions() {
-    if (_currentXDir == null) {
-      return [];
-    }
-
-    // Determine which axes are available for y_dir based on x_dir
-    // X axis options (0, 1) => Y and Z axes are available
-    // Y axis options (2, 3) => X and Z axes are available
-    // Z axis options (4, 5) => X and Y axes are available
-    if (_currentXDir == 0 || _currentXDir == 1) {
-      // X axis selected, Y and Z axes available
-      return [
-        const DropdownMenuItem<int>(value: 0, child: Text('+Y')),
-        const DropdownMenuItem<int>(value: 1, child: Text('-Y')),
-        const DropdownMenuItem<int>(value: 2, child: Text('+Z')),
-        const DropdownMenuItem<int>(value: 3, child: Text('-Z')),
-      ];
-    } else if (_currentXDir == 2 || _currentXDir == 3) {
-      // Y axis selected, X and Z axes available
-      return [
-        const DropdownMenuItem<int>(value: 0, child: Text('+X')),
-        const DropdownMenuItem<int>(value: 1, child: Text('-X')),
-        const DropdownMenuItem<int>(value: 2, child: Text('+Z')),
-        const DropdownMenuItem<int>(value: 3, child: Text('-Z')),
-      ];
-    } else {
-      // Z axis selected, X and Y axes available
-      return [
-        const DropdownMenuItem<int>(value: 0, child: Text('+X')),
-        const DropdownMenuItem<int>(value: 1, child: Text('-X')),
-        const DropdownMenuItem<int>(value: 2, child: Text('+Y')),
-        const DropdownMenuItem<int>(value: 3, child: Text('-Y')),
-      ];
-    }
   }
 
   @override
@@ -94,14 +64,14 @@ class _StampEditorState extends State<StampEditor> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.medium),
-          child: Text('No stamp placement selected. Click on a crystal atom to add a stamp placement.'),
+          child: Text(
+              'No stamp placement selected. Click on a crystal atom to add a stamp placement.'),
         ),
       );
     }
 
     // Get the current values
     final stampPlacement = widget.data!.selectedStampPlacement!;
-    _currentXDir = stampPlacement.xDir;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
@@ -119,7 +89,7 @@ class _StampEditorState extends State<StampEditor> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 4),
-              
+
               // Position info (in unit cells)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -130,46 +100,21 @@ class _StampEditorState extends State<StampEditor> {
                 ],
               ),
               const SizedBox(height: 8),
-              
-              // X direction dropdown
+
+              // Rotation dropdown
               Row(
                 children: [
-                  const SizedBox(width: 60, child: Text('X-Dir:')),
+                  const SizedBox(width: 60, child: Text('Rotation:')),
                   const SizedBox(width: 4),
                   Expanded(
                     child: DropdownButton<int>(
                       isExpanded: true,
                       isDense: true,
-                      value: _currentXDir,
-                      items: _getXDirOptions(),
+                      value: stampPlacement.rotation,
+                      items: _getRotationOptions(),
                       onChanged: (value) {
                         if (value != null) {
-                          setState(() {
-                            _currentXDir = value;
-                          });
-                          widget.model.setStampXDir(widget.nodeId, value);
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              
-              // Y direction dropdown
-              Row(
-                children: [
-                  const SizedBox(width: 60, child: Text('Y-Dir:')),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: DropdownButton<int>(
-                      isExpanded: true,
-                      isDense: true,
-                      value: stampPlacement.yDir,
-                      items: _getYDirOptions(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          widget.model.setStampYDir(widget.nodeId, value);
+                          widget.model.setStampRotation(widget.nodeId, value);
                         }
                       },
                     ),
@@ -177,7 +122,7 @@ class _StampEditorState extends State<StampEditor> {
                 ],
               ),
               const SizedBox(height: 8),
-              
+
               // Delete button
               Center(
                 child: ElevatedButton.icon(
@@ -195,7 +140,7 @@ class _StampEditorState extends State<StampEditor> {
       ),
     );
   }
-  
+
   Widget _buildCoordinateDisplay(String label, double value) {
     return Row(
       mainAxisSize: MainAxisSize.min,

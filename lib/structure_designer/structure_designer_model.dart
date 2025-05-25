@@ -76,18 +76,10 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void setStampXDir(BigInt nodeId, int xDir) {
-    stamp_api.setStampXDir(
+  void setStampRotation(BigInt nodeId, int rotation) {
+    stamp_api.setStampRotation(
       nodeId: nodeId,
-      xDir: xDir,
-    );
-    refreshFromKernel();
-  }
-
-  void setStampYDir(BigInt nodeId, int yDir) {
-    stamp_api.setStampYDir(
-      nodeId: nodeId,
-      yDir: yDir,
+      rotation: rotation,
     );
     refreshFromKernel();
   }

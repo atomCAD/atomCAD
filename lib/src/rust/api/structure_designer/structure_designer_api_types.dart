@@ -249,17 +249,15 @@ class APISphereData {
 
 class APIStampPlacement {
   final APIIVec3 position;
-  final int xDir;
-  final int yDir;
+  final int rotation;
 
   const APIStampPlacement({
     required this.position,
-    required this.xDir,
-    required this.yDir,
+    required this.rotation,
   });
 
   @override
-  int get hashCode => position.hashCode ^ xDir.hashCode ^ yDir.hashCode;
+  int get hashCode => position.hashCode ^ rotation.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -267,8 +265,7 @@ class APIStampPlacement {
       other is APIStampPlacement &&
           runtimeType == other.runtimeType &&
           position == other.position &&
-          xDir == other.xDir &&
-          yDir == other.yDir;
+          rotation == other.rotation;
 }
 
 class APIStampView {

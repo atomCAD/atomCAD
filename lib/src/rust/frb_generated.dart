@@ -77,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.7.0';
 
   @override
-  int get rustContentHash => 1780623958;
+  int get rustContentHash => -830345488;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -332,11 +332,8 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStructureDesignerApiSetSphereData(
       {required BigInt nodeId, required APISphereData data});
 
-  void crateApiStructureDesignerStampApiSetStampXDir(
-      {required BigInt nodeId, required int xDir});
-
-  void crateApiStructureDesignerStampApiSetStampYDir(
-      {required BigInt nodeId, required int yDir});
+  void crateApiStructureDesignerStampApiSetStampRotation(
+      {required BigInt nodeId, required int rotation});
 
   Future<void> crateApiCommonApiSetViewportSize(
       {required int width, required int height});
@@ -2588,56 +2585,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  void crateApiStructureDesignerStampApiSetStampXDir(
-      {required BigInt nodeId, required int xDir}) {
+  void crateApiStructureDesignerStampApiSetStampRotation(
+      {required BigInt nodeId, required int rotation}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_64(nodeId, serializer);
-        sse_encode_i_32(xDir, serializer);
+        sse_encode_i_32(rotation, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
-      constMeta: kCrateApiStructureDesignerStampApiSetStampXDirConstMeta,
-      argValues: [nodeId, xDir],
+      constMeta: kCrateApiStructureDesignerStampApiSetStampRotationConstMeta,
+      argValues: [nodeId, rotation],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiStructureDesignerStampApiSetStampXDirConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_stamp_x_dir",
-        argNames: ["nodeId", "xDir"],
-      );
-
-  @override
-  void crateApiStructureDesignerStampApiSetStampYDir(
-      {required BigInt nodeId, required int yDir}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_64(nodeId, serializer);
-        sse_encode_i_32(yDir, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 87)!;
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: null,
-      ),
-      constMeta: kCrateApiStructureDesignerStampApiSetStampYDirConstMeta,
-      argValues: [nodeId, yDir],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiStructureDesignerStampApiSetStampYDirConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_stamp_y_dir",
-        argNames: ["nodeId", "yDir"],
-      );
+  TaskConstMeta
+      get kCrateApiStructureDesignerStampApiSetStampRotationConstMeta =>
+          const TaskConstMeta(
+            debugName: "set_stamp_rotation",
+            argNames: ["nodeId", "rotation"],
+          );
 
   @override
   Future<void> crateApiCommonApiSetViewportSize(
@@ -2648,7 +2620,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(width, serializer);
         sse_encode_u_32(height, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 88, port: port_);
+            funcId: 87, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2671,7 +2643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -2696,7 +2668,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_transform(absTransform, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 90)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2724,7 +2696,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(axisIndex, serializer);
         sse_encode_f_64(translation, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 91)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 90)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2912,12 +2884,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIStampPlacement dco_decode_api_stamp_placement(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APIStampPlacement(
       position: dco_decode_apii_vec_3(arr[0]),
-      xDir: dco_decode_i_32(arr[1]),
-      yDir: dco_decode_i_32(arr[2]),
+      rotation: dco_decode_i_32(arr[1]),
     );
   }
 
@@ -3655,10 +3626,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_position = sse_decode_apii_vec_3(deserializer);
-    var var_xDir = sse_decode_i_32(deserializer);
-    var var_yDir = sse_decode_i_32(deserializer);
-    return APIStampPlacement(
-        position: var_position, xDir: var_xDir, yDir: var_yDir);
+    var var_rotation = sse_decode_i_32(deserializer);
+    return APIStampPlacement(position: var_position, rotation: var_rotation);
   }
 
   @protected
@@ -4503,8 +4472,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIStampPlacement self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_3(self.position, serializer);
-    sse_encode_i_32(self.xDir, serializer);
-    sse_encode_i_32(self.yDir, serializer);
+    sse_encode_i_32(self.rotation, serializer);
   }
 
   @protected

@@ -101,8 +101,7 @@ pub struct InputPinView {
 
   pub struct APIStampPlacement {
     pub position: APIIVec3,
-    pub x_dir: i32, // +x, -x, +y, -y, +z, -z: 6 possibilities
-    pub y_dir: i32, // 4 possibilities
+    pub rotation: i32, // Index into CRYSTAL_ROTATION_MATRICES (0-11)
   }
 
   pub struct APIStampView {

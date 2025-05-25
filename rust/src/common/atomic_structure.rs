@@ -16,6 +16,12 @@ use serde::{Serialize, Deserialize};
 // or in a neighbouring cell most of the time. This is important for performance reasons.
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
 
+#[derive(Clone)]
+pub struct CrystalMetaData {
+  pub primary_atomic_number: i32,
+  pub secondary_atomic_number: i32,
+  pub unit_cell_size: f64,
+}
 
 #[derive(Clone)]
 pub enum AtomDisplayState {
@@ -142,6 +148,17 @@ pub struct AtomicStructure {
   pub selection_transform: Option<Transform>,
   pub anchor_position: Option<IVec3>,
   pub decorator: AtomicStructureDecorator,
+  pub crystal_meta_data: CrystalMetaData,
+}
+
+impl CrystalMetaData {
+  pub fn new() -> Self {
+    Self {
+      primary_atomic_number: 6,
+      secondary_atomic_number: 6,
+      unit_cell_size: 3.567,
+    }
+  }
 }
 
 impl AtomicStructure {
@@ -171,6 +188,7 @@ impl AtomicStructure {
       selection_transform: None,
       anchor_position: None,
       decorator: AtomicStructureDecorator::new(),
+      crystal_meta_data: CrystalMetaData::new(),
     };
     ret.add_cluster("default");
     ret

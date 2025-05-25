@@ -13,6 +13,7 @@ use crate::common::crystal_utils::in_crystal_pos_to_id;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::common_constants::CrystalTypeInfo;
+use crate::common::atomic_structure::CrystalMetaData;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 enum ZincBlendeAtomType {
@@ -101,6 +102,12 @@ pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stac
   let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
 
   let geo_to_atom_data = node.data.as_any_ref().downcast_ref::<GeoToAtomData>().unwrap();
+
+  atomic_structure.crystal_meta_data = CrystalMetaData {
+    primary_atomic_number: geo_to_atom_data.primary_atomic_number,
+    secondary_atomic_number: geo_to_atom_data.secondary_atomic_number,
+    unit_cell_size: get_unit_cell_size(geo_to_atom_data.primary_atomic_number, geo_to_atom_data.secondary_atomic_number),
+  };
 
   process_box_for_atomic(
     implicit_evaluator,

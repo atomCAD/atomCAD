@@ -13,6 +13,33 @@ lazy_static! {
         IVec3::new(0, 0, 1),  // +z
         IVec3::new(0, 0, -1), // -z
     ];
+
+    pub static ref CRYSTAL_ROTATION_MATRICES: [IMat3; 12] = [
+        // 1. Identity
+        IMat3::new(&IVec3::new(1, 0, 0), &IVec3::new(0, 1, 0), &IVec3::new(0, 0, 1)),
+        // 2. 180° around [1 0 0]
+        IMat3::new(&IVec3::new(1, 0, 0), &IVec3::new(0, -1, 0), &IVec3::new(0, 0, -1)),
+        // 3. 180° around [0 1 0]
+        IMat3::new(&IVec3::new(-1, 0, 0), &IVec3::new(0, 1, 0), &IVec3::new(0, 0, -1)),
+        // 4. 180° around [0 0 1]
+        IMat3::new(&IVec3::new(-1, 0, 0), &IVec3::new(0, -1, 0), &IVec3::new(0, 0, 1)),
+        // 5. +120° around [1 1 1]
+        IMat3::new(&IVec3::new(0, 1, 0), &IVec3::new(0, 0, 1), &IVec3::new(1, 0, 0)),
+        // 6. –120° around [1 1 1]
+        IMat3::new(&IVec3::new(0, 0, 1), &IVec3::new(1, 0, 0), &IVec3::new(0, 1, 0)),
+        // 7. +120° around [-1 1 1]
+        IMat3::new(&IVec3::new(0, 0, -1), &IVec3::new(-1, 0, 0), &IVec3::new(0, 1, 0)),
+        // 8. –120° around [-1 1 1]
+        IMat3::new(&IVec3::new(0, -1, 0), &IVec3::new(0, 0, 1), &IVec3::new(-1, 0, 0)),
+        // 9. +120° around [1 -1 1]
+        IMat3::new(&IVec3::new(0, 0, 1), &IVec3::new(-1, 0, 0), &IVec3::new(0, -1, 0)),
+        // 10. –120° around [1 -1 1]
+        IMat3::new(&IVec3::new(0, -1, 0), &IVec3::new(0, 0, -1), &IVec3::new(1, 0, 0)),
+        // 11. +120° around [1 1 -1]
+        IMat3::new(&IVec3::new(0, 0, -1), &IVec3::new(1, 0, 0), &IVec3::new(0, -1, 0)),
+        // 12. –120° around [1 1 -1]
+        IMat3::new(&IVec3::new(0, 1, 0), &IVec3::new(0, 0, -1), &IVec3::new(-1, 0, 0)),
+    ];
 }
 
 /// Converts a crystal lattice position to a unique 64-bit ID.
@@ -104,6 +131,7 @@ pub fn crystal_rot_to_mat(x_dir: i32, y_dir: i32) -> IMat3 {
     );
     
     // Create and return the rotation matrix
+    println!("DEBUG - Crystal Rotation Matrix: x_dir={}, y_dir={}, x_basis={:?}, y_basis={:?}, z_basis={:?}", x_dir, y_dir, x_basis, y_basis, z_basis);
     IMat3::new(&x_basis, &y_basis, &z_basis)
 }
 

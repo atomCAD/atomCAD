@@ -33,8 +33,7 @@ pub fn get_stamp_view(node_id: u64) -> Option<APIStampView> {
         let stamp_placement = &stamp_data.stamp_placements[index];
         Some(crate::api::structure_designer::structure_designer_api_types::APIStampPlacement {
           position: to_api_ivec3(&stamp_placement.position),
-          x_dir: stamp_placement.x_dir,
-          y_dir: stamp_placement.y_dir,
+          rotation: stamp_placement.rotation,
         })
       },
       _ => None,
@@ -47,20 +46,10 @@ pub fn get_stamp_view(node_id: u64) -> Option<APIStampView> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_stamp_x_dir(node_id: u64, x_dir: i32) {
+pub fn set_stamp_rotation(node_id: u64, rotation: i32) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
-      stamp::set_x_dir(&mut instance.structure_designer, node_id, x_dir);
-      refresh_renderer(instance, false);
-    }
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn set_stamp_y_dir(node_id: u64, y_dir: i32) {
-  unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      stamp::set_y_dir(&mut instance.structure_designer, node_id, y_dir);
+      stamp::set_rotation(&mut instance.structure_designer, node_id, rotation);
       refresh_renderer(instance, false);
     }
   }

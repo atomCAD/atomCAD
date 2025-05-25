@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1780623958;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -830345488;
 
 // Section: executor
 
@@ -2787,14 +2787,14 @@ let api_data = <crate::api::structure_designer::structure_designer_api_types::AP
                      let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_sphere_data(api_node_id, api_data); })?;   Ok(output_ok)
                 })()) })
 }
-fn wire__crate__api__structure_designer__stamp_api__set_stamp_x_dir_impl(
+fn wire__crate__api__structure_designer__stamp_api__set_stamp_rotation_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_stamp_x_dir",
+            debug_name: "set_stamp_rotation",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -2809,49 +2809,13 @@ fn wire__crate__api__structure_designer__stamp_api__set_stamp_x_dir_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_node_id = <u64>::sse_decode(&mut deserializer);
-            let api_x_dir = <i32>::sse_decode(&mut deserializer);
+            let api_rotation = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::stamp_api::set_stamp_x_dir(
+                    crate::api::structure_designer::stamp_api::set_stamp_rotation(
                         api_node_id,
-                        api_x_dir,
-                    );
-                })?;
-                Ok(output_ok)
-            })())
-        },
-    )
-}
-fn wire__crate__api__structure_designer__stamp_api__set_stamp_y_dir_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_stamp_y_dir",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_node_id = <u64>::sse_decode(&mut deserializer);
-            let api_y_dir = <i32>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::stamp_api::set_stamp_y_dir(
-                        api_node_id,
-                        api_y_dir,
+                        api_rotation,
                     );
                 })?;
                 Ok(output_ok)
@@ -3207,12 +3171,10 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_position = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
-        let mut var_xDir = <i32>::sse_decode(deserializer);
-        let mut var_yDir = <i32>::sse_decode(deserializer);
+        let mut var_rotation = <i32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIStampPlacement {
             position: var_position,
-            x_dir: var_xDir,
-            y_dir: var_yDir,
+            rotation: var_rotation,
         };
     }
 }
@@ -3912,7 +3874,7 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         44 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        88 => {
+        87 => {
             wire__crate__api__common_api__set_viewport_size_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -4011,11 +3973,10 @@ fn pde_ffi_dispatcher_sync_impl(
 83 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
 84 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(ptr, rust_vec_len, data_len),
 85 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
-86 => wire__crate__api__structure_designer__stamp_api__set_stamp_x_dir_impl(ptr, rust_vec_len, data_len),
-87 => wire__crate__api__structure_designer__stamp_api__set_stamp_y_dir_impl(ptr, rust_vec_len, data_len),
-89 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
-90 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
-91 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(ptr, rust_vec_len, data_len),
+86 => wire__crate__api__structure_designer__stamp_api__set_stamp_rotation_impl(ptr, rust_vec_len, data_len),
+88 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+89 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
+90 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -4357,8 +4318,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.position.into_into_dart().into_dart(),
-            self.x_dir.into_into_dart().into_dart(),
-            self.y_dir.into_into_dart().into_dart(),
+            self.rotation.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4900,8 +4860,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.position, serializer);
-        <i32>::sse_encode(self.x_dir, serializer);
-        <i32>::sse_encode(self.y_dir, serializer);
+        <i32>::sse_encode(self.rotation, serializer);
     }
 }
 
