@@ -3,6 +3,12 @@ use lazy_static::lazy_static;
 
 use crate::util::imat3::IMat3;
 
+#[derive(PartialEq)]
+pub enum ZincBlendeAtomType {
+    Primary,
+    Secondary,
+}
+
 // Define the 6 possible basis vectors outside the function
 lazy_static! {
     static ref BASIS_VECTORS: [IVec3; 6] = [
@@ -133,6 +139,14 @@ pub fn crystal_rot_to_mat(x_dir: i32, y_dir: i32) -> IMat3 {
     // Create and return the rotation matrix
     println!("DEBUG - Crystal Rotation Matrix: x_dir={}, y_dir={}, x_basis={:?}, y_basis={:?}, z_basis={:?}", x_dir, y_dir, x_basis, y_basis, z_basis);
     IMat3::new(&x_basis, &y_basis, &z_basis)
+}
+
+pub fn get_zinc_blende_atom_type_for_pos(pos: &IVec3) -> ZincBlendeAtomType {
+    if pos.x % 2 == 0 {
+        ZincBlendeAtomType::Primary
+    } else {
+        ZincBlendeAtomType::Secondary
+    }
 }
 
 #[cfg(test)]

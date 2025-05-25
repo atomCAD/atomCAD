@@ -14,12 +14,9 @@ use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::common_constants::CrystalTypeInfo;
 use crate::common::atomic_structure::CrystalMetaData;
+use crate::common::crystal_utils::ZincBlendeAtomType;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
-enum ZincBlendeAtomType {
-  Primary,
-  Secondary,
-}
 
 // Relative in-cell positions of the atoms that are part of a cell
 // A position can be part of multiple cells (corner positions are part of 8 cells,

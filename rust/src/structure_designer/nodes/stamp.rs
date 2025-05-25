@@ -14,7 +14,14 @@ use crate::common::atomic_structure::{Atom, AtomDisplayState, AtomicStructure};
 use crate::common::crystal_utils::CRYSTAL_ROTATION_MATRICES;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::atomic_structure::HitTestResult;
-use crate::common::crystal_utils::{is_crystal_atom_id, id_to_in_crystal_pos, in_crystal_pos_to_id};
+use crate::common::crystal_utils::{
+  ZincBlendeAtomType,
+  is_crystal_atom_id,
+  id_to_in_crystal_pos,
+  in_crystal_pos_to_id,
+  get_zinc_blende_atom_type_for_pos,
+};
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StampPlacement {
@@ -62,7 +69,7 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
   };
 
   if let NetworkResult::Atomic(stamp_structure) = stamp_val {
-      
+
     let anchor_position = match stamp_structure.anchor_position {
       Some(anchor_position) => {
         anchor_position
@@ -91,11 +98,25 @@ fn place_stamp(
   decorate: bool,
   selected: bool) {
     let quarter_unit_cell_size = stamp_structure.crystal_meta_data.unit_cell_size * 0.25;
-    let rotation_index = stamp_placement.rotation as usize % 12;
-    let stamping_rotation = CRYSTAL_ROTATION_MATRICES[rotation_index];
-    let double_stamping_rotation = stamping_rotation.as_dmat3();
     let anchor_position = stamp_structure.anchor_position.unwrap();
     let anchor_position_double = anchor_position.as_dvec3() * quarter_unit_cell_size;
+
+    let anchor_site_type = get_zinc_blende_atom_type_for_pos(&anchor_position);
+    let placement_site_type = get_zinc_blende_atom_type_for_pos(&stamp_placement.position);
+    let rotation_index = stamp_placement.rotation as usize % 12;
+    let mut stamping_rotation = CRYSTAL_ROTATION_MATRICES[rotation_index];
+
+    if anchor_site_type != placement_site_type {
+      stamping_rotation = stamping_rotation.mul_imat3(
+        &IMat3::new(
+          &IVec3::new(0, -1, 0), 
+          &IVec3::new(-1, 0, 0), 
+          &IVec3::new(0, 0, -1))
+      );
+    }
+
+    let double_stamping_rotation = stamping_rotation.as_dmat3();
+
     let stamp_placement_position_double = stamp_placement.position.as_dvec3() * quarter_unit_cell_size;
 
     for atom in stamp_structure.atoms.values() {

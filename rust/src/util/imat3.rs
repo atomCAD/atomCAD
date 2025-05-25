@@ -50,6 +50,25 @@ impl IMat3 {
         x + y + z
     }
 
+    /// Performs matrix multiplication with another IMat3 matrix (self * other).
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The matrix to multiply with
+    ///
+    /// # Returns
+    ///
+    /// A new IMat3 that is the result of the matrix multiplication
+    pub fn mul_imat3(&self, other: &IMat3) -> IMat3 {
+        // For each column in the result matrix, transform the corresponding
+        // column from the other matrix
+        let x_col = self.mul(&other.cols[0]);
+        let y_col = self.mul(&other.cols[1]);
+        let z_col = self.mul(&other.cols[2]);
+        
+        IMat3::new(&x_col, &y_col, &z_col)
+    }
+
     /// Converts the integer matrix to a double-precision matrix.
     ///
     /// # Returns
