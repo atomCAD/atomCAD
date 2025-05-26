@@ -21,6 +21,7 @@ const double PIN_BORDER_WIDTH = 5.0;
 const Color NODE_BACKGROUND_COLOR = Color(0xFF212121); // Colors.grey[900]
 const Color NODE_BORDER_COLOR_SELECTED = Colors.orange;
 const Color NODE_BORDER_COLOR_NORMAL = Colors.blueAccent;
+const Color NODE_BORDER_COLOR_ERROR = Colors.red;
 const double NODE_BORDER_WIDTH_SELECTED = 3.0;
 const double NODE_BORDER_WIDTH_NORMAL = 2.0;
 const double NODE_BORDER_RADIUS = 8.0;
@@ -256,21 +257,31 @@ class NodeWidget extends StatelessWidget {
             color: NODE_BACKGROUND_COLOR,
             borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
             border: Border.all(
-                color: node.selected
-                    ? NODE_BORDER_COLOR_SELECTED
-                    : NODE_BORDER_COLOR_NORMAL,
+                color: node.error != null
+                    ? NODE_BORDER_COLOR_ERROR
+                    : (node.selected
+                        ? NODE_BORDER_COLOR_SELECTED
+                        : NODE_BORDER_COLOR_NORMAL),
                 width: node.selected
                     ? NODE_BORDER_WIDTH_SELECTED
                     : NODE_BORDER_WIDTH_NORMAL),
-            boxShadow: node.selected
+            boxShadow: node.error != null
                 ? [
                     BoxShadow(
-                        color: NODE_BORDER_COLOR_SELECTED
+                        color: NODE_BORDER_COLOR_ERROR
                             .withOpacity(WIRE_GLOW_OPACITY),
                         blurRadius: WIRE_GLOW_BLUR_RADIUS,
                         spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
                   ]
-                : null,
+                : (node.selected
+                    ? [
+                        BoxShadow(
+                            color: NODE_BORDER_COLOR_SELECTED
+                                .withOpacity(WIRE_GLOW_OPACITY),
+                            blurRadius: WIRE_GLOW_BLUR_RADIUS,
+                            spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+                      ]
+                    : null),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

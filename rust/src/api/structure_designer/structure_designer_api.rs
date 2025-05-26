@@ -62,6 +62,9 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
         });
       }
 
+      // Get error for this node from last_generated_structure_designer_scene if it exists
+      let error = cad_instance.structure_designer.last_generated_structure_designer_scene.node_errors.get(&node.id).cloned();
+
       node_network_view.nodes.insert(node.id, NodeView {
         id: node.id,
         node_type_name: node.node_type_name.clone(),
@@ -71,6 +74,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
         selected: node_network.selected_node_id == Some(node.id),
         displayed: node_network.displayed_node_ids.contains(&node.id),
         return_node: node_network.return_node_id == Some(node.id),
+        error,
       });
     }
 

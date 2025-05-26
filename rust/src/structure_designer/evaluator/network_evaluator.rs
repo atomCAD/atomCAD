@@ -35,6 +35,7 @@ pub enum NetworkResult {
   None,
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
+  Error(String),
 }
 
 pub struct NetworkEvaluator {

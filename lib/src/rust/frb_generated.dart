@@ -3238,8 +3238,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -3249,7 +3249,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       selected: dco_decode_bool(arr[5]),
       displayed: dco_decode_bool(arr[6]),
       returnNode: dco_decode_bool(arr[7]),
+      error: dco_decode_opt_String(arr[8]),
     );
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
   }
 
   @protected
@@ -4015,6 +4022,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_selected = sse_decode_bool(deserializer);
     var var_displayed = sse_decode_bool(deserializer);
     var var_returnNode = sse_decode_bool(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
     return NodeView(
         id: var_id,
         nodeTypeName: var_nodeTypeName,
@@ -4023,7 +4031,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         outputType: var_outputType,
         selected: var_selected,
         displayed: var_displayed,
-        returnNode: var_returnNode);
+        returnNode: var_returnNode,
+        error: var_error);
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -4825,6 +4845,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.selected, serializer);
     sse_encode_bool(self.displayed, serializer);
     sse_encode_bool(self.returnNode, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
   }
 
   @protected

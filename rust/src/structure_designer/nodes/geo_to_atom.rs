@@ -88,7 +88,7 @@ pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stac
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
   if node.arguments[0].argument_node_ids.is_empty() {
-    return NetworkResult::Atomic(AtomicStructure::new());
+    return NetworkResult::Error("No geometry node connected".to_string());
   }
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();
