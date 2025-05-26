@@ -34,7 +34,7 @@ impl NodeData for AtomTransData {
     }
 }
 
-pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {  
+pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
   if node.arguments[0].argument_node_ids.is_empty() {
@@ -42,7 +42,7 @@ pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: 
   }
   let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
 
-  let result = &network_evaluator.evaluate(network_stack, input_molecule_node_id, registry, false)[0];
+  let result = &network_evaluator.evaluate(network_stack, input_molecule_node_id, registry, false, context)[0];
   if let NetworkResult::Atomic(atomic_structure) = result {
     let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glam::i32::IVec3;
 use crate::common::surface_point_cloud::SurfacePoint;
 use crate::common::surface_point_cloud::SurfacePointCloud;
@@ -38,6 +40,18 @@ pub enum NetworkResult {
   Error(String),
 }
 
+pub struct NetworkEvaluationContext {
+  pub node_errors: HashMap<u64, String>,
+}
+
+impl NetworkEvaluationContext {
+  pub fn new() -> Self {
+    Self {
+      node_errors: HashMap::new(),
+    }
+  }
+}
+
 pub struct NetworkEvaluator {
     pub implicit_evaluator: ImplicitEvaluator,
 }
@@ -75,9 +89,12 @@ impl NetworkEvaluator {
     };
 
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
+    
+    // Create evaluation context to track errors
+    let mut context = NetworkEvaluationContext::new();
 
     if node_type.output_type == DataType::Geometry {
-      return self.generate_point_cloud_scene(network, node_id, registry);
+      return self.generate_point_cloud_scene(network, node_id, registry, &mut context);
     }
     if node_type.output_type == DataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);
@@ -85,12 +102,15 @@ impl NetworkEvaluator {
       let mut scene = StructureDesignerScene::new();
 
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
-      let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node)[0];
+      let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
       if let NetworkResult::Atomic(atomic_structure) = result {
         let mut cloned_atomic_structure = atomic_structure.clone();
         cloned_atomic_structure.from_selected_node = from_selected_node;
         scene.atomic_structures.push(cloned_atomic_structure);
       };
+      
+      // Copy the collected errors to the scene
+      scene.node_errors = context.node_errors;
 
       return scene;
     }
@@ -98,11 +118,11 @@ impl NetworkEvaluator {
     return StructureDesignerScene::new();
   }
 
-  pub fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool) -> Vec<NetworkResult> {
+  pub fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut NetworkEvaluationContext) -> Vec<NetworkResult> {
 
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
-    if node.node_type_name == "parameter" {
+    let results = if node.node_type_name == "parameter" {
       let parent_node_id = network_stack.last().unwrap().node_id;
 
       let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
@@ -110,43 +130,44 @@ impl NetworkEvaluator {
       parent_network_stack.pop();
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
       let args : Vec<Vec<NetworkResult>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
-        self.evaluate(&parent_network_stack, arg_node_id, registry, false)
+        self.evaluate(&parent_network_stack, arg_node_id, registry, false, context)
       }).collect();
-      return args.concat();
-    }
-    if node.node_type_name == "sphere" {
-      return vec![eval_sphere(network_stack, node_id, registry)];
-    }
-    if node.node_type_name == "cuboid" {
-      return vec![eval_cuboid(network_stack, node_id, registry)];
-    }
-    if node.node_type_name == "half_space" {
-      return vec![eval_half_space(network_stack, node_id, registry)];
-    }
-    if node.node_type_name == "geo_to_atom" {
-      return vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)];
-    }
-    if node.node_type_name == "edit_atom" {
-      return vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate)];
-    }
-    if node.node_type_name == "atom_trans" {
-      return vec![eval_atom_trans(&self, network_stack, node_id, registry)];
-    }
-    if node.node_type_name == "anchor" {
-      return vec![eval_anchor(&self, network_stack, node_id, registry)];
-    }    
-    if node.node_type_name == "stamp" {
-      return vec![eval_stamp(&self, network_stack, node_id, registry, decorate)];
-    }
-    if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
+      args.concat()
+    } else if node.node_type_name == "sphere" {
+      vec![eval_sphere(network_stack, node_id, registry)]
+    } else if node.node_type_name == "cuboid" {
+      vec![eval_cuboid(network_stack, node_id, registry)]
+    } else if node.node_type_name == "half_space" {
+      vec![eval_half_space(network_stack, node_id, registry)]
+    } else if node.node_type_name == "geo_to_atom" {
+      vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)]
+    } else if node.node_type_name == "edit_atom" {
+      vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)]
+    } else if node.node_type_name == "atom_trans" {
+      vec![eval_atom_trans(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "anchor" {
+      vec![eval_anchor(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "stamp" {
+      vec![eval_stamp(&self, network_stack, node_id, registry, decorate, context)]
+    } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
-      return self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry, false);
+      self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry, false, context)
+    } else {
+      vec![NetworkResult::None]
+    };
+    
+    // Check for errors and store them in the context
+    for result in &results {
+      if let NetworkResult::Error(error_message) = result {
+        context.node_errors.insert(node_id, error_message.clone());
+      }
     }
-    return vec![NetworkResult::None];
+    
+    results
   }
 
-  pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry) -> StructureDesignerScene {
+  pub fn generate_point_cloud_scene(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry, context: &mut NetworkEvaluationContext) -> StructureDesignerScene {
     let mut point_cloud = SurfacePointCloud::new();
     let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
     (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
@@ -166,6 +187,10 @@ impl NetworkEvaluator {
 
     let mut scene = StructureDesignerScene::new();
     scene.surface_point_clouds.push(point_cloud);
+    
+    // Copy any collected errors to the scene
+    scene.node_errors = context.node_errors.clone();
+    
     scene
   }
 

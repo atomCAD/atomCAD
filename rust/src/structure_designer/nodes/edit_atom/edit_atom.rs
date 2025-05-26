@@ -172,14 +172,14 @@ impl NodeData for EditAtomData {
     }
 }
 
-pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool) -> NetworkResult {
+pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
   let input_val = if node.arguments[0].argument_node_ids.is_empty() {
     return NetworkResult::Atomic(AtomicStructure::new());
   } else {
     let input_node_id = node.arguments[0].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry, false)[0].clone()
+    network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone()
   };
 
   if let NetworkResult::Atomic(mut atomic_structure) = input_val {
