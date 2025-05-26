@@ -12,6 +12,9 @@ use crate::common::crystal_utils::{in_crystal_pos_to_id, is_crystal_atom_id, id_
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::atomic_structure::HitTestResult;
 use glam::f64::DVec3;
+use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
+use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnchorData {
@@ -36,12 +39,16 @@ impl AnchorData {
 pub fn eval_anchor<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
-  let input_val = if node.arguments[0].argument_node_ids.is_empty() {
-    return NetworkResult::Atomic(AtomicStructure::new());
-  } else {
-    let input_node_id = node.arguments[0].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone()
-  };
+  if node.arguments[0].argument_node_ids.is_empty() {
+    return input_missing_error("molecule");
+  }
+
+  let input_node_id = node.arguments[0].get_node_id().unwrap();
+  let input_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
+
+  if let NetworkResult::Error(_error) = input_val {
+    return error_in_input("molecule");
+  }
 
   if let NetworkResult::Atomic(mut atomic_structure) = input_val {
     let anchor_data = &node.data.as_any_ref().downcast_ref::<AnchorData>().unwrap();

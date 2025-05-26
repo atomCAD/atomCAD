@@ -2,7 +2,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_evaluator::{NetworkResult, input_missing_error};
 use crate::common::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 use glam::i32::IVec3;
@@ -88,7 +88,7 @@ pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stac
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
   if node.arguments[0].argument_node_ids.is_empty() {
-    return NetworkResult::Error("No geometry node connected".to_string());
+    return input_missing_error("shape");
   }
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();

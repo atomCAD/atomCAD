@@ -40,6 +40,21 @@ pub enum NetworkResult {
   Error(String),
 }
 
+/// Creates a consistent error message for missing input in node evaluation
+/// 
+/// # Arguments
+/// * `input_name` - The name of the missing input (e.g., 'molecule', 'shape')
+/// 
+/// # Returns
+/// * `NetworkResult::Error` with a formatted error message
+pub fn input_missing_error(input_name: &str) -> NetworkResult {
+  NetworkResult::Error(format!("{} input is missing", input_name))
+}
+
+pub fn error_in_input(input_name: &str) -> NetworkResult {
+  NetworkResult::Error(format!("error in {} input", input_name))
+}
+
 pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
 }

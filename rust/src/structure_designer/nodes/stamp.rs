@@ -21,7 +21,8 @@ use crate::common::crystal_utils::{
   in_crystal_pos_to_id,
   get_zinc_blende_atom_type_for_pos,
 };
-
+use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
+use crate::structure_designer::evaluator::network_evaluator::error_in_input;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StampPlacement {
@@ -54,19 +55,27 @@ impl StampData {
 pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
-  let crystal_val = if node.arguments[0].argument_node_ids.is_empty() {
-    NetworkResult::Atomic(AtomicStructure::new())
-  } else {
-    let input_node_id = node.arguments[0].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone()
-  };
+  if node.arguments[0].argument_node_ids.is_empty() {
+    return input_missing_error("crystal");
+  }
 
-  let stamp_val = if node.arguments[1].argument_node_ids.is_empty() {
-    return crystal_val;
-  } else {
-    let input_node_id = node.arguments[1].get_node_id().unwrap();
-    network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone()
-  };
+  let input_node_id = node.arguments[0].get_node_id().unwrap();
+  let crystal_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
+
+  if let NetworkResult::Error(_error) = crystal_val {
+    return error_in_input("crystal");
+  }
+
+  if node.arguments[1].argument_node_ids.is_empty() {
+    return input_missing_error("stamp");
+  }
+
+  let input_node_id = node.arguments[1].get_node_id().unwrap();
+  let stamp_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
+
+  if let NetworkResult::Error(_error) = stamp_val {
+    return error_in_input("stamp");
+  }
 
   if let NetworkResult::Atomic(stamp_structure) = stamp_val {
 
@@ -74,7 +83,7 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
       Some(anchor_position) => {
         anchor_position
       },
-      None => {return crystal_val; },
+      None => {return NetworkResult::Error("stamp has no anchor position".to_string()); },
     };
 
     let stamp_data = &node.data.as_any_ref().downcast_ref::<StampData>().unwrap();
