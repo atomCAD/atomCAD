@@ -1,4 +1,4 @@
-- for zincblende only allow stamp placement on a site which has the same site type as the anchor atom. Think about validation also generally as a stamp can become invalid not just when placing the stamp but also on stamp or crystal input change. (so it should be checked evaluation time too)
+- support selection of existing stamp placements
 - support deleted atoms
 - support defect bond placement and deletions
 - support atom_trans correctly for stamping

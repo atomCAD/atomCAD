@@ -89,10 +89,19 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
     let stamp_data = &node.data.as_any_ref().downcast_ref::<StampData>().unwrap();
     
     if let NetworkResult::Atomic(mut crystal_structure) = crystal_val {
+
+      if !(stamp_structure.crystal_meta_data.primary_atomic_number == crystal_structure.crystal_meta_data.primary_atomic_number &&
+      stamp_structure.crystal_meta_data.secondary_atomic_number == crystal_structure.crystal_meta_data.secondary_atomic_number) {
+        return NetworkResult::Error("stamp and crystal have different atomic numbers".to_string());
+      }
+
       for (index, stamp_placement) in stamp_data.stamp_placements.iter().enumerate() {
         let is_selected = stamp_data.selected_stamp_placement.map_or(false, |selected_index| selected_index == index);
         place_stamp(&mut crystal_structure, &stamp_structure, stamp_placement, decorate, is_selected);
       }
+
+      crystal_structure.crystal_meta_data.stamped_by_anchor_atom_type = Some(get_zinc_blende_atom_type_for_pos(&anchor_position));
+
       return NetworkResult::Atomic(crystal_structure);
     }
     return crystal_val;
@@ -177,22 +186,27 @@ pub fn add_or_select_stamp_placement_by_ray(structure_designer: &mut StructureDe
     _ => return,
   };
 
-  let stamp_data = match get_selected_stamp_data_mut(structure_designer) {
-    Some(data) => data,
-    None => return,
-  };
-
   if !is_crystal_atom_id(atom_id) {
     return;
   }
 
   let position = id_to_in_crystal_pos(atom_id);
 
-  // TODO: not all atom positions can be selected (also depends on whether zinc-blende)
-  // but maybe the whole valiadation business should be thought out, as the stamp input can change
-  // after setting this data, so invalidation should be done generally on input change too.
+  let crystal_meta_data = &atomic_structure.crystal_meta_data;
+  let is_zinc_blende = crystal_meta_data.primary_atomic_number != crystal_meta_data.secondary_atomic_number;
+  let stamping_atom_type = get_zinc_blende_atom_type_for_pos(&position);
+
+  // in case of zinc-blende, the stamping atom type must match the stamp anchor's atom type to add a stamp placement.
+  if is_zinc_blende && crystal_meta_data.stamped_by_anchor_atom_type != Some(stamping_atom_type) {
+    return;
+  }
 
   // TODO: maybe select existing placement
+
+  let stamp_data = match get_selected_stamp_data_mut(structure_designer) {
+    Some(data) => data,
+    None => return,
+  };
 
   stamp_data.stamp_placements.push(StampPlacement {
     position,

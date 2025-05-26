@@ -104,6 +104,7 @@ pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stac
     primary_atomic_number: geo_to_atom_data.primary_atomic_number,
     secondary_atomic_number: geo_to_atom_data.secondary_atomic_number,
     unit_cell_size: get_unit_cell_size(geo_to_atom_data.primary_atomic_number, geo_to_atom_data.secondary_atomic_number),
+    stamped_by_anchor_atom_type: None,
   };
 
   process_box_for_atomic(
