@@ -23,6 +23,8 @@ use crate::common::crystal_utils::{
 };
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StampPlacement {
@@ -137,17 +139,32 @@ fn place_stamp(
 
     let stamp_placement_position_double = stamp_placement.position.as_dvec3() * quarter_unit_cell_size;
 
+    // Create a mapping from stamp atom IDs to crystal atom IDs
+    let mut stamp_to_crystal_mapping: HashMap<u64, u64> = HashMap::new();
+    
+    // place stamp atoms
     for atom in stamp_structure.atoms.values() {
       let dest_atom_id = calc_dest_atom_id(atom.id, &stamping_rotation, &anchor_position, &stamp_placement.position);
       let dest_pos = calc_dest_pos(atom, &double_stamping_rotation, &anchor_position_double, &stamp_placement_position_double);
       crystal_structure.replace_atom(dest_atom_id, atom.atomic_number);
       crystal_structure.set_atom_position(dest_atom_id, dest_pos);
+      
+      // Add to the mapping
+      stamp_to_crystal_mapping.insert(atom.id, dest_atom_id);
     }
 
+    // delete stamp deleted atoms
     for deleted_atom_id in stamp_structure.deleted_atom_ids.clone() {
       let dest_atom_id = calc_dest_atom_id(deleted_atom_id, &stamping_rotation, &anchor_position, &stamp_placement.position);
       crystal_structure.delete_atom(dest_atom_id, true);
     }
+    
+    // transfer stamp bonds
+    transfer_stamp_bonds(
+      crystal_structure,
+      stamp_structure,
+      &stamp_to_crystal_mapping
+    );
 
     if decorate {
       let atom_id = in_crystal_pos_to_id(&stamp_placement.position);
@@ -233,6 +250,79 @@ pub fn get_selected_stamp_data_mut(structure_designer: &mut StructureDesigner) -
   let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;
     
   node_data.as_any_mut().downcast_mut::<StampData>()
+}
+
+/// Transfers bonds from stamp structure to crystal structure
+/// 
+/// This function ensures that:
+/// 1. All bonds between atoms in the stamp exist between corresponding atoms in the crystal
+/// 2. No bonds exist between mapped crystal atoms unless they correspond to a bond in the stamp
+fn transfer_stamp_bonds(
+  crystal_structure: &mut AtomicStructure,
+  stamp_structure: &AtomicStructure,
+  stamp_to_crystal_mapping: &HashMap<u64, u64>
+) {
+  // Create sets for tracking mapped atoms
+  let mapped_stamp_atom_ids: HashSet<u64> = stamp_to_crystal_mapping.keys().cloned().collect();
+  let mapped_crystal_atom_ids: HashSet<u64> = stamp_to_crystal_mapping.values().cloned().collect();
+  
+  // Create a set of bonds that should exist in the crystal
+  let mut expected_crystal_bonds: HashSet<(u64, u64)> = HashSet::new();
+  
+  // Process all bonds in the stamp structure
+  for bond in stamp_structure.bonds.values() {
+    // Only process bonds where both atoms are mapped
+    if mapped_stamp_atom_ids.contains(&bond.atom_id1) && mapped_stamp_atom_ids.contains(&bond.atom_id2) {
+      let crystal_atom_id1 = *stamp_to_crystal_mapping.get(&bond.atom_id1).unwrap();
+      let crystal_atom_id2 = *stamp_to_crystal_mapping.get(&bond.atom_id2).unwrap();
+      
+      // Add this bond pair to the expected set (using ordered pairs for consistency)
+      let ordered_pair = if crystal_atom_id1 < crystal_atom_id2 {
+        (crystal_atom_id1, crystal_atom_id2)
+      } else {
+        (crystal_atom_id2, crystal_atom_id1)
+      };
+      expected_crystal_bonds.insert(ordered_pair);
+      
+      // Add the bond or update its multiplicity if it already exists
+      // The add_bond method now handles checking for existing bonds internally
+      crystal_structure.add_bond(crystal_atom_id1, crystal_atom_id2, bond.multiplicity);
+    }
+  }
+  
+  // Find and remove bonds between mapped atoms that shouldn't exist
+  let mut bonds_to_remove: HashSet<u64> = HashSet::new();
+  
+  // For each mapped crystal atom, check its bonds
+  for &crystal_atom_id in &mapped_crystal_atom_ids {
+    // Skip if the atom doesn't exist (safety check)
+    if let Some(atom) = crystal_structure.atoms.get(&crystal_atom_id) {
+      // Check each bond of this atom
+      for &bond_id in &atom.bond_ids {
+        if let Some(bond) = crystal_structure.bonds.get(&bond_id) {
+          // Only consider bonds between mapped atoms
+          if mapped_crystal_atom_ids.contains(&bond.atom_id1) && mapped_crystal_atom_ids.contains(&bond.atom_id2) {
+            // Check if this bond pair is in our expected set
+            let ordered_pair = if bond.atom_id1 < bond.atom_id2 {
+              (bond.atom_id1, bond.atom_id2)
+            } else {
+              (bond.atom_id2, bond.atom_id1)
+            };
+            
+            // If the bond isn't in our expected set, mark it for removal
+            if !expected_crystal_bonds.contains(&ordered_pair) {
+              bonds_to_remove.insert(bond_id);
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Remove the bonds that shouldn't exist
+  for bond_id in bonds_to_remove {
+    crystal_structure.delete_bond(bond_id);
+  }
 }
 
 /// Sets the rotation of the selected stamp placement

@@ -487,14 +487,45 @@ impl AtomicStructure {
   }
 
   pub fn add_bond(&mut self, atom_id1: u64, atom_id2: u64, multiplicity: i32) -> u64 {
+    // Check if a bond already exists before obtaining a new ID
+    if let Some(existing_bond_id) = self.find_bond_id_between(atom_id1, atom_id2) {
+      return self.add_bond_with_id(existing_bond_id, atom_id1, atom_id2, multiplicity);
+    }
+    
+    // No existing bond, obtain a new ID and create the bond
     let id = self.obtain_next_bond_id();
-    self.add_bond_with_id(id, atom_id1, atom_id2, multiplicity);
-    id
+    self.add_bond_with_id(id, atom_id1, atom_id2, multiplicity)
   }
 
-  // Right now this can only be called if no bond exist between the two atoms but both atoms exist
-  // TODO: handle the case when a bond already exist
-  pub fn add_bond_with_id(&mut self, id: u64, atom_id1: u64, atom_id2: u64, multiplicity: i32) {
+  /// Adds a bond with a specific ID between two atoms, or updates an existing bond's multiplicity
+  ///
+  /// If a bond already exists between the atoms, its multiplicity will be updated
+  /// and the provided ID will be ignored (the existing bond ID is preserved).
+  /// If no bond exists, a new bond will be created with the provided ID.
+  ///
+  /// # Arguments
+  ///
+  /// * `id` - The ID to use for the bond if no bond exists between the atoms
+  /// * `atom_id1` - The ID of the first atom
+  /// * `atom_id2` - The ID of the second atom
+  /// * `multiplicity` - The bond multiplicity to set
+  ///
+  /// # Returns
+  ///
+  /// The ID of the bond (either the existing bond ID or the provided ID for new bonds)
+  pub fn add_bond_with_id(&mut self, id: u64, atom_id1: u64, atom_id2: u64, multiplicity: i32) -> u64 {
+    // Check if a bond already exists between these atoms
+    if let Some(existing_bond_id) = self.find_bond_id_between(atom_id1, atom_id2) {
+      // Update the multiplicity of the existing bond
+      if let Some(bond) = self.bonds.get_mut(&existing_bond_id) {
+        bond.multiplicity = multiplicity;
+      }
+      self.make_atom_dirty(atom_id1);
+      self.make_atom_dirty(atom_id2);
+      return existing_bond_id;
+    }
+    
+    // No existing bond, create a new one
     self.bonds.insert(id, Bond {
       id,
       atom_id1,
@@ -506,6 +537,65 @@ impl AtomicStructure {
     self.atoms.get_mut(&atom_id2).unwrap().bond_ids.push(id);
     self.make_atom_dirty(atom_id1);
     self.make_atom_dirty(atom_id2);
+    id
+  }
+  
+  /// Finds the ID of a bond between two atoms, if it exists
+  ///
+  /// This method is optimized to check through the bonds of the atom with fewer bonds,
+  /// rather than iterating through all bonds in the structure.
+  ///
+  /// # Arguments
+  ///
+  /// * `atom_id1` - The ID of the first atom
+  /// * `atom_id2` - The ID of the second atom
+  ///
+  /// # Returns
+  ///
+  /// `Some(bond_id)` if a bond exists between the atoms, `None` otherwise
+  pub fn find_bond_id_between(&self, atom_id1: u64, atom_id2: u64) -> Option<u64> {
+    // If either atom doesn't exist, there can't be a bond between them
+    if !self.atoms.contains_key(&atom_id1) || !self.atoms.contains_key(&atom_id2) {
+      return None;
+    }
+    
+    // Choose the atom that likely has fewer bonds to iterate through
+    let (atom_to_check, other_atom_id) = if self.atoms[&atom_id1].bond_ids.len() <= self.atoms[&atom_id2].bond_ids.len() {
+      (&self.atoms[&atom_id1], atom_id2)
+    } else {
+      (&self.atoms[&atom_id2], atom_id1)
+    };
+    
+    // Find the bond ID that connects these atoms
+    atom_to_check.bond_ids.iter().find_map(|bond_id| {
+      if let Some(bond) = self.bonds.get(bond_id) {
+        if (bond.atom_id1 == atom_to_check.id && bond.atom_id2 == other_atom_id) ||
+           (bond.atom_id1 == other_atom_id && bond.atom_id2 == atom_to_check.id) {
+          Some(*bond_id)
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    })
+  }
+  
+  /// Checks if a bond exists between two atoms
+  ///
+  /// This method is optimized to check through the bonds of the atom with fewer bonds,
+  /// rather than iterating through all bonds in the structure.
+  ///
+  /// # Arguments
+  ///
+  /// * `atom_id1` - The ID of the first atom
+  /// * `atom_id2` - The ID of the second atom
+  ///
+  /// # Returns
+  ///
+  /// `true` if a bond exists between the atoms, `false` otherwise
+  pub fn has_bond_between(&self, atom_id1: u64, atom_id2: u64) -> bool {
+    self.find_bond_id_between(atom_id1, atom_id2).is_some()
   }
 
   // Right now this can only be called if the bond exists
