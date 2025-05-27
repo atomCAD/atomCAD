@@ -152,6 +152,7 @@ pub struct AtomicStructure {
   pub from_selected_node: bool,
   pub selection_transform: Option<Transform>,
   pub anchor_position: Option<IVec3>,
+  pub deleted_atom_ids: HashSet<u64>,
   pub decorator: AtomicStructureDecorator,
   pub crystal_meta_data: CrystalMetaData,
 }
@@ -193,6 +194,7 @@ impl AtomicStructure {
       from_selected_node: false,
       selection_transform: None,
       anchor_position: None,
+      deleted_atom_ids: HashSet::new(),
       decorator: AtomicStructureDecorator::new(),
       crystal_meta_data: CrystalMetaData::new(),
     };
@@ -424,7 +426,7 @@ impl AtomicStructure {
     self.make_atom_dirty(id);
   }
 
-  pub fn delete_atom(&mut self, id: u64) {
+  pub fn delete_atom(&mut self, id: u64, remember_deleted_atom: bool) {
     // Get the atom and collect its bond IDs before removing it
     let (pos, bond_ids) = if let Some(atom) = self.atoms.get(&id) {
       // Remove atom ID from its cluster's atom_ids HashSet if the cluster exists
@@ -450,6 +452,10 @@ impl AtomicStructure {
 
     self.atoms.remove(&id);
     self.make_atom_dirty(id);
+  
+    if remember_deleted_atom {
+      self.deleted_atom_ids.insert(id);
+    }
   }
 
   pub fn move_atom_to_cluster(&mut self, atom_id: u64, new_cluster_id: u64) {
@@ -735,7 +741,7 @@ impl AtomicStructure {
       .collect();
     
     for atom_id in lone_atoms {
-      self.delete_atom(atom_id);
+      self.delete_atom(atom_id, false);
     }
   }
 

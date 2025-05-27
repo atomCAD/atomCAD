@@ -144,6 +144,11 @@ fn place_stamp(
       crystal_structure.set_atom_position(dest_atom_id, dest_pos);
     }
 
+    for deleted_atom_id in stamp_structure.deleted_atom_ids.clone() {
+      let dest_atom_id = calc_dest_atom_id(deleted_atom_id, &stamping_rotation, &anchor_position, &stamp_placement.position);
+      crystal_structure.delete_atom(dest_atom_id, true);
+    }
+
     if decorate {
       let atom_id = in_crystal_pos_to_id(&stamp_placement.position);
       if crystal_structure.atoms.contains_key(&atom_id) {
