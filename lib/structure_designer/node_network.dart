@@ -248,176 +248,200 @@ class NodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-        left: node.position.x,
-        top: node.position.y,
-        child: Container(
-          width: NODE_WIDTH,
-          decoration: BoxDecoration(
-            color: NODE_BACKGROUND_COLOR,
-            borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
-            border: Border.all(
-                color: node.error != null
-                    ? NODE_BORDER_COLOR_ERROR
-                    : (node.selected
-                        ? NODE_BORDER_COLOR_SELECTED
-                        : NODE_BORDER_COLOR_NORMAL),
-                width: node.selected
-                    ? NODE_BORDER_WIDTH_SELECTED
-                    : NODE_BORDER_WIDTH_NORMAL),
-            boxShadow: node.error != null
+    // Create the base node widget content
+    Widget nodeContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Title Bar
+        GestureDetector(
+          onTapDown: (details) {
+            final model = Provider.of<StructureDesignerModel>(context,
+                listen: false);
+            model.setSelectedNode(node.id);
+          },
+          onPanStart: (details) {
+            final model = Provider.of<StructureDesignerModel>(context,
+                listen: false);
+            model.setSelectedNode(node.id);
+          },
+          onPanUpdate: (details) {
+            Provider.of<StructureDesignerModel>(context, listen: false)
+                .dragNodePosition(node.id, details.delta);
+          },
+          onPanEnd: (details) {
+            Provider.of<StructureDesignerModel>(context, listen: false)
+                .updateNodePosition(node.id);
+          },
+          onSecondaryTapDown: (details) {
+            final model = Provider.of<StructureDesignerModel>(context,
+                listen: false);
+            model.setSelectedNode(node.id);
+
+            final RenderBox overlay = Overlay.of(context)
+                .context
+                .findRenderObject() as RenderBox;
+            final RelativeRect position = RelativeRect.fromRect(
+              Rect.fromPoints(
+                details.globalPosition,
+                details.globalPosition,
+              ),
+              Offset.zero & overlay.size,
+            );
+
+            showMenu(
+              context: context,
+              position: position,
+              items: [
+                PopupMenuItem(
+                  value: 'return',
+                  child: Text(node.returnNode
+                      ? 'Unset as return node'
+                      : 'Set as return node'),
+                ),
+              ],
+            ).then((value) {
+              if (value == 'return') {
+                final model = Provider.of<StructureDesignerModel>(context,
+                    listen: false);
+                if (node.returnNode) {
+                  // Unset as return node (pass null to clear the return node)
+                  model.setReturnNodeId(null);
+                } else {
+                  // Set as return node (pass the node ID)
+                  model.setReturnNodeId(node.id);
+                }
+              }
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            decoration: BoxDecoration(
+              color: node.selected
+                  ? NODE_TITLE_COLOR_SELECTED
+                  : (node.returnNode
+                      ? NODE_TITLE_COLOR_RETURN
+                      : NODE_TITLE_COLOR_NORMAL),
+              borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(NODE_BORDER_RADIUS - 2)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  node.nodeTypeName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    final model = Provider.of<StructureDesignerModel>(
+                        context,
+                        listen: false);
+                    model.toggleNodeDisplay(node.id);
+                  },
+                  child: Icon(
+                    node.displayed
+                        ? Icons.visibility
+                        : Icons.visibility_off,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Main Body
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              // Left Side (Inputs)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: node.inputPins
+                    .asMap()
+                    .entries
+                    .map((entry) => _buildInputPin(
+                        entry.value.name,
+                        PinReference(
+                            node.id, entry.key, entry.value.dataType),
+                        entry.value.multi))
+                    .toList(),
+              ),
+              const Spacer(),
+              // Right Side (Output)
+              PinWidget(
+                pinReference: PinReference(node.id, -1, node.outputType),
+                multi: false,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    
+    // Create container with node appearance
+    Widget nodeWidget = Container(
+      width: NODE_WIDTH,
+      decoration: BoxDecoration(
+        color: NODE_BACKGROUND_COLOR,
+        borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
+        border: Border.all(
+            color: node.error != null
+                ? NODE_BORDER_COLOR_ERROR
+                : (node.selected
+                    ? NODE_BORDER_COLOR_SELECTED
+                    : NODE_BORDER_COLOR_NORMAL),
+            width: node.selected
+                ? NODE_BORDER_WIDTH_SELECTED
+                : NODE_BORDER_WIDTH_NORMAL),
+        boxShadow: node.error != null
+            ? [
+                BoxShadow(
+                    color: NODE_BORDER_COLOR_ERROR
+                        .withOpacity(WIRE_GLOW_OPACITY),
+                    blurRadius: WIRE_GLOW_BLUR_RADIUS,
+                    spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+              ]
+            : (node.selected
                 ? [
                     BoxShadow(
-                        color: NODE_BORDER_COLOR_ERROR
+                        color: NODE_BORDER_COLOR_SELECTED
                             .withOpacity(WIRE_GLOW_OPACITY),
                         blurRadius: WIRE_GLOW_BLUR_RADIUS,
                         spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
                   ]
-                : (node.selected
-                    ? [
-                        BoxShadow(
-                            color: NODE_BORDER_COLOR_SELECTED
-                                .withOpacity(WIRE_GLOW_OPACITY),
-                            blurRadius: WIRE_GLOW_BLUR_RADIUS,
-                            spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-                      ]
-                    : null),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Title Bar
-              GestureDetector(
-                onTapDown: (details) {
-                  final model = Provider.of<StructureDesignerModel>(context,
-                      listen: false);
-                  model.setSelectedNode(node.id);
-                },
-                onPanStart: (details) {
-                  final model = Provider.of<StructureDesignerModel>(context,
-                      listen: false);
-                  model.setSelectedNode(node.id);
-                },
-                onPanUpdate: (details) {
-                  Provider.of<StructureDesignerModel>(context, listen: false)
-                      .dragNodePosition(node.id, details.delta);
-                },
-                onPanEnd: (details) {
-                  Provider.of<StructureDesignerModel>(context, listen: false)
-                      .updateNodePosition(node.id);
-                },
-                onSecondaryTapDown: (details) {
-                  final model = Provider.of<StructureDesignerModel>(context,
-                      listen: false);
-                  model.setSelectedNode(node.id);
-
-                  final RenderBox overlay = Overlay.of(context)
-                      .context
-                      .findRenderObject() as RenderBox;
-                  final RelativeRect position = RelativeRect.fromRect(
-                    Rect.fromPoints(
-                      details.globalPosition,
-                      details.globalPosition,
-                    ),
-                    Offset.zero & overlay.size,
-                  );
-
-                  showMenu(
-                    context: context,
-                    position: position,
-                    items: [
-                      PopupMenuItem(
-                        value: 'return',
-                        child: Text(node.returnNode
-                            ? 'Unset as return node'
-                            : 'Set as return node'),
-                      ),
-                    ],
-                  ).then((value) {
-                    if (value == 'return') {
-                      final model = Provider.of<StructureDesignerModel>(context,
-                          listen: false);
-                      if (node.returnNode) {
-                        // Unset as return node (pass null to clear the return node)
-                        model.setReturnNodeId(null);
-                      } else {
-                        // Set as return node (pass the node ID)
-                        model.setReturnNodeId(node.id);
-                      }
-                    }
-                  });
-                },
-                child: Container(
-                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: node.selected
-                        ? NODE_TITLE_COLOR_SELECTED
-                        : (node.returnNode
-                            ? NODE_TITLE_COLOR_RETURN
-                            : NODE_TITLE_COLOR_NORMAL),
-                    borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(NODE_BORDER_RADIUS - 2)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        node.nodeTypeName,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          final model = Provider.of<StructureDesignerModel>(
-                              context,
-                              listen: false);
-                          model.toggleNodeDisplay(node.id);
-                        },
-                        child: Icon(
-                          node.displayed
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // Main Body
-              Padding(
-                padding: EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    // Left Side (Inputs)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: node.inputPins
-                          .asMap()
-                          .entries
-                          .map((entry) => _buildInputPin(
-                              entry.value.name,
-                              PinReference(
-                                  node.id, entry.key, entry.value.dataType),
-                              entry.value.multi))
-                          .toList(),
-                    ),
-                    Spacer(),
-                    // Right Side (Output)
-                    PinWidget(
-                      pinReference: PinReference(node.id, -1, node.outputType),
-                      multi: false,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ));
+                : null),
+      ),
+      child: nodeContent,
+    );
+    
+    // Add tooltip for nodes with errors
+    if (node.error != null && node.error!.isNotEmpty) {
+      nodeWidget = Tooltip(
+        message: node.error!,
+        textStyle: const TextStyle(fontSize: 14, color: Colors.white),
+        decoration: BoxDecoration(
+          color: Colors.red.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        waitDuration: const Duration(milliseconds: 500),
+        showDuration: const Duration(seconds: 5),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        preferBelow: true,
+        child: nodeWidget,
+      );
+    }
+    
+    return Positioned(
+      left: node.position.x,
+      top: node.position.y,
+      child: nodeWidget,
+    );
   }
 
   /// Creates a labeled input pin.
