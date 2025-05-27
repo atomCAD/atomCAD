@@ -144,13 +144,18 @@ fn place_stamp(
     
     // place stamp atoms
     for atom in stamp_structure.atoms.values() {
-      let dest_atom_id = calc_dest_atom_id(atom.id, &stamping_rotation, &anchor_position, &stamp_placement.position);
       let dest_pos = calc_dest_pos(atom, &double_stamping_rotation, &anchor_position_double, &stamp_placement_position_double);
-      crystal_structure.replace_atom(dest_atom_id, atom.atomic_number);
-      crystal_structure.set_atom_position(dest_atom_id, dest_pos);
-      
-      // Add to the mapping
-      stamp_to_crystal_mapping.insert(atom.id, dest_atom_id);
+      if is_crystal_atom_id(atom.id) {
+        let dest_atom_id = calc_dest_atom_id(atom.id, &stamping_rotation, &anchor_position, &stamp_placement.position);
+        if crystal_structure.atoms.contains_key(&dest_atom_id) {
+          crystal_structure.replace_atom(dest_atom_id, atom.atomic_number);
+          crystal_structure.set_atom_position(dest_atom_id, dest_pos);
+          stamp_to_crystal_mapping.insert(atom.id, dest_atom_id);
+        }
+      } else {
+        let dest_atom_id = crystal_structure.add_atom(atom.atomic_number, dest_pos, 0);
+        stamp_to_crystal_mapping.insert(atom.id, dest_atom_id);
+      }
     }
 
     // delete stamp deleted atoms
