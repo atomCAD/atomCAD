@@ -525,6 +525,13 @@ impl AtomicStructure {
       return existing_bond_id;
     }
     
+    // Verify both atoms exist before creating a bond
+    if !self.atoms.contains_key(&atom_id1) || !self.atoms.contains_key(&atom_id2) {
+      // Return the provided ID without creating a bond if either atom doesn't exist
+      // This prevents panics but maintains the ID allocation for consistency
+      return id;
+    }
+    
     // No existing bond, create a new one
     self.bonds.insert(id, Bond {
       id,
@@ -533,6 +540,8 @@ impl AtomicStructure {
       multiplicity,
       selected: false,
     });
+    
+    // Both atoms are guaranteed to exist at this point
     self.atoms.get_mut(&atom_id1).unwrap().bond_ids.push(id);
     self.atoms.get_mut(&atom_id2).unwrap().bond_ids.push(id);
     self.make_atom_dirty(atom_id1);
