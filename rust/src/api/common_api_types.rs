@@ -17,6 +17,11 @@ pub struct APIVec3 {
   pub z: f64,
 }
 
+pub struct APIIVec2 {
+  pub x: i32,
+  pub y: i32,
+}
+
 pub struct APIIVec3 {
   pub x: i32,
   pub y: i32,

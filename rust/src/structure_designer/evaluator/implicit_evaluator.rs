@@ -2,8 +2,10 @@ use glam::f64::DVec2;
 use glam::f64::DVec3;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
+use crate::structure_designer::nodes::circle::implicit_eval_circle;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::nodes::rect::implicit_eval_rect;
 use std::collections::HashMap;
 use crate::structure_designer::nodes::cuboid::implicit_eval_cuboid;
 use crate::structure_designer::nodes::sphere::implicit_eval_sphere;
@@ -42,6 +44,9 @@ impl ImplicitEvaluator {
           built_in_functions_2d: HashMap::new(),
         };
     
+        ret.built_in_functions_2d.insert("circle".to_string(), implicit_eval_circle);
+        ret.built_in_functions_2d.insert("rect".to_string(), implicit_eval_rect);
+
         ret.built_in_functions.insert("cuboid".to_string(), implicit_eval_cuboid);
         ret.built_in_functions.insert("sphere".to_string(), implicit_eval_sphere);
         ret.built_in_functions.insert("half_space".to_string(), implicit_eval_half_space);

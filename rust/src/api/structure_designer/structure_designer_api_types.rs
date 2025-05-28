@@ -1,5 +1,6 @@
 use flutter_rust_bridge::frb;
 use crate::api::common_api_types::APIVec2;
+use crate::api::common_api_types::APIIVec2;
 use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::APITransform;
@@ -44,7 +45,17 @@ pub struct InputPinView {
     pub nodes: HashMap<u64, NodeView>,
     pub wires: Vec<WireView>,
   }
+
+  pub struct APIRectData {
+    pub min_corner: APIIVec2,
+    pub extent: APIIVec2,
+  }
   
+  pub struct APICircleData {
+    pub center: APIIVec2,
+    pub radius: i32,
+  }
+
   pub struct APICuboidData {
     pub min_corner: APIIVec3,
     pub extent: APIIVec3,

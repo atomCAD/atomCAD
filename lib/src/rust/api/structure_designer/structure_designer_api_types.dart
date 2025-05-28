@@ -48,6 +48,27 @@ class APIAtomTransData {
           rotation == other.rotation;
 }
 
+class APICircleData {
+  final APIIVec2 center;
+  final int radius;
+
+  const APICircleData({
+    required this.center,
+    required this.radius,
+  });
+
+  @override
+  int get hashCode => center.hashCode ^ radius.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICircleData &&
+          runtimeType == other.runtimeType &&
+          center == other.center &&
+          radius == other.radius;
+}
+
 class APICrystalTypeInfo {
   final int primaryAtomicNumber;
   final int secondaryAtomicNumber;
@@ -224,6 +245,27 @@ class APIHalfSpaceData {
           runtimeType == other.runtimeType &&
           millerIndex == other.millerIndex &&
           shift == other.shift;
+}
+
+class APIRectData {
+  final APIIVec2 minCorner;
+  final APIIVec2 extent;
+
+  const APIRectData({
+    required this.minCorner,
+    required this.extent,
+  });
+
+  @override
+  int get hashCode => minCorner.hashCode ^ extent.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRectData &&
+          runtimeType == other.runtimeType &&
+          minCorner == other.minCorner &&
+          extent == other.extent;
 }
 
 class APISphereData {

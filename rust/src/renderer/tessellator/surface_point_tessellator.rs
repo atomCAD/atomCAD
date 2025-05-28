@@ -20,9 +20,9 @@ pub fn tessellate_surface_point_cloud(output_mesh: &mut Mesh, surface_point_clou
 pub fn tessellate_surface_point(output_mesh: &mut Mesh, point: &SurfacePoint) {
   let roughness: f32 = 0.5;
   let metallic: f32 = 0.0;
-  let outside_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
+  let outside_material = Material::new(&Vec3::new(0.0, 0.6, 0.0), roughness, metallic);
   let inside_material = Material::new(&Vec3::new(1.0, 0.0, 0.0), roughness, metallic);
-  let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
+  let side_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
 
   // Create rotation quaternion from surface normal to align cuboid
   let rotator = DQuat::from_rotation_arc(DVec3::Y, point.normal);
@@ -50,16 +50,16 @@ pub fn tessellate_surface_point_cloud_2d(output_mesh: &mut Mesh, surface_point_c
 pub fn tessellate_surface_point_2d(output_mesh: &mut Mesh, point: &SurfacePoint2D) {
   let roughness: f32 = 0.5;
   let metallic: f32 = 0.0;
-  let outside_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
+  let outside_material = Material::new(&Vec3::new(0.0, 0.6, 0.0), roughness, metallic);
   let inside_material = Material::new(&Vec3::new(1.0, 0.0, 0.0), roughness, metallic);
-  let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
+  let side_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
 
   // Create rotation quaternion from surface normal to align cuboid
   let position3D = DVec3::new(point.position.x, 0.0, point.position.y);
   let normal3D = DVec3::new(point.normal.x, 0.0, point.normal.y);
   let rotator = DQuat::from_rotation_arc(DVec3::Y, normal3D);
 
-  let size = DVec3::new(0.3, 0.08, 0.3); // x, y, z extents
+  let size = DVec3::new(0.3, 0.2, 0.3); // x, y, z extents
 
   tessellator::tessellate_cuboid(
     output_mesh,

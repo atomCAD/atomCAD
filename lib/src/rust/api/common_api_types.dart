@@ -117,6 +117,27 @@ class APIVec3 {
           z == other.z;
 }
 
+class APIIVec2 {
+  final int x;
+  final int y;
+
+  const APIIVec2({
+    required this.x,
+    required this.y,
+  });
+
+  @override
+  int get hashCode => x.hashCode ^ y.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIVec2 &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y;
+}
+
 class APIIVec3 {
   final int x;
   final int y;

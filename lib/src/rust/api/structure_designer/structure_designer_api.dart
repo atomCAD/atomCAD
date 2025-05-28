@@ -69,6 +69,12 @@ bool selectWire(
 void clearSelection() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiClearSelection();
 
+APIRectData? getRectData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetRectData(nodeId: nodeId);
+
+APICircleData? getCircleData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetCircleData(nodeId: nodeId);
+
 APICuboidData? getCuboidData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCuboidData(nodeId: nodeId);
 
@@ -108,6 +114,16 @@ APIEditAtomData? getEditAtomData({required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiGetEditAtomData(
             nodeId: nodeId);
+
+void setRectData({required BigInt nodeId, required APIRectData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetRectData(
+            nodeId: nodeId, data: data);
+
+void setCircleData({required BigInt nodeId, required APICircleData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetCircleData(
+            nodeId: nodeId, data: data);
 
 void setCuboidData({required BigInt nodeId, required APICuboidData data}) =>
     RustLib.instance.api

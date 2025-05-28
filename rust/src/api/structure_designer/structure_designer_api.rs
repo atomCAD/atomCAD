@@ -1,7 +1,11 @@
+use crate::api::api_common::from_api_ivec2;
 use crate::api::api_common::refresh_renderer;
+use crate::api::api_common::to_api_ivec2;
 use crate::api::api_common::CAD_INSTANCE;
 use crate::api::structure_designer::structure_designer_api_types::NodeNetworkView;
+use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
+use crate::structure_designer::nodes::rect::RectData;
 use std::collections::HashMap;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
 use crate::api::structure_designer::structure_designer_api_types::NodeView;
@@ -30,6 +34,9 @@ use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
+
+use super::structure_designer_api_types::APICircleData;
+use super::structure_designer_api_types::APIRectData;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -219,6 +226,32 @@ pub fn clear_selection() {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_rect_data(node_id: u64) -> Option<APIRectData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let rect_data = node_data.as_any_ref().downcast_ref::<RectData>()?;
+    return Some(APIRectData {
+      min_corner: to_api_ivec2(&rect_data.min_corner),
+      extent: to_api_ivec2(&rect_data.extent),
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_circle_data(node_id: u64) -> Option<APICircleData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let circle_data = node_data.as_any_ref().downcast_ref::<CircleData>()?;
+    return Some(APICircleData {
+      center: to_api_ivec2(&circle_data.center),
+      radius: circle_data.radius,
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_cuboid_data(node_id: u64) -> Option<APICuboidData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
@@ -370,6 +403,34 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
       has_selection,
       selection_transform: edit_atom_data.selection_transform.as_ref().map(|transform| crate::api::api_common::to_api_transform(transform))
     });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_rect_data(node_id: u64, data: APIRectData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let rect_data = Box::new(RectData {
+        min_corner: from_api_ivec2(&data.min_corner),
+        extent: from_api_ivec2(&data.extent),
+      });
+      instance.structure_designer.set_node_network_data(node_id, rect_data);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_circle_data(node_id: u64, data: APICircleData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let circle_data = Box::new(CircleData {
+        center: from_api_ivec2(&data.center),
+        radius: data.radius,
+      });
+      instance.structure_designer.set_node_network_data(node_id, circle_data);
+      refresh_renderer(instance, false);
+    }
   }
 }
 

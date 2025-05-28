@@ -41,6 +41,7 @@ const double HIT_TEST_WIRE_WIDTH = 12.0;
 // Colors
 const Color DEFAULT_DATA_TYPE_COLOR = Colors.grey;
 const Map<String, Color> DATA_TYPE_COLORS = {
+  'Geometry2D': Colors.purple,
   'Geometry': Colors.blue,
   'Atomic': Color.fromARGB(255, 30, 160, 30),
 };
@@ -255,13 +256,13 @@ class NodeWidget extends StatelessWidget {
         // Title Bar
         GestureDetector(
           onTapDown: (details) {
-            final model = Provider.of<StructureDesignerModel>(context,
-                listen: false);
+            final model =
+                Provider.of<StructureDesignerModel>(context, listen: false);
             model.setSelectedNode(node.id);
           },
           onPanStart: (details) {
-            final model = Provider.of<StructureDesignerModel>(context,
-                listen: false);
+            final model =
+                Provider.of<StructureDesignerModel>(context, listen: false);
             model.setSelectedNode(node.id);
           },
           onPanUpdate: (details) {
@@ -273,13 +274,12 @@ class NodeWidget extends StatelessWidget {
                 .updateNodePosition(node.id);
           },
           onSecondaryTapDown: (details) {
-            final model = Provider.of<StructureDesignerModel>(context,
-                listen: false);
+            final model =
+                Provider.of<StructureDesignerModel>(context, listen: false);
             model.setSelectedNode(node.id);
 
-            final RenderBox overlay = Overlay.of(context)
-                .context
-                .findRenderObject() as RenderBox;
+            final RenderBox overlay =
+                Overlay.of(context).context.findRenderObject() as RenderBox;
             final RelativeRect position = RelativeRect.fromRect(
               Rect.fromPoints(
                 details.globalPosition,
@@ -301,8 +301,8 @@ class NodeWidget extends StatelessWidget {
               ],
             ).then((value) {
               if (value == 'return') {
-                final model = Provider.of<StructureDesignerModel>(context,
-                    listen: false);
+                final model =
+                    Provider.of<StructureDesignerModel>(context, listen: false);
                 if (node.returnNode) {
                   // Unset as return node (pass null to clear the return node)
                   model.setReturnNodeId(null);
@@ -337,15 +337,12 @@ class NodeWidget extends StatelessWidget {
                 ),
                 GestureDetector(
                   onTap: () {
-                    final model = Provider.of<StructureDesignerModel>(
-                        context,
+                    final model = Provider.of<StructureDesignerModel>(context,
                         listen: false);
                     model.toggleNodeDisplay(node.id);
                   },
                   child: Icon(
-                    node.displayed
-                        ? Icons.visibility
-                        : Icons.visibility_off,
+                    node.displayed ? Icons.visibility : Icons.visibility_off,
                     color: Colors.white,
                     size: 20,
                   ),
@@ -367,8 +364,7 @@ class NodeWidget extends StatelessWidget {
                     .entries
                     .map((entry) => _buildInputPin(
                         entry.value.name,
-                        PinReference(
-                            node.id, entry.key, entry.value.dataType),
+                        PinReference(node.id, entry.key, entry.value.dataType),
                         entry.value.multi))
                     .toList(),
               ),
@@ -383,7 +379,7 @@ class NodeWidget extends StatelessWidget {
         ),
       ],
     );
-    
+
     // Create container with node appearance
     Widget nodeWidget = Container(
       width: NODE_WIDTH,
@@ -402,8 +398,8 @@ class NodeWidget extends StatelessWidget {
         boxShadow: node.error != null
             ? [
                 BoxShadow(
-                    color: NODE_BORDER_COLOR_ERROR
-                        .withOpacity(WIRE_GLOW_OPACITY),
+                    color:
+                        NODE_BORDER_COLOR_ERROR.withOpacity(WIRE_GLOW_OPACITY),
                     blurRadius: WIRE_GLOW_BLUR_RADIUS,
                     spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
               ]
@@ -419,7 +415,7 @@ class NodeWidget extends StatelessWidget {
       ),
       child: nodeContent,
     );
-    
+
     // Add tooltip for nodes with errors
     if (node.error != null && node.error!.isNotEmpty) {
       nodeWidget = Tooltip(
@@ -436,7 +432,7 @@ class NodeWidget extends StatelessWidget {
         child: nodeWidget,
       );
     }
-    
+
     return Positioned(
       left: node.position.x,
       top: node.position.y,

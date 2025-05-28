@@ -1,6 +1,7 @@
-use super::common_api_types::{APIVec3, APIVec2, APIIVec3, APITransform};
+use super::common_api_types::{APIVec3, APIVec2, APIIVec3, APIIVec2, APITransform};
 use glam::f64::DVec3;
 use glam::i32::IVec3;
+use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::DQuat;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -25,6 +26,20 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     }
   }
   
+  pub fn to_api_ivec2(v: &IVec2) -> APIIVec2 {
+    return APIIVec2{
+      x: v.x,
+      y: v.y,
+    }
+  }
+  
+  pub fn from_api_ivec2(v: &APIIVec2) -> IVec2 {
+    return IVec2{
+      x: v.x,
+      y: v.y,
+    }
+  }
+
   pub fn to_api_ivec3(v: &IVec3) -> APIIVec3 {
     return APIIVec3{
       x: v.x,

@@ -48,6 +48,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera dco_decode_api_camera(dynamic raw);
 
   @protected
+  APICircleData dco_decode_api_circle_data(dynamic raw);
+
+  @protected
   APICrystalTypeInfo dco_decode_api_crystal_type_info(dynamic raw);
 
   @protected
@@ -67,6 +70,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
+
+  @protected
+  APIRectData dco_decode_api_rect_data(dynamic raw);
 
   @protected
   APISceneComposerTool dco_decode_api_scene_composer_tool(dynamic raw);
@@ -90,6 +96,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3 dco_decode_api_vec_3(dynamic raw);
 
   @protected
+  APIIVec2 dco_decode_apii_vec_2(dynamic raw);
+
+  @protected
   APIIVec3 dco_decode_apii_vec_3(dynamic raw);
 
   @protected
@@ -108,6 +117,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw);
 
   @protected
+  APICircleData dco_decode_box_autoadd_api_circle_data(dynamic raw);
+
+  @protected
   APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw);
 
   @protected
@@ -124,6 +136,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APIRectData dco_decode_box_autoadd_api_rect_data(dynamic raw);
 
   @protected
   APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw);
@@ -226,6 +241,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera? dco_decode_opt_box_autoadd_api_camera(dynamic raw);
 
   @protected
+  APICircleData? dco_decode_opt_box_autoadd_api_circle_data(dynamic raw);
+
+  @protected
   APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw);
 
   @protected
@@ -243,6 +261,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APIRectData? dco_decode_opt_box_autoadd_api_rect_data(dynamic raw);
 
   @protected
   APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw);
@@ -326,6 +347,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera sse_decode_api_camera(SseDeserializer deserializer);
 
   @protected
+  APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
+
+  @protected
   APICrystalTypeInfo sse_decode_api_crystal_type_info(
       SseDeserializer deserializer);
 
@@ -347,6 +371,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
+
+  @protected
+  APIRectData sse_decode_api_rect_data(SseDeserializer deserializer);
 
   @protected
   APISceneComposerTool sse_decode_api_scene_composer_tool(
@@ -372,6 +399,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3 sse_decode_api_vec_3(SseDeserializer deserializer);
 
   @protected
+  APIIVec2 sse_decode_apii_vec_2(SseDeserializer deserializer);
+
+  @protected
   APIIVec3 sse_decode_apii_vec_3(SseDeserializer deserializer);
 
   @protected
@@ -390,6 +420,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer);
+
+  @protected
+  APICircleData sse_decode_box_autoadd_api_circle_data(
+      SseDeserializer deserializer);
 
   @protected
   APICuboidData sse_decode_box_autoadd_api_cuboid_data(
@@ -413,6 +447,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRectData sse_decode_box_autoadd_api_rect_data(
       SseDeserializer deserializer);
 
   @protected
@@ -529,6 +567,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICircleData? sse_decode_opt_box_autoadd_api_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
   APICuboidData? sse_decode_opt_box_autoadd_api_cuboid_data(
       SseDeserializer deserializer);
 
@@ -550,6 +592,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData? sse_decode_opt_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRectData? sse_decode_opt_box_autoadd_api_rect_data(
       SseDeserializer deserializer);
 
   @protected
@@ -641,6 +687,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_camera(APICamera self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_crystal_type_info(
       APICrystalTypeInfo self, SseSerializer serializer);
 
@@ -668,6 +717,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_rect_data(APIRectData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_scene_composer_tool(
       APISceneComposerTool self, SseSerializer serializer);
 
@@ -691,6 +743,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_vec_3(APIVec3 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_apii_vec_2(APIIVec2 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_apii_vec_3(APIIVec3 self, SseSerializer serializer);
 
   @protected
@@ -710,6 +765,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_camera(
       APICamera self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_circle_data(
+      APICircleData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_cuboid_data(
@@ -734,6 +793,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_rect_data(
+      APIRectData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_sphere_data(
@@ -855,6 +918,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICamera? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_circle_data(
+      APICircleData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_cuboid_data(
       APICuboidData? self, SseSerializer serializer);
 
@@ -877,6 +944,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_half_space_data(
       APIHalfSpaceData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_rect_data(
+      APIRectData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_sphere_data(
