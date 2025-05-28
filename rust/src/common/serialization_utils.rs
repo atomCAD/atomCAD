@@ -1,5 +1,6 @@
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use glam::i32::IVec3;
+use glam::i32::IVec2;
 use glam::f64::{DVec3, DVec2, DQuat};
 
 /// Module to handle serialization of IVec3 type
@@ -21,6 +22,27 @@ pub mod ivec3_serializer {
         // Deserialize from an array of 3 i32 values
         let (x, y, z) = <(i32, i32, i32)>::deserialize(deserializer)?;
         Ok(IVec3::new(x, y, z))
+    }
+}
+
+pub mod ivec2_serializer {
+    use super::*;
+
+    pub fn serialize<S>(vec: &IVec2, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize IVec2 as an array of 2 i32 values
+        (vec.x, vec.y).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<IVec2, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize from an array of 3 i32 values
+        let (x, y) = <(i32, i32)>::deserialize(deserializer)?;
+        Ok(IVec2::new(x, y))
     }
 }
 

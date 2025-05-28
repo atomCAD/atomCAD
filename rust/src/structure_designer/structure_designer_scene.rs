@@ -1,12 +1,14 @@
 use crate::common::scene::Scene;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::common::surface_point_cloud::SurfacePointCloud;
+use crate::common::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use std::collections::HashMap;
 
 pub struct StructureDesignerScene {
     pub atomic_structures: Vec<AtomicStructure>,
     pub surface_point_clouds: Vec<SurfacePointCloud>,
+    pub surface_point_cloud_2ds: Vec<SurfacePointCloud2D>,
 
     pub tessellatable: Option<Box<dyn Tessellatable>>,
 
@@ -18,6 +20,7 @@ impl StructureDesignerScene {
         Self {
             atomic_structures: Vec::new(),
             surface_point_clouds: Vec::new(),
+            surface_point_cloud_2ds: Vec::new(),
             tessellatable: None,
             node_errors: HashMap::new(),
         }
@@ -26,6 +29,8 @@ impl StructureDesignerScene {
     pub fn merge(&mut self, other: StructureDesignerScene) {
         self.atomic_structures.extend(other.atomic_structures);
         self.surface_point_clouds.extend(other.surface_point_clouds);
+        self.surface_point_cloud_2ds.extend(other.surface_point_cloud_2ds);
+        
         self.node_errors.extend(other.node_errors);
         
         match other.tessellatable {
@@ -52,6 +57,10 @@ impl<'a> Scene<'a> for StructureDesignerScene {
 
     fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_> {
         Box::new(self.surface_point_clouds.iter())
+    }
+
+    fn surface_point_cloud_2ds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud2D> + '_> {
+        Box::new(self.surface_point_cloud_2ds.iter())
     }
 
     fn tessellatable(&self) -> Option<Box<&dyn Tessellatable>> {

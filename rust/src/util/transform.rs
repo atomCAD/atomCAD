@@ -1,7 +1,9 @@
 use glam::f64::DVec3;
+use glam::f64::DVec2;
 use glam::f64::DQuat;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::dvec3_serializer;
+use crate::common::serialization_utils::dvec2_serializer;
 use crate::common::serialization_utils::dquat_serializer;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -93,3 +95,21 @@ impl Default for Transform {
   }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Transform2D {
+  #[serde(with = "dvec2_serializer")]
+  pub translation: DVec2,
+  pub rotation: f64,
+}
+
+impl Transform2D {
+  pub fn new(translation: DVec2, rotation: f64) -> Self {
+    Self { translation, rotation }
+  }
+}
+
+impl Default for Transform2D {
+  fn default() -> Self {
+    Self { translation: DVec2::ZERO, rotation: 0.0 }
+  }
+}

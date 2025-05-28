@@ -2,12 +2,14 @@ use crate::structure_designer::node_data::NodeData;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum DataType {
+  Geometry2D,
   Geometry,
   Atomic
 }
 
 pub fn data_type_to_str(data_type: &DataType) -> String {
   match data_type {
+    DataType::Geometry2D => "Geometry2D".to_string(),
     DataType::Geometry => "Geometry".to_string(),
     DataType::Atomic => "Atomic".to_string(),
   }
@@ -15,6 +17,7 @@ pub fn data_type_to_str(data_type: &DataType) -> String {
 
 pub fn str_to_data_type(s: &str) -> Option<DataType> {
   match s {
+    "Geometry2D" => Some(DataType::Geometry2D),
     "Geometry" => Some(DataType::Geometry),
     "Atomic" => Some(DataType::Atomic),
     _ => None

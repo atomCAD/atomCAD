@@ -11,3 +11,5 @@ pub mod intersect;
 pub mod diff;
 pub mod anchor;
 pub mod stamp;
+pub mod rect;
+pub mod circle;

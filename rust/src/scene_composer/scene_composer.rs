@@ -2,6 +2,7 @@ use crate::common::atomic_structure::AtomicStructure;
 use crate::common::atomic_structure::HitTestResult;
 use crate::common::gadget::Gadget;
 use crate::common::surface_point_cloud::SurfacePointCloud;
+use crate::common::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::scene::Scene;
 use crate::common::xyz_loader::load_xyz;
@@ -596,6 +597,10 @@ impl<'a> Scene<'a> for SceneComposer {
   }
 
   fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_> {
+      Box::new(std::iter::empty())
+  }
+
+  fn surface_point_cloud_2ds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud2D> + '_> {
       Box::new(std::iter::empty())
   }
 

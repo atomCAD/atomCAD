@@ -6,6 +6,8 @@ use super::node_network::NodeNetwork;
 use super::nodes::parameter::ParameterData;
 use super::nodes::cuboid::CuboidData;
 use super::nodes::sphere::SphereData;
+use super::nodes::circle::CircleData;
+use super::nodes::rect::RectData;
 use super::nodes::half_space::HalfSpaceData;
 use super::nodes::geo_trans::GeoTransData;
 use super::nodes::atom_trans::AtomTransData;
@@ -14,7 +16,7 @@ use super::nodes::geo_to_atom::GeoToAtomData;
 use super::nodes::anchor::AnchorData;
 use super::nodes::stamp::StampData;
 use super::node_data::NoData;
-use glam::{IVec3, DVec3};
+use glam::{IVec3, DVec3, IVec2};
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
@@ -36,6 +38,26 @@ impl NodeTypeRegistry {
       output_type: DataType::Geometry, // is not used, the parameter node's output type will be determined by the node network's node type.
       node_data_creator: || Box::new(ParameterData {
         param_index: 0,
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "rect".to_string(),
+      parameters: Vec::new(),
+      output_type: DataType::Geometry2D,
+      node_data_creator: || Box::new(RectData {
+        min_corner: IVec2::new(-1, -1),
+        extent: IVec2::new(2, 2),
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "circle".to_string(),
+      parameters: Vec::new(),
+      output_type: DataType::Geometry2D,
+      node_data_creator: || Box::new(CircleData {
+        center: IVec2::new(0, 0),
+        radius: 1,
       }),
     });
 
