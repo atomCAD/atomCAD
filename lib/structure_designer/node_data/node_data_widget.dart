@@ -3,13 +3,16 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_data/anchor_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/circle_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/extrude_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/stamp_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
@@ -153,6 +156,36 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: stampView,
           model: model,
+        );
+      case 'rect':
+        // Fetch the rectangle data here in the parent widget
+        final rectData = getRectData(
+          nodeId: selectedNode.id,
+        );
+
+        return RectEditor(
+          nodeId: selectedNode.id,
+          data: rectData,
+        );
+      case 'circle':
+        // Fetch the circle data here in the parent widget
+        final circleData = getCircleData(
+          nodeId: selectedNode.id,
+        );
+
+        return CircleEditor(
+          nodeId: selectedNode.id,
+          data: circleData,
+        );
+      case 'extrude':
+        // Fetch the extrude data here in the parent widget
+        final extrudeData = getExtrudeData(
+          nodeId: selectedNode.id,
+        );
+
+        return ExtrudeEditor(
+          nodeId: selectedNode.id,
+          data: extrudeData,
         );
       default:
         return Center(
