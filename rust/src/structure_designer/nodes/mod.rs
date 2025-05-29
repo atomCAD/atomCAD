@@ -14,3 +14,6 @@ pub mod stamp;
 pub mod rect;
 pub mod circle;
 pub mod extrude;
+pub mod union_2d;
+pub mod intersect_2d;
+pub mod diff_2d;

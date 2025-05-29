@@ -63,6 +63,50 @@ impl NodeTypeRegistry {
     });
 
     ret.add_node_type(NodeType {
+      name: "union_2d".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "shapes".to_string(),
+              data_type: DataType::Geometry2D,
+              multi: true,
+          },
+      ],
+      output_type: DataType::Geometry2D,
+      node_data_creator: || Box::new(NoData {}),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "intersect_2d".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "shapes".to_string(),
+              data_type: DataType::Geometry2D,
+              multi: true,
+          },
+      ],
+      output_type: DataType::Geometry2D,
+      node_data_creator: || Box::new(NoData {}),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "diff_2d".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "base".to_string(),
+              data_type: DataType::Geometry2D,
+              multi: true, // If multiple shapes are given, they are unioned.
+          },
+          Parameter {
+              name: "sub".to_string(),
+              data_type: DataType::Geometry2D,
+              multi: true, // A set of shapes to subtract from base
+          },
+      ],
+      output_type: DataType::Geometry2D,
+      node_data_creator: || Box::new(NoData {}),
+    });
+
+    ret.add_node_type(NodeType {
       name: "extrude".to_string(),
       parameters: vec![
           Parameter {

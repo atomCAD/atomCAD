@@ -15,6 +15,9 @@ use crate::structure_designer::nodes::geo_trans::implicit_eval_geo_trans;
 use crate::structure_designer::nodes::union::implicit_eval_union;
 use crate::structure_designer::nodes::intersect::implicit_eval_intersect;
 use crate::structure_designer::nodes::diff::implicit_eval_diff;
+use crate::structure_designer::nodes::union_2d::implicit_eval_union_2d;
+use crate::structure_designer::nodes::intersect_2d::implicit_eval_intersect_2d;
+use crate::structure_designer::nodes::diff_2d::implicit_eval_diff_2d;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -44,9 +47,12 @@ impl ImplicitEvaluator {
           built_in_functions: HashMap::new(),
           built_in_functions_2d: HashMap::new(),
         };
-    
+
         ret.built_in_functions_2d.insert("circle".to_string(), implicit_eval_circle);
         ret.built_in_functions_2d.insert("rect".to_string(), implicit_eval_rect);
+        ret.built_in_functions_2d.insert("union_2d".to_string(), implicit_eval_union_2d);
+        ret.built_in_functions_2d.insert("intersect_2d".to_string(), implicit_eval_intersect_2d);
+        ret.built_in_functions_2d.insert("diff_2d".to_string(), implicit_eval_diff_2d);
 
         ret.built_in_functions.insert("extrude".to_string(), implicit_eval_extrude);
         ret.built_in_functions.insert("cuboid".to_string(), implicit_eval_cuboid);
@@ -56,7 +62,7 @@ impl ImplicitEvaluator {
         ret.built_in_functions.insert("intersect".to_string(), implicit_eval_intersect);
         ret.built_in_functions.insert("diff".to_string(), implicit_eval_diff);
         ret.built_in_functions.insert("geo_trans".to_string(), implicit_eval_geo_trans);
-    
+
         return ret;
     }
 
