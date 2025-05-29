@@ -61,6 +61,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool dco_decode_api_edit_atom_tool(dynamic raw);
 
   @protected
+  APIExtrudeData dco_decode_api_extrude_data(dynamic raw);
+
+  @protected
   APIGeoToAtomData dco_decode_api_geo_to_atom_data(dynamic raw);
 
   @protected
@@ -125,6 +128,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIEditAtomTool dco_decode_box_autoadd_api_edit_atom_tool(dynamic raw);
+
+  @protected
+  APIExtrudeData dco_decode_box_autoadd_api_extrude_data(dynamic raw);
 
   @protected
   APIGeoToAtomData dco_decode_box_autoadd_api_geo_to_atom_data(dynamic raw);
@@ -251,6 +257,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool? dco_decode_opt_box_autoadd_api_edit_atom_tool(dynamic raw);
 
   @protected
+  APIExtrudeData? dco_decode_opt_box_autoadd_api_extrude_data(dynamic raw);
+
+  @protected
   APIGeoToAtomData? dco_decode_opt_box_autoadd_api_geo_to_atom_data(
       dynamic raw);
 
@@ -361,6 +370,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool sse_decode_api_edit_atom_tool(SseDeserializer deserializer);
 
   @protected
+  APIExtrudeData sse_decode_api_extrude_data(SseDeserializer deserializer);
+
+  @protected
   APIGeoToAtomData sse_decode_api_geo_to_atom_data(
       SseDeserializer deserializer);
 
@@ -433,6 +445,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIEditAtomTool sse_decode_box_autoadd_api_edit_atom_tool(
+      SseDeserializer deserializer);
+
+  @protected
+  APIExtrudeData sse_decode_box_autoadd_api_extrude_data(
       SseDeserializer deserializer);
 
   @protected
@@ -581,6 +597,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIExtrudeData? sse_decode_opt_box_autoadd_api_extrude_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIGeoToAtomData? sse_decode_opt_box_autoadd_api_geo_to_atom_data(
       SseDeserializer deserializer);
 
@@ -703,6 +723,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIEditAtomTool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_extrude_data(
+      APIExtrudeData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_geo_to_atom_data(
       APIGeoToAtomData self, SseSerializer serializer);
 
@@ -779,6 +803,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_edit_atom_tool(
       APIEditAtomTool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_extrude_data(
+      APIExtrudeData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_geo_to_atom_data(
@@ -930,6 +958,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_edit_atom_tool(
       APIEditAtomTool? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_extrude_data(
+      APIExtrudeData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_geo_to_atom_data(

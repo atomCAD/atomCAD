@@ -3,6 +3,7 @@ use super::node_type::DataType;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
 use super::node_network::NodeNetwork;
+use super::nodes::extrude::ExtrudeData;
 use super::nodes::parameter::ParameterData;
 use super::nodes::cuboid::CuboidData;
 use super::nodes::sphere::SphereData;
@@ -58,6 +59,21 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(CircleData {
         center: IVec2::new(0, 0),
         radius: 1,
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "extrude".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry2D,
+              multi: false,
+          },
+      ],
+      output_type: DataType::Geometry,
+      node_data_creator: || Box::new(ExtrudeData {
+        height: 1,
       }),
     });
 

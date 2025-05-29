@@ -179,6 +179,24 @@ enum APIEditAtomTool {
   ;
 }
 
+class APIExtrudeData {
+  final int height;
+
+  const APIExtrudeData({
+    required this.height,
+  });
+
+  @override
+  int get hashCode => height.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIExtrudeData &&
+          runtimeType == other.runtimeType &&
+          height == other.height;
+}
+
 class APIGeoToAtomData {
   final int primaryAtomicNumber;
   final int secondaryAtomicNumber;

@@ -56,6 +56,10 @@ pub struct InputPinView {
     pub radius: i32,
   }
 
+  pub struct APIExtrudeData {
+    pub height: i32,
+  }
+
   pub struct APICuboidData {
     pub min_corner: APIIVec3,
     pub extent: APIIVec3,

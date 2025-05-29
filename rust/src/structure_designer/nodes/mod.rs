@@ -13,3 +13,4 @@ pub mod anchor;
 pub mod stamp;
 pub mod rect;
 pub mod circle;
+pub mod extrude;

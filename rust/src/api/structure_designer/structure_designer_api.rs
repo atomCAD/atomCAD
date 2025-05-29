@@ -4,6 +4,7 @@ use crate::api::api_common::to_api_ivec2;
 use crate::api::api_common::CAD_INSTANCE;
 use crate::api::structure_designer::structure_designer_api_types::NodeNetworkView;
 use crate::structure_designer::nodes::circle::CircleData;
+use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
 use crate::structure_designer::nodes::rect::RectData;
 use std::collections::HashMap;
@@ -36,6 +37,7 @@ use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
 
 use super::structure_designer_api_types::APICircleData;
+use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIRectData;
 
 #[flutter_rust_bridge::frb(sync)]
@@ -222,6 +224,18 @@ pub fn clear_selection() {
       instance.structure_designer.clear_selection();
       refresh_renderer(instance, false);
     }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_extrude_data(node_id: u64) -> Option<APIExtrudeData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let extrude_data = node_data.as_any_ref().downcast_ref::<ExtrudeData>()?;
+    return Some(APIExtrudeData {
+      height: extrude_data.height,
+    });
   }
 }
 
@@ -429,6 +443,19 @@ pub fn set_circle_data(node_id: u64, data: APICircleData) {
         radius: data.radius,
       });
       instance.structure_designer.set_node_network_data(node_id, circle_data);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_extrude_data(node_id: u64, data: APIExtrudeData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let extrude_data = Box::new(ExtrudeData {
+        height: data.height,
+      });
+      instance.structure_designer.set_node_network_data(node_id, extrude_data);
       refresh_renderer(instance, false);
     }
   }
