@@ -1,4 +1,5 @@
 use crate::common::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::HitTestResult;
 use crate::common::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
@@ -434,6 +435,54 @@ impl StructureDesigner {
     }
   }
 
+  // -------------------------------------------------------------------------------------------------------------------------
+  // --- Raytracing methods                                                                                              ---
+  // -------------------------------------------------------------------------------------------------------------------------
+  
+  /// Traces a ray into the current scene, checking both atomic structures and implicit geometry
+  /// 
+  /// # Arguments
+  /// 
+  /// * `ray_origin` - The origin point of the ray
+  /// * `ray_direction` - The direction vector of the ray (does not need to be normalized)
+  /// 
+  /// # Returns
+  /// 
+  /// The distance to the closest intersection, or None if no intersection was found
+  pub fn raytrace(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
+    let mut min_distance: Option<f64> = None;
+    
+    // First, check all atomic structures in the scene
+    for atomic_structure in &self.last_generated_structure_designer_scene.atomic_structures {
+      match atomic_structure.hit_test(ray_origin, ray_direction) {
+        crate::common::atomic_structure::HitTestResult::Atom(_, distance) | 
+        crate::common::atomic_structure::HitTestResult::Bond(_, distance) => {
+          // Update minimum distance if this hit is closer
+          min_distance = match min_distance {
+            None => Some(distance),
+            Some(current_min) if distance < current_min => Some(distance),
+            _ => min_distance,
+          };
+        },
+        crate::common::atomic_structure::HitTestResult::None => {}
+      }
+    }
+    
+    // Next, check implicit geometry in the active network
+    if let Some(network_name) = &self.active_node_network_name {
+      if let Some(distance) = self.network_evaluator.raytrace_geometry(network_name, &self.node_type_registry, ray_origin, ray_direction) {
+        // Update minimum distance if this hit is closer
+        min_distance = match min_distance {
+          None => Some(distance),
+          Some(current_min) if distance < current_min => Some(distance),
+          _ => min_distance,
+        };
+      }
+    }
+    
+    min_distance
+  }
+  
   // -------------------------------------------------------------------------------------------------------------------------
   // --- Gadget delegation methods                                                                                        ---
   // -------------------------------------------------------------------------------------------------------------------------

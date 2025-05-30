@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use glam::i32::IVec3;
 use glam::i32::IVec2;
+use glam::f64::DVec3;
 use crate::common::surface_point_cloud::SurfacePoint;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::common::surface_point_cloud::SurfacePoint2D;
@@ -97,6 +98,80 @@ impl NetworkEvaluator {
     Self {
       implicit_evaluator: ImplicitEvaluator::new(),
     }
+  }
+
+  // traces a ray for a given geometry node
+  pub fn raytrace_geometry(&self, network_name: &str, registry: &NodeTypeRegistry, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
+    let network = match registry.node_networks.get(network_name) {
+      Some(network) => network,
+      None => return None,
+    };
+    
+    let mut min_distance: Option<f64> = None;
+    
+    for node_id in &network.displayed_node_ids {
+      let node = match network.nodes.get(&node_id) {
+        Some(node) => node,
+        None => return None,
+      };
+  
+      let node_type = registry.get_node_type(&node.node_type_name).unwrap();
+      if node_type.output_type != DataType::Geometry {
+        continue; // Skip non-geometry nodes
+      }
+      
+      // Raytrace the current geometry node
+      if let Some(distance) = self.raytrace_geometry_node(network, *node_id, registry, ray_origin, ray_direction) {
+        // Update minimum distance if this is the first hit or closer than previous hits
+        min_distance = match min_distance {
+          None => Some(distance),
+          Some(current_min) if distance < current_min => Some(distance),
+          _ => min_distance,
+        };
+      }
+    }
+    
+    min_distance
+  } 
+
+  pub fn raytrace_geometry_node(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
+    // Constants for ray marching algorithm
+    const MAX_STEPS: usize = 100;
+    const MAX_DISTANCE: f64 = 5000.0;
+    const SURFACE_THRESHOLD: f64 = 0.01;
+    
+    let normalized_dir = ray_direction.normalize();
+    let mut current_distance: f64 = 0.0;
+    
+    // Perform ray marching
+    for _ in 0..MAX_STEPS {
+      // Calculate current position along the ray
+      let current_pos = *ray_origin + normalized_dir * current_distance;
+      
+      // Evaluate SDF at current position
+      let sdf_value = self.implicit_evaluator.eval(network, node_id, &current_pos, registry)[0];
+      
+      println!("Current position: {:?}", current_pos);
+      println!("SDF value: {}", sdf_value);
+
+      // If we're close enough to the surface, return the distance
+      if sdf_value.abs() < SURFACE_THRESHOLD {
+        return Some(current_distance);
+      }
+      
+      // If we've gone too far, give up
+      if current_distance > MAX_DISTANCE {
+        return None;
+      }
+      
+      // Step forward by the SDF value - this is safe because
+      // the absolute value of the gradient of an SDF cannot be bigger than 1
+      // This means the SDF value tells us how far we can safely march without missing the surface
+      current_distance += sdf_value;
+    }
+
+    // No intersection found within the maximum number of steps
+    None
   }
 
   // Creates the Scene that will be displayed for the given node

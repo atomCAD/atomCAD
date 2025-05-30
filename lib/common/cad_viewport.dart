@@ -200,6 +200,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   }
 
   void startMoveCamera(Offset pointerPos) {
+    // Adjust camera target based on what's under the cursor
+    final ray = getRayFromPointerPos(pointerPos);
+    adjustCameraTarget(
+        rayOrigin: Vector3ToAPIVec3(ray.start),
+        rayDirection: Vector3ToAPIVec3(ray.direction));
+    
     dragState = ViewportDragState.move;
     _dragStartPointerPos = pointerPos;
     final camera = getCamera();
@@ -233,6 +239,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   }
 
   void startRotateCamera(Offset pointerPos) {
+    // Adjust camera target based on what's under the cursor
+    final ray = getRayFromPointerPos(pointerPos);
+    adjustCameraTarget(
+        rayOrigin: Vector3ToAPIVec3(ray.start),
+        rayDirection: Vector3ToAPIVec3(ray.direction));
+    
     dragState = ViewportDragState.rotate;
     _dragStartPointerPos = pointerPos;
   }
@@ -392,6 +404,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       // Do not interfere with move or rotate
       return;
     }
+
+    // Adjust camera target based on what's under the cursor
+    final ray = getRayFromPointerPos(pointerPos);
+    adjustCameraTarget(
+        rayOrigin: Vector3ToAPIVec3(ray.start),
+        rayDirection: Vector3ToAPIVec3(ray.direction));
 
     final camera = getCamera();
     final cameraTransform = getCameraTransform(camera);

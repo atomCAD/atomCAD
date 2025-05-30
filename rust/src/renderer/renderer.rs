@@ -617,7 +617,7 @@ impl Renderer {
     }
 
     // Helper method to update camera buffer
-    fn update_camera_buffer(&mut self) {
+    pub fn update_camera_buffer(&mut self) {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.refresh(&self.camera);
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));

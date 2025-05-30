@@ -434,6 +434,28 @@ impl SceneComposer {
   }
 
   // -------------------------------------------------------------------------------------------------------------------------
+  // --- Raytracing methods                                                                                              ---
+  // -------------------------------------------------------------------------------------------------------------------------
+
+  /// Traces a ray into the scene and returns the distance to the closest intersection
+  /// 
+  /// # Arguments
+  /// 
+  /// * `ray_origin` - The origin point of the ray
+  /// * `ray_direction` - The direction vector of the ray
+  /// 
+  /// # Returns
+  /// 
+  /// The distance to the closest intersection, or None if no intersection was found
+  pub fn raytrace(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
+    // Simply use the hit_test method of the atomic structure model
+    match self.model.model.hit_test(ray_origin, ray_direction) {
+      HitTestResult::Atom(_, distance) | HitTestResult::Bond(_, distance) => Some(distance),
+      HitTestResult::None => None,
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------------
   // --- Gadget delegation methods                                                                                        ---
   // -------------------------------------------------------------------------------------------------------------------------
 
