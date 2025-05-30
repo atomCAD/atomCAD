@@ -7,6 +7,7 @@ import 'package:flutter_cad/structure_designer/node_data/circle_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/extrude_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/half_plane_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart';
@@ -186,6 +187,16 @@ class NodeDataWidget extends StatelessWidget {
         return ExtrudeEditor(
           nodeId: selectedNode.id,
           data: extrudeData,
+        );
+      case 'half_plane':
+        // Fetch the half plane data here in the parent widget
+        final halfPlaneData = getHalfPlaneData(
+          nodeId: selectedNode.id,
+        );
+
+        return HalfPlaneEditor(
+          nodeId: selectedNode.id,
+          data: halfPlaneData,
         );
       default:
         return Center(

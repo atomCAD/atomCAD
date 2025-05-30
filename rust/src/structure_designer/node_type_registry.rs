@@ -9,6 +9,7 @@ use super::nodes::cuboid::CuboidData;
 use super::nodes::sphere::SphereData;
 use super::nodes::circle::CircleData;
 use super::nodes::rect::RectData;
+use super::nodes::half_plane::HalfPlaneData;
 use super::nodes::half_space::HalfSpaceData;
 use super::nodes::geo_trans::GeoTransData;
 use super::nodes::atom_trans::AtomTransData;
@@ -104,6 +105,16 @@ impl NodeTypeRegistry {
       ],
       output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(NoData {}),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "half_plane".to_string(),
+      parameters: Vec::new(),
+      output_type: DataType::Geometry2D,
+      node_data_creator: || Box::new(HalfPlaneData {
+        miller_index: IVec2::new(1, 0), // Default normal along x-axis
+        shift: 0,
+      }),
     });
 
     ret.add_node_type(NodeType {
