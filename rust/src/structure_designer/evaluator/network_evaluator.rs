@@ -148,10 +148,14 @@ impl NetworkEvaluator {
       // Calculate current position along the ray
       let current_pos = *ray_origin + normalized_dir * current_distance;
       
-      // Evaluate SDF at current position
-      let sdf_value = self.implicit_evaluator.eval(network, node_id, &current_pos, registry)[0];
+      // Scale the position by dividing by DIAMOND_UNIT_CELL_SIZE_ANGSTROM to match the scale used in rendering
+      let scaled_pos = current_pos / common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+      
+      // Evaluate SDF at the scaled position
+      let sdf_value = self.implicit_evaluator.eval(network, node_id, &scaled_pos, registry)[0];
       
       println!("Current position: {:?}", current_pos);
+      println!("Scaled position: {:?}", scaled_pos);
       println!("SDF value: {}", sdf_value);
 
       // If we're close enough to the surface, return the distance
@@ -167,7 +171,8 @@ impl NetworkEvaluator {
       // Step forward by the SDF value - this is safe because
       // the absolute value of the gradient of an SDF cannot be bigger than 1
       // This means the SDF value tells us how far we can safely march without missing the surface
-      current_distance += sdf_value;
+      // We need to scale the SDF value back to world space by multiplying by DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+      current_distance += sdf_value * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
     }
 
     // No intersection found within the maximum number of steps
