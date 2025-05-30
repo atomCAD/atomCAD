@@ -70,6 +70,11 @@ pub struct InputPinView {
     pub radius: i32,
   }
   
+  pub struct APIHalfPlaneData {
+    pub miller_index: APIIVec2,
+    pub shift: i32,
+  }
+
   pub struct APIHalfSpaceData {
     pub miller_index: APIIVec3,
     pub shift: i32,

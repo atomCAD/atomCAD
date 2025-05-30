@@ -79,6 +79,11 @@ APIRectData? getRectData({required BigInt nodeId}) => RustLib.instance.api
 APICircleData? getCircleData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCircleData(nodeId: nodeId);
 
+APIHalfPlaneData? getHalfPlaneData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetHalfPlaneData(
+        nodeId: nodeId);
+
 APICuboidData? getCuboidData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCuboidData(nodeId: nodeId);
 
@@ -127,6 +132,12 @@ void setRectData({required BigInt nodeId, required APIRectData data}) =>
 void setCircleData({required BigInt nodeId, required APICircleData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetCircleData(
+            nodeId: nodeId, data: data);
+
+void setHalfPlaneData(
+        {required BigInt nodeId, required APIHalfPlaneData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetHalfPlaneData(
             nodeId: nodeId, data: data);
 
 void setExtrudeData({required BigInt nodeId, required APIExtrudeData data}) =>

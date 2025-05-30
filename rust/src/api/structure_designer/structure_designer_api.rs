@@ -6,6 +6,7 @@ use crate::api::structure_designer::structure_designer_api_types::NodeNetworkVie
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
+use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::rect::RectData;
 use std::collections::HashMap;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
@@ -38,6 +39,7 @@ use crate::api::api_common::from_api_vec3;
 
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APIExtrudeData;
+use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIRectData;
 
 #[flutter_rust_bridge::frb(sync)]
@@ -266,6 +268,19 @@ pub fn get_circle_data(node_id: u64) -> Option<APICircleData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_half_plane_data(node_id: u64) -> Option<APIHalfPlaneData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let half_plane_data = node_data.as_any_ref().downcast_ref::<HalfPlaneData>()?;
+    return Some(APIHalfPlaneData {
+      miller_index: to_api_ivec2(&half_plane_data.miller_index),
+      shift: half_plane_data.shift,
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_cuboid_data(node_id: u64) -> Option<APICuboidData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
@@ -443,6 +458,20 @@ pub fn set_circle_data(node_id: u64, data: APICircleData) {
         radius: data.radius,
       });
       instance.structure_designer.set_node_network_data(node_id, circle_data);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_half_plane_data(node_id: u64, data: APIHalfPlaneData) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      let half_plane_data = Box::new(HalfPlaneData {
+        miller_index: from_api_ivec2(&data.miller_index),
+        shift: data.shift,
+      });
+      instance.structure_designer.set_node_network_data(node_id, half_plane_data);
       refresh_renderer(instance, false);
     }
   }

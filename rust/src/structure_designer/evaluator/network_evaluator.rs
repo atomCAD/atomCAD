@@ -9,6 +9,7 @@ use crate::common::surface_point_cloud::SurfacePointCloud2D;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type::DataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::nodes::half_plane::eval_half_plane;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
@@ -169,7 +170,9 @@ impl NetworkEvaluator {
       vec![eval_circle(network_stack, node_id, registry)]
     } else if node.node_type_name == "rect" {
       vec![eval_rect(network_stack, node_id, registry)]
-    } else if node.node_type_name == "sphere" {
+    } else if node.node_type_name == "half_plane" {
+      vec![eval_half_plane(network_stack, node_id, registry)]
+    }else if node.node_type_name == "sphere" {
       vec![eval_sphere(network_stack, node_id, registry)]
     } else if node.node_type_name == "cuboid" {
       vec![eval_cuboid(network_stack, node_id, registry)]

@@ -72,6 +72,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
 
   @protected
+  APIHalfPlaneData dco_decode_api_half_plane_data(dynamic raw);
+
+  @protected
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
 
   @protected
@@ -139,6 +142,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIGeoTransData dco_decode_box_autoadd_api_geo_trans_data(dynamic raw);
+
+  @protected
+  APIHalfPlaneData dco_decode_box_autoadd_api_half_plane_data(dynamic raw);
 
   @protected
   APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
@@ -269,6 +275,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData? dco_decode_opt_box_autoadd_api_geo_trans_data(dynamic raw);
 
   @protected
+  APIHalfPlaneData? dco_decode_opt_box_autoadd_api_half_plane_data(dynamic raw);
+
+  @protected
   APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
 
   @protected
@@ -382,6 +391,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData sse_decode_api_geo_trans_data(SseDeserializer deserializer);
 
   @protected
+  APIHalfPlaneData sse_decode_api_half_plane_data(SseDeserializer deserializer);
+
+  @protected
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
 
   @protected
@@ -459,6 +471,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIGeoTransData sse_decode_box_autoadd_api_geo_trans_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIHalfPlaneData sse_decode_box_autoadd_api_half_plane_data(
       SseDeserializer deserializer);
 
   @protected
@@ -611,6 +627,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIHalfPlaneData? sse_decode_opt_box_autoadd_api_half_plane_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIHalfSpaceData? sse_decode_opt_box_autoadd_api_half_space_data(
       SseDeserializer deserializer);
 
@@ -737,6 +757,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIGeoTransData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_half_plane_data(
+      APIHalfPlaneData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
 
@@ -817,6 +841,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_geo_trans_data(
       APIGeoTransData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_half_plane_data(
+      APIHalfPlaneData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_half_space_data(
@@ -972,6 +1000,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_geo_trans_data(
       APIGeoTransData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_half_plane_data(
+      APIHalfPlaneData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_half_space_data(

@@ -17,3 +17,4 @@ pub mod extrude;
 pub mod union_2d;
 pub mod intersect_2d;
 pub mod diff_2d;
+pub mod half_plane;

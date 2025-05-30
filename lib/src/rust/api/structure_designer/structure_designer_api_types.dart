@@ -244,6 +244,27 @@ class APIGeoTransData {
           transformOnlyFrame == other.transformOnlyFrame;
 }
 
+class APIHalfPlaneData {
+  final APIIVec2 millerIndex;
+  final int shift;
+
+  const APIHalfPlaneData({
+    required this.millerIndex,
+    required this.shift,
+  });
+
+  @override
+  int get hashCode => millerIndex.hashCode ^ shift.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIHalfPlaneData &&
+          runtimeType == other.runtimeType &&
+          millerIndex == other.millerIndex &&
+          shift == other.shift;
+}
+
 class APIHalfSpaceData {
   final APIIVec3 millerIndex;
   final int shift;
