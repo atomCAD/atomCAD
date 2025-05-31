@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -301105175;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 103651793;
 
 // Section: executor
 
@@ -1361,6 +1361,36 @@ fn wire__crate__api__structure_designer__structure_designer_api__get_node_type_n
         },
     )
 }
+fn wire__crate__api__common_api__get_ortho_half_height_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_ortho_half_height",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::common_api::get_ortho_half_height())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1745,6 +1775,35 @@ fn wire__crate__api__structure_designer__structure_designer_api__is_node_type_ac
                         api_node_type,
                     ),
                 )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__common_api__is_orthographic_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "is_orthographic",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::common_api::is_orthographic())?;
                 Ok(output_ok)
             })())
         },
@@ -2924,6 +2983,70 @@ fn wire__crate__api__structure_designer__structure_designer_api__set_node_displa
         },
     )
 }
+fn wire__crate__api__common_api__set_ortho_half_height_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_ortho_half_height",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_half_height = <f64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::common_api::set_ortho_half_height(api_half_height);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__common_api__set_orthographic_mode_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_orthographic_mode",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_orthographic = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::common_api::set_orthographic_mode(api_orthographic);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -3251,6 +3374,8 @@ impl SseDecode for crate::api::common_api_types::APICamera {
         let mut var_fovy = <f64>::sse_decode(deserializer);
         let mut var_znear = <f64>::sse_decode(deserializer);
         let mut var_zfar = <f64>::sse_decode(deserializer);
+        let mut var_orthographic = <bool>::sse_decode(deserializer);
+        let mut var_orthoHalfHeight = <f64>::sse_decode(deserializer);
         return crate::api::common_api_types::APICamera {
             eye: var_eye,
             target: var_target,
@@ -3259,6 +3384,8 @@ impl SseDecode for crate::api::common_api_types::APICamera {
             fovy: var_fovy,
             znear: var_znear,
             zfar: var_zfar,
+            orthographic: var_orthographic,
+            ortho_half_height: var_orthoHalfHeight,
         };
     }
 }
@@ -4232,8 +4359,8 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        96 => {
+        50 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        100 => {
             wire__crate__api__common_api__set_viewport_size_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -4286,64 +4413,68 @@ fn pde_ffi_dispatcher_sync_impl(
 37 => wire__crate__api__structure_designer__structure_designer_api__get_node_network_names_impl(ptr, rust_vec_len, data_len),
 38 => wire__crate__api__structure_designer__structure_designer_api__get_node_network_view_impl(ptr, rust_vec_len, data_len),
 39 => wire__crate__api__structure_designer__structure_designer_api__get_node_type_names_impl(ptr, rust_vec_len, data_len),
-40 => wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(ptr, rust_vec_len, data_len),
-41 => wire__crate__api__scene_composer_api__get_scene_composer_atom_info_impl(ptr, rust_vec_len, data_len),
-42 => wire__crate__api__scene_composer_api__get_scene_composer_view_impl(ptr, rust_vec_len, data_len),
-43 => wire__crate__api__scene_composer_api__get_selected_frame_transform_impl(ptr, rust_vec_len, data_len),
-44 => wire__crate__api__structure_designer__structure_designer_api__get_sphere_data_impl(ptr, rust_vec_len, data_len),
-45 => wire__crate__api__structure_designer__stamp_api__get_stamp_view_impl(ptr, rust_vec_len, data_len),
-46 => wire__crate__api__structure_designer__geo_to_atom_api__get_unit_cell_size_impl(ptr, rust_vec_len, data_len),
-47 => wire__crate__api__common_api__greet_impl(ptr, rust_vec_len, data_len),
-48 => wire__crate__api__scene_composer_api__import_xyz_impl(ptr, rust_vec_len, data_len),
-50 => wire__crate__api__scene_composer_api__is_frame_locked_to_atoms_impl(ptr, rust_vec_len, data_len),
-51 => wire__crate__api__structure_designer__structure_designer_api__is_node_type_active_impl(ptr, rust_vec_len, data_len),
-52 => wire__crate__api__structure_designer__geo_to_atom_api__is_unit_cell_size_estimated_impl(ptr, rust_vec_len, data_len),
-53 => wire__crate__api__structure_designer__structure_designer_api__load_node_networks_impl(ptr, rust_vec_len, data_len),
-54 => wire__crate__api__common_api__move_camera_impl(ptr, rust_vec_len, data_len),
-55 => wire__crate__api__structure_designer__structure_designer_api__move_node_impl(ptr, rust_vec_len, data_len),
-56 => wire__crate__api__common_api__provide_texture_impl(ptr, rust_vec_len, data_len),
-57 => wire__crate__api__structure_designer__structure_designer_api__rename_node_network_impl(ptr, rust_vec_len, data_len),
-58 => wire__crate__api__structure_designer__edit_atom_api__replace_selected_atoms_impl(ptr, rust_vec_len, data_len),
-59 => wire__crate__api__scene_composer_api__rotate_around_local_axis_impl(ptr, rust_vec_len, data_len),
-60 => wire__crate__api__structure_designer__structure_designer_api__save_node_networks_impl(ptr, rust_vec_len, data_len),
-61 => wire__crate__api__scene_composer_api__scene_composer_new_model_impl(ptr, rust_vec_len, data_len),
-62 => wire__crate__api__scene_composer_api__scene_composer_redo_impl(ptr, rust_vec_len, data_len),
-63 => wire__crate__api__scene_composer_api__scene_composer_rename_cluster_impl(ptr, rust_vec_len, data_len),
-64 => wire__crate__api__scene_composer_api__scene_composer_undo_impl(ptr, rust_vec_len, data_len),
-65 => wire__crate__api__scene_composer_api__select_align_atom_by_ray_impl(ptr, rust_vec_len, data_len),
-66 => wire__crate__api__structure_designer__anchor_api__select_anchor_atom_by_ray_impl(ptr, rust_vec_len, data_len),
-67 => wire__crate__api__scene_composer_api__select_atom_info_atom_by_ray_impl(ptr, rust_vec_len, data_len),
-68 => wire__crate__api__structure_designer__edit_atom_api__select_atom_or_bond_by_ray_impl(ptr, rust_vec_len, data_len),
-69 => wire__crate__api__scene_composer_api__select_cluster_by_id_impl(ptr, rust_vec_len, data_len),
-70 => wire__crate__api__scene_composer_api__select_cluster_by_ray_impl(ptr, rust_vec_len, data_len),
-71 => wire__crate__api__scene_composer_api__select_distance_atom_by_ray_impl(ptr, rust_vec_len, data_len),
-72 => wire__crate__api__structure_designer__structure_designer_api__select_node_impl(ptr, rust_vec_len, data_len),
-73 => wire__crate__api__structure_designer__structure_designer_api__select_wire_impl(ptr, rust_vec_len, data_len),
-74 => wire__crate__api__structure_designer__edit_atom_api__set_active_edit_atom_tool_impl(ptr, rust_vec_len, data_len),
-75 => wire__crate__api__common_api__set_active_editor_impl(ptr, rust_vec_len, data_len),
-76 => wire__crate__api__structure_designer__structure_designer_api__set_active_node_network_impl(ptr, rust_vec_len, data_len),
-77 => wire__crate__api__scene_composer_api__set_active_scene_composer_tool_impl(ptr, rust_vec_len, data_len),
-78 => wire__crate__api__structure_designer__structure_designer_api__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
-79 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
-80 => wire__crate__api__structure_designer__structure_designer_api__set_circle_data_impl(ptr, rust_vec_len, data_len),
-81 => wire__crate__api__structure_designer__structure_designer_api__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
-82 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_add_atom_data_impl(ptr, rust_vec_len, data_len),
-83 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_default_data_impl(ptr, rust_vec_len, data_len),
-84 => wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(ptr, rust_vec_len, data_len),
-85 => wire__crate__api__scene_composer_api__set_frame_locked_to_atoms_impl(ptr, rust_vec_len, data_len),
-86 => wire__crate__api__structure_designer__structure_designer_api__set_geo_to_atom_data_impl(ptr, rust_vec_len, data_len),
-87 => wire__crate__api__structure_designer__structure_designer_api__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
-88 => wire__crate__api__structure_designer__structure_designer_api__set_half_plane_data_impl(ptr, rust_vec_len, data_len),
-89 => wire__crate__api__structure_designer__structure_designer_api__set_half_space_data_impl(ptr, rust_vec_len, data_len),
-90 => wire__crate__api__structure_designer__structure_designer_api__set_node_display_impl(ptr, rust_vec_len, data_len),
-91 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
-92 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
-93 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(ptr, rust_vec_len, data_len),
-94 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
-95 => wire__crate__api__structure_designer__stamp_api__set_stamp_rotation_impl(ptr, rust_vec_len, data_len),
-97 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
-98 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
-99 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(ptr, rust_vec_len, data_len),
+40 => wire__crate__api__common_api__get_ortho_half_height_impl(ptr, rust_vec_len, data_len),
+41 => wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(ptr, rust_vec_len, data_len),
+42 => wire__crate__api__scene_composer_api__get_scene_composer_atom_info_impl(ptr, rust_vec_len, data_len),
+43 => wire__crate__api__scene_composer_api__get_scene_composer_view_impl(ptr, rust_vec_len, data_len),
+44 => wire__crate__api__scene_composer_api__get_selected_frame_transform_impl(ptr, rust_vec_len, data_len),
+45 => wire__crate__api__structure_designer__structure_designer_api__get_sphere_data_impl(ptr, rust_vec_len, data_len),
+46 => wire__crate__api__structure_designer__stamp_api__get_stamp_view_impl(ptr, rust_vec_len, data_len),
+47 => wire__crate__api__structure_designer__geo_to_atom_api__get_unit_cell_size_impl(ptr, rust_vec_len, data_len),
+48 => wire__crate__api__common_api__greet_impl(ptr, rust_vec_len, data_len),
+49 => wire__crate__api__scene_composer_api__import_xyz_impl(ptr, rust_vec_len, data_len),
+51 => wire__crate__api__scene_composer_api__is_frame_locked_to_atoms_impl(ptr, rust_vec_len, data_len),
+52 => wire__crate__api__structure_designer__structure_designer_api__is_node_type_active_impl(ptr, rust_vec_len, data_len),
+53 => wire__crate__api__common_api__is_orthographic_impl(ptr, rust_vec_len, data_len),
+54 => wire__crate__api__structure_designer__geo_to_atom_api__is_unit_cell_size_estimated_impl(ptr, rust_vec_len, data_len),
+55 => wire__crate__api__structure_designer__structure_designer_api__load_node_networks_impl(ptr, rust_vec_len, data_len),
+56 => wire__crate__api__common_api__move_camera_impl(ptr, rust_vec_len, data_len),
+57 => wire__crate__api__structure_designer__structure_designer_api__move_node_impl(ptr, rust_vec_len, data_len),
+58 => wire__crate__api__common_api__provide_texture_impl(ptr, rust_vec_len, data_len),
+59 => wire__crate__api__structure_designer__structure_designer_api__rename_node_network_impl(ptr, rust_vec_len, data_len),
+60 => wire__crate__api__structure_designer__edit_atom_api__replace_selected_atoms_impl(ptr, rust_vec_len, data_len),
+61 => wire__crate__api__scene_composer_api__rotate_around_local_axis_impl(ptr, rust_vec_len, data_len),
+62 => wire__crate__api__structure_designer__structure_designer_api__save_node_networks_impl(ptr, rust_vec_len, data_len),
+63 => wire__crate__api__scene_composer_api__scene_composer_new_model_impl(ptr, rust_vec_len, data_len),
+64 => wire__crate__api__scene_composer_api__scene_composer_redo_impl(ptr, rust_vec_len, data_len),
+65 => wire__crate__api__scene_composer_api__scene_composer_rename_cluster_impl(ptr, rust_vec_len, data_len),
+66 => wire__crate__api__scene_composer_api__scene_composer_undo_impl(ptr, rust_vec_len, data_len),
+67 => wire__crate__api__scene_composer_api__select_align_atom_by_ray_impl(ptr, rust_vec_len, data_len),
+68 => wire__crate__api__structure_designer__anchor_api__select_anchor_atom_by_ray_impl(ptr, rust_vec_len, data_len),
+69 => wire__crate__api__scene_composer_api__select_atom_info_atom_by_ray_impl(ptr, rust_vec_len, data_len),
+70 => wire__crate__api__structure_designer__edit_atom_api__select_atom_or_bond_by_ray_impl(ptr, rust_vec_len, data_len),
+71 => wire__crate__api__scene_composer_api__select_cluster_by_id_impl(ptr, rust_vec_len, data_len),
+72 => wire__crate__api__scene_composer_api__select_cluster_by_ray_impl(ptr, rust_vec_len, data_len),
+73 => wire__crate__api__scene_composer_api__select_distance_atom_by_ray_impl(ptr, rust_vec_len, data_len),
+74 => wire__crate__api__structure_designer__structure_designer_api__select_node_impl(ptr, rust_vec_len, data_len),
+75 => wire__crate__api__structure_designer__structure_designer_api__select_wire_impl(ptr, rust_vec_len, data_len),
+76 => wire__crate__api__structure_designer__edit_atom_api__set_active_edit_atom_tool_impl(ptr, rust_vec_len, data_len),
+77 => wire__crate__api__common_api__set_active_editor_impl(ptr, rust_vec_len, data_len),
+78 => wire__crate__api__structure_designer__structure_designer_api__set_active_node_network_impl(ptr, rust_vec_len, data_len),
+79 => wire__crate__api__scene_composer_api__set_active_scene_composer_tool_impl(ptr, rust_vec_len, data_len),
+80 => wire__crate__api__structure_designer__structure_designer_api__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
+81 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
+82 => wire__crate__api__structure_designer__structure_designer_api__set_circle_data_impl(ptr, rust_vec_len, data_len),
+83 => wire__crate__api__structure_designer__structure_designer_api__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+84 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_add_atom_data_impl(ptr, rust_vec_len, data_len),
+85 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_default_data_impl(ptr, rust_vec_len, data_len),
+86 => wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(ptr, rust_vec_len, data_len),
+87 => wire__crate__api__scene_composer_api__set_frame_locked_to_atoms_impl(ptr, rust_vec_len, data_len),
+88 => wire__crate__api__structure_designer__structure_designer_api__set_geo_to_atom_data_impl(ptr, rust_vec_len, data_len),
+89 => wire__crate__api__structure_designer__structure_designer_api__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
+90 => wire__crate__api__structure_designer__structure_designer_api__set_half_plane_data_impl(ptr, rust_vec_len, data_len),
+91 => wire__crate__api__structure_designer__structure_designer_api__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+92 => wire__crate__api__structure_designer__structure_designer_api__set_node_display_impl(ptr, rust_vec_len, data_len),
+93 => wire__crate__api__common_api__set_ortho_half_height_impl(ptr, rust_vec_len, data_len),
+94 => wire__crate__api__common_api__set_orthographic_mode_impl(ptr, rust_vec_len, data_len),
+95 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
+96 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
+97 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(ptr, rust_vec_len, data_len),
+98 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
+99 => wire__crate__api__structure_designer__stamp_api__set_stamp_rotation_impl(ptr, rust_vec_len, data_len),
+101 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+102 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
+103 => wire__crate__api__scene_composer_api__translate_along_local_axis_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -4411,6 +4542,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::APICamera {
             self.fovy.into_into_dart().into_dart(),
             self.znear.into_into_dart().into_dart(),
             self.zfar.into_into_dart().into_dart(),
+            self.orthographic.into_into_dart().into_dart(),
+            self.ortho_half_height.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5244,6 +5377,8 @@ impl SseEncode for crate::api::common_api_types::APICamera {
         <f64>::sse_encode(self.fovy, serializer);
         <f64>::sse_encode(self.znear, serializer);
         <f64>::sse_encode(self.zfar, serializer);
+        <bool>::sse_encode(self.orthographic, serializer);
+        <f64>::sse_encode(self.ortho_half_height, serializer);
     }
 }
 

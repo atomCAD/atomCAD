@@ -164,7 +164,9 @@ pub fn get_camera() -> Option<APICamera> {
         aspect: camera.aspect,
         fovy: camera.fovy,
         znear: camera.znear,
-        zfar: camera.zfar,      
+        zfar: camera.zfar,
+        orthographic: camera.orthographic,
+        ortho_half_height: camera.ortho_half_height,
       });
     } else {
       return None;
@@ -412,6 +414,50 @@ pub fn set_camera_transform(transform: APITransform) {
       instance.renderer.set_camera_transform(&transform);
       refresh_renderer(instance, false);
     }
+  }
+}
+
+/// Set the camera to use orthographic or perspective projection
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_orthographic_mode(orthographic: bool) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.renderer.set_orthographic_mode(orthographic);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+/// Get whether the camera is using orthographic projection
+#[flutter_rust_bridge::frb(sync)]
+pub fn is_orthographic() -> bool {
+  unsafe {
+    if let Some(instance) = &CAD_INSTANCE {
+      return instance.renderer.is_orthographic();
+    }
+    return false;
+  }
+}
+
+/// Set the orthographic half height (controls zoom level in orthographic mode)
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_ortho_half_height(half_height: f64) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.renderer.set_ortho_half_height(half_height);
+      refresh_renderer(instance, false);
+    }
+  }
+}
+
+/// Get the current orthographic half height
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_ortho_half_height() -> f64 {
+  unsafe {
+    if let Some(instance) = &CAD_INSTANCE {
+      return instance.renderer.get_ortho_half_height();
+    }
+    return 10.0; // Default value
   }
 }
 

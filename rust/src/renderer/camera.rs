@@ -10,12 +10,25 @@ pub struct Camera {
   pub fovy: f64, // in radians
   pub znear: f64,
   pub zfar: f64,
+  pub orthographic: bool,
+  pub ortho_half_height: f64,
 }
 
 impl Camera {
   pub fn build_view_projection_matrix(&self) -> DMat4 {
       let view = DMat4::look_at_rh(self.eye, self.target, self.up);
-      let proj = DMat4::perspective_rh_gl(self.fovy, self.aspect, self.znear, self.zfar);
+      let proj = if self.orthographic {
+          // Calculate the orthographic projection matrix
+          let right = self.ortho_half_height * self.aspect;
+          DMat4::orthographic_rh_gl(
+              -right, right,
+              -self.ortho_half_height, self.ortho_half_height,
+              self.znear, self.zfar
+          )
+      } else {
+          // Use the existing perspective projection
+          DMat4::perspective_rh_gl(self.fovy, self.aspect, self.znear, self.zfar)
+      };
       return proj * view;
   }
 

@@ -87,6 +87,21 @@ void setCameraTransform({required APITransform transform}) =>
     RustLib.instance.api
         .crateApiCommonApiSetCameraTransform(transform: transform);
 
+/// Set the camera to use orthographic or perspective projection
+void setOrthographicMode({required bool orthographic}) => RustLib.instance.api
+    .crateApiCommonApiSetOrthographicMode(orthographic: orthographic);
+
+/// Get whether the camera is using orthographic projection
+bool isOrthographic() => RustLib.instance.api.crateApiCommonApiIsOrthographic();
+
+/// Set the orthographic half height (controls zoom level in orthographic mode)
+void setOrthoHalfHeight({required double halfHeight}) => RustLib.instance.api
+    .crateApiCommonApiSetOrthoHalfHeight(halfHeight: halfHeight);
+
+/// Get the current orthographic half height
+double getOrthoHalfHeight() =>
+    RustLib.instance.api.crateApiCommonApiGetOrthoHalfHeight();
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiCommonApiGreet(name: name);
 

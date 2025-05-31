@@ -16,6 +16,8 @@ class APICamera {
   final double fovy;
   final double znear;
   final double zfar;
+  final bool orthographic;
+  final double orthoHalfHeight;
 
   const APICamera({
     required this.eye,
@@ -25,6 +27,8 @@ class APICamera {
     required this.fovy,
     required this.znear,
     required this.zfar,
+    required this.orthographic,
+    required this.orthoHalfHeight,
   });
 
   @override
@@ -35,7 +39,9 @@ class APICamera {
       aspect.hashCode ^
       fovy.hashCode ^
       znear.hashCode ^
-      zfar.hashCode;
+      zfar.hashCode ^
+      orthographic.hashCode ^
+      orthoHalfHeight.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -48,7 +54,9 @@ class APICamera {
           aspect == other.aspect &&
           fovy == other.fovy &&
           znear == other.znear &&
-          zfar == other.zfar;
+          zfar == other.zfar &&
+          orthographic == other.orthographic &&
+          orthoHalfHeight == other.orthoHalfHeight;
 }
 
 class APITransform {

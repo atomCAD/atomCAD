@@ -35,6 +35,15 @@ struct CameraUniform {
     head_light_dir: [f32; 3],
 
     _padding1: u32,
+    
+    // Orthographic rendering flag (1.0 = orthographic, 0.0 = perspective)
+    is_orthographic: f32,
+    
+    // Half height for orthographic projection (used for zoom level)
+    ortho_half_height: f32,
+    
+    // Additional padding to maintain 16-byte alignment
+    _padding2: [u32; 2],
 }
 
 impl CameraUniform {
@@ -45,6 +54,9 @@ impl CameraUniform {
         _padding0: 0,
         head_light_dir: Vec3::new(0.0, -1.0, 0.0).to_array(),
         _padding1: 0,
+        is_orthographic: 0.0,  // Default to perspective mode
+        ortho_half_height: 10.0, // Default orthographic half height
+        _padding2: [0, 0],
       }
   }
 
@@ -52,6 +64,8 @@ impl CameraUniform {
     self.view_proj = camera.build_view_projection_matrix().as_mat4().to_cols_array_2d();
     self.camera_position = camera.eye.as_vec3().to_array();
     self.head_light_dir = camera.calc_headlight_direction().as_vec3().to_array();
+    self.is_orthographic = if camera.orthographic { 1.0 } else { 0.0 };
+    self.ortho_half_height = camera.ortho_half_height as f32;
   }
 }
 
@@ -97,6 +111,8 @@ impl Renderer {
           fovy: std::f64::consts::PI * 0.15,
           znear: 0.5,
           zfar: 600.0,
+          orthographic: false, // Default to perspective mode
+          ortho_half_height: 10.0, // Default orthographic half height
         };
 
         // Initialize GPU
@@ -621,6 +637,28 @@ impl Renderer {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.refresh(&self.camera);
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
+    }
+    
+    /// Sets the camera to orthographic or perspective mode
+    pub fn set_orthographic_mode(&mut self, orthographic: bool) {
+        self.camera.orthographic = orthographic;
+        self.update_camera_buffer();
+    }
+    
+    /// Gets the current projection mode
+    pub fn is_orthographic(&self) -> bool {
+        self.camera.orthographic
+    }
+    
+    /// Sets the orthographic half height (controls zoom level in orthographic mode)
+    pub fn set_ortho_half_height(&mut self, half_height: f64) {
+        self.camera.ortho_half_height = half_height;
+        self.update_camera_buffer();
+    }
+    
+    /// Gets the current orthographic half height
+    pub fn get_ortho_half_height(&self) -> f64 {
+        self.camera.ortho_half_height
     }
     
     // These methods are no longer needed as each mesh now manages its own model buffer
