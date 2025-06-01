@@ -11,6 +11,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart'
     as stamp_api;
+import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 class PinReference {
   BigInt nodeId;
@@ -50,12 +51,29 @@ class StructureDesignerModel extends ChangeNotifier {
   NodeNetworkView? nodeNetworkView;
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
+  APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
+  bool isOrthographic = false;
 
   StructureDesignerModel();
 
   void init() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+  }
+
+  void setCameraTransform(APITransform transform) {
+    common_api.setCameraTransform(transform: transform);
+    refreshFromKernel();
+  }
+
+  void setCameraCanonicalView(APICameraCanonicalView view) {
+    common_api.setCameraCanonicalView(view: view);
+    refreshFromKernel();
+  }
+
+  void setOrthographicMode(bool orthographic) {
+    common_api.setOrthographicMode(orthographic: orthographic);
+    refreshFromKernel();
   }
 
   void selectAnchorAtomByRay(
@@ -331,6 +349,8 @@ class StructureDesignerModel extends ChangeNotifier {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
     activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
+    cameraCanonicalView = common_api.getCameraCanonicalView();
+    isOrthographic = common_api.isOrthographic();
     notifyListeners();
   }
 }

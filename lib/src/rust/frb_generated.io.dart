@@ -46,6 +46,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera dco_decode_api_camera(dynamic raw);
 
   @protected
+  APICameraCanonicalView dco_decode_api_camera_canonical_view(dynamic raw);
+
+  @protected
   APICircleData dco_decode_api_circle_data(dynamic raw);
 
   @protected
@@ -361,6 +364,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICamera sse_decode_api_camera(SseDeserializer deserializer);
+
+  @protected
+  APICameraCanonicalView sse_decode_api_camera_canonical_view(
+      SseDeserializer deserializer);
 
   @protected
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
@@ -723,6 +730,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_camera(APICamera self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_camera_canonical_view(
+      APICameraCanonicalView self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);

@@ -19,6 +19,8 @@ use glam::f64::DQuat;
 use crate::common::scene::Scene;
 use std::time::Instant;
 use std::sync::Mutex;
+use crate::api::common_api_types::APICameraCanonicalView;
+use crate::util::transform::Transform;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -659,6 +661,12 @@ impl Renderer {
     /// Gets the current orthographic half height
     pub fn get_ortho_half_height(&self) -> f64 {
         self.camera.ortho_half_height
+    }
+    
+    /// Sets the camera to a canonical view
+    pub fn set_camera_canonical_view(&mut self, view: APICameraCanonicalView) {
+        self.camera.set_canonical_view(view);
+        self.update_camera_buffer();
     }
     
     // These methods are no longer needed as each mesh now manages its own model buffer

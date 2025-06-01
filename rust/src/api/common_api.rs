@@ -7,6 +7,7 @@ use crate::scene_composer::scene_composer::SceneComposer;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::APICamera;
 use crate::api::common_api_types::Editor;
+use crate::api::common_api_types::APICameraCanonicalView;
 use crate::util::transform::Transform;
 use crate::api::api_common::CAD_INSTANCE;
 use crate::api::api_common::CADInstance;
@@ -458,6 +459,32 @@ pub fn get_ortho_half_height() -> f64 {
       return instance.renderer.get_ortho_half_height();
     }
     return 10.0; // Default value
+  }
+}
+
+/// Get the canonical view of the current camera orientation
+/// Returns one of: Custom, Top, Bottom, Front, Back, Left, Right
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_camera_canonical_view() -> APICameraCanonicalView {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      return instance.renderer.camera.get_canonical_view();
+    }
+  }
+  // Default to Custom if no CAD instance exists
+  APICameraCanonicalView::Custom
+}
+
+/// Set the camera to a canonical view orientation
+/// Accepts one of: Custom, Top, Bottom, Front, Back, Left, Right
+/// If Custom is provided, no changes will be made to the camera orientation
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_camera_canonical_view(view: APICameraCanonicalView) {
+  unsafe {
+    if let Some(instance) = &mut CAD_INSTANCE {
+      instance.renderer.set_camera_canonical_view(view);
+      refresh_renderer(instance, false);
+    }
   }
 }
 

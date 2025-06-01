@@ -102,6 +102,17 @@ void setOrthoHalfHeight({required double halfHeight}) => RustLib.instance.api
 double getOrthoHalfHeight() =>
     RustLib.instance.api.crateApiCommonApiGetOrthoHalfHeight();
 
+/// Get the canonical view of the current camera orientation
+/// Returns one of: Custom, Top, Bottom, Front, Back, Left, Right
+APICameraCanonicalView getCameraCanonicalView() =>
+    RustLib.instance.api.crateApiCommonApiGetCameraCanonicalView();
+
+/// Set the camera to a canonical view orientation
+/// Accepts one of: Custom, Top, Bottom, Front, Back, Left, Right
+/// If Custom is provided, no changes will be made to the camera orientation
+void setCameraCanonicalView({required APICameraCanonicalView view}) =>
+    RustLib.instance.api.crateApiCommonApiSetCameraCanonicalView(view: view);
+
 String greet({required String name}) =>
     RustLib.instance.api.crateApiCommonApiGreet(name: name);
 

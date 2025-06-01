@@ -59,6 +59,17 @@ class APICamera {
           orthoHalfHeight == other.orthoHalfHeight;
 }
 
+enum APICameraCanonicalView {
+  custom,
+  top,
+  bottom,
+  front,
+  back,
+  left,
+  right,
+  ;
+}
+
 class APITransform {
   final APIVec3 translation;
   final APIVec3 rotation;

@@ -45,6 +45,16 @@ pub struct APITransform {
   pub rotation: APIVec3, // intrinsic euler angles in degrees
 }
 
+pub enum APICameraCanonicalView {
+  Custom,
+  Top,
+  Bottom,
+  Front,
+  Back,
+  Left,
+  Right,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SelectModifier {
   Replace,

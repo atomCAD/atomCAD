@@ -1,6 +1,7 @@
 use glam::f64::DVec3;
 use glam::f64::DMat4;
 use glam::f64::DQuat;
+use crate::api::common_api_types::APICameraCanonicalView;
 
 pub struct Camera {
   pub eye: DVec3,
@@ -41,5 +42,93 @@ impl Camera {
     let rotation = DQuat::from_axis_angle(right, -angle_in_radians);
 
     return rotation * forward;
+  }
+
+  pub fn get_canonical_view(&self) -> APICameraCanonicalView {
+    // Calculate view direction (from eye to target)
+    let view_dir = (self.target - self.eye).normalize();
+    
+    // Check for alignment with cardinal axes
+    // We use a small epsilon for floating point comparison
+    const EPSILON: f64 = 0.001;
+    
+    // Check if the view direction is aligned with positive or negative X, Y, or Z axis
+    // These direction checks must match the directions set in set_canonical_view
+    if (view_dir - DVec3::new(-1.0, 0.0, 0.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Right;
+    } else if (view_dir - DVec3::new(1.0, 0.0, 0.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Left;
+    } else if (view_dir - DVec3::new(0.0, -1.0, 0.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Top;
+    } else if (view_dir - DVec3::new(0.0, 1.0, 0.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Bottom;
+    } else if (view_dir - DVec3::new(0.0, 0.0, -1.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Back;
+    } else if (view_dir - DVec3::new(0.0, 0.0, 1.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Front;
+    }
+    
+    // If not aligned with any cardinal direction, return Custom
+    APICameraCanonicalView::Custom
+  }
+  
+  pub fn set_canonical_view(&mut self, view: APICameraCanonicalView) {
+    // If view is Custom, do nothing
+    if matches!(view, APICameraCanonicalView::Custom) {
+      return;
+    }
+    
+    // Define a constant distance for canonical views
+    const CANONICAL_DISTANCE: f64 = 40.0;
+    
+    // Set target to origin
+    self.target = DVec3::new(0.0, 0.0, 0.0);
+    
+    // Define the viewing direction and up vectors for each canonical view
+    let (view_dir, up) = match view {
+      APICameraCanonicalView::Top => (
+        DVec3::new(0.0, -1.0, 0.0),    // Looking down from +Y
+        DVec3::new(0.0, 0.0, -1.0)     // Up is -Z
+      ),
+      APICameraCanonicalView::Bottom => (
+        DVec3::new(0.0, 1.0, 0.0),     // Looking up from -Y
+        DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
+      ),
+      APICameraCanonicalView::Front => (
+        DVec3::new(0.0, 0.0, 1.0),     // Looking from -Z
+        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+      ),
+      APICameraCanonicalView::Back => (
+        DVec3::new(0.0, 0.0, -1.0),    // Looking from +Z
+        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+      ),
+      APICameraCanonicalView::Left => (
+        DVec3::new(1.0, 0.0, 0.0),     // Looking from -X
+        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+      ),
+      APICameraCanonicalView::Right => (
+        DVec3::new(-1.0, 0.0, 0.0),    // Looking from +X
+        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+      ),
+      APICameraCanonicalView::Custom => {
+        // This shouldn't happen because of the check at the beginning
+        // But we provide a default value for completeness
+        (DVec3::new(0.0, 0.0, 1.0), DVec3::new(0.0, 1.0, 0.0))
+      }
+    };
+    
+    // Set eye position at CANONICAL_DISTANCE away from the origin in the view direction
+    // We subtract the view_dir because we want to look toward the target from that direction
+    self.eye = self.target - view_dir * CANONICAL_DISTANCE;
+    
+    // Set the up direction
+    self.up = up;
+    
+    // If in orthographic mode, adjust ortho_half_height based on fovy
+    if self.orthographic {
+      // Calculate ortho_half_height that would give the same view frustum at the target distance
+      // tan(fovy/2) * distance gives the half-height of the view frustum at that distance
+      self.ortho_half_height = (self.fovy / 2.0).tan() * CANONICAL_DISTANCE;
+    }
   }
 }

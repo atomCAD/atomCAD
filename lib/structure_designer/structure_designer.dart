@@ -4,6 +4,7 @@ import 'package:flutter_cad/structure_designer/node_network.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list_panel.dart';
+import 'package:flutter_cad/structure_designer/camera_control_widget.dart';
 import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -92,6 +93,17 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 ),
                 child: Column(
                   children: [
+                    // Camera Control section
+                    Section(
+                      title: 'Camera control',
+                      content: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        child: CameraControlWidget(model: graphModel),
+                      ),
+                      expand: false,
+                    ),
+                    const SizedBox(height: 8),
+                    // Node networks section
                     Expanded(
                       flex: 5,
                       child: Section(
