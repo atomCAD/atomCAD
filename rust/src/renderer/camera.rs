@@ -21,15 +21,19 @@ impl Camera {
       let proj = if self.orthographic {
           // Calculate the orthographic projection matrix
           let right = self.ortho_half_height * self.aspect;
-          DMat4::orthographic_rh_gl(
+          let ortho_matrix = DMat4::orthographic_rh(
               -right, right,
               -self.ortho_half_height, self.ortho_half_height,
               self.znear, self.zfar
-          )
+          );
+          //println!("  right: {}, half_height: {}, aspect: {}, znear: {}, zfar: {}", 
+          //        right, self.ortho_half_height, self.aspect, self.znear, self.zfar);
+          ortho_matrix
       } else {
-          // Use the existing perspective projection
-          DMat4::perspective_rh_gl(self.fovy, self.aspect, self.znear, self.zfar)
+          let perspective_matrix = DMat4::perspective_rh_gl(self.fovy, self.aspect, self.znear, self.zfar);
+          perspective_matrix
       };
+      // println!("Projection matrix: {:?}", proj);
       return proj * view;
   }
 
