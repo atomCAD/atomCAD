@@ -245,24 +245,24 @@ class APIGeoTransData {
 }
 
 class APIHalfPlaneData {
-  final APIIVec2 millerIndex;
-  final int shift;
+  final APIIVec2 point1;
+  final APIIVec2 point2;
 
   const APIHalfPlaneData({
-    required this.millerIndex,
-    required this.shift,
+    required this.point1,
+    required this.point2,
   });
 
   @override
-  int get hashCode => millerIndex.hashCode ^ shift.hashCode;
+  int get hashCode => point1.hashCode ^ point2.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIHalfPlaneData &&
           runtimeType == other.runtimeType &&
-          millerIndex == other.millerIndex &&
-          shift == other.shift;
+          point1 == other.point1 &&
+          point2 == other.point2;
 }
 
 class APIHalfSpaceData {

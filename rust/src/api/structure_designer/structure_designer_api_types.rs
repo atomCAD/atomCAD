@@ -71,8 +71,8 @@ pub struct InputPinView {
   }
   
   pub struct APIHalfPlaneData {
-    pub miller_index: APIIVec2,
-    pub shift: i32,
+    pub point1: APIIVec2,
+    pub point2: APIIVec2,
   }
 
   pub struct APIHalfSpaceData {

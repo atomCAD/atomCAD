@@ -16,8 +16,9 @@ use crate::structure_designer::node_network::Node;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
   #[serde(with = "ivec2_serializer")]
-  pub miller_index: IVec2,
-  pub shift: i32,
+  pub point1: IVec2,
+  #[serde(with = "ivec2_serializer")]
+  pub point2: IVec2,
 }
 
 impl NodeData for HalfPlaneData {
@@ -32,12 +33,17 @@ pub fn eval_half_plane<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let half_plane_data = &node.data.as_any_ref().downcast_ref::<HalfPlaneData>().unwrap();
 
-  let dir = half_plane_data.miller_index.as_dvec2().normalize();
-  let shift_handle_offset = ((half_plane_data.shift as f64) / half_plane_data.miller_index.as_dvec2().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-
+  // Convert point1 to double precision for calculations
+  let point1 = half_plane_data.point1.as_dvec2();
+  
+  // Calculate direction vector from point1 to point2
+  let dir_vector = (half_plane_data.point2 - half_plane_data.point1).as_dvec2();
+  let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
+  
+  // Use point1 as the position and calculate the angle for the transform
   return NetworkResult::Geometry2D(GeometrySummary2D { frame_transform: Transform2D::new(
-    dir * shift_handle_offset,
-    dir.x.atan2(dir.y), // Angle from Y direction to dir in radians
+    point1,
+    normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
   )});
 }
 
@@ -48,7 +54,16 @@ pub fn implicit_eval_half_plane<'a>(
   node: &Node,
   sample_point: &DVec2) -> f64 {
   let half_plane_data = &node.data.as_any_ref().downcast_ref::<HalfPlaneData>().unwrap();
-  let float_miller = half_plane_data.miller_index.as_dvec2();
-  let miller_magnitude = float_miller.length();
-  return (float_miller.dot(sample_point.clone()) - (half_plane_data.shift as f64)) / miller_magnitude;
+  
+  // Convert points to double precision for calculations
+  let point1 = half_plane_data.point1.as_dvec2();
+  let point2 = half_plane_data.point2.as_dvec2();
+  
+  // Calculate line direction and normal
+  let dir_vector = point2 - point1;
+  let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
+  
+  // Calculate signed distance from sample_point to the line
+  // Formula: distance = normal·(sample_point - point1)
+  return normal.dot(*sample_point - point1);
 }

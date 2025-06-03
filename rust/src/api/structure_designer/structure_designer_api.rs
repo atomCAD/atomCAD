@@ -274,8 +274,8 @@ pub fn get_half_plane_data(node_id: u64) -> Option<APIHalfPlaneData> {
     let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
     let half_plane_data = node_data.as_any_ref().downcast_ref::<HalfPlaneData>()?;
     return Some(APIHalfPlaneData {
-      miller_index: to_api_ivec2(&half_plane_data.miller_index),
-      shift: half_plane_data.shift,
+      point1: to_api_ivec2(&half_plane_data.point1),
+      point2: to_api_ivec2(&half_plane_data.point2),
     });
   }
 }
@@ -463,13 +463,15 @@ pub fn set_circle_data(node_id: u64, data: APICircleData) {
   }
 }
 
+
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_half_plane_data(node_id: u64, data: APIHalfPlaneData) {
   unsafe {
     if let Some(instance) = &mut CAD_INSTANCE {
       let half_plane_data = Box::new(HalfPlaneData {
-        miller_index: from_api_ivec2(&data.miller_index),
-        shift: data.shift,
+        point1: from_api_ivec2(&data.point1),
+        point2: from_api_ivec2(&data.point2),
       });
       instance.structure_designer.set_node_network_data(node_id, half_plane_data);
       refresh_renderer(instance, false);

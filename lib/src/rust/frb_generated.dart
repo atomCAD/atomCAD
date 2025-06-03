@@ -3319,8 +3319,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APIHalfPlaneData(
-      millerIndex: dco_decode_apii_vec_2(arr[0]),
-      shift: dco_decode_i_32(arr[1]),
+      point1: dco_decode_apii_vec_2(arr[0]),
+      point2: dco_decode_apii_vec_2(arr[1]),
     );
   }
 
@@ -4181,9 +4181,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIHalfPlaneData sse_decode_api_half_plane_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_millerIndex = sse_decode_apii_vec_2(deserializer);
-    var var_shift = sse_decode_i_32(deserializer);
-    return APIHalfPlaneData(millerIndex: var_millerIndex, shift: var_shift);
+    var var_point1 = sse_decode_apii_vec_2(deserializer);
+    var var_point2 = sse_decode_apii_vec_2(deserializer);
+    return APIHalfPlaneData(point1: var_point1, point2: var_point2);
   }
 
   @protected
@@ -5167,8 +5167,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_half_plane_data(
       APIHalfPlaneData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_apii_vec_2(self.millerIndex, serializer);
-    sse_encode_i_32(self.shift, serializer);
+    sse_encode_apii_vec_2(self.point1, serializer);
+    sse_encode_apii_vec_2(self.point2, serializer);
   }
 
   @protected

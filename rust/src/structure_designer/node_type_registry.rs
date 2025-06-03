@@ -112,8 +112,8 @@ impl NodeTypeRegistry {
       parameters: Vec::new(),
       output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(HalfPlaneData {
-        miller_index: IVec2::new(1, 0), // Default normal along x-axis
-        shift: 0,
+        point1: IVec2::new(0, 0),
+        point2: IVec2::new(1, 0),
       }),
     });
 
