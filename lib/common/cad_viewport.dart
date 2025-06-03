@@ -165,14 +165,33 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final centeredPointerPos =
         pointerPos - Offset(viewportWidth * 0.5, viewportHeight * 0.5);
 
-    final d = viewportHeight * 0.5 / tan(camera!.fovy * 0.5);
+    if (camera!.orthographic) {
+      // Orthographic mode: rays are parallel and start from the near plane
+      // Calculate width from height and aspect ratio
+      final orthoHalfWidth = camera.orthoHalfHeight * camera.aspect;
+      
+      // Calculate position on near plane (scaled by orthoHalfWidth/orthoHalfHeight)
+      final xOffset = (centeredPointerPos.dx / (viewportWidth * 0.5)) * orthoHalfWidth;
+      final yOffset = (centeredPointerPos.dy / (viewportHeight * 0.5)) * camera.orthoHalfHeight;
+      
+      // Ray starts from a point on the near plane
+      final rayStart = cameraTransform!.eye + 
+          cameraTransform.right * xOffset - 
+          cameraTransform.up * yOffset;
+          
+      // Ray direction is always the forward vector in orthographic mode
+      return Ray(start: rayStart, direction: cameraTransform.forward);
+    } else {
+      // Perspective mode (original implementation)
+      final d = viewportHeight * 0.5 / tan(camera.fovy * 0.5);
 
-    final rayDir = (cameraTransform!.right * centeredPointerPos.dx -
-            cameraTransform.up * centeredPointerPos.dy +
-            cameraTransform.forward * d)
-        .normalized();
+      final rayDir = (cameraTransform!.right * centeredPointerPos.dx -
+              cameraTransform.up * centeredPointerPos.dy +
+              cameraTransform.forward * d)
+          .normalized();
 
-    return Ray(start: cameraTransform.eye, direction: rayDir);
+      return Ray(start: cameraTransform.eye, direction: rayDir);
+    }
   }
 
   void initTexture() async {
