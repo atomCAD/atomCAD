@@ -169,16 +169,18 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       // Orthographic mode: rays are parallel and start from the near plane
       // Calculate width from height and aspect ratio
       final orthoHalfWidth = camera.orthoHalfHeight * camera.aspect;
-      
+
       // Calculate position on near plane (scaled by orthoHalfWidth/orthoHalfHeight)
-      final xOffset = (centeredPointerPos.dx / (viewportWidth * 0.5)) * orthoHalfWidth;
-      final yOffset = (centeredPointerPos.dy / (viewportHeight * 0.5)) * camera.orthoHalfHeight;
-      
+      final xOffset =
+          (centeredPointerPos.dx / (viewportWidth * 0.5)) * orthoHalfWidth;
+      final yOffset = (centeredPointerPos.dy / (viewportHeight * 0.5)) *
+          camera.orthoHalfHeight;
+
       // Ray starts from a point on the near plane
-      final rayStart = cameraTransform!.eye + 
-          cameraTransform.right * xOffset - 
+      final rayStart = cameraTransform!.eye +
+          cameraTransform.right * xOffset -
           cameraTransform.up * yOffset;
-          
+
       // Ray direction is always the forward vector in orthographic mode
       return Ray(start: rayStart, direction: cameraTransform.forward);
     } else {
@@ -224,17 +226,24 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     adjustCameraTarget(
         rayOrigin: Vector3ToAPIVec3(ray.start),
         rayDirection: Vector3ToAPIVec3(ray.direction));
-    
+
     dragState = ViewportDragState.move;
     _dragStartPointerPos = pointerPos;
     final camera = getCamera();
     _dragStartCameraTransform = getCameraTransform(camera);
 
-    var movePlaneDistance =
-        (_dragStartCameraTransform!.target - _dragStartCameraTransform!.eye)
-            .dot(_dragStartCameraTransform!.forward);
-    _cameraMovePerPixel =
-        2.0 * movePlaneDistance * tan(camera!.fovy * 0.5) / viewportHeight;
+    if (camera!.orthographic) {
+      // In orthographic mode, movement scale is based directly on orthoHalfHeight
+      // and viewport dimensions
+      _cameraMovePerPixel = 2.0 * camera.orthoHalfHeight / viewportHeight;
+    } else {
+      // Original perspective mode calculation
+      var movePlaneDistance =
+          (_dragStartCameraTransform!.target - _dragStartCameraTransform!.eye)
+              .dot(_dragStartCameraTransform!.forward);
+      _cameraMovePerPixel =
+          2.0 * movePlaneDistance * tan(camera.fovy * 0.5) / viewportHeight;
+    }
   }
 
   void cameraMove(Offset pointerPos) {
@@ -263,7 +272,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     adjustCameraTarget(
         rayOrigin: Vector3ToAPIVec3(ray.start),
         rayDirection: Vector3ToAPIVec3(ray.direction));
-    
+
     dragState = ViewportDragState.rotate;
     _dragStartPointerPos = pointerPos;
   }
@@ -431,21 +440,44 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
         rayDirection: Vector3ToAPIVec3(ray.direction));
 
     final camera = getCamera();
-    final cameraTransform = getCameraTransform(camera);
 
-    final zoomTargetPlaneDistance =
-        (cameraTransform!.target - cameraTransform.eye)
-            .dot(cameraTransform.forward);
+    if (camera!.orthographic) {
+      // For orthographic projection, we adjust orthoHalfHeight instead of moving the camera
+      // Positive scrollDeltaY = zoom out = increase orthoHalfHeight
+      // Negative scrollDeltaY = zoom in = decrease orthoHalfHeight
 
-    final moveVec = cameraTransform.forward *
-        (ZOOM_PER_ZOOM_DELTA * (-scrollDeltaY) * zoomTargetPlaneDistance);
+      // Get the current value
+      final currentHalfHeight = camera.orthoHalfHeight;
 
-    final newEye = cameraTransform.eye + moveVec;
+      // Calculate the zoom factor (scrolling down increases size, up decreases)
+      final zoomFactor = 1.0 + ZOOM_PER_ZOOM_DELTA * scrollDeltaY;
 
-    _moveCameraAndRender(
-        eye: Vector3ToAPIVec3(newEye),
-        target: Vector3ToAPIVec3(cameraTransform.target),
-        up: Vector3ToAPIVec3(cameraTransform.up));
+      // Apply the zoom factor with limits to prevent extreme zoom in/out
+      final newHalfHeight = currentHalfHeight * zoomFactor;
+      final limitedHalfHeight = newHalfHeight.clamp(0.1, 1000.0);
+
+      // Update the orthographic height
+      setOrthoHalfHeight(halfHeight: limitedHalfHeight);
+      refreshFromKernel();
+      renderingNeeded();
+    } else {
+      // Original perspective zooming code
+      final cameraTransform = getCameraTransform(camera);
+
+      final zoomTargetPlaneDistance =
+          (cameraTransform!.target - cameraTransform.eye)
+              .dot(cameraTransform.forward);
+
+      final moveVec = cameraTransform.forward *
+          (ZOOM_PER_ZOOM_DELTA * (-scrollDeltaY) * zoomTargetPlaneDistance);
+
+      final newEye = cameraTransform.eye + moveVec;
+
+      _moveCameraAndRender(
+          eye: Vector3ToAPIVec3(newEye),
+          target: Vector3ToAPIVec3(cameraTransform.target),
+          up: Vector3ToAPIVec3(cameraTransform.up));
+    }
   }
 
   @override

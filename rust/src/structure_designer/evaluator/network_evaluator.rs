@@ -154,9 +154,9 @@ impl NetworkEvaluator {
       // Evaluate SDF at the scaled position
       let sdf_value = self.implicit_evaluator.eval(network, node_id, &scaled_pos, registry)[0];
       
-      println!("Current position: {:?}", current_pos);
-      println!("Scaled position: {:?}", scaled_pos);
-      println!("SDF value: {}", sdf_value);
+      //println!("Current position: {:?}", current_pos);
+      //println!("Scaled position: {:?}", scaled_pos);
+      //println!("SDF value: {}", sdf_value);
 
       // If we're close enough to the surface, return the distance
       if sdf_value.abs() < SURFACE_THRESHOLD {
