@@ -83,8 +83,8 @@ pub const HANDLE_DIVISIONS: u32 = 16; // Still used for line tessellation, could
 pub const HANDLE_HEIGHT: f64 = 0.6;
 pub const LINE_RADIUS: f64 = 0.15;
 pub const SELECTED_HANDLE_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0); // Orange for selected handle
-pub const HANDLE_COLOR: Vec3 = Vec3::new(0.3, 1.0, 0.7); // Light green for handles
-pub const LINE_COLOR: Vec3 = Vec3::new(0.5, 0.5, 1.0); // Light blue for the line
+pub const HANDLE_COLOR: Vec3 = Vec3::new(0.1, 1.0, 0.3); // Light green for handles
+pub const LINE_COLOR: Vec3 = Vec3::new(0.0, 0.0, 0.6);
 
 #[derive(Clone)]
 pub struct HalfPlaneGadget {
@@ -143,11 +143,53 @@ impl Tessellatable for HalfPlaneGadget {
         
         let line_material = Material::new(&LINE_COLOR, roughness, metallic);
         
-        // Draw the line connecting the two points
+        // Calculate the extended line across the entire coordinate system
+        use crate::renderer::tessellator::coordinate_system_tessellator::CS_SIZE;
+        
+        // Get the direction vector (normalized)
+        let dir_xz = DVec2::new(p2_3d.x - p1_3d.x, p2_3d.z - p1_3d.z).normalize();
+        
+        // If line is nearly vertical or horizontal, handle separately
+        let extended_line_start: DVec3;
+        let extended_line_end: DVec3;
+        
+        if dir_xz.x.abs() < 1e-6 {  // Line is parallel to Z axis
+            extended_line_start = DVec3::new(p1_3d.x, 0.0, -CS_SIZE);
+            extended_line_end = DVec3::new(p1_3d.x, 0.0, CS_SIZE);
+        } else if dir_xz.y.abs() < 1e-6 {  // Line is parallel to X axis
+            extended_line_start = DVec3::new(-CS_SIZE, 0.0, p1_3d.z);
+            extended_line_end = DVec3::new(CS_SIZE, 0.0, p1_3d.z);
+        } else {
+            // Calculate t values where line crosses grid boundary
+            // Parametrize line as p1 + t*dir
+            let t_x_min = (-CS_SIZE - p1_3d.x) / dir_xz.x;
+            let t_x_max = (CS_SIZE - p1_3d.x) / dir_xz.x;
+            let t_z_min = (-CS_SIZE - p1_3d.z) / dir_xz.y;
+            let t_z_max = (CS_SIZE - p1_3d.z) / dir_xz.y;
+            
+            // Find min and max t values within grid
+            let t_min = t_x_min.min(t_x_max).max(t_z_min.min(t_z_max));
+            let t_max = t_x_min.max(t_x_max).min(t_z_min.max(t_z_max));
+            
+            // Calculate start and end points
+            extended_line_start = DVec3::new(
+                p1_3d.x + t_min * dir_xz.x,
+                0.0,
+                p1_3d.z + t_min * dir_xz.y
+            );
+            
+            extended_line_end = DVec3::new(
+                p1_3d.x + t_max * dir_xz.x,
+                0.0,
+                p1_3d.z + t_max * dir_xz.y
+            );
+        }
+        
+        // Draw the extended line
         tessellator::tessellate_cylinder(
             output_mesh,
-            &p1_3d,
-            &p2_3d,
+            &extended_line_start,
+            &extended_line_end,
             LINE_RADIUS,
             HANDLE_DIVISIONS,
             &line_material,
