@@ -112,6 +112,11 @@ pub struct InputPinView {
     pub position: Option<APIIVec3>,
   }
 
+  pub struct APIPolygonData {
+    pub num_sides: i32,
+    pub radius: i32,
+  }
+
   #[derive(Clone, Debug)]
   pub struct APICrystalTypeInfo {
     pub primary_atomic_number: i32,

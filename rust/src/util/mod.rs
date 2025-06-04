@@ -4,3 +4,4 @@ pub mod transform;
 pub mod as_any;
 pub mod box_subdivision;
 pub mod imat3;
+pub mod mat_utils;

@@ -7,6 +7,7 @@ use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
+use crate::structure_designer::nodes::polygon::PolygonData;
 use crate::structure_designer::nodes::rect::RectData;
 use std::collections::HashMap;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
@@ -40,6 +41,7 @@ use crate::api::api_common::from_api_vec3;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
+use super::structure_designer_api_types::APIPolygonData;
 use super::structure_designer_api_types::APIRectData;
 
 #[flutter_rust_bridge::frb(sync)]
@@ -255,6 +257,19 @@ pub fn get_rect_data(node_id: u64) -> Option<APIRectData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_polygon_data(node_id: u64) -> Option<APIPolygonData> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+    let polygon_data = node_data.as_any_ref().downcast_ref::<PolygonData>()?;
+    return Some(APIPolygonData {
+      num_sides: polygon_data.num_sides,
+      radius: polygon_data.radius,
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_circle_data(node_id: u64) -> Option<APICircleData> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
@@ -445,6 +460,21 @@ pub fn set_rect_data(node_id: u64, data: APIRectData) {
       });
       instance.structure_designer.set_node_network_data(node_id, rect_data);
       refresh_renderer(instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_polygon_data(node_id: u64, data: APIPolygonData) {
+  unsafe {
+    if let Some(cad_instance) = CAD_INSTANCE.as_mut() {
+      if let Some(node_data) = cad_instance.structure_designer.get_node_network_data_mut(node_id) {
+        if let Some(polygon_data) = node_data.as_any_mut().downcast_mut::<PolygonData>() {
+          polygon_data.num_sides = data.num_sides;
+          polygon_data.radius = data.radius;
+          refresh_renderer(cad_instance, false);
+        }
+      }
     }
   }
 }

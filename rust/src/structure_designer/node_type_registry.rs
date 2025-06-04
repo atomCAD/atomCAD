@@ -6,6 +6,7 @@ use super::node_network::NodeNetwork;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::parameter::ParameterData;
 use super::nodes::cuboid::CuboidData;
+use super::nodes::polygon::PolygonData;
 use super::nodes::sphere::SphereData;
 use super::nodes::circle::CircleData;
 use super::nodes::rect::RectData;
@@ -60,6 +61,16 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(CircleData {
         center: IVec2::new(0, 0),
         radius: 1,
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "polygon".to_string(),
+      parameters: Vec::new(),
+      output_type: DataType::Geometry2D,
+      node_data_creator: || Box::new(PolygonData {
+        num_sides: 3,
+        radius: 3,
       }),
     });
 

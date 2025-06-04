@@ -79,6 +79,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
 
   @protected
+  APIPolygonData dco_decode_api_polygon_data(dynamic raw);
+
+  @protected
   APIRectData dco_decode_api_rect_data(dynamic raw);
 
   @protected
@@ -149,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APIPolygonData dco_decode_box_autoadd_api_polygon_data(dynamic raw);
 
   @protected
   APIRectData dco_decode_box_autoadd_api_rect_data(dynamic raw);
@@ -282,6 +288,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
 
   @protected
+  APIPolygonData? dco_decode_opt_box_autoadd_api_polygon_data(dynamic raw);
+
+  @protected
   APIRectData? dco_decode_opt_box_autoadd_api_rect_data(dynamic raw);
 
   @protected
@@ -402,6 +411,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
 
   @protected
+  APIPolygonData sse_decode_api_polygon_data(SseDeserializer deserializer);
+
+  @protected
   APIRectData sse_decode_api_rect_data(SseDeserializer deserializer);
 
   @protected
@@ -484,6 +496,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPolygonData sse_decode_box_autoadd_api_polygon_data(
       SseDeserializer deserializer);
 
   @protected
@@ -640,6 +656,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIPolygonData? sse_decode_opt_box_autoadd_api_polygon_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIRectData? sse_decode_opt_box_autoadd_api_rect_data(
       SseDeserializer deserializer);
 
@@ -774,6 +794,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_polygon_data(
+      APIPolygonData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_rect_data(APIRectData self, SseSerializer serializer);
 
   @protected
@@ -858,6 +882,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_polygon_data(
+      APIPolygonData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_rect_data(
@@ -1017,6 +1045,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_half_space_data(
       APIHalfSpaceData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_polygon_data(
+      APIPolygonData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_rect_data(
