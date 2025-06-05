@@ -3393,7 +3393,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APIHalfSpaceData(
       millerIndex: dco_decode_apii_vec_3(arr[0]),
-      shift: dco_decode_i_32(arr[1]),
+      center: dco_decode_apii_vec_3(arr[1]),
     );
   }
 
@@ -4276,8 +4276,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_millerIndex = sse_decode_apii_vec_3(deserializer);
-    var var_shift = sse_decode_i_32(deserializer);
-    return APIHalfSpaceData(millerIndex: var_millerIndex, shift: var_shift);
+    var var_center = sse_decode_apii_vec_3(deserializer);
+    return APIHalfSpaceData(millerIndex: var_millerIndex, center: var_center);
   }
 
   @protected
@@ -5288,7 +5288,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIHalfSpaceData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_3(self.millerIndex, serializer);
-    sse_encode_i_32(self.shift, serializer);
+    sse_encode_apii_vec_3(self.center, serializer);
   }
 
   @protected

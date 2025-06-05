@@ -386,6 +386,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     if (oldDragState == ViewportDragState.defaultDrag && isGadgetDragging) {
       gadgetEndDrag();
       renderingNeeded();
+      refreshFromKernel();
       isGadgetDragging = false;
     }
   }

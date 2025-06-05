@@ -169,7 +169,7 @@ impl NodeTypeRegistry {
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(HalfSpaceData {
         miller_index: IVec3::new(1, 0, 0), // Default normal along x-axis
-        shift: 0,
+        center: IVec3::new(0, 0, 0),
       }),
     });
 

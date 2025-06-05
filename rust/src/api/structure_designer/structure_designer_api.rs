@@ -341,7 +341,7 @@ pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
     let half_space_data = node_data.as_any_ref().downcast_ref::<HalfSpaceData>()?;
     return Some(APIHalfSpaceData {
       miller_index: to_api_ivec3(&half_space_data.miller_index),
-      shift: half_space_data.shift,
+      center: to_api_ivec3(&half_space_data.center),
     });
   }
 }
@@ -556,7 +556,7 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
     if let Some(instance) = &mut CAD_INSTANCE {
       let half_space_data = Box::new(HalfSpaceData {
         miller_index: from_api_ivec3(&data.miller_index),
-        shift: data.shift,
+        center: from_api_ivec3(&data.center),
       });
       instance.structure_designer.set_node_network_data(node_id, half_space_data);
       refresh_renderer(instance, false);

@@ -3655,10 +3655,10 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_millerIndex =
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
-        let mut var_shift = <i32>::sse_decode(deserializer);
+        let mut var_center = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData {
             miller_index: var_millerIndex,
-            shift: var_shift,
+            center: var_center,
         };
     }
 }
@@ -5001,7 +5001,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.miller_index.into_into_dart().into_dart(),
-            self.shift.into_into_dart().into_dart(),
+            self.center.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5708,7 +5708,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.miller_index, serializer);
-        <i32>::sse_encode(self.shift, serializer);
+        <crate::api::common_api_types::APIIVec3>::sse_encode(self.center, serializer);
     }
 }
 

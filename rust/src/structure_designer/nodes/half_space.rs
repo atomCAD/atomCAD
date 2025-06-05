@@ -45,13 +45,14 @@ pub const SHIFT_HANDLE_LENGTH: f64 = 1.2;
 pub struct HalfSpaceData {
   #[serde(with = "ivec3_serializer")]
   pub miller_index: IVec3,
-  pub shift: i32,
+  #[serde(with = "ivec3_serializer")]
+  pub center: IVec3,
 }
 
 impl NodeData for HalfSpaceData {
 
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
-      return Some(Box::new(HalfSpaceGadget::new(&self.miller_index, self.shift)));
+      return Some(Box::new(HalfSpaceGadget::new(&self.miller_index, self.center)));
     }
   
 }
@@ -60,12 +61,11 @@ pub fn eval_half_space<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
-
   let dir = half_space_data.miller_index.as_dvec3().normalize();
-  let shift_handle_offset = ((half_space_data.shift as f64) / half_space_data.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+  let center_pos = half_space_data.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
   return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-    dir * shift_handle_offset,
+    center_pos,
     DQuat::from_rotation_arc(DVec3::Y, dir),
   )});
 }
@@ -79,13 +79,17 @@ pub fn implicit_eval_half_space<'a>(
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
   let float_miller = half_space_data.miller_index.as_dvec3();
   let miller_magnitude = float_miller.length();
-  return (float_miller.dot(sample_point.clone()) - (half_space_data.shift as f64)) / miller_magnitude;
+  let center_pos = half_space_data.center.as_dvec3();
+  
+  // Calculate the signed distance from the point to the plane defined by the normal (miller_index) and center point
+  return float_miller.dot(*sample_point - center_pos) / miller_magnitude;
 }
 
 #[derive(Clone)]
 pub struct HalfSpaceGadget {
     pub miller_index: IVec3,
-    pub shift: i32,
+    pub center: IVec3,
+    pub visualized_plane_shift: i32,
     pub dir: DVec3, // normalized
     pub shift_handle_offset: f64,
     pub is_dragging: bool,
@@ -93,13 +97,15 @@ pub struct HalfSpaceGadget {
 
 impl Tessellatable for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
-        let direction_handle_center = self.dir * GADGET_LENGTH;
+        // Calculate center position in world space
+        let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        let direction_handle_center = center_pos + self.dir * GADGET_LENGTH;
 
         // axis of the gadget
         tessellator::tessellate_cylinder(
           output_mesh,
-          &(self.dir * f64::min(self.shift_handle_offset, 0.0)),
-          &(self.dir * f64::max(self.shift_handle_offset, GADGET_LENGTH)),
+          &(center_pos + self.dir * f64::min(self.shift_handle_offset, 0.0)),
+          &(center_pos + self.dir * f64::max(self.shift_handle_offset, GADGET_LENGTH)),
           AXIS_RADIUS,
           AXIS_DIVISIONS,
           &Material::new(&Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8), 
@@ -108,14 +114,14 @@ impl Tessellatable for HalfSpaceGadget {
         // center sphere
         tessellator::tessellate_sphere(
             output_mesh,
-            &DVec3::new(0.0, 0.0, 0.0),
+            &center_pos,
             CENTER_SPHERE_RADIUS,
             CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
             CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
             &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
 
         
-        let shift_handle_center = self.dir * self.shift_handle_offset;
+        let shift_handle_center = center_pos + self.dir * self.shift_handle_offset;
 
         // shift handle
         tessellator::tessellate_cylinder(
@@ -148,13 +154,12 @@ impl Tessellatable for HalfSpaceGadget {
             let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);      
 
             let thickness = 0.05;
-
-            let plane_offset = ((self.shift as f64) / self.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+            let plane_offset = ((self.visualized_plane_shift as f64) / self.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
             // A grid representing the plane
             tessellator::tessellate_grid(
                 output_mesh,
-                &(plane_normal * plane_offset),
+                &(center_pos + plane_offset * plane_normal),
                 &plane_rotator,
                 thickness,
                 40.0,
@@ -179,8 +184,11 @@ impl Gadget for HalfSpaceGadget {
     // handle 0: shift handle
     // handle 1: direction handle
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+        // Calculate center position in world space
+        let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        
         // Test shift handle
-        let shift_handle_center = self.dir * self.shift_handle_offset;
+        let shift_handle_center = center_pos + self.dir * self.shift_handle_offset;
         let shift_handle_start = shift_handle_center - self.dir * 0.5 * SHIFT_HANDLE_LENGTH;
         let shift_handle_end = shift_handle_center + self.dir * 0.5 * SHIFT_HANDLE_LENGTH;
 
@@ -194,7 +202,7 @@ impl Gadget for HalfSpaceGadget {
             return Some(0); // Shift handle hit
         }
 
-        let direction_handle_center = self.dir * GADGET_LENGTH;
+        let direction_handle_center = center_pos + self.dir * GADGET_LENGTH;
    
         // Test direction handle (cylinder centered at gadget_end_point)
         let direction_handle_start = direction_handle_center - self.dir * 0.5 * DIRECTION_HANDLE_LENGTH;
@@ -218,20 +226,23 @@ impl Gadget for HalfSpaceGadget {
     }
 
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+        // Calculate center position in world space
+        let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        
         if handle_index == 0 {
             // Shift handle drag
             let t = get_closest_point_on_first_ray(
-                &DVec3::new(0.0, 0.0, 0.0),
+                &center_pos,
                 &self.dir,
                 &ray_origin,
                 &ray_direction);
             self.shift_handle_offset = t;
-            self.shift = self.offset_to_quantized_shift(self.shift_handle_offset);
+            self.visualized_plane_shift = self.offset_to_quantized_shift(self.shift_handle_offset);
         }
         else if handle_index == 1 {
             // Direction handle drag
             if let Some(t) = sphere_hit_test(
-                &DVec3::new(0.0, 0.0, 0.0),
+                &center_pos,
                 GADGET_LENGTH,
                 &ray_origin,
                 &ray_direction
@@ -239,7 +250,8 @@ impl Gadget for HalfSpaceGadget {
                 let new_end_point = ray_origin + ray_direction * t;
                 self.dir = new_end_point.normalize();
                 self.miller_index = self.quantize_dir(&self.dir);
-                self.shift = self.offset_to_quantized_shift(self.shift_handle_offset);
+                // We're changing direction, so reset the visualized plane shift
+                self.visualized_plane_shift = 0;
             }
         }
     }
@@ -247,7 +259,24 @@ impl Gadget for HalfSpaceGadget {
     fn end_drag(&mut self) {
         self.is_dragging = false;
         self.dir = self.miller_index.as_dvec3().normalize();
-        self.shift_handle_offset = ((self.shift as f64) / self.miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64)
+
+        if self.visualized_plane_shift != 0 {
+            // Get shift in world space
+            let shift_amount = (self.visualized_plane_shift as f64) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64) / self.miller_index.as_dvec3().length();
+            
+            // Calculate the shifted point in world coordinates
+            let center_world_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+            let shifted_point = center_world_pos + self.dir * shift_amount;
+            
+            // Find a lattice point that lies exactly on the shifted plane
+            self.center = self.find_lattice_point_on_plane(shifted_point);
+            
+            // Reset the visualized shift since we've moved the center
+            self.visualized_plane_shift = 0;
+        }
+        
+        // Always reset the shift handle offset when dragging ends
+        self.shift_handle_offset = 0.0;
     }
 }
 
@@ -259,30 +288,106 @@ impl NodeNetworkGadget for HalfSpaceGadget {
     fn sync_data(&self, data: &mut dyn NodeData) {
         if let Some(half_space_data) = data.as_any_mut().downcast_mut::<HalfSpaceData>() {
             half_space_data.miller_index = self.miller_index;
-            half_space_data.shift = self.shift;
+            half_space_data.center = self.center;
         }
     }
 }
 
 impl HalfSpaceGadget {
 
-    pub fn new(miller_index: &IVec3, shift: i32) -> Self {
+    pub fn new(miller_index: &IVec3, center: IVec3) -> Self {
+        let normalized_dir = miller_index.as_dvec3().normalize();
+        
         let ret = Self {
             miller_index: *miller_index,
-            shift,
-            dir: miller_index.as_dvec3().normalize(),
-            shift_handle_offset: ((shift as f64) / miller_index.as_dvec3().length()) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64),
+            center,
+            visualized_plane_shift: 0, // No initial shift relative to center
+            dir: normalized_dir,
+            shift_handle_offset: 0.0,  // No initial offset
             is_dragging: false
         };
 
         return ret;
     }
 
-    fn tessellate_lattice_points(&self, output_mesh: &mut Mesh) {
+    /// Find a lattice point (integer coordinates) that lies exactly on the plane
+    /// defined by the given miller_index and a target point in world coordinates.
+    /// 
+    /// Returns the closest lattice point to the target_point that satisfies the plane equation.
+    fn find_lattice_point_on_plane(&self, target_point: DVec3) -> IVec3 {
+        // Convert target point to lattice coordinates
+        let target_lattice = target_point / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        
+        // Calculate an initial guess by rounding to nearest integer coordinates
+        let initial_guess = IVec3::new(
+            target_lattice.x.round() as i32,
+            target_lattice.y.round() as i32,
+            target_lattice.z.round() as i32
+        );
+        
+        // Get the normalized miller index as the plane normal
+        let normal = self.miller_index.as_dvec3().normalize();
+        
+        // Determine search radius based on miller index components
+        // For mathematical correctness, we need a radius that accounts for:
+        // 1. The magnitude of the miller index
+        // 2. Possible large spacings between valid lattice points
+        //
+        // A conservative approach is to use the sum of the absolute values
+        // of the Miller indices, which guarantees finding a solution
+        let h = self.miller_index.x.abs();
+        let k = self.miller_index.y.abs();
+        let l = self.miller_index.z.abs();
+        let magnitude_sum = h + k + l;
+        
+        // Use a very conservative radius that's guaranteed to find a solution
+        // if one exists within a reasonable distance
+        let max_radius = i32::max(magnitude_sum * 2, 10); // At least radius 10
+        
+        // Search in increasingly larger cubes around the initial guess
+        for radius in 0..=max_radius {
+            // Search in a cube with side length 2*radius+1 centered at initial_guess
+            for dx in -radius..=radius {
+                for dy in -radius..=radius {
+                    for dz in -radius..=radius {
+                        // Skip points we've already checked in smaller cubes
+                        if dx.abs() < radius && dy.abs() < radius && dz.abs() < radius {
+                            continue;
+                        }
+                        
+                        let candidate = initial_guess + IVec3::new(dx, dy, dz);
+                        
+                        // Check if this point satisfies the plane equation
+                        // For a point to lie on the plane: normal · (point - target_point) = 0
+                        // Convert candidate to world space for consistent comparison with target_point
+                        let candidate_world = candidate.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+                        let distance_from_plane = normal.dot(candidate_world - target_point);
+                        
+                        // Allow for a reasonable error due to floating point calculations
+                        // Using 1e-4 provides sufficient precision while avoiding false negatives
+                        if distance_from_plane.abs() < 1e-4 {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If no exact solution found, use the initial guess
+        // This should be extremely rare with reasonable miller indices
+        initial_guess
+    }
 
+
+    fn tessellate_lattice_points(&self, output_mesh: &mut Mesh) {
         let float_miller = self.miller_index.as_dvec3();
         let miller_magnitude = float_miller.length();
-        let shift_float = self.shift as f64;
+        
+        // Calculate center position in world space
+        let center_pos = self.center.as_dvec3();
+        
+        // Calculate total plane shift (center + visualized_plane_shift)
+        let plane_shift = self.visualized_plane_shift as f64;
 
         let regular_cube_size = DVec3::new(0.1, 0.1, 0.1);
         let regular_cube_material = Material::new(&Vec3::new(0.6, 0.6, 0.6), 0.5, 0.0);
@@ -295,11 +400,17 @@ impl HalfSpaceGadget {
             for y in common_constants::IMPLICIT_VOLUME_MIN.y..common_constants::IMPLICIT_VOLUME_MAX.y {
                 for z in common_constants::IMPLICIT_VOLUME_MIN.z..common_constants::IMPLICIT_VOLUME_MAX.z {
                     let sample_point = DVec3::new(x as f64, y as f64, z as f64);
-                    let distance = (float_miller.dot(sample_point) - shift_float).abs() / miller_magnitude;
+                    
+                    // Calculate signed distance from the plane defined by center and miller index with shift
+                    // First get the distance from the center-based plane
+                    let center_distance = float_miller.dot(sample_point - center_pos) / miller_magnitude;
+                    
+                    // Then apply the visualized plane shift
+                    let adjusted_distance = (center_distance - plane_shift / miller_magnitude).abs();
 
-                    if distance < 0.01 {
+                    if adjusted_distance < 0.01 {
                         let lattice_point = sample_point * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-                        let highlighted = distance < 0.01;
+                        let highlighted = adjusted_distance < 0.01;
 
                         let cube_size = if highlighted {
                             &highlighted_cube_size
@@ -317,8 +428,8 @@ impl HalfSpaceGadget {
                             output_mesh,
                             &lattice_point,
                             cube_size,
-                        &DQuat::IDENTITY,
-                        cube_material, cube_material, cube_material);
+                            &DQuat::IDENTITY,
+                            cube_material, cube_material, cube_material);
                     } 
                 }
             }

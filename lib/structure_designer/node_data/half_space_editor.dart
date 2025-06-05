@@ -75,18 +75,18 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
               onChanged: (newValue) {
                 _updateStagedData(APIHalfSpaceData(
                   millerIndex: newValue,
-                  shift: _stagedData!.shift,
+                  center: _stagedData!.center,
                 ));
               },
             ),
             const SizedBox(height: 8),
-            IntInput(
-              label: 'Shift',
-              value: _stagedData!.shift,
+            IVec3Input(
+              label: 'Center',
+              value: _stagedData!.center,
               onChanged: (newValue) {
                 _updateStagedData(APIHalfSpaceData(
                   millerIndex: _stagedData!.millerIndex,
-                  shift: newValue,
+                  center: newValue,
                 ));
               },
             ),

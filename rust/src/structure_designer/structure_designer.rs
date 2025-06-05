@@ -509,6 +509,7 @@ impl StructureDesigner {
   pub fn gadget_end_drag(&mut self) {
     if let Some(gadget) = &mut self.gadget {
       gadget.end_drag();
+      self.sync_gadget_data();
     }
   }
 
