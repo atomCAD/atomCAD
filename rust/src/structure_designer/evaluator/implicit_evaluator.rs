@@ -179,3 +179,22 @@ impl ImplicitEvaluator {
   }
 
 }
+
+pub struct NodeEvaluator<'a> {
+    pub network: &'a NodeNetwork,
+    pub node_id: u64,
+    pub registry: &'a NodeTypeRegistry,
+    pub implicit_evaluator: &'a ImplicitEvaluator,
+}
+
+impl<'a> NodeEvaluator<'a> {
+    pub fn eval(&self, sample_point: &DVec3) -> f64 {
+        // Delegate to implicit_evaluator.eval and return the first element in the result array
+        self.implicit_evaluator.eval(self.network, self.node_id, sample_point, self.registry)[0]
+    }
+
+    pub fn get_gradient(&self, sample_point: &DVec3) -> (DVec3, f64) {
+        // Delegate to implicit_evaluator.get_gradient
+        self.implicit_evaluator.get_gradient(self.network, self.node_id, sample_point, self.registry)
+    }
+}
