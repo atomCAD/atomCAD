@@ -197,4 +197,14 @@ impl<'a> NodeEvaluator<'a> {
         // Delegate to implicit_evaluator.get_gradient
         self.implicit_evaluator.get_gradient(self.network, self.node_id, sample_point, self.registry)
     }
+    
+    pub fn eval_2d(&self, sample_point: &DVec2) -> f64 {
+        // Delegate to implicit_evaluator.eval_2d and return the first element in the result array
+        self.implicit_evaluator.eval_2d(self.network, self.node_id, sample_point, self.registry)[0]
+    }
+    
+    pub fn get_gradient_2d(&self, sample_point: &DVec2) -> (DVec2, f64) {
+        // Delegate to implicit_evaluator.get_gradient_2d
+        self.implicit_evaluator.get_gradient_2d(self.network, self.node_id, sample_point, self.registry)
+    }
 }
