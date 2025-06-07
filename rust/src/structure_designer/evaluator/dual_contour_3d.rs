@@ -2,20 +2,25 @@ use std::collections::HashMap;
 use glam::i32::IVec3;
 use crate::util::box_subdivision::subdivide_box;
 use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
-
+use crate::structure_designer::common_constants;
 const DC_3D_SAMPLES_PER_UNIT: i32 = 4;
 
 pub struct DCCell {
   pub vertex_index: i32, // -1 if no vertex for this cell.
 }
 
-pub fn generate_cells() -> HashMap<(i32, i32, i32), DCCell> {
+pub fn generate_cells(node_evaluator: &NodeEvaluator) -> HashMap<(i32, i32, i32), DCCell> {
   let mut cells = HashMap::new();
+
+  generate_cells_for_box(
+    node_evaluator,
+    &(common_constants::IMPLICIT_VOLUME_MIN * DC_3D_SAMPLES_PER_UNIT),
+    &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * DC_3D_SAMPLES_PER_UNIT),
+    &mut cells);
 
   return cells;
 }
 
-/*
 fn generate_cells_for_box(
   node_evaluator: &NodeEvaluator,
   start_pos: &IVec3,
@@ -54,11 +59,11 @@ fn generate_cells_for_box(
                     start_pos.y + y,
                     start_pos.z + z
                 );
-                process_cell_for_point_cloud(
-                    node_evaluator,
-                    &cell_pos,
-                    eval_cache,
-                    point_cloud
+                cells.insert(
+                    (cell_pos.x, cell_pos.y, cell_pos.z),
+                    DCCell {
+                        vertex_index: -1,
+                    }
                 );
             }
         }
@@ -77,14 +82,12 @@ fn generate_cells_for_box(
 
   // Process each subdivision recursively
   for (sub_start, sub_size) in subdivisions {
-    process_box_for_point_cloud(
+    generate_cells_for_box(
         node_evaluator,
         &sub_start,
         &sub_size,
-        eval_cache,
-        point_cloud
+        cells,
     );
   }
 }
 
-*/
