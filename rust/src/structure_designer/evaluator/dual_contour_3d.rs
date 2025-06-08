@@ -4,6 +4,7 @@ use crate::util::box_subdivision::subdivide_box;
 use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
 use crate::renderer::mesh::{Mesh, Vertex, Material};
+use crate::structure_designer::evaluator::quad_mesh::QuadMesh;
 
 /*
  * Terminology for Dual Contouring:
@@ -62,15 +63,17 @@ pub fn generate_cells(node_evaluator: &NodeEvaluator) -> HashMap<(i32, i32, i32)
   return cells;
 }
 
-pub fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &NodeEvaluator) -> Mesh {
-  let mut mesh = Mesh::new();
-  let default_material = Material::new(&Vec3::new(0.8, 0.8, 0.8), 0.5, 0.0);
+pub fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &NodeEvaluator) -> QuadMesh {
+  let mut mesh = QuadMesh::new();
   
   // First pass: Generate vertices for cells and process edges
-  process_cell_edges(cells, node_evaluator, &mut mesh, &default_material);
+  process_cell_edges(cells, node_evaluator, &mut mesh);
   
   // Second pass: Calculate proper vertex positions for each cell
   optimize_vertex_positions(cells, node_evaluator, &mut mesh);
+  
+  // Compute normals for quads
+  mesh.compute_quad_normals();
   
   mesh
 }
@@ -78,8 +81,7 @@ pub fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluato
 fn process_cell_edges(
   cells: &mut HashMap<(i32, i32, i32), DCCell>, 
   node_evaluator: &NodeEvaluator, 
-  mesh: &mut Mesh,
-  material: &Material
+  mesh: &mut QuadMesh
 ) {
   // Create a list of vertices to process (each cell key is also the key of its minimum vertex)
   let vertex_keys: Vec<(i32, i32, i32)> = cells.keys().cloned().collect();
@@ -163,16 +165,8 @@ fn process_cell_edges(
           // We'll optimize the position later in optimize_vertex_positions
           let cell_center = get_cell_center_pos(surrounding_cell_key);
           
-          // Create a placeholder normal - will be calculated correctly later
-          let normal = Vec3::new(0.0, 1.0, 0.0);
-          
-          let vertex = Vertex::new(
-            &Vec3::new(cell_center.x as f32, cell_center.y as f32, cell_center.z as f32),
-            &normal,
-            material
-          );
-          
-          let vertex_index = mesh.add_vertex(vertex);
+          // With QuadMesh, we only need to add the position (no normals/materials needed)
+          let vertex_index = mesh.add_vertex(cell_center);
           cell.vertex_index = vertex_index as i32;
         }
         
@@ -236,8 +230,8 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
   (a + b) * 0.5
 }
 
-// Optimize vertex positions and update normals
-fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node_evaluator: &NodeEvaluator, mesh: &mut Mesh) {
+// Optimize vertex positions using intersection data
+fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node_evaluator: &NodeEvaluator, mesh: &mut QuadMesh) {
   // Iterate over all cells to optimize vertex positions based on stored edge intersections
   for cell in cells.values() {
     // Skip cells without a vertex or intersections
@@ -245,28 +239,18 @@ fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node
       continue;
     }
     
-    // Compute average position and normal from edge intersections
+    // Compute average position from edge intersections
     let mut avg_position = DVec3::ZERO;
-    let mut avg_normal = DVec3::ZERO;
     
     for intersection in &cell.edge_intersections {
       avg_position += intersection.position;
-      avg_normal += intersection.normal;
     }
     
     avg_position /= cell.edge_intersections.len() as f64;
     
-    // Normalize the average normal
-    if avg_normal.length_squared() > 0.0 {
-      avg_normal = avg_normal.normalize();
-    } else {
-      avg_normal = DVec3::new(0.0, 0.0, 1.0); // Default normal if we couldn't compute one
-    }
-    
-    // Update the vertex in the mesh
-    if let Some(vertex) = mesh.vertices.get_mut(cell.vertex_index as usize) {
-      vertex.position = [avg_position.x as f32, avg_position.y as f32, avg_position.z as f32];
-      vertex.normal = [avg_normal.x as f32, avg_normal.y as f32, avg_normal.z as f32];
+    // Update the vertex position in the mesh (no normals in QuadMesh)
+    if cell.vertex_index >= 0 {
+      mesh.set_vertex_position(cell.vertex_index as usize, avg_position);
     }
   }
 }
