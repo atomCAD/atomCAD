@@ -44,8 +44,8 @@ const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
     [(0, 0, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1)],
     
     // Cells around Y-direction edge from vertex at (i,j,k) to vertex at (i,j+1,k)
-    // For this Y edge, we use the cells at: (i,j,k), (i+1,j,k), (i+1,j,k+1), (i,j,k+1)
-    [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)],
+    // For this Y edge, we use the cells at: (i,j,k), (i,j,k+1), (i+1,j,k+1), (i+1,j,k)
+    [(0, 0, 0), (0, 0, 1), (1, 0, 1), (1, 0, 0)],
     
     // Cells around Z-direction edge from vertex at (i,j,k) to vertex at (i,j,k+1)
     // For this Z edge, we use the cells at: (i,j,k), (i+1,j,k), (i+1,j+1,k), (i,j+1,k)
@@ -187,8 +187,17 @@ fn process_cell_edges(
         cell_indices[i] = cell.vertex_index as u32;
       }
       
-      // Add quad using the vertices from all four surrounding cells
-      mesh.add_quad(cell_indices[0], cell_indices[1], cell_indices[2], cell_indices[3]);
+      // Determine correct winding order for the quad based on edge normal
+      let edge_direction = DVec3::new(dx as f64, dy as f64, dz as f64);
+      
+      // Add quad with correct winding order
+      // Simple check: if edge direction and normal are aligned (positive dot product), 
+      // use default ordering, otherwise reverse
+      if edge_direction.dot(normal) > 0.0 {
+        mesh.add_quad(cell_indices[0], cell_indices[1], cell_indices[2], cell_indices[3]);
+      } else {
+        mesh.add_quad(cell_indices[3], cell_indices[2], cell_indices[1], cell_indices[0]);
+      }
     }
   }
 }
@@ -213,6 +222,8 @@ fn get_cell_center_pos(cell_key: (i32, i32, i32)) -> DVec3 {
     (cell_key.2 as f64 + 0.5) / DC_3D_SAMPLES_PER_UNIT as f64
   )
 }
+
+
 
 // Function to find the zero-crossing point on an edge using binary search
 fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3) -> DVec3 {
