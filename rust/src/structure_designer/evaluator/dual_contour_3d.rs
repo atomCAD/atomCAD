@@ -82,8 +82,10 @@ fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &
   process_cell_edges(cells, node_evaluator, &mut mesh);
   
   // Second pass: Calculate proper vertex positions for each cell
-  optimize_vertex_positions(cells, node_evaluator, &mut mesh);
+  //optimize_vertex_positions(cells, node_evaluator, &mut mesh);
   
+  mesh.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+
   // Compute normals for quads
   mesh.compute_quad_normals();
   

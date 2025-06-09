@@ -466,7 +466,7 @@ impl Renderer {
 
             for quad_mesh in scene.quad_meshes() {
                 quad_mesh.convert_into_mesh_simple(&mut mesh, false, &Material::new(
-                    &Vec3::new(1.0, 1.0, 1.0), 
+                    &Vec3::new(0.0, 1.0, 0.0), 
                     1.0, 
                     0.0));
             }

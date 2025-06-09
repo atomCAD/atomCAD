@@ -98,7 +98,7 @@ impl NetworkEvaluator {
   pub fn new() -> Self {
     Self {
       implicit_evaluator: ImplicitEvaluator::new(),
-      geometry_visualization_3d: GeometryVisualization3D::SurfaceSplatting,
+      geometry_visualization_3d: GeometryVisualization3D::DualContouring,
     }
   }
 

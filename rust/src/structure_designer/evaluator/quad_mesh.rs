@@ -69,7 +69,13 @@ impl QuadMesh {
         
         quad_index
     }
-    
+
+    pub fn scale(&mut self, scale: f64) {
+        for vertex in &mut self.vertices {
+            vertex.position *= scale;
+        }
+    }
+
     /// Computes the normal for each quad in the mesh
     pub fn compute_quad_normals(&mut self) {
         for quad in &mut self.quads {
