@@ -121,16 +121,12 @@ impl QuadMesh {
         Vec3::new(vec.x as f32, vec.y as f32, vec.z as f32)
     }
 
-    /// Creates a mesh with smooth normals (averaged from adjacent faces)
+    /// Converts this QuadMesh into an existing Mesh with smooth normals (averaged from adjacent faces)
     /// 
     /// # Arguments
+    /// * `mesh` - The target mesh to add vertices and faces to
     /// * `material` - The material to apply to the mesh vertices
-    /// 
-    /// # Returns
-    /// A mesh with shared vertices and smoothed normals
-    fn create_mesh_smooth(&self, material: &Material) -> Mesh {
-        let mut mesh = Mesh::new();
-        
+    fn convert_into_mesh_smooth(&self, mesh: &mut Mesh, material: &Material) {
         // First calculate normal for each vertex by averaging adjacent quad normals
         let mut vertex_normals: Vec<Vec3> = vec![Vec3::ZERO; self.vertices.len()];
         
@@ -167,19 +163,15 @@ impl QuadMesh {
                 vertex_indices[quad.vertices[3] as usize]
             );
         }
-        
-        mesh
     }
     
-    /// Creates a mesh with sharp edges (no normal averaging)
+    /// Converts this QuadMesh into an existing Mesh with sharp edges (no normal averaging)
     /// 
     /// # Arguments
+    /// * `mesh` - The target mesh to add vertices and faces to
     /// * `material` - The material to apply to the mesh vertices
-    /// 
-    /// # Returns
-    /// A mesh where each quad has its own set of vertices
-    fn create_mesh_sharp(&self, material: &Material) -> Mesh {
-        let mut mesh = Mesh::new();
+    fn convert_into_mesh_sharp(&self, mesh: &mut Mesh, material: &Material) {
+        // Process each quad
         
         // Sharp version: duplicate vertices for each quad
         for quad in &self.quads {
@@ -213,12 +205,26 @@ impl QuadMesh {
             
             // Add the quad (as two triangles) to the mesh
             mesh.add_quad(v0_idx, v1_idx, v2_idx, v3_idx);
+
         }
-        
-        mesh
     }
 
-    /// Creates a rendering Mesh from this QuadMesh
+    /// Converts this QuadMesh into an existing Mesh
+    /// 
+    /// # Arguments
+    /// * `mesh` - The target mesh to add vertices and faces to
+    /// * `smooth` - If true, vertex normals are averaged from adjacent face normals.
+    ///              If false, each quad gets its own set of vertices with the quad's normal.
+    /// * `material` - The material to apply to the mesh vertices
+    pub fn convert_into_mesh_simple(&self, mesh: &mut Mesh, smooth: bool, material: &Material) {
+        if smooth {
+            self.convert_into_mesh_smooth(mesh, material);
+        } else {
+            self.convert_into_mesh_sharp(mesh, material);
+        }
+    }
+    
+    /// Creates a new rendering Mesh from this QuadMesh
     /// 
     /// # Arguments
     /// * `smooth` - If true, vertex normals are averaged from adjacent face normals.
@@ -228,10 +234,8 @@ impl QuadMesh {
     /// # Returns
     /// A new Mesh suitable for rendering
     pub fn create_mesh_simple(&self, smooth: bool, material: &Material) -> Mesh {
-        if smooth {
-            self.create_mesh_smooth(material)
-        } else {
-            self.create_mesh_sharp(material)
-        }
+        let mut mesh = Mesh::new();
+        self.convert_into_mesh_simple(&mut mesh, smooth, material);
+        mesh
     }
 }

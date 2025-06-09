@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use glam::{i32::IVec3, Vec3, DVec3};
+use glam::{i32::IVec3, DVec3};
 use crate::util::box_subdivision::subdivide_box;
 use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
-use crate::renderer::mesh::{Mesh, Vertex, Material};
 use crate::structure_designer::evaluator::quad_mesh::QuadMesh;
 use crate::structure_designer::evaluator::qef_solver;
+use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 
 /*
  * Terminology for Dual Contouring:
@@ -52,7 +52,18 @@ const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
     [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
 ];
 
-pub fn generate_cells(node_evaluator: &NodeEvaluator) -> HashMap<(i32, i32, i32), DCCell> {
+pub fn generate_dual_contour_3d_scene(node_evaluator: &NodeEvaluator) -> StructureDesignerScene {
+  let mut cells = generate_cells(node_evaluator);
+
+  let mesh = generate_mesh(&mut cells, node_evaluator);
+
+  let mut scene = StructureDesignerScene::new();
+  scene.quad_meshes.push(mesh);
+
+  scene
+}
+
+fn generate_cells(node_evaluator: &NodeEvaluator) -> HashMap<(i32, i32, i32), DCCell> {
   let mut cells = HashMap::new();
 
   generate_cells_for_box(
@@ -64,7 +75,7 @@ pub fn generate_cells(node_evaluator: &NodeEvaluator) -> HashMap<(i32, i32, i32)
   return cells;
 }
 
-pub fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &NodeEvaluator) -> QuadMesh {
+fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &NodeEvaluator) -> QuadMesh {
   let mut mesh = QuadMesh::new();
   
   // First pass: Generate vertices for cells and process edges

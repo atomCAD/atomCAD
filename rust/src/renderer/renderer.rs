@@ -21,6 +21,7 @@ use std::time::Instant;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::util::transform::Transform;
+use crate::renderer::mesh::Material;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -463,6 +464,13 @@ impl Renderer {
                 surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
             }
 
+            for quad_mesh in scene.quad_meshes() {
+                quad_mesh.convert_into_mesh_simple(&mut mesh, false, &Material::new(
+                    &Vec3::new(1.0, 1.0, 1.0), 
+                    1.0, 
+                    0.0));
+            }
+            
             //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
 
             // Update main GPU mesh

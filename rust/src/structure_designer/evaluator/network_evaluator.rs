@@ -29,6 +29,7 @@ use crate::structure_designer::nodes::rect::eval_rect;
 
 use super::surface_splatting_2d::generate_2d_point_cloud_scene;
 use super::surface_splatting_3d::generate_point_cloud_scene;
+use super::dual_contour_3d::generate_dual_contour_3d_scene;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -47,6 +48,12 @@ pub enum NetworkResult {
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
   Error(String),
+}
+
+#[derive(PartialEq, Clone)]
+pub enum GeometryVisualization3D {
+  SurfaceSplatting,
+  DualContouring,
 }
 
 /// Creates a consistent error message for missing input in node evaluation
@@ -78,6 +85,7 @@ impl NetworkEvaluationContext {
 
 pub struct NetworkEvaluator {
     pub implicit_evaluator: ImplicitEvaluator,
+    pub geometry_visualization_3d: GeometryVisualization3D,
 }
 
 /*
@@ -90,6 +98,7 @@ impl NetworkEvaluator {
   pub fn new() -> Self {
     Self {
       implicit_evaluator: ImplicitEvaluator::new(),
+      geometry_visualization_3d: GeometryVisualization3D::SurfaceSplatting,
     }
   }
 
@@ -208,7 +217,11 @@ impl NetworkEvaluator {
       return generate_2d_point_cloud_scene(&node_evaluator, &mut context);
     }
     if node_type.output_type == DataType::Geometry {
-      return generate_point_cloud_scene(&node_evaluator, &mut context);
+      if self.geometry_visualization_3d == GeometryVisualization3D::SurfaceSplatting {
+        return generate_point_cloud_scene(&node_evaluator, &mut context);
+      } else if self.geometry_visualization_3d == GeometryVisualization3D::DualContouring {
+        return generate_dual_contour_3d_scene(&node_evaluator);
+      }
     }
     if node_type.output_type == DataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);

@@ -9,6 +9,7 @@ use crate::common::xyz_loader::load_xyz;
 use crate::common::xyz_loader::XyzError;
 use crate::common::xyz_saver::save_xyz;
 use crate::common::xyz_saver::XyzSaveError;
+use crate::structure_designer::evaluator::quad_mesh::QuadMesh;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
 use crate::util::transform::Transform;
@@ -626,6 +627,10 @@ impl<'a> Scene<'a> for SceneComposer {
       Box::new(std::iter::empty())
   }
 
+  fn quad_meshes(&self) -> Box<dyn Iterator<Item = &QuadMesh> + '_> {
+    Box::new(std::iter::empty())
+  }
+  
   fn tessellatable(&self) -> Option<Box<&dyn Tessellatable>> {
       // Use as_deref to get a reference to the inner ClusterFrameGadget
       let frame_gadget_ref = self.model.selected_frame_gadget.as_deref()?;
