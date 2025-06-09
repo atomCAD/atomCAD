@@ -35,21 +35,22 @@ const EDGE_DIRECTIONS: [(i32, i32, i32); 3] = [
     (0, 0, 1)  // Edge along +Z direction from vertex at (i,j,k) to (i,j,k+1)
 ];
 
-// Cells that surround each edge direction
+// Cells that surround each edge direction in counter-clockwise order when viewing from the positive end of the edge
+// (i.e., looking opposite to the edge direction, looking back toward the origin vertex)
 // Each array contains the relative positions of the 4 cells that meet at an edge
 // These cells will contribute vertices to form a quad in the final mesh
 const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
     // Cells around X-direction edge from vertex at (i,j,k) to vertex at (i+1,j,k)
-    // For this X edge, we use the cells at: (i,j,k), (i,j+1,k), (i,j+1,k+1), (i,j,k+1)
-    [(0, 0, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1)],
+    // Going CCW when looking from positive X back towards the origin at (i,j,k):
+    [(0, 0, 0), (0, -1, 0), (0, -1, -1), (0, 0, -1)],
     
     // Cells around Y-direction edge from vertex at (i,j,k) to vertex at (i,j+1,k)
-    // For this Y edge, we use the cells at: (i,j,k), (i,j,k+1), (i+1,j,k+1), (i+1,j,k)
-    [(0, 0, 0), (0, 0, 1), (1, 0, 1), (1, 0, 0)],
+    // Going CCW when looking from positive Y back towards the origin at (i,j,k):
+    [(0, 0, 0), (0, 0, -1), (-1, 0, -1), (-1, 0, 0)],
     
     // Cells around Z-direction edge from vertex at (i,j,k) to vertex at (i,j,k+1)
-    // For this Z edge, we use the cells at: (i,j,k), (i+1,j,k), (i+1,j+1,k), (i,j+1,k)
-    [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    // Going CCW when looking from positive Z back towards the origin at (i,j,k):
+    [(0, 0, 0), (-1, 0, 0), (-1, -1, 0), (0, -1, 0)]
 ];
 
 pub fn generate_dual_contour_3d_scene(node_evaluator: &NodeEvaluator) -> StructureDesignerScene {
@@ -82,7 +83,7 @@ fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &
   process_cell_edges(cells, node_evaluator, &mut mesh);
   
   // Second pass: Calculate proper vertex positions for each cell
-  //optimize_vertex_positions(cells, node_evaluator, &mut mesh);
+  optimize_vertex_positions(cells, node_evaluator, &mut mesh);
   
   mesh.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
 
@@ -147,6 +148,7 @@ fn process_cell_edges(
       
       // Skip if not all required cells exist
       if !all_cells_exist {
+        //println!("Skipping edge due to missing cells");
         continue;
       }
       
@@ -341,7 +343,7 @@ fn generate_cells_for_box(
                 );
             }
         }
-    }
+      }
     return;
   }
 
