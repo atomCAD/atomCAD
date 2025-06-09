@@ -5,6 +5,7 @@ use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
 use crate::renderer::mesh::{Mesh, Vertex, Material};
 use crate::structure_designer::evaluator::quad_mesh::QuadMesh;
+use crate::structure_designer::evaluator::qef_solver;
 
 /*
  * Terminology for Dual Contouring:
@@ -230,27 +231,41 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
   (a + b) * 0.5
 }
 
-// Optimize vertex positions using intersection data
+// Optimize vertex positions using QEF minimization
 fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node_evaluator: &NodeEvaluator, mesh: &mut QuadMesh) {
+  let spu = DC_3D_SAMPLES_PER_UNIT as f64;
+  
   // Iterate over all cells to optimize vertex positions based on stored edge intersections
-  for cell in cells.values() {
+  for (&(x, y, z), cell) in cells.iter() {
     // Skip cells without a vertex or intersections
     if cell.vertex_index < 0 || cell.edge_intersections.is_empty() {
       continue;
     }
     
-    // Compute average position from edge intersections
-    let mut avg_position = DVec3::ZERO;
+    // Calculate cell bounds in world space
+    let min_bound = DVec3::new(x as f64, y as f64, z as f64) / spu;
+    let max_bound = DVec3::new((x + 1) as f64, (y + 1) as f64, (z + 1) as f64) / spu;
+    
+    // Extract intersection points and normals
+    let mut positions = Vec::with_capacity(cell.edge_intersections.len());
+    let mut normals = Vec::with_capacity(cell.edge_intersections.len());
     
     for intersection in &cell.edge_intersections {
-      avg_position += intersection.position;
+      positions.push(intersection.position);
+      normals.push(intersection.normal);
     }
     
-    avg_position /= cell.edge_intersections.len() as f64;
+    // Compute optimal position using QEF solver with cell bounds constraint
+    let optimal_position = qef_solver::compute_optimal_position(
+      &positions, 
+      &normals,
+      min_bound, 
+      max_bound
+    );
     
-    // Update the vertex position in the mesh (no normals in QuadMesh)
+    // Update the vertex position in the mesh
     if cell.vertex_index >= 0 {
-      mesh.set_vertex_position(cell.vertex_index as usize, avg_position);
+      mesh.set_vertex_position(cell.vertex_index as u32, optimal_position);
     }
   }
 }
