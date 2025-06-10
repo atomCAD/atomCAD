@@ -3,5 +3,4 @@ pub mod implicit_evaluator;
 pub mod dual_contour_3d;
 pub mod surface_splatting_3d;
 pub mod surface_splatting_2d;
-pub mod quad_mesh;
 pub mod qef_solver;

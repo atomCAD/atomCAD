@@ -153,19 +153,21 @@ impl Tessellatable for HalfPlaneGadget {
         let extended_line_start: DVec3;
         let extended_line_end: DVec3;
         
+        let cs_size = CS_SIZE as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+
         if dir_xz.x.abs() < 1e-6 {  // Line is parallel to Z axis
-            extended_line_start = DVec3::new(p1_3d.x, 0.0, -CS_SIZE);
-            extended_line_end = DVec3::new(p1_3d.x, 0.0, CS_SIZE);
+            extended_line_start = DVec3::new(p1_3d.x, 0.0, -cs_size);
+            extended_line_end = DVec3::new(p1_3d.x, 0.0, cs_size);
         } else if dir_xz.y.abs() < 1e-6 {  // Line is parallel to X axis
-            extended_line_start = DVec3::new(-CS_SIZE, 0.0, p1_3d.z);
-            extended_line_end = DVec3::new(CS_SIZE, 0.0, p1_3d.z);
+            extended_line_start = DVec3::new(-cs_size, 0.0, p1_3d.z);
+            extended_line_end = DVec3::new(cs_size, 0.0, p1_3d.z);
         } else {
             // Calculate t values where line crosses grid boundary
             // Parametrize line as p1 + t*dir
-            let t_x_min = (-CS_SIZE - p1_3d.x) / dir_xz.x;
-            let t_x_max = (CS_SIZE - p1_3d.x) / dir_xz.x;
-            let t_z_min = (-CS_SIZE - p1_3d.z) / dir_xz.y;
-            let t_z_max = (CS_SIZE - p1_3d.z) / dir_xz.y;
+            let t_x_min = (-cs_size - p1_3d.x) / dir_xz.x;
+            let t_x_max = (cs_size - p1_3d.x) / dir_xz.x;
+            let t_z_min = (-cs_size - p1_3d.z) / dir_xz.y;
+            let t_z_max = (cs_size - p1_3d.z) / dir_xz.y;
             
             // Find min and max t values within grid
             let t_min = t_x_min.min(t_x_max).max(t_z_min.min(t_z_max));

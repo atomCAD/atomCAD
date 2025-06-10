@@ -9,7 +9,7 @@ use crate::common::xyz_loader::load_xyz;
 use crate::common::xyz_loader::XyzError;
 use crate::common::xyz_saver::save_xyz;
 use crate::common::xyz_saver::XyzSaveError;
-use crate::structure_designer::evaluator::quad_mesh::QuadMesh;
+use crate::common::quad_mesh::QuadMesh;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
 use crate::util::transform::Transform;

@@ -8,3 +8,4 @@ pub mod atomic_structure_utils;
 pub mod gadget;
 pub mod serialization_utils;
 pub mod crystal_utils;
+pub mod quad_mesh;

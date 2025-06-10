@@ -4,7 +4,7 @@ use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::common::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use std::collections::HashMap;
-use super::evaluator::quad_mesh::QuadMesh;
+use crate::common::quad_mesh::QuadMesh;
 
 pub struct StructureDesignerScene {
     pub atomic_structures: Vec<AtomicStructure>,

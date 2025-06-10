@@ -3,7 +3,7 @@ use glam::{i32::IVec3, DVec3};
 use crate::util::box_subdivision::subdivide_box;
 use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
-use crate::structure_designer::evaluator::quad_mesh::QuadMesh;
+use crate::common::quad_mesh::QuadMesh;
 use crate::structure_designer::evaluator::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 

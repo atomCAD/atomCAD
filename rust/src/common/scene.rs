@@ -2,7 +2,7 @@ use super::atomic_structure::AtomicStructure;
 use super::surface_point_cloud::SurfacePointCloud;
 use super::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::structure_designer::evaluator::quad_mesh::QuadMesh;
+use crate::common::quad_mesh::QuadMesh;
 
 pub trait Scene<'a> {
     fn atomic_structures(&self) -> Box<dyn Iterator<Item = &AtomicStructure> + '_>;
