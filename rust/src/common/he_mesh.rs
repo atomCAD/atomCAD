@@ -18,8 +18,6 @@ pub struct HEMesh {
     /// Maps vertex pairs (origin, target) to the half-edge that connects them
     /// This enables O(1) lookup of half-edges and their twins
     pub edge_map: HashMap<(VertexId, VertexId), HalfEdgeId>,
-    /// Tracks whether face normals have been computed
-    pub face_normals_computed: bool,
 }
 
 /// One record per mesh‐vertex.
@@ -40,8 +38,6 @@ pub struct HalfEdge {
     pub next:   HalfEdgeId,
     /// The opposite half‐edge (same undirected edge, opposite direction).
     pub twin:   HalfEdgeId,
-    /// Flag indicating whether this edge is sharp (used for smooth shading)
-    pub is_sharp: bool,
     // … optionally user‐data, edge‐properties, flags, etc …
 }
 
@@ -61,7 +57,6 @@ impl HEMesh {
             half_edges: Vec::new(),
             faces: Vec::new(),
             edge_map: HashMap::new(),
-            face_normals_computed: false,
         }
     }
 
@@ -94,7 +89,6 @@ impl HEMesh {
             face: face_id,
             next: he1_id,
             twin: HalfEdgeId(0), // Temporary value, will be updated later
-            is_sharp: false,
         };
         
         let he1 = HalfEdge {
@@ -102,7 +96,6 @@ impl HEMesh {
             face: face_id,
             next: he2_id,
             twin: HalfEdgeId(0), // Temporary value, will be updated later
-            is_sharp: false,
         };
         
         let he2 = HalfEdge {
@@ -110,7 +103,6 @@ impl HEMesh {
             face: face_id,
             next: he3_id,
             twin: HalfEdgeId(0), // Temporary value, will be updated later
-            is_sharp: false,
         };
         
         let he3 = HalfEdge {
@@ -118,7 +110,6 @@ impl HEMesh {
             face: face_id,
             next: he0_id,
             twin: HalfEdgeId(0), // Temporary value, will be updated later
-            is_sharp: false,
         };
         
         // Add half-edges to the mesh
@@ -135,9 +126,6 @@ impl HEMesh {
         
         // Add face to the mesh
         self.faces.push(face);
-        
-        // When adding a quad, face normals need to be recomputed
-        self.face_normals_computed = false;
         
         // Update vertex references to the half-edges
         self.vertices[v0.0].half_edge = Some(he0_id);
@@ -170,7 +158,6 @@ impl HEMesh {
     /// Computes normals for each face in the mesh, handling non-coplanar faces
     /// by averaging triangle normals within the face
     pub fn compute_face_normals(&mut self) {
-
         for face_id in 0..self.faces.len() {
             // Get the half-edge associated with this face
             let start_he_id = self.faces[face_id].half_edge;
@@ -237,60 +224,12 @@ impl HEMesh {
                 self.faces[face_id].normal = DVec3::new(0.0, 0.0, 1.0);
             }
         }
-        
-        // Set flag to indicate normals have been computed
-        self.face_normals_computed = true;
     }
     
     /// Scales the entire mesh by the provided scale factor
     pub fn scale(&mut self, scale: f64) {
         for vertex in &mut self.vertices {
             vertex.position *= scale;
-        }
-        // Uniform scaling doesn't affect normals, so we don't need to recompute them
-    }
-    
-    /// Detects sharp edges based on the angle between adjacent face normals
-    /// 
-    /// # Arguments
-    /// * `angle_threshold_degrees` - The minimum angle (in degrees) between face normals
-    ///                               for an edge to be considered sharp
-    pub fn detect_sharp_edges(&mut self, angle_threshold_degrees: f64) {
-        // Ensure face normals are computed
-        if !self.face_normals_computed {
-            self.compute_face_normals();
-        }
-        
-        // Convert threshold to radians and calculate the cosine threshold
-        // (We'll compare cosines directly to avoid expensive acos operations)
-        let angle_threshold_radians = angle_threshold_degrees.to_radians();
-        let cos_threshold = angle_threshold_radians.cos();
-        
-        // Process each half-edge
-        for he_id in 0..self.half_edges.len() {
-            let he_id = HalfEdgeId(he_id);
-            let twin_id = self.half_edges[he_id.0].twin;
-            
-            // Skip if this edge has already been processed
-            if he_id.0 < twin_id.0 {
-                // Get face normals on both sides of the edge
-                let face_id = self.half_edges[he_id.0].face;
-                let twin_face_id = self.half_edges[twin_id.0].face;
-                
-                let face_normal = self.faces[face_id.0].normal;
-                let twin_face_normal = self.faces[twin_face_id.0].normal;
-                
-                // Calculate the cosine of the angle between the normals
-                let cos_angle = face_normal.dot(twin_face_normal);
-                
-                // If the cosine is less than the threshold, the angle is greater than the threshold
-                // (Note: cosine decreases as angle increases)
-                let is_sharp = cos_angle < cos_threshold;
-                
-                // Mark both half-edges with the result
-                self.half_edges[he_id.0].is_sharp = is_sharp;
-                self.half_edges[twin_id.0].is_sharp = is_sharp;
-            }
         }
     }
 }
