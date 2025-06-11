@@ -1,4 +1,5 @@
 use crate::renderer::mesh::{Mesh, Vertex, Material};
+use crate::renderer::line_mesh::LineMesh;
 use glam::Vec3;
 use glam::DVec3;
 use crate::common::quad_mesh::QuadMesh;
@@ -189,5 +190,54 @@ pub fn tessellate_quad_mesh(quad_mesh: &QuadMesh, mesh: &mut Mesh, smoothing: Me
         MeshSmoothing::Smooth => tessellate_quad_mesh_smooth(quad_mesh, mesh, material),
         MeshSmoothing::Sharp => tessellate_quad_mesh_sharp(quad_mesh, mesh, material),
         MeshSmoothing::SmoothingGroupBased => tessellate_quad_mesh_smoothing_group_based(quad_mesh, mesh, material),
+    }
+}
+
+/// Converts a QuadMesh into a LineMesh with lines representing the edges
+/// Sharp edges will be rendered with a different color to highlight them
+/// 
+/// # Arguments
+/// * `quad_mesh` - The QuadMesh to convert
+/// * `line_mesh` - The target line mesh to add lines to
+/// * `smoothing` - Controls how edges are interpreted (affects what's considered a sharp edge)
+/// * `sharp_edge_color` - The color for sharp edges [r, g, b]
+/// * `normal_edge_color` - The color for non-sharp edges [r, g, b]
+pub fn tessellate_quad_mesh_to_line_mesh(
+    quad_mesh: &QuadMesh, 
+    line_mesh: &mut LineMesh, 
+    smoothing: MeshSmoothing, 
+    sharp_edge_color: [f32; 3], 
+    normal_edge_color: [f32; 3]
+) {
+    // Set of edges already processed to avoid duplicates
+    let mut processed_edges = std::collections::HashSet::new();
+    
+    // Process each edge in the quad mesh
+    for ((v1_idx, v2_idx), edge) in &quad_mesh.edges {
+        // Skip if we've already processed this edge
+        // We need to check both directions since the edge map uses ordered pairs
+        if processed_edges.contains(&(*v1_idx, *v2_idx)) || processed_edges.contains(&(*v2_idx, *v1_idx)) {
+            continue;
+        }
+        
+        // Mark as processed
+        processed_edges.insert((*v1_idx, *v2_idx));
+        
+        // Get vertex positions
+        let v1_pos = quad_mesh.vertices[*v1_idx as usize].position.as_vec3();
+        let v2_pos = quad_mesh.vertices[*v2_idx as usize].position.as_vec3();
+        
+        // Determine if this edge should be rendered as sharp based on the smoothing mode
+        let is_sharp = match smoothing {
+            MeshSmoothing::Smooth => false, // All edges smooth
+            MeshSmoothing::Sharp => true,  // All edges sharp
+            MeshSmoothing::SmoothingGroupBased => edge.is_sharp // Use the edge's sharp flag
+        };
+        
+        // Choose color based on whether the edge is sharp
+        let color = if is_sharp { sharp_edge_color } else { normal_edge_color };
+        
+        // Add the line with the appropriate color
+        line_mesh.add_line_with_uniform_color(&v1_pos, &v2_pos, &color);
     }
 }

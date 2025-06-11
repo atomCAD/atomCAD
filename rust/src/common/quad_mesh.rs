@@ -36,7 +36,7 @@ pub struct QuadMesh {
     /// Quad faces of the mesh
     pub quads: Vec<Quad>,
     /// Edges of the mesh, keyed by vertex index pairs (always ordered so first index < second index)
-    edges: HashMap<(u32, u32), QuadEdge>,
+    pub edges: HashMap<(u32, u32), QuadEdge>,
     /// Flag indicating whether quad normals are currently valid
     quad_normals_valid: bool,
 }
