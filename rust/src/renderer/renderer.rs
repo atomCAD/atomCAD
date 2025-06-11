@@ -5,6 +5,7 @@ use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
 use super::gpu_mesh::MeshType;
+use super::tessellator::quad_mesh_tessellator::tessellate_quad_mesh;
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
@@ -20,7 +21,6 @@ use crate::common::scene::Scene;
 use std::time::Instant;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
-use crate::util::transform::Transform;
 use crate::renderer::mesh::Material;
 
 #[repr(C)]
@@ -465,7 +465,7 @@ impl Renderer {
             }
 
             for quad_mesh in scene.quad_meshes() {
-                quad_mesh.convert_into_mesh_simple(&mut mesh, true, &Material::new(
+                tessellate_quad_mesh(&quad_mesh, &mut mesh, true, &Material::new(
                     &Vec3::new(0.0, 1.0, 0.0), 
                     1.0, 
                     0.0));
