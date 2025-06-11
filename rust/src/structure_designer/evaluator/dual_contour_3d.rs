@@ -87,8 +87,7 @@ fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &
   
   mesh.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
 
-  // Compute normals for quads
-  mesh.compute_quad_normals();
+  mesh.detect_sharp_edges(29.0, true);
   
   mesh
 }

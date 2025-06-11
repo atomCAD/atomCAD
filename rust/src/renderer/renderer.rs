@@ -1,3 +1,4 @@
+use wgpu::naga::proc::HashableLiteral;
 use wgpu::*;
 use bytemuck;
 use wgpu::util::DeviceExt;
@@ -5,7 +6,7 @@ use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
 use super::gpu_mesh::MeshType;
-use super::tessellator::quad_mesh_tessellator::tessellate_quad_mesh;
+use super::tessellator::quad_mesh_tessellator::{tessellate_quad_mesh, MeshSmoothing};
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
@@ -465,12 +466,12 @@ impl Renderer {
             }
 
             for quad_mesh in scene.quad_meshes() {
-                tessellate_quad_mesh(&quad_mesh, &mut mesh, true, &Material::new(
+                tessellate_quad_mesh(&quad_mesh, &mut mesh, MeshSmoothing::SmoothingGroupBased, &Material::new(
                     &Vec3::new(0.0, 1.0, 0.0), 
                     1.0, 
                     0.0));
             }
-            
+
             //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
 
             // Update main GPU mesh

@@ -105,18 +105,89 @@ fn tessellate_quad_mesh_sharp(quad_mesh: &QuadMesh, mesh: &mut Mesh, material: &
     }
 }
 
+/// Converts a QuadMesh into an existing Mesh with smoothing group based normals
+/// Vertices are shared within smoothing groups but duplicated at smoothing group boundaries
+/// 
+/// # Arguments
+/// * `quad_mesh` - The QuadMesh to convert
+/// * `mesh` - The target mesh to add vertices and faces to
+/// * `material` - The material to apply to the mesh vertices
+fn tessellate_quad_mesh_smoothing_group_based(quad_mesh: &QuadMesh, mesh: &mut Mesh, material: &Material) {
+    // Maps (vertex_id, smoothing_group) to output mesh vertex indices
+    let mut vertex_map: std::collections::HashMap<(u32, Option<u32>), u32> = std::collections::HashMap::new();
+    
+    // First pass: Create vertices for each vertex+smoothing_group combination
+    for (vertex_idx, vertex) in quad_mesh.vertices.iter().enumerate() {
+        let vertex_id = vertex_idx as u32;
+        
+        // Collect normals for each smoothing group this vertex belongs to
+        // Map of smoothing_group -> accumulated normal
+        let mut smoothing_group_normals: std::collections::HashMap<Option<u32>, DVec3> = 
+            std::collections::HashMap::new();
+        
+        // For each quad that uses this vertex
+        for &quad_idx in &vertex.quad_indices {
+            let quad = &quad_mesh.quads[quad_idx as usize];
+            let smoothing_group = quad.smoothing_group_id;
+            let quad_normal = quad.normal;
+            
+            // Accumulate this normal into the appropriate smoothing group
+            let normal_sum = smoothing_group_normals
+                .entry(smoothing_group)
+                .or_insert(DVec3::ZERO);
+                
+            *normal_sum += quad_normal;
+        }
+        
+        // Now create a vertex for each smoothing group this vertex belongs to
+        let position = vertex.position;
+        
+        for (smoothing_group, normal_sum) in smoothing_group_normals {
+            // Calculate the final normal for this smoothing group
+            let normal = if normal_sum.length_squared() > 0.0 {
+                normal_sum.normalize()
+            } else {
+                DVec3::Y // Default normal if zero normal sum
+            };
+            
+            // Add this vertex with the calculated normal
+            let output_vertex_idx = mesh.add_vertex(Vertex::new(
+                &position.as_vec3(), 
+                &normal.as_vec3(), 
+                material
+            ));
+            
+            // Store the mapping for face creation
+            vertex_map.insert((vertex_id, smoothing_group), output_vertex_idx);
+        }
+    }
+    
+    // Second pass: Create quads
+    for (quad_idx, quad) in quad_mesh.quads.iter().enumerate() {
+        let smoothing_group = quad.smoothing_group_id;
+        
+        // Get the vertices for this quad with the correct smoothing group
+        let v0_idx = *vertex_map.get(&(quad.vertices[0], smoothing_group)).unwrap_or(&0);
+        let v1_idx = *vertex_map.get(&(quad.vertices[1], smoothing_group)).unwrap_or(&0);
+        let v2_idx = *vertex_map.get(&(quad.vertices[2], smoothing_group)).unwrap_or(&0);
+        let v3_idx = *vertex_map.get(&(quad.vertices[3], smoothing_group)).unwrap_or(&0);
+        
+        // Add the quad (as two triangles) to the mesh
+        mesh.add_quad(v0_idx, v1_idx, v2_idx, v3_idx);
+    }
+}
+
 /// Converts this QuadMesh into an existing Mesh
 /// 
 /// # Arguments
 /// * `quad_mesh` - The QuadMesh to convert
 /// * `mesh` - The target mesh to add vertices and faces to
-/// * `smooth` - If true, vertex normals are averaged from adjacent face normals.
-///              If false, each quad gets its own set of vertices with the quad's normal.
+/// * `smoothing` - Controls how normals are calculated and vertices are shared
 /// * `material` - The material to apply to the mesh vertices
-pub fn tessellate_quad_mesh(quad_mesh: &QuadMesh, mesh: &mut Mesh, smooth: bool, material: &Material) {
-  if smooth {
-    tessellate_quad_mesh_smooth(quad_mesh, mesh, material);
-  } else {
-    tessellate_quad_mesh_sharp(quad_mesh, mesh, material);
-  }
+pub fn tessellate_quad_mesh(quad_mesh: &QuadMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, material: &Material) {
+    match smoothing {
+        MeshSmoothing::Smooth => tessellate_quad_mesh_smooth(quad_mesh, mesh, material),
+        MeshSmoothing::Sharp => tessellate_quad_mesh_sharp(quad_mesh, mesh, material),
+        MeshSmoothing::SmoothingGroupBased => tessellate_quad_mesh_smoothing_group_based(quad_mesh, mesh, material),
+    }
 }
