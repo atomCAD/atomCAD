@@ -464,11 +464,13 @@ impl Renderer {
                 surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
             }
 
-            for quad_mesh in scene.quad_meshes() {
-                quad_mesh.convert_into_mesh_simple(&mut mesh, true, &Material::new(
-                    &Vec3::new(0.0, 1.0, 0.0), 
-                    1.0, 
-                    0.0));
+            for he_mesh in scene.he_meshes() {
+                crate::renderer::tessellator::he_mesh_tessellator::tessellate_he_mesh(
+                    &mut mesh,
+                    he_mesh,
+                    &crate::renderer::tessellator::he_mesh_tessellator::MeshSmoothing::Smooth,
+                    &Material::new(&Vec3::new(0.0, 1.0, 0.0), 1.0, 0.0)
+                );
             }
             
             //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());

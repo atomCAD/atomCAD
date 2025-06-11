@@ -3,7 +3,7 @@ use glam::{i32::IVec3, DVec3};
 use crate::util::box_subdivision::subdivide_box;
 use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
-use crate::common::quad_mesh::QuadMesh;
+use crate::common::he_mesh::{HEMesh, VertexId};
 use crate::structure_designer::evaluator::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 
@@ -23,8 +23,17 @@ pub struct EdgeIntersection {
 }
 
 pub struct DCCell {
-  pub vertex_index: i32, // -1 if no vertex for this cell.
+  pub vertex_id: Option<VertexId>, // None if no vertex for this cell.
   pub edge_intersections: Vec<EdgeIntersection>, // Intersections that influence this cell's vertex
+}
+
+impl DCCell {
+  pub fn new() -> Self {
+    DCCell {
+      vertex_id: None,
+      edge_intersections: Vec::new(),
+    }
+  }
 }
 
 // Edge directions between cell corners/vertices (x, y, z)
@@ -59,7 +68,7 @@ pub fn generate_dual_contour_3d_scene(node_evaluator: &NodeEvaluator) -> Structu
   let mesh = generate_mesh(&mut cells, node_evaluator);
 
   let mut scene = StructureDesignerScene::new();
-  scene.quad_meshes.push(mesh);
+  scene.he_meshes.push(mesh);
 
   scene
 }
@@ -76,8 +85,8 @@ fn generate_cells(node_evaluator: &NodeEvaluator) -> HashMap<(i32, i32, i32), DC
   return cells;
 }
 
-fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &NodeEvaluator) -> QuadMesh {
-  let mut mesh = QuadMesh::new();
+fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &NodeEvaluator) -> HEMesh {
+  let mut mesh = HEMesh::new();
   
   // First pass: Generate vertices for cells and process edges
   process_cell_edges(cells, node_evaluator, &mut mesh);
@@ -87,8 +96,8 @@ fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &
   
   mesh.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
 
-  // Compute normals for quads
-  mesh.compute_quad_normals();
+  // Compute normals for faces
+  mesh.compute_face_normals();
   
   mesh
 }
@@ -96,7 +105,7 @@ fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &
 fn process_cell_edges(
   cells: &mut HashMap<(i32, i32, i32), DCCell>, 
   node_evaluator: &NodeEvaluator, 
-  mesh: &mut QuadMesh
+  mesh: &mut HEMesh
 ) {
   // Create a list of vertices to process (each cell key is also the key of its minimum vertex)
   let vertex_keys: Vec<(i32, i32, i32)> = cells.keys().cloned().collect();
@@ -176,17 +185,17 @@ fn process_cell_edges(
         cell.edge_intersections.push(edge_intersection.clone());
         
         // Create vertex for this cell if it doesn't have one yet
-        if cell.vertex_index == -1 {
+        if cell.vertex_id.is_none() {
           // For now, put the vertex at the center of the cell
           // We'll optimize the position later in optimize_vertex_positions
           let cell_center = get_cell_center_pos(surrounding_cell_key);
           
-          // With QuadMesh, we only need to add the position (no normals/materials needed)
-          let vertex_index = mesh.add_vertex(cell_center);
-          cell.vertex_index = vertex_index as i32;
+          // With HEMesh, we only need to add the position (no normals/materials needed)
+          let vertex_id = mesh.add_vertex(cell_center);
+          cell.vertex_id = Some(vertex_id);
         }
         
-        cell_indices[i] = cell.vertex_index as u32;
+        cell_indices[i] = cell.vertex_id.unwrap().0;
       }
       
       // Determine correct winding order for the quad based on edge normal
@@ -196,9 +205,9 @@ fn process_cell_edges(
       // Simple check: if edge direction and normal are aligned (positive dot product), 
       // use default ordering, otherwise reverse
       if edge_direction.dot(normal) > 0.0 {
-        mesh.add_quad(cell_indices[0], cell_indices[1], cell_indices[2], cell_indices[3]);
+        mesh.add_quad(VertexId(cell_indices[0]), VertexId(cell_indices[1]), VertexId(cell_indices[2]), VertexId(cell_indices[3]));
       } else {
-        mesh.add_quad(cell_indices[3], cell_indices[2], cell_indices[1], cell_indices[0]);
+        mesh.add_quad(VertexId(cell_indices[3]), VertexId(cell_indices[2]), VertexId(cell_indices[1]), VertexId(cell_indices[0]));
       }
     }
   }
@@ -258,13 +267,13 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
 }
 
 // Optimize vertex positions using QEF minimization
-fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node_evaluator: &NodeEvaluator, mesh: &mut QuadMesh) {
+fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node_evaluator: &NodeEvaluator, mesh: &mut HEMesh) {
   let spu = DC_3D_SAMPLES_PER_UNIT as f64;
   
   // Iterate over all cells to optimize vertex positions based on stored edge intersections
   for (&(x, y, z), cell) in cells.iter() {
     // Skip cells without a vertex or intersections
-    if cell.vertex_index < 0 || cell.edge_intersections.is_empty() {
+    if cell.vertex_id.is_none() || cell.edge_intersections.is_empty() {
       continue;
     }
     
@@ -290,8 +299,8 @@ fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node
     );
     
     // Update the vertex position in the mesh
-    if cell.vertex_index >= 0 {
-      mesh.set_vertex_position(cell.vertex_index as u32, optimal_position);
+    if let Some(vertex_id) = cell.vertex_id {
+      mesh.vertices[vertex_id.0].position = optimal_position;
     }
   }
 }
@@ -336,10 +345,7 @@ fn generate_cells_for_box(
                 );
                 cells.insert(
                     (cell_pos.x, cell_pos.y, cell_pos.z),
-                    DCCell {
-                        vertex_index: -1,
-                        edge_intersections: Vec::new(),
-                    }
+                    DCCell::new()
                 );
             }
         }
