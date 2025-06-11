@@ -51,95 +51,9 @@ pub struct Face {
     /// To list all vertices of the face, follow `.next` until you cycle.
     pub half_edge: HalfEdgeId,
     pub normal: DVec3, // Computed by HEMesh::compute_face_normals()
-    /// Optional smoothing group ID for shading purposes
-    /// Faces in the same smoothing group will have smooth normal interpolation across edges
-    pub smoothing_group_id: Option<u32>,
 }
 
 impl HEMesh {
-    // ------------- Common Access Methods -------------
-    
-    /// Gets the next half-edge in a face
-    #[inline]
-    pub fn get_next_half_edge(&self, he_id: HalfEdgeId) -> HalfEdgeId {
-        self.half_edges[he_id.0].next
-    }
-    
-    /// Gets the twin half-edge
-    #[inline]
-    pub fn get_twin_half_edge(&self, he_id: HalfEdgeId) -> HalfEdgeId {
-        self.half_edges[he_id.0].twin
-    }
-    
-    /// Gets the origin vertex of a half-edge
-    #[inline]
-    pub fn get_half_edge_origin(&self, he_id: HalfEdgeId) -> VertexId {
-        self.half_edges[he_id.0].origin
-    }
-    
-    /// Gets the face a half-edge belongs to
-    pub fn get_half_edge_face(&self, he_id: HalfEdgeId) -> FaceId {
-        self.half_edges[he_id.0].face
-    }
-    
-    /// Gets the face's half-edge
-    pub fn get_face_half_edge(&self, face_id: FaceId) -> HalfEdgeId {
-        self.faces[face_id.0].half_edge
-    }
-    
-    /// Gets the next half-edge around a vertex (counter-clockwise rotation)
-    /// This is useful for finding all faces connected to a vertex
-    pub fn get_next_half_edge_around_vertex(&self, he_id: HalfEdgeId) -> HalfEdgeId {
-        let twin_he = self.get_twin_half_edge(he_id);
-        self.get_next_half_edge(twin_he)
-    }
-    
-    /// Gets the first half-edge originating from a vertex, if any exists
-    pub fn get_vertex_half_edge(&self, vertex_id: VertexId) -> Option<HalfEdgeId> {
-        self.vertices[vertex_id.0].half_edge
-    }
-    
-    /// Gets the position of a vertex
-    #[inline]
-    pub fn get_vertex_position(&self, vertex_id: VertexId) -> &DVec3 {
-        &self.vertices[vertex_id.0].position
-    }
-    
-    /// Gets the normal of a face
-    #[inline]
-    pub fn get_face_normal(&self, face_id: FaceId) -> &DVec3 {
-        &self.faces[face_id.0].normal
-    }
-    
-    /// Gets the smoothing group ID of a face, if any
-    #[inline]
-    pub fn get_face_smoothing_group(&self, face_id: FaceId) -> Option<u32> {
-        self.faces[face_id.0].smoothing_group_id
-    }
-    
-    /// Gets the number of vertices in a face
-    pub fn get_face_vertex_count(&self, face_id: FaceId) -> usize {
-        let mut count = 0;
-        let start_he = self.faces[face_id.0].half_edge;
-        let mut current_he = start_he;
-        
-        loop {
-            count += 1;
-            current_he = self.half_edges[current_he.0].next;
-            if current_he == start_he {
-                break;
-            }
-        }
-        
-        count
-    }
-    
-    /// Checks if a half-edge is sharp
-    #[inline]
-    pub fn is_half_edge_sharp(&self, he_id: HalfEdgeId) -> bool {
-        self.half_edges[he_id.0].is_sharp
-    }
-    
     /// Creates a new empty HEMesh
     pub fn new() -> Self {
         HEMesh {
@@ -217,7 +131,6 @@ impl HEMesh {
         let face = Face {
             half_edge: he0_id,
             normal: DVec3::ZERO, // Will be computed later
-            smoothing_group_id: None,
         };
         
         // Add face to the mesh
@@ -342,8 +255,7 @@ impl HEMesh {
     /// # Arguments
     /// * `angle_threshold_degrees` - The minimum angle (in degrees) between face normals
     ///                               for an edge to be considered sharp
-    /// * `create_smoothing_groups` - If true, also create smoothing groups based on detected sharp edges
-    pub fn detect_sharp_edges(&mut self, angle_threshold_degrees: f64, create_smoothing_groups: bool) {
+    pub fn detect_sharp_edges(&mut self, angle_threshold_degrees: f64) {
         // Ensure face normals are computed
         if !self.face_normals_computed {
             self.compute_face_normals();
@@ -378,84 +290,6 @@ impl HEMesh {
                 // Mark both half-edges with the result
                 self.half_edges[he_id.0].is_sharp = is_sharp;
                 self.half_edges[twin_id.0].is_sharp = is_sharp;
-            }
-        }
-        
-        // If requested, create smoothing groups based on the sharp edges
-        if create_smoothing_groups {
-            self.create_smoothing_groups();
-        }
-    }
-    
-    /// Creates smoothing groups based on previously detected sharp edges
-    /// Faces connected by non-sharp edges will be assigned to the same smoothing group
-    fn create_smoothing_groups(&mut self) {
-        // Reset all smoothing group IDs
-        for face in &mut self.faces {
-            face.smoothing_group_id = None;
-        }
-        
-        // Current smoothing group ID counter
-        let mut next_group_id: u32 = 1;
-        
-        // Process all faces
-        for face_idx in 0..self.faces.len() {
-            let face_id = FaceId(face_idx);
-            
-            // Skip faces that already have a smoothing group assigned
-            if self.faces[face_id.0].smoothing_group_id.is_some() {
-                continue;
-            }
-            
-            // Assign a new smoothing group ID to this face and flood fill
-            self.faces[face_id.0].smoothing_group_id = Some(next_group_id);
-            self.flood_fill_smoothing_group(face_id, next_group_id);
-            
-            // Increment for the next smoothing group
-            next_group_id += 1;
-        }
-    }
-    
-    /// Performs a flood-fill starting from the given face to assign smoothing group IDs
-    /// Propagates the given smoothing_group_id to all faces connected by non-sharp edges
-    fn flood_fill_smoothing_group(&mut self, start_face_id: FaceId, smoothing_group_id: u32) {
-        // Use a stack for depth-first traversal
-        let mut stack = vec![start_face_id];
-        
-        // Flood-fill algorithm to propagate this smoothing group ID
-        while let Some(current_face_id) = stack.pop() {
-            let start_he_id = self.faces[current_face_id.0].half_edge;
-            
-            // Get a half-edge on this face
-            let mut he_id = start_he_id;
-            
-            // Walk around all edges of the face
-            loop {
-                // Get the twin half-edge (crossing to the adjacent face)
-                let twin_id = self.half_edges[he_id.0].twin;
-                
-                // If this is not a sharp edge
-                if !self.half_edges[he_id.0].is_sharp {
-                    // Get the adjacent face
-                    let adjacent_face_id = self.half_edges[twin_id.0].face;
-                    
-                    // If the adjacent face doesn't have a smoothing group yet
-                    if self.faces[adjacent_face_id.0].smoothing_group_id.is_none() {
-                        // Assign it to the current smoothing group
-                        self.faces[adjacent_face_id.0].smoothing_group_id = Some(smoothing_group_id);
-                        
-                        // Add it to the stack for further processing
-                        stack.push(adjacent_face_id);
-                    }
-                }
-                
-                // Move to the next half-edge around the face
-                he_id = self.half_edges[he_id.0].next;
-                
-                // Stop if we've gone all the way around the face
-                if he_id == start_he_id {
-                    break;
-                }
             }
         }
     }
