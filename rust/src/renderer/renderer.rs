@@ -6,7 +6,7 @@ use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
 use super::gpu_mesh::MeshType;
-use super::tessellator::quad_mesh_tessellator::{tessellate_quad_mesh, MeshSmoothing};
+use super::tessellator::quad_mesh_tessellator::{tessellate_quad_mesh, MeshSmoothing, tessellate_quad_mesh_to_line_mesh};
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
@@ -81,6 +81,7 @@ pub struct Renderer  {
     triangle_pipeline: RenderPipeline,  
     line_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
+    wireframe_mesh: GPUMesh,
     selected_clusters_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
     background_mesh: GPUMesh,
@@ -151,6 +152,7 @@ impl Renderer {
         
         // Initialize meshes with the model_bind_group_layout
         let main_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
+        let wireframe_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
         let selected_clusters_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
         
         let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
@@ -355,6 +357,7 @@ impl Renderer {
           triangle_pipeline,
           line_pipeline,
           main_mesh,
+          wireframe_mesh,
           selected_clusters_mesh,
           lightweight_mesh,
           background_mesh,
@@ -445,6 +448,7 @@ impl Renderer {
         if !lightweight {
             // Tessellate everything except tessellatable into main buffers
             let mut mesh = Mesh::new();
+            let mut wireframe_mesh = LineMesh::new();
             let mut selected_clusters_mesh = Mesh::new();
 
             let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
@@ -466,20 +470,29 @@ impl Renderer {
             }
 
             for quad_mesh in scene.quad_meshes() {
-                tessellate_quad_mesh(&quad_mesh, &mut mesh, MeshSmoothing::SmoothingGroupBased, &Material::new(
-                    &Vec3::new(0.0, 1.0, 0.0), 
-                    1.0, 
-                    0.0));
+                //tessellate_quad_mesh(&quad_mesh, &mut mesh, MeshSmoothing::SmoothingGroupBased, &Material::new(
+                //    &Vec3::new(0.0, 1.0, 0.0), 
+                //    1.0, 
+                //    0.0));
+
+                tessellate_quad_mesh_to_line_mesh(
+                    &quad_mesh,
+                    &mut wireframe_mesh, 
+                    MeshSmoothing::SmoothingGroupBased, 
+                    Vec3::new(0.0, 0.0, 0.0).to_array(),
+                    Vec3::new(0.4, 0.4, 0.4).to_array());
             }
 
             //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
 
             // Update main GPU mesh
             self.main_mesh.update_from_mesh(&self.device, &mesh, "Main");
+            self.wireframe_mesh.update_from_line_mesh(&self.device, &wireframe_mesh, "Wireframe");
             self.selected_clusters_mesh.update_from_mesh(&self.device, &selected_clusters_mesh, "Selected Clusters");
             
             // Set identity transform for main mesh
             self.main_mesh.set_identity_transform(&self.queue);
+            self.wireframe_mesh.set_identity_transform(&self.queue);
             
             // Apply the current selected clusters transform
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
@@ -556,6 +569,10 @@ impl Renderer {
             // Set identity transform for main mesh and render it
             self.main_mesh.set_identity_transform(&self.queue);
             self.render_mesh(&mut render_pass, &self.main_mesh);
+
+            // Set identity transform for wireframe mesh and render it
+            self.wireframe_mesh.set_identity_transform(&self.queue);
+            self.render_mesh(&mut render_pass, &self.wireframe_mesh);
 
             // Update selected clusters mesh with its transform and render it
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
