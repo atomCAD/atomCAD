@@ -106,34 +106,4 @@ impl Mesh {
     self.add_triangle(index0, index1, index2);
     self.add_triangle(index2, index3, index0);
   }
-
-  /// Adds a polygon to the mesh by triangulating it
-  /// Uses simple fan triangulation, which works for convex polygons
-  ///
-  /// # Arguments
-  /// * `vertices` - An array of vertex indices representing the polygon vertices
-  pub fn add_polygon(&mut self, vertices: &[u32]) {
-    // Need at least 3 vertices to form a triangle
-    if vertices.len() < 3 {
-      return;
-    }
-    
-    // For a triangle, just add it directly
-    if vertices.len() == 3 {
-      self.add_triangle(vertices[0], vertices[1], vertices[2]);
-      return;
-    }
-    
-    // For quads, use the built-in add_quad which creates two triangles
-    if vertices.len() == 4 {
-      self.add_quad(vertices[0], vertices[1], vertices[2], vertices[3]);
-      return;
-    }
-    
-    // For polygons with more than 4 vertices, use fan triangulation
-    let anchor = vertices[0];
-    for i in 1..(vertices.len() - 1) {
-      self.add_triangle(anchor, vertices[i], vertices[i + 1]);
-    }
-  }
 }
