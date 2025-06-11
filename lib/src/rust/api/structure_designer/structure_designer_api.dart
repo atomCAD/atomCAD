@@ -199,3 +199,19 @@ bool loadNodeNetworks({required String filePath}) => RustLib.instance.api
 bool isNodeTypeActive({required String nodeType}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiIsNodeTypeActive(
         nodeType: nodeType);
+
+bool? getWireframeGeometry() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetWireframeGeometry();
+
+void setWireframeGeometry({required bool wireframe}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSetWireframeGeometry(
+        wireframe: wireframe);
+
+APIGeometryVisualization3D? getGeometryVisualization3D() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetGeometryVisualization3D();
+
+void setGeometryVisualization3D(
+        {required APIGeometryVisualization3D visualization}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetGeometryVisualization3D(
+            visualization: visualization);

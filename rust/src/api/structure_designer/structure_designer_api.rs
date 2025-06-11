@@ -43,6 +43,7 @@ use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIPolygonData;
 use super::structure_designer_api_types::APIRectData;
+use super::structure_designer_api_types::APIGeometryVisualization3D;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -661,3 +662,52 @@ pub fn is_node_type_active(node_type: String) -> bool {
     }
   }
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_wireframe_geometry() -> Option<bool> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    return Some(cad_instance.structure_designer.wireframe_geometry);
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_wireframe_geometry(wireframe: bool) {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      cad_instance.structure_designer.wireframe_geometry = wireframe;
+      refresh_renderer(cad_instance, false);
+    }
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_geometry_visualization_3d() -> Option<APIGeometryVisualization3D> {
+  unsafe {
+    let cad_instance = CAD_INSTANCE.as_ref()?;
+    let internal_vis = cad_instance.structure_designer.get_geometry_visualization_3d();
+    return Some(match internal_vis {
+      crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::SurfaceSplatting => 
+        APIGeometryVisualization3D::SurfaceSplatting,
+      crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::DualContouring => 
+        APIGeometryVisualization3D::DualContouring,
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_geometry_visualization_3d(visualization: APIGeometryVisualization3D) {
+  unsafe {
+    if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      let internal_vis = match visualization {
+        APIGeometryVisualization3D::SurfaceSplatting => 
+          crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::SurfaceSplatting,
+        APIGeometryVisualization3D::DualContouring => 
+          crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::DualContouring,
+        };
+      cad_instance.structure_designer.set_geometry_visualization_3d(internal_vis);
+      refresh_renderer(cad_instance, false);
+    }
+  }
+}
+

@@ -8,6 +8,7 @@ import 'package:flutter_cad/structure_designer/camera_control_widget.dart';
 import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cad/structure_designer/geometry_visualization_widget.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -93,6 +94,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 ),
                 child: Column(
                   children: [
+                    // Geometry Visualization section
+                    Section(
+                      title: 'Geometry',
+                      content: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        child: GeometryVisualizationWidget(model: graphModel),
+                      ),
+                      expand: false,
+                    ),
+                    const SizedBox(height: 8),
                     // Camera Control section
                     Section(
                       title: 'Camera control',

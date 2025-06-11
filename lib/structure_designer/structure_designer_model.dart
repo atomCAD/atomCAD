@@ -54,7 +54,11 @@ class StructureDesignerModel extends ChangeNotifier {
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
 
-  StructureDesignerModel();
+  APIGeometryVisualization3D geometryVisualization3D =
+      APIGeometryVisualization3D.dualContouring;
+  bool wireframeGeometry = false;
+
+  StructureDesignerModel() {}
 
   void init() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
@@ -73,6 +77,17 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setOrthographicMode(bool orthographic) {
     common_api.setOrthographicMode(orthographic: orthographic);
+    refreshFromKernel();
+  }
+
+  void setGeometryVisualization3D(APIGeometryVisualization3D visualization) {
+    structure_designer_api.setGeometryVisualization3D(
+        visualization: visualization);
+    refreshFromKernel();
+  }
+
+  void setWireframeGeometry(bool wireframe) {
+    structure_designer_api.setWireframeGeometry(wireframe: wireframe);
     refreshFromKernel();
   }
 
@@ -351,6 +366,12 @@ class StructureDesignerModel extends ChangeNotifier {
     activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();
+
+    geometryVisualization3D =
+        structure_designer_api.getGeometryVisualization3D() ??
+            APIGeometryVisualization3D.dualContouring;
+    wireframeGeometry = structure_designer_api.getWireframeGeometry() ?? false;
+
     notifyListeners();
   }
 }

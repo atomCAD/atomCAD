@@ -427,7 +427,7 @@ impl Renderer {
         self.device.poll(Maintain::Wait);
     }
 
-    pub fn refresh<'a, S: Scene<'a>>(&mut self, scene: &S, lightweight: bool) {
+    pub fn refresh<'a, S: Scene<'a>>(&mut self, scene: &S, lightweight: bool, wireframe_geometry: bool) {
         let start_time = Instant::now();
 
         // Always refresh lightweight buffers with extra tessellatable data
@@ -470,17 +470,21 @@ impl Renderer {
             }
 
             for quad_mesh in scene.quad_meshes() {
-                tessellate_quad_mesh(&quad_mesh, &mut mesh, MeshSmoothing::SmoothingGroupBased, &Material::new(
-                    &Vec3::new(0.0, 1.0, 0.0), 
-                    1.0, 
-                    0.0));
+                if wireframe_geometry {
+                    tessellate_quad_mesh_to_line_mesh(
+                        &quad_mesh,
+                        &mut wireframe_mesh, 
+                        MeshSmoothing::SmoothingGroupBased, 
+                        Vec3::new(0.0, 0.0, 0.0).to_array(),
+                        Vec3::new(0.4, 0.4, 0.4).to_array());
+                } else {
+                    tessellate_quad_mesh(&quad_mesh, &mut mesh, MeshSmoothing::SmoothingGroupBased, &Material::new(
+                        &Vec3::new(0.0, 1.0, 0.0), 
+                        1.0, 
+                        0.0));
+                }
 
-                //tessellate_quad_mesh_to_line_mesh(
-                //    &quad_mesh,
-                //    &mut wireframe_mesh, 
-                //    MeshSmoothing::SmoothingGroupBased, 
-                //    Vec3::new(0.0, 0.0, 0.0).to_array(),
-                //    Vec3::new(0.4, 0.4, 0.4).to_array());
+
             }
 
             //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());

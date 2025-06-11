@@ -3,6 +3,7 @@ use crate::common::atomic_structure::HitTestResult;
 use crate::common::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
+use super::evaluator::network_evaluator::GeometryVisualization3D;
 use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
@@ -21,6 +22,7 @@ pub struct StructureDesigner {
   pub gadget: Option<Box<dyn NodeNetworkGadget>>,
   pub active_node_network_name: Option<String>,
   pub last_generated_structure_designer_scene: StructureDesignerScene,
+  pub wireframe_geometry: bool,
 }
 
 impl StructureDesigner {
@@ -36,11 +38,21 @@ impl StructureDesigner {
       gadget: None,
       active_node_network_name: None,
       last_generated_structure_designer_scene: StructureDesignerScene::new(),
+      wireframe_geometry: false,
     }
   }
 }
 
 impl StructureDesigner {
+
+
+  pub fn get_geometry_visualization_3d(&self) -> GeometryVisualization3D {
+    self.network_evaluator.geometry_visualization_3d.clone()
+  }
+
+  pub fn set_geometry_visualization_3d(&mut self, geometry_visualization_3d: GeometryVisualization3D) {
+    self.network_evaluator.geometry_visualization_3d = geometry_visualization_3d;
+  }
 
   pub fn set_last_generated_structure_designer_scene(&mut self, scene: StructureDesignerScene) {
     self.last_generated_structure_designer_scene = scene;
