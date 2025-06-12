@@ -346,8 +346,6 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) -> bool
         },
         Editor::None => None,
       };
-      
-      println!("Hit distance: {:?}", hit_distance);
 
       // Get the camera forward vector (normalized)
       let camera_forward = (instance.renderer.camera.target - eye).normalize();

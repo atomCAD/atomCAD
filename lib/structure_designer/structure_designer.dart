@@ -9,6 +9,7 @@ import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/geometry_visualization_widget.dart';
+import 'package:flutter_cad/structure_designer/preferences_window.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -71,6 +72,30 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   MenuItemButton(
                     onPressed: _saveDesignAs,
                     child: const Text('Save Design As'),
+                  ),
+                ],
+              ),
+              MenuAnchor(
+                builder: (context, controller, child) {
+                  return TextButton(
+                    onPressed: () {
+                      if (controller.isOpen) {
+                        controller.close();
+                      } else {
+                        controller.open();
+                      }
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.black87,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: const Text('Edit'),
+                  );
+                },
+                menuChildren: [
+                  MenuItemButton(
+                    onPressed: _showPreferences,
+                    child: const Text('Preferences'),
                   ),
                 ],
               ),
@@ -188,18 +213,24 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
   Future<void> _saveDesignAs() async {
     // Open file picker for saving CNND files
-    String? outputPath = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Design File',
-      fileName: 'design.cnnd',
-      type: FileType.custom,
-      allowedExtensions: ['cnnd'],
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save Design As',
+      fileName: 'design.atomcad',
+      allowedExtensions: ['atomcad'],
     );
 
-    if (outputPath != null) {
-      debugPrint('Saving design file to: $outputPath');
-      graphModel.saveNodeNetworks(outputPath);
-    } else {
-      debugPrint('Design file save canceled');
+    if (outputFile != null) {
+      graphModel.saveNodeNetworks(outputFile);
     }
+  }
+
+  void _showPreferences() {
+    showDialog(
+      context: context,
+      barrierDismissible: true, // Allow dismissing when clicking outside
+      builder: (context) {
+        return PreferencesWindow(model: graphModel);
+      },
+    );
   }
 }
