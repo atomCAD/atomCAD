@@ -254,6 +254,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<WireView> dco_decode_list_wire_view(dynamic raw);
 
   @protected
+  MeshSmoothing dco_decode_mesh_smoothing(dynamic raw);
+
+  @protected
   NodeNetworkView dco_decode_node_network_view(dynamic raw);
 
   @protected
@@ -631,6 +634,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<WireView> sse_decode_list_wire_view(SseDeserializer deserializer);
+
+  @protected
+  MeshSmoothing sse_decode_mesh_smoothing(SseDeserializer deserializer);
 
   @protected
   NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer);
@@ -1042,6 +1048,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_wire_view(List<WireView> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_mesh_smoothing(MeshSmoothing self, SseSerializer serializer);
 
   @protected
   void sse_encode_node_network_view(

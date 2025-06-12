@@ -207,13 +207,13 @@ impl NetworkEvaluator {
     };
 
     if node_type.output_type == DataType::Geometry2D {
-      return generate_2d_point_cloud_scene(&node_evaluator, &mut context);
+      return generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
     }
     if node_type.output_type == DataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
-        return generate_point_cloud_scene(&node_evaluator, &mut context);
+        return generate_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        return generate_dual_contour_3d_scene(&node_evaluator);
+        return generate_dual_contour_3d_scene(&node_evaluator, geometry_visualization_preferences);
       }
     }
     if node_type.output_type == DataType::Atomic {

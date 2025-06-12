@@ -3,18 +3,7 @@ use crate::renderer::line_mesh::LineMesh;
 use glam::Vec3;
 use glam::DVec3;
 use crate::common::quad_mesh::QuadMesh;
-
-/// Enum to control mesh smoothing behavior during tessellation
-#[derive(Debug, Clone)]
-pub enum MeshSmoothing {
-    /// Smooth normals: averages normals at each vertex from all connected faces
-    Smooth,
-    /// Sharp normals: uses face normals directly, duplicates vertices as needed
-    Sharp,
-    /// Smoothing group based: averages normals within the same smoothing group,
-    /// duplicates vertices at smoothing group boundaries
-    SmoothingGroupBased,
-}
+use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
 
 /// Converts a QuadMesh into an existing Mesh with smooth normals (averaged from adjacent faces)
 /// 

@@ -7,24 +7,27 @@ use crate::util::box_subdivision::subdivide_box;
 use crate::common::surface_point_cloud::SurfacePoint;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
-const SS_3D_SAMPLES_PER_UNIT: i32 = 4;
-
-pub fn generate_point_cloud_scene(node_evaluator: &NodeEvaluator, context: &mut NetworkEvaluationContext) -> StructureDesignerScene {
+pub fn generate_point_cloud_scene(
+  node_evaluator: &NodeEvaluator,
+  context: &mut NetworkEvaluationContext,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
   let mut point_cloud = SurfacePointCloud::new();
   let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
   (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
   (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
-  SS_3D_SAMPLES_PER_UNIT * SS_3D_SAMPLES_PER_UNIT;
+  geometry_visualization_preferences.samples_per_unit_cell * geometry_visualization_preferences.samples_per_unit_cell;
 
   let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
   process_box_for_point_cloud(
       &node_evaluator,
-      &(common_constants::IMPLICIT_VOLUME_MIN * SS_3D_SAMPLES_PER_UNIT),
-      &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * SS_3D_SAMPLES_PER_UNIT),
+      &(common_constants::IMPLICIT_VOLUME_MIN * geometry_visualization_preferences.samples_per_unit_cell),
+      &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * geometry_visualization_preferences.samples_per_unit_cell),
       &mut eval_cache,
-      &mut point_cloud);
+      &mut point_cloud,
+      geometry_visualization_preferences);
 
   let mut scene = StructureDesignerScene::new();
   scene.surface_point_clouds.push(point_cloud);
@@ -40,9 +43,10 @@ fn process_box_for_point_cloud(
   start_pos: &IVec3,
   size: &IVec3,
   eval_cache: &mut LruCache<IVec3, f64>,
-  point_cloud: &mut SurfacePointCloud,) {
+  point_cloud: &mut SurfacePointCloud,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) {
 
-  let spu = SS_3D_SAMPLES_PER_UNIT as f64;
+  let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
   let epsilon = 0.001;
 
   // Calculate the center point of the box
@@ -78,7 +82,8 @@ fn process_box_for_point_cloud(
                     node_evaluator,
                     &cell_pos,
                     eval_cache,
-                    point_cloud
+                    point_cloud,
+                    geometry_visualization_preferences,
                 );
             }
         }
@@ -102,7 +107,8 @@ fn process_box_for_point_cloud(
         &sub_start,
         &sub_size,
         eval_cache,
-        point_cloud
+        point_cloud,
+        geometry_visualization_preferences,
     );
   }
 }
@@ -111,8 +117,9 @@ fn process_cell_for_point_cloud(
   node_evaluator: &NodeEvaluator,
   int_pos: &IVec3,
   eval_cache: &mut LruCache<IVec3, f64>,
-  point_cloud: &mut SurfacePointCloud) {
-    let spu = SS_3D_SAMPLES_PER_UNIT as f64;
+  point_cloud: &mut SurfacePointCloud,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) {
+    let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
 
     // Define the corner points for the current cube
     let corner_points = [

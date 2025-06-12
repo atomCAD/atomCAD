@@ -8,23 +8,27 @@ use glam::i32::IVec2;
 use glam::Vec3Swizzles;
 use crate::util::box_subdivision::subdivide_rect;
 use crate::common::surface_point_cloud::SurfacePoint2D;
+use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
-const SS_2D_SAMPLES_PER_UNIT: i32 = 4;
-
-pub fn generate_2d_point_cloud_scene(node_evaluator: &NodeEvaluator, context: &mut NetworkEvaluationContext) -> StructureDesignerScene {
+pub fn generate_2d_point_cloud_scene(
+  node_evaluator: &NodeEvaluator,
+  context: &mut NetworkEvaluationContext,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences
+) -> StructureDesignerScene {
   let mut point_cloud = SurfacePointCloud2D::new();
   let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
   (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
-  SS_2D_SAMPLES_PER_UNIT * SS_2D_SAMPLES_PER_UNIT;
+  geometry_visualization_preferences.samples_per_unit_cell * geometry_visualization_preferences.samples_per_unit_cell;
 
   let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
   process_rect_for_point_cloud(
       &node_evaluator,
-      &(common_constants::IMPLICIT_VOLUME_MIN.xz() * SS_2D_SAMPLES_PER_UNIT),
-      &((common_constants::IMPLICIT_VOLUME_MAX.xz() - common_constants::IMPLICIT_VOLUME_MIN.xz()) * SS_2D_SAMPLES_PER_UNIT),
+      &(common_constants::IMPLICIT_VOLUME_MIN.xz() * geometry_visualization_preferences.samples_per_unit_cell),
+      &((common_constants::IMPLICIT_VOLUME_MAX.xz() - common_constants::IMPLICIT_VOLUME_MIN.xz()) * geometry_visualization_preferences.samples_per_unit_cell),
       &mut eval_cache,
-      &mut point_cloud);
+      &mut point_cloud,
+      geometry_visualization_preferences);
 
   let mut scene = StructureDesignerScene::new();
   scene.surface_point_cloud_2ds.push(point_cloud);
@@ -40,9 +44,10 @@ fn process_rect_for_point_cloud(
   start_pos: &IVec2,
   size: &IVec2,
   eval_cache: &mut LruCache<IVec2, f64>,
-  point_cloud: &mut SurfacePointCloud2D,) {
+  point_cloud: &mut SurfacePointCloud2D,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) {
 
-let spu = SS_2D_SAMPLES_PER_UNIT as f64;
+let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
 let epsilon = 0.001;
 
 // Calculate the center point of the rect
@@ -75,7 +80,8 @@ if !should_subdivide_x && !should_subdivide_y {
                     node_evaluator,
                     &cell_pos,
                     eval_cache,
-                    point_cloud
+                    point_cloud,
+                    geometry_visualization_preferences
                 );
         }
     }
@@ -97,7 +103,8 @@ for (sub_start, sub_size) in subdivisions {
         &sub_start,
         &sub_size,
         eval_cache,
-        point_cloud
+        point_cloud,
+        geometry_visualization_preferences
     );
 }
 }
@@ -107,8 +114,9 @@ fn process_2d_cell_for_point_cloud(
 node_evaluator: &NodeEvaluator,
 int_pos: &IVec2,
 eval_cache: &mut LruCache<IVec2, f64>,
-point_cloud: &mut SurfacePointCloud2D) {
-  let spu = SS_2D_SAMPLES_PER_UNIT as f64;
+point_cloud: &mut SurfacePointCloud2D,
+geometry_visualization_preferences: &GeometryVisualizationPreferences) {
+  let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
 
   // Define the corner points for the current square
   let corner_points = [

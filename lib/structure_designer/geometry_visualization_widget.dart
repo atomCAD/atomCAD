@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:provider/provider.dart';
-
-import '../src/rust/api/structure_designer/structure_designer_api_types.dart';
 import '../common/ui_common.dart';
 import 'structure_designer_model.dart';
 

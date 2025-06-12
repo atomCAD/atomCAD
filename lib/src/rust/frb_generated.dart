@@ -3854,11 +3854,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dco_decode_geometry_visualization_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return GeometryVisualizationPreferences(
       geometryVisualization: dco_decode_geometry_visualization(arr[0]),
       wireframeGeometry: dco_decode_bool(arr[1]),
+      samplesPerUnitCell: dco_decode_i_32(arr[2]),
+      sharpnessAngleThresholdDegree: dco_decode_f_64(arr[3]),
+      meshSmoothing: dco_decode_mesh_smoothing(arr[4]),
     );
   }
 
@@ -3940,6 +3943,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<WireView> dco_decode_list_wire_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_wire_view).toList();
+  }
+
+  @protected
+  MeshSmoothing dco_decode_mesh_smoothing(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MeshSmoothing.values[raw as int];
   }
 
   @protected
@@ -4771,9 +4780,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_geometryVisualization =
         sse_decode_geometry_visualization(deserializer);
     var var_wireframeGeometry = sse_decode_bool(deserializer);
+    var var_samplesPerUnitCell = sse_decode_i_32(deserializer);
+    var var_sharpnessAngleThresholdDegree = sse_decode_f_64(deserializer);
+    var var_meshSmoothing = sse_decode_mesh_smoothing(deserializer);
     return GeometryVisualizationPreferences(
         geometryVisualization: var_geometryVisualization,
-        wireframeGeometry: var_wireframeGeometry);
+        wireframeGeometry: var_wireframeGeometry,
+        samplesPerUnitCell: var_samplesPerUnitCell,
+        sharpnessAngleThresholdDegree: var_sharpnessAngleThresholdDegree,
+        meshSmoothing: var_meshSmoothing);
   }
 
   @protected
@@ -4898,6 +4913,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_wire_view(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  MeshSmoothing sse_decode_mesh_smoothing(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MeshSmoothing.values[inner];
   }
 
   @protected
@@ -5815,6 +5837,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_geometry_visualization(self.geometryVisualization, serializer);
     sse_encode_bool(self.wireframeGeometry, serializer);
+    sse_encode_i_32(self.samplesPerUnitCell, serializer);
+    sse_encode_f_64(self.sharpnessAngleThresholdDegree, serializer);
+    sse_encode_mesh_smoothing(self.meshSmoothing, serializer);
   }
 
   @protected
@@ -5916,6 +5941,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_wire_view(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_mesh_smoothing(MeshSmoothing self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected

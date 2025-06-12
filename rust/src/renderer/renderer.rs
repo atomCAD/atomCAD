@@ -1,4 +1,3 @@
-use wgpu::naga::proc::HashableLiteral;
 use wgpu::*;
 use bytemuck;
 use wgpu::util::DeviceExt;
@@ -6,7 +5,8 @@ use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
 use super::gpu_mesh::MeshType;
-use super::tessellator::quad_mesh_tessellator::{tessellate_quad_mesh, MeshSmoothing, tessellate_quad_mesh_to_line_mesh};
+use super::tessellator::quad_mesh_tessellator::{tessellate_quad_mesh, tessellate_quad_mesh_to_line_mesh};
+use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
@@ -23,6 +23,7 @@ use std::time::Instant;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::renderer::mesh::Material;
+use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -427,7 +428,12 @@ impl Renderer {
         self.device.poll(Maintain::Wait);
     }
 
-    pub fn refresh<'a, S: Scene<'a>>(&mut self, scene: &S, lightweight: bool, wireframe_geometry: bool) {
+    pub fn refresh<'a, S: Scene<'a>>(
+        &mut self,
+        scene: &S,
+        lightweight: bool,
+        geometry_visualization_preferences: &GeometryVisualizationPreferences
+    ) {
         let start_time = Instant::now();
 
         // Always refresh lightweight buffers with extra tessellatable data
@@ -470,18 +476,24 @@ impl Renderer {
             }
 
             for quad_mesh in scene.quad_meshes() {
-                if wireframe_geometry {
+                if geometry_visualization_preferences.wireframe_geometry {
                     tessellate_quad_mesh_to_line_mesh(
                         &quad_mesh,
                         &mut wireframe_mesh, 
-                        MeshSmoothing::SmoothingGroupBased, 
+                        geometry_visualization_preferences.mesh_smoothing.clone(), 
                         Vec3::new(0.0, 0.0, 0.0).to_array(),
                         Vec3::new(0.4, 0.4, 0.4).to_array());
                 } else {
-                    tessellate_quad_mesh(&quad_mesh, &mut mesh, MeshSmoothing::SmoothingGroupBased, &Material::new(
-                        &Vec3::new(0.0, 1.0, 0.0), 
-                        1.0, 
-                        0.0));
+                    tessellate_quad_mesh(
+                        &quad_mesh,
+                        &mut mesh, 
+                        geometry_visualization_preferences.mesh_smoothing.clone(), 
+                        &Material::new(
+                            &Vec3::new(0.0, 1.0, 0.0), 
+                            1.0, 
+                            0.0
+                        )
+                    );
                 }
 
 

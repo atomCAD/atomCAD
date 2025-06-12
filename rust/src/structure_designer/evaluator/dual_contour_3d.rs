@@ -6,6 +6,7 @@ use crate::structure_designer::common_constants;
 use crate::common::quad_mesh::QuadMesh;
 use crate::structure_designer::evaluator::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
+use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
 /*
  * Terminology for Dual Contouring:
@@ -14,7 +15,6 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
  * - Edge: Connection between two adjacent vertices
  * - In dual contouring, we place mesh vertices INSIDE cells, not at grid vertices
  */
-const DC_3D_SAMPLES_PER_UNIT: i32 = 4;
 
 #[derive(Clone, Copy)]
 pub struct EdgeIntersection {
@@ -53,10 +53,13 @@ const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
     [(0, 0, 0), (-1, 0, 0), (-1, -1, 0), (0, -1, 0)]
 ];
 
-pub fn generate_dual_contour_3d_scene(node_evaluator: &NodeEvaluator) -> StructureDesignerScene {
-  let mut cells = generate_cells(node_evaluator);
+pub fn generate_dual_contour_3d_scene(
+  node_evaluator: &NodeEvaluator,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences
+) -> StructureDesignerScene {
+  let mut cells = generate_cells(node_evaluator, geometry_visualization_preferences);
 
-  let mesh = generate_mesh(&mut cells, node_evaluator);
+  let mesh = generate_mesh(&mut cells, node_evaluator, geometry_visualization_preferences);
 
   let mut scene = StructureDesignerScene::new();
   scene.quad_meshes.push(mesh);
@@ -64,30 +67,34 @@ pub fn generate_dual_contour_3d_scene(node_evaluator: &NodeEvaluator) -> Structu
   scene
 }
 
-fn generate_cells(node_evaluator: &NodeEvaluator) -> HashMap<(i32, i32, i32), DCCell> {
+fn generate_cells(node_evaluator: &NodeEvaluator, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> HashMap<(i32, i32, i32), DCCell> {
   let mut cells = HashMap::new();
 
   generate_cells_for_box(
     node_evaluator,
-    &(common_constants::IMPLICIT_VOLUME_MIN * DC_3D_SAMPLES_PER_UNIT),
-    &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * DC_3D_SAMPLES_PER_UNIT),
-    &mut cells);
+    &(common_constants::IMPLICIT_VOLUME_MIN * geometry_visualization_preferences.samples_per_unit_cell),
+    &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * geometry_visualization_preferences.samples_per_unit_cell),
+    &mut cells,
+    geometry_visualization_preferences);
 
   return cells;
 }
 
-fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &NodeEvaluator) -> QuadMesh {
+fn generate_mesh(
+  cells: &mut HashMap<(i32, i32, i32), DCCell>,
+  node_evaluator: &NodeEvaluator,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) -> QuadMesh {
   let mut mesh = QuadMesh::new();
   
   // First pass: Generate vertices for cells and process edges
-  process_cell_edges(cells, node_evaluator, &mut mesh);
+  process_cell_edges(cells, node_evaluator, &mut mesh, geometry_visualization_preferences);
   
   // Second pass: Calculate proper vertex positions for each cell
-  optimize_vertex_positions(cells, node_evaluator, &mut mesh);
+  optimize_vertex_positions(cells, node_evaluator, &mut mesh, geometry_visualization_preferences);
   
   mesh.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
 
-  mesh.detect_sharp_edges(29.0, true);
+  mesh.detect_sharp_edges(geometry_visualization_preferences.sharpness_angle_threshold_degree, true);
   
   mesh
 }
@@ -95,7 +102,8 @@ fn generate_mesh(cells: &mut HashMap<(i32, i32, i32), DCCell>, node_evaluator: &
 fn process_cell_edges(
   cells: &mut HashMap<(i32, i32, i32), DCCell>, 
   node_evaluator: &NodeEvaluator, 
-  mesh: &mut QuadMesh
+  mesh: &mut QuadMesh,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) {
   // Create a list of vertices to process (each cell key is also the key of its minimum vertex)
   let vertex_keys: Vec<(i32, i32, i32)> = cells.keys().cloned().collect();
@@ -110,8 +118,8 @@ fn process_cell_edges(
       
       // Get the SDF values at the endpoints (vertices) of the edge
       // These are the actual grid vertices where we evaluate the SDF
-      let p1 = get_vertex_world_pos(vertex_key); // World position of first vertex
-      let p2 = get_vertex_world_pos(adjacent_vertex); // World position of second vertex
+      let p1 = get_vertex_world_pos(vertex_key, geometry_visualization_preferences.samples_per_unit_cell); // World position of first vertex
+      let p2 = get_vertex_world_pos(adjacent_vertex, geometry_visualization_preferences.samples_per_unit_cell); // World position of second vertex
       
       let sdf1 = node_evaluator.eval(&p1);
       let sdf2 = node_evaluator.eval(&p2);
@@ -178,7 +186,7 @@ fn process_cell_edges(
         if cell.vertex_index == -1 {
           // For now, put the vertex at the center of the cell
           // We'll optimize the position later in optimize_vertex_positions
-          let cell_center = get_cell_center_pos(surrounding_cell_key);
+          let cell_center = get_cell_center_pos(surrounding_cell_key, geometry_visualization_preferences.samples_per_unit_cell);
           
           // With QuadMesh, we only need to add the position (no normals/materials needed)
           let vertex_index = mesh.add_vertex(cell_center);
@@ -206,21 +214,21 @@ fn process_cell_edges(
 // Helper function to convert vertex coordinates to world position
 // Note: Cell coordinates are the same as the coordinates of the minimum corner vertex of the cell
 // For example: Cell (5,3,2) has its minimum corner vertex at world position (5/SPU, 3/SPU, 2/SPU)
-fn get_vertex_world_pos(vertex_key: (i32, i32, i32)) -> DVec3 {
+fn get_vertex_world_pos(vertex_key: (i32, i32, i32), samples_per_unit_cell: i32) -> DVec3 {
   DVec3::new(
-    vertex_key.0 as f64 / DC_3D_SAMPLES_PER_UNIT as f64,
-    vertex_key.1 as f64 / DC_3D_SAMPLES_PER_UNIT as f64, 
-    vertex_key.2 as f64 / DC_3D_SAMPLES_PER_UNIT as f64
+    vertex_key.0 as f64 / samples_per_unit_cell as f64,
+    vertex_key.1 as f64 / samples_per_unit_cell as f64, 
+    vertex_key.2 as f64 / samples_per_unit_cell as f64
   )
 }
 
 // Helper function to get the center position of a cell
 // The center is 0.5 units (in grid coordinates) from the minimum vertex
-fn get_cell_center_pos(cell_key: (i32, i32, i32)) -> DVec3 {
+fn get_cell_center_pos(cell_key: (i32, i32, i32), samples_per_unit_cell: i32) -> DVec3 {
   DVec3::new(
-    (cell_key.0 as f64 + 0.5) / DC_3D_SAMPLES_PER_UNIT as f64,
-    (cell_key.1 as f64 + 0.5) / DC_3D_SAMPLES_PER_UNIT as f64, 
-    (cell_key.2 as f64 + 0.5) / DC_3D_SAMPLES_PER_UNIT as f64
+    (cell_key.0 as f64 + 0.5) / samples_per_unit_cell as f64,
+    (cell_key.1 as f64 + 0.5) / samples_per_unit_cell as f64, 
+    (cell_key.2 as f64 + 0.5) / samples_per_unit_cell as f64
   )
 }
 
@@ -257,8 +265,12 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
 }
 
 // Optimize vertex positions using QEF minimization
-fn optimize_vertex_positions(cells: &mut HashMap<(i32, i32, i32), DCCell>, _node_evaluator: &NodeEvaluator, mesh: &mut QuadMesh) {
-  let spu = DC_3D_SAMPLES_PER_UNIT as f64;
+fn optimize_vertex_positions(
+  cells: &mut HashMap<(i32, i32, i32), DCCell>,
+  _node_evaluator: &NodeEvaluator,
+  mesh: &mut QuadMesh,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) {
+  let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
   
   // Iterate over all cells to optimize vertex positions based on stored edge intersections
   for (&(x, y, z), cell) in cells.iter() {
@@ -299,9 +311,10 @@ fn generate_cells_for_box(
   node_evaluator: &NodeEvaluator,
   start_pos: &IVec3,
   size: &IVec3,
-  cells: &mut HashMap<(i32, i32, i32), DCCell>) {
+  cells: &mut HashMap<(i32, i32, i32), DCCell>,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) {
 
-  let spu = DC_3D_SAMPLES_PER_UNIT as f64;
+  let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
   let epsilon = 0.001;
 
   // Calculate the center point of the box
@@ -362,6 +375,7 @@ fn generate_cells_for_box(
         &sub_start,
         &sub_size,
         cells,
+        geometry_visualization_preferences,
     );
   }
 }

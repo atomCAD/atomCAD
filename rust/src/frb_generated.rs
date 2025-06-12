@@ -3931,7 +3931,10 @@ impl SseDecode for crate::api::structure_designer::structure_designer_preference
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {let mut var_geometryVisualization = <crate::api::structure_designer::structure_designer_preferences::GeometryVisualization>::sse_decode(deserializer);
 let mut var_wireframeGeometry = <bool>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry};}
+let mut var_samplesPerUnitCell = <i32>::sse_decode(deserializer);
+let mut var_sharpnessAngleThresholdDegree = <f64>::sse_decode(deserializer);
+let mut var_meshSmoothing = <crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_decode(deserializer);
+return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing};}
                 }
 
 impl SseDecode for i32 {
@@ -4078,6 +4081,19 @@ impl SseDecode for Vec<crate::api::structure_designer::structure_designer_api_ty
             ans_.push(<crate::api::structure_designer::structure_designer_api_types::WireView>::sse_decode(deserializer));
         }
         return ans_;
+    }
+}
+
+impl SseDecode for crate::api::structure_designer::structure_designer_preferences::MeshSmoothing {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_preferences::MeshSmoothing::Smooth,
+1 => crate::api::structure_designer::structure_designer_preferences::MeshSmoothing::Sharp,
+2 => crate::api::structure_designer::structure_designer_preferences::MeshSmoothing::SmoothingGroupBased,
+            _ => unreachable!("Invalid variant for MeshSmoothing: {}", inner),
+        };
     }
 }
 
@@ -5483,7 +5499,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::structure_designer::structure
                 fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
                     [
                     self.geometry_visualization.into_into_dart().into_dart(),
-self.wireframe_geometry.into_into_dart().into_dart()
+self.wireframe_geometry.into_into_dart().into_dart(),
+self.samples_per_unit_cell.into_into_dart().into_dart(),
+self.sharpness_angle_threshold_degree.into_into_dart().into_dart(),
+self.mesh_smoothing.into_into_dart().into_dart()
                 ].into_dart()
                 }
             }
@@ -5518,6 +5537,34 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::InputPinView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_preferences::MeshSmoothing
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Smooth => 0.into_dart(),
+            Self::Sharp => 1.into_dart(),
+            Self::SmoothingGroupBased => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_preferences::MeshSmoothing
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_preferences::MeshSmoothing,
+    > for crate::api::structure_designer::structure_designer_preferences::MeshSmoothing
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_preferences::MeshSmoothing {
         self
     }
 }
@@ -6027,7 +6074,10 @@ crate::api::structure_designer::structure_designer_preferences::GeometryVisualiz
 impl SseEncode for crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences {
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {<crate::api::structure_designer::structure_designer_preferences::GeometryVisualization>::sse_encode(self.geometry_visualization, serializer);
-<bool>::sse_encode(self.wireframe_geometry, serializer);}
+<bool>::sse_encode(self.wireframe_geometry, serializer);
+<i32>::sse_encode(self.samples_per_unit_cell, serializer);
+<f64>::sse_encode(self.sharpness_angle_threshold_degree, serializer);
+<crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_encode(self.mesh_smoothing, serializer);}
                 }
 
 impl SseEncode for i32 {
@@ -6147,6 +6197,16 @@ impl SseEncode for Vec<crate::api::structure_designer::structure_designer_api_ty
                 item, serializer,
             );
         }
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_preferences::MeshSmoothing {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_preferences::MeshSmoothing::Smooth => { 0 }
+crate::api::structure_designer::structure_designer_preferences::MeshSmoothing::Sharp => { 1 }
+crate::api::structure_designer::structure_designer_preferences::MeshSmoothing::SmoothingGroupBased => { 2 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 

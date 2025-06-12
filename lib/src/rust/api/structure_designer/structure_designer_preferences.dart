@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `eq`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`
 
 enum GeometryVisualization {
   surfaceSplatting,
@@ -17,15 +17,25 @@ enum GeometryVisualization {
 class GeometryVisualizationPreferences {
   GeometryVisualization geometryVisualization;
   bool wireframeGeometry;
+  int samplesPerUnitCell;
+  double sharpnessAngleThresholdDegree;
+  MeshSmoothing meshSmoothing;
 
   GeometryVisualizationPreferences({
     required this.geometryVisualization,
     required this.wireframeGeometry,
+    required this.samplesPerUnitCell,
+    required this.sharpnessAngleThresholdDegree,
+    required this.meshSmoothing,
   });
 
   @override
   int get hashCode =>
-      geometryVisualization.hashCode ^ wireframeGeometry.hashCode;
+      geometryVisualization.hashCode ^
+      wireframeGeometry.hashCode ^
+      samplesPerUnitCell.hashCode ^
+      sharpnessAngleThresholdDegree.hashCode ^
+      meshSmoothing.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -33,7 +43,25 @@ class GeometryVisualizationPreferences {
       other is GeometryVisualizationPreferences &&
           runtimeType == other.runtimeType &&
           geometryVisualization == other.geometryVisualization &&
-          wireframeGeometry == other.wireframeGeometry;
+          wireframeGeometry == other.wireframeGeometry &&
+          samplesPerUnitCell == other.samplesPerUnitCell &&
+          sharpnessAngleThresholdDegree ==
+              other.sharpnessAngleThresholdDegree &&
+          meshSmoothing == other.meshSmoothing;
+}
+
+/// Enum to control mesh smoothing behavior during tessellation
+enum MeshSmoothing {
+  /// Smooth normals: averages normals at each vertex from all connected faces
+  smooth,
+
+  /// Sharp normals: uses face normals directly, duplicates vertices as needed
+  sharp,
+
+  /// Smoothing group based: averages normals within the same smoothing group,
+  /// duplicates vertices at smoothing group boundaries
+  smoothingGroupBased,
+  ;
 }
 
 class StructureDesignerPreferences {
