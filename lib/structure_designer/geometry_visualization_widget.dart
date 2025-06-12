@@ -22,7 +22,7 @@ class GeometryVisualizationWidget extends StatelessWidget {
       child: Consumer<StructureDesignerModel>(
         builder: (context, model, child) {
           return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               // Surface Splatting Button (point cloud visualization)
               _buildIconButton(
