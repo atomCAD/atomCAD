@@ -9,6 +9,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/anchor_api.dart'
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart'
     as stamp_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
@@ -53,10 +54,7 @@ class StructureDesignerModel extends ChangeNotifier {
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
-
-  APIGeometryVisualization3D geometryVisualization3D =
-      APIGeometryVisualization3D.dualContouring;
-  bool wireframeGeometry = false;
+  StructureDesignerPreferences? preferences;
 
   StructureDesignerModel() {}
 
@@ -80,14 +78,9 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void setGeometryVisualization3D(APIGeometryVisualization3D visualization) {
-    structure_designer_api.setGeometryVisualization3D(
-        visualization: visualization);
-    refreshFromKernel();
-  }
-
-  void setWireframeGeometry(bool wireframe) {
-    structure_designer_api.setWireframeGeometry(wireframe: wireframe);
+  void setPreferences(StructureDesignerPreferences preferences) {
+    structure_designer_api.setStructureDesignerPreferences(
+        preferences: preferences);
     refreshFromKernel();
   }
 
@@ -366,11 +359,7 @@ class StructureDesignerModel extends ChangeNotifier {
     activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();
-
-    geometryVisualization3D =
-        structure_designer_api.getGeometryVisualization3D() ??
-            APIGeometryVisualization3D.dualContouring;
-    wireframeGeometry = structure_designer_api.getWireframeGeometry() ?? false;
+    preferences = structure_designer_api.getStructureDesignerPreferences();
 
     notifyListeners();
   }

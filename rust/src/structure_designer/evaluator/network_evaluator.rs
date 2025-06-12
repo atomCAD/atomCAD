@@ -26,10 +26,11 @@ use crate::structure_designer::nodes::edit_atom::edit_atom::eval_edit_atom;
 use crate::structure_designer::nodes::stamp::eval_stamp;
 use crate::structure_designer::nodes::circle::eval_circle;
 use crate::structure_designer::nodes::rect::eval_rect;
-
 use super::surface_splatting_2d::generate_2d_point_cloud_scene;
 use super::surface_splatting_3d::generate_point_cloud_scene;
 use super::dual_contour_3d::generate_dual_contour_3d_scene;
+use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
+use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -48,12 +49,6 @@ pub enum NetworkResult {
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
   Error(String),
-}
-
-#[derive(PartialEq, Clone)]
-pub enum GeometryVisualization3D {
-  SurfaceSplatting,
-  DualContouring,
 }
 
 /// Creates a consistent error message for missing input in node evaluation
@@ -85,7 +80,6 @@ impl NetworkEvaluationContext {
 
 pub struct NetworkEvaluator {
     pub implicit_evaluator: ImplicitEvaluator,
-    pub geometry_visualization_3d: GeometryVisualization3D,
 }
 
 /*
@@ -98,7 +92,6 @@ impl NetworkEvaluator {
   pub fn new() -> Self {
     Self {
       implicit_evaluator: ImplicitEvaluator::new(),
-      geometry_visualization_3d: GeometryVisualization3D::DualContouring,
     }
   }
 
@@ -183,7 +176,7 @@ impl NetworkEvaluator {
 
   // Creates the Scene that will be displayed for the given node
   // Currently creates it from scratch, no caching is used.
-  pub fn generate_scene(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry) -> StructureDesignerScene {
+  pub fn generate_scene(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
     let _timer = Timer::new("generate_scene");
 
     let network = match registry.node_networks.get(network_name) {
@@ -217,9 +210,9 @@ impl NetworkEvaluator {
       return generate_2d_point_cloud_scene(&node_evaluator, &mut context);
     }
     if node_type.output_type == DataType::Geometry {
-      if self.geometry_visualization_3d == GeometryVisualization3D::SurfaceSplatting {
+      if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         return generate_point_cloud_scene(&node_evaluator, &mut context);
-      } else if self.geometry_visualization_3d == GeometryVisualization3D::DualContouring {
+      } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         return generate_dual_contour_3d_scene(&node_evaluator);
       }
     }

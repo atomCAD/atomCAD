@@ -133,9 +133,3 @@ pub struct InputPinView {
   pub struct APIStampView {
     pub selected_stamp_placement: Option<APIStampPlacement>,
   }
-
-#[derive(Clone)]
-pub enum APIGeometryVisualization3D {
-  SurfaceSplatting,
-  DualContouring,
-}

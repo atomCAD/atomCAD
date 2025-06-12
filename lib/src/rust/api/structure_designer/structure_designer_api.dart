@@ -7,6 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
+import 'structure_designer_preferences.dart';
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
@@ -200,18 +201,12 @@ bool isNodeTypeActive({required String nodeType}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiIsNodeTypeActive(
         nodeType: nodeType);
 
-bool? getWireframeGeometry() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiGetWireframeGeometry();
+StructureDesignerPreferences? getStructureDesignerPreferences() => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetStructureDesignerPreferences();
 
-void setWireframeGeometry({required bool wireframe}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiSetWireframeGeometry(
-        wireframe: wireframe);
-
-APIGeometryVisualization3D? getGeometryVisualization3D() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiGetGeometryVisualization3D();
-
-void setGeometryVisualization3D(
-        {required APIGeometryVisualization3D visualization}) =>
+void setStructureDesignerPreferences(
+        {required StructureDesignerPreferences preferences}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetGeometryVisualization3D(
-            visualization: visualization);
+        .crateApiStructureDesignerStructureDesignerApiSetStructureDesignerPreferences(
+            preferences: preferences);

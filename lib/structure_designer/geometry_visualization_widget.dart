@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:provider/provider.dart';
 
 import '../src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -26,48 +27,64 @@ class GeometryVisualizationWidget extends StatelessWidget {
               // Surface Splatting Button (point cloud visualization)
               _buildIconButton(
                 context,
-                Icons.blur_on,  // Using blur_on to represent point cloud
+                Icons.blur_on, // Using blur_on to represent point cloud
                 'Surface Splatting',
-                isSelected: model.geometryVisualization3D == 
-                    APIGeometryVisualization3D.surfaceSplatting,
+                isSelected: model.preferences?.geometryVisualizationPreferences
+                        .geometryVisualization ==
+                    GeometryVisualization.surfaceSplatting,
                 onPressed: () {
-                  model.setGeometryVisualization3D(
-                      APIGeometryVisualization3D.surfaceSplatting);
-                  model.setWireframeGeometry(false);
+                  model.preferences?.geometryVisualizationPreferences
+                          .geometryVisualization =
+                      GeometryVisualization.surfaceSplatting;
+                  model.preferences?.geometryVisualizationPreferences
+                      .wireframeGeometry = false;
+                  model.setPreferences(model.preferences!);
                 },
               ),
-              
+
               const SizedBox(width: 8),
-              
+
               // Dual Contouring with Wireframe Button
               _buildIconButton(
                 context,
-                Icons.grid_3x3,  // Using grid to represent wireframe
+                Icons.grid_3x3, // Using grid to represent wireframe
                 'Dual Contouring Wireframe',
-                isSelected: model.geometryVisualization3D ==
-                        APIGeometryVisualization3D.dualContouring &&
-                    model.wireframeGeometry == true,
+                isSelected: model.preferences?.geometryVisualizationPreferences
+                            .geometryVisualization ==
+                        GeometryVisualization.dualContouring &&
+                    model.preferences?.geometryVisualizationPreferences
+                            .wireframeGeometry ==
+                        true,
                 onPressed: () {
-                  model.setGeometryVisualization3D(
-                      APIGeometryVisualization3D.dualContouring);
-                  model.setWireframeGeometry(true);
+                  model.preferences?.geometryVisualizationPreferences
+                          .geometryVisualization =
+                      GeometryVisualization.dualContouring;
+                  model.preferences?.geometryVisualizationPreferences
+                      .wireframeGeometry = true;
+                  model.setPreferences(model.preferences!);
                 },
               ),
-              
+
               const SizedBox(width: 8),
-              
+
               // Dual Contouring without Wireframe Button (solid)
               _buildIconButton(
                 context,
-                Icons.view_in_ar,  // Using 3D object icon for solid
+                Icons.view_in_ar, // Using 3D object icon for solid
                 'Dual Contouring Solid',
-                isSelected: model.geometryVisualization3D ==
-                        APIGeometryVisualization3D.dualContouring &&
-                    model.wireframeGeometry == false,
+                isSelected: model.preferences?.geometryVisualizationPreferences
+                            .geometryVisualization ==
+                        GeometryVisualization.dualContouring &&
+                    model.preferences?.geometryVisualizationPreferences
+                            .wireframeGeometry ==
+                        false,
                 onPressed: () {
-                  model.setGeometryVisualization3D(
-                      APIGeometryVisualization3D.dualContouring);
-                  model.setWireframeGeometry(false);
+                  model.preferences?.geometryVisualizationPreferences
+                          .geometryVisualization =
+                      GeometryVisualization.dualContouring;
+                  model.preferences?.geometryVisualizationPreferences
+                      .wireframeGeometry = false;
+                  model.setPreferences(model.preferences!);
                 },
               ),
             ],
@@ -77,10 +94,7 @@ class GeometryVisualizationWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildIconButton(
-      BuildContext context,
-      IconData icon,
-      String tooltip,
+  Widget _buildIconButton(BuildContext context, IconData icon, String tooltip,
       {required bool isSelected, required VoidCallback onPressed}) {
     return Tooltip(
       message: tooltip,

@@ -37,13 +37,12 @@ use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
-
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIPolygonData;
 use super::structure_designer_api_types::APIRectData;
-use super::structure_designer_api_types::APIGeometryVisualization3D;
+use super::structure_designer_preferences::StructureDesignerPreferences;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -664,50 +663,19 @@ pub fn is_node_type_active(node_type: String) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_wireframe_geometry() -> Option<bool> {
+pub fn get_structure_designer_preferences() -> Option<StructureDesignerPreferences> {
   unsafe {
     let cad_instance = CAD_INSTANCE.as_ref()?;
-    return Some(cad_instance.structure_designer.wireframe_geometry);
+    return Some(cad_instance.structure_designer.preferences.clone());
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_wireframe_geometry(wireframe: bool) {
+pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferences) {
   unsafe {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
-      cad_instance.structure_designer.wireframe_geometry = wireframe;
+      cad_instance.structure_designer.preferences = preferences;
       refresh_renderer(cad_instance, false);
     }
   }
 }
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_geometry_visualization_3d() -> Option<APIGeometryVisualization3D> {
-  unsafe {
-    let cad_instance = CAD_INSTANCE.as_ref()?;
-    let internal_vis = cad_instance.structure_designer.get_geometry_visualization_3d();
-    return Some(match internal_vis {
-      crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::SurfaceSplatting => 
-        APIGeometryVisualization3D::SurfaceSplatting,
-      crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::DualContouring => 
-        APIGeometryVisualization3D::DualContouring,
-    });
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn set_geometry_visualization_3d(visualization: APIGeometryVisualization3D) {
-  unsafe {
-    if let Some(ref mut cad_instance) = CAD_INSTANCE {
-      let internal_vis = match visualization {
-        APIGeometryVisualization3D::SurfaceSplatting => 
-          crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::SurfaceSplatting,
-        APIGeometryVisualization3D::DualContouring => 
-          crate::structure_designer::evaluator::network_evaluator::GeometryVisualization3D::DualContouring,
-        };
-      cad_instance.structure_designer.set_geometry_visualization_3d(internal_vis);
-      refresh_renderer(cad_instance, false);
-    }
-  }
-}
-

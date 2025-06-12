@@ -1,9 +1,7 @@
 use crate::common::atomic_structure::AtomicStructure;
-use crate::common::atomic_structure::HitTestResult;
 use crate::common::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
-use super::evaluator::network_evaluator::GeometryVisualization3D;
 use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::DataType;
@@ -15,6 +13,7 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
+use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -22,7 +21,7 @@ pub struct StructureDesigner {
   pub gadget: Option<Box<dyn NodeNetworkGadget>>,
   pub active_node_network_name: Option<String>,
   pub last_generated_structure_designer_scene: StructureDesignerScene,
-  pub wireframe_geometry: bool,
+  pub preferences: StructureDesignerPreferences,
 }
 
 impl StructureDesigner {
@@ -38,21 +37,12 @@ impl StructureDesigner {
       gadget: None,
       active_node_network_name: None,
       last_generated_structure_designer_scene: StructureDesignerScene::new(),
-      wireframe_geometry: false,
+      preferences: StructureDesignerPreferences::new(),
     }
   }
 }
 
 impl StructureDesigner {
-
-
-  pub fn get_geometry_visualization_3d(&self) -> GeometryVisualization3D {
-    self.network_evaluator.geometry_visualization_3d.clone()
-  }
-
-  pub fn set_geometry_visualization_3d(&mut self, geometry_visualization_3d: GeometryVisualization3D) {
-    self.network_evaluator.geometry_visualization_3d = geometry_visualization_3d;
-  }
 
   pub fn set_last_generated_structure_designer_scene(&mut self, scene: StructureDesignerScene) {
     self.last_generated_structure_designer_scene = scene;
@@ -145,7 +135,12 @@ impl StructureDesigner {
         None => return scene,
       };
       for node_id in &network.displayed_node_ids {
-        scene.merge(self.network_evaluator.generate_scene(node_network_name, *node_id, &self.node_type_registry));
+        scene.merge(self.network_evaluator.generate_scene(
+          node_network_name,
+          *node_id,
+          &self.node_type_registry,
+          &self.preferences.geometry_visualization_preferences,
+        ));
       }
     }
 

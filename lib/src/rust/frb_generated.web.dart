@@ -16,6 +16,7 @@ import 'api/structure_designer/geo_to_atom_api.dart';
 import 'api/structure_designer/stamp_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
 import 'api/structure_designer/structure_designer_api_types.dart';
+import 'api/structure_designer/structure_designer_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -73,10 +74,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
-
-  @protected
-  APIGeometryVisualization3D dco_decode_api_geometry_visualization_3_d(
-      dynamic raw);
 
   @protected
   APIHalfPlaneData dco_decode_api_half_plane_data(dynamic raw);
@@ -154,10 +151,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData dco_decode_box_autoadd_api_geo_trans_data(dynamic raw);
 
   @protected
-  APIGeometryVisualization3D
-      dco_decode_box_autoadd_api_geometry_visualization_3_d(dynamic raw);
-
-  @protected
   APIHalfPlaneData dco_decode_box_autoadd_api_half_plane_data(dynamic raw);
 
   @protected
@@ -194,9 +187,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AtomView dco_decode_box_autoadd_atom_view(dynamic raw);
 
   @protected
-  bool dco_decode_box_autoadd_bool(dynamic raw);
-
-  @protected
   int dco_decode_box_autoadd_i_32(dynamic raw);
 
   @protected
@@ -204,6 +194,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SceneComposerView dco_decode_box_autoadd_scene_composer_view(dynamic raw);
+
+  @protected
+  StructureDesignerPreferences
+      dco_decode_box_autoadd_structure_designer_preferences(dynamic raw);
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
@@ -219,6 +213,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  GeometryVisualization dco_decode_geometry_visualization(dynamic raw);
+
+  @protected
+  GeometryVisualizationPreferences
+      dco_decode_geometry_visualization_preferences(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -295,10 +296,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData? dco_decode_opt_box_autoadd_api_geo_trans_data(dynamic raw);
 
   @protected
-  APIGeometryVisualization3D?
-      dco_decode_opt_box_autoadd_api_geometry_visualization_3_d(dynamic raw);
-
-  @protected
   APIHalfPlaneData? dco_decode_opt_box_autoadd_api_half_plane_data(dynamic raw);
 
   @protected
@@ -330,9 +327,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AtomView? dco_decode_opt_box_autoadd_atom_view(dynamic raw);
 
   @protected
-  bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
-
-  @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
   @protected
@@ -341,6 +335,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   SceneComposerView? dco_decode_opt_box_autoadd_scene_composer_view(
       dynamic raw);
+
+  @protected
+  StructureDesignerPreferences?
+      dco_decode_opt_box_autoadd_structure_designer_preferences(dynamic raw);
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
@@ -356,6 +354,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SelectModifier dco_decode_select_modifier(dynamic raw);
+
+  @protected
+  StructureDesignerPreferences dco_decode_structure_designer_preferences(
+      dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -423,10 +425,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIGeoTransData sse_decode_api_geo_trans_data(SseDeserializer deserializer);
-
-  @protected
-  APIGeometryVisualization3D sse_decode_api_geometry_visualization_3_d(
-      SseDeserializer deserializer);
 
   @protected
   APIHalfPlaneData sse_decode_api_half_plane_data(SseDeserializer deserializer);
@@ -515,11 +513,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APIGeometryVisualization3D
-      sse_decode_box_autoadd_api_geometry_visualization_3_d(
-          SseDeserializer deserializer);
-
-  @protected
   APIHalfPlaneData sse_decode_box_autoadd_api_half_plane_data(
       SseDeserializer deserializer);
 
@@ -564,9 +557,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AtomView sse_decode_box_autoadd_atom_view(SseDeserializer deserializer);
 
   @protected
-  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
-
-  @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
@@ -576,6 +566,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   SceneComposerView sse_decode_box_autoadd_scene_composer_view(
       SseDeserializer deserializer);
+
+  @protected
+  StructureDesignerPreferences
+      sse_decode_box_autoadd_structure_designer_preferences(
+          SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
@@ -591,6 +586,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  GeometryVisualization sse_decode_geometry_visualization(
+      SseDeserializer deserializer);
+
+  @protected
+  GeometryVisualizationPreferences
+      sse_decode_geometry_visualization_preferences(
+          SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -680,11 +684,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APIGeometryVisualization3D?
-      sse_decode_opt_box_autoadd_api_geometry_visualization_3_d(
-          SseDeserializer deserializer);
-
-  @protected
   APIHalfPlaneData? sse_decode_opt_box_autoadd_api_half_plane_data(
       SseDeserializer deserializer);
 
@@ -723,9 +722,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AtomView? sse_decode_opt_box_autoadd_atom_view(SseDeserializer deserializer);
 
   @protected
-  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
-
-  @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
@@ -735,6 +731,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   SceneComposerView? sse_decode_opt_box_autoadd_scene_composer_view(
       SseDeserializer deserializer);
+
+  @protected
+  StructureDesignerPreferences?
+      sse_decode_opt_box_autoadd_structure_designer_preferences(
+          SseDeserializer deserializer);
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
@@ -752,6 +753,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SelectModifier sse_decode_select_modifier(SseDeserializer deserializer);
+
+  @protected
+  StructureDesignerPreferences sse_decode_structure_designer_preferences(
+      SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -824,10 +829,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_geo_trans_data(
       APIGeoTransData self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_api_geometry_visualization_3_d(
-      APIGeometryVisualization3D self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_half_plane_data(
@@ -920,10 +921,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIGeoTransData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_api_geometry_visualization_3_d(
-      APIGeometryVisualization3D self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_api_half_plane_data(
       APIHalfPlaneData self, SseSerializer serializer);
 
@@ -970,9 +967,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AtomView self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -982,6 +976,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_scene_composer_view(
       SceneComposerView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_structure_designer_preferences(
+      StructureDesignerPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
@@ -998,6 +996,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_geometry_visualization(
+      GeometryVisualization self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_geometry_visualization_preferences(
+      GeometryVisualizationPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -1090,10 +1096,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIGeoTransData? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_api_geometry_visualization_3_d(
-      APIGeometryVisualization3D? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_api_half_plane_data(
       APIHalfPlaneData? self, SseSerializer serializer);
 
@@ -1134,9 +1136,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AtomView? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
 
   @protected
@@ -1146,6 +1145,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_scene_composer_view(
       SceneComposerView? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_structure_designer_preferences(
+      StructureDesignerPreferences? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
@@ -1164,6 +1167,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_select_modifier(
       SelectModifier self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_structure_designer_preferences(
+      StructureDesignerPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
