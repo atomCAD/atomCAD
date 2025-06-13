@@ -184,38 +184,6 @@ pub fn is_point_in_cell(point: DVec3, min_bound: DVec3, max_bound: DVec3) -> boo
 }
 
 /// Computes the optimal position using QEF minimization with cell bounds constraints
-pub fn compute_optimal_position_old(
-    intersections: &[DVec3],
-    normals: &[DVec3],
-    min_bound: DVec3,
-    max_bound: DVec3,
-) -> DVec3 {
-    if intersections.is_empty() || normals.is_empty() || intersections.len() != normals.len() {
-        // Return center of cell if no valid data
-        return (min_bound + max_bound) * 0.5;
-    }
-    
-    // Create and populate QEF solver
-    let mut solver = QefSolver::new();
-    for i in 0..intersections.len() {
-        solver.add(&intersections[i], &normals[i]);
-    }
-    
-    // Get QEF solution
-    let qef_solution = solver.solve();
-    
-    // Check if solution is inside cell
-    if is_point_in_cell(qef_solution, min_bound, max_bound) {
-        return qef_solution;
-    }
-    
-    // Project QEF solution to cell bounds
-    let projected_qef = project_to_bounds(qef_solution, min_bound, max_bound);
-    
-    projected_qef
-}
-
-/// Replace your existing compute_optimal_position with this:
 pub fn compute_optimal_position(
     intersections: &[DVec3],
     normals:       &[DVec3],
