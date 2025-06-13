@@ -53,6 +53,9 @@ const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
     [(0, 0, 0), (-1, 0, 0), (-1, -1, 0), (0, -1, 0)]
 ];
 
+/// Treat [–EPS, +∞) as “positive”
+const SDF_ZERO_TOLERANCE: f64 = 1e-9;
+
 pub fn generate_dual_contour_3d_scene(
   node_evaluator: &NodeEvaluator,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
@@ -91,7 +94,7 @@ fn generate_mesh(
   
   // Second pass: Calculate proper vertex positions for each cell
   optimize_vertex_positions(cells, node_evaluator, &mut mesh, geometry_visualization_preferences);
-  
+
   mesh.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
 
   mesh.detect_sharp_edges(geometry_visualization_preferences.sharpness_angle_threshold_degree, true);
@@ -125,10 +128,10 @@ fn process_cell_edges(
       let sdf2 = node_evaluator.eval(&p2);
       
       // Skip if there's no sign change across the edge
-      if sdf1 * sdf2 > 0.0 || sdf1 == sdf2 {
+      if !sdf_sign_change(sdf1, sdf2) {
         continue;
       }
-      
+
       // If we got here, we found a sign change, which means the surface intersects this edge
       // We'll create a quad around this edge using the dual contouring approach
       let cells_around_edge = &CELLS_AROUND_EDGES[dir_idx];
@@ -232,8 +235,6 @@ fn get_cell_center_pos(cell_key: (i32, i32, i32), samples_per_unit_cell: i32) ->
   )
 }
 
-
-
 // Function to find the zero-crossing point on an edge using binary search
 fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3) -> DVec3 {
   let mut a = *p1;
@@ -242,7 +243,7 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
   let mut sdf_b = node_evaluator.eval(&b);
   
   // Ensure we have opposite signs
-  if sdf_a * sdf_b > 0.0 {
+  if !sdf_sign_change(sdf_a, sdf_b) {
     return (a + b) * 0.5; // Return midpoint if not a zero-crossing
   }
   
@@ -380,3 +381,10 @@ fn generate_cells_for_box(
   }
 }
 
+fn sdf_is_positive(sdf: f64) -> bool {
+  sdf > -SDF_ZERO_TOLERANCE
+}
+
+fn sdf_sign_change(sdf1: f64, sdf2: f64) -> bool {
+  sdf_is_positive(sdf1) != sdf_is_positive(sdf2)
+}
