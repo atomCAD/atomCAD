@@ -218,16 +218,8 @@ pub fn compute_optimal_position(
         return qef_solution;
     }
     
-    // If outside, compute average of intersection points
-    let mut avg_position = DVec3::ZERO;
-    for pos in intersections.iter() {
-        avg_position += *pos;
-    }
-    avg_position /= intersections.len() as f64;
-    
     // Project QEF solution to cell bounds
     let projected_qef = project_to_cell_bounds(qef_solution, min_bound, max_bound);
     
-    // Return a weighted blend favoring the projected QEF solution (70% QEF, 30% average)
-    projected_qef * 0.7 + avg_position * 0.3
+    projected_qef
 }
