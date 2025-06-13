@@ -183,17 +183,8 @@ pub fn is_point_in_cell(point: DVec3, min_bound: DVec3, max_bound: DVec3) -> boo
     point.z >= min_bound.z && point.z <= max_bound.z
 }
 
-/// Projects a point to the nearest point inside cell bounds
-pub fn project_to_cell_bounds(point: DVec3, min_bound: DVec3, max_bound: DVec3) -> DVec3 {
-    DVec3::new(
-        point.x.clamp(min_bound.x, max_bound.x),
-        point.y.clamp(min_bound.y, max_bound.y),
-        point.z.clamp(min_bound.z, max_bound.z)
-    )
-}
-
 /// Computes the optimal position using QEF minimization with cell bounds constraints
-pub fn compute_optimal_position(
+pub fn compute_optimal_position_old(
     intersections: &[DVec3],
     normals: &[DVec3],
     min_bound: DVec3,
@@ -219,7 +210,122 @@ pub fn compute_optimal_position(
     }
     
     // Project QEF solution to cell bounds
-    let projected_qef = project_to_cell_bounds(qef_solution, min_bound, max_bound);
+    let projected_qef = project_to_bounds(qef_solution, min_bound, max_bound);
     
     projected_qef
+}
+
+/// Replace your existing compute_optimal_position with this:
+pub fn compute_optimal_position(
+    intersections: &[DVec3],
+    normals:       &[DVec3],
+    min_bound:     DVec3,
+    max_bound:     DVec3,
+) -> DVec3 {
+    // If nothing to do, drop to cell‐center
+    if intersections.is_empty() || normals.len() != intersections.len() {
+        return (min_bound + max_bound) * 0.5;
+    }
+
+    // Build the QEF accumulators
+    let mut solver = QefSolver::new();
+    for (p, n) in intersections.iter().zip(normals.iter()) {
+        solver.add(p, n);
+    }
+
+    // Pull out the ATA and ATb from the solver
+    let ata = {
+        // complete symmetric ATA
+        let mut m = [[0.0;3];3];
+        for i in 0..3 {
+            for j in 0..3 {
+                m[i][j] = if i <= j { solver.ata[i][j] } else { solver.ata[j][i] };
+            }
+        }
+        m
+    };
+    let atb = solver.atb;
+    let midpoint = (min_bound + max_bound) * 0.5;
+    let mass_pt = solver.mass_point / (solver.num_points as f64);
+
+    // helper for 2×2 det
+    fn det2(a: f64, b: f64, c: f64, d: f64) -> f64 { a*d - b*c }
+
+    // compute principal minors
+    let d00 = ata[0][0];
+    let d11 = ata[1][1];
+    let d22 = ata[2][2];
+    let det3 = 
+        ata[0][0]*(ata[1][1]*ata[2][2] - ata[1][2]*ata[1][2])
+      - ata[0][1]*(ata[0][1]*ata[2][2] - ata[1][2]*ata[0][2])
+      + ata[0][2]*(ata[0][1]*ata[1][2] - ata[1][1]*ata[0][2]);
+
+    // rank‐3: full solve
+    const EPS: f64 = 1e-10;
+    if det3.abs() > EPS {
+        let sol = solver.solve();
+        return project_to_bounds(sol, min_bound, max_bound);
+    }
+
+    // rank‐2: look for the largest 2×2 minor
+    let minors = [
+        ((0,1), det2(ata[0][0], ata[0][1], ata[0][1], ata[1][1]).abs()),
+        ((0,2), det2(ata[0][0], ata[0][2], ata[0][2], ata[2][2]).abs()),
+        ((1,2), det2(ata[1][1], ata[1][2], ata[1][2], ata[2][2]).abs()),
+    ];
+    if let Some(&((i,j), det2val)) = minors.iter().max_by(|a,b| a.1.partial_cmp(&b.1).unwrap()) {
+        if det2val > EPS {
+            // solve [A_ij] x_ij = -[b_i, b_j]
+            let aii = ata[i][i];
+            let ajj = ata[j][j];
+            let aij = ata[i][j];
+            let bi = -atb[i];
+            let bj = -atb[j];
+            let denom = aii*ajj - aij*aij;
+            if denom.abs() > EPS {
+                let xi = ( bi*ajj - aij*bj) / denom;
+                let xj = ( aii*bj - aij*bi) / denom;
+                // fill into full vector
+                let mut sol = midpoint; // start at center
+                sol[i] = xi;
+                sol[j] = xj;
+                return project_to_bounds(sol, min_bound, max_bound);
+            }
+        }
+    }
+
+    // rank‐1: find the strongest direction (largest diagonal ATA[k][k])
+    let diags = [(0,d00.abs()), (1,d11.abs()), (2,d22.abs())];
+    if let Some(&(k, val)) = diags.iter().max_by(|a,b| a.1.partial_cmp(&b.1).unwrap()) {
+        if val > EPS {
+            // compute an averaged normal direction
+            let mut n_sum = DVec3::ZERO;
+            for n in normals.iter() { n_sum += *n; }
+            if n_sum.length_squared() > EPS {
+                let u = n_sum.normalize();
+                // average d = mean( -u·p )
+                let avg_d = - intersections.iter()
+                                  .map(|p| u.dot(*p))
+                                  .sum::<f64>() 
+                            / (intersections.len() as f64);
+                // plane: u·x + avg_d = 0 → project midpoint
+                let t = u.dot(midpoint) + avg_d;
+                let sol = midpoint - u * t;
+                return project_to_bounds(sol, min_bound, max_bound);
+            }
+        }
+    }
+
+    // rank‐0 or fallback: just use the mass point (or cell center if out of bounds)
+    let fallback = mass_pt;
+    project_to_bounds(fallback, min_bound, max_bound)
+}
+
+/// Clamp each component of `p` to [min_bound, max_bound]
+fn project_to_bounds(p: DVec3, min_bound: DVec3, max_bound: DVec3) -> DVec3 {
+    DVec3::new(
+        p.x.clamp(min_bound.x, max_bound.x),
+        p.y.clamp(min_bound.y, max_bound.y),
+        p.z.clamp(min_bound.z, max_bound.z),
+    )
 }
