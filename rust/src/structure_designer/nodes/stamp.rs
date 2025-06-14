@@ -15,7 +15,6 @@ use crate::common::crystal_utils::CRYSTAL_ROTATION_MATRICES;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::atomic_structure::HitTestResult;
 use crate::common::crystal_utils::{
-  ZincBlendeAtomType,
   is_crystal_atom_id,
   id_to_in_crystal_pos,
   in_crystal_pos_to_id,

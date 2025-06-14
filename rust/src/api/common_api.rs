@@ -220,7 +220,7 @@ pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i3
 #[flutter_rust_bridge::frb(sync)]
 pub fn gadget_start_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
-    let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
+    let Some(instance) = CAD_INSTANCE.as_mut() else { return };
 
     match instance.active_editor {
       Editor::StructureDesigner => {
@@ -239,7 +239,7 @@ pub fn gadget_start_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: 
 #[flutter_rust_bridge::frb(sync)]
 pub fn gadget_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
-    let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
+    let Some(instance) = CAD_INSTANCE.as_mut() else { return };
 
     match instance.active_editor {
       Editor::StructureDesigner => {
@@ -263,7 +263,7 @@ pub fn gadget_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec
 #[flutter_rust_bridge::frb(sync)]
 pub fn gadget_end_drag() {
   unsafe {
-    let Some(mut instance) = CAD_INSTANCE.as_mut() else { return };
+    let Some(instance) = CAD_INSTANCE.as_mut() else { return };
 
     match instance.active_editor {
       Editor::StructureDesigner => {

@@ -12,7 +12,7 @@ use glam::f64::DVec2;
 use glam::i32::IVec2;
 use std::f64::consts::PI;
 use std::cmp::max;
-use crate::util::mat_utils::{consistent_round, consistent_round_dvec2};
+use crate::util::mat_utils::consistent_round;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonData {

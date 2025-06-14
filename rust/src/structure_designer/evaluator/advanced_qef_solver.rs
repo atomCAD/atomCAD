@@ -1,7 +1,7 @@
 // Port of advanced QEF solver from C++ to Rust
 // Original implementation uses SVD for calculation of feature points from hermite data
 
-use glam::{DMat3, DVec3, DVec4};
+use glam::{DVec3, DVec4};
 
 // Constants
 const SVD_NUM_SWEEPS: usize = 5;

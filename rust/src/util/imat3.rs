@@ -1,4 +1,4 @@
-use glam::{IVec3, DMat3, DVec3};
+use glam::{IVec3, DMat3};
 
 /// A 3x3 integer matrix for integer-based transformations.
 /// Used primarily for rotating integer crystal lattice positions.

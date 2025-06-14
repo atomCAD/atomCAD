@@ -7,9 +7,7 @@ use crate::common::quad_mesh::QuadMesh;
 use crate::structure_designer::evaluator::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
-use crate::structure_designer::evaluator::advanced_qef_solver;
 
-use super::advanced_qef_solver::compute_optimal_position_advanced;
 
 /*
  * Terminology for Dual Contouring:

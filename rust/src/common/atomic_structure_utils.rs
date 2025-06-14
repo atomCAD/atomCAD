@@ -91,7 +91,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
 pub fn detect_bonded_substructures(structure: &mut AtomicStructure) {
 
     let mut visited: HashSet<u64> = HashSet::new();
-    let mut new_cluster_ids: Vec<u64> = Vec::new();
+    let new_cluster_ids: Vec<u64> = Vec::new();
     
     let all_atom_ids: Vec<u64> = structure.atoms.keys().cloned().collect();
     

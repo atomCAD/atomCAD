@@ -6,7 +6,6 @@ use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
 use super::gpu_mesh::MeshType;
 use super::tessellator::quad_mesh_tessellator::{tessellate_quad_mesh, tessellate_quad_mesh_to_line_mesh};
-use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
