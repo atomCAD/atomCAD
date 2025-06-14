@@ -17,6 +17,7 @@ use crate::api::api_common::add_sample_network;
 use crate::api::api_common::refresh_renderer;
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
+use crate::api::api_common::with_mut_cad_instance;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::ElementSummary;
 use crate::api::api_common::refresh_structure_designer;
@@ -26,15 +27,15 @@ const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
 
 /// Set the viewport size for rendering
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub fn set_viewport_size(width: u32, height: u32) {
   let start_time = Instant::now();
   println!("API: Setting viewport size to {}x{}", width, height);
 
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      instance.renderer.set_viewport_size(width, height);
-    }
+    with_mut_cad_instance(|cad_instance| {
+      cad_instance.renderer.set_viewport_size(width, height);
+    });
   }
 
   println!("set_viewport_size took: {:?}", start_time.elapsed());
@@ -124,6 +125,11 @@ fn send_texture(texture_ptr: u64, width: u32, height: u32, v : Vec<u8>) {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_active_editor(editor: Editor) {
+  set_active_editor_internal(editor);
+}
+
+// Separate the unsafe code into a non-frb-annotated function
+fn set_active_editor_internal(editor: Editor) {
   unsafe {
     if let Some(cad_instance) = &mut CAD_INSTANCE {
       cad_instance.active_editor = editor;
@@ -178,9 +184,9 @@ pub fn get_camera() -> Option<APICamera> {
 #[flutter_rust_bridge::frb(sync)]
 pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
   unsafe {
-    if let Some(cad_instance) = &mut CAD_INSTANCE {
+    with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.move_camera(&from_api_vec3(&eye), &from_api_vec3(&target), &from_api_vec3(&up));
-    }
+    });
   }
 }
 
@@ -326,29 +332,29 @@ pub fn get_camera_transform() -> APITransform {
 /// # Returns
 /// 
 /// `true` if the camera target was adjusted, `false` otherwise
-#[no_mangle]
-pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) -> bool {
+#[unsafe(no_mangle)]
+pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
   let ray_origin = from_api_vec3(&ray_origin);
   let ray_direction = from_api_vec3(&ray_direction);
   
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
+    with_mut_cad_instance(|cad_instance| {
       // Get the current camera eye position
-      let eye = instance.renderer.camera.eye;
+      let eye = cad_instance.renderer.camera.eye;
       
       // Perform raytracing based on the active editor
-      let hit_distance = match instance.active_editor {
+      let hit_distance = match cad_instance.active_editor {
         Editor::StructureDesigner => {
-          instance.structure_designer.raytrace(&ray_origin, &ray_direction)
+          cad_instance.structure_designer.raytrace(&ray_origin, &ray_direction)
         },
         Editor::SceneComposer => {
-          instance.scene_composer.raytrace(&ray_origin, &ray_direction)
+          cad_instance.scene_composer.raytrace(&ray_origin, &ray_direction)
         },
         Editor::None => None,
       };
 
       // Get the camera forward vector (normalized)
-      let camera_forward = (instance.renderer.camera.target - eye).normalize();
+      let camera_forward = (cad_instance.renderer.camera.target - eye).normalize();
 
       // If we hit something, adjust the camera target
       if let Some(distance) = hit_distance {
@@ -362,12 +368,12 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) -> bool
         let target_depth = eye_to_hit.dot(camera_forward);
         
         // Adjust the camera target by setting it at the new depth along the same direction
-        instance.renderer.camera.target = eye + camera_forward * target_depth;
+        cad_instance.renderer.camera.target = eye + camera_forward * target_depth;
         
         // Update the camera buffer
-        instance.renderer.update_camera_buffer();
+        cad_instance.renderer.update_camera_buffer();
         
-        return true;
+        return;
       } else {
         // Fallback: Check if both the camera forward vector and input ray hit the XZ plane
         
@@ -391,28 +397,26 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) -> bool
           let xz_intersection = eye + camera_forward * xz_dist_from_camera;
           
           // Set the new target
-          instance.renderer.camera.target = xz_intersection;
+          cad_instance.renderer.camera.target = xz_intersection;
           
           // Update the camera buffer
-          instance.renderer.update_camera_buffer();
+          cad_instance.renderer.update_camera_buffer();
           
-          return true;
+          return;
         }
       }
-    }
+    });
   }
-  
-  false
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_camera_transform(transform: APITransform) {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
+    with_mut_cad_instance(|cad_instance| {
       let transform = from_api_transform(&transform);
-      instance.renderer.set_camera_transform(&transform);
-      refresh_renderer(instance, false);
-    }
+      cad_instance.renderer.set_camera_transform(&transform);
+      refresh_renderer(cad_instance, false);
+    });
   }
 }
 
@@ -420,10 +424,10 @@ pub fn set_camera_transform(transform: APITransform) {
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_orthographic_mode(orthographic: bool) {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      instance.renderer.set_orthographic_mode(orthographic);
-      refresh_renderer(instance, false);
-    }
+    with_mut_cad_instance(|cad_instance| {
+      cad_instance.renderer.set_orthographic_mode(orthographic);
+      refresh_renderer(cad_instance, false);
+    });
   }
 }
 
@@ -442,10 +446,10 @@ pub fn is_orthographic() -> bool {
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_ortho_half_height(half_height: f64) {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      instance.renderer.set_ortho_half_height(half_height);
-      refresh_renderer(instance, false);
-    }
+    with_mut_cad_instance(|cad_instance| {
+      cad_instance.renderer.set_ortho_half_height(half_height);
+      refresh_renderer(cad_instance, false);
+    });
   }
 }
 
@@ -479,10 +483,10 @@ pub fn get_camera_canonical_view() -> APICameraCanonicalView {
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_camera_canonical_view(view: APICameraCanonicalView) {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      instance.renderer.set_camera_canonical_view(view);
-      refresh_renderer(instance, false);
-    }
+    with_mut_cad_instance(|cad_instance| {
+      cad_instance.renderer.set_camera_canonical_view(view);
+      refresh_renderer(cad_instance, false);
+    });
   }
 }
 

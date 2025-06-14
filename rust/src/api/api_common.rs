@@ -108,6 +108,37 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
 
   pub static mut CAD_INSTANCE: Option<CADInstance> = None;
 
+  /// Helper function to safely access the CAD_INSTANCE static variable with mutable access
+  /// 
+  /// This function takes a closure that will be called with a mutable reference to the CAD instance
+  /// if it exists. This is a thread-safe way to access the static variable in Rust 2024.
+  /// 
+  /// # Safety
+  /// 
+  /// This function uses unsafe code to access a mutable static.
+  /// The caller must ensure proper synchronization when accessing CAD_INSTANCE.
+  /// 
+  /// # Examples
+  /// 
+  /// ```
+  /// use crate::api::api_common::with_mut_cad_instance;
+  /// 
+  /// unsafe {
+  ///     with_mut_cad_instance(|instance| {
+  ///         instance.renderer.set_viewport_size(width, height);
+  ///     });
+  /// }
+  /// ```
+  pub unsafe fn with_mut_cad_instance<F, R>(f: F) -> Option<R>
+  where
+      F: FnOnce(&mut CADInstance) -> R,
+  {
+      use std::ptr::addr_of_mut;
+      
+      let cad_instance_ptr = addr_of_mut!(CAD_INSTANCE);
+      (*cad_instance_ptr).as_mut().map(f)
+  }
+
 
 pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.add_node_network("sample");
