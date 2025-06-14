@@ -137,19 +137,19 @@ pub fn set_active_editor(editor: Editor) {
 
 #[flutter_rust_bridge::frb(sync, type_64bit_int)]
 pub fn provide_texture(texture_ptr: u64) -> f64 {
-
   let start = Instant::now(); // Record the start time
 
-  match unsafe { &mut CAD_INSTANCE } {
-    Some(cad_instance) => {
+  unsafe {
+    // Use regular with_mut_cad_instance which returns Option<()>
+    if with_mut_cad_instance(|cad_instance| {
       let v = cad_instance.renderer.render();
       send_texture(texture_ptr, cad_instance.renderer.texture_size.width, cad_instance.renderer.texture_size.height, v);
-    }
-    None => {
+    }).is_none() {
+      // Handle the None case
       let v: Vec<u8> = generate_mock_image(INITIAL_VIEWPORT_WIDTH, INITIAL_VIEWPORT_HEIGHT);
       send_texture(texture_ptr, INITIAL_VIEWPORT_WIDTH, INITIAL_VIEWPORT_HEIGHT, v);
     }
-  };
+  }
 
   let duration = start.elapsed(); // Calculate elapsed time
   //println!("Provide texture time: {:?}", duration);
@@ -221,7 +221,7 @@ pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i3
         },
         Editor::None => None
       }
-    })
+    })?  // Use ? operator here to extract the inner Option
   }
 }
 
