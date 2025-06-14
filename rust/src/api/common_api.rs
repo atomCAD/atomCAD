@@ -22,6 +22,9 @@ use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::ElementSummary;
 use crate::api::api_common::refresh_structure_designer;
 use crate::common::common_constants::ATOM_INFO;
+use crate::api::api_common::with_cad_instance;
+use crate::api::api_common::with_cad_instance_or;
+use crate::api::api_common::with_mut_cad_instance_or;
 
 const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
@@ -125,15 +128,10 @@ fn send_texture(texture_ptr: u64, width: u32, height: u32, v : Vec<u8>) {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_active_editor(editor: Editor) {
-  set_active_editor_internal(editor);
-}
-
-// Separate the unsafe code into a non-frb-annotated function
-fn set_active_editor_internal(editor: Editor) {
   unsafe {
-    if let Some(cad_instance) = &mut CAD_INSTANCE {
+    with_mut_cad_instance(|cad_instance| {
       cad_instance.active_editor = editor;
-    }
+    });
   }
 }
 
@@ -162,9 +160,9 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_camera() -> Option<APICamera> {
   unsafe {
-    if let Some(cad_instance) = &CAD_INSTANCE {
+    with_cad_instance(|cad_instance| {
       let camera = &cad_instance.renderer.camera;
-      return Some(APICamera {
+      APICamera {
         eye: to_api_vec3(&camera.eye),
         target: to_api_vec3(&camera.target),
         up: to_api_vec3(&camera.up),
@@ -174,12 +172,11 @@ pub fn get_camera() -> Option<APICamera> {
         zfar: camera.zfar,
         orthographic: camera.orthographic,
         ortho_half_height: camera.ortho_half_height,
-      });
-    } else {
-      return None;
+      }
+    })
     }
   }
-}
+
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
@@ -193,127 +190,144 @@ pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
 #[flutter_rust_bridge::frb(sync)]
 pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
   unsafe {
-    if let Some(cad_instance) = &CAD_INSTANCE {
-      let model = &cad_instance.scene_composer.model.model;
-      return to_api_vec3(&model.find_pivot_point(&from_api_vec3(&ray_start), &from_api_vec3(&ray_dir)));
-    } else {
-      return APIVec3{
+    with_cad_instance_or(
+      |cad_instance| {
+        let model = &cad_instance.scene_composer.model.model;
+        to_api_vec3(&model.find_pivot_point(&from_api_vec3(&ray_start), &from_api_vec3(&ray_dir)))
+      },
+      // Default value when CAD_INSTANCE is None
+      APIVec3 {
         x: 0.0,
         y: 0.0,
         z: 0.0
       }
-    }
+    )
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i32> {
   unsafe {
-    let instance = CAD_INSTANCE.as_ref()?;
-
-    match instance.active_editor {
-      Editor::StructureDesigner => {
-        return instance.structure_designer.gadget_hit_test(from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-      },
-      Editor::SceneComposer => {
-        return instance.scene_composer.gadget_hit_test(from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-      },
-      Editor::None => { None }
-    }
+    with_cad_instance(|instance| {
+      let origin_vec = from_api_vec3(&ray_origin);
+      let direction_vec = from_api_vec3(&ray_direction);
+      
+      match instance.active_editor {
+        Editor::StructureDesigner => {
+          instance.structure_designer.gadget_hit_test(origin_vec, direction_vec)
+        },
+        Editor::SceneComposer => {
+          instance.scene_composer.gadget_hit_test(origin_vec, direction_vec)
+        },
+        Editor::None => None
+      }
+    })
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn gadget_start_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
-    let Some(instance) = CAD_INSTANCE.as_mut() else { return };
-
-    match instance.active_editor {
-      Editor::StructureDesigner => {
-        instance.structure_designer.gadget_start_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-      },
-      Editor::SceneComposer => {
-        instance.scene_composer.gadget_start_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-      },
-      Editor::None => {}
-    }
-
-    refresh_renderer(instance, false);
+    with_mut_cad_instance(|cad_instance| {
+      let origin_vec = from_api_vec3(&ray_origin);
+      let direction_vec = from_api_vec3(&ray_direction);
+      
+      match cad_instance.active_editor {
+        Editor::StructureDesigner => {
+          cad_instance.structure_designer.gadget_start_drag(handle_index, origin_vec, direction_vec);
+        },
+        Editor::SceneComposer => {
+          cad_instance.scene_composer.gadget_start_drag(handle_index, origin_vec, direction_vec);
+        },
+        Editor::None => {}
+      }
+      
+      // Call refresh_renderer inside the closure to access cad_instance
+      refresh_renderer(cad_instance, false);
+    });
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn gadget_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec3) {
   unsafe {
-    let Some(instance) = CAD_INSTANCE.as_mut() else { return };
+    with_mut_cad_instance(|instance| {
+      let origin_vec = from_api_vec3(&ray_origin);
+      let direction_vec = from_api_vec3(&ray_direction);
+      
+      match instance.active_editor {
+        Editor::StructureDesigner => {
+          instance.structure_designer.gadget_drag(handle_index, origin_vec, direction_vec);
+          // Important: Preserve the lightweight rendering flag (true) as per your memory
+          refresh_renderer(instance, true);
+        },
+        Editor::SceneComposer => {
+          instance.scene_composer.gadget_drag(handle_index, origin_vec, direction_vec);
 
-    match instance.active_editor {
-      Editor::StructureDesigner => {
-        instance.structure_designer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-        refresh_renderer(instance, true);
-      },
-      Editor::SceneComposer => {
-        instance.scene_composer.gadget_drag(handle_index, from_api_vec3(&ray_origin), from_api_vec3(&ray_direction));
-
-        if instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().frame_locked_to_atoms {
-          let selected_clusters_transform = instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().get_selected_clusters_transform();
-          instance.renderer.set_selected_clusters_transform(&selected_clusters_transform);
-        }
-        refresh_renderer(instance, true);
-      },
-      Editor::None => {}
-    }
+          if instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().frame_locked_to_atoms {
+            let selected_clusters_transform = instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().get_selected_clusters_transform();
+            instance.renderer.set_selected_clusters_transform(&selected_clusters_transform);
+          }
+          // Important: Preserve the lightweight rendering flag (true) as per your memory
+          refresh_renderer(instance, true);
+        },
+        Editor::None => {}
+      }
+    });
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn gadget_end_drag() {
   unsafe {
-    let Some(instance) = CAD_INSTANCE.as_mut() else { return };
-
-    match instance.active_editor {
-      Editor::StructureDesigner => {
-        instance.structure_designer.gadget_end_drag();
-      },
-      Editor::SceneComposer => {
-        instance.renderer.set_selected_clusters_transform(&Transform::default());
-        instance.scene_composer.gadget_end_drag();
-      },
-      Editor::None => {}
-    }
-    refresh_renderer(instance, false);
+    with_mut_cad_instance(|instance| {
+      match instance.active_editor {
+        Editor::StructureDesigner => {
+          instance.structure_designer.gadget_end_drag();
+        },
+        Editor::SceneComposer => {
+          instance.renderer.set_selected_clusters_transform(&Transform::default());
+          instance.scene_composer.gadget_end_drag();
+        },
+        Editor::None => {}
+      }
+      refresh_renderer(instance, false);
+    });
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn sync_gadget_data() -> bool {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      match instance.active_editor {
-        Editor::StructureDesigner => {
-          return instance.structure_designer.sync_gadget_data();
-        },
-        Editor::SceneComposer => {
-          instance.scene_composer.model.sync_gadget_to_model();
-          return true;
-        },
-        Editor::None => { false }
-      }
-    } else {
-      false
-    }
+    with_mut_cad_instance_or(
+      |instance| {
+        match instance.active_editor {
+          Editor::StructureDesigner => {
+            instance.structure_designer.sync_gadget_data()
+          },
+          Editor::SceneComposer => {
+            instance.scene_composer.model.sync_gadget_to_model();
+            true
+          },
+          Editor::None => false
+        }
+      },
+      false // Default return value if CAD_INSTANCE is None
+    )
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_camera_transform() -> APITransform {
   unsafe {
-    if let Some(instance) = &CAD_INSTANCE {
-      let transform = instance.renderer.get_camera_transform();
-      return to_api_transform(&transform);
-    }
-    // Return identity transform as fallback
-    to_api_transform(&Transform::default())
+    with_cad_instance_or(
+      |cad_instance| {
+        let transform = cad_instance.renderer.get_camera_transform();
+        to_api_transform(&transform)
+      },
+      // Return identity transform as fallback
+      to_api_transform(&Transform::default())
+    )
   }
 }
 
@@ -435,10 +449,10 @@ pub fn set_orthographic_mode(orthographic: bool) {
 #[flutter_rust_bridge::frb(sync)]
 pub fn is_orthographic() -> bool {
   unsafe {
-    if let Some(instance) = &CAD_INSTANCE {
-      return instance.renderer.is_orthographic();
-    }
-    return false;
+    with_cad_instance_or(
+      |cad_instance| cad_instance.renderer.is_orthographic(),
+      false // Default to false if CAD_INSTANCE is None
+    )
   }
 }
 
@@ -457,10 +471,10 @@ pub fn set_ortho_half_height(half_height: f64) {
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_ortho_half_height() -> f64 {
   unsafe {
-    if let Some(instance) = &CAD_INSTANCE {
-      return instance.renderer.get_ortho_half_height();
-    }
-    return 10.0; // Default value
+    with_cad_instance_or(
+      |cad_instance| cad_instance.renderer.get_ortho_half_height(),
+      10.0 // Default value
+    )
   }
 }
 
@@ -469,12 +483,12 @@ pub fn get_ortho_half_height() -> f64 {
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_camera_canonical_view() -> APICameraCanonicalView {
   unsafe {
-    if let Some(instance) = &mut CAD_INSTANCE {
-      return instance.renderer.camera.get_canonical_view();
-    }
+    with_cad_instance_or(
+      |cad_instance| cad_instance.renderer.camera.get_canonical_view(),
+      // Default to Custom if no CAD instance exists
+      APICameraCanonicalView::Custom
+    )
   }
-  // Default to Custom if no CAD instance exists
-  APICameraCanonicalView::Custom
 }
 
 /// Set the camera to a canonical view orientation

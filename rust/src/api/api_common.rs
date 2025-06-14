@@ -138,6 +138,103 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
       let cad_instance_ptr = addr_of_mut!(CAD_INSTANCE);
       (*cad_instance_ptr).as_mut().map(f)
   }
+  
+  /// Helper function to safely access the CAD_INSTANCE with mutable access and a default value
+  /// 
+  /// Similar to `with_mut_cad_instance` but returns a default value if CAD_INSTANCE is None
+  /// 
+  /// # Safety
+  /// 
+  /// This function uses unsafe code to access a mutable static.
+  /// The caller must ensure proper synchronization when accessing CAD_INSTANCE.
+  /// 
+  /// # Examples
+  /// 
+  /// ```
+  /// use crate::api::api_common::with_mut_cad_instance_or;
+  /// 
+  /// unsafe {
+  ///     let result = with_mut_cad_instance_or(
+  ///         |instance| {
+  ///             instance.renderer.update_something();
+  ///             true // success
+  ///         },
+  ///         false // failure
+  ///     );
+  /// }
+  /// ```
+  pub unsafe fn with_mut_cad_instance_or<F, R>(f: F, default: R) -> R
+  where
+      F: FnOnce(&mut CADInstance) -> R,
+  {
+      use std::ptr::addr_of_mut;
+      
+      let cad_instance_ptr = addr_of_mut!(CAD_INSTANCE);
+      (*cad_instance_ptr).as_mut().map(f).unwrap_or(default)
+  }
+  
+  /// Helper function to safely access the CAD_INSTANCE static variable with immutable access
+  /// 
+  /// This function takes a closure that will be called with an immutable reference to the CAD instance
+  /// if it exists. This is a thread-safe way to access the static variable in Rust 2024.
+  /// 
+  /// # Safety
+  /// 
+  /// This function uses unsafe code to access a mutable static.
+  /// The caller must ensure proper synchronization when accessing CAD_INSTANCE.
+  /// 
+  /// # Examples
+  /// 
+  /// ```
+  /// use crate::api::api_common::with_cad_instance;
+  /// 
+  /// unsafe {
+  ///     with_cad_instance(|instance| {
+  ///         let camera = &instance.renderer.camera;
+  ///         // use camera data
+  ///     });
+  /// }
+  /// ```
+  pub unsafe fn with_cad_instance<F, R>(f: F) -> Option<R>
+  where
+      F: FnOnce(&CADInstance) -> R,
+  {
+      use std::ptr::addr_of;
+      
+      let cad_instance_ptr = addr_of!(CAD_INSTANCE);
+      (*cad_instance_ptr).as_ref().map(f)
+  }
+  
+  /// Helper function to safely access the CAD_INSTANCE with immutable access and a default value
+  /// 
+  /// Similar to `with_cad_instance` but returns a default value if CAD_INSTANCE is None
+  /// 
+  /// # Safety
+  /// 
+  /// This function uses unsafe code to access a mutable static.
+  /// The caller must ensure proper synchronization when accessing CAD_INSTANCE.
+  /// 
+  /// # Examples
+  /// 
+  /// ```
+  /// use crate::api::api_common::with_cad_instance_or;
+  /// 
+  /// unsafe {
+  ///     let result = with_cad_instance_or(
+  ///         |instance| instance.renderer.get_viewport_size(),
+  ///         (0, 0)
+  ///     );
+  /// }
+  /// ```
+  pub unsafe fn with_cad_instance_or<F, R>(f: F, default: R) -> R
+  where
+      F: FnOnce(&CADInstance) -> R,
+  {
+      use std::ptr::addr_of;
+      
+      let cad_instance_ptr = addr_of!(CAD_INSTANCE);
+      (*cad_instance_ptr).as_ref().map(f).unwrap_or(default)
+  }
 
 
 pub fn add_sample_network(kernel: &mut StructureDesigner) {
