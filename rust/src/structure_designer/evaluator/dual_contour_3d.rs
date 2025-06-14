@@ -7,6 +7,9 @@ use crate::common::quad_mesh::QuadMesh;
 use crate::structure_designer::evaluator::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
+use crate::structure_designer::evaluator::advanced_qef_solver;
+
+use super::advanced_qef_solver::compute_optimal_position_advanced;
 
 /*
  * Terminology for Dual Contouring:
@@ -172,7 +175,7 @@ fn process_cell_edges(
       // Create the edge intersection data
       let edge_intersection = EdgeIntersection {
         position: intersection,
-        normal: normal,
+        normal: normal.clone().normalize(),
       };
       
       // If we get here, all cells exist, so we can safely create/use vertices
@@ -219,9 +222,9 @@ fn process_cell_edges(
 // For example: Cell (5,3,2) has its minimum corner vertex at world position (5/SPU, 3/SPU, 2/SPU)
 fn get_vertex_world_pos(vertex_key: (i32, i32, i32), samples_per_unit_cell: i32) -> DVec3 {
   DVec3::new(
-    vertex_key.0 as f64 / samples_per_unit_cell as f64,
-    vertex_key.1 as f64 / samples_per_unit_cell as f64, 
-    vertex_key.2 as f64 / samples_per_unit_cell as f64
+    vertex_key.0 as f64 / get_spu(samples_per_unit_cell),
+    vertex_key.1 as f64 / get_spu(samples_per_unit_cell), 
+    vertex_key.2 as f64 / get_spu(samples_per_unit_cell)
   )
 }
 
@@ -229,9 +232,9 @@ fn get_vertex_world_pos(vertex_key: (i32, i32, i32), samples_per_unit_cell: i32)
 // The center is 0.5 units (in grid coordinates) from the minimum vertex
 fn get_cell_center_pos(cell_key: (i32, i32, i32), samples_per_unit_cell: i32) -> DVec3 {
   DVec3::new(
-    (cell_key.0 as f64 + 0.5) / samples_per_unit_cell as f64,
-    (cell_key.1 as f64 + 0.5) / samples_per_unit_cell as f64, 
-    (cell_key.2 as f64 + 0.5) / samples_per_unit_cell as f64
+    (cell_key.0 as f64 + 0.5) / get_spu(samples_per_unit_cell),
+    (cell_key.1 as f64 + 0.5) / get_spu(samples_per_unit_cell), 
+    (cell_key.2 as f64 + 0.5) / get_spu(samples_per_unit_cell)
   )
 }
 
@@ -249,10 +252,12 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
   
   // Binary search for zero-crossing (8 iterations should be enough)
   for _ in 0..8 {
-    let mid = (a + b) * 0.5;
+    // Linear interpolation based on SDF values for faster convergence
+    let t = sdf_a / (sdf_a - sdf_b);
+    let mid = a + t * (b - a);
     let sdf_mid = node_evaluator.eval(&mid);
     
-    if sdf_mid * sdf_a <= 0.0 {
+    if sdf_sign_change(sdf_mid, sdf_a) {
       b = mid;
       sdf_b = sdf_mid;
     } else {
@@ -261,8 +266,9 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
     }
   }
   
-  // Return the best approximation of the zero-crossing point
-  (a + b) * 0.5
+  // Return the best approximation of the zero-crossing point using interpolation
+  let t = sdf_a / (sdf_a - sdf_b);
+  a + t * (b - a)
 }
 
 // Optimize vertex positions using QEF minimization
@@ -271,7 +277,7 @@ fn optimize_vertex_positions(
   _node_evaluator: &NodeEvaluator,
   mesh: &mut QuadMesh,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) {
-  let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
+  let spu = get_spu(geometry_visualization_preferences.samples_per_unit_cell);
   
   // Iterate over all cells to optimize vertex positions based on stored edge intersections
   for (&(x, y, z), cell) in cells.iter() {
@@ -315,7 +321,7 @@ fn generate_cells_for_box(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) {
 
-  let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
+  let spu = get_spu(geometry_visualization_preferences.samples_per_unit_cell);
   let epsilon = 0.001;
 
   // Calculate the center point of the box
@@ -387,4 +393,8 @@ fn sdf_is_positive(sdf: f64) -> bool {
 
 fn sdf_sign_change(sdf1: f64, sdf2: f64) -> bool {
   sdf_is_positive(sdf1) != sdf_is_positive(sdf2)
+}
+
+fn get_spu(samples_per_unit_cell: i32) -> f64 {
+  (samples_per_unit_cell as f64) + 0.276453
 }
