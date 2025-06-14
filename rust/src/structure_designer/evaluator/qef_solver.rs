@@ -1,6 +1,6 @@
 use glam::DVec3;
 
-const BIAS_STRENGTH: f64 = 0.05;
+const BIAS_STRENGTH: f64 = 0.01;
 
 /// A simple QEF (Quadratic Error Function) solver that minimizes the sum of squared
 /// distances from a point to a set of planes defined by points and normals.
@@ -169,7 +169,7 @@ impl QefSolver {
                 return solution;
             }
             // build reduced system for free axes
-            println!("Free axes: {:?}", active);
+            //println!("Free axes: {:?}", active);
             //if active[0] && active[1] && active[2] {
             //    self.print_data();
             //}
