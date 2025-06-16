@@ -223,11 +223,12 @@ fn wire__crate__api__common_api__adjust_camera_target_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::common_api::adjust_camera_target(
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::common_api::adjust_camera_target(
                             api_ray_origin,
                             api_ray_direction,
-                        ))?;
+                        );
+                    })?;
                     Ok(output_ok)
                 })())
             }

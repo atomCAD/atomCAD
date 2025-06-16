@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `set_active_editor_internal`
+// These functions are ignored because they are not marked as `pub`: `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
@@ -78,7 +78,7 @@ APITransform getCameraTransform() =>
 /// # Returns
 ///
 /// `true` if the camera target was adjusted, `false` otherwise
-Future<bool> adjustCameraTarget(
+Future<void> adjustCameraTarget(
         {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
     RustLib.instance.api.crateApiCommonApiAdjustCameraTarget(
         rayOrigin: rayOrigin, rayDirection: rayDirection);

@@ -103,7 +103,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStampApiAddOrSelectStampPlacementByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  Future<bool> crateApiCommonApiAdjustCameraTarget(
+  Future<void> crateApiCommonApiAdjustCameraTarget(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection});
 
   void crateApiStructureDesignerStructureDesignerApiClearSelection();
@@ -526,7 +526,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Future<bool> crateApiCommonApiAdjustCameraTarget(
+  Future<void> crateApiCommonApiAdjustCameraTarget(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -537,7 +537,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             funcId: 5, port: port_);
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_bool,
+        decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta: kCrateApiCommonApiAdjustCameraTargetConstMeta,
