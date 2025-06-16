@@ -13,6 +13,7 @@ use glam::f64::DQuat;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use glam::f64::DVec3;
+use crate::common::csg_types::CSG;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SphereData {
@@ -31,10 +32,18 @@ pub fn eval_sphere<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u6
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
 
-  return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-    sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+  let center = sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+
+  let geometry = CSG::sphere(sphere_data.radius as f64, 32, 32, None)
+    .translate(center.x, center.y, center.z);
+
+  return NetworkResult::Geometry(GeometrySummary { 
+    frame_transform: Transform::new(
+    center,
     DQuat::IDENTITY,
-  ) });
+    ),
+    csg: geometry,
+  });
 }
 
 pub fn implicit_eval_sphere<'a>(

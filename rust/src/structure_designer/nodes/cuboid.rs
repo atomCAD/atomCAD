@@ -13,6 +13,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DQuat;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
+use crate::common::csg_types::CSG;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CuboidData {
@@ -36,10 +37,16 @@ pub fn eval_cuboid<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u6
   let extent = cuboid_data.extent.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
   let center = min_corner + extent / 2.0;
 
-  return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-    center,
-    DQuat::IDENTITY,
-  ) });
+  let geometry = CSG::cube(extent.x, extent.y, extent.z, None)
+    .translate(center.x, center.y, center.z);
+
+  return NetworkResult::Geometry(GeometrySummary { 
+    frame_transform: Transform::new(
+      center,
+      DQuat::IDENTITY,
+    ),
+    csg: geometry,
+  });
 }
 
 pub fn implicit_eval_cuboid<'a>(

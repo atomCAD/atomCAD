@@ -24,6 +24,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
+use crate::common::csg_types::CSG;
 
 pub const MAX_MILLER_INDEX: f64 = 6.0;
 pub const GADGET_LENGTH: f64 = 6.0;
@@ -64,10 +65,12 @@ pub fn eval_half_space<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id
   let dir = half_space_data.miller_index.as_dvec3().normalize();
   let center_pos = half_space_data.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
-  return NetworkResult::Geometry(GeometrySummary { frame_transform: Transform::new(
-    center_pos,
-    DQuat::from_rotation_arc(DVec3::Y, dir),
-  )});
+  return NetworkResult::Geometry(GeometrySummary {
+    frame_transform: Transform::new(
+      center_pos,
+      DQuat::from_rotation_arc(DVec3::Y, dir),
+    ),
+    csg: CSG::new()});
 }
 
 pub fn implicit_eval_half_space<'a>(

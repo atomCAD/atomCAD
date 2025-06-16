@@ -31,6 +31,7 @@ use super::surface_splatting_3d::generate_point_cloud_scene;
 use super::dual_contour_3d::generate_dual_contour_3d_scene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
+use crate::common::csg_types::CSG;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -40,6 +41,7 @@ pub struct GeometrySummary2D {
 #[derive(Clone)]
 pub struct GeometrySummary {
   pub frame_transform: Transform,
+  pub csg: CSG,
 }
 
 #[derive(Clone)]
@@ -238,7 +240,12 @@ impl NetworkEvaluator {
     return StructureDesignerScene::new();
   }
 
-  pub fn evaluate<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut NetworkEvaluationContext) -> Vec<NetworkResult> {
+  pub fn evaluate<'a>(
+    &self,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64, registry: &NodeTypeRegistry,
+    decorate: bool,
+    context: &mut NetworkEvaluationContext) -> Vec<NetworkResult> {
 
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
