@@ -1,5 +1,4 @@
 use crate::api::api_common::refresh_renderer;
-use crate::api::api_common::CAD_INSTANCE;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;

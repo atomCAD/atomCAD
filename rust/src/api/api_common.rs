@@ -132,12 +132,12 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   pub unsafe fn with_mut_cad_instance<F, R>(f: F) -> Option<R>
   where
       F: FnOnce(&mut CADInstance) -> R,
-  {
+  { unsafe {
       use std::ptr::addr_of_mut;
       
       let cad_instance_ptr = addr_of_mut!(CAD_INSTANCE);
       (*cad_instance_ptr).as_mut().map(f)
-  }
+  }}
   
   /// Helper function to safely access the CAD_INSTANCE with mutable access and a default value
   /// 
@@ -166,12 +166,12 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   pub unsafe fn with_mut_cad_instance_or<F, R>(f: F, default: R) -> R
   where
       F: FnOnce(&mut CADInstance) -> R,
-  {
+  { unsafe {
       use std::ptr::addr_of_mut;
       
       let cad_instance_ptr = addr_of_mut!(CAD_INSTANCE);
       (*cad_instance_ptr).as_mut().map(f).unwrap_or(default)
-  }
+  }}
   
   /// Helper function to safely access the CAD_INSTANCE static variable with immutable access
   /// 
@@ -198,12 +198,12 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   pub unsafe fn with_cad_instance<F, R>(f: F) -> Option<R>
   where
       F: FnOnce(&CADInstance) -> R,
-  {
+  { unsafe {
       use std::ptr::addr_of;
       
       let cad_instance_ptr = addr_of!(CAD_INSTANCE);
       (*cad_instance_ptr).as_ref().map(f)
-  }
+  }}
   
   /// Helper function to safely access the CAD_INSTANCE with immutable access and a default value
   /// 
@@ -229,12 +229,12 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   pub unsafe fn with_cad_instance_or<F, R>(f: F, default: R) -> R
   where
       F: FnOnce(&CADInstance) -> R,
-  {
+  { unsafe {
       use std::ptr::addr_of;
       
       let cad_instance_ptr = addr_of!(CAD_INSTANCE);
       (*cad_instance_ptr).as_ref().map(f).unwrap_or(default)
-  }
+  }}
 
 
 pub fn add_sample_network(kernel: &mut StructureDesigner) {

@@ -1,3 +1,5 @@
 [toolchain]
-channel = "nightly"
+channel = "stable"
 components = ["rustc", "cargo", "rust-std", "rust-docs", "clippy"]
+# Ensure we use Rust 1.85 or newer for 2024 edition support
+minimal-version = "1.85.0"
