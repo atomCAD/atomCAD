@@ -218,7 +218,7 @@ pub fn set_active_scene_composer_tool(tool: APISceneComposerTool) {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_align_tool_state_text() -> String {
-  let start_time = Instant::now();
+  let _start_time = Instant::now();
   
   unsafe {
     with_mut_cad_instance_or(
@@ -230,7 +230,7 @@ pub fn get_align_tool_state_text() -> String {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_distance_tool_state_text() -> String {
-  let start_time = Instant::now();
+  let _start_time = Instant::now();
   
   unsafe {
     with_mut_cad_instance_or(

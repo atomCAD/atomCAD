@@ -153,7 +153,7 @@ fn tessellate_quad_mesh_smoothing_group_based(quad_mesh: &QuadMesh, mesh: &mut M
     }
     
     // Second pass: Create quads
-    for (quad_idx, quad) in quad_mesh.quads.iter().enumerate() {
+    for (_quad_idx, quad) in quad_mesh.quads.iter().enumerate() {
         let smoothing_group = quad.smoothing_group_id;
         
         // Get the vertices for this quad with the correct smoothing group

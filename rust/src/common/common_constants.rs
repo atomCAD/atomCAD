@@ -154,21 +154,3 @@ fn get_all_elements() -> Vec<AtomInfo> {
         create_atom_info(96, "Cm", "Curium", 1.69, Vec3::new(0.47, 0.36, 0.89)),
     ]
 }
-
-/// Initializes the CHEMICAL_ELEMENTS map from the element registry
-fn initialize_chemical_elements() -> HashMap<String, i32> {
-    let mut elements = HashMap::new();
-    for atom_info in get_all_elements() {
-        elements.insert(atom_info.symbol.clone(), atom_info.atomic_number);
-    }
-    elements
-}
-
-/// Initializes the ATOM_INFO map from the element registry
-fn initialize_atom_info() -> HashMap<i32, AtomInfo> {
-    let mut info_map = HashMap::new();
-    for atom_info in get_all_elements() {
-        info_map.insert(atom_info.atomic_number, atom_info);
-    }
-    info_map
-}

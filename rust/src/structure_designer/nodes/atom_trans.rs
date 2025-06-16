@@ -84,15 +84,15 @@ impl Tessellatable for AtomTransGadget {
 }
 
 impl Gadget for AtomTransGadget {
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(&self, _ray_origin: DVec3, _ray_direction: DVec3) -> Option<i32> {
         None
     }
 
-    fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    fn start_drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
 
     }
 
-    fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    fn drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
 
     }
 

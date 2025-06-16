@@ -26,9 +26,9 @@ impl NodeData for PolygonData {
     }
 }
 
-pub fn eval_polygon<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let polygon_data = &node.data.as_any_ref().downcast_ref::<PolygonData>().unwrap();
+pub fn eval_polygon<'a>(_network_stack: &Vec<NetworkStackElement<'a>>, _node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
+    //let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    //let polygon_data = &node.data.as_any_ref().downcast_ref::<PolygonData>().unwrap();
 
     // Create a transform at the center of the polygon (origin)
     // No rotation is needed for this type of shape

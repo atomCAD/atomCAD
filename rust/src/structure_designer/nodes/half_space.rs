@@ -58,7 +58,7 @@ impl NodeData for HalfSpaceData {
   
 }
 
-pub fn eval_half_space<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_half_space<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
@@ -224,7 +224,7 @@ impl Gadget for HalfSpaceGadget {
         None // No handle was hit
     }
 
-    fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    fn start_drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
         self.is_dragging = true;
     }
 

@@ -55,15 +55,15 @@ pub fn tessellate_surface_point_2d(output_mesh: &mut Mesh, point: &SurfacePoint2
   let side_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
 
   // Create rotation quaternion from surface normal to align cuboid
-  let position3D = DVec3::new(point.position.x, 0.0, point.position.y);
-  let normal3D = DVec3::new(point.normal.x, 0.0, point.normal.y);
-  let rotator = DQuat::from_rotation_arc(DVec3::Y, normal3D);
+  let position_3d = DVec3::new(point.position.x, 0.0, point.position.y);
+  let normal_3d = DVec3::new(point.normal.x, 0.0, point.normal.y);
+  let rotator = DQuat::from_rotation_arc(DVec3::Y, normal_3d);
 
   let size = DVec3::new(0.3, 0.2, 0.3); // x, y, z extents
 
   tessellator::tessellate_cuboid(
     output_mesh,
-    &(position3D - normal3D * size.y * 0.5),
+    &(position_3d - normal_3d * size.y * 0.5),
     &size,
     &rotator,
     &outside_material,

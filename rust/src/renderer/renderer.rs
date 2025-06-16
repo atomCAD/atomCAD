@@ -94,7 +94,6 @@ pub struct Renderer  {
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    model_bind_group_layout: wgpu::BindGroupLayout,
     pub selected_clusters_transform: crate::util::transform::Transform,
     render_mutex: Mutex<()>,
 }
@@ -370,7 +369,6 @@ impl Renderer {
           camera,
           camera_buffer,
           camera_bind_group,
-          model_bind_group_layout,
           selected_clusters_transform: crate::util::transform::Transform::default(),
           render_mutex: Mutex::new(()),
         };

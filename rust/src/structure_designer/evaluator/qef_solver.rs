@@ -27,7 +27,7 @@ impl QefSolver {
         }
     }
 
-    fn print_data(&self) {
+    pub fn print_data(&self) {
         println!("Num points: {}", self.num_points);
         println!("points: {:?}", self.points);
         println!("normals: {:?}", self.normals);
@@ -131,6 +131,7 @@ impl QefSolver {
         Some(DVec3::new(x[0], x[1], x[2]))
     }
 
+    /*
     /// Projects a point to within the given bounds
     fn project_to_bounds(p: DVec3, minb: DVec3, maxb: DVec3) -> DVec3 {
         DVec3::new(
@@ -139,6 +140,7 @@ impl QefSolver {
             p.z.clamp(minb.z, maxb.z),
         )
     }
+    */
 
     /// Finds the QEF minimizer, using active-set to respect bounds
     pub fn optimal_position(&self, minb: DVec3, maxb: DVec3) -> DVec3 {
@@ -180,14 +182,14 @@ impl QefSolver {
             //return solution;
             let n = free.len();
             // build small A and b
-            let mut A = vec![vec![0.0; n]; n];
+            let mut a = vec![vec![0.0; n]; n];
             let mut b = vec![0.0; n];
             for (ii, &i) in free.iter().enumerate() {
                 b[ii] = self.atb[i];
                 
                 // Set up the system matrix correctly
                 for (jj, &j) in free.iter().enumerate() {
-                    A[ii][jj] = ata[i][j];
+                    a[ii][jj] = ata[i][j];
                 }
                 
                 // Subtract contribution from fixed vars (ONCE per row)
@@ -200,7 +202,7 @@ impl QefSolver {
                 b[ii] = -b[ii];
             }
             // solve reduced via simple Gaussian elimination
-            if let Some(x_free) = Self::solve_reduced(&A, &b) {
+            if let Some(x_free) = Self::solve_reduced(&a, &b) {
                 for (ii, &i) in free.iter().enumerate() {
                     solution[i] = x_free[ii];
                 }
@@ -213,11 +215,11 @@ impl QefSolver {
     }
 
     /// Solve n×n system via Gaussian elimination (in-place vectors)
-    fn solve_reduced(A: &[Vec<f64>], b: &[f64]) -> Option<Vec<f64>> {
+    fn solve_reduced(a: &[Vec<f64>], b: &[f64]) -> Option<Vec<f64>> {
         let n = b.len();
         let mut aug = vec![vec![0.0; n + 1]; n];
         for i in 0..n {
-            aug[i][..n].copy_from_slice(&A[i]);
+            aug[i][..n].copy_from_slice(&a[i]);
             aug[i][n] = b[i];
         }
         for i in 0..n {

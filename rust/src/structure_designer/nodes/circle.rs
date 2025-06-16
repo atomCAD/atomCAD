@@ -26,7 +26,7 @@ impl NodeData for CircleData {
     }
 }
 
-pub fn eval_circle<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_circle<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let circle_data = &node.data.as_any_ref().downcast_ref::<CircleData>().unwrap();
 

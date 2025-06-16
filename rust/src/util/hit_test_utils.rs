@@ -264,10 +264,6 @@ pub fn cone_hit_test(
     let cone_height = cone_axis.length();
     let cone_axis_normalized = cone_axis.normalize();
     
-    // The half-angle of the cone (from axis to surface)
-    let cone_angle = (radius / cone_height).atan();
-    let cos_sqr = cone_angle.cos().powi(2);
-    
     // Step 2: Create a rotation that maps the cone axis to the y-axis (0,1,0)
     let y_axis = DVec3::new(0.0, 1.0, 0.0);
     let quat = DQuat::from_rotation_arc(cone_axis_normalized, y_axis);

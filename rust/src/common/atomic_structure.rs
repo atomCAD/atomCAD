@@ -1022,7 +1022,7 @@ impl AtomicStructure {
       let mut new_name = cluster.name.clone();
       
       // Update name if it follows the 'Cluster_{id}' pattern
-      if let Some(captures) = regex::Regex::new(r"^Cluster_(\d+)$").unwrap().captures(&cluster.name) {
+      if let Some(_captures) = regex::Regex::new(r"^Cluster_(\d+)$").unwrap().captures(&cluster.name) {
         new_name = format!("Cluster_{}", new_cluster_id);
       }
       

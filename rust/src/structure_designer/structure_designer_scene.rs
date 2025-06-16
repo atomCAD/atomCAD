@@ -50,11 +50,11 @@ impl<'a> Scene<'a> for StructureDesignerScene {
         Box::new(self.atomic_structures.iter())
     }
 
-    fn is_atom_marked(&self, atom_id: u64) -> bool {
+    fn is_atom_marked(&self, _atom_id: u64) -> bool {
         false // Default implementation: no atom is marked by default
     }
 
-    fn is_atom_secondary_marked(&self, atom_id: u64) -> bool {
+    fn is_atom_secondary_marked(&self, _atom_id: u64) -> bool {
         false // Default implementation: no atom is secondary marked by default
     }
 

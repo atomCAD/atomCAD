@@ -58,7 +58,7 @@ impl GPUMesh {
     /// Creates a new empty GPUMesh
     pub fn new_empty(device: &Device, mesh_type: MeshType, model_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         // Create minimal empty buffers
-        let (vertex_buffer, vertex_label) = match mesh_type {
+        let (vertex_buffer, _vertex_label) = match mesh_type {
             MeshType::Triangles => {
                 let vertex_buffer = device.create_buffer_init(
                     &wgpu::util::BufferInitDescriptor {

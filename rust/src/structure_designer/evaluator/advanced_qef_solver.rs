@@ -173,7 +173,7 @@ fn svd_vmul_sym(a: &[[f64; 3]; 3], v: &DVec3) -> DVec3 {
 }
 
 /// Computes A^T*A for a matrix A
-fn svd_mul_ata_sym(a: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
+pub fn svd_mul_ata_sym(a: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
     [
         [
             a[0][0] * a[0][0] + a[1][0] * a[1][0] + a[2][0] * a[2][0],
@@ -194,7 +194,7 @@ fn svd_mul_ata_sym(a: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
 }
 
 /// Solves Ax = b system using SVD
-fn svd_solve_ax_b(a: &[[f64; 3]; 3], b: &DVec3) -> DVec3 {
+pub fn svd_solve_ax_b(a: &[[f64; 3]; 3], b: &DVec3) -> DVec3 {
     let ata = svd_mul_ata_sym(a);
     
     // Compute A^T * b

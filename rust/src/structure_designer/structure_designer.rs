@@ -408,6 +408,7 @@ impl StructureDesigner {
     }
   }
 
+  /*
   fn refresh_gadget(&mut self) {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
@@ -418,6 +419,7 @@ impl StructureDesigner {
       self.gadget = network.provide_gadget();
     }
   }
+  */
 
   pub fn clear_selection(&mut self) {
     // Early return if active_node_network_name is None
