@@ -38,7 +38,7 @@ pub fn eval_cuboid<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u6
   let center = min_corner + extent / 2.0;
 
   let geometry = CSG::cube(extent.x, extent.y, extent.z, None)
-    .translate(center.x, center.y, center.z);
+    .translate(min_corner.x, min_corner.y, min_corner.z);
 
   return NetworkResult::Geometry(GeometrySummary { 
     frame_transform: Transform::new(

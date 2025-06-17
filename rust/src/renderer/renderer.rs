@@ -472,17 +472,17 @@ impl Renderer {
                 surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
             }
 
-            for quad_mesh in scene.quad_meshes() {
+            for poly_mesh in scene.poly_meshes() {
                 if geometry_visualization_preferences.wireframe_geometry {
                     tessellate_poly_mesh_to_line_mesh(
-                        &quad_mesh,
+                        &poly_mesh,
                         &mut wireframe_mesh, 
                         geometry_visualization_preferences.mesh_smoothing.clone(), 
                         Vec3::new(0.0, 0.0, 0.0).to_array(),
                         Vec3::new(0.4, 0.4, 0.4).to_array());
                 } else {
                     tessellate_poly_mesh(
-                        &quad_mesh,
+                        &poly_mesh,
                         &mut mesh, 
                         geometry_visualization_preferences.mesh_smoothing.clone(), 
                         &Material::new(

@@ -34,7 +34,7 @@ pub fn eval_sphere<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u6
 
   let center = sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 
-  let geometry = CSG::sphere(sphere_data.radius as f64, 32, 32, None)
+  let geometry = CSG::sphere(sphere_data.radius as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 32, 32, None)
     .translate(center.x, center.y, center.z);
 
   return NetworkResult::Geometry(GeometrySummary { 

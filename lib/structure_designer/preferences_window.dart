@@ -36,11 +36,16 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
     if (currentPreferences != null) {
       _preferences = currentPreferences;
       _geometryVisualizationPreferences = GeometryVisualizationPreferences(
-        geometryVisualization: currentPreferences.geometryVisualizationPreferences.geometryVisualization,
-        wireframeGeometry: currentPreferences.geometryVisualizationPreferences.wireframeGeometry,
-        samplesPerUnitCell: currentPreferences.geometryVisualizationPreferences.samplesPerUnitCell,
-        sharpnessAngleThresholdDegree: currentPreferences.geometryVisualizationPreferences.sharpnessAngleThresholdDegree,
-        meshSmoothing: currentPreferences.geometryVisualizationPreferences.meshSmoothing,
+        geometryVisualization: currentPreferences
+            .geometryVisualizationPreferences.geometryVisualization,
+        wireframeGeometry: currentPreferences
+            .geometryVisualizationPreferences.wireframeGeometry,
+        samplesPerUnitCell: currentPreferences
+            .geometryVisualizationPreferences.samplesPerUnitCell,
+        sharpnessAngleThresholdDegree: currentPreferences
+            .geometryVisualizationPreferences.sharpnessAngleThresholdDegree,
+        meshSmoothing:
+            currentPreferences.geometryVisualizationPreferences.meshSmoothing,
       );
     } else {
       // If no preferences exist yet, create default ones
@@ -51,7 +56,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
         sharpnessAngleThresholdDegree: 30.0,
         meshSmoothing: MeshSmoothing.smooth,
       );
-      
+
       _preferences = StructureDesignerPreferences(
         geometryVisualizationPreferences: _geometryVisualizationPreferences,
       );
@@ -63,17 +68,27 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
     setState(() {
       switch (value) {
         case 0: // Surface splatting
-          _geometryVisualizationPreferences.geometryVisualization = 
+          _geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.surfaceSplatting;
           _geometryVisualizationPreferences.wireframeGeometry = false;
           break;
-        case 1: // Solid (Dual Contouring)
-          _geometryVisualizationPreferences.geometryVisualization = 
+        case 1: // Solid (Explicit Mesh)
+          _geometryVisualizationPreferences.geometryVisualization =
+              GeometryVisualization.explicitMesh;
+          _geometryVisualizationPreferences.wireframeGeometry = false;
+          break;
+        case 2: // Wireframe (Explicit Mesh)
+          _geometryVisualizationPreferences.geometryVisualization =
+              GeometryVisualization.explicitMesh;
+          _geometryVisualizationPreferences.wireframeGeometry = true;
+          break;
+        case 3: // Solid (Dual Contouring)
+          _geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.dualContouring;
           _geometryVisualizationPreferences.wireframeGeometry = false;
           break;
-        case 2: // Wireframe (Dual Contouring)
-          _geometryVisualizationPreferences.geometryVisualization = 
+        case 4: // Wireframe (Dual Contouring)
+          _geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.dualContouring;
           _geometryVisualizationPreferences.wireframeGeometry = true;
           break;
@@ -84,12 +99,15 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
   // Helper to get the selected visualization method index
   int _getVisualizationMethodIndex() {
-    if (_geometryVisualizationPreferences.geometryVisualization == 
+    if (_geometryVisualizationPreferences.geometryVisualization ==
         GeometryVisualization.surfaceSplatting) {
       return 0;
-    } else if (_geometryVisualizationPreferences.geometryVisualization == 
-        GeometryVisualization.dualContouring) {
+    } else if (_geometryVisualizationPreferences.geometryVisualization ==
+        GeometryVisualization.explicitMesh) {
       return _geometryVisualizationPreferences.wireframeGeometry ? 2 : 1;
+    } else if (_geometryVisualizationPreferences.geometryVisualization ==
+        GeometryVisualization.dualContouring) {
+      return _geometryVisualizationPreferences.wireframeGeometry ? 4 : 3;
     }
     return 0; // Default
   }
@@ -172,21 +190,30 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               DropdownButtonFormField<int>(
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
-                                  contentPadding: AppSpacing.fieldContentPadding,
+                                  contentPadding:
+                                      AppSpacing.fieldContentPadding,
                                 ),
                                 value: _getVisualizationMethodIndex(),
                                 items: const [
                                   DropdownMenuItem(
                                     value: 0,
-                                    child: Text('Surface splatting'),
+                                    child: Text('Surface Splatting'),
                                   ),
                                   DropdownMenuItem(
                                     value: 1,
-                                    child: Text('Solid (Dual Contouring)'),
+                                    child: Text('Solid (explicit mesh)'),
                                   ),
                                   DropdownMenuItem(
                                     value: 2,
-                                    child: Text('Wireframe (Dual Contouring)'),
+                                    child: Text('Wireframe (explicit mesh)'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 3,
+                                    child: Text('Solid (dual contouring)'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 4,
+                                    child: Text('Wireframe (dual contouring)'),
                                   ),
                                 ],
                                 onChanged: (value) {
@@ -202,10 +229,12 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           // Samples per unit cell
                           IntInput(
                             label: 'Samples per unit cell',
-                            value: _geometryVisualizationPreferences.samplesPerUnitCell,
+                            value: _geometryVisualizationPreferences
+                                .samplesPerUnitCell,
                             onChanged: (value) {
                               setState(() {
-                                _geometryVisualizationPreferences.samplesPerUnitCell = value;
+                                _geometryVisualizationPreferences
+                                    .samplesPerUnitCell = value;
                               });
                               _applyPreferences();
                             },
@@ -215,10 +244,12 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           // Sharpness threshold
                           FloatInput(
                             label: 'Sharpness threshold (degree)',
-                            value: _geometryVisualizationPreferences.sharpnessAngleThresholdDegree,
+                            value: _geometryVisualizationPreferences
+                                .sharpnessAngleThresholdDegree,
                             onChanged: (value) {
                               setState(() {
-                                _geometryVisualizationPreferences.sharpnessAngleThresholdDegree = value;
+                                _geometryVisualizationPreferences
+                                    .sharpnessAngleThresholdDegree = value;
                               });
                               _applyPreferences();
                             },
@@ -234,9 +265,11 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               DropdownButtonFormField<MeshSmoothing>(
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
-                                  contentPadding: AppSpacing.fieldContentPadding,
+                                  contentPadding:
+                                      AppSpacing.fieldContentPadding,
                                 ),
-                                value: _geometryVisualizationPreferences.meshSmoothing,
+                                value: _geometryVisualizationPreferences
+                                    .meshSmoothing,
                                 items: const [
                                   DropdownMenuItem(
                                     value: MeshSmoothing.smooth,
@@ -254,7 +287,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() {
-                                      _geometryVisualizationPreferences.meshSmoothing = value;
+                                      _geometryVisualizationPreferences
+                                          .meshSmoothing = value;
                                     });
                                     _applyPreferences();
                                   }
@@ -269,8 +303,6 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                 ),
               ),
             ),
-
-
           ],
         ),
       ),

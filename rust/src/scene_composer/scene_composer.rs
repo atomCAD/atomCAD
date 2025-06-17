@@ -627,7 +627,7 @@ impl<'a> Scene<'a> for SceneComposer {
       Box::new(std::iter::empty())
   }
 
-  fn quad_meshes(&self) -> Box<dyn Iterator<Item = &PolyMesh> + '_> {
+  fn poly_meshes(&self) -> Box<dyn Iterator<Item = &PolyMesh> + '_> {
     Box::new(std::iter::empty())
   }
   

@@ -46,17 +46,17 @@ class GeometryVisualizationWidget extends StatelessWidget {
               _buildIconButton(
                 context,
                 Icons.grid_3x3, // Using grid to represent wireframe
-                'Dual Contouring Wireframe',
+                'Wireframe (explicit mesh)',
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
-                        GeometryVisualization.dualContouring &&
+                        GeometryVisualization.explicitMesh &&
                     model.preferences?.geometryVisualizationPreferences
                             .wireframeGeometry ==
                         true,
                 onPressed: () {
                   model.preferences?.geometryVisualizationPreferences
                           .geometryVisualization =
-                      GeometryVisualization.dualContouring;
+                      GeometryVisualization.explicitMesh;
                   model.preferences?.geometryVisualizationPreferences
                       .wireframeGeometry = true;
                   model.setPreferences(model.preferences!);
@@ -69,17 +69,17 @@ class GeometryVisualizationWidget extends StatelessWidget {
               _buildIconButton(
                 context,
                 Icons.view_in_ar, // Using 3D object icon for solid
-                'Dual Contouring Solid',
+                'Solid (explicit mesh)',
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
-                        GeometryVisualization.dualContouring &&
+                        GeometryVisualization.explicitMesh &&
                     model.preferences?.geometryVisualizationPreferences
                             .wireframeGeometry ==
                         false,
                 onPressed: () {
                   model.preferences?.geometryVisualizationPreferences
                           .geometryVisualization =
-                      GeometryVisualization.dualContouring;
+                      GeometryVisualization.explicitMesh;
                   model.preferences?.geometryVisualizationPreferences
                       .wireframeGeometry = false;
                   model.setPreferences(model.preferences!);

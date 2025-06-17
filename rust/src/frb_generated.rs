@@ -3923,6 +3923,7 @@ impl SseDecode
         return match inner {
             0 => crate::api::structure_designer::structure_designer_preferences::GeometryVisualization::SurfaceSplatting,
 1 => crate::api::structure_designer::structure_designer_preferences::GeometryVisualization::DualContouring,
+2 => crate::api::structure_designer::structure_designer_preferences::GeometryVisualization::ExplicitMesh,
             _ => unreachable!("Invalid variant for GeometryVisualization: {}", inner),
         };
     }
@@ -5476,6 +5477,7 @@ impl flutter_rust_bridge::IntoDart
         match self {
             Self::SurfaceSplatting => 0.into_dart(),
             Self::DualContouring => 1.into_dart(),
+            Self::ExplicitMesh => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -6068,6 +6070,7 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_preferences::GeometryVisualization::SurfaceSplatting => { 0 }
 crate::api::structure_designer::structure_designer_preferences::GeometryVisualization::DualContouring => { 1 }
+crate::api::structure_designer::structure_designer_preferences::GeometryVisualization::ExplicitMesh => { 2 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

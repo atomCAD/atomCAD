@@ -5,6 +5,7 @@ use flutter_rust_bridge::frb;
 pub enum GeometryVisualization {
   SurfaceSplatting,
   DualContouring,
+  ExplicitMesh,
 }
 
 /// Enum to control mesh smoothing behavior during tessellation

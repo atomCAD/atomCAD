@@ -66,7 +66,7 @@ pub fn generate_dual_contour_3d_scene(
   let mesh = generate_mesh(&mut cells, node_evaluator, geometry_visualization_preferences);
 
   let mut scene = StructureDesignerScene::new();
-  scene.quad_meshes.push(mesh);
+  scene.poly_meshes.push(mesh);
 
   scene
 }

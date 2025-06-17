@@ -32,6 +32,7 @@ use super::dual_contour_3d::generate_dual_contour_3d_scene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::common::csg_types::CSG;
+use crate::common::csg_utils::convert_csg_to_poly_mesh;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -208,6 +209,8 @@ impl NetworkEvaluator {
       implicit_evaluator: &self.implicit_evaluator,
     };
 
+    let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
+
     if node_type.output_type == DataType::Geometry2D {
       return generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
     }
@@ -216,6 +219,18 @@ impl NetworkEvaluator {
         return generate_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         return generate_dual_contour_3d_scene(&node_evaluator, geometry_visualization_preferences);
+      } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
+        let mut scene = StructureDesignerScene::new();
+        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
+        if let NetworkResult::Geometry(geometry_summary) = result {
+          let mut poly_mesh = convert_csg_to_poly_mesh(&geometry_summary.csg);
+          poly_mesh.detect_sharp_edges(
+            geometry_visualization_preferences.sharpness_angle_threshold_degree,
+            true
+          );
+          scene.poly_meshes.push(poly_mesh);
+        }
+        return scene;
       }
     }
     if node_type.output_type == DataType::Atomic {
@@ -223,14 +238,13 @@ impl NetworkEvaluator {
 
       let mut scene = StructureDesignerScene::new();
 
-      let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
       let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
       if let NetworkResult::Atomic(atomic_structure) = result {
         let mut cloned_atomic_structure = atomic_structure.clone();
         cloned_atomic_structure.from_selected_node = from_selected_node;
         scene.atomic_structures.push(cloned_atomic_structure);
       };
-      
+
       // Copy the collected errors to the scene
       scene.node_errors = context.node_errors;
 

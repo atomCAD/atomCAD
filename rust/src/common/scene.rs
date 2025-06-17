@@ -10,6 +10,6 @@ pub trait Scene<'a> {
     fn is_atom_secondary_marked(&self, atom_id: u64) -> bool;
     fn surface_point_clouds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud> + '_>;
     fn surface_point_cloud_2ds(&self) -> Box<dyn Iterator<Item = &SurfacePointCloud2D> + '_>;
-    fn quad_meshes(&self) -> Box<dyn Iterator<Item = &PolyMesh> + '_>;
+    fn poly_meshes(&self) -> Box<dyn Iterator<Item = &PolyMesh> + '_>;
     fn tessellatable(&self) -> Option<Box<&dyn Tessellatable>>;
 }
