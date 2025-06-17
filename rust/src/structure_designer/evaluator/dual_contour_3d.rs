@@ -3,7 +3,7 @@ use glam::{i32::IVec3, DVec3};
 use crate::util::box_subdivision::subdivide_box;
 use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
-use crate::common::quad_mesh::QuadMesh;
+use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::evaluator::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
@@ -87,8 +87,8 @@ fn generate_cells(node_evaluator: &NodeEvaluator, geometry_visualization_prefere
 fn generate_mesh(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
   node_evaluator: &NodeEvaluator,
-  geometry_visualization_preferences: &GeometryVisualizationPreferences) -> QuadMesh {
-  let mut mesh = QuadMesh::new();
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) -> PolyMesh {
+  let mut mesh = PolyMesh::new();
   
   // First pass: Generate vertices for cells and process edges
   process_cell_edges(cells, node_evaluator, &mut mesh, geometry_visualization_preferences);
@@ -106,7 +106,7 @@ fn generate_mesh(
 fn process_cell_edges(
   cells: &mut HashMap<(i32, i32, i32), DCCell>, 
   node_evaluator: &NodeEvaluator, 
-  mesh: &mut QuadMesh,
+  mesh: &mut PolyMesh,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) {
   // Create a list of vertices to process (each cell key is also the key of its minimum vertex)
@@ -192,7 +192,7 @@ fn process_cell_edges(
           // We'll optimize the position later in optimize_vertex_positions
           let cell_center = get_cell_center_pos(surrounding_cell_key, geometry_visualization_preferences.samples_per_unit_cell);
           
-          // With QuadMesh, we only need to add the position (no normals/materials needed)
+          // With PolyMesh, we only need to add the position (no normals/materials needed)
           let vertex_index = mesh.add_vertex(cell_center);
           cell.vertex_index = vertex_index as i32;
         }
@@ -273,7 +273,7 @@ fn find_edge_intersection(node_evaluator: &NodeEvaluator, p1: &DVec3, p2: &DVec3
 fn optimize_vertex_positions(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
   _node_evaluator: &NodeEvaluator,
-  mesh: &mut QuadMesh,
+  mesh: &mut PolyMesh,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) {
   let spu = get_spu(geometry_visualization_preferences.samples_per_unit_cell);
   

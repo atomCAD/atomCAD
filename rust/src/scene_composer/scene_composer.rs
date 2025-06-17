@@ -9,7 +9,7 @@ use crate::common::xyz_loader::load_xyz;
 use crate::common::xyz_loader::XyzError;
 use crate::common::xyz_saver::save_xyz;
 use crate::common::xyz_saver::XyzSaveError;
-use crate::common::quad_mesh::QuadMesh;
+use crate::common::poly_mesh::PolyMesh;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
 use crate::util::transform::Transform;
@@ -627,7 +627,7 @@ impl<'a> Scene<'a> for SceneComposer {
       Box::new(std::iter::empty())
   }
 
-  fn quad_meshes(&self) -> Box<dyn Iterator<Item = &QuadMesh> + '_> {
+  fn quad_meshes(&self) -> Box<dyn Iterator<Item = &PolyMesh> + '_> {
     Box::new(std::iter::empty())
   }
   

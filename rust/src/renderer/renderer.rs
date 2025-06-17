@@ -5,7 +5,7 @@ use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
 use super::gpu_mesh::MeshType;
-use super::tessellator::quad_mesh_tessellator::{tessellate_quad_mesh, tessellate_quad_mesh_to_line_mesh};
+use super::tessellator::poly_mesh_tessellator::{tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh};
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
@@ -474,14 +474,14 @@ impl Renderer {
 
             for quad_mesh in scene.quad_meshes() {
                 if geometry_visualization_preferences.wireframe_geometry {
-                    tessellate_quad_mesh_to_line_mesh(
+                    tessellate_poly_mesh_to_line_mesh(
                         &quad_mesh,
                         &mut wireframe_mesh, 
                         geometry_visualization_preferences.mesh_smoothing.clone(), 
                         Vec3::new(0.0, 0.0, 0.0).to_array(),
                         Vec3::new(0.4, 0.4, 0.4).to_array());
                 } else {
-                    tessellate_quad_mesh(
+                    tessellate_poly_mesh(
                         &quad_mesh,
                         &mut mesh, 
                         geometry_visualization_preferences.mesh_smoothing.clone(), 

@@ -4,13 +4,13 @@ use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::common::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use std::collections::HashMap;
-use crate::common::quad_mesh::QuadMesh;
+use crate::common::poly_mesh::PolyMesh;
 
 pub struct StructureDesignerScene {
     pub atomic_structures: Vec<AtomicStructure>,
     pub surface_point_clouds: Vec<SurfacePointCloud>,
     pub surface_point_cloud_2ds: Vec<SurfacePointCloud2D>,
-    pub quad_meshes: Vec<QuadMesh>,
+    pub quad_meshes: Vec<PolyMesh>,
 
     pub tessellatable: Option<Box<dyn Tessellatable>>,
 
@@ -66,7 +66,7 @@ impl<'a> Scene<'a> for StructureDesignerScene {
         Box::new(self.surface_point_cloud_2ds.iter())
     }
 
-    fn quad_meshes(&self) -> Box<dyn Iterator<Item = &QuadMesh> + '_> {
+    fn quad_meshes(&self) -> Box<dyn Iterator<Item = &PolyMesh> + '_> {
         Box::new(self.quad_meshes.iter())
     }
 
