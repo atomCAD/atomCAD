@@ -19,6 +19,8 @@ use crate::util::timer::Timer;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
 use crate::structure_designer::nodes::sphere::eval_sphere;
 use crate::structure_designer::nodes::cuboid::eval_cuboid;
+use crate::structure_designer::nodes::intersect::eval_intersect;
+use crate::structure_designer::nodes::union::eval_union;
 use crate::structure_designer::nodes::half_space::eval_half_space;
 use crate::structure_designer::nodes::anchor::eval_anchor;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
@@ -71,12 +73,14 @@ pub fn error_in_input(input_name: &str) -> NetworkResult {
 
 pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
+  pub explicit_geo_eval_needed: bool,
 }
 
 impl NetworkEvaluationContext {
-  pub fn new() -> Self {
+  pub fn new(explicit_geo_eval_needed: bool) -> Self {
     Self {
       node_errors: HashMap::new(),
+      explicit_geo_eval_needed,
     }
   }
 }
@@ -179,7 +183,13 @@ impl NetworkEvaluator {
 
   // Creates the Scene that will be displayed for the given node
   // Currently creates it from scratch, no caching is used.
-  pub fn generate_scene(&self, network_name: &str, node_id: u64, registry: &NodeTypeRegistry, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
+  pub fn generate_scene(
+    &self,
+    network_name: &str,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    geometry_visualization_preferences: &GeometryVisualizationPreferences
+  ) -> StructureDesignerScene {
     let _timer = Timer::new("generate_scene");
 
     let network = match registry.node_networks.get(network_name) {
@@ -199,7 +209,7 @@ impl NetworkEvaluator {
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
     
     // Create evaluation context to track errors
-    let mut context = NetworkEvaluationContext::new();
+    let mut context = NetworkEvaluationContext::new(geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh);
 
     // Create a NodeEvaluator instance to abstract SDF evaluation
     let node_evaluator = NodeEvaluator {
@@ -230,6 +240,7 @@ impl NetworkEvaluator {
           );
           scene.poly_meshes.push(poly_mesh);
         }
+        scene.node_errors = context.node_errors;
         return scene;
       }
     }
@@ -283,12 +294,16 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "half_plane" {
       vec![eval_half_plane(network_stack, node_id, registry)]
     }else if node.node_type_name == "sphere" {
-      vec![eval_sphere(network_stack, node_id, registry)]
+      vec![eval_sphere(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "cuboid" {
-      vec![eval_cuboid(network_stack, node_id, registry)]
+      vec![eval_cuboid(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "half_space" {
       vec![eval_half_space(network_stack, node_id, registry)]
-    } else if node.node_type_name == "geo_to_atom" {
+    } else if node.node_type_name == "intersect" {
+      vec![eval_intersect(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "union" {
+      vec![eval_union(&self, network_stack, node_id, registry, context)]
+    }else if node.node_type_name == "geo_to_atom" {
       vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)]
     } else if node.node_type_name == "edit_atom" {
       vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)]

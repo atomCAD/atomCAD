@@ -14,6 +14,7 @@ use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use glam::f64::DVec3;
 use crate::common::csg_types::CSG;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SphereData {
@@ -28,14 +29,24 @@ impl NodeData for SphereData {
     }
 }
 
-pub fn eval_sphere<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_sphere<'a>(
+  network_stack: &Vec<NetworkStackElement<'a>>,
+  node_id: u64,
+  _registry: &NodeTypeRegistry,
+  context: &mut NetworkEvaluationContext,
+) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
 
   let center = sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 
-  let geometry = CSG::sphere(sphere_data.radius as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 32, 32, None)
-    .translate(center.x, center.y, center.z);
+  let geometry = if context.explicit_geo_eval_needed { CSG::sphere(
+    sphere_data.radius as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+    32,
+    16,
+    None
+  )
+    .translate(center.x, center.y, center.z) } else { CSG::new() };
 
   return NetworkResult::Geometry(GeometrySummary { 
     frame_transform: Transform::new(
