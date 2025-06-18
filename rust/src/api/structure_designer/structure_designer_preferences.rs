@@ -46,7 +46,7 @@ impl StructureDesignerPreferences {
   pub fn new() -> Self {
     Self {
       geometry_visualization_preferences: GeometryVisualizationPreferences {
-        geometry_visualization: GeometryVisualization::DualContouring,
+        geometry_visualization: GeometryVisualization::ExplicitMesh,
         wireframe_geometry: false,
         samples_per_unit_cell: 4,
         sharpness_angle_threshold_degree: 29.0,

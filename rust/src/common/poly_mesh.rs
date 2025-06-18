@@ -176,7 +176,12 @@ impl PolyMesh {
             edge.is_sharp = false;
             
             // Case 1: Non-manifold edge (not exactly 2 faces)
-            if edge.face_indices.len() != 2 {
+            if edge.face_indices.len() == 1 {
+                edge.is_sharp = true;
+                continue;
+            }
+            
+            if edge.face_indices.len() > 2 {
                 edge.is_sharp = true;
                 continue;
             }

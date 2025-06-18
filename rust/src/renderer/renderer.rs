@@ -479,7 +479,11 @@ impl Renderer {
                         &mut wireframe_mesh, 
                         geometry_visualization_preferences.mesh_smoothing.clone(), 
                         Vec3::new(0.0, 0.0, 0.0).to_array(),
-                        Vec3::new(0.4, 0.4, 0.4).to_array());
+                        // normally normal_edge_color should be Vec3::new(0.4, 0.4, 0.4), but we do not show the difference here
+                        // as csgrs sometimes creates non-manifold edges (false sharp edges) where it should not.
+                        // Fortunatelly csgrs only do this on edges on a plane, so it does not matter for the
+                        // solid visualization. 
+                        Vec3::new(0.0, 0.0, 0.0).to_array()); 
                 } else {
                     tessellate_poly_mesh(
                         &poly_mesh,
