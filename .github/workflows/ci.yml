@@ -159,6 +159,15 @@ jobs:
         if: ${{ matrix.platform.use_cross }}
         shell: bash
         run: CARGO_TARGET_${{ matrix.platform.target_upper }}_RUSTFLAGS='${{ matrix.platform.rustflags }}' cross clippy --target ${{ matrix.platform.target }} --workspace --all-targets --all-features -- -D warnings
+      - name: Run cargo doc (native)
+        if: ${{ ! matrix.platform.use_cross }}
+        shell: bash
+        run: RUSTFLAGS='${{ matrix.platform.rustflags }}' cargo doc --target ${{ matrix.platform.target }} --workspace --no-deps
+      - name: Run cargo doc (cross)
+        if: ${{ matrix.platform.use_cross }}
+        shell: bash
+        run: CARGO_TARGET_${{ matrix.platform.target_upper }}_RUSTFLAGS='${{ matrix.platform.rustflags }}' cross doc --target ${{ matrix.platform.target }} --workspace --no-deps
+
   rustfmt:
     name: Formatting
     runs-on: ubuntu-22.04

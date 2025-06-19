@@ -16,6 +16,9 @@ cargo clippy --workspace --target wasm32-unknown-unknown --all-targets --all-fea
 echo Running formatting check...
 cargo fmt --all -- --check
 
+echo Checking cargo doc...
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+
 echo All done!
 
 # End of file
