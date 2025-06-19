@@ -570,6 +570,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "contour_tracing"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9efef72b4f4049ebc4b690ae8ac98cfb7d3cb50407592745ad2c83106625936"
+
+[[package]]
 name = "convert_case"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -703,18 +709,21 @@ dependencies = [
 
 [[package]]
 name = "csgrs"
-version = "0.17.4"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c166593c64946b6819f00c553b8651f0d42e7012f226bfd542d87b414e6121e2"
+checksum = "7e443292ccb25f481b8f2d00bf42a520cfe5dc9328cd5b4704c920d8a4bd3f06"
 dependencies = [
  "chull",
+ "contour_tracing",
  "core2",
+ "doc-image-embed",
  "dxf",
  "either",
  "fast-surface-nets",
  "geo",
  "geo-buf",
  "hashbrown 0.15.2",
+ "image",
  "nalgebra",
  "parry3d-f64",
  "rapier3d-f64",
@@ -856,6 +865,18 @@ dependencies = [
  "libc",
  "quote 0.6.13",
  "syn 0.15.44",
+]
+
+[[package]]
+name = "doc-image-embed"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b1c7e5bbb92b417588a5e733e095416c27c06eedc051065cc955a0a8c8389d9"
+dependencies = [
+ "base64",
+ "proc-macro2 1.0.93",
+ "quote 1.0.38",
+ "syn 2.0.96",
 ]
 
 [[package]]
