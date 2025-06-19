@@ -199,6 +199,7 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(NoData {}),
     });
 
+    /*
     ret.add_node_type(NodeType {
       name: "negate".to_string(),
       parameters: vec![
@@ -211,6 +212,7 @@ impl NodeTypeRegistry {
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
     });
+    */
 
     ret.add_node_type(NodeType {
       name: "diff".to_string(),

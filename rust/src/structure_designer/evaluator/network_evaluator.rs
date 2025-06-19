@@ -21,6 +21,7 @@ use crate::structure_designer::nodes::sphere::eval_sphere;
 use crate::structure_designer::nodes::cuboid::eval_cuboid;
 use crate::structure_designer::nodes::intersect::eval_intersect;
 use crate::structure_designer::nodes::union::eval_union;
+use crate::structure_designer::nodes::diff::eval_diff;
 use crate::structure_designer::nodes::half_space::eval_half_space;
 use crate::structure_designer::nodes::anchor::eval_anchor;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
@@ -303,7 +304,9 @@ impl NetworkEvaluator {
       vec![eval_intersect(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "union" {
       vec![eval_union(&self, network_stack, node_id, registry, context)]
-    }else if node.node_type_name == "geo_to_atom" {
+    } else if node.node_type_name == "diff" {
+      vec![eval_diff(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "geo_to_atom" {
       vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)]
     } else if node.node_type_name == "edit_atom" {
       vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)]
