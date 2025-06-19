@@ -299,7 +299,7 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "cuboid" {
       vec![eval_cuboid(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "half_space" {
-      vec![eval_half_space(network_stack, node_id, registry)]
+      vec![eval_half_space(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "intersect" {
       vec![eval_intersect(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "union" {

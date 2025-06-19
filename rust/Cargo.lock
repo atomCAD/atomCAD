@@ -2855,6 +2855,7 @@ dependencies = [
  "glam",
  "lazy_static",
  "lru",
+ "nalgebra",
  "regex",
  "serde",
  "serde_json",

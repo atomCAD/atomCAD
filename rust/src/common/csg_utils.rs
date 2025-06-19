@@ -2,6 +2,8 @@ use crate::common::csg_types::CSG;
 use crate::common::poly_mesh::PolyMesh;
 use crate::common::unique_3d_points::Unique3DPoints;
 use glam::DVec3;
+use csgrs::float_types::Real;
+use nalgebra::{Point3, Vector3};
 
 /// Convert a CSG object to a PolyMesh, merging vertices that are within epsilon distance of each other.
 /// 
@@ -45,3 +47,12 @@ pub fn convert_csg_to_poly_mesh(csg: &CSG) -> PolyMesh {
     
     poly_mesh
 }
+
+pub fn dvec3_to_point3(dvec3: DVec3) -> Point3<Real> {
+    Point3::new(dvec3.x as Real, dvec3.y as Real, dvec3.z as Real)
+}
+
+pub fn dvec3_to_vector3(dvec3: DVec3) -> Vector3<Real> {
+    Vector3::new(dvec3.x as Real, dvec3.y as Real, dvec3.z as Real)
+}
+

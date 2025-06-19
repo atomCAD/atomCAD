@@ -1,3 +1,4 @@
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
@@ -25,6 +26,10 @@ use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use crate::common::csg_types::CSG;
+use csgrs::polygon::Polygon;
+use csgrs::vertex::Vertex;
+use crate::common::csg_utils::dvec3_to_point3;
+use crate::common::csg_utils::dvec3_to_vector3;
 
 pub const MAX_MILLER_INDEX: f64 = 6.0;
 pub const GADGET_LENGTH: f64 = 6.0;
@@ -58,19 +63,54 @@ impl NodeData for HalfSpaceData {
   
 }
 
-pub fn eval_half_space<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_half_space<'a>(
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    _registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext
+  ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
   let dir = half_space_data.miller_index.as_dvec3().normalize();
   let center_pos = half_space_data.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
+  let normal = dvec3_to_vector3(dir);
+  let rotation = DQuat::from_rotation_arc(DVec3::Y, dir);
+
+  let width = 40.0;
+  let height = 40.0;
+
+  let start_x =  - width * 0.5;
+  let start_z =  - height * 0.5;
+  let end_x =   width * 0.5;
+  let end_z =   height * 0.5;
+
+  let v1 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(start_x, 0.0, start_z)));
+  let v2 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(start_x, 0.0, end_z)));
+  let v3 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(end_x, 0.0, end_z)));
+  let v4 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(end_x, 0.0, start_z)));
+
+  let geometry = if context.explicit_geo_eval_needed {
+    CSG::from_polygons(&[
+        Polygon::new(
+            vec![
+                Vertex::new(v1, normal),
+                Vertex::new(v2, normal),
+                Vertex::new(v3, normal),
+                Vertex::new(v4, normal),
+            ], None
+        ),
+    ])
+    .translate(center_pos.x, center_pos.y, center_pos.z)
+  } else { CSG::new() };
+  
   return NetworkResult::Geometry(GeometrySummary {
     frame_transform: Transform::new(
       center_pos,
       DQuat::from_rotation_arc(DVec3::Y, dir),
     ),
-    csg: CSG::new()});
+    csg: geometry});
 }
 
 pub fn implicit_eval_half_space<'a>(
