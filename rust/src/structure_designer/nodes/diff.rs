@@ -79,16 +79,12 @@ pub fn eval_diff<'a>(
     frame_translation *= 0.5;
   }
 
-  //let cube1 = CSG::cube(3.0, 3.0, 3.0, None).translate(1.0, 1.0, 1.0);  // 2×2×2 cube at origin, no metadata
-  //let cube2 = cube1.translate(2.0, 2.0, 2.0); 
-  //let difference_result = cube1.difference(&cube2);
-
   return NetworkResult::Geometry(GeometrySummary { 
     frame_transform: Transform::new(
       frame_translation,
       DQuat::IDENTITY,
     ),
-    csg: geometry.unwrap(), // difference_result,
+    csg: geometry.unwrap(),
   });
 }
 

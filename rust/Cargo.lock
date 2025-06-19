@@ -570,12 +570,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "contour_tracing"
-version = "1.0.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9efef72b4f4049ebc4b690ae8ac98cfb7d3cb50407592745ad2c83106625936"
-
-[[package]]
 name = "convert_case"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -709,12 +703,11 @@ dependencies = [
 
 [[package]]
 name = "csgrs"
-version = "0.18.0"
+version = "0.17.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df907ed43d6206561f2c2685d570cb482fa792c6d59c3864378db6b8f54180dd"
+checksum = "c166593c64946b6819f00c553b8651f0d42e7012f226bfd542d87b414e6121e2"
 dependencies = [
  "chull",
- "contour_tracing",
  "core2",
  "dxf",
  "either",
@@ -722,7 +715,6 @@ dependencies = [
  "geo",
  "geo-buf",
  "hashbrown 0.15.2",
- "image",
  "nalgebra",
  "parry3d-f64",
  "rapier3d-f64",
