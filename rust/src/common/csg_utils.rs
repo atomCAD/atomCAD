@@ -17,8 +17,34 @@ pub fn convert_csg_to_poly_mesh(csg: &CSG) -> PolyMesh {
     let epsilon = 1e-5;
     let mut unique_vertices = Unique3DPoints::new(epsilon);
 
+    let polys_from_2d = if csg.geometry.is_empty() {
+        Vec::new()
+    } else {
+        let mut polys = csg.to_polygons();
+        
+        // Transform from XY plane to XZ plane
+        for poly in &mut polys {
+            // Transform each vertex: move Y coordinate to Z, and clear Y
+            for vertex in &mut poly.vertices {
+                vertex.pos.z = vertex.pos.y;
+                vertex.pos.y = 0.0;
+            }
+            
+            // Reverse vertex order to maintain correct winding after transformation
+            poly.vertices.reverse();
+        }
+        
+        polys
+    };
+
+    let polygons = if csg.geometry.is_empty() {
+        &csg.polygons
+    } else {
+        &polys_from_2d
+    };
+
     // Process each polygon in the CSG
-    for polygon in &csg.polygons {
+    for polygon in polygons {
         let mut face_vertices = Vec::new();
         
         // Process each vertex in the polygon

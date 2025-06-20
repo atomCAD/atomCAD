@@ -40,6 +40,7 @@ use crate::common::csg_utils::convert_csg_to_poly_mesh;
 #[derive(Clone)]
 pub struct GeometrySummary2D {
   pub frame_transform: Transform2D,
+  pub csg: CSG,
 }
 
 #[derive(Clone)]
@@ -223,7 +224,12 @@ impl NetworkEvaluator {
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
     if node_type.output_type == DataType::Geometry2D {
-      return generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
+      if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
+         geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
+        return generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
+      } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
+        return self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences);
+      }
     }
     if node_type.output_type == DataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
@@ -231,18 +237,7 @@ impl NetworkEvaluator {
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         return generate_dual_contour_3d_scene(&node_evaluator, geometry_visualization_preferences);
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
-        let mut scene = StructureDesignerScene::new();
-        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
-        if let NetworkResult::Geometry(geometry_summary) = result {
-          let mut poly_mesh = convert_csg_to_poly_mesh(&geometry_summary.csg);
-          poly_mesh.detect_sharp_edges(
-            geometry_visualization_preferences.sharpness_angle_threshold_degree,
-            true
-          );
-          scene.poly_meshes.push(poly_mesh);
-        }
-        scene.node_errors = context.node_errors;
-        return scene;
+        return self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences);
       }
     }
     if node_type.output_type == DataType::Atomic {
@@ -264,6 +259,37 @@ impl NetworkEvaluator {
     }
 
     return StructureDesignerScene::new();
+  }
+
+  fn generate_explicit_mesh_scene<'a>(
+    &self,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64, registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
+      let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
+      let mut scene = StructureDesignerScene::new();
+      let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, context)[0];
+      
+      // Extract CSG from either geometry type (3D or 2D)
+      let csg = match result {
+        NetworkResult::Geometry(geometry_summary) => Some(&geometry_summary.csg),
+        NetworkResult::Geometry2D(geometry_summary_2d) => Some(&geometry_summary_2d.csg),
+        _ => None,
+      };
+      
+      // Process the CSG if it was found
+      if let Some(csg) = csg {
+        let mut poly_mesh = convert_csg_to_poly_mesh(csg);
+        poly_mesh.detect_sharp_edges(
+          geometry_visualization_preferences.sharpness_angle_threshold_degree,
+          true
+        );
+        scene.poly_meshes.push(poly_mesh);
+      }
+      
+      scene.node_errors = context.node_errors.clone();
+      return scene;
   }
 
   pub fn evaluate<'a>(
@@ -289,7 +315,7 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "circle" {
       vec![eval_circle(network_stack, node_id, registry)]
     } else if node.node_type_name == "rect" {
-      vec![eval_rect(network_stack, node_id, registry)]
+      vec![eval_rect(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "polygon" {
       vec![eval_polygon(network_stack, node_id, registry)]
     } else if node.node_type_name == "half_plane" {

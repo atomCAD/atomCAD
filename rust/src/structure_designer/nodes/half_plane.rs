@@ -20,6 +20,7 @@ use crate::renderer::tessellator::tessellator;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
+use crate::common::csg_types::CSG;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -49,10 +50,14 @@ pub fn eval_half_plane<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id
   let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
   
   // Use point1 as the position and calculate the angle for the transform
-  return NetworkResult::Geometry2D(GeometrySummary2D { frame_transform: Transform2D::new(
-    point1,
-    normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
-  )});
+  return NetworkResult::Geometry2D(
+    GeometrySummary2D {
+      frame_transform: Transform2D::new(
+        point1,
+        normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
+      ),
+      csg: CSG::new(),
+    });
 }
 
 pub fn implicit_eval_half_plane<'a>(

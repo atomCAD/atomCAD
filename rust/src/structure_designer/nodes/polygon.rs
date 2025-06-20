@@ -13,6 +13,7 @@ use glam::i32::IVec2;
 use std::f64::consts::PI;
 use std::cmp::max;
 use crate::util::mat_utils::consistent_round;
+use crate::common::csg_types::CSG;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -32,12 +33,15 @@ pub fn eval_polygon<'a>(_network_stack: &Vec<NetworkStackElement<'a>>, _node_id:
 
     // Create a transform at the center of the polygon (origin)
     // No rotation is needed for this type of shape
-    return NetworkResult::Geometry2D(GeometrySummary2D { 
+    return NetworkResult::Geometry2D(
+      GeometrySummary2D {
         frame_transform: Transform2D::new(
-            DVec2::new(0.0, 0.0),  // Center at origin
-            0.0,                   // No rotation
-        )
-    });
+          DVec2::new(0.0, 0.0),  // Center at origin
+          0.0,                   // No rotation
+        ),
+        csg: CSG::new(),
+      }
+    );
 }
 
 /// Calculates the closest lattice point to a given floating point position
