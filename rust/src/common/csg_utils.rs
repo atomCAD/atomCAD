@@ -24,10 +24,10 @@ pub fn convert_csg_to_poly_mesh(csg: &CSG) -> PolyMesh {
         
         // Transform from XY plane to XZ plane
         for poly in &mut polys {
-            // Transform each vertex: move Y coordinate to Z, and clear Y
+            // Transform each vertex: move Y coordinate to Z, and set y to be just above the grid
             for vertex in &mut poly.vertices {
                 vertex.pos.z = vertex.pos.y;
-                vertex.pos.y = 0.0;
+                vertex.pos.y = 0.001;
             }
             
             // Reverse vertex order to maintain correct winding after transformation
