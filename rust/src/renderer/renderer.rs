@@ -78,8 +78,9 @@ const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 pub struct Renderer  {
     device: Device,
     queue: Queue,
-    triangle_pipeline: RenderPipeline,  
+    triangle_pipeline: RenderPipeline,
     line_pipeline: RenderPipeline,
+    background_line_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
     selected_clusters_mesh: GPUMesh,
@@ -194,12 +195,6 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
         });
 
-        // Line shader module
-        let line_shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("Line Shader"),
-            source: ShaderSource::Wgsl(include_str!("line_mesh.wgsl").into()),
-        });
-
         let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
           entries: &[
               wgpu::BindGroupLayoutEntry {
@@ -292,7 +287,11 @@ impl Renderer {
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: -8,
+                    slope_scale: -1.0,
+                    clamp: 8.0,
+                },
             }),
             multisample: wgpu::MultisampleState {
                 count: 1,
@@ -303,58 +302,30 @@ impl Renderer {
             cache: None,
         });
 
-        // Line pipeline
-        let line_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Line Render Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &line_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[
-                  LineVertex::desc(),
-                ],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: &line_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::REPLACE),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-              topology: wgpu::PrimitiveTopology::LineList,
-              strip_index_format: None,
-              front_face: wgpu::FrontFace::Ccw,
-              cull_mode: None, // Don't cull lines
-              polygon_mode: wgpu::PolygonMode::Fill,
-              unclipped_depth: false,
-              conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        });
+        let line_pipeline = Self::create_line_pipeline(
+            &device,
+            &pipeline_layout,
+            wgpu::DepthBiasState {
+                constant: 0,
+                slope_scale: 0.0,
+                clamp: 0.0,
+            });
+        let background_line_pipeline = Self::create_line_pipeline(
+            &device,
+            &pipeline_layout,
+            wgpu::DepthBiasState {
+                constant: 0,
+                slope_scale: 0.0,
+                clamp: 0.0,
+            }
+        );
 
         let result = Self {
           device,
           queue,
           triangle_pipeline,
           line_pipeline,
+          background_line_pipeline,
           main_mesh,
           wireframe_mesh,
           selected_clusters_mesh,
@@ -375,6 +346,65 @@ impl Renderer {
 
         result
     }
+
+    fn create_line_pipeline(
+        device: &Device,
+        pipeline_layout: &wgpu::PipelineLayout,
+        depth_bias_state: wgpu::DepthBiasState,
+    ) -> RenderPipeline {
+        // Line shader module
+        let line_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Line Shader"),
+            source: ShaderSource::Wgsl(include_str!("line_mesh.wgsl").into()),
+        });
+
+        return device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Line Render Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &line_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[
+                    LineVertex::desc(),
+                ],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &line_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::REPLACE),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None, // Don't cull lines
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: depth_bias_state,
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+    }
+
 
     pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
       self.camera.eye = *eye;
@@ -576,28 +606,33 @@ impl Renderer {
 
             // Set camera bind group (shared for both pipelines)
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            
+
             // Each mesh now has its own model bind group
-            
-            // Set identity transform for background mesh and render it
-            self.background_mesh.set_identity_transform(&self.queue);
-            self.render_mesh(&mut render_pass, &self.background_mesh);
-            
-            // Set identity transform for main mesh and render it
-            self.main_mesh.set_identity_transform(&self.queue);
-            self.render_mesh(&mut render_pass, &self.main_mesh);
 
             // Set identity transform for wireframe mesh and render it
             self.wireframe_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.line_pipeline);
             self.render_mesh(&mut render_pass, &self.wireframe_mesh);
+
+            // Set identity transform for main mesh and render it
+            self.main_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.triangle_pipeline);
+            self.render_mesh(&mut render_pass, &self.main_mesh);
 
             // Update selected clusters mesh with its transform and render it
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
+            render_pass.set_pipeline(&self.triangle_pipeline);
             self.render_mesh(&mut render_pass, &self.selected_clusters_mesh);
             
             // Set identity transform for lightweight mesh and render it
             self.lightweight_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.triangle_pipeline);
             self.render_mesh(&mut render_pass, &self.lightweight_mesh);
+
+            // Set identity transform for background mesh and render it
+            self.background_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.background_line_pipeline);
+            self.render_mesh(&mut render_pass, &self.background_mesh);
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
@@ -658,16 +693,6 @@ impl Renderer {
     // Private helper method to render a GPU mesh
     fn render_mesh<'a>(&self, render_pass: &mut RenderPass<'a>, mesh: &GPUMesh) {
         if mesh.num_indices > 0 {
-            // Set the appropriate pipeline based on mesh type
-            match mesh.mesh_type {
-                MeshType::Triangles => {
-                    render_pass.set_pipeline(&self.triangle_pipeline);
-                },
-                MeshType::Lines => {
-                    render_pass.set_pipeline(&self.line_pipeline);
-                }
-            }
-
             // Set the mesh's model bind group (index 1)
             render_pass.set_bind_group(1, &mesh.model_bind_group, &[]);
             
