@@ -13,6 +13,7 @@ use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use glam::f64::DVec2;
 use crate::common::csg_types::CSG;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CircleData {
@@ -27,9 +28,23 @@ impl NodeData for CircleData {
     }
 }
 
-pub fn eval_circle<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_circle<'a>(
+  network_stack: &Vec<NetworkStackElement<'a>>,
+  node_id: u64,
+  _registry: &NodeTypeRegistry,
+  context: &mut NetworkEvaluationContext,
+) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let circle_data = &node.data.as_any_ref().downcast_ref::<CircleData>().unwrap();
+
+  let center = circle_data.center.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+
+  let geometry = if context.explicit_geo_eval_needed { CSG::circle(
+    circle_data.radius as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+    32,
+    None
+  )
+  .translate(center.x, center.y, 0.0) } else { CSG::new() };
 
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
@@ -37,7 +52,7 @@ pub fn eval_circle<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u6
         circle_data.center.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
         0.0,
       ),
-      csg: CSG::new(),
+      csg: geometry,
     });
 }
 

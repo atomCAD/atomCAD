@@ -22,6 +22,9 @@ use crate::structure_designer::nodes::cuboid::eval_cuboid;
 use crate::structure_designer::nodes::intersect::eval_intersect;
 use crate::structure_designer::nodes::union::eval_union;
 use crate::structure_designer::nodes::diff::eval_diff;
+use crate::structure_designer::nodes::intersect_2d::eval_intersect_2d;
+use crate::structure_designer::nodes::union_2d::eval_union_2d;
+use crate::structure_designer::nodes::diff_2d::eval_diff_2d;
 use crate::structure_designer::nodes::half_space::eval_half_space;
 use crate::structure_designer::nodes::anchor::eval_anchor;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
@@ -313,13 +316,19 @@ impl NetworkEvaluator {
       }).collect();
       args.concat()
     } else if node.node_type_name == "circle" {
-      vec![eval_circle(network_stack, node_id, registry)]
+      vec![eval_circle(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {
       vec![eval_rect(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "polygon" {
       vec![eval_polygon(network_stack, node_id, registry)]
     } else if node.node_type_name == "half_plane" {
       vec![eval_half_plane(network_stack, node_id, registry)]
+    } else if node.node_type_name == "intersect_2d" {
+      vec![eval_intersect_2d(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "union_2d" {
+      vec![eval_union_2d(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "diff_2d" {
+      vec![eval_diff_2d(&self, network_stack, node_id, registry, context)]
     }else if node.node_type_name == "sphere" {
       vec![eval_sphere(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "cuboid" {
