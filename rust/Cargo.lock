@@ -2873,6 +2873,7 @@ dependencies = [
  "dlopen",
  "flutter_rust_bridge",
  "flutter_rust_bridge_codegen",
+ "geo",
  "glam",
  "lazy_static",
  "lru",

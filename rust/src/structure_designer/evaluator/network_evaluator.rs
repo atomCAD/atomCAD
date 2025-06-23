@@ -283,14 +283,14 @@ impl NetworkEvaluator {
       
       // Process the CSG if it was found
       if let Some(csg) = csg {
-        let mut poly_mesh = convert_csg_to_poly_mesh(csg);
+        let mut poly_mesh = convert_csg_to_poly_mesh(csg, !geometry_visualization_preferences.wireframe_geometry);
         poly_mesh.detect_sharp_edges(
           geometry_visualization_preferences.sharpness_angle_threshold_degree,
           true
         );
         scene.poly_meshes.push(poly_mesh);
       }
-      
+  
       scene.node_errors = context.node_errors.clone();
       return scene;
   }
