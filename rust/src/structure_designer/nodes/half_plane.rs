@@ -1,7 +1,10 @@
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
+use nalgebra::Point3;
+use nalgebra::Vector3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec2_serializer;
 use glam::i32::IVec2;
@@ -21,6 +24,8 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::common::csg_types::CSG;
+use csgrs::polygon::Polygon;
+use csgrs::vertex::Vertex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -38,17 +43,34 @@ impl NodeData for HalfPlaneData {
   
 }
 
-pub fn eval_half_plane<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_half_plane<'a>(
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64, _registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let half_plane_data = &node.data.as_any_ref().downcast_ref::<HalfPlaneData>().unwrap();
 
   // Convert point1 to double precision for calculations
-  let point1 = half_plane_data.point1.as_dvec2();
-  
+  let point1 = half_plane_data.point1.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+
   // Calculate direction vector from point1 to point2
-  let dir_vector = (half_plane_data.point2 - half_plane_data.point1).as_dvec2();
+  let dir_vector = half_plane_data.point2.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM - point1;
+  let dir = dir_vector.normalize();
   let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
   
+  let center_pos = point1 + dir_vector * 0.5;
+
+  let width = 100.0 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+  let height = 100.0 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;  
+
+  let geometry = if context.explicit_geo_eval_needed {
+    let tr = center_pos - dir * width * 0.5 - normal * height;
+    CSG::square(width, height, None)
+    .rotate(0.0, 0.0, dir.y.atan2(dir.x).to_degrees())
+    .translate(tr.x, tr.y, 0.0)
+  } else { CSG::new() };
+
   // Use point1 as the position and calculate the angle for the transform
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
@@ -56,7 +78,7 @@ pub fn eval_half_plane<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id
         point1,
         normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
       ),
-      csg: CSG::new(),
+      csg: geometry,
     });
 }
 

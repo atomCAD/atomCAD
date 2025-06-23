@@ -322,7 +322,7 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "polygon" {
       vec![eval_polygon(network_stack, node_id, registry)]
     } else if node.node_type_name == "half_plane" {
-      vec![eval_half_plane(network_stack, node_id, registry)]
+      vec![eval_half_plane(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "intersect_2d" {
       vec![eval_intersect_2d(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "union_2d" {
