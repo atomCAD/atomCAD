@@ -20,7 +20,7 @@ pub fn convert_csg_to_poly_mesh(csg: &CSG, triangulate_2d: bool) -> PolyMesh {
     let epsilon = 1e-5;
     let mut unique_vertices = Unique3DPoints::new(epsilon);
 
-    let polys_from_2d = if csg.geometry.is_empty() {
+    let polys_from_2d = if !csg.polygons.is_empty() {
         Vec::new()
     } else {
         let mut polys = if triangulate_2d {
@@ -45,7 +45,7 @@ pub fn convert_csg_to_poly_mesh(csg: &CSG, triangulate_2d: bool) -> PolyMesh {
         polys
     };
 
-    let polygons = if csg.geometry.is_empty() {
+    let polygons = if !csg.polygons.is_empty() {
         &csg.polygons
     } else {
         &polys_from_2d
