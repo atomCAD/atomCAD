@@ -25,6 +25,7 @@ use crate::structure_designer::nodes::diff::eval_diff;
 use crate::structure_designer::nodes::intersect_2d::eval_intersect_2d;
 use crate::structure_designer::nodes::union_2d::eval_union_2d;
 use crate::structure_designer::nodes::diff_2d::eval_diff_2d;
+use crate::structure_designer::nodes::extrude::eval_extrude;
 use crate::structure_designer::nodes::half_space::eval_half_space;
 use crate::structure_designer::nodes::anchor::eval_anchor;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
@@ -329,7 +330,9 @@ impl NetworkEvaluator {
       vec![eval_union_2d(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "diff_2d" {
       vec![eval_diff_2d(&self, network_stack, node_id, registry, context)]
-    }else if node.node_type_name == "sphere" {
+    } else if node.node_type_name == "extrude" {
+      vec![eval_extrude(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "sphere" {
       vec![eval_sphere(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "cuboid" {
       vec![eval_cuboid(network_stack, node_id, registry, context)]
