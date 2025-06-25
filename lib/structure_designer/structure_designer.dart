@@ -7,7 +7,6 @@ import 'package:flutter_cad/structure_designer/node_networks_list_panel.dart';
 import 'package:flutter_cad/structure_designer/camera_control_widget.dart';
 import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/geometry_visualization_widget.dart';
 import 'package:flutter_cad/structure_designer/preferences_window.dart';
 
@@ -123,7 +122,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
                     Section(
                       title: 'Geometry',
                       content: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0, vertical: 4.0),
                         child: GeometryVisualizationWidget(model: graphModel),
                       ),
                       expand: false,
@@ -133,7 +133,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
                     Section(
                       title: 'Camera control',
                       content: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0, vertical: 4.0),
                         child: CameraControlWidget(model: graphModel),
                       ),
                       expand: false,

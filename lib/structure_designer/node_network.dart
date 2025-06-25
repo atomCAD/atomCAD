@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/structure_designer/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_widget.dart';
+import 'package:flutter_cad/structure_designer/wire_painter.dart';
 
 // Node dimensions and layout constants
 const double NODE_WIDTH = 130.0;
@@ -13,27 +13,9 @@ const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
 const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
 const double CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
 
-// Pin appearance constants
-const double PIN_SIZE = 14.0;
-const double PIN_BORDER_WIDTH = 5.0;
-
-// Node appearance constants
-const Color NODE_BACKGROUND_COLOR = Color(0xFF212121); // Colors.grey[900]
-const Color NODE_BORDER_COLOR_SELECTED = Colors.orange;
-const Color NODE_BORDER_COLOR_NORMAL = Colors.blueAccent;
-const Color NODE_BORDER_COLOR_ERROR = Colors.red;
-const double NODE_BORDER_WIDTH_SELECTED = 3.0;
-const double NODE_BORDER_WIDTH_NORMAL = 2.0;
-const double NODE_BORDER_RADIUS = 8.0;
-const Color NODE_TITLE_COLOR_SELECTED = Color(0xFFD84315); // Colors.orange[800]
-const Color NODE_TITLE_COLOR_NORMAL = Color(0xFF37474F); // Colors.blueGrey[800]
-const Color NODE_TITLE_COLOR_RETURN = Color(0xFF0D47A1); // Dark blue
-
 // Wire appearance constants
 const double WIRE_WIDTH_SELECTED = 4.0;
 const double WIRE_WIDTH_NORMAL = 2.0;
-const double WIRE_GLOW_BLUR_RADIUS = 8.0;
-const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
 const double WIRE_GLOW_OPACITY = 0.3;
 
 const double HIT_TEST_WIRE_WIDTH = 12.0;
@@ -47,8 +29,36 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
-Color getDataTypeColor(String dataType) {
-  return DATA_TYPE_COLORS[dataType] ?? DEFAULT_DATA_TYPE_COLOR;
+/// Widget specifically for handling wire painting and interaction
+class WireInteractionLayer extends StatelessWidget {
+  final StructureDesignerModel model;
+
+  const WireInteractionLayer({super.key, required this.model});
+
+  /// Handles tap on wires for selection
+  void _handleWireTapDown(TapDownDetails details) {
+    final painter = WirePainter(model);
+    final hit = painter.findWireAtPosition(details.localPosition);
+    if (hit != null) {
+      model.setSelectedWire(
+        hit.sourceNodeId,
+        hit.destNodeId,
+        hit.destParamIndex,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: WirePainter(model),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTapDown: _handleWireTapDown,
+        child: Container(),
+      ),
+    );
+  }
 }
 
 /// The main node network widget.
@@ -78,6 +88,39 @@ class NodeNetwork extends StatelessWidget {
     return false;
   }
 
+  /// Handles tap down in the main area
+  void _handleTapDown(TapDownDetails details) {
+    focusNode.requestFocus();
+  }
+
+  /// Handles secondary (right-click) tap for context menu
+  Future<void> _handleSecondaryTapDown(TapDownDetails details,
+      BuildContext context, StructureDesignerModel model) async {
+    // Only show add node popup if clicked on empty space (not on a node)
+    // The nodes have their own context menu handling
+    if (!_isClickOnNode(model, details.localPosition)) {
+      String? selectedNode = await showAddNodePopup(context);
+      if (selectedNode != null) {
+        model.createNode(selectedNode, details.localPosition);
+      }
+    }
+    focusNode.requestFocus();
+  }
+
+  /// Builds the stack children for the node network
+  List<Widget> _buildStackChildren(StructureDesignerModel model) {
+    if (model.nodeNetworkView == null) {
+      return [];
+    }
+
+    return [
+      WireInteractionLayer(model: model),
+      ...(model.nodeNetworkView!.nodes.entries
+          .map((entry) => NodeWidget(node: entry.value))
+          .toList())
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -101,47 +144,11 @@ class NodeNetwork extends StatelessWidget {
                 }
               },
               child: GestureDetector(
-                onTapDown: (details) {
-                  focusNode.requestFocus();
-                },
-                onSecondaryTapDown: (details) async {
-                  // Only show add node popup if clicked on empty space (not on a node)
-                  // The nodes have their own context menu handling
-                  if (!_isClickOnNode(model, details.localPosition)) {
-                    String? selectedNode = await showAddNodePopup(context);
-                    if (selectedNode != null) {
-                      model.createNode(selectedNode, details.localPosition);
-                    }
-                  }
-                  focusNode.requestFocus();
-                },
+                onTapDown: _handleTapDown,
+                onSecondaryTapDown: (details) =>
+                    _handleSecondaryTapDown(details, context, model),
                 child: Stack(
-                  children: (model.nodeNetworkView == null)
-                      ? []
-                      : [
-                          CustomPaint(
-                            painter: WirePainter(model),
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTapDown: (details) {
-                                final painter = WirePainter(model);
-                                final hit = painter
-                                    .findWireAtPosition(details.localPosition);
-                                if (hit != null) {
-                                  model.setSelectedWire(
-                                    hit.sourceNodeId,
-                                    hit.destNodeId,
-                                    hit.destParamIndex,
-                                  );
-                                }
-                              },
-                              child: Container(),
-                            ),
-                          ),
-                          ...(model.nodeNetworkView!.nodes.entries
-                              .map((entry) => NodeWidget(node: entry.value))
-                              .toList())
-                        ],
+                  children: _buildStackChildren(model),
                 ),
               ),
             ),
@@ -150,482 +157,4 @@ class NodeNetwork extends StatelessWidget {
       ),
     );
   }
-}
-
-class PinViewWidget extends StatelessWidget {
-  final String dataType;
-  final bool multi;
-
-  const PinViewWidget({super.key, required this.dataType, required this.multi});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = getDataTypeColor(dataType);
-
-    return Center(
-      child: Container(
-          width: PIN_SIZE,
-          height: PIN_SIZE,
-          decoration: multi
-              ? BoxDecoration(
-                  border: Border.all(
-                    color: color, // Set the border color
-                    width: PIN_BORDER_WIDTH, // Set the border width
-                  ),
-                  shape: BoxShape.circle,
-                  color: Colors.black,
-                )
-              : BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color,
-                )),
-    );
-  }
-}
-
-class PinWidget extends StatelessWidget {
-  final PinReference pinReference;
-  final bool multi;
-  PinWidget({required this.pinReference, required this.multi})
-      : super(key: ValueKey(pinReference.pinIndex));
-
-  RenderBox? _findNodeNetworkRenderBox(BuildContext context) {
-    RenderBox? result;
-    context.visitAncestorElements((element) {
-      if (element.widget is NodeNetwork) {
-        result = element.renderObject as RenderBox?;
-        return false; // Stop visiting
-      }
-      return true; // Continue visiting
-    });
-    return result;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DragTarget<PinReference>(
-      builder: (context, candidateData, rejectedData) {
-        return Draggable<PinReference>(
-          data: pinReference,
-          feedback: SizedBox.shrink(),
-          childWhenDragging:
-              PinViewWidget(dataType: pinReference.dataType, multi: multi),
-          child: PinViewWidget(dataType: pinReference.dataType, multi: multi),
-          onDragUpdate: (details) {
-            final nodeNetworkBox = _findNodeNetworkRenderBox(context);
-            if (nodeNetworkBox != null) {
-              final position =
-                  nodeNetworkBox.globalToLocal(details.globalPosition);
-              Provider.of<StructureDesignerModel>(context, listen: false)
-                  .dragWire(pinReference, position);
-            }
-          },
-          onDragEnd: (details) {
-            Provider.of<StructureDesignerModel>(context, listen: false)
-                .cancelDragWire();
-          },
-        );
-      },
-      onWillAcceptWithDetails: (details) {
-        return details.data.dataType ==
-                pinReference.dataType && // same data type
-            (details.data.pinIndex < 0) !=
-                (pinReference.pinIndex < 0); // output to input
-      },
-      onAcceptWithDetails: (details) {
-        //print("Connected pin ${details.data} to pin $pinReference");
-        Provider.of<StructureDesignerModel>(context, listen: false)
-            .connectPins(details.data, pinReference);
-      },
-    );
-  }
-}
-
-/// Widget representing a single draggable node.
-class NodeWidget extends StatelessWidget {
-  final NodeView node;
-
-  NodeWidget({required this.node}) : super(key: ValueKey(node.id));
-
-  @override
-  Widget build(BuildContext context) {
-    // Create the base node widget content
-    Widget nodeContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Title Bar
-        GestureDetector(
-          onTapDown: (details) {
-            final model =
-                Provider.of<StructureDesignerModel>(context, listen: false);
-            model.setSelectedNode(node.id);
-          },
-          onPanStart: (details) {
-            final model =
-                Provider.of<StructureDesignerModel>(context, listen: false);
-            model.setSelectedNode(node.id);
-          },
-          onPanUpdate: (details) {
-            Provider.of<StructureDesignerModel>(context, listen: false)
-                .dragNodePosition(node.id, details.delta);
-          },
-          onPanEnd: (details) {
-            Provider.of<StructureDesignerModel>(context, listen: false)
-                .updateNodePosition(node.id);
-          },
-          onSecondaryTapDown: (details) {
-            final model =
-                Provider.of<StructureDesignerModel>(context, listen: false);
-            model.setSelectedNode(node.id);
-
-            final RenderBox overlay =
-                Overlay.of(context).context.findRenderObject() as RenderBox;
-            final RelativeRect position = RelativeRect.fromRect(
-              Rect.fromPoints(
-                details.globalPosition,
-                details.globalPosition,
-              ),
-              Offset.zero & overlay.size,
-            );
-
-            showMenu(
-              context: context,
-              position: position,
-              items: [
-                PopupMenuItem(
-                  value: 'return',
-                  child: Text(node.returnNode
-                      ? 'Unset as return node'
-                      : 'Set as return node'),
-                ),
-              ],
-            ).then((value) {
-              if (value == 'return') {
-                final model =
-                    Provider.of<StructureDesignerModel>(context, listen: false);
-                if (node.returnNode) {
-                  // Unset as return node (pass null to clear the return node)
-                  model.setReturnNodeId(null);
-                } else {
-                  // Set as return node (pass the node ID)
-                  model.setReturnNodeId(node.id);
-                }
-              }
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            decoration: BoxDecoration(
-              color: node.selected
-                  ? NODE_TITLE_COLOR_SELECTED
-                  : (node.returnNode
-                      ? NODE_TITLE_COLOR_RETURN
-                      : NODE_TITLE_COLOR_NORMAL),
-              borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(NODE_BORDER_RADIUS - 2)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  node.nodeTypeName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    final model = Provider.of<StructureDesignerModel>(context,
-                        listen: false);
-                    model.toggleNodeDisplay(node.id);
-                  },
-                  child: Icon(
-                    node.displayed ? Icons.visibility : Icons.visibility_off,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Main Body
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              // Left Side (Inputs)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: node.inputPins
-                    .asMap()
-                    .entries
-                    .map((entry) => _buildInputPin(
-                        entry.value.name,
-                        PinReference(node.id, entry.key, entry.value.dataType),
-                        entry.value.multi))
-                    .toList(),
-              ),
-              const Spacer(),
-              // Right Side (Output)
-              PinWidget(
-                pinReference: PinReference(node.id, -1, node.outputType),
-                multi: false,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    // Create container with node appearance
-    Widget nodeWidget = Container(
-      width: NODE_WIDTH,
-      decoration: BoxDecoration(
-        color: NODE_BACKGROUND_COLOR,
-        borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
-        border: Border.all(
-            color: node.error != null
-                ? NODE_BORDER_COLOR_ERROR
-                : (node.selected
-                    ? NODE_BORDER_COLOR_SELECTED
-                    : NODE_BORDER_COLOR_NORMAL),
-            width: node.selected
-                ? NODE_BORDER_WIDTH_SELECTED
-                : NODE_BORDER_WIDTH_NORMAL),
-        boxShadow: node.error != null
-            ? [
-                BoxShadow(
-                    color:
-                        NODE_BORDER_COLOR_ERROR.withOpacity(WIRE_GLOW_OPACITY),
-                    blurRadius: WIRE_GLOW_BLUR_RADIUS,
-                    spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-              ]
-            : (node.selected
-                ? [
-                    BoxShadow(
-                        color: NODE_BORDER_COLOR_SELECTED
-                            .withOpacity(WIRE_GLOW_OPACITY),
-                        blurRadius: WIRE_GLOW_BLUR_RADIUS,
-                        spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-                  ]
-                : null),
-      ),
-      child: nodeContent,
-    );
-
-    // Add tooltip for nodes with errors
-    if (node.error != null && node.error!.isNotEmpty) {
-      nodeWidget = Tooltip(
-        message: node.error!,
-        textStyle: const TextStyle(fontSize: 14, color: Colors.white),
-        decoration: BoxDecoration(
-          color: Colors.red.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        waitDuration: const Duration(milliseconds: 500),
-        showDuration: const Duration(seconds: 5),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        preferBelow: true,
-        child: nodeWidget,
-      );
-    }
-
-    return Positioned(
-      left: node.position.x,
-      top: node.position.y,
-      child: nodeWidget,
-    );
-  }
-
-  /// Creates a labeled input pin.
-  Widget _buildInputPin(String label, PinReference pinReference, bool multi) {
-    return Row(
-      children: [
-        PinWidget(pinReference: pinReference, multi: multi),
-        SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(color: Colors.white, fontSize: 14),
-        ),
-      ],
-    );
-  }
-}
-
-class WireHitResult {
-  final BigInt sourceNodeId;
-  final BigInt destNodeId;
-  final BigInt destParamIndex;
-
-  WireHitResult(this.sourceNodeId, this.destNodeId, this.destParamIndex);
-}
-
-class WirePainter extends CustomPainter {
-  final StructureDesignerModel graphModel;
-
-  WirePainter(this.graphModel);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (graphModel.nodeNetworkView == null) {
-      return;
-    }
-
-    Paint paint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = WIRE_WIDTH_NORMAL
-      ..style = PaintingStyle.stroke;
-
-    // Draw regular wires first
-    for (var wire in graphModel.nodeNetworkView!.wires) {
-      final source = _getPinPositionAndDataType(wire.sourceNodeId, -1);
-      final dest = _getPinPositionAndDataType(
-          wire.destNodeId, wire.destParamIndex.toInt());
-      _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected);
-    }
-
-    // Draw dragged wire on top
-    if (graphModel.draggedWire != null) {
-      final wireStart = _getPinPositionAndDataType(
-          graphModel.draggedWire!.startPin.nodeId,
-          graphModel.draggedWire!.startPin.pinIndex);
-      final wireEndPos = graphModel.draggedWire!.wireEndPosition;
-      if (graphModel.draggedWire!.startPin.pinIndex < 0) {
-        // start is source
-        _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2, false);
-      } else {
-        // start is dest
-        _drawWire(wireEndPos, wireStart.$1, canvas, paint, wireStart.$2, false);
-      }
-    }
-  }
-
-  (Offset, String) _getPinPositionAndDataType(BigInt nodeId, int pinIndex) {
-    // Now this is is a bit of a hacky solution.
-    // We should probably use the real positions of the pin widgets instead of this logic to
-    // approximate it independently.
-    if (pinIndex < 0) {
-      // output pin (source pin)
-      final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId];
-      final sourceVertOffset = sourceNode!.inputPins.isEmpty
-          ? NODE_VERT_WIRE_OFFSET_EMPTY
-          : NODE_VERT_WIRE_OFFSET +
-              sourceNode.inputPins.length *
-                  NODE_VERT_WIRE_OFFSET_PER_PARAM *
-                  0.5;
-      return (
-        APIVec2ToOffset(sourceNode.position) +
-            Offset(NODE_WIDTH, sourceVertOffset),
-        sourceNode.outputType
-      );
-    } else {
-      // input pin (dest pin)
-      final destNode = graphModel.nodeNetworkView!.nodes[nodeId];
-      final destVertOffset = NODE_VERT_WIRE_OFFSET +
-          (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-      return (
-        APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset),
-        destNode.inputPins[pinIndex].dataType
-      );
-    }
-  }
-
-  _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint,
-      String dataType, bool selected) {
-    paint.color = getDataTypeColor(dataType);
-    paint.strokeWidth = selected ? WIRE_WIDTH_SELECTED : WIRE_WIDTH_NORMAL;
-
-    if (selected) {
-      paint.color = WIRE_COLOR_SELECTED;
-
-      // Draw glow effect for selected wire
-      final glowPaint = Paint()
-        ..color = WIRE_COLOR_SELECTED.withOpacity(WIRE_GLOW_OPACITY)
-        ..strokeWidth = paint.strokeWidth * 2
-        ..style = PaintingStyle.stroke;
-
-      canvas.drawPath(_getPath(sourcePos, destPos), glowPaint);
-    }
-
-    canvas.drawPath(_getPath(sourcePos, destPos), paint);
-  }
-
-  Path _getPath(Offset sourcePos, Offset destPos) {
-    final controlPoint1 = sourcePos + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
-    final controlPoint2 = destPos - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
-
-    return Path()
-      ..moveTo(sourcePos.dx, sourcePos.dy)
-      ..cubicTo(
-        controlPoint1.dx,
-        controlPoint1.dy,
-        controlPoint2.dx,
-        controlPoint2.dy,
-        destPos.dx,
-        destPos.dy,
-      );
-  }
-
-  Path _getBand(Offset sourcePos, Offset destPos, double width) {
-    final hw = width * 0.5;
-    final off = destPos.dx > sourcePos.dx ? width : (-width);
-
-    final sourcePos1 = Offset(sourcePos.dx, sourcePos.dy + hw);
-    final sourcePos2 = Offset(sourcePos.dx, sourcePos.dy - hw);
-    final destPos1 = Offset(destPos.dx, destPos.dy + hw);
-    final destPos2 = Offset(destPos.dx, destPos.dy - hw);
-
-    final controlPointStart1 =
-        sourcePos1 + Offset(CUBIC_SPLINE_HORIZ_OFFSET - off, 0);
-    final controlPointEnd1 = destPos1 - Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
-
-    final controlPointStart2 =
-        sourcePos2 + Offset(CUBIC_SPLINE_HORIZ_OFFSET, 0);
-    final controlPointEnd2 =
-        destPos2 - Offset(CUBIC_SPLINE_HORIZ_OFFSET - off, 0);
-
-    return Path()
-      ..moveTo(sourcePos1.dx, sourcePos1.dy)
-      ..cubicTo(
-        controlPointStart1.dx,
-        controlPointStart1.dy,
-        controlPointEnd1.dx,
-        controlPointEnd1.dy,
-        destPos1.dx,
-        destPos1.dy,
-      )
-      ..lineTo(destPos2.dx, destPos2.dy)
-      ..cubicTo(
-        controlPointEnd2.dx,
-        controlPointEnd2.dy,
-        controlPointStart2.dx,
-        controlPointStart2.dy,
-        sourcePos2.dx,
-        sourcePos2.dy,
-      )
-      ..close();
-  }
-
-  WireHitResult? findWireAtPosition(Offset position) {
-    if (graphModel.nodeNetworkView == null) return null;
-
-    for (var wire in graphModel.nodeNetworkView!.wires) {
-      final (sourcePos, _) = _getPinPositionAndDataType(wire.sourceNodeId, -1);
-      final (destPos, _) = _getPinPositionAndDataType(
-          wire.destNodeId, wire.destParamIndex.toInt());
-
-      final hitTestPath = _getBand(sourcePos, destPos, HIT_TEST_WIRE_WIDTH);
-      if (hitTestPath.contains(position)) {
-        return WireHitResult(
-            wire.sourceNodeId, wire.destNodeId, wire.destParamIndex);
-      }
-    }
-    return null;
-  }
-
-  @override
-  bool shouldRepaint(WirePainter oldDelegate) => true;
 }

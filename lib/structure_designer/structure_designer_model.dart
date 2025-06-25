@@ -136,6 +136,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void clearSelection() {
+    structure_designer_api.clearSelection();
+    refreshFromKernel();
+  }
+
   void saveNodeNetworks(String filePath) {
     structure_designer_api.saveNodeNetworks(filePath: filePath);
     refreshFromKernel();
