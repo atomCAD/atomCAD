@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_resizable_container/flutter_resizable_container.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart';
 import 'package:flutter_cad/structure_designer/node_network.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -99,7 +101,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   ),
                 ],
               ),
-              
+
               // View Menu
               StructureDesignerMenuWidget(
                 label: 'View',
@@ -110,7 +112,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   ),
                 ],
               ),
-              
+
               // Edit Menu
               StructureDesignerMenuWidget(
                 label: 'Edit',
@@ -177,21 +179,29 @@ class _StructureDesignerState extends State<StructureDesigner> {
               ),
               // Main content area
               Expanded(
-                child: Column(
+                child: ResizableContainer(
+                  direction: Axis.vertical,
                   children: [
-                    Expanded(
-                      flex: 20,
+                    // 3D Viewport panel - initially 65% of height
+                    ResizableChild(
+                      size: ResizableSize.ratio(0.65),
+                      // Custom divider that appears below this panel
+                      divider: ResizableDivider(
+                        thickness: 8,  // Height of the divider
+                        color: Colors.grey.shade300,
+                        cursor: SystemMouseCursors.resizeRow,
+                      ),
                       child: StructureDesignerViewport(graphModel: graphModel),
                     ),
-                    Expanded(
-                      flex: 11,
+                    // Node Network panel - initially 35% of height
+                    ResizableChild(
+                      size: ResizableSize.ratio(0.35),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(
                             flex: 4,
-                            child: NodeNetwork(
-                                key: nodeNetworkKey, graphModel: graphModel),
+                            child: NodeNetwork(key: nodeNetworkKey, graphModel: graphModel),
                           ),
                           Container(
                             width: 300,
