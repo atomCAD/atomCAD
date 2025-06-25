@@ -80,14 +80,62 @@ class _NodeNetworkState extends State<NodeNetwork> {
 
   /// Current pan offset for the network view
   Offset _panOffset = Offset.zero;
+  
+  /// Store the current network name to detect changes
+  String? _currentNetworkName;
 
   /// Whether we're currently panning the view
   bool _isPanning = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Initial calculation of pan offset for the current network
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updatePanOffsetForCurrentNetwork();
+    });
+  }
+
+  @override
   void dispose() {
     focusNode.dispose();
     super.dispose();
+  }
+  
+  /// Calculate an appropriate pan offset based on node positions
+  /// This is called whenever the active node network changes
+  void _updatePanOffsetForCurrentNetwork() {
+    final model = widget.graphModel;
+    if (model.nodeNetworkView == null) return;
+    
+    // Check if the network has changed
+    if (_currentNetworkName == model.nodeNetworkView!.name) return;
+    
+    // Update the current network name
+    _currentNetworkName = model.nodeNetworkView!.name;
+    
+    // If there are no nodes, center the view
+    if (model.nodeNetworkView!.nodes.isEmpty) {
+      setState(() {
+        _panOffset = Offset.zero;
+      });
+      return;
+    }
+    
+    // Find the minimum x and y coordinates
+    double minX = double.infinity;
+    double minY = double.infinity;
+    
+    for (final node in model.nodeNetworkView!.nodes.values) {
+      if (node.position.x < minX) minX = node.position.x;
+      if (node.position.y < minY) minY = node.position.y;
+    }
+    
+    // Set the pan offset to position the top-left node with a small margin
+    const margin = 20.0;
+    setState(() {
+      _panOffset = Offset(-minX + margin, -minY + margin);
+    });
   }
 
   /// Checks if the given position is on top of any node
@@ -208,6 +256,14 @@ class _NodeNetworkState extends State<NodeNetwork> {
       value: widget.graphModel,
       child: Consumer<StructureDesignerModel>(
         builder: (context, model, child) {
+          // Check if the node network has changed and update pan offset if needed
+          if (model.nodeNetworkView != null && 
+              _currentNetworkName != model.nodeNetworkView!.name) {
+            // Use post-frame callback to avoid setState during build
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _updatePanOffsetForCurrentNetwork();
+            });
+          }
           return Focus(
             focusNode: focusNode,
             autofocus: true,
