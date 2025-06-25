@@ -33,15 +33,12 @@ const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
 #[unsafe(no_mangle)]
 pub fn set_viewport_size(width: u32, height: u32) {
   let start_time = Instant::now();
-  println!("API: Setting viewport size to {}x{}", width, height);
 
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_viewport_size(width, height);
     });
   }
-
-  println!("set_viewport_size took: {:?}", start_time.elapsed());
 }
 
 pub type FlutterRgbaRendererPluginOnRgba = unsafe extern "C" fn(

@@ -208,14 +208,18 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     SchedulerBinding.instance
         .addPersistentFrameCallback(_handlePersistentFrame);
 
-    setState(() {
-      textureId = myTextureId;
-      _texturePtr = texturePtr;
-    });
+    // Check if widget is still mounted before calling setState
+    if (mounted) {
+      setState(() {
+        textureId = myTextureId;
+        _texturePtr = texturePtr;
+      });
+    }
   }
 
   void _handlePersistentFrame(Duration timeStamp) {
-    if (_texturePtr != null) {
+    // Check if widget is still mounted to prevent errors
+    if (mounted && _texturePtr != null) {
       provideTexture(texturePtr: _texturePtr!);
     }
   }
@@ -526,6 +530,13 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
   @override
   void dispose() {
+    // We can't remove persistent frame callbacks, so clean up resources
+    // and release texture resources to prevent memory leaks
+    const int textureKey = 0;
+    _textureRenderer?.closeTexture(textureKey);
+    _textureRenderer = null;
+    _texturePtr = null;
+    
     super.dispose();
   }
 }
