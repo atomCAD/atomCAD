@@ -18,6 +18,41 @@ class StructureDesigner extends StatefulWidget {
   State<StructureDesigner> createState() => _StructureDesignerState();
 }
 
+/// A reusable menu widget for the Structure Designer menu bar
+class StructureDesignerMenuWidget extends StatelessWidget {
+  final String label;
+  final List<Widget> menuItems;
+
+  const StructureDesignerMenuWidget({
+    super.key,
+    required this.label,
+    required this.menuItems,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MenuAnchor(
+      builder: (context, controller, child) {
+        return TextButton(
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.black87,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          child: Text(label),
+        );
+      },
+      menuChildren: menuItems,
+    );
+  }
+}
+
 class _StructureDesignerState extends State<StructureDesigner> {
   late StructureDesignerModel graphModel;
 
@@ -50,24 +85,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
           ),
           child: Row(
             children: [
-              MenuAnchor(
-                builder: (context, controller, child) {
-                  return TextButton(
-                    onPressed: () {
-                      if (controller.isOpen) {
-                        controller.close();
-                      } else {
-                        controller.open();
-                      }
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    child: const Text('File'),
-                  );
-                },
-                menuChildren: [
+              // File Menu
+              StructureDesignerMenuWidget(
+                label: 'File',
+                menuItems: [
                   MenuItemButton(
                     onPressed: _loadDesign,
                     child: const Text('Load Design'),
@@ -78,48 +99,22 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   ),
                 ],
               ),
-              MenuAnchor(
-                builder: (context, controller, child) {
-                  return TextButton(
-                    onPressed: () {
-                      if (controller.isOpen) {
-                        controller.close();
-                      } else {
-                        controller.open();
-                      }
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    child: const Text('View'),
-                  );
-                },
-                menuChildren: [
+              
+              // View Menu
+              StructureDesignerMenuWidget(
+                label: 'View',
+                menuItems: [
                   MenuItemButton(
                     onPressed: _resetNodeNetworkView,
                     child: const Text('Reset node network view'),
                   ),
                 ],
               ),
-              MenuAnchor(
-                builder: (context, controller, child) {
-                  return TextButton(
-                    onPressed: () {
-                      if (controller.isOpen) {
-                        controller.close();
-                      } else {
-                        controller.open();
-                      }
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    child: const Text('Edit'),
-                  );
-                },
-                menuChildren: [
+              
+              // Edit Menu
+              StructureDesignerMenuWidget(
+                label: 'Edit',
+                menuItems: [
                   MenuItemButton(
                     onPressed: _showPreferences,
                     child: const Text('Preferences'),
@@ -268,8 +263,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
   void _resetNodeNetworkView() {
     // Access the NodeNetworkState directly through the key
     final state = nodeNetworkKey.currentState;
-
-    print('Resetting node network view state: $state');
 
     // Call the updatePanOffsetForCurrentNetwork method with forceUpdate=true if state exists
     if (state != null) {
