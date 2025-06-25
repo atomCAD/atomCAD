@@ -15,8 +15,9 @@ class WireHitResult {
 
 class WirePainter extends CustomPainter {
   final StructureDesignerModel graphModel;
+  final Offset panOffset;
 
-  WirePainter(this.graphModel);
+  WirePainter(this.graphModel, {this.panOffset = Offset.zero});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -68,7 +69,8 @@ class WirePainter extends CustomPainter {
                   0.5;
       return (
         APIVec2ToOffset(sourceNode.position) +
-            Offset(NODE_WIDTH, sourceVertOffset),
+            Offset(NODE_WIDTH, sourceVertOffset) +
+            panOffset,
         sourceNode.outputType
       );
     } else {
@@ -77,7 +79,9 @@ class WirePainter extends CustomPainter {
       final destVertOffset = NODE_VERT_WIRE_OFFSET +
           (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
       return (
-        APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset),
+        APIVec2ToOffset(destNode!.position) + 
+            Offset(0.0, destVertOffset) +
+            panOffset,
         destNode.inputPins[pinIndex].dataType
       );
     }
@@ -162,6 +166,8 @@ class WirePainter extends CustomPainter {
   WireHitResult? findWireAtPosition(Offset position) {
     if (graphModel.nodeNetworkView == null) return null;
 
+    // We don't need to adjust the position here because _getPinPositionAndDataType
+    // already adds the panOffset to the returned positions
     for (var wire in graphModel.nodeNetworkView!.wires) {
       final (sourcePos, _) = _getPinPositionAndDataType(wire.sourceNodeId, -1);
       final (destPos, _) = _getPinPositionAndDataType(

@@ -5,6 +5,7 @@ import 'package:flutter_cad/structure_designer/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_widget.dart';
 import 'package:flutter_cad/structure_designer/wire_painter.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 // Node dimensions and layout constants
 const double NODE_WIDTH = 130.0;
@@ -29,15 +30,17 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
-/// Widget specifically for handling wire painting and interaction
+/// Wraps the WirePainter to add interaction capabilities
 class WireInteractionLayer extends StatelessWidget {
   final StructureDesignerModel model;
+  final Offset panOffset;
 
-  const WireInteractionLayer({super.key, required this.model});
+  const WireInteractionLayer(
+      {super.key, required this.model, required this.panOffset});
 
   /// Handles tap on wires for selection
   void _handleWireTapDown(TapDownDetails details) {
-    final painter = WirePainter(model);
+    final painter = WirePainter(model, panOffset: panOffset);
     final hit = painter.findWireAtPosition(details.localPosition);
     if (hit != null) {
       model.setSelectedWire(
@@ -51,7 +54,7 @@ class WireInteractionLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: WirePainter(model),
+      painter: WirePainter(model, panOffset: panOffset),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTapDown: _handleWireTapDown,
@@ -62,15 +65,38 @@ class WireInteractionLayer extends StatelessWidget {
 }
 
 /// The main node network widget.
-class NodeNetwork extends StatelessWidget {
+class NodeNetwork extends StatefulWidget {
   final StructureDesignerModel graphModel;
+
+  const NodeNetwork({super.key, required this.graphModel});
+
+  @override
+  State<NodeNetwork> createState() => _NodeNetworkState();
+}
+
+class _NodeNetworkState extends State<NodeNetwork> {
+  /// Focus node for keyboard events
   final focusNode = FocusNode();
 
-  NodeNetwork({super.key, required this.graphModel});
+  /// Current pan offset for the network view
+  Offset _panOffset = Offset.zero;
+
+  /// Whether we're currently panning the view
+  bool _isPanning = false;
+
+  @override
+  void dispose() {
+    focusNode.dispose();
+    super.dispose();
+  }
 
   /// Checks if the given position is on top of any node
+  /// Adjusts for panning by subtracting the pan offset from the position
   bool _isClickOnNode(StructureDesignerModel model, Offset position) {
     if (model.nodeNetworkView == null) return false;
+
+    // Adjust position for pan offset
+    final adjustedPosition = position - _panOffset;
 
     for (final node in model.nodeNetworkView!.nodes.values) {
       final nodeRect = Rect.fromLTWH(
@@ -81,11 +107,35 @@ class NodeNetwork extends StatelessWidget {
           NODE_VERT_WIRE_OFFSET +
               (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM));
 
-      if (nodeRect.contains(position)) {
+      if (nodeRect.contains(adjustedPosition)) {
         return true;
       }
     }
     return false;
+  }
+
+  /// Gets the node at the given position, if any
+  /// Accounts for the current pan offset
+  NodeView? getNodeAtPosition(StructureDesignerModel model, Offset position) {
+    if (model.nodeNetworkView == null) return null;
+    
+    // Adjust position for pan offset
+    final adjustedPosition = position - _panOffset;
+    
+    for (final node in model.nodeNetworkView!.nodes.values) {
+      final nodeRect = Rect.fromLTWH(
+        node.position.x,
+        node.position.y,
+        NODE_WIDTH,
+        NODE_VERT_WIRE_OFFSET +
+            (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM)
+      );
+      
+      if (nodeRect.contains(adjustedPosition)) {
+        return node;
+      }
+    }
+    return null;
   }
 
   /// Handles tap down in the main area
@@ -101,10 +151,39 @@ class NodeNetwork extends StatelessWidget {
     if (!_isClickOnNode(model, details.localPosition)) {
       String? selectedNode = await showAddNodePopup(context);
       if (selectedNode != null) {
-        model.createNode(selectedNode, details.localPosition);
+        // Adjust position for pan offset when creating node
+        final adjustedPosition = details.localPosition - _panOffset;
+        model.createNode(selectedNode, adjustedPosition);
       }
     }
     focusNode.requestFocus();
+  }
+
+  /// Handles the start of a pan gesture
+  void _handlePanStart(DragStartDetails details) {
+    // Only start panning if not clicking on a node
+    // This allows dragging nodes to work separately
+    if (!_isClickOnNode(widget.graphModel, details.localPosition)) {
+      setState(() {
+        _isPanning = true;
+      });
+    }
+  }
+
+  /// Handles the update of a pan gesture
+  void _handlePanUpdate(DragUpdateDetails details) {
+    if (_isPanning) {
+      setState(() {
+        _panOffset += details.delta;
+      });
+    }
+  }
+
+  /// Handles the end of a pan gesture
+  void _handlePanEnd(DragEndDetails details) {
+    setState(() {
+      _isPanning = false;
+    });
   }
 
   /// Builds the stack children for the node network
@@ -113,18 +192,20 @@ class NodeNetwork extends StatelessWidget {
       return [];
     }
 
+    // The Stack will handle all the nodes and wires with appropriate transformations
     return [
-      WireInteractionLayer(model: model),
-      ...(model.nodeNetworkView!.nodes.entries
-          .map((entry) => NodeWidget(node: entry.value))
-          .toList())
+      // Wire layer at the bottom
+      WireInteractionLayer(model: model, panOffset: _panOffset),
+      // Then all the nodes on top - NodeWidget now handles its own positioning with panOffset
+      ...model.nodeNetworkView!.nodes.entries
+          .map((entry) => NodeWidget(node: entry.value, panOffset: _panOffset))
     ];
   }
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
-      value: graphModel,
+      value: widget.graphModel,
       child: Consumer<StructureDesignerModel>(
         builder: (context, model, child) {
           return Focus(
@@ -147,6 +228,10 @@ class NodeNetwork extends StatelessWidget {
                 onTapDown: _handleTapDown,
                 onSecondaryTapDown: (details) =>
                     _handleSecondaryTapDown(details, context, model),
+                // Add pan gesture recognizers
+                onPanStart: _handlePanStart,
+                onPanUpdate: _handlePanUpdate,
+                onPanEnd: _handlePanEnd,
                 child: Stack(
                   children: _buildStackChildren(model),
                 ),

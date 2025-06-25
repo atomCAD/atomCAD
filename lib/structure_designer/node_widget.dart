@@ -120,8 +120,9 @@ class PinWidget extends StatelessWidget {
 /// Widget representing a single draggable node.
 class NodeWidget extends StatelessWidget {
   final NodeView node;
+  final Offset panOffset;
 
-  NodeWidget({required this.node}) : super(key: ValueKey(node.id));
+  NodeWidget({required this.node, required this.panOffset}) : super(key: ValueKey(node.id));
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +143,9 @@ class NodeWidget extends StatelessWidget {
             model.setSelectedNode(node.id);
           },
           onPanUpdate: (details) {
+            // The dragNodePosition updates the model's absolute position
+            // The UI applies panOffset separately during rendering
+            // So we just pass the raw delta to the model
             Provider.of<StructureDesignerModel>(context, listen: false)
                 .dragNodePosition(node.id, details.delta);
           },
@@ -309,9 +313,10 @@ class NodeWidget extends StatelessWidget {
       );
     }
 
+    // Position the node, taking into account both the node's position and the pan offset
     return Positioned(
-      left: node.position.x,
-      top: node.position.y,
+      left: node.position.x + panOffset.dx,
+      top: node.position.y + panOffset.dy,
       child: nodeWidget,
     );
   }
