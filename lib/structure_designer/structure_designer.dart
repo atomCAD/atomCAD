@@ -21,6 +21,10 @@ class StructureDesigner extends StatefulWidget {
 class _StructureDesignerState extends State<StructureDesigner> {
   late StructureDesignerModel graphModel;
 
+  // GlobalKey to access the NodeNetwork widget state
+  final GlobalKey<NodeNetworkState> nodeNetworkKey =
+      GlobalKey<NodeNetworkState>();
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +75,30 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   MenuItemButton(
                     onPressed: _saveDesignAs,
                     child: const Text('Save Design As'),
+                  ),
+                ],
+              ),
+              MenuAnchor(
+                builder: (context, controller, child) {
+                  return TextButton(
+                    onPressed: () {
+                      if (controller.isOpen) {
+                        controller.close();
+                      } else {
+                        controller.open();
+                      }
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.black87,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: const Text('View'),
+                  );
+                },
+                menuChildren: [
+                  MenuItemButton(
+                    onPressed: _resetNodeNetworkView,
+                    child: const Text('Reset node network view'),
                   ),
                 ],
               ),
@@ -167,7 +195,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
                         children: [
                           Expanded(
                             flex: 4,
-                            child: NodeNetwork(graphModel: graphModel),
+                            child: NodeNetwork(
+                                key: nodeNetworkKey, graphModel: graphModel),
                           ),
                           Container(
                             width: 300,
@@ -233,5 +262,18 @@ class _StructureDesignerState extends State<StructureDesigner> {
         return PreferencesWindow(model: graphModel);
       },
     );
+  }
+
+  /// Reset the node network view to show all nodes
+  void _resetNodeNetworkView() {
+    // Access the NodeNetworkState directly through the key
+    final state = nodeNetworkKey.currentState;
+
+    print('Resetting node network view state: $state');
+
+    // Call the updatePanOffsetForCurrentNetwork method with forceUpdate=true if state exists
+    if (state != null) {
+      state.updatePanOffsetForCurrentNetwork(forceUpdate: true);
+    }
   }
 }

@@ -71,10 +71,10 @@ class NodeNetwork extends StatefulWidget {
   const NodeNetwork({super.key, required this.graphModel});
 
   @override
-  State<NodeNetwork> createState() => _NodeNetworkState();
+  State<NodeNetwork> createState() => NodeNetworkState();
 }
 
-class _NodeNetworkState extends State<NodeNetwork> {
+class NodeNetworkState extends State<NodeNetwork> {
   /// Focus node for keyboard events
   final focusNode = FocusNode();
 
@@ -92,7 +92,7 @@ class _NodeNetworkState extends State<NodeNetwork> {
     super.initState();
     // Initial calculation of pan offset for the current network
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updatePanOffsetForCurrentNetwork();
+      updatePanOffsetForCurrentNetwork(forceUpdate: false);
     });
   }
 
@@ -103,13 +103,16 @@ class _NodeNetworkState extends State<NodeNetwork> {
   }
   
   /// Calculate an appropriate pan offset based on node positions
-  /// This is called whenever the active node network changes
-  void _updatePanOffsetForCurrentNetwork() {
+  /// This is called whenever the active node network changes or when manually triggered
+  /// via the View menu
+  /// 
+  /// If forceUpdate is true, it will recalculate the pan offset even if the network hasn't changed
+  void updatePanOffsetForCurrentNetwork({bool forceUpdate = false}) {
     final model = widget.graphModel;
     if (model.nodeNetworkView == null) return;
     
-    // Check if the network has changed
-    if (_currentNetworkName == model.nodeNetworkView!.name) return;
+    // Skip if the network hasn't changed and we're not forcing an update
+    if (!forceUpdate && _currentNetworkName == model.nodeNetworkView!.name) return;
     
     // Update the current network name
     _currentNetworkName = model.nodeNetworkView!.name;
@@ -261,7 +264,7 @@ class _NodeNetworkState extends State<NodeNetwork> {
               _currentNetworkName != model.nodeNetworkView!.name) {
             // Use post-frame callback to avoid setState during build
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _updatePanOffsetForCurrentNetwork();
+              updatePanOffsetForCurrentNetwork(forceUpdate: false);
             });
           }
           return Focus(

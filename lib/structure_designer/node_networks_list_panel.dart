@@ -177,17 +177,11 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                       AppColors.selectionBackground,
                                   selectedColor: AppColors.selectionForeground,
                                   onTap: () {
-                                    print(
-                                        'Tapped on $networkName isEditing: $isEditing');
-
                                     if (isEditing) {
                                       return; // Don't change selection when in edit mode
                                     }
-
                                     // Set the active node network
                                     model.setActiveNodeNetwork(networkName);
-                                    print(
-                                        'model.nodeNetworkView?.name: ${model.nodeNetworkView?.name}');
                                   },
                                 ),
                               );
