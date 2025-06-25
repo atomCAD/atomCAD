@@ -28,7 +28,6 @@ pub fn convert_csg_to_poly_mesh(csg: &CSG, triangulate_2d: bool) -> PolyMesh {
         } else {
             csg.to_polygons()
         };
-        println!("Number of polygons: {}", polys.len());
         
         // Transform from XY plane to XZ plane
         for poly in &mut polys {
@@ -109,12 +108,10 @@ fn triangulate_csg_geometry(csg: &CSG) -> Vec<Polygon<()>> {
     for geom in csg.geometry.iter() {
         match geom {
             Geometry::Polygon(poly2d) => {
-                println!("Polygon: {:?}", poly2d);
                 ret.extend(triangulate_geo_polygon(&poly2d));
             },
             Geometry::MultiPolygon(multipoly) => {
                 for poly2d in multipoly {
-                    println!("Polygon (part of MultiPolygon): {:?}", poly2d);
                     ret.extend(triangulate_geo_polygon(&poly2d));
                 }
             },

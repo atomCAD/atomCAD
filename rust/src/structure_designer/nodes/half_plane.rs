@@ -1,17 +1,15 @@
+use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
-use nalgebra::Point3;
-use nalgebra::Vector3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec2_serializer;
 use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use glam::f32::Vec3;
-use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -24,8 +22,6 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::common::csg_types::CSG;
-use csgrs::polygon::Polygon;
-use csgrs::vertex::Vertex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -52,17 +48,17 @@ pub fn eval_half_plane<'a>(
   let half_plane_data = &node.data.as_any_ref().downcast_ref::<HalfPlaneData>().unwrap();
 
   // Convert point1 to double precision for calculations
-  let point1 = half_plane_data.point1.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+  let point1 = half_plane_data.point1.as_dvec2();
 
   // Calculate direction vector from point1 to point2
-  let dir_vector = half_plane_data.point2.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM - point1;
+  let dir_vector = half_plane_data.point2.as_dvec2() - point1;
   let dir = dir_vector.normalize();
   let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
   
   let center_pos = point1 + dir_vector * 0.5;
 
-  let width = 100.0 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-  let height = 100.0 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;  
+  let width = 100.0;
+  let height = 100.0;
 
   let geometry = if context.explicit_geo_eval_needed {
     let tr = center_pos - dir * width * 0.5 - normal * height;

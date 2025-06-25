@@ -8,7 +8,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use glam::f64::DVec2;
@@ -37,10 +36,10 @@ pub fn eval_circle<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let circle_data = &node.data.as_any_ref().downcast_ref::<CircleData>().unwrap();
 
-  let center = circle_data.center.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+  let center = circle_data.center.as_dvec2();
 
   let geometry = if context.explicit_geo_eval_needed { CSG::circle(
-    circle_data.radius as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+    circle_data.radius as f64,
     32,
     None
   )
@@ -49,7 +48,7 @@ pub fn eval_circle<'a>(
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
       frame_transform: Transform2D::new(
-        circle_data.center.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+        circle_data.center.as_dvec2(),
         0.0,
       ),
       csg: geometry,

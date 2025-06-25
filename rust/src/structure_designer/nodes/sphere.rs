@@ -8,7 +8,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
 use crate::util::transform::Transform;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::common_constants;
 use glam::f64::DQuat;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
@@ -38,10 +37,10 @@ pub fn eval_sphere<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let sphere_data = &node.data.as_any_ref().downcast_ref::<SphereData>().unwrap();
 
-  let center = sphere_data.center.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+  let center = sphere_data.center.as_dvec3();
 
   let geometry = if context.explicit_geo_eval_needed { CSG::sphere(
-    sphere_data.radius as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+    sphere_data.radius as f64,
     32,
     16,
     None

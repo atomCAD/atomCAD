@@ -10,7 +10,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
-use crate::structure_designer::common_constants;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
@@ -38,8 +37,8 @@ pub fn eval_rect<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let rect_data = &node.data.as_any_ref().downcast_ref::<RectData>().unwrap();
 
-  let min_corner = rect_data.min_corner.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-  let extent = rect_data.extent.as_dvec2() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+  let min_corner = rect_data.min_corner.as_dvec2();
+  let extent = rect_data.extent.as_dvec2();
   let center = min_corner + extent / 2.0;
 
   let geometry = if context.explicit_geo_eval_needed { 

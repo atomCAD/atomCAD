@@ -281,10 +281,12 @@ impl NetworkEvaluator {
         NetworkResult::Geometry2D(geometry_summary_2d) => Some(&geometry_summary_2d.csg),
         _ => None,
       };
-      
+
       // Process the CSG if it was found
       if let Some(csg) = csg {
-        let mut poly_mesh = convert_csg_to_poly_mesh(csg, !geometry_visualization_preferences.wireframe_geometry);
+        let scale_factor = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+        let scaled_csg = csg.scale(scale_factor, scale_factor, scale_factor);
+        let mut poly_mesh = convert_csg_to_poly_mesh(&scaled_csg, !geometry_visualization_preferences.wireframe_geometry);
         poly_mesh.detect_sharp_edges(
           geometry_visualization_preferences.sharpness_angle_threshold_degree,
           true

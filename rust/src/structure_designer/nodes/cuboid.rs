@@ -8,7 +8,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::common_constants;
 use crate::util::transform::Transform;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DQuat;
@@ -39,8 +38,8 @@ pub fn eval_cuboid<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
 
-  let min_corner = cuboid_data.min_corner.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-  let extent = cuboid_data.extent.as_dvec3() * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+  let min_corner = cuboid_data.min_corner.as_dvec3();
+  let extent = cuboid_data.extent.as_dvec3();
   let center = min_corner + extent / 2.0;
 
   let geometry = if context.explicit_geo_eval_needed { CSG::cube(extent.x, extent.y, extent.z, None)

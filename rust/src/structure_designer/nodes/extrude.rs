@@ -1,7 +1,5 @@
-use crate::structure_designer::common_constants;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use csgrs::polygon;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
@@ -59,7 +57,7 @@ pub fn eval_extrude<'a>(
   }
   if let NetworkResult::Geometry2D(shape) = shape_val {
     let extruded_geometry = if context.explicit_geo_eval_needed {
-      let mut extruded = shape.csg.extrude(extrude_data.height as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+      let mut extruded = shape.csg.extrude(extrude_data.height as f64);
 
       // swap y and z coordinates
       for polygon in &mut extruded.polygons {        

@@ -73,7 +73,7 @@ pub fn eval_half_space<'a>(
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
   let dir = half_space_data.miller_index.as_dvec3().normalize();
-  let center_pos = half_space_data.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+  let center_pos = half_space_data.center.as_dvec3();
 
   let normal = dvec3_to_vector3(dir);
   let rotation = DQuat::from_rotation_arc(DVec3::Y, dir);
