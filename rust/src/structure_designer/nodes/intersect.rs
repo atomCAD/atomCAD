@@ -33,9 +33,10 @@ pub fn eval_intersect<'a>(
 ) -> NetworkResult {
   //let _timer = Timer::new("eval_intersect");
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
+  let shapes_input_name = registry.get_parameter_name(&node.node_type_name, 0);
 
-  if node.arguments[0].argument_node_ids.is_empty() {
-    return input_missing_error("shapes");
+  if node.arguments[0].is_empty() {
+    return input_missing_error(&shapes_input_name);
   }
 
   let mut geometry = None;
@@ -49,7 +50,7 @@ pub fn eval_intersect<'a>(
       context
     )[0].clone();
     if let NetworkResult::Error(_error) = shape_val {
-      return error_in_input("shapes");
+      return error_in_input(&shapes_input_name);
     }
     else if let NetworkResult::Geometry(shape) = shape_val {
       if context.explicit_geo_eval_needed {

@@ -360,6 +360,11 @@ impl NodeTypeRegistry {
     return Some(&node_network.node_type);
   }
 
+  pub fn get_parameter_name(&self, node_type_name: &str, parameter_index: usize) -> String {
+    let node_type = self.get_node_type(node_type_name).unwrap();
+    node_type.parameters[parameter_index].name.clone()
+  }
+
   pub fn add_node_network(&mut self, node_network: NodeNetwork) {
     self.node_networks.insert(node_network.node_type.name.clone(), node_network);
   }

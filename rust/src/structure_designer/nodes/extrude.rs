@@ -37,10 +37,11 @@ pub fn eval_extrude<'a>(
 ) -> NetworkResult {
   //let _timer = Timer::new("eval_extrude");
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
+  let shape_input_name = registry.get_parameter_name(&node.node_type_name, 0);
   let extrude_data = &node.data.as_any_ref().downcast_ref::<ExtrudeData>().unwrap();
 
-  if node.arguments[0].argument_node_ids.is_empty() {
-    return input_missing_error("shape");
+  if node.arguments[0].is_empty() {
+    return input_missing_error(&shape_input_name);
   }
 
   let input_node_id = node.arguments[0].get_node_id().unwrap();
@@ -53,7 +54,7 @@ pub fn eval_extrude<'a>(
   )[0];
 
   if let NetworkResult::Error(_error) = shape_val {
-    return error_in_input("shape");
+    return error_in_input(&shape_input_name);
   }
   if let NetworkResult::Geometry2D(shape) = shape_val {
     let extruded_geometry = if context.explicit_geo_eval_needed {
@@ -86,7 +87,7 @@ pub fn eval_extrude<'a>(
       csg: extruded_geometry,
     });
   } else {
-    return error_in_input("shape");
+    return error_in_input(&shape_input_name);
   }
 }
 

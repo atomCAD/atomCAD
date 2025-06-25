@@ -55,27 +55,30 @@ impl StampData {
 
 pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
+  let crystal_input_name = registry.get_parameter_name(&node.node_type_name, 0);
 
-  if node.arguments[0].argument_node_ids.is_empty() {
-    return input_missing_error("crystal");
+  if node.arguments[0].is_empty() {
+    return input_missing_error(&crystal_input_name);
   }
 
   let input_node_id = node.arguments[0].get_node_id().unwrap();
   let crystal_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
 
   if let NetworkResult::Error(_error) = crystal_val {
-    return error_in_input("crystal");
+    return error_in_input(&crystal_input_name);
   }
 
-  if node.arguments[1].argument_node_ids.is_empty() {
-    return input_missing_error("stamp");
+  let stamp_input_name = registry.get_parameter_name(&node.node_type_name, 1);
+
+  if node.arguments[1].is_empty() {
+    return input_missing_error(&stamp_input_name);
   }
 
   let input_node_id = node.arguments[1].get_node_id().unwrap();
   let stamp_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
 
   if let NetworkResult::Error(_error) = stamp_val {
-    return error_in_input("stamp");
+    return error_in_input(&stamp_input_name);
   }
 
   if let NetworkResult::Atomic(stamp_structure) = stamp_val {

@@ -18,6 +18,10 @@ impl Argument {
   pub fn get_node_id(&self) -> Option<u64> {
     self.argument_node_ids.iter().next().copied()
   }
+
+  pub fn is_empty(&self) -> bool {
+    self.argument_node_ids.is_empty()
+  }
 }
 
 #[derive(Serialize, Deserialize)]

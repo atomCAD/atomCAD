@@ -42,9 +42,11 @@ pub fn eval_diff<'a>(
 ) -> NetworkResult {
   //let _timer = Timer::new("eval_diff");
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
+  let base_input_name = registry.get_parameter_name(&node.node_type_name, 0);
+  let sub_input_name = registry.get_parameter_name(&node.node_type_name, 1);
 
   if node.arguments[0].argument_node_ids.is_empty() {
-    return input_missing_error("base");
+    return input_missing_error(&base_input_name);
   }
 
   let (mut geometry, mut frame_translation) = helper_union(
@@ -56,10 +58,10 @@ pub fn eval_diff<'a>(
   );
 
   if geometry.is_none() {
-    return error_in_input("base");
+    return error_in_input(&base_input_name);
   } 
 
-  if !node.arguments[1].argument_node_ids.is_empty() {
+  if !node.arguments[1].is_empty() {
     let (sub_geometry, sub_frame_translation) = helper_union(
       network_evaluator,
       network_stack,
@@ -69,7 +71,7 @@ pub fn eval_diff<'a>(
     );
   
     if sub_geometry.is_none() {
-      return error_in_input("sub");
+      return error_in_input(&sub_input_name);
     }
 
     geometry = Some(geometry.unwrap().difference(&sub_geometry.unwrap()));
