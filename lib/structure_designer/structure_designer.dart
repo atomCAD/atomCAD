@@ -21,6 +21,9 @@ class StructureDesigner extends StatefulWidget {
 class _StructureDesignerState extends State<StructureDesigner> {
   late StructureDesignerModel graphModel;
 
+  // Whether the division between viewport and node network is vertical (true) or horizontal (false)
+  bool verticalDivision = true;
+
   // GlobalKey to access the NodeNetwork widget state
   final GlobalKey<NodeNetworkState> nodeNetworkKey =
       GlobalKey<NodeNetworkState>();
@@ -72,6 +75,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   MenuItemButton(
                     onPressed: _resetNodeNetworkView,
                     child: const Text('Reset node network view'),
+                  ),
+                  MenuItemButton(
+                    onPressed: _toggleDivisionOrientation,
+                    child: Text(verticalDivision 
+                      ? 'Switch to Horizontal Layout' 
+                      : 'Switch to Vertical Layout'),
                   ),
                 ],
               ),
@@ -144,6 +153,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
               MainContentArea(
                 graphModel: graphModel,
                 nodeNetworkKey: nodeNetworkKey,
+                verticalDivision: verticalDivision,
               ),
             ],
           ),
@@ -201,5 +211,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
     if (state != null) {
       state.updatePanOffsetForCurrentNetwork(forceUpdate: true);
     }
+  }
+  
+  /// Toggle between vertical and horizontal division orientation
+  void _toggleDivisionOrientation() {
+    setState(() {
+      verticalDivision = !verticalDivision;
+    });
   }
 }

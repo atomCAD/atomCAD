@@ -10,9 +10,13 @@ class MainContentArea extends StatelessWidget {
   final StructureDesignerModel graphModel;
   final GlobalKey nodeNetworkKey;
 
+  /// Whether the division between viewport and node network is vertical (true) or horizontal (false)
+  final bool verticalDivision;
+
   const MainContentArea({
     required this.graphModel,
     required this.nodeNetworkKey,
+    this.verticalDivision = true,
     Key? key,
   }) : super(key: key);
 
@@ -20,48 +24,79 @@ class MainContentArea extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: ResizableContainer(
-        direction: Axis.vertical,
+        direction: verticalDivision ? Axis.vertical : Axis.horizontal,
         children: [
-          // 3D Viewport panel - initially 65% of height
+          // Viewport panel - initially 65% of height/width
           ResizableChild(
-            size: ResizableSize.ratio(0.65),
-            // Custom divider that appears below this panel
+            size: ResizableSize.ratio(0.65, min: 100),
+            // Custom divider that appears below/beside this panel
             divider: ResizableDivider(
-              thickness: 8, // Height of the divider
+              thickness: 8,
               color: Colors.grey.shade300,
-              cursor: SystemMouseCursors.resizeRow,
+              cursor: verticalDivision
+                  ? SystemMouseCursors.resizeRow
+                  : SystemMouseCursors.resizeColumn,
             ),
             child: StructureDesignerViewport(graphModel: graphModel),
           ),
-          // Node Network panel - initially 35% of height
+          // Node Network panel - initially 35% of height/width
           ResizableChild(
-            size: ResizableSize.ratio(0.35),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 4,
-                  child:
-                      NodeNetwork(key: nodeNetworkKey, graphModel: graphModel),
-                ),
-                Container(
-                  width: 300,
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      left: BorderSide(
-                        color: Colors.grey,
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: NodeDataWidget(graphModel: graphModel),
-                ),
-              ],
-            ),
+            size: ResizableSize.ratio(0.35, min: verticalDivision ? 100 : 300),
+            child: verticalDivision
+                ? _buildVerticalNetworkPanel()
+                : _buildHorizontalNetworkPanel(),
           ),
         ],
       ),
+    );
+  }
+
+  /// Builds the network panel for vertical layout (side-by-side network and data)
+  Widget _buildVerticalNetworkPanel() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          flex: 4,
+          child: NodeNetwork(key: nodeNetworkKey, graphModel: graphModel),
+        ),
+        _buildNodeDataPanel(isVertical: true),
+      ],
+    );
+  }
+
+  /// Builds the network panel for horizontal layout (stacked network and data)
+  Widget _buildHorizontalNetworkPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          flex: 4,
+          child: NodeNetwork(key: nodeNetworkKey, graphModel: graphModel),
+        ),
+        _buildNodeDataPanel(isVertical: false),
+      ],
+    );
+  }
+
+  /// Builds the node data panel with appropriate decoration based on orientation
+  Widget _buildNodeDataPanel({required bool isVertical}) {
+    return Container(
+      width: isVertical ? 300 : double.infinity,
+      height: isVertical ? double.infinity : 240,
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        border: Border(
+          // Apply different border based on orientation
+          left: isVertical
+              ? const BorderSide(color: Colors.grey, width: 1)
+              : BorderSide.none,
+          top: !isVertical
+              ? const BorderSide(color: Colors.grey, width: 1)
+              : BorderSide.none,
+        ),
+      ),
+      child: NodeDataWidget(graphModel: graphModel),
     );
   }
 }
