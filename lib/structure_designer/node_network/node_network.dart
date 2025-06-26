@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -84,8 +85,11 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Store the current network name to detect changes
   String? _currentNetworkName;
 
-  /// Whether we're currently panning the view
-  bool _isPanning = false;
+  /// Whether we're currently panning with middle mouse button
+  bool _isMiddleMousePanning = false;
+
+  /// Store the last pointer position for middle mouse panning
+  Offset? _lastMiddleMousePosition;
 
   @override
   void initState() {
@@ -210,32 +214,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     focusNode.requestFocus();
   }
 
-  /// Handles the start of a pan gesture
-  void _handlePanStart(DragStartDetails details) {
-    // Only start panning if not clicking on a node
-    // This allows dragging nodes to work separately
-    if (!_isClickOnNode(widget.graphModel, details.localPosition)) {
-      setState(() {
-        _isPanning = true;
-      });
-    }
-  }
-
-  /// Handles the update of a pan gesture
-  void _handlePanUpdate(DragUpdateDetails details) {
-    if (_isPanning) {
-      setState(() {
-        _panOffset += details.delta;
-      });
-    }
-  }
-
-  /// Handles the end of a pan gesture
-  void _handlePanEnd(DragEndDetails details) {
-    setState(() {
-      _isPanning = false;
-    });
-  }
+  // Left-click panning has been replaced by middle mouse button panning
 
   /// Builds the stack children for the node network
   List<Widget> _buildStackChildren(StructureDesignerModel model) {
@@ -251,6 +230,37 @@ class NodeNetworkState extends State<NodeNetwork> {
       ...model.nodeNetworkView!.nodes.entries
           .map((entry) => NodeWidget(node: entry.value, panOffset: _panOffset))
     ];
+  }
+
+  /// Handle pointer down event - check for middle mouse button
+  void _handlePointerDown(PointerDownEvent event) {
+    // Check if middle mouse button (button 2)
+    if (event.buttons == kTertiaryButton) {
+      setState(() {
+        _isMiddleMousePanning = true;
+        _lastMiddleMousePosition = event.position;
+      });
+    }
+  }
+
+  /// Handle pointer move event for middle mouse panning
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (_isMiddleMousePanning && _lastMiddleMousePosition != null) {
+      setState(() {
+        _panOffset += event.position - _lastMiddleMousePosition!;
+        _lastMiddleMousePosition = event.position;
+      });
+    }
+  }
+
+  /// Handle pointer up event to end middle mouse panning
+  void _handlePointerUp(PointerUpEvent event) {
+    if (_isMiddleMousePanning) {
+      setState(() {
+        _isMiddleMousePanning = false;
+        _lastMiddleMousePosition = null;
+      });
+    }
   }
 
   @override
@@ -283,16 +293,17 @@ class NodeNetworkState extends State<NodeNetwork> {
                   focusNode.requestFocus();
                 }
               },
-              child: GestureDetector(
-                onTapDown: _handleTapDown,
-                onSecondaryTapDown: (details) =>
-                    _handleSecondaryTapDown(details, context, model),
-                // Add pan gesture recognizers
-                onPanStart: _handlePanStart,
-                onPanUpdate: _handlePanUpdate,
-                onPanEnd: _handlePanEnd,
-                child: Stack(
-                  children: _buildStackChildren(model),
+              child: Listener(
+                onPointerDown: _handlePointerDown,
+                onPointerMove: _handlePointerMove,
+                onPointerUp: _handlePointerUp,
+                child: GestureDetector(
+                  onTapDown: _handleTapDown,
+                  onSecondaryTapDown: (details) =>
+                      _handleSecondaryTapDown(details, context, model),
+                  child: Stack(
+                    children: _buildStackChildren(model),
+                  ),
                 ),
               ),
             ),
