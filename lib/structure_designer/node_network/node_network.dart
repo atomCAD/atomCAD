@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
-import 'package:flutter_cad/structure_designer/node_network/wire_painter.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 // Node dimensions and layout constants
@@ -31,17 +31,17 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
-/// Wraps the WirePainter to add interaction capabilities
-class WireInteractionLayer extends StatelessWidget {
+/// Wraps the NodeNetworkPainter to add interaction capabilities
+class NodeNetworkInteractionLayer extends StatelessWidget {
   final StructureDesignerModel model;
   final Offset panOffset;
 
-  const WireInteractionLayer(
+  const NodeNetworkInteractionLayer(
       {super.key, required this.model, required this.panOffset});
 
   /// Handles tap on wires for selection
   void _handleWireTapDown(TapDownDetails details) {
-    final painter = WirePainter(model, panOffset: panOffset);
+    final painter = NodeNetworkPainter(model, panOffset: panOffset);
     final hit = painter.findWireAtPosition(details.localPosition);
     if (hit != null) {
       model.setSelectedWire(
@@ -55,7 +55,7 @@ class WireInteractionLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: WirePainter(model, panOffset: panOffset),
+      painter: NodeNetworkPainter(model, panOffset: panOffset),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTapDown: _handleWireTapDown,
@@ -225,7 +225,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     // The Stack will handle all the nodes and wires with appropriate transformations
     return [
       // Wire layer at the bottom
-      WireInteractionLayer(model: model, panOffset: _panOffset),
+      NodeNetworkInteractionLayer(model: model, panOffset: _panOffset),
       // Then all the nodes on top - NodeWidget now handles its own positioning with panOffset
       ...model.nodeNetworkView!.nodes.entries
           .map((entry) => NodeWidget(node: entry.value, panOffset: _panOffset))

@@ -12,17 +12,28 @@ class WireHitResult {
   WireHitResult(this.sourceNodeId, this.destNodeId, this.destParamIndex);
 }
 
-class WirePainter extends CustomPainter {
+// Grid appearance constants
+const double GRID_MAJOR_SPACING = 100.0;
+const double GRID_MINOR_SPACING = 20.0;
+const Color GRID_MAJOR_COLOR = Color(0xFFDDDDDD); // Light grey
+const Color GRID_MINOR_COLOR = Color(0xFFEEEEEE); // Very light grey
+const double GRID_MAJOR_LINE_WIDTH = 1.0;
+const double GRID_MINOR_LINE_WIDTH = 1.0;
+
+class NodeNetworkPainter extends CustomPainter {
   final StructureDesignerModel graphModel;
   final Offset panOffset;
 
-  WirePainter(this.graphModel, {this.panOffset = Offset.zero});
+  NodeNetworkPainter(this.graphModel, {this.panOffset = Offset.zero});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (graphModel.nodeNetworkView == null) {
       return;
     }
+
+    // Draw grid first so it's behind everything else
+    _drawGrid(canvas, size);
 
     Paint paint = Paint()
       ..color = Colors.black
@@ -181,6 +192,67 @@ class WirePainter extends CustomPainter {
     return null;
   }
 
+  /// Draw a grid pattern that respects the pan offset
+  void _drawGrid(Canvas canvas, Size size) {
+    // Calculate grid boundaries based on visible area
+    final Rect visibleRect = Offset.zero & size;
+    
+    // Apply clipping to prevent drawing outside the widget area
+    canvas.clipRect(visibleRect);
+
+    // Calculate the grid lines starting points based on pan offset
+    // Ensure grid appears fixed to the world, not to the view
+    double startX =
+        ((visibleRect.left - panOffset.dx) / GRID_MINOR_SPACING).floor() *
+                GRID_MINOR_SPACING +
+            panOffset.dx;
+    double startY =
+        ((visibleRect.top - panOffset.dy) / GRID_MINOR_SPACING).floor() *
+                GRID_MINOR_SPACING +
+            panOffset.dy;
+    double endX = visibleRect.right;
+    double endY = visibleRect.bottom;
+
+    // Create paints for major and minor grid lines
+    final minorPaint = Paint()
+      ..color = GRID_MINOR_COLOR
+      ..strokeWidth = GRID_MINOR_LINE_WIDTH
+      ..style = PaintingStyle.stroke;
+
+    final majorPaint = Paint()
+      ..color = GRID_MAJOR_COLOR
+      ..strokeWidth = GRID_MAJOR_LINE_WIDTH
+      ..style = PaintingStyle.stroke;
+
+    // Draw vertical grid lines
+    for (double x = startX; x <= endX; x += GRID_MINOR_SPACING) {
+      // Determine if this is a major grid line
+      bool isMajor = (((x - panOffset.dx) / GRID_MAJOR_SPACING).round() *
+                      GRID_MAJOR_SPACING +
+                  panOffset.dx -
+                  x)
+              .abs() <
+          0.5;
+
+      canvas.drawLine(Offset(x, visibleRect.top), Offset(x, visibleRect.bottom),
+          isMajor ? majorPaint : minorPaint);
+    }
+
+    // Draw horizontal grid lines
+    for (double y = startY; y <= endY; y += GRID_MINOR_SPACING) {
+      // Determine if this is a major grid line
+      bool isMajor = (((y - panOffset.dy) / GRID_MAJOR_SPACING).round() *
+                      GRID_MAJOR_SPACING +
+                  panOffset.dy -
+                  y)
+              .abs() <
+          0.5;
+
+      canvas.drawLine(Offset(visibleRect.left, y), Offset(visibleRect.right, y),
+          isMajor ? majorPaint : minorPaint);
+    }
+  }
+
   @override
-  bool shouldRepaint(WirePainter oldDelegate) => true;
+  bool shouldRepaint(NodeNetworkPainter oldDelegate) => true;
 }
