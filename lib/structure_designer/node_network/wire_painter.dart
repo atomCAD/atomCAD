@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-import 'package:flutter_cad/structure_designer/node_widget.dart';
-import 'package:flutter_cad/structure_designer/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 
 class WireHitResult {
   final BigInt sourceNodeId;
@@ -79,7 +78,7 @@ class WirePainter extends CustomPainter {
       final destVertOffset = NODE_VERT_WIRE_OFFSET +
           (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
       return (
-        APIVec2ToOffset(destNode!.position) + 
+        APIVec2ToOffset(destNode!.position) +
             Offset(0.0, destVertOffset) +
             panOffset,
         destNode.inputPins[pinIndex].dataType

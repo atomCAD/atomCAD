@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cad/structure_designer/add_node_popup.dart';
+import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-import 'package:flutter_cad/structure_designer/node_widget.dart';
-import 'package:flutter_cad/structure_designer/wire_painter.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
+import 'package:flutter_cad/structure_designer/node_network/wire_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 // Node dimensions and layout constants
@@ -80,7 +80,7 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Current pan offset for the network view
   Offset _panOffset = Offset.zero;
-  
+
   /// Store the current network name to detect changes
   String? _currentNetworkName;
 
@@ -101,22 +101,23 @@ class NodeNetworkState extends State<NodeNetwork> {
     focusNode.dispose();
     super.dispose();
   }
-  
+
   /// Calculate an appropriate pan offset based on node positions
   /// This is called whenever the active node network changes or when manually triggered
   /// via the View menu
-  /// 
+  ///
   /// If forceUpdate is true, it will recalculate the pan offset even if the network hasn't changed
   void updatePanOffsetForCurrentNetwork({bool forceUpdate = false}) {
     final model = widget.graphModel;
     if (model.nodeNetworkView == null) return;
-    
+
     // Skip if the network hasn't changed and we're not forcing an update
-    if (!forceUpdate && _currentNetworkName == model.nodeNetworkView!.name) return;
-    
+    if (!forceUpdate && _currentNetworkName == model.nodeNetworkView!.name)
+      return;
+
     // Update the current network name
     _currentNetworkName = model.nodeNetworkView!.name;
-    
+
     // If there are no nodes, center the view
     if (model.nodeNetworkView!.nodes.isEmpty) {
       setState(() {
@@ -124,16 +125,16 @@ class NodeNetworkState extends State<NodeNetwork> {
       });
       return;
     }
-    
+
     // Find the minimum x and y coordinates
     double minX = double.infinity;
     double minY = double.infinity;
-    
+
     for (final node in model.nodeNetworkView!.nodes.values) {
       if (node.position.x < minX) minX = node.position.x;
       if (node.position.y < minY) minY = node.position.y;
     }
-    
+
     // Set the pan offset to position the top-left node with a small margin
     const margin = 20.0;
     setState(() {
@@ -169,19 +170,18 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Accounts for the current pan offset
   NodeView? getNodeAtPosition(StructureDesignerModel model, Offset position) {
     if (model.nodeNetworkView == null) return null;
-    
+
     // Adjust position for pan offset
     final adjustedPosition = position - _panOffset;
-    
+
     for (final node in model.nodeNetworkView!.nodes.values) {
       final nodeRect = Rect.fromLTWH(
-        node.position.x,
-        node.position.y,
-        NODE_WIDTH,
-        NODE_VERT_WIRE_OFFSET +
-            (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM)
-      );
-      
+          node.position.x,
+          node.position.y,
+          NODE_WIDTH,
+          NODE_VERT_WIRE_OFFSET +
+              (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM));
+
       if (nodeRect.contains(adjustedPosition)) {
         return node;
       }
@@ -260,7 +260,7 @@ class NodeNetworkState extends State<NodeNetwork> {
       child: Consumer<StructureDesignerModel>(
         builder: (context, model, child) {
           // Check if the node network has changed and update pan offset if needed
-          if (model.nodeNetworkView != null && 
+          if (model.nodeNetworkView != null &&
               _currentNetworkName != model.nodeNetworkView!.name) {
             // Use post-frame callback to avoid setState during build
             WidgetsBinding.instance.addPostFrameCallback((_) {

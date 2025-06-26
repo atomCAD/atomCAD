@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-import 'package:flutter_cad/structure_designer/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 
 // Pin appearance constants
 const double PIN_SIZE = 14.0;
@@ -122,7 +122,8 @@ class NodeWidget extends StatelessWidget {
   final NodeView node;
   final Offset panOffset;
 
-  NodeWidget({required this.node, required this.panOffset}) : super(key: ValueKey(node.id));
+  NodeWidget({required this.node, required this.panOffset})
+      : super(key: ValueKey(node.id));
 
   @override
   Widget build(BuildContext context) {

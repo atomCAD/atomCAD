@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_resizable_container/flutter_resizable_container.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart';
-import 'package:flutter_cad/structure_designer/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list_panel.dart';
@@ -11,6 +10,7 @@ import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_cad/structure_designer/geometry_visualization_widget.dart';
 import 'package:flutter_cad/structure_designer/preferences_window.dart';
+import 'package:flutter_cad/common/menu_widget.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -18,41 +18,6 @@ class StructureDesigner extends StatefulWidget {
 
   @override
   State<StructureDesigner> createState() => _StructureDesignerState();
-}
-
-/// A reusable menu widget for the Structure Designer menu bar
-class StructureDesignerMenuWidget extends StatelessWidget {
-  final String label;
-  final List<Widget> menuItems;
-
-  const StructureDesignerMenuWidget({
-    super.key,
-    required this.label,
-    required this.menuItems,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return MenuAnchor(
-      builder: (context, controller, child) {
-        return TextButton(
-          onPressed: () {
-            if (controller.isOpen) {
-              controller.close();
-            } else {
-              controller.open();
-            }
-          },
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.black87,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-          ),
-          child: Text(label),
-        );
-      },
-      menuChildren: menuItems,
-    );
-  }
 }
 
 class _StructureDesignerState extends State<StructureDesigner> {
@@ -88,7 +53,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
           child: Row(
             children: [
               // File Menu
-              StructureDesignerMenuWidget(
+              MenuWidget(
                 label: 'File',
                 menuItems: [
                   MenuItemButton(
@@ -103,7 +68,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
               ),
 
               // View Menu
-              StructureDesignerMenuWidget(
+              MenuWidget(
                 label: 'View',
                 menuItems: [
                   MenuItemButton(
@@ -114,7 +79,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
               ),
 
               // Edit Menu
-              StructureDesignerMenuWidget(
+              MenuWidget(
                 label: 'Edit',
                 menuItems: [
                   MenuItemButton(
@@ -187,7 +152,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                       size: ResizableSize.ratio(0.65),
                       // Custom divider that appears below this panel
                       divider: ResizableDivider(
-                        thickness: 8,  // Height of the divider
+                        thickness: 8, // Height of the divider
                         color: Colors.grey.shade300,
                         cursor: SystemMouseCursors.resizeRow,
                       ),
@@ -201,7 +166,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
                         children: [
                           Expanded(
                             flex: 4,
-                            child: NodeNetwork(key: nodeNetworkKey, graphModel: graphModel),
+                            child: NodeNetwork(
+                                key: nodeNetworkKey, graphModel: graphModel),
                           ),
                           Container(
                             width: 300,
