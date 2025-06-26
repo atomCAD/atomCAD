@@ -20,6 +20,7 @@ use super::super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::edit_atom_data_serialization::edit_atom_data_to_serializable;
 use super::edit_atom_data_serialization::serializable_to_edit_atom_data;
 use super::edit_atom_data_serialization::SerializableEditAtomData;
+use super::super::node_network::NodeDisplayType;
 
 // The current version of the serialization format
 const SERIALIZATION_VERSION: u32 = 1;
@@ -60,7 +61,7 @@ pub struct SerializableNodeNetwork {
     pub node_type: SerializableNodeType,
     pub nodes: Vec<SerializableNode>, // Store as vec instead of HashMap
     pub return_node_id: Option<u64>,
-    pub displayed_node_ids: Vec<u64>, // Store as vec instead of HashSet
+    pub displayed_node_ids: Vec<(u64, NodeDisplayType)>, // Store as vec instead of HashSet
 }
 
 /// Container for serializing all node networks in the NodeTypeRegistry
@@ -266,8 +267,8 @@ pub fn node_network_to_serializable(network: &NodeNetwork) -> io::Result<Seriali
         serializable_nodes.push(serializable_node);
     }
     
-    // Convert displayed_node_ids from HashSet to Vec
-    let displayed_node_ids: Vec<u64> = network.displayed_node_ids.iter().cloned().collect();
+    // Convert displayed_node_ids from HashMap to Vec of tuples
+    let displayed_node_ids: Vec<(u64, NodeDisplayType)> = network.displayed_node_ids.iter().map(|(key, value)| (*key, *value)).collect();
     
     // Create a serializable version of the node type
     let serializable_node_type = node_type_to_serializable(&network.node_type);
@@ -297,8 +298,8 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork) -> i
     network.next_node_id = serializable.next_node_id;
     network.return_node_id = serializable.return_node_id;
     
-    // Convert displayed_node_ids from Vec to HashSet
-    network.displayed_node_ids = serializable.displayed_node_ids.iter().cloned().collect();
+    // Convert displayed_node_ids from Vec of tuples to HashMap without taking ownership
+    network.displayed_node_ids = serializable.displayed_node_ids.iter().map(|(id, display_type)| (*id, *display_type)).collect();
     
     // Process each node
     for serializable_node in &serializable.nodes {

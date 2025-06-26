@@ -6,6 +6,12 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeDisplayType {
+  Normal,
+  Ghost,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
@@ -51,7 +57,7 @@ pub struct NodeNetwork {
   pub node_type: NodeType, // This is the node type when this node network is used as a node in another network. (analog to a function header in programming)
   pub nodes: HashMap<u64, Node>,
   pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
-  pub displayed_node_ids: HashSet<u64>, // Set of nodes that are currently displayed
+  pub displayed_node_ids: HashMap<u64, NodeDisplayType>, // Map of nodes that are currently displayed with their display type (Normal or Ghost)
   pub selected_node_id: Option<u64>, // Currently selected node, if any
   pub selected_wire: Option<Wire>, // Currently selected wire
 }
@@ -66,7 +72,7 @@ impl NodeNetwork {
       node_type,
       nodes: HashMap::new(),
       return_node_id: None,
-      displayed_node_ids: HashSet::new(),
+      displayed_node_ids: HashMap::new(),
       selected_node_id: None,
       selected_wire: None,
     };
@@ -128,11 +134,28 @@ impl NodeNetwork {
   pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
     if self.nodes.contains_key(&node_id) {
       if is_displayed {
-        self.displayed_node_ids.insert(node_id);
+        self.displayed_node_ids.insert(node_id, NodeDisplayType::Normal);
       } else {
         self.displayed_node_ids.remove(&node_id);
       }
     }
+  }
+  
+  /// Sets a node to be displayed with the specified display type
+  pub fn set_node_display_type(&mut self, node_id: u64, display_type: NodeDisplayType) {
+    if self.nodes.contains_key(&node_id) {
+      self.displayed_node_ids.insert(node_id, display_type);
+    }
+  }
+  
+  /// Check if a node is currently displayed
+  pub fn is_node_displayed(&self, node_id: u64) -> bool {
+    self.displayed_node_ids.contains_key(&node_id)
+  }
+  
+  /// Get the display type of a node if it is displayed
+  pub fn get_node_display_type(&self, node_id: u64) -> Option<NodeDisplayType> {
+    self.displayed_node_ids.get(&node_id).copied()
   }
 
   /// Selects a node and clears any existing wire selection.

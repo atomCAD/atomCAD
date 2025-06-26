@@ -104,7 +104,7 @@ impl StructureDesigner {
     };
     
     // Check if the selected node is displayed
-    if !network.displayed_node_ids.contains(&selected_node_id) {
+    if !network.is_node_displayed(selected_node_id) {
       return false;
     }
     
@@ -134,10 +134,11 @@ impl StructureDesigner {
         Some(network) => network,
         None => return scene,
       };
-      for node_id in &network.displayed_node_ids {
+      for node_entry in &network.displayed_node_ids {
         scene.merge(self.network_evaluator.generate_scene(
           node_network_name,
-          *node_id,
+          *node_entry.0,
+          *node_entry.1,
           &self.node_type_registry,
           &self.preferences.geometry_visualization_preferences,
         ));

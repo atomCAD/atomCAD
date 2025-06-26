@@ -545,7 +545,7 @@ impl Renderer {
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
         }
 
-        println!("refresh took: {:?}", start_time.elapsed());
+        //println!("refresh took: {:?}", start_time.elapsed());
     }
 
     pub fn refresh_background(&mut self) {

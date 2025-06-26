@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use glam::f64::DVec3;
+use crate::structure_designer::node_network::NodeDisplayType;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type::DataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -117,8 +118,8 @@ impl NetworkEvaluator {
     
     let mut min_distance: Option<f64> = None;
     
-    for node_id in &network.displayed_node_ids {
-      let node = match network.nodes.get(&node_id) {
+    for node_entry in &network.displayed_node_ids {
+      let node = match network.nodes.get(&node_entry.0) {
         Some(node) => node,
         None => return None,
       };
@@ -129,7 +130,7 @@ impl NetworkEvaluator {
       }
       
       // Raytrace the current geometry node
-      if let Some(distance) = self.raytrace_geometry_node(network, *node_id, registry, ray_origin, ray_direction) {
+      if let Some(distance) = self.raytrace_geometry_node(network, *node_entry.0, registry, ray_origin, ray_direction) {
         // Update minimum distance if this is the first hit or closer than previous hits
         min_distance = match min_distance {
           None => Some(distance),
@@ -193,10 +194,11 @@ impl NetworkEvaluator {
     &self,
     network_name: &str,
     node_id: u64,
+    display_type: NodeDisplayType,
     registry: &NodeTypeRegistry,
     geometry_visualization_preferences: &GeometryVisualizationPreferences
   ) -> StructureDesignerScene {
-    let _timer = Timer::new("generate_scene");
+    //let _timer = Timer::new("generate_scene");
 
     let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
