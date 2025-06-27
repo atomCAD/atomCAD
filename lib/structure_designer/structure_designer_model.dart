@@ -59,8 +59,7 @@ class StructureDesignerModel extends ChangeNotifier {
   StructureDesignerModel() {}
 
   void init() {
-    nodeNetworkView = structure_designer_api.getNodeNetworkView();
-    nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+    refreshFromKernel();
   }
 
   void setCameraTransform(APITransform transform) {

@@ -22,7 +22,6 @@ class PreferencesWindow extends StatefulWidget {
 class _PreferencesWindowState extends State<PreferencesWindow> {
   // Local copy of preferences that we'll modify
   late StructureDesignerPreferences _preferences;
-  late GeometryVisualizationPreferences _geometryVisualizationPreferences;
 
   @override
   void initState() {
@@ -34,32 +33,11 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
     // Make a copy of the current preferences
     final currentPreferences = widget.model.preferences;
     if (currentPreferences != null) {
-      _preferences = currentPreferences;
-      _geometryVisualizationPreferences = GeometryVisualizationPreferences(
-        geometryVisualization: currentPreferences
-            .geometryVisualizationPreferences.geometryVisualization,
-        wireframeGeometry: currentPreferences
-            .geometryVisualizationPreferences.wireframeGeometry,
-        samplesPerUnitCell: currentPreferences
-            .geometryVisualizationPreferences.samplesPerUnitCell,
-        sharpnessAngleThresholdDegree: currentPreferences
-            .geometryVisualizationPreferences.sharpnessAngleThresholdDegree,
-        meshSmoothing:
-            currentPreferences.geometryVisualizationPreferences.meshSmoothing,
-      );
+      // Clone the existing preferences
+      _preferences = currentPreferences.cloneSelf();
     } else {
       // If no preferences exist yet, create default ones
-      _geometryVisualizationPreferences = GeometryVisualizationPreferences(
-        geometryVisualization: GeometryVisualization.surfaceSplatting,
-        wireframeGeometry: false,
-        samplesPerUnitCell: 20,
-        sharpnessAngleThresholdDegree: 30.0,
-        meshSmoothing: MeshSmoothing.smooth,
-      );
-
-      _preferences = StructureDesignerPreferences(
-        geometryVisualizationPreferences: _geometryVisualizationPreferences,
-      );
+      _preferences = StructureDesignerPreferences();
     }
   }
 
@@ -68,29 +46,29 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
     setState(() {
       switch (value) {
         case 0: // Surface splatting
-          _geometryVisualizationPreferences.geometryVisualization =
+          _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.surfaceSplatting;
-          _geometryVisualizationPreferences.wireframeGeometry = false;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry = false;
           break;
         case 1: // Solid (Explicit Mesh)
-          _geometryVisualizationPreferences.geometryVisualization =
+          _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.explicitMesh;
-          _geometryVisualizationPreferences.wireframeGeometry = false;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry = false;
           break;
         case 2: // Wireframe (Explicit Mesh)
-          _geometryVisualizationPreferences.geometryVisualization =
+          _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.explicitMesh;
-          _geometryVisualizationPreferences.wireframeGeometry = true;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry = true;
           break;
         case 3: // Solid (Dual Contouring)
-          _geometryVisualizationPreferences.geometryVisualization =
+          _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.dualContouring;
-          _geometryVisualizationPreferences.wireframeGeometry = false;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry = false;
           break;
         case 4: // Wireframe (Dual Contouring)
-          _geometryVisualizationPreferences.geometryVisualization =
+          _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.dualContouring;
-          _geometryVisualizationPreferences.wireframeGeometry = true;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry = true;
           break;
       }
     });
@@ -99,24 +77,23 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
   // Helper to get the selected visualization method index
   int _getVisualizationMethodIndex() {
-    if (_geometryVisualizationPreferences.geometryVisualization ==
+    if (_preferences.geometryVisualizationPreferences.geometryVisualization ==
         GeometryVisualization.surfaceSplatting) {
       return 0;
-    } else if (_geometryVisualizationPreferences.geometryVisualization ==
+    } else if (_preferences.geometryVisualizationPreferences.geometryVisualization ==
         GeometryVisualization.explicitMesh) {
-      return _geometryVisualizationPreferences.wireframeGeometry ? 2 : 1;
-    } else if (_geometryVisualizationPreferences.geometryVisualization ==
+      return _preferences.geometryVisualizationPreferences.wireframeGeometry ? 2 : 1;
+    } else if (_preferences.geometryVisualizationPreferences.geometryVisualization ==
         GeometryVisualization.dualContouring) {
-      return _geometryVisualizationPreferences.wireframeGeometry ? 4 : 3;
+      return _preferences.geometryVisualizationPreferences.wireframeGeometry ? 4 : 3;
     }
     return 0; // Default
   }
 
   // Apply preferences immediately
   void _applyPreferences() {
-    final updatedPreferences = StructureDesignerPreferences(
-      geometryVisualizationPreferences: _geometryVisualizationPreferences,
-    );
+    // Clone our local preferences before sending to the model
+    final updatedPreferences = _preferences.cloneSelf();
     widget.model.setPreferences(updatedPreferences);
   }
 
@@ -229,12 +206,10 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           // Samples per unit cell
                           IntInput(
                             label: 'Samples per unit cell',
-                            value: _geometryVisualizationPreferences
-                                .samplesPerUnitCell,
+                            value: _preferences.geometryVisualizationPreferences.samplesPerUnitCell,
                             onChanged: (value) {
                               setState(() {
-                                _geometryVisualizationPreferences
-                                    .samplesPerUnitCell = value;
+                                _preferences.geometryVisualizationPreferences.samplesPerUnitCell = value;
                               });
                               _applyPreferences();
                             },
@@ -244,11 +219,11 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           // Sharpness threshold
                           FloatInput(
                             label: 'Sharpness threshold (degree)',
-                            value: _geometryVisualizationPreferences
+                            value: _preferences.geometryVisualizationPreferences
                                 .sharpnessAngleThresholdDegree,
                             onChanged: (value) {
                               setState(() {
-                                _geometryVisualizationPreferences
+                                _preferences.geometryVisualizationPreferences
                                     .sharpnessAngleThresholdDegree = value;
                               });
                               _applyPreferences();
@@ -268,7 +243,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                   contentPadding:
                                       AppSpacing.fieldContentPadding,
                                 ),
-                                value: _geometryVisualizationPreferences
+                                value: _preferences.geometryVisualizationPreferences
                                     .meshSmoothing,
                                 items: const [
                                   DropdownMenuItem(
@@ -287,7 +262,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() {
-                                      _geometryVisualizationPreferences
+                                      _preferences.geometryVisualizationPreferences
                                           .meshSmoothing = value;
                                     });
                                     _applyPreferences();

@@ -494,6 +494,17 @@ impl StructureDesigner {
   }
   
   // -------------------------------------------------------------------------------------------------------------------------
+  // --- Preferences management                                                                                         ---
+  // -------------------------------------------------------------------------------------------------------------------------
+
+  /// Sets the preferences for the structure designer and applies necessary updates
+  pub fn set_preferences(&mut self, preferences: StructureDesignerPreferences) {
+    // TODO: carefully examine what has changed becuse that determines whether to do expensive
+    // refresh operations
+    self.preferences = preferences;
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------------
   // --- Gadget delegation methods                                                                                        ---
   // -------------------------------------------------------------------------------------------------------------------------
 

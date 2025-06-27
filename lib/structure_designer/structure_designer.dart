@@ -3,6 +3,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/main_content_area.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list_panel.dart';
+import 'package:flutter_cad/structure_designer/node_display_widget.dart';
 import 'package:flutter_cad/structure_designer/camera_control_widget.dart';
 import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
@@ -78,9 +79,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   ),
                   MenuItemButton(
                     onPressed: _toggleDivisionOrientation,
-                    child: Text(verticalDivision 
-                      ? 'Switch to Horizontal Layout' 
-                      : 'Switch to Vertical Layout'),
+                    child: Text(verticalDivision
+                        ? 'Switch to Horizontal Layout'
+                        : 'Switch to Vertical Layout'),
                   ),
                 ],
               ),
@@ -115,13 +116,22 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 ),
                 child: Column(
                   children: [
-                    // Geometry Visualization section
+                    // Display settings section
                     Section(
-                      title: 'Geometry',
+                      title: 'Display',
                       content: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8.0, vertical: 4.0),
-                        child: GeometryVisualizationWidget(model: graphModel),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Geometry visualization widget (left aligned)
+                            GeometryVisualizationWidget(model: graphModel),
+                            
+                            // Node display widget (right aligned)
+                            NodeDisplayWidget(model: graphModel),
+                          ],
+                        ),
                       ),
                       expand: false,
                     ),
@@ -212,7 +222,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       state.updatePanOffsetForCurrentNetwork(forceUpdate: true);
     }
   }
-  
+
   /// Toggle between vertical and horizontal division orientation
   void _toggleDivisionOrientation() {
     setState(() {

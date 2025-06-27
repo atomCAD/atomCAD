@@ -59,6 +59,7 @@ pub struct StructureDesignerPreferences {
 }
 
 impl StructureDesignerPreferences {
+  #[flutter_rust_bridge::frb(sync)]
   pub fn new() -> Self {
     Self {
       geometry_visualization_preferences: GeometryVisualizationPreferences {
@@ -73,4 +74,9 @@ impl StructureDesignerPreferences {
       },
     }
   }
+
+  #[flutter_rust_bridge::frb(sync)]
+  pub fn clone_self(&self) -> StructureDesignerPreferences {
+    self.clone()
+  }  
 }

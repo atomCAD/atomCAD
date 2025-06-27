@@ -26,7 +26,7 @@ class GeometryVisualizationWidget extends StatelessWidget {
               _buildIconButton(
                 context,
                 Icons.blur_on, // Using blur_on to represent point cloud
-                'Surface Splatting',
+                'Geometry visualization: Surface Splatting',
                 isSelected: model.preferences?.geometryVisualizationPreferences
                         .geometryVisualization ==
                     GeometryVisualization.surfaceSplatting,
@@ -40,13 +40,11 @@ class GeometryVisualizationWidget extends StatelessWidget {
                 },
               ),
 
-              const SizedBox(width: 8),
-
               // Dual Contouring with Wireframe Button
               _buildIconButton(
                 context,
                 Icons.grid_3x3, // Using grid to represent wireframe
-                'Wireframe (explicit mesh)',
+                'Geometry visualization: Wireframe (explicit mesh)',
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
                         GeometryVisualization.explicitMesh &&
@@ -63,13 +61,11 @@ class GeometryVisualizationWidget extends StatelessWidget {
                 },
               ),
 
-              const SizedBox(width: 8),
-
               // Dual Contouring without Wireframe Button (solid)
               _buildIconButton(
                 context,
                 Icons.view_in_ar, // Using 3D object icon for solid
-                'Solid (explicit mesh)',
+                'Geometry visualization: Solid (explicit mesh)',
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
                         GeometryVisualization.explicitMesh &&
@@ -103,7 +99,7 @@ class GeometryVisualizationWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(4.0),
           onTap: onPressed,
           child: Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(2.0),
             child: Icon(
               icon,
               size: 20,

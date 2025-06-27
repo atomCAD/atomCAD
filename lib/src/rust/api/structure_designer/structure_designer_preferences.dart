@@ -94,14 +94,17 @@ class StructureDesignerPreferences {
   final GeometryVisualizationPreferences geometryVisualizationPreferences;
   final NodeDisplayPreferences nodeDisplayPreferences;
 
-  const StructureDesignerPreferences({
+  const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
     required this.nodeDisplayPreferences,
   });
 
-  // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
-  static Future<StructureDesignerPreferences> newInstance() => RustLib
-      .instance.api
+  StructureDesignerPreferences cloneSelf() => RustLib.instance.api
+          .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelf(
+        that: this,
+      );
+
+  factory StructureDesignerPreferences() => RustLib.instance.api
       .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew();
 
   @override

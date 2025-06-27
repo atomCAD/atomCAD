@@ -844,7 +844,7 @@ pub fn get_structure_designer_preferences() -> Option<StructureDesignerPreferenc
 pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferences) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
-      cad_instance.structure_designer.preferences = preferences;
+      cad_instance.structure_designer.set_preferences(preferences);
       refresh_renderer(cad_instance, false);
     });
   }

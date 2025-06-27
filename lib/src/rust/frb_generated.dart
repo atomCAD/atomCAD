@@ -78,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -1577912680;
+  int get rustContentHash => 616556907;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -393,7 +393,11 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiCommonApiSetViewportSize(
       {required int width, required int height});
 
-  Future<StructureDesignerPreferences>
+  StructureDesignerPreferences
+      crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelf(
+          {required StructureDesignerPreferences that});
+
+  StructureDesignerPreferences
       crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew();
 
   bool crateApiCommonApiSyncGadgetData();
@@ -3198,13 +3202,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<StructureDesignerPreferences>
-      crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew() {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
+  StructureDesignerPreferences
+      crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelf(
+          {required StructureDesignerPreferences that}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 107, port: port_);
+        sse_encode_box_autoadd_structure_designer_preferences(that, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 107)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_structure_designer_preferences,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelfConstMeta,
+      argValues: [that],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelfConstMeta =>
+          const TaskConstMeta(
+            debugName: "structure_designer_preferences_clone_self",
+            argNames: ["that"],
+          );
+
+  @override
+  StructureDesignerPreferences
+      crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew() {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 108)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_structure_designer_preferences,
@@ -3229,7 +3260,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 108)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 109)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -3254,7 +3285,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_transform(absTransform, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 109)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 110)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3282,7 +3313,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(axisIndex, serializer);
         sse_encode_f_64(translation, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 110)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 111)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -4214,7 +4245,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return StructureDesignerPreferences(
+    return StructureDesignerPreferences.raw(
       geometryVisualizationPreferences:
           dco_decode_geometry_visualization_preferences(arr[0]),
       nodeDisplayPreferences: dco_decode_node_display_preferences(arr[1]),
@@ -5352,7 +5383,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_geometry_visualization_preferences(deserializer);
     var var_nodeDisplayPreferences =
         sse_decode_node_display_preferences(deserializer);
-    return StructureDesignerPreferences(
+    return StructureDesignerPreferences.raw(
         geometryVisualizationPreferences: var_geometryVisualizationPreferences,
         nodeDisplayPreferences: var_nodeDisplayPreferences);
   }
