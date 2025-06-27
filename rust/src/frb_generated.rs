@@ -4099,6 +4099,31 @@ impl SseDecode for crate::api::structure_designer::structure_designer_preference
     }
 }
 
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy::Manual,
+1 => crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy::PreferSelected,
+2 => crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy::PreferFrontier,
+            _ => unreachable!("Invalid variant for NodeDisplayPolicy: {}", inner),
+        };
+    }
+}
+
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_displayPolicy = <crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences{display_policy: var_displayPolicy};
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::NodeNetworkView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4543,7 +4568,8 @@ impl SseDecode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_geometryVisualizationPreferences = <crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences{geometry_visualization_preferences: var_geometryVisualizationPreferences};
+        let mut var_nodeDisplayPreferences = <crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences{geometry_visualization_preferences: var_geometryVisualizationPreferences, node_display_preferences: var_nodeDisplayPreferences};
     }
 }
 
@@ -5573,6 +5599,58 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Manual => 0.into_dart(),
+            Self::PreferSelected => 1.into_dart(),
+            Self::PreferFrontier => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy,
+    > for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [self.display_policy.into_into_dart().into_dart()].into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences,
+    > for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences
+    {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::NodeNetworkView
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -5684,10 +5762,12 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self
-            .geometry_visualization_preferences
-            .into_into_dart()
-            .into_dart()]
+        [
+            self.geometry_visualization_preferences
+                .into_into_dart()
+                .into_dart(),
+            self.node_display_preferences.into_into_dart().into_dart(),
+        ]
         .into_dart()
     }
 }
@@ -6214,6 +6294,27 @@ crate::api::structure_designer::structure_designer_preferences::MeshSmoothing::S
     }
 }
 
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy::Manual => { 0 }
+crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy::PreferSelected => { 1 }
+crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy::PreferFrontier => { 2 }
+ _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::structure_designer::structure_designer_preferences::NodeDisplayPolicy>::sse_encode(self.display_policy, serializer);
+    }
+}
+
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::NodeNetworkView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6607,6 +6708,7 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences>::sse_encode(self.geometry_visualization_preferences, serializer);
+        <crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences>::sse_encode(self.node_display_preferences, serializer);
     }
 }
 

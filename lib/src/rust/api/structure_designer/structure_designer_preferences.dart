@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`
 
 enum GeometryVisualization {
   surfaceSplatting,
@@ -65,11 +65,38 @@ enum MeshSmoothing {
   ;
 }
 
+enum NodeDisplayPolicy {
+  manual,
+  preferSelected,
+  preferFrontier,
+  ;
+}
+
+class NodeDisplayPreferences {
+  NodeDisplayPolicy displayPolicy;
+
+  NodeDisplayPreferences({
+    required this.displayPolicy,
+  });
+
+  @override
+  int get hashCode => displayPolicy.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NodeDisplayPreferences &&
+          runtimeType == other.runtimeType &&
+          displayPolicy == other.displayPolicy;
+}
+
 class StructureDesignerPreferences {
   final GeometryVisualizationPreferences geometryVisualizationPreferences;
+  final NodeDisplayPreferences nodeDisplayPreferences;
 
   const StructureDesignerPreferences({
     required this.geometryVisualizationPreferences,
+    required this.nodeDisplayPreferences,
   });
 
   // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
@@ -78,7 +105,9 @@ class StructureDesignerPreferences {
       .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew();
 
   @override
-  int get hashCode => geometryVisualizationPreferences.hashCode;
+  int get hashCode =>
+      geometryVisualizationPreferences.hashCode ^
+      nodeDisplayPreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -86,5 +115,6 @@ class StructureDesignerPreferences {
       other is StructureDesignerPreferences &&
           runtimeType == other.runtimeType &&
           geometryVisualizationPreferences ==
-              other.geometryVisualizationPreferences;
+              other.geometryVisualizationPreferences &&
+          nodeDisplayPreferences == other.nodeDisplayPreferences;
 }

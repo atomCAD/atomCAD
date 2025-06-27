@@ -3952,6 +3952,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NodeDisplayPolicy dco_decode_node_display_policy(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return NodeDisplayPolicy.values[raw as int];
+  }
+
+  @protected
+  NodeDisplayPreferences dco_decode_node_display_preferences(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return NodeDisplayPreferences(
+      displayPolicy: dco_decode_node_display_policy(arr[0]),
+    );
+  }
+
+  @protected
   NodeNetworkView dco_decode_node_network_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -4195,11 +4212,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return StructureDesignerPreferences(
       geometryVisualizationPreferences:
           dco_decode_geometry_visualization_preferences(arr[0]),
+      nodeDisplayPreferences: dco_decode_node_display_preferences(arr[1]),
     );
   }
 
@@ -4923,6 +4941,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NodeDisplayPolicy sse_decode_node_display_policy(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return NodeDisplayPolicy.values[inner];
+  }
+
+  @protected
+  NodeDisplayPreferences sse_decode_node_display_preferences(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_displayPolicy = sse_decode_node_display_policy(deserializer);
+    return NodeDisplayPreferences(displayPolicy: var_displayPolicy);
+  }
+
+  @protected
   NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
@@ -5316,8 +5350,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_geometryVisualizationPreferences =
         sse_decode_geometry_visualization_preferences(deserializer);
+    var var_nodeDisplayPreferences =
+        sse_decode_node_display_preferences(deserializer);
     return StructureDesignerPreferences(
-        geometryVisualizationPreferences: var_geometryVisualizationPreferences);
+        geometryVisualizationPreferences: var_geometryVisualizationPreferences,
+        nodeDisplayPreferences: var_nodeDisplayPreferences);
   }
 
   @protected
@@ -5950,6 +5987,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_node_display_policy(
+      NodeDisplayPolicy self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_node_display_preferences(
+      NodeDisplayPreferences self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_node_display_policy(self.displayPolicy, serializer);
+  }
+
+  @protected
   void sse_encode_node_network_view(
       NodeNetworkView self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6298,6 +6349,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_geometry_visualization_preferences(
         self.geometryVisualizationPreferences, serializer);
+    sse_encode_node_display_preferences(
+        self.nodeDisplayPreferences, serializer);
   }
 
   @protected

@@ -9,3 +9,5 @@ pub mod evaluator;
 pub mod node_network_gadget;
 pub mod structure_designer_scene;
 pub mod serialization;
+pub mod node_display_policy_resolver;
+

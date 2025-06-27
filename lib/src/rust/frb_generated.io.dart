@@ -257,6 +257,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MeshSmoothing dco_decode_mesh_smoothing(dynamic raw);
 
   @protected
+  NodeDisplayPolicy dco_decode_node_display_policy(dynamic raw);
+
+  @protected
+  NodeDisplayPreferences dco_decode_node_display_preferences(dynamic raw);
+
+  @protected
   NodeNetworkView dco_decode_node_network_view(dynamic raw);
 
   @protected
@@ -637,6 +643,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MeshSmoothing sse_decode_mesh_smoothing(SseDeserializer deserializer);
+
+  @protected
+  NodeDisplayPolicy sse_decode_node_display_policy(
+      SseDeserializer deserializer);
+
+  @protected
+  NodeDisplayPreferences sse_decode_node_display_preferences(
+      SseDeserializer deserializer);
 
   @protected
   NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer);
@@ -1051,6 +1065,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_mesh_smoothing(MeshSmoothing self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_node_display_policy(
+      NodeDisplayPolicy self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_node_display_preferences(
+      NodeDisplayPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_node_network_view(

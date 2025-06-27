@@ -37,9 +37,25 @@ pub struct GeometryVisualizationPreferences {
 }
 
 #[frb]
+#[derive(PartialEq, Clone)]
+pub enum NodeDisplayPolicy {
+  Manual,
+  PreferSelected,
+  PreferFrontier,
+}
+
+#[frb]
+#[derive(Clone)]
+pub struct NodeDisplayPreferences {
+  #[frb(non_final)]
+  pub display_policy: NodeDisplayPolicy,
+}
+
+#[frb]
 #[derive(Clone)]
 pub struct StructureDesignerPreferences {
   pub geometry_visualization_preferences: GeometryVisualizationPreferences,
+  pub node_display_preferences: NodeDisplayPreferences,
 }
 
 impl StructureDesignerPreferences {
@@ -51,6 +67,9 @@ impl StructureDesignerPreferences {
         samples_per_unit_cell: 4,
         sharpness_angle_threshold_degree: 29.0,
         mesh_smoothing: MeshSmoothing::SmoothingGroupBased,
+      },
+      node_display_preferences: NodeDisplayPreferences {
+        display_policy: NodeDisplayPolicy::Manual,
       },
     }
   }
