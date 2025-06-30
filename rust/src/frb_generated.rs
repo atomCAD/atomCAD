@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 616556907;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1108123514;
 
 // Section: executor
 
@@ -1422,40 +1422,6 @@ fn wire__crate__api__common_api__get_ortho_half_height_impl(
         },
     )
 }
-fn wire__crate__api__structure_designer__structure_designer_api__get_polygon_data_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "get_polygon_data",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_node_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::structure_designer_api::get_polygon_data(
-                        api_node_id,
-                    ),
-                )?;
-                Ok(output_ok)
-            })())
-        },
-    )
-}
 fn wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1482,6 +1448,40 @@ fn wire__crate__api__structure_designer__structure_designer_api__get_rect_data_i
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::get_rect_data(
+                        api_node_id,
+                    ),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__structure_designer__structure_designer_api__get_reg_poly_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_reg_poly_data",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::structure_designer::structure_designer_api::get_reg_poly_data(
                         api_node_id,
                     ),
                 )?;
@@ -3159,20 +3159,6 @@ fn wire__crate__api__common_api__set_orthographic_mode_impl(
         },
     )
 }
-fn wire__crate__api__structure_designer__structure_designer_api__set_polygon_data_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "set_polygon_data", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
-            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
-            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_node_id = <u64>::sse_decode(&mut deserializer);
-let api_data = <crate::api::structure_designer::structure_designer_api_types::APIPolygonData>::sse_decode(&mut deserializer);deserializer.end();
-                transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_polygon_data(api_node_id, api_data); })?;   Ok(output_ok)
-                })()) })
-}
 fn wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -3185,6 +3171,20 @@ fn wire__crate__api__structure_designer__structure_designer_api__set_rect_data_i
 let api_data = <crate::api::structure_designer::structure_designer_api_types::APIRectData>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
                      let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_rect_data(api_node_id, api_data); })?;   Ok(output_ok)
+                })()) })
+}
+fn wire__crate__api__structure_designer__structure_designer_api__set_reg_poly_data_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "set_reg_poly_data", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+let api_data = <crate::api::structure_designer::structure_designer_api_types::APIRegPolyData>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, ()>((move || {
+                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_reg_poly_data(api_node_id, api_data); })?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(
@@ -3716,18 +3716,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
-impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIPolygonData {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_numSides = <i32>::sse_decode(deserializer);
-        let mut var_radius = <i32>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIPolygonData {
-            num_sides: var_numSides,
-            radius: var_radius,
-        };
-    }
-}
-
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIRectData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3736,6 +3724,18 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         return crate::api::structure_designer::structure_designer_api_types::APIRectData {
             min_corner: var_minCorner,
             extent: var_extent,
+        };
+    }
+}
+
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIRegPolyData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_numSides = <i32>::sse_decode(deserializer);
+        let mut var_radius = <i32>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIRegPolyData {
+            num_sides: var_numSides,
+            radius: var_radius,
         };
     }
 }
@@ -4350,12 +4350,12 @@ impl SseDecode
 }
 
 impl SseDecode
-    for Option<crate::api::structure_designer::structure_designer_api_types::APIPolygonData>
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIRectData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::structure_designer::structure_designer_api_types::APIPolygonData>::sse_decode(deserializer));
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIRectData>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -4363,12 +4363,12 @@ impl SseDecode
 }
 
 impl SseDecode
-    for Option<crate::api::structure_designer::structure_designer_api_types::APIRectData>
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIRegPolyData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::structure_designer::structure_designer_api_types::APIRectData>::sse_decode(deserializer));
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIRegPolyData>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -4704,8 +4704,8 @@ fn pde_ffi_dispatcher_sync_impl(
 39 => wire__crate__api__structure_designer__structure_designer_api__get_node_network_view_impl(ptr, rust_vec_len, data_len),
 40 => wire__crate__api__structure_designer__structure_designer_api__get_node_type_names_impl(ptr, rust_vec_len, data_len),
 41 => wire__crate__api__common_api__get_ortho_half_height_impl(ptr, rust_vec_len, data_len),
-42 => wire__crate__api__structure_designer__structure_designer_api__get_polygon_data_impl(ptr, rust_vec_len, data_len),
-43 => wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(ptr, rust_vec_len, data_len),
+42 => wire__crate__api__structure_designer__structure_designer_api__get_rect_data_impl(ptr, rust_vec_len, data_len),
+43 => wire__crate__api__structure_designer__structure_designer_api__get_reg_poly_data_impl(ptr, rust_vec_len, data_len),
 44 => wire__crate__api__scene_composer_api__get_scene_composer_atom_info_impl(ptr, rust_vec_len, data_len),
 45 => wire__crate__api__scene_composer_api__get_scene_composer_view_impl(ptr, rust_vec_len, data_len),
 46 => wire__crate__api__scene_composer_api__get_selected_frame_transform_impl(ptr, rust_vec_len, data_len),
@@ -4760,8 +4760,8 @@ fn pde_ffi_dispatcher_sync_impl(
 96 => wire__crate__api__structure_designer__structure_designer_api__set_node_display_impl(ptr, rust_vec_len, data_len),
 97 => wire__crate__api__common_api__set_ortho_half_height_impl(ptr, rust_vec_len, data_len),
 98 => wire__crate__api__common_api__set_orthographic_mode_impl(ptr, rust_vec_len, data_len),
-99 => wire__crate__api__structure_designer__structure_designer_api__set_polygon_data_impl(ptr, rust_vec_len, data_len),
-100 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
+99 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
+100 => wire__crate__api__structure_designer__structure_designer_api__set_reg_poly_data_impl(ptr, rust_vec_len, data_len),
 101 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
 102 => wire__crate__api__scene_composer_api__set_selected_frame_transform_impl(ptr, rust_vec_len, data_len),
 103 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
@@ -5163,33 +5163,6 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
-    for crate::api::structure_designer::structure_designer_api_types::APIPolygonData
-{
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.num_sides.into_into_dart().into_dart(),
-            self.radius.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::structure_designer::structure_designer_api_types::APIPolygonData
-{
-}
-impl
-    flutter_rust_bridge::IntoIntoDart<
-        crate::api::structure_designer::structure_designer_api_types::APIPolygonData,
-    > for crate::api::structure_designer::structure_designer_api_types::APIPolygonData
-{
-    fn into_into_dart(
-        self,
-    ) -> crate::api::structure_designer::structure_designer_api_types::APIPolygonData {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIRectData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -5212,6 +5185,33 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIRectData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIRegPolyData
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.num_sides.into_into_dart().into_dart(),
+            self.radius.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIRegPolyData
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIRegPolyData,
+    > for crate::api::structure_designer::structure_designer_api_types::APIRegPolyData
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIRegPolyData {
         self
     }
 }
@@ -6001,19 +6001,19 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
-impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIPolygonData {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.num_sides, serializer);
-        <i32>::sse_encode(self.radius, serializer);
-    }
-}
-
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIRectData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::common_api_types::APIIVec2>::sse_encode(self.min_corner, serializer);
         <crate::api::common_api_types::APIIVec2>::sse_encode(self.extent, serializer);
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIRegPolyData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.num_sides, serializer);
+        <i32>::sse_encode(self.radius, serializer);
     }
 }
 
@@ -6516,18 +6516,6 @@ impl SseEncode
 }
 
 impl SseEncode
-    for Option<crate::api::structure_designer::structure_designer_api_types::APIPolygonData>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::structure_designer::structure_designer_api_types::APIPolygonData>::sse_encode(value, serializer);
-        }
-    }
-}
-
-impl SseEncode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIRectData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6537,6 +6525,18 @@ impl SseEncode
             <crate::api::structure_designer::structure_designer_api_types::APIRectData>::sse_encode(
                 value, serializer,
             );
+        }
+    }
+}
+
+impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIRegPolyData>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIRegPolyData>::sse_encode(value, serializer);
         }
     }
 }

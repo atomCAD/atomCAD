@@ -10,7 +10,7 @@ use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
-use crate::structure_designer::nodes::polygon::PolygonData;
+use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::rect::RectData;
 use std::collections::HashMap;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
@@ -43,7 +43,7 @@ use crate::api::api_common::from_api_vec3;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
-use super::structure_designer_api_types::APIPolygonData;
+use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 
@@ -138,7 +138,9 @@ pub fn add_node(node_type_name: &str, position: APIVec2) -> u64 {
   unsafe {
     with_mut_cad_instance_or(
       |cad_instance| {
-        cad_instance.structure_designer.add_node(node_type_name, from_api_vec2(&position))
+        let ret = cad_instance.structure_designer.add_node(node_type_name, from_api_vec2(&position));
+        refresh_renderer(cad_instance, false);
+        ret
       },
       0 // Default value if CAD_INSTANCE is None
     )
@@ -306,7 +308,7 @@ pub fn get_rect_data(node_id: u64) -> Option<APIRectData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_polygon_data(node_id: u64) -> Option<APIPolygonData> {
+pub fn get_reg_poly_data(node_id: u64) -> Option<APIRegPolyData> {
   unsafe {
     with_cad_instance_or(
       |cad_instance| {
@@ -314,13 +316,13 @@ pub fn get_polygon_data(node_id: u64) -> Option<APIPolygonData> {
           Some(data) => data,
           None => return None,
         };
-        let polygon_data = match node_data.as_any_ref().downcast_ref::<PolygonData>() {
+        let reg_poly_data = match node_data.as_any_ref().downcast_ref::<RegPolyData>() {
           Some(data) => data,
           None => return None,
         };
-        Some(APIPolygonData {
-          num_sides: polygon_data.num_sides,
-          radius: polygon_data.radius,
+        Some(APIRegPolyData {
+          num_sides: reg_poly_data.num_sides,
+          radius: reg_poly_data.radius,
         })
       },
       None
@@ -632,13 +634,13 @@ pub fn set_rect_data(node_id: u64, data: APIRectData) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_polygon_data(node_id: u64, data: APIPolygonData) {
+pub fn set_reg_poly_data(node_id: u64, data: APIRegPolyData) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       if let Some(node_data) = cad_instance.structure_designer.get_node_network_data_mut(node_id) {
-        if let Some(polygon_data) = node_data.as_any_mut().downcast_mut::<PolygonData>() {
-          polygon_data.num_sides = data.num_sides;
-          polygon_data.radius = data.radius;
+        if let Some(reg_poly_data) = node_data.as_any_mut().downcast_mut::<RegPolyData>() {
+          reg_poly_data.num_sides = data.num_sides;
+          reg_poly_data.radius = data.radius;
           refresh_renderer(cad_instance, false);
         }
       }

@@ -16,20 +16,35 @@ use crate::util::mat_utils::consistent_round;
 use crate::common::csg_types::CSG;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct PolygonData {
+pub struct RegPolyData {
     pub num_sides: i32,     // Number of sides for the polygon
     pub radius: i32,        // Approximate radius in lattice units
 }
 
-impl NodeData for PolygonData {
+impl NodeData for RegPolyData {
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
         None
     }
 }
 
-pub fn eval_polygon<'a>(_network_stack: &Vec<NetworkStackElement<'a>>, _node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
-    //let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    //let polygon_data = &node.data.as_any_ref().downcast_ref::<PolygonData>().unwrap();
+pub fn eval_reg_poly<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    let polygon_data = &node.data.as_any_ref().downcast_ref::<RegPolyData>().unwrap();
+
+    let num_sides = max(3, polygon_data.num_sides);
+    let radius = max(1, polygon_data.radius);
+
+    let mut points: Vec<[f64; 2]> = Vec::new();
+
+    for i in 0..num_sides {
+        // Calculate the ideal angle for this vertex
+        let angle = kth_angle(i, num_sides);        
+        // Find the lattice point for this angle
+        let p = find_lattice_point(angle, radius);
+        points.push([p.x as f64, p.y as f64]);
+    }
+
+    let geometry = CSG::polygon(&points, None);
 
     // Create a transform at the center of the polygon (origin)
     // No rotation is needed for this type of shape
@@ -39,7 +54,7 @@ pub fn eval_polygon<'a>(_network_stack: &Vec<NetworkStackElement<'a>>, _node_id:
           DVec2::new(0.0, 0.0),  // Center at origin
           0.0,                   // No rotation
         ),
-        csg: CSG::new(),
+        csg: geometry,
       }
     );
 }
@@ -80,14 +95,14 @@ fn calculate_half_plane_for_side(p1: IVec2, p2: IVec2, center: IVec2) -> (IVec2,
     }
 }
 
-pub fn implicit_eval_polygon<'a>(
+pub fn implicit_eval_reg_poly<'a>(
     _evaluator: &ImplicitEvaluator,
     _registry: &NodeTypeRegistry,
     _network_stack: &Vec<NetworkStackElement<'a>>,
     node: &Node,
     sample_point: &DVec2) -> f64 {
     
-    let polygon_data = &node.data.as_any_ref().downcast_ref::<PolygonData>().unwrap();
+    let polygon_data = &node.data.as_any_ref().downcast_ref::<RegPolyData>().unwrap();
     
     // Ensure we have at least 3 sides
     let num_sides = max(3, polygon_data.num_sides);
@@ -104,13 +119,13 @@ pub fn implicit_eval_polygon<'a>(
     // Generate the polygon by finding lattice points near the ideal positions
     for i in 0..num_sides {
         // Calculate the ideal angle for this vertex
-        let angle = 2.0 * PI * (i as f64) / (num_sides as f64);
+        let angle = kth_angle(i, num_sides);
         
         // Find the lattice point for this angle
         let p1 = find_lattice_point(angle, radius);
-        
+
         // Calculate the next vertex
-        let next_angle = 2.0 * PI * ((i + 1) % num_sides) as f64 / (num_sides as f64);
+        let next_angle = kth_angle((i + 1) % num_sides, num_sides);
         let p2 = find_lattice_point(next_angle, radius);
         
         // Ensure the half-plane is oriented correctly (facing inward)
@@ -138,4 +153,9 @@ pub fn implicit_eval_polygon<'a>(
 
     // Return the SDF value for the polygon
     return max_distance;
+}
+
+
+fn kth_angle(k: i32, num_sides: i32) -> f64 {
+    return 2.0 * PI * (k as f64) / (num_sides as f64);
 }

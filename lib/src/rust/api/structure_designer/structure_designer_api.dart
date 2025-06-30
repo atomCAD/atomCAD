@@ -77,8 +77,8 @@ APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
 APIRectData? getRectData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetRectData(nodeId: nodeId);
 
-APIPolygonData? getPolygonData({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiGetPolygonData(
+APIRegPolyData? getRegPolyData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetRegPolyData(
         nodeId: nodeId);
 
 APICircleData? getCircleData({required BigInt nodeId}) => RustLib.instance.api
@@ -134,9 +134,9 @@ void setRectData({required BigInt nodeId, required APIRectData data}) =>
         .crateApiStructureDesignerStructureDesignerApiSetRectData(
             nodeId: nodeId, data: data);
 
-void setPolygonData({required BigInt nodeId, required APIPolygonData data}) =>
+void setRegPolyData({required BigInt nodeId, required APIRegPolyData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetPolygonData(
+        .crateApiStructureDesignerStructureDesignerApiSetRegPolyData(
             nodeId: nodeId, data: data);
 
 void setCircleData({required BigInt nodeId, required APICircleData data}) =>

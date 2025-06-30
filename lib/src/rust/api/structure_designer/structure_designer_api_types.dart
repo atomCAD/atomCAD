@@ -286,27 +286,6 @@ class APIHalfSpaceData {
           center == other.center;
 }
 
-class APIPolygonData {
-  final int numSides;
-  final int radius;
-
-  const APIPolygonData({
-    required this.numSides,
-    required this.radius,
-  });
-
-  @override
-  int get hashCode => numSides.hashCode ^ radius.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIPolygonData &&
-          runtimeType == other.runtimeType &&
-          numSides == other.numSides &&
-          radius == other.radius;
-}
-
 class APIRectData {
   final APIIVec2 minCorner;
   final APIIVec2 extent;
@@ -326,6 +305,27 @@ class APIRectData {
           runtimeType == other.runtimeType &&
           minCorner == other.minCorner &&
           extent == other.extent;
+}
+
+class APIRegPolyData {
+  final int numSides;
+  final int radius;
+
+  const APIRegPolyData({
+    required this.numSides,
+    required this.radius,
+  });
+
+  @override
+  int get hashCode => numSides.hashCode ^ radius.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRegPolyData &&
+          runtimeType == other.runtimeType &&
+          numSides == other.numSides &&
+          radius == other.radius;
 }
 
 class APISphereData {

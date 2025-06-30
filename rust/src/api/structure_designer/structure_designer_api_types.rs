@@ -112,7 +112,7 @@ pub struct InputPinView {
     pub position: Option<APIIVec3>,
   }
 
-  pub struct APIPolygonData {
+  pub struct APIRegPolyData {
     pub num_sides: i32,
     pub radius: i32,
   }

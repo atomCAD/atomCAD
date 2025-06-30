@@ -6,7 +6,7 @@ use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type::DataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::half_plane::eval_half_plane;
-use crate::structure_designer::nodes::polygon::eval_polygon;
+use crate::structure_designer::nodes::reg_poly::eval_reg_poly;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
@@ -323,8 +323,8 @@ impl NetworkEvaluator {
       vec![eval_circle(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {
       vec![eval_rect(network_stack, node_id, registry, context)]
-    } else if node.node_type_name == "polygon" {
-      vec![eval_polygon(network_stack, node_id, registry)]
+    } else if node.node_type_name == "reg_poly" {
+      vec![eval_reg_poly(network_stack, node_id, registry)]
     } else if node.node_type_name == "half_plane" {
       vec![eval_half_plane(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "intersect_2d" {

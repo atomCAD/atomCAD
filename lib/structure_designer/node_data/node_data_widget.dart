@@ -14,7 +14,7 @@ import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/polygon_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/stamp_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
@@ -199,15 +199,15 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: halfPlaneData,
         );
-      case 'polygon':
+      case 'reg_poly':
         // Fetch the polygon data here in the parent widget
-        final polygonData = getPolygonData(
+        final regPolyData = getRegPolyData(
           nodeId: selectedNode.id,
         );
 
-        return PolygonEditor(
+        return RegPolyEditor(
           nodeId: selectedNode.id,
-          data: polygonData,
+          data: regPolyData,
         );
       default:
         return Center(

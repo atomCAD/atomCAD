@@ -78,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => 616556907;
+  int get rustContentHash => 1108123514;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -208,10 +208,10 @@ abstract class RustLibApi extends BaseApi {
 
   double crateApiCommonApiGetOrthoHalfHeight();
 
-  APIPolygonData? crateApiStructureDesignerStructureDesignerApiGetPolygonData(
+  APIRectData? crateApiStructureDesignerStructureDesignerApiGetRectData(
       {required BigInt nodeId});
 
-  APIRectData? crateApiStructureDesignerStructureDesignerApiGetRectData(
+  APIRegPolyData? crateApiStructureDesignerStructureDesignerApiGetRegPolyData(
       {required BigInt nodeId});
 
   AtomView? crateApiSceneComposerApiGetSceneComposerAtomInfo();
@@ -368,11 +368,11 @@ abstract class RustLibApi extends BaseApi {
 
   void crateApiCommonApiSetOrthographicMode({required bool orthographic});
 
-  void crateApiStructureDesignerStructureDesignerApiSetPolygonData(
-      {required BigInt nodeId, required APIPolygonData data});
-
   void crateApiStructureDesignerStructureDesignerApiSetRectData(
       {required BigInt nodeId, required APIRectData data});
+
+  void crateApiStructureDesignerStructureDesignerApiSetRegPolyData(
+      {required BigInt nodeId, required APIRegPolyData data});
 
   bool crateApiStructureDesignerStructureDesignerApiSetReturnNodeId(
       {BigInt? nodeId});
@@ -1485,40 +1485,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  APIPolygonData? crateApiStructureDesignerStructureDesignerApiGetPolygonData(
-      {required BigInt nodeId}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_64(nodeId, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_opt_box_autoadd_api_polygon_data,
-        decodeErrorData: null,
-      ),
-      constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiGetPolygonDataConstMeta,
-      argValues: [nodeId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiGetPolygonDataConstMeta =>
-          const TaskConstMeta(
-            debugName: "get_polygon_data",
-            argNames: ["nodeId"],
-          );
-
-  @override
   APIRectData? crateApiStructureDesignerStructureDesignerApiGetRectData(
       {required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_64(nodeId, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_box_autoadd_api_rect_data,
@@ -1535,6 +1508,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiGetRectDataConstMeta =>
           const TaskConstMeta(
             debugName: "get_rect_data",
+            argNames: ["nodeId"],
+          );
+
+  @override
+  APIRegPolyData? crateApiStructureDesignerStructureDesignerApiGetRegPolyData(
+      {required BigInt nodeId}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_u_64(nodeId, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_box_autoadd_api_reg_poly_data,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerStructureDesignerApiGetRegPolyDataConstMeta,
+      argValues: [nodeId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerStructureDesignerApiGetRegPolyDataConstMeta =>
+          const TaskConstMeta(
+            debugName: "get_reg_poly_data",
             argNames: ["nodeId"],
           );
 
@@ -2982,34 +2982,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  void crateApiStructureDesignerStructureDesignerApiSetPolygonData(
-      {required BigInt nodeId, required APIPolygonData data}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_u_64(nodeId, serializer);
-        sse_encode_box_autoadd_api_polygon_data(data, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 99)!;
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: null,
-      ),
-      constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiSetPolygonDataConstMeta,
-      argValues: [nodeId, data],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiSetPolygonDataConstMeta =>
-          const TaskConstMeta(
-            debugName: "set_polygon_data",
-            argNames: ["nodeId", "data"],
-          );
-
-  @override
   void crateApiStructureDesignerStructureDesignerApiSetRectData(
       {required BigInt nodeId, required APIRectData data}) {
     return handler.executeSync(SyncTask(
@@ -3017,7 +2989,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_rect_data(data, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 100)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 99)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3034,6 +3006,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetRectDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_rect_data",
+            argNames: ["nodeId", "data"],
+          );
+
+  @override
+  void crateApiStructureDesignerStructureDesignerApiSetRegPolyData(
+      {required BigInt nodeId, required APIRegPolyData data}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_box_autoadd_api_reg_poly_data(data, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 100)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerStructureDesignerApiSetRegPolyDataConstMeta,
+      argValues: [nodeId, data],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerStructureDesignerApiSetRegPolyDataConstMeta =>
+          const TaskConstMeta(
+            debugName: "set_reg_poly_data",
             argNames: ["nodeId", "data"],
           );
 
@@ -3523,18 +3523,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIPolygonData dco_decode_api_polygon_data(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return APIPolygonData(
-      numSides: dco_decode_i_32(arr[0]),
-      radius: dco_decode_i_32(arr[1]),
-    );
-  }
-
-  @protected
   APIRectData dco_decode_api_rect_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -3543,6 +3531,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIRectData(
       minCorner: dco_decode_apii_vec_2(arr[0]),
       extent: dco_decode_apii_vec_2(arr[1]),
+    );
+  }
+
+  @protected
+  APIRegPolyData dco_decode_api_reg_poly_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIRegPolyData(
+      numSides: dco_decode_i_32(arr[0]),
+      radius: dco_decode_i_32(arr[1]),
     );
   }
 
@@ -3747,15 +3747,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIPolygonData dco_decode_box_autoadd_api_polygon_data(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_api_polygon_data(raw);
-  }
-
-  @protected
   APIRectData dco_decode_box_autoadd_api_rect_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_rect_data(raw);
+  }
+
+  @protected
+  APIRegPolyData dco_decode_box_autoadd_api_reg_poly_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_reg_poly_data(raw);
   }
 
   @protected
@@ -4116,15 +4116,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIPolygonData? dco_decode_opt_box_autoadd_api_polygon_data(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_api_polygon_data(raw);
-  }
-
-  @protected
   APIRectData? dco_decode_opt_box_autoadd_api_rect_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_api_rect_data(raw);
+  }
+
+  @protected
+  APIRegPolyData? dco_decode_opt_box_autoadd_api_reg_poly_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_reg_poly_data(raw);
   }
 
   @protected
@@ -4481,19 +4481,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIPolygonData sse_decode_api_polygon_data(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_numSides = sse_decode_i_32(deserializer);
-    var var_radius = sse_decode_i_32(deserializer);
-    return APIPolygonData(numSides: var_numSides, radius: var_radius);
-  }
-
-  @protected
   APIRectData sse_decode_api_rect_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_minCorner = sse_decode_apii_vec_2(deserializer);
     var var_extent = sse_decode_apii_vec_2(deserializer);
     return APIRectData(minCorner: var_minCorner, extent: var_extent);
+  }
+
+  @protected
+  APIRegPolyData sse_decode_api_reg_poly_data(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_numSides = sse_decode_i_32(deserializer);
+    var var_radius = sse_decode_i_32(deserializer);
+    return APIRegPolyData(numSides: var_numSides, radius: var_radius);
   }
 
   @protected
@@ -4683,17 +4683,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIPolygonData sse_decode_box_autoadd_api_polygon_data(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_api_polygon_data(deserializer));
-  }
-
-  @protected
   APIRectData sse_decode_box_autoadd_api_rect_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_rect_data(deserializer));
+  }
+
+  @protected
+  APIRegPolyData sse_decode_box_autoadd_api_reg_poly_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_reg_poly_data(deserializer));
   }
 
   @protected
@@ -5176,24 +5176,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIPolygonData? sse_decode_opt_box_autoadd_api_polygon_data(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_api_polygon_data(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
   APIRectData? sse_decode_opt_box_autoadd_api_rect_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_api_rect_data(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIRegPolyData? sse_decode_opt_box_autoadd_api_reg_poly_data(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_reg_poly_data(deserializer));
     } else {
       return null;
     }
@@ -5577,18 +5577,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_api_polygon_data(
-      APIPolygonData self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.numSides, serializer);
-    sse_encode_i_32(self.radius, serializer);
-  }
-
-  @protected
   void sse_encode_api_rect_data(APIRectData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_2(self.minCorner, serializer);
     sse_encode_apii_vec_2(self.extent, serializer);
+  }
+
+  @protected
+  void sse_encode_api_reg_poly_data(
+      APIRegPolyData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.numSides, serializer);
+    sse_encode_i_32(self.radius, serializer);
   }
 
   @protected
@@ -5762,17 +5762,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_api_polygon_data(
-      APIPolygonData self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_api_polygon_data(self, serializer);
-  }
-
-  @protected
   void sse_encode_box_autoadd_api_rect_data(
       APIRectData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_rect_data(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_reg_poly_data(
+      APIRegPolyData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_reg_poly_data(self, serializer);
   }
 
   @protected
@@ -6197,17 +6197,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_api_polygon_data(
-      APIPolygonData? self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_api_polygon_data(self, serializer);
-    }
-  }
-
-  @protected
   void sse_encode_opt_box_autoadd_api_rect_data(
       APIRectData? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6215,6 +6204,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_rect_data(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_reg_poly_data(
+      APIRegPolyData? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_reg_poly_data(self, serializer);
     }
   }
 

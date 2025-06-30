@@ -6,7 +6,7 @@ use super::node_network::NodeNetwork;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::parameter::ParameterData;
 use super::nodes::cuboid::CuboidData;
-use super::nodes::polygon::PolygonData;
+use super::nodes::reg_poly::RegPolyData;
 use super::nodes::sphere::SphereData;
 use super::nodes::circle::CircleData;
 use super::nodes::rect::RectData;
@@ -65,10 +65,10 @@ impl NodeTypeRegistry {
     });
 
     ret.add_node_type(NodeType {
-      name: "polygon".to_string(),
+      name: "reg_poly".to_string(),
       parameters: Vec::new(),
       output_type: DataType::Geometry2D,
-      node_data_creator: || Box::new(PolygonData {
+      node_data_creator: || Box::new(RegPolyData {
         num_sides: 3,
         radius: 3,
       }),

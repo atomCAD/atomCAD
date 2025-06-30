@@ -4,22 +4,22 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/inputs/int_input.dart';
 
 /// Editor widget for polygon nodes
-class PolygonEditor extends StatefulWidget {
+class RegPolyEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APIPolygonData? data;
+  final APIRegPolyData? data;
 
-  const PolygonEditor({
+  const RegPolyEditor({
     super.key,
     required this.nodeId,
     required this.data,
   });
 
   @override
-  State<PolygonEditor> createState() => PolygonEditorState();
+  State<RegPolyEditor> createState() => RegPolyEditorState();
 }
 
-class PolygonEditorState extends State<PolygonEditor> {
-  APIPolygonData? _stagedData;
+class RegPolyEditorState extends State<RegPolyEditor> {
+  APIRegPolyData? _stagedData;
 
   @override
   void initState() {
@@ -30,7 +30,7 @@ class PolygonEditorState extends State<PolygonEditor> {
   }
 
   @override
-  void didUpdateWidget(PolygonEditor oldWidget) {
+  void didUpdateWidget(RegPolyEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data != widget.data) {
       setState(() {
@@ -39,13 +39,13 @@ class PolygonEditorState extends State<PolygonEditor> {
     }
   }
 
-  void _updateStagedData(APIPolygonData newData) {
+  void _updateStagedData(APIRegPolyData newData) {
     setState(() => _stagedData = newData);
   }
 
   void _applyChanges() {
     if (_stagedData != null) {
-      setPolygonData(
+      setRegPolyData(
         nodeId: widget.nodeId,
         data: _stagedData!,
       );
@@ -74,7 +74,7 @@ class PolygonEditorState extends State<PolygonEditor> {
               onChanged: (newValue) {
                 // Ensure at least 3 sides for a valid polygon
                 final validSides = newValue < 3 ? 3 : newValue;
-                _updateStagedData(APIPolygonData(
+                _updateStagedData(APIRegPolyData(
                   numSides: validSides,
                   radius: _stagedData!.radius,
                 ));
@@ -87,7 +87,7 @@ class PolygonEditorState extends State<PolygonEditor> {
               onChanged: (newValue) {
                 // Ensure radius is at least 1
                 final validRadius = newValue < 1 ? 1 : newValue;
-                _updateStagedData(APIPolygonData(
+                _updateStagedData(APIRegPolyData(
                   numSides: _stagedData!.numSides,
                   radius: validRadius,
                 ));
