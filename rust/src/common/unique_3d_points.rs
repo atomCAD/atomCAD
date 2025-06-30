@@ -1,6 +1,5 @@
 use glam::DVec3;
 use std::collections::HashMap;
-use std::hash::Hash;
 
 /// A data structure for efficiently storing and retrieving unique 3D points within a given epsilon tolerance.
 /// Uses a grid-based spatial hashing approach for O(1) lookups.

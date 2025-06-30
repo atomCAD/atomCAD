@@ -16,7 +16,6 @@ use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElemen
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::util::timer::Timer;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
 use crate::structure_designer::nodes::sphere::eval_sphere;
 use crate::structure_designer::nodes::cuboid::eval_cuboid;
@@ -194,7 +193,7 @@ impl NetworkEvaluator {
     &self,
     network_name: &str,
     node_id: u64,
-    display_type: NodeDisplayType,
+    _display_type: NodeDisplayType, //TODO: use display_type
     registry: &NodeTypeRegistry,
     geometry_visualization_preferences: &GeometryVisualizationPreferences
   ) -> StructureDesignerScene {

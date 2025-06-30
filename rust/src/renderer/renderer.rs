@@ -4,7 +4,6 @@ use wgpu::util::DeviceExt;
 use super::mesh::Vertex;
 use super::mesh::Mesh;
 use super::gpu_mesh::GPUMesh;
-use super::gpu_mesh::MeshType;
 use super::tessellator::poly_mesh_tessellator::{tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh};
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
@@ -18,7 +17,6 @@ use glam::f64::DVec3;
 use glam::f64::DVec4;
 use glam::f64::DQuat;
 use crate::common::scene::Scene;
-use std::time::Instant;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::renderer::mesh::Material;
@@ -461,7 +459,7 @@ impl Renderer {
         lightweight: bool,
         geometry_visualization_preferences: &GeometryVisualizationPreferences
     ) {
-        let start_time = Instant::now();
+        //let start_time = Instant::now();
 
         // Always refresh lightweight buffers with extra tessellatable data
         let mut lightweight_mesh = Mesh::new();

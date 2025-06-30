@@ -32,8 +32,6 @@ const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
 /// Set the viewport size for rendering
 #[unsafe(no_mangle)]
 pub fn set_viewport_size(width: u32, height: u32) {
-  let start_time = Instant::now();
-
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_viewport_size(width, height);
