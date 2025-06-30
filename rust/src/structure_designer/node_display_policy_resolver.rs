@@ -158,14 +158,14 @@ impl NodeDisplayPolicyResolver {
     result
   }
 
-  /*
+  /**
    * Resolves the node display policy.
    * 
    * # Parameters
    * * `node_network` - The node network to resolve the node display policy on
    * * `node_display_preferences` - The node display preferences to use
    * * `dirty_node_ids` - Only the node islands
-   * that contain dirty nodes are recalculated
+   * that contain dirty nodes are recalculated. If None, all nodes are considered dirty.
    * 
    * # Returns
    * The node ids for which the display type needs to be changed.
@@ -174,18 +174,30 @@ impl NodeDisplayPolicyResolver {
     &self,
     node_network: &NodeNetwork,
     node_display_preferences: &NodeDisplayPreferences,
-    dirty_node_ids: &HashSet<u64>,
+    dirty_node_ids: Option<&HashSet<u64>>,
   ) -> HashMap<u64, Option<NodeDisplayType>> {
-    // If policy is Manual, do nothing
+    // If manual policy, we just return no changes
     if node_display_preferences.display_policy == NodeDisplayPolicy::Manual {
       return HashMap::new();
     }
     
-    // Calculate reverse connections map for the node network
+    // Calculate reverse connections for traversal
     let reverse_connections = self.calculate_reverse_connections(node_network);
     
-    // Find islands containing dirty nodes
-    let islands = self.find_islands_with_dirty_nodes(node_network, dirty_node_ids, &reverse_connections);
+    // If dirty_node_ids is None, consider all nodes as dirty
+    // Create an owned HashSet for all nodes if needed
+    let owned_all_node_ids: HashSet<u64> = match dirty_node_ids {
+      Some(_) => HashSet::new(), // Empty set as placeholder, won't be used
+      None => node_network.nodes.keys().cloned().collect()
+    };
+    
+    // Use a reference to either the provided dirty_node_ids or our own collection
+    let all_nodes = match dirty_node_ids {
+      Some(dirty_ids) => dirty_ids,
+      None => &owned_all_node_ids
+    };
+    
+    let islands = self.find_islands_with_dirty_nodes(node_network, all_nodes, &reverse_connections);
     
     // Create a map to store the display type changes
     let mut changes = HashMap::new();

@@ -141,10 +141,17 @@ impl NodeNetwork {
     }
   }
   
-  /// Sets a node to be displayed with the specified display type
-  pub fn set_node_display_type(&mut self, node_id: u64, display_type: NodeDisplayType) {
+  /// Sets a node to be displayed with the specified display type, or hides it if display_type is None
+  pub fn set_node_display_type(&mut self, node_id: u64, display_type: Option<NodeDisplayType>) {
     if self.nodes.contains_key(&node_id) {
-      self.displayed_node_ids.insert(node_id, display_type);
+      match display_type {
+        Some(display_type) => {
+          self.displayed_node_ids.insert(node_id, display_type);
+        },
+        None => {
+          self.displayed_node_ids.remove(&node_id);
+        }
+      }
     }
   }
   
