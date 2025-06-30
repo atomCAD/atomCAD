@@ -15,6 +15,7 @@ use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
+use std::collections::HashSet;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -501,32 +502,43 @@ impl StructureDesigner {
   // --- Preferences management                                                                                         ---
   // -------------------------------------------------------------------------------------------------------------------------
 
+  /// Applies the node display policy to the active node network
+  /// 
+  /// This will resolve the display policy using the current preferences and apply 
+  /// the changes to the node network. If dirty_node_ids is None, all nodes will be considered dirty.
+  /// 
+  /// # Parameters
+  /// * `dirty_node_ids` - The set of node IDs that are dirty, or None to consider all nodes dirty
+  pub fn apply_node_display_policy(&mut self, dirty_node_ids: Option<&HashSet<u64>>) {
+    // Only apply if there's an active node network
+    if let Some(network_name) = &self.active_node_network_name {
+      if let Some(node_network) = self.node_type_registry.node_networks.get_mut(network_name) {
+        // Resolve the display policy with the provided dirty_node_ids
+        let changes = self.node_display_policy_resolver.resolve(
+          node_network,
+          &self.preferences.node_display_preferences,
+          dirty_node_ids
+        );
+        
+        // Apply the changes to the node network
+        for (node_id, display_type) in changes {
+          node_network.set_node_display_type(node_id, display_type);
+        }
+      }
+    }
+  }
+
   /// Sets the preferences for the structure designer and applies necessary updates
   pub fn set_preferences(&mut self, preferences: StructureDesignerPreferences) {
     // Check if node display preferences have changed
-    let node_display_prefs_changed = self.preferences.node_display_preferences.display_policy != preferences.node_display_preferences.display_policy;
+    let node_display_prefs_changed = self.preferences.node_display_preferences != preferences.node_display_preferences;
     
     // Update the preferences
     self.preferences = preferences;
     
     // If node display preferences have changed, reapply the node display policy
     if node_display_prefs_changed {
-      // Only apply if there's an active node network
-      if let Some(network_name) = &self.active_node_network_name {
-        if let Some(node_network) = self.node_type_registry.node_networks.get_mut(network_name) {
-          // Resolve the display policy with None as dirty_node_ids to consider all nodes as dirty
-          let changes = self.node_display_policy_resolver.resolve(
-            node_network,
-            &self.preferences.node_display_preferences,
-            None
-          );
-          
-          // Apply the changes to the node network
-          for (node_id, display_type) in changes {
-            node_network.set_node_display_type(node_id, display_type);
-          }
-        }
-      }
+      self.apply_node_display_policy(None);
     }
   }
 

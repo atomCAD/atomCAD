@@ -45,7 +45,7 @@ pub enum NodeDisplayPolicy {
 }
 
 #[frb]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct NodeDisplayPreferences {
   #[frb(non_final)]
   pub display_policy: NodeDisplayPolicy,
