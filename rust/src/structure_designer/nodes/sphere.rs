@@ -41,8 +41,8 @@ pub fn eval_sphere<'a>(
 
   let geometry = if context.explicit_geo_eval_needed { CSG::sphere(
     sphere_data.radius as f64,
-    32,
-    16,
+    24,
+    12,
     None
   )
     .translate(center.x, center.y, center.z) } else { CSG::new() };

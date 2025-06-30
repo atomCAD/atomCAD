@@ -65,6 +65,42 @@ pub struct NodeNetwork {
 
 
 impl NodeNetwork {
+  /// Returns a HashSet of all node IDs that are directly connected to the given node
+  /// This includes both nodes that provide input to this node and nodes that receive output from this node
+  pub fn get_connected_node_ids(&self, node_id: u64) -> HashSet<u64> {
+    let mut connected_ids = HashSet::new();
+    
+    // Check if the node exists
+    if !self.nodes.contains_key(&node_id) {
+      return connected_ids; // Return empty set if node doesn't exist
+    }
+    
+    // Get nodes that provide input to this node (input connections)
+    if let Some(node) = self.nodes.get(&node_id) {
+      for argument in &node.arguments {
+        // Add all node IDs that provide input to this node
+        connected_ids.extend(&argument.argument_node_ids);
+      }
+    }
+    
+    // Get nodes that receive output from this node (output connections)
+    for (other_id, other_node) in &self.nodes {
+      // Skip the node itself
+      if *other_id == node_id {
+        continue;
+      }
+      
+      // Check if any of this node's arguments reference the given node
+      for argument in &other_node.arguments {
+        if argument.argument_node_ids.contains(&node_id) {
+          connected_ids.insert(*other_id);
+          break; // No need to check other arguments of this node
+        }
+      }
+    }
+    
+    connected_ids
+  }
 
   pub fn new(node_type: NodeType) -> Self {
     let ret = Self {

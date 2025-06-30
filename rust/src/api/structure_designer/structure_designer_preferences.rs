@@ -70,7 +70,7 @@ impl StructureDesignerPreferences {
         mesh_smoothing: MeshSmoothing::SmoothingGroupBased,
       },
       node_display_preferences: NodeDisplayPreferences {
-        display_policy: NodeDisplayPolicy::Manual,
+        display_policy: NodeDisplayPolicy::PreferSelected,
       },
     }
   }

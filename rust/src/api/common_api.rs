@@ -90,6 +90,7 @@ async fn initialize_cad_instance_async() {
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
       cad_instance.renderer.refresh_background();
       add_sample_network(&mut cad_instance.structure_designer);
+      cad_instance.structure_designer.apply_node_display_policy(None);
       refresh_structure_designer(cad_instance, false);
     }
   }

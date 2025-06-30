@@ -227,12 +227,22 @@ impl StructureDesigner {
       None => return 0,
     };
 
-    // Then modify the network
-    if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
-      node_network.add_node(node_type_name, position, num_parameters, node_data)
-    } else {
-      0
+    // Early return if the node network doesn't exist
+    let node_id = self.node_type_registry.node_networks.get_mut(node_network_name)
+      .map(|node_network| node_network.add_node(node_type_name, position, num_parameters, node_data))
+      .unwrap_or(0);
+    
+    // If we successfully added a node, apply the display policy with this node as dirty
+    if node_id != 0 {
+      // Create a HashSet with just the new node ID
+      let mut dirty_nodes = HashSet::new();
+      dirty_nodes.insert(node_id);
+      
+      // Apply display policy considering only this node as dirty
+      self.apply_node_display_policy(Some(&dirty_nodes));
     }
+    
+    node_id
   }
 
   pub fn move_node(&mut self, node_id: u64, position: DVec2) {
@@ -286,6 +296,14 @@ impl StructureDesigner {
         dest_param_index,
         dest_param_is_multi,
       );
+      
+      // Create a HashSet with the source and destination nodes marked as dirty
+      let mut dirty_nodes = HashSet::new();
+      dirty_nodes.insert(source_node_id);
+      dirty_nodes.insert(dest_node_id);
+      
+      // Apply display policy considering only these nodes as dirty
+      self.apply_node_display_policy(Some(&dirty_nodes));
     }
   }
 
@@ -391,8 +409,28 @@ impl StructureDesigner {
       None => return false,
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      // Get the previously selected node ID before changing selection
+      let previously_selected_node_id = network.selected_node_id;
+      
+      // Update the selection
       let ret = network.select_node(node_id);
       self.gadget = network.provide_gadget();
+      
+      // If the selection was successful, update the display policy
+      if ret {
+        // Create a HashSet with the previous and newly selected node IDs
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(node_id); // New selection
+        
+        // Add previously selected node to dirty nodes if it existed
+        if let Some(prev_id) = previously_selected_node_id {
+          dirty_nodes.insert(prev_id);
+        }
+        
+        // Apply display policy considering these nodes as dirty
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      
       ret
     } else {
       false
@@ -406,8 +444,23 @@ impl StructureDesigner {
       None => return false,
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      // Get the previously selected node ID before changing selection
+      let previously_selected_node_id = network.selected_node_id;
+      
+      // Update the selection
       let ret = network.select_wire(source_node_id, destination_node_id, destination_argument_index);
       self.gadget = network.provide_gadget();
+      
+      // If the selection was successful and there was a previously selected node
+      if ret && previously_selected_node_id.is_some() {
+        // Create a HashSet with just the previously selected node ID
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(previously_selected_node_id.unwrap());
+        
+        // Apply display policy considering only the previously selected node as dirty
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      
       ret
     } else {
       false
@@ -434,8 +487,22 @@ impl StructureDesigner {
       None => return,
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      // Get the previously selected node ID before clearing selection
+      let previously_selected_node_id = network.selected_node_id;
+      
+      // Clear the selection
       network.clear_selection();
       self.gadget = network.provide_gadget();
+      
+      // If there was a previously selected node
+      if let Some(prev_id) = previously_selected_node_id {
+        // Create a HashSet with just the previously selected node ID
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(prev_id);
+        
+        // Apply display policy considering only the previously selected node as dirty
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
     }
   }
 
@@ -445,8 +512,31 @@ impl StructureDesigner {
       Some(name) => name,
       None => return,
     };
+    
+    // Collect nodes that will need to be marked as dirty after deletion
+    let mut dirty_nodes = HashSet::new();
+    
+    if let Some(node_network) = self.node_type_registry.node_networks.get(node_network_name) {
+      // If a node is selected, all connected nodes will be dirty
+      if let Some(selected_node_id) = node_network.selected_node_id {
+        // Get all nodes connected to the selected node
+        dirty_nodes = node_network.get_connected_node_ids(selected_node_id);
+      } 
+      // If a wire is selected, both source and destination nodes will be dirty
+      else if let Some(ref wire) = node_network.selected_wire {
+        dirty_nodes.insert(wire.source_node_id);
+        dirty_nodes.insert(wire.destination_node_id);
+      }
+    }
+    
+    // Perform the deletion
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.delete_selected();
+    }
+    
+    // Only apply display policy if there were dirty nodes
+    if !dirty_nodes.is_empty() {
+      self.apply_node_display_policy(Some(&dirty_nodes));
     }
   }
 
@@ -642,6 +732,9 @@ impl StructureDesigner {
     // Reset active node network to None
     self.set_active_node_network_name(None);
     
+    // Apply display policy to all nodes
+    self.apply_node_display_policy(None);
+
     result
   }
 }
