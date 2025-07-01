@@ -19,4 +19,5 @@ pub mod intersect_2d;
 pub mod diff_2d;
 pub mod half_plane;
 pub mod reg_poly;
+pub mod polygon;
 

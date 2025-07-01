@@ -112,6 +112,33 @@ pub mod dquat_serializer {
     }
 }
 
+/// Module to handle serialization of Vec<IVec2> type
+pub mod vec_ivec2_serializer {
+    use super::*;
+
+    pub fn serialize<S>(vec_ivec2: &Vec<IVec2>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Convert each IVec2 to a tuple of (i32, i32) and serialize the whole Vec
+        let tuples: Vec<(i32, i32)> = vec_ivec2.iter()
+            .map(|v| (v.x, v.y))
+            .collect();
+        tuples.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<IVec2>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize from a Vec of tuples (i32, i32)
+        let tuples = <Vec<(i32, i32)>>::deserialize(deserializer)?;
+        Ok(tuples.into_iter()
+            .map(|(x, y)| IVec2::new(x, y))
+            .collect())
+    }
+}
+
 /// Module to handle serialization of Option<IVec3> type
 pub mod option_ivec3_serializer {
     use super::*;
