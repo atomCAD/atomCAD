@@ -69,6 +69,38 @@ impl PolygonGadget {
             dragged_handle: None,
         }
     }
+    
+    /// Finds the nearest lattice point by intersecting a ray with the XZ plane
+    /// Returns None if the ray doesn't intersect the plane in a forward direction
+    fn find_lattice_point_by_ray(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<IVec2> {
+        // Project the ray onto the XZ plane (y = 0)
+        let plane_normal = DVec3::new(0.0, 1.0, 0.0);
+        let plane_point = DVec3::new(0.0, 0.0, 0.0);
+        
+        // Find intersection of ray with XZ plane
+        let denominator = ray_direction.dot(plane_normal);
+        
+        // Avoid division by zero (ray parallel to plane)
+        if denominator.abs() < 1e-6 { 
+            return None;
+        }
+        
+        let t = (plane_point - ray_origin).dot(plane_normal) / denominator;
+        
+        if t <= 0.0 { 
+            // Ray doesn't hit the plane in the forward direction
+            return None;
+        }
+        
+        let intersection_point = *ray_origin + *ray_direction * t;
+        
+        // Convert the 3D point to lattice coordinates by dividing by cell size
+        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
+        let x_lattice = (intersection_point.x / cell_size).round() as i32;
+        let z_lattice = (intersection_point.z / cell_size).round() as i32;
+        
+        Some(IVec2::new(x_lattice, z_lattice))
+    }
 }
 
 impl Tessellatable for PolygonGadget {
@@ -172,49 +204,52 @@ impl Gadget for PolygonGadget {
         None
     }
 
-    fn start_drag(&mut self, handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
-        // Only allow dragging vertex handles (not line segment handles)
-        if handle_index >= 0 && handle_index < self.vertices.len() as i32 {
+    fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+        let num_vertices = self.vertices.len() as i32;
+        
+        // Case 1: Vertex handle
+        if handle_index >= 0 && handle_index < num_vertices {
             self.is_dragging = true;
             self.dragged_handle = Some(handle_index as usize);
+            return;
+        }
+        
+        // Case 2: Line segment handle - add a new vertex
+        if handle_index >= num_vertices {
+            // Calculate the line segment index (0-based)
+            let segment_index = (handle_index - num_vertices) as usize;
+            
+            // Get the indices of the two vertices that form the line segment
+            let start_vertex_index = segment_index;
+            let end_vertex_index = (segment_index + 1) % self.vertices.len();
+            
+            // Find the lattice point where the ray intersects the XZ plane
+            if let Some(new_vertex) = self.find_lattice_point_by_ray(&ray_origin, &ray_direction) {
+                // Insert the new vertex after the start vertex
+                // This works for all cases including the last-to-first segment
+                // (where it will insert at the end, which is logically correct)
+                let insert_index = start_vertex_index + 1;
+                
+                self.vertices.insert(insert_index, new_vertex);
+                
+                // Start dragging the new vertex
+                self.is_dragging = true;
+                self.dragged_handle = Some(insert_index);
+            }
         }
     }
 
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
-        // Skip dragging if not in drag mode or if trying to drag a line segment
-        if !self.is_dragging || handle_index >= self.vertices.len() as i32 {
+        // Skip dragging if not in drag mode
+        if !self.is_dragging {
             return;
         }
-        
-        // Project the ray onto the XZ plane (y = 0)
-        let plane_normal = DVec3::new(0.0, 1.0, 0.0);
-        let plane_point = DVec3::new(0.0, 0.0, 0.0);
-        
-        // Find intersection of ray with XZ plane
-        let denominator = ray_direction.dot(plane_normal);
-        
-        // Avoid division by zero (ray parallel to plane)
-        if denominator.abs() < 1e-6 { 
-            return;
-        }
-        
-        let t = (plane_point - ray_origin).dot(plane_normal) / denominator;
-        
-        if t <= 0.0 { 
-            // Ray doesn't hit the plane in the forward direction
-            return;
-        }
-        
-        let intersection_point = ray_origin + ray_direction * t;
-        
-        // Convert the 3D point to lattice coordinates by dividing by cell size
-        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
-        let x_lattice = (intersection_point.x / cell_size).round() as i32;
-        let z_lattice = (intersection_point.z / cell_size).round() as i32;
-        
-        // Update the vertex position
-        if let Some(vertex_index) = self.dragged_handle {
-            self.vertices[vertex_index] = IVec2::new(x_lattice, z_lattice);
+
+        // Update the vertex position if we have a valid lattice point
+        if let Some(lattice_point) = self.find_lattice_point_by_ray(&ray_origin, &ray_direction) {
+            if let Some(vertex_index) = self.dragged_handle {
+                self.vertices[vertex_index] = lattice_point;
+            }
         }
     }
 
