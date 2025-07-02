@@ -173,15 +173,54 @@ impl Gadget for PolygonGadget {
     }
 
     fn start_drag(&mut self, handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
-        //TODO
+        // Only allow dragging vertex handles (not line segment handles)
+        if handle_index >= 0 && handle_index < self.vertices.len() as i32 {
+            self.is_dragging = true;
+            self.dragged_handle = Some(handle_index as usize);
+        }
     }
 
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
-        //TODO
+        // Skip dragging if not in drag mode or if trying to drag a line segment
+        if !self.is_dragging || handle_index >= self.vertices.len() as i32 {
+            return;
+        }
+        
+        // Project the ray onto the XZ plane (y = 0)
+        let plane_normal = DVec3::new(0.0, 1.0, 0.0);
+        let plane_point = DVec3::new(0.0, 0.0, 0.0);
+        
+        // Find intersection of ray with XZ plane
+        let denominator = ray_direction.dot(plane_normal);
+        
+        // Avoid division by zero (ray parallel to plane)
+        if denominator.abs() < 1e-6 { 
+            return;
+        }
+        
+        let t = (plane_point - ray_origin).dot(plane_normal) / denominator;
+        
+        if t <= 0.0 { 
+            // Ray doesn't hit the plane in the forward direction
+            return;
+        }
+        
+        let intersection_point = ray_origin + ray_direction * t;
+        
+        // Convert the 3D point to lattice coordinates by dividing by cell size
+        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
+        let x_lattice = (intersection_point.x / cell_size).round() as i32;
+        let z_lattice = (intersection_point.z / cell_size).round() as i32;
+        
+        // Update the vertex position
+        if let Some(vertex_index) = self.dragged_handle {
+            self.vertices[vertex_index] = IVec2::new(x_lattice, z_lattice);
+        }
     }
 
     fn end_drag(&mut self) {
-        //TODO
+        self.is_dragging = false;
+        self.dragged_handle = None;
     }
 }
 
