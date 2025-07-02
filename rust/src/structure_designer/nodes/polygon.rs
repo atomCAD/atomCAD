@@ -70,6 +70,34 @@ impl PolygonGadget {
         }
     }
     
+    /// Removes any vertices that are at the same position as an adjacent vertex.
+    /// This allows the user to delete a vertex by dragging it onto one of its neighbors.
+    /// The polygon must maintain at least 3 vertices.
+    fn eliminate_duplicate_vertices(&mut self) {
+        // Don't allow reducing below the minimum number of vertices for a polygon (3)
+        if self.vertices.len() <= 3 {
+            return;
+        }
+        
+        // First, check for duplicates between consecutive vertices
+        let mut i = 0;
+        while i < self.vertices.len() - 1 {
+            if self.vertices[i] == self.vertices[i + 1] {
+                // Remove the duplicate
+                self.vertices.remove(i + 1);
+                // Don't increment i, check the next pair
+            } else {
+                i += 1;
+            }
+        }
+        
+        // Finally, check if the first and last vertices are duplicates (wrap around case)
+        let len = self.vertices.len();
+        if len > 3 && self.vertices[0] == self.vertices[len - 1] {
+            self.vertices.pop(); // Remove the last vertex
+        }
+    }
+    
     /// Finds the nearest lattice point by intersecting a ray with the XZ plane
     /// Returns None if the ray doesn't intersect the plane in a forward direction
     fn find_lattice_point_by_ray(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<IVec2> {
@@ -254,6 +282,7 @@ impl Gadget for PolygonGadget {
     }
 
     fn end_drag(&mut self) {
+        self.eliminate_duplicate_vertices();
         self.is_dragging = false;
         self.dragged_handle = None;
     }
