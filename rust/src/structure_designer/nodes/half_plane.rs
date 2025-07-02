@@ -9,7 +9,6 @@ use crate::common::serialization_utils::ivec2_serializer;
 use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
-use glam::f32::Vec3;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -99,16 +98,6 @@ pub fn implicit_eval_half_plane<'a>(
   return normal.dot(*sample_point - point1);
 }
 
-// Constants for the gadget
-pub const HANDLE_TRIANGLE_SIDE_LENGTH: f64 = 1.0;
-// pub const HANDLE_RADIUS: f64 = 0.4; // Replaced by triangle side length logic
-pub const HANDLE_DIVISIONS: u32 = 16; // Still used for line tessellation, could be removed if not used elsewhere
-pub const HANDLE_HEIGHT: f64 = 0.6;
-pub const LINE_RADIUS: f64 = 0.15;
-pub const SELECTED_HANDLE_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0); // Orange for selected handle
-pub const HANDLE_COLOR: Vec3 = Vec3::new(0.1, 1.0, 0.3); // Light green for handles
-pub const LINE_COLOR: Vec3 = Vec3::new(0.0, 0.0, 0.6);
-
 #[derive(Clone)]
 pub struct HalfPlaneGadget {
     pub point1: IVec2,
@@ -153,18 +142,18 @@ impl Tessellatable for HalfPlaneGadget {
         let roughness: f32 = 0.2;
         let metallic: f32 = 0.8;
         let handle1_material = if self.dragged_handle == Some(0) {
-            Material::new(&SELECTED_HANDLE_COLOR, roughness, metallic)
+            Material::new(&common_constants::SELECTED_HANDLE_COLOR, roughness, metallic)
         } else {
-            Material::new(&HANDLE_COLOR, roughness, metallic)
+            Material::new(&common_constants::HANDLE_COLOR, roughness, metallic)
         };
         
         let handle2_material = if self.dragged_handle == Some(1) {
-            Material::new(&SELECTED_HANDLE_COLOR, roughness, metallic)
+            Material::new(&common_constants::SELECTED_HANDLE_COLOR, roughness, metallic)
         } else {
-            Material::new(&HANDLE_COLOR, roughness, metallic)
+            Material::new(&common_constants::HANDLE_COLOR, roughness, metallic)
         };
         
-        let line_material = Material::new(&LINE_COLOR, roughness, metallic);
+        let line_material = Material::new(&common_constants::LINE_COLOR, roughness, metallic);
         
         // Calculate the extended line across the entire coordinate system
         use crate::renderer::tessellator::coordinate_system_tessellator::CS_SIZE;
@@ -215,8 +204,8 @@ impl Tessellatable for HalfPlaneGadget {
             output_mesh,
             &extended_line_start,
             &extended_line_end,
-            LINE_RADIUS,
-            HANDLE_DIVISIONS,
+            common_constants::LINE_RADIUS,
+            common_constants::LINE_DIVISIONS,
             &line_material,
             true
         );
@@ -226,8 +215,8 @@ impl Tessellatable for HalfPlaneGadget {
         tessellator::tessellate_equilateral_triangle_prism(
             output_mesh,
             DVec2::new(p1_3d.x, p1_3d.z), // Centroid of bottom triangle in XZ plane
-            HANDLE_HEIGHT,
-            HANDLE_TRIANGLE_SIDE_LENGTH,
+            common_constants::HANDLE_HEIGHT,
+            common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
             triangle_rotation_angle,
             &handle1_material,
         );
@@ -236,8 +225,8 @@ impl Tessellatable for HalfPlaneGadget {
         tessellator::tessellate_equilateral_triangle_prism(
             output_mesh,
             DVec2::new(p2_3d.x, p2_3d.z), // Centroid of bottom triangle in XZ plane
-            HANDLE_HEIGHT,
-            HANDLE_TRIANGLE_SIDE_LENGTH,
+            common_constants::HANDLE_HEIGHT,
+            common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
             triangle_rotation_angle,
             &handle2_material,
         );
@@ -266,18 +255,18 @@ impl Gadget for HalfPlaneGadget {
         );
         
         // Effective radius for hit testing (distance from centroid to vertex of the triangle)
-        let hit_test_radius = HANDLE_TRIANGLE_SIDE_LENGTH / 3.0_f64.sqrt();
+        let hit_test_radius = common_constants::HANDLE_TRIANGLE_SIDE_LENGTH / 3.0_f64.sqrt();
 
         // Handle for point1 - test cylinder along Y axis
-        let p1_top = DVec3::new(p1_3d.x, HANDLE_HEIGHT / 2.0, p1_3d.z);
-        let p1_bottom = DVec3::new(p1_3d.x, -HANDLE_HEIGHT / 2.0, p1_3d.z);
+        let p1_top = DVec3::new(p1_3d.x, common_constants::HANDLE_HEIGHT / 2.0, p1_3d.z);
+        let p1_bottom = DVec3::new(p1_3d.x, -common_constants::HANDLE_HEIGHT / 2.0, p1_3d.z);
         if cylinder_hit_test(&p1_top, &p1_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(0); // Handle 0 hit
         }
         
         // Handle for point2 - test cylinder along Y axis
-        let p2_top = DVec3::new(p2_3d.x, HANDLE_HEIGHT / 2.0, p2_3d.z);
-        let p2_bottom = DVec3::new(p2_3d.x, -HANDLE_HEIGHT / 2.0, p2_3d.z);
+        let p2_top = DVec3::new(p2_3d.x, common_constants::HANDLE_HEIGHT / 2.0, p2_3d.z);
+        let p2_bottom = DVec3::new(p2_3d.x, -common_constants::HANDLE_HEIGHT / 2.0, p2_3d.z);
         if cylinder_hit_test(&p2_top, &p2_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(1); // Handle 1 hit
         }

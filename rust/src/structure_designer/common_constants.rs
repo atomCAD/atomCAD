@@ -1,5 +1,6 @@
 // TODO: these will not be constant, will be set by the user
 use glam::i32::IVec3;
+use glam::f32::Vec3;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
@@ -7,6 +8,17 @@ pub const IMPLICIT_VOLUME_MIN: IVec3 = IVec3::new(-10, -10, -10);
 pub const IMPLICIT_VOLUME_MAX: IVec3 = IVec3::new(10, 10, 10);
 
 pub const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f64 = 3.567;  // Size of one complete unit cell in Ångströms
+
+// Gadget constants
+pub const HANDLE_TRIANGLE_SIDE_LENGTH: f64 = 1.0;
+pub const HANDLE_RADIUS: f64 = 0.4;
+pub const HANDLE_DIVISIONS: u32 = 16;
+pub const HANDLE_HEIGHT: f64 = 0.6;
+pub const HANDLE_COLOR: Vec3 = Vec3::new(0.0, 0.0, 0.8); // Dark blue for handles
+pub const SELECTED_HANDLE_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0); // Orange for selected handle
+pub const LINE_COLOR: Vec3 = Vec3::new(0.0, 0.0, 0.6);
+pub const LINE_DIVISIONS: u32 = 16;
+pub const LINE_RADIUS: f64 = 0.15;
 
 #[derive(Clone, Debug)]
 pub struct CrystalTypeInfo {

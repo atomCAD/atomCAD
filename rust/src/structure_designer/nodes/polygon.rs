@@ -1,6 +1,7 @@
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::vec_ivec2_serializer;
+use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
@@ -10,6 +11,13 @@ use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::util::transform::Transform2D;
 use glam::DVec2;
+use glam::f64::DVec3;
+use crate::structure_designer::common_constants;
+use crate::renderer::mesh::Mesh;
+use crate::renderer::mesh::Material;
+use crate::renderer::tessellator::tessellator;
+use crate::common::gadget::Gadget;
+use crate::util::hit_test_utils::cylinder_hit_test;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -19,7 +27,7 @@ pub struct PolygonData {
 
 impl NodeData for PolygonData {
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
-        None
+      Some(Box::new(PolygonGadget::new(&self.vertices)))
     }
 }
 
@@ -44,4 +52,147 @@ pub fn eval_polygon<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u
       csg: geometry,
     }
   );
+}
+
+#[derive(Clone)]
+pub struct PolygonGadget {
+    pub vertices: Vec<IVec2>,
+    pub is_dragging: bool,
+    pub dragged_handle: Option<usize>, // index of the dragged vertex
+}
+
+impl PolygonGadget {
+    pub fn new(vertices: &Vec<IVec2>) -> Self {
+        PolygonGadget {
+            vertices: vertices.clone(),
+            is_dragging: false,
+            dragged_handle: None,
+        }
+    }
+}
+
+impl Tessellatable for PolygonGadget {
+  fn tessellate(&self, output_mesh: &mut Mesh) {
+    // Convert to 3D coordinates and scale by unit cell size
+    let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
+
+    // Convert 2D points to 3D space (on XZ plane)
+    let vertices_3d: Vec<DVec3> = self.vertices.iter().map(|v| {
+      DVec3::new(
+        v.x as f64 * cell_size, 
+        0.0, 
+        v.y as f64 * cell_size
+      )
+    }).collect();
+
+    // Create materials
+    let roughness: f32 = 0.2;
+    let metallic: f32 = 0.8;
+    let handle_material = Material::new(&common_constants::HANDLE_COLOR, roughness, metallic);
+    let selected_handle_material = Material::new(&common_constants::SELECTED_HANDLE_COLOR, roughness, metallic);  
+    let line_material = Material::new(&common_constants::LINE_COLOR, roughness, metallic);
+    
+    for i in 0..vertices_3d.len() {
+        let selected = self.dragged_handle.is_some() && self.dragged_handle.unwrap() == i;
+        let p1_3d = vertices_3d[i];
+        let p2_3d = vertices_3d[(i + 1) % vertices_3d.len()];
+
+        // handle for the point
+        let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
+        let handle_start = DVec3::new(p1_3d.x, -handle_half_height, p1_3d.z);
+        let handle_end = DVec3::new(p1_3d.x, handle_half_height, p1_3d.z);
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &handle_end,
+            &handle_start,
+            common_constants::HANDLE_RADIUS,
+            common_constants::HANDLE_DIVISIONS,
+            if selected { &selected_handle_material } else { &handle_material },
+            true
+        );
+
+        // line connecting the points
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &p2_3d,
+            &p1_3d,
+            common_constants::LINE_RADIUS,
+            common_constants::LINE_DIVISIONS,
+            &line_material,
+            false
+        );
+    }
+  }
+
+  fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+      Box::new(self.clone())
+  }
+}
+
+impl Gadget for PolygonGadget {
+    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+        // Convert to 3D coordinates and scale by unit cell size
+        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
+
+        // Convert 2D points to 3D space (on XZ plane)
+        let vertices_3d: Vec<DVec3> = self.vertices.iter().map(|v| {
+            DVec3::new(
+                v.x as f64 * cell_size, 
+                0.0, 
+                v.y as f64 * cell_size
+            )
+        }).collect();
+        
+        // First, check hits with vertex handles
+        for i in 0..vertices_3d.len() {
+            let p1_3d = vertices_3d[i];
+            
+            // Handle for the vertex - test cylinder along Y axis
+            let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
+            let handle_start = DVec3::new(p1_3d.x, -handle_half_height, p1_3d.z);
+            let handle_end = DVec3::new(p1_3d.x, handle_half_height, p1_3d.z);
+            
+            if cylinder_hit_test(&handle_end, &handle_start, common_constants::HANDLE_RADIUS, &ray_origin, &ray_direction).is_some() {
+                return Some(i as i32); // Return the vertex index if hit
+            }
+        }
+        
+        // Next, check hits with line segments
+        for i in 0..vertices_3d.len() {
+            let p1_3d = vertices_3d[i];
+            let p2_3d = vertices_3d[(i + 1) % vertices_3d.len()];
+            
+            if cylinder_hit_test(&p2_3d, &p1_3d, common_constants::LINE_RADIUS, &ray_origin, &ray_direction).is_some() {
+                // Return the number of vertices plus the line segment index if hit
+                return Some(vertices_3d.len() as i32 + i as i32);
+            }
+        }
+        
+        // No hit
+        None
+    }
+
+    fn start_drag(&mut self, handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
+        //TODO
+    }
+
+    fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+        //TODO
+    }
+
+    fn end_drag(&mut self) {
+        //TODO
+    }
+}
+
+impl NodeNetworkGadget for PolygonGadget {
+    fn clone_box(&self) -> Box<dyn NodeNetworkGadget> {
+        Box::new(self.clone())
+    }
+    
+    fn sync_data(&self, data: &mut dyn NodeData) {
+        if let Some(polygon_data) = data.as_any_mut().downcast_mut::<PolygonData>() {
+            polygon_data.vertices = self.vertices.clone();
+        }
+    }
 }
