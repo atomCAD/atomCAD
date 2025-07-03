@@ -86,10 +86,10 @@ pub fn eval_half_space<'a>(
   let end_x =   width * 0.5;
   let end_z =   height * 0.5;
 
-  let v1 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(start_x, 0.0, start_z)));
-  let v2 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(start_x, 0.0, end_z)));
-  let v3 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(end_x, 0.0, end_z)));
-  let v4 = dvec3_to_point3(center_pos + rotation.mul_vec3(DVec3::new(end_x, 0.0, start_z)));
+  let v1 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, start_z)));
+  let v2 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, end_z)));
+  let v3 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, end_z)));
+  let v4 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, start_z)));
 
   let geometry = if context.explicit_geo_eval_needed {
     CSG::from_polygons(&[
