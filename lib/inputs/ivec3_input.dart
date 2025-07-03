@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 
 /// A reusable widget for editing IVec3 values
@@ -111,6 +112,54 @@ class _IVec3InputState extends State<IVec3Input> {
     }
   }
 
+  void _incrementValue(String axis) {
+    int currentValue;
+    switch (axis) {
+      case 'x':
+        currentValue = int.tryParse(_xController.text) ?? widget.value.x;
+        final newValue = currentValue + 1;
+        _xController.text = newValue.toString();
+        widget.onChanged(APIIVec3(x: newValue, y: widget.value.y, z: widget.value.z));
+        break;
+      case 'y':
+        currentValue = int.tryParse(_yController.text) ?? widget.value.y;
+        final newValue = currentValue + 1;
+        _yController.text = newValue.toString();
+        widget.onChanged(APIIVec3(x: widget.value.x, y: newValue, z: widget.value.z));
+        break;
+      case 'z':
+        currentValue = int.tryParse(_zController.text) ?? widget.value.z;
+        final newValue = currentValue + 1;
+        _zController.text = newValue.toString();
+        widget.onChanged(APIIVec3(x: widget.value.x, y: widget.value.y, z: newValue));
+        break;
+    }
+  }
+
+  void _decrementValue(String axis) {
+    int currentValue;
+    switch (axis) {
+      case 'x':
+        currentValue = int.tryParse(_xController.text) ?? widget.value.x;
+        final newValue = currentValue - 1;
+        _xController.text = newValue.toString();
+        widget.onChanged(APIIVec3(x: newValue, y: widget.value.y, z: widget.value.z));
+        break;
+      case 'y':
+        currentValue = int.tryParse(_yController.text) ?? widget.value.y;
+        final newValue = currentValue - 1;
+        _yController.text = newValue.toString();
+        widget.onChanged(APIIVec3(x: widget.value.x, y: newValue, z: widget.value.z));
+        break;
+      case 'z':
+        currentValue = int.tryParse(_zController.text) ?? widget.value.z;
+        final newValue = currentValue - 1;
+        _zController.text = newValue.toString();
+        widget.onChanged(APIIVec3(x: widget.value.x, y: widget.value.y, z: newValue));
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const inputDecoration = InputDecoration(
@@ -126,32 +175,65 @@ class _IVec3InputState extends State<IVec3Input> {
         Row(
           children: [
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'X'),
-                controller: _xController,
-                focusNode: _xFocusNode,
-                keyboardType: TextInputType.number,
-                onSubmitted: (text) => _updateValueFromText(text, 'x'),
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    if (event.scrollDelta.dy > 0) {
+                      _decrementValue('x');
+                    } else if (event.scrollDelta.dy < 0) {
+                      _incrementValue('x');
+                    }
+                  }
+                },
+                child: TextField(
+                  decoration: inputDecoration.copyWith(labelText: 'X'),
+                  controller: _xController,
+                  focusNode: _xFocusNode,
+                  keyboardType: TextInputType.number,
+                  onSubmitted: (text) => _updateValueFromText(text, 'x'),
+                ),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'Y'),
-                controller: _yController,
-                focusNode: _yFocusNode,
-                keyboardType: TextInputType.number,
-                onSubmitted: (text) => _updateValueFromText(text, 'y'),
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    if (event.scrollDelta.dy > 0) {
+                      _decrementValue('y');
+                    } else if (event.scrollDelta.dy < 0) {
+                      _incrementValue('y');
+                    }
+                  }
+                },
+                child: TextField(
+                  decoration: inputDecoration.copyWith(labelText: 'Y'),
+                  controller: _yController,
+                  focusNode: _yFocusNode,
+                  keyboardType: TextInputType.number,
+                  onSubmitted: (text) => _updateValueFromText(text, 'y'),
+                ),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'Z'),
-                controller: _zController,
-                focusNode: _zFocusNode,
-                keyboardType: TextInputType.number,
-                onSubmitted: (text) => _updateValueFromText(text, 'z'),
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    if (event.scrollDelta.dy > 0) {
+                      _decrementValue('z');
+                    } else if (event.scrollDelta.dy < 0) {
+                      _incrementValue('z');
+                    }
+                  }
+                },
+                child: TextField(
+                  decoration: inputDecoration.copyWith(labelText: 'Z'),
+                  controller: _zController,
+                  focusNode: _zFocusNode,
+                  keyboardType: TextInputType.number,
+                  onSubmitted: (text) => _updateValueFromText(text, 'z'),
+                ),
               ),
             ),
           ],

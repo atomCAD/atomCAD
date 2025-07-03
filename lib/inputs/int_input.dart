@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 /// A reusable widget for editing integer values
 class IntInput extends StatefulWidget {
@@ -58,22 +59,49 @@ class _IntInputState extends State<IntInput> {
     super.dispose();
   }
 
+  void _incrementValue() {
+    final currentValue = int.tryParse(_controller.text) ?? widget.value;
+    final newValue = currentValue + 1;
+    _controller.text = newValue.toString();
+    widget.onChanged(newValue);
+  }
+
+  void _decrementValue() {
+    final currentValue = int.tryParse(_controller.text) ?? widget.value;
+    final newValue = currentValue - 1;
+    _controller.text = newValue.toString();
+    widget.onChanged(newValue);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(widget.label),
-        TextField(
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-          ),
-          controller: _controller,
-          focusNode: _focusNode,
-          keyboardType: TextInputType.number,
-          onSubmitted: (text) {
-            _updateValueFromText(text);
+        Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              // Scrolling down (positive delta) decreases the value
+              // Scrolling up (negative delta) increases the value
+              if (event.scrollDelta.dy > 0) {
+                _decrementValue();
+              } else if (event.scrollDelta.dy < 0) {
+                _incrementValue();
+              }
+            }
           },
+          child: TextField(
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+            ),
+            controller: _controller,
+            focusNode: _focusNode,
+            keyboardType: TextInputType.number,
+            onSubmitted: (text) {
+              _updateValueFromText(text);
+            },
+          ),
         ),
       ],
     );
