@@ -20,43 +20,10 @@ class SphereEditor extends StatefulWidget {
 }
 
 class SphereEditorState extends State<SphereEditor> {
-  APISphereData? _stagedData;
-
-  @override
-  void initState() {
-    super.initState();
-    setState(() {
-      _stagedData = widget.data;
-    });
-  }
-
-  @override
-  void didUpdateWidget(SphereEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.data != widget.data) {
-      setState(() {
-        _stagedData = widget.data;
-      });
-    }
-  }
-
-  void _updateStagedData(APISphereData newData) {
-    setState(() => _stagedData = newData);
-  }
-
-  void _applyChanges() {
-    if (_stagedData != null) {
-      setSphereData(
-        nodeId: widget.nodeId,
-        data: _stagedData!,
-      );
-      // No need to update _data here as it will be updated in the parent widget
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    if (_stagedData == null) {
+    if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -71,43 +38,30 @@ class SphereEditorState extends State<SphereEditor> {
             const SizedBox(height: 8),
             IVec3Input(
               label: 'Center',
-              value: _stagedData!.center,
+              value: widget.data!.center,
               onChanged: (newValue) {
-                _updateStagedData(APISphereData(
-                  center: newValue,
-                  radius: _stagedData!.radius,
-                ));
+                setSphereData(
+                  nodeId: widget.nodeId,
+                  data: APISphereData(
+                    center: newValue,
+                    radius: widget.data!.radius,
+                  ),
+                );
               },
             ),
             const SizedBox(height: 8),
             IntInput(
               label: 'Radius',
-              value: _stagedData!.radius,
+              value: widget.data!.radius,
               onChanged: (newValue) {
-                _updateStagedData(APISphereData(
-                  center: _stagedData!.center,
-                  radius: newValue,
-                ));
+                setSphereData(
+                  nodeId: widget.nodeId,
+                  data: APISphereData(
+                    center: widget.data!.center,
+                    radius: newValue,
+                  ),
+                );
               },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _stagedData != widget.data
-                      ? () {
-                          setState(() => _stagedData = widget.data);
-                        }
-                      : null,
-                  child: const Text('Reset'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _stagedData != widget.data ? _applyChanges : null,
-                  child: const Text('Apply'),
-                ),
-              ],
             ),
           ],
         ),

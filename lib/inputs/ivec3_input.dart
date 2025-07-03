@@ -22,6 +22,10 @@ class _IVec3InputState extends State<IVec3Input> {
   late TextEditingController _xController;
   late TextEditingController _yController;
   late TextEditingController _zController;
+  
+  late FocusNode _xFocusNode;
+  late FocusNode _yFocusNode;
+  late FocusNode _zFocusNode;
 
   @override
   void initState() {
@@ -29,6 +33,31 @@ class _IVec3InputState extends State<IVec3Input> {
     _xController = TextEditingController(text: widget.value.x.toString());
     _yController = TextEditingController(text: widget.value.y.toString());
     _zController = TextEditingController(text: widget.value.z.toString());
+    
+    _xFocusNode = FocusNode();
+    _yFocusNode = FocusNode();
+    _zFocusNode = FocusNode();
+    
+    _xFocusNode.addListener(() {
+      if (!_xFocusNode.hasFocus) {
+        // When focus is lost, update the value
+        _updateValueFromText(_xController.text, 'x');
+      }
+    });
+    
+    _yFocusNode.addListener(() {
+      if (!_yFocusNode.hasFocus) {
+        // When focus is lost, update the value
+        _updateValueFromText(_yController.text, 'y');
+      }
+    });
+    
+    _zFocusNode.addListener(() {
+      if (!_zFocusNode.hasFocus) {
+        // When focus is lost, update the value
+        _updateValueFromText(_zController.text, 'z');
+      }
+    });
   }
 
   @override
@@ -56,10 +85,13 @@ class _IVec3InputState extends State<IVec3Input> {
     _xController.dispose();
     _yController.dispose();
     _zController.dispose();
+    _xFocusNode.dispose();
+    _yFocusNode.dispose();
+    _zFocusNode.dispose();
     super.dispose();
   }
 
-  void _handleValueChange(String text, String axis) {
+  void _updateValueFromText(String text, String axis) {
     final newValue = int.tryParse(text);
     if (newValue != null) {
       switch (axis) {
@@ -97,8 +129,9 @@ class _IVec3InputState extends State<IVec3Input> {
               child: TextField(
                 decoration: inputDecoration.copyWith(labelText: 'X'),
                 controller: _xController,
+                focusNode: _xFocusNode,
                 keyboardType: TextInputType.number,
-                onChanged: (text) => _handleValueChange(text, 'x'),
+                onSubmitted: (text) => _updateValueFromText(text, 'x'),
               ),
             ),
             const SizedBox(width: 8),
@@ -106,8 +139,9 @@ class _IVec3InputState extends State<IVec3Input> {
               child: TextField(
                 decoration: inputDecoration.copyWith(labelText: 'Y'),
                 controller: _yController,
+                focusNode: _yFocusNode,
                 keyboardType: TextInputType.number,
-                onChanged: (text) => _handleValueChange(text, 'y'),
+                onSubmitted: (text) => _updateValueFromText(text, 'y'),
               ),
             ),
             const SizedBox(width: 8),
@@ -115,8 +149,9 @@ class _IVec3InputState extends State<IVec3Input> {
               child: TextField(
                 decoration: inputDecoration.copyWith(labelText: 'Z'),
                 controller: _zController,
+                focusNode: _zFocusNode,
                 keyboardType: TextInputType.number,
-                onChanged: (text) => _handleValueChange(text, 'z'),
+                onSubmitted: (text) => _updateValueFromText(text, 'z'),
               ),
             ),
           ],

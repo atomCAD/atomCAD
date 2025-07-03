@@ -19,11 +19,19 @@ class IntInput extends StatefulWidget {
 
 class _IntInputState extends State<IntInput> {
   late TextEditingController _controller;
+  late FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value.toString());
+    _focusNode = FocusNode();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        // When focus is lost, update the value
+        _updateValueFromText(_controller.text);
+      }
+    });
   }
 
   @override
@@ -36,9 +44,17 @@ class _IntInputState extends State<IntInput> {
     }
   }
 
+  void _updateValueFromText(String text) {
+    final newValue = int.tryParse(text);
+    if (newValue != null) {
+      widget.onChanged(newValue);
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -53,12 +69,10 @@ class _IntInputState extends State<IntInput> {
             border: OutlineInputBorder(),
           ),
           controller: _controller,
+          focusNode: _focusNode,
           keyboardType: TextInputType.number,
-          onChanged: (text) {
-            final newValue = int.tryParse(text);
-            if (newValue != null) {
-              widget.onChanged(newValue);
-            }
+          onSubmitted: (text) {
+            _updateValueFromText(text);
           },
         ),
       ],
