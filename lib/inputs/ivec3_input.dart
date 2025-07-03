@@ -33,6 +33,21 @@ class _IVec3InputState extends State<IVec3Input> {
   late FocusNode _yFocusNode;
   late FocusNode _zFocusNode;
 
+  // Helper method to handle scroll events for any axis
+  void _handleScrollEvent(PointerScrollEvent event, String axis) {
+    // Check if shift key is pressed for larger increments
+    final useShiftIncrement = RawKeyboard.instance.keysPressed
+        .any((key) => key == LogicalKeyboardKey.shift ||
+                 key == LogicalKeyboardKey.shiftLeft ||
+                 key == LogicalKeyboardKey.shiftRight);
+    
+    if (event.scrollDelta.dy > 0) {
+      _decrementValue(axis, useShiftIncrement: useShiftIncrement);
+    } else if (event.scrollDelta.dy < 0) {
+      _incrementValue(axis, useShiftIncrement: useShiftIncrement);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -308,40 +323,67 @@ class _IVec3InputState extends State<IVec3Input> {
 
   // Build a tooltip message for a specific axis based on constraints
   String _buildAxisTooltipMessage(String axis) {
-    List<String> tooltipLines = [
-      'Use mouse scroll wheel to quickly change the value',
-      'Hold SHIFT while scrolling for 10x increments'
+    final tooltipLines = [
+      'Use mouse wheel to increment/decrement',
+      'Hold SHIFT + mouse wheel for 10x steps',
     ];
     
-    if (widget.minimumValue != null) {
-      switch (axis) {
-        case 'x':
+    switch (axis) {
+      case 'x':
+        if (widget.minimumValue != null) {
           tooltipLines.add('Minimum value: ${widget.minimumValue!.x}');
-          break;
-        case 'y':
-          tooltipLines.add('Minimum value: ${widget.minimumValue!.y}');
-          break;
-        case 'z':
-          tooltipLines.add('Minimum value: ${widget.minimumValue!.z}');
-          break;
-      }
-    }
-    
-    if (widget.maximumValue != null) {
-      switch (axis) {
-        case 'x':
+        }
+        if (widget.maximumValue != null) {
           tooltipLines.add('Maximum value: ${widget.maximumValue!.x}');
-          break;
-        case 'y':
+        }
+        break;
+      case 'y':
+        if (widget.minimumValue != null) {
+          tooltipLines.add('Minimum value: ${widget.minimumValue!.y}');
+        }
+        if (widget.maximumValue != null) {
           tooltipLines.add('Maximum value: ${widget.maximumValue!.y}');
-          break;
-        case 'z':
+        }
+        break;
+      case 'z':
+        if (widget.minimumValue != null) {
+          tooltipLines.add('Minimum value: ${widget.minimumValue!.z}');
+        }
+        if (widget.maximumValue != null) {
           tooltipLines.add('Maximum value: ${widget.maximumValue!.z}');
-          break;
-      }
+        }
+        break;
     }
     
     return tooltipLines.join('\n');
+  }
+  
+  // Helper method to build a TextField widget for an axis
+  Widget _buildAxisTextField({
+    required String axis,
+    required String axisLabel,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required InputDecoration baseDecoration,
+  }) {
+    return Tooltip(
+      message: _buildAxisTooltipMessage(axis),
+      preferBelow: true,
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent) {
+            _handleScrollEvent(event, axis);
+          }
+        },
+        child: TextField(
+          decoration: baseDecoration.copyWith(labelText: axisLabel),
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: TextInputType.number,
+          onSubmitted: (text) => _updateValueFromText(text, axis),
+        ),
+      ),
+    );
   }
 
   @override
@@ -359,95 +401,32 @@ class _IVec3InputState extends State<IVec3Input> {
         Row(
           children: [
             Expanded(
-              child: Tooltip(
-                message: _buildAxisTooltipMessage('x'),
-                preferBelow: true,
-                child: Listener(
-                  onPointerSignal: (event) {
-                    if (event is PointerScrollEvent) {
-                      // Check if shift key is pressed for larger increments
-                      final useShiftIncrement = RawKeyboard.instance.keysPressed
-                          .any((key) => key == LogicalKeyboardKey.shift ||
-                                     key == LogicalKeyboardKey.shiftLeft ||
-                                     key == LogicalKeyboardKey.shiftRight);
-                      
-                      if (event.scrollDelta.dy > 0) {
-                        _decrementValue('x', useShiftIncrement: useShiftIncrement);
-                      } else if (event.scrollDelta.dy < 0) {
-                        _incrementValue('x', useShiftIncrement: useShiftIncrement);
-                      }
-                    }
-                  },
-                  child: TextField(
-                    decoration: inputDecoration.copyWith(labelText: 'X'),
-                    controller: _xController,
-                    focusNode: _xFocusNode,
-                    keyboardType: TextInputType.number,
-                    onSubmitted: (text) => _updateValueFromText(text, 'x'),
-                  ),
-                ),
+              child: _buildAxisTextField(
+                axis: 'x',
+                axisLabel: 'X',
+                controller: _xController,
+                focusNode: _xFocusNode,
+                baseDecoration: inputDecoration,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Tooltip(
-                message: _buildAxisTooltipMessage('y'),
-                preferBelow: true,
-                child: Listener(
-                  onPointerSignal: (event) {
-                    if (event is PointerScrollEvent) {
-                      // Check if shift key is pressed for larger increments
-                      final useShiftIncrement = RawKeyboard.instance.keysPressed
-                          .any((key) => key == LogicalKeyboardKey.shift ||
-                                     key == LogicalKeyboardKey.shiftLeft ||
-                                     key == LogicalKeyboardKey.shiftRight);
-                      
-                      if (event.scrollDelta.dy > 0) {
-                        _decrementValue('y', useShiftIncrement: useShiftIncrement);
-                      } else if (event.scrollDelta.dy < 0) {
-                        _incrementValue('y', useShiftIncrement: useShiftIncrement);
-                      }
-                    }
-                  },
-                  child: TextField(
-                    decoration: inputDecoration.copyWith(labelText: 'Y'),
-                    controller: _yController,
-                    focusNode: _yFocusNode,
-                    keyboardType: TextInputType.number,
-                    onSubmitted: (text) => _updateValueFromText(text, 'y'),
-                  ),
-                ),
+              child: _buildAxisTextField(
+                axis: 'y',
+                axisLabel: 'Y',
+                controller: _yController,
+                focusNode: _yFocusNode,
+                baseDecoration: inputDecoration,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Tooltip(
-                message: _buildAxisTooltipMessage('z'),
-                preferBelow: true,
-                child: Listener(
-                  onPointerSignal: (event) {
-                    if (event is PointerScrollEvent) {
-                      // Check if shift key is pressed for larger increments
-                      final useShiftIncrement = RawKeyboard.instance.keysPressed
-                          .any((key) => key == LogicalKeyboardKey.shift ||
-                                     key == LogicalKeyboardKey.shiftLeft ||
-                                     key == LogicalKeyboardKey.shiftRight);
-                      
-                      if (event.scrollDelta.dy > 0) {
-                        _decrementValue('z', useShiftIncrement: useShiftIncrement);
-                      } else if (event.scrollDelta.dy < 0) {
-                        _incrementValue('z', useShiftIncrement: useShiftIncrement);
-                      }
-                    }
-                  },
-                  child: TextField(
-                    decoration: inputDecoration.copyWith(labelText: 'Z'),
-                    controller: _zController,
-                    focusNode: _zFocusNode,
-                    keyboardType: TextInputType.number,
-                    onSubmitted: (text) => _updateValueFromText(text, 'z'),
-                  ),
-                ),
+              child: _buildAxisTextField(
+                axis: 'z',
+                axisLabel: 'Z',
+                controller: _zController,
+                focusNode: _zFocusNode,
+                baseDecoration: inputDecoration,
               ),
             ),
           ],
