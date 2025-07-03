@@ -76,6 +76,7 @@ class NodeDataWidget extends StatelessWidget {
         return CuboidEditor(
           nodeId: selectedNode.id,
           data: cuboidData,
+          model: model,
         );
       case 'sphere':
         // Fetch the sphere data here in the parent widget

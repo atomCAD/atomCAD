@@ -357,6 +357,11 @@ class StructureDesignerModel extends ChangeNotifier {
     return nodeId;
   }
 
+  void setCuboidData(BigInt nodeId, APICuboidData data) {
+    structure_designer_api.setCuboidData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];

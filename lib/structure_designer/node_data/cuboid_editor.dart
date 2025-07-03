@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor widget for cuboid nodes
 class CuboidEditor extends StatefulWidget {
   final BigInt nodeId;
   final APICuboidData? data;
+  final StructureDesignerModel model;
 
   const CuboidEditor({
     super.key,
     required this.nodeId,
     required this.data,
+    required this.model,
   });
 
   @override
@@ -40,9 +42,9 @@ class CuboidEditorState extends State<CuboidEditor> {
               label: 'Min Corner',
               value: widget.data!.minCorner,
               onChanged: (newValue) {
-                setCuboidData(
-                  nodeId: widget.nodeId,
-                  data: APICuboidData(
+                widget.model.setCuboidData(
+                  widget.nodeId,
+                  APICuboidData(
                     minCorner: newValue,
                     extent: widget.data!.extent,
                   ),
@@ -54,9 +56,9 @@ class CuboidEditorState extends State<CuboidEditor> {
               label: 'Extent',
               value: widget.data!.extent,
               onChanged: (newValue) {
-                setCuboidData(
-                  nodeId: widget.nodeId,
-                  data: APICuboidData(
+                widget.model.setCuboidData(
+                  widget.nodeId,
+                  APICuboidData(
                     minCorner: widget.data!.minCorner,
                     extent: newValue,
                   ),
