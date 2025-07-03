@@ -20,7 +20,6 @@ class SphereEditor extends StatefulWidget {
 }
 
 class SphereEditorState extends State<SphereEditor> {
-
   @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
@@ -53,6 +52,7 @@ class SphereEditorState extends State<SphereEditor> {
             IntInput(
               label: 'Radius',
               value: widget.data!.radius,
+              minimumValue: 1,
               onChanged: (newValue) {
                 setSphereData(
                   nodeId: widget.nodeId,

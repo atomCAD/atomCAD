@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 
 /// A reusable widget for editing integer values
@@ -6,12 +7,16 @@ class IntInput extends StatefulWidget {
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
+  final int? minimumValue;
+  final int? maximumValue;
 
   const IntInput({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.minimumValue,
+    this.maximumValue,
   });
 
   @override
@@ -45,14 +50,33 @@ class _IntInputState extends State<IntInput> {
     }
   }
 
+  int? _validateInput(String text) {
+    // Try to parse the input as an integer
+    final value = int.tryParse(text);
+    if (value == null) {
+      return null;
+    }
+
+    // Check range constraints if specified
+    if (widget.minimumValue != null && value < widget.minimumValue!) {
+      return null;
+    }
+    if (widget.maximumValue != null && value > widget.maximumValue!) {
+      return null;
+    }
+
+    // Input is valid
+    return value;
+  }
+
   void _updateValueFromText(String text) {
-    final newValue = int.tryParse(text);
-    if (newValue != null) {
-      widget.onChanged(newValue);
+    final validValue = _validateInput(text);
+    if (validValue != null) {
+      widget.onChanged(validValue);
     } else {
-      // If parsing fails, restore the previous valid value
+      // If validation fails, restore the previous valid value
       _controller.text = widget.value.toString();
-      
+
       // Position cursor at the end of the text
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
@@ -67,48 +91,102 @@ class _IntInputState extends State<IntInput> {
     super.dispose();
   }
 
-  void _incrementValue() {
+  void _incrementValue({bool useShiftIncrement = false}) {
     final currentValue = int.tryParse(_controller.text) ?? widget.value;
-    final newValue = currentValue + 1;
-    _controller.text = newValue.toString();
-    widget.onChanged(newValue);
+    // Use increment of 10 if shift is pressed, otherwise increment by 1
+    final increment = useShiftIncrement ? 10 : 1;
+    var newValue = currentValue + increment;
+
+    // Clamp at maxValue if specified
+    if (widget.maximumValue != null && newValue > widget.maximumValue!) {
+      newValue = widget.maximumValue!;
+    }
+
+    // Still validate to handle other cases and ensure the value is within bounds
+    final validatedValue = _validateInput(newValue.toString());
+    if (validatedValue != null) {
+      _controller.text = validatedValue.toString();
+      widget.onChanged(validatedValue);
+    }
   }
 
-  void _decrementValue() {
+  void _decrementValue({bool useShiftIncrement = false}) {
     final currentValue = int.tryParse(_controller.text) ?? widget.value;
-    final newValue = currentValue - 1;
-    _controller.text = newValue.toString();
-    widget.onChanged(newValue);
+    // Use decrement of 10 if shift is pressed, otherwise decrement by 1
+    final decrement = useShiftIncrement ? 10 : 1;
+    var newValue = currentValue - decrement;
+
+    // Clamp at minValue if specified
+    if (widget.minimumValue != null && newValue < widget.minimumValue!) {
+      newValue = widget.minimumValue!;
+    }
+    
+    // Still validate to handle other cases and ensure the value is within bounds
+    final validatedValue = _validateInput(newValue.toString());
+    if (validatedValue != null) {
+      _controller.text = validatedValue.toString();
+      widget.onChanged(validatedValue);
+    }
   }
 
   @override
+  // Build a tooltip message based on constraints
+  String _buildTooltipMessage() {
+    List<String> tooltipLines = [
+      'Use mouse scroll wheel to quickly change the value',
+      'Hold SHIFT while scrolling for 10x increments'
+    ];
+    
+    if (widget.minimumValue != null) {
+      tooltipLines.add('Minimum value: ${widget.minimumValue}');
+    }
+    
+    if (widget.maximumValue != null) {
+      tooltipLines.add('Maximum value: ${widget.maximumValue}');
+    }
+    
+    return tooltipLines.join('\n');
+  }
+
   Widget build(BuildContext context) {
+    final tooltipMessage = _buildTooltipMessage();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(widget.label),
-        Listener(
-          onPointerSignal: (event) {
-            if (event is PointerScrollEvent) {
-              // Scrolling down (positive delta) decreases the value
-              // Scrolling up (negative delta) increases the value
-              if (event.scrollDelta.dy > 0) {
-                _decrementValue();
-              } else if (event.scrollDelta.dy < 0) {
-                _incrementValue();
+        Tooltip(
+          message: tooltipMessage,
+          preferBelow: true,
+          child: Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent) {
+                // Check if shift key is pressed for larger increments
+                final useShiftIncrement = RawKeyboard.instance.keysPressed
+                    .any((key) => key == LogicalKeyboardKey.shift ||
+                               key == LogicalKeyboardKey.shiftLeft ||
+                               key == LogicalKeyboardKey.shiftRight);
+                
+                // Scrolling down (positive delta) decreases the value
+                // Scrolling up (negative delta) increases the value
+                if (event.scrollDelta.dy > 0) {
+                  _decrementValue(useShiftIncrement: useShiftIncrement);
+                } else if (event.scrollDelta.dy < 0) {
+                  _incrementValue(useShiftIncrement: useShiftIncrement);
+                }
               }
-            }
-          },
-          child: TextField(
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-            ),
-            controller: _controller,
-            focusNode: _focusNode,
-            keyboardType: TextInputType.number,
-            onSubmitted: (text) {
-              _updateValueFromText(text);
             },
+            child: TextField(
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+              ),
+              controller: _controller,
+              focusNode: _focusNode,
+              keyboardType: TextInputType.number,
+              onSubmitted: (text) {
+                _updateValueFromText(text);
+              },
+            ),
           ),
         ),
       ],
