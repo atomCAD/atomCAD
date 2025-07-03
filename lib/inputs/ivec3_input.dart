@@ -109,6 +109,28 @@ class _IVec3InputState extends State<IVec3Input> {
               APIIVec3(x: widget.value.x, y: widget.value.y, z: newValue));
           break;
       }
+    } else {
+      // If parsing fails, restore the previous valid value for this axis
+      switch (axis) {
+        case 'x':
+          _xController.text = widget.value.x.toString();
+          _xController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _xController.text.length),
+          );
+          break;
+        case 'y':
+          _yController.text = widget.value.y.toString();
+          _yController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _yController.text.length),
+          );
+          break;
+        case 'z':
+          _zController.text = widget.value.z.toString();
+          _zController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _zController.text.length),
+          );
+          break;
+      }
     }
   }
 

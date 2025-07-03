@@ -49,6 +49,14 @@ class _IntInputState extends State<IntInput> {
     final newValue = int.tryParse(text);
     if (newValue != null) {
       widget.onChanged(newValue);
+    } else {
+      // If parsing fails, restore the previous valid value
+      _controller.text = widget.value.toString();
+      
+      // Position cursor at the end of the text
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: _controller.text.length),
+      );
     }
   }
 
