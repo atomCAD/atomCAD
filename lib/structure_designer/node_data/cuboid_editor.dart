@@ -19,43 +19,11 @@ class CuboidEditor extends StatefulWidget {
 }
 
 class CuboidEditorState extends State<CuboidEditor> {
-  APICuboidData? _stagedData;
-
-  @override
-  void initState() {
-    super.initState();
-    setState(() {
-      _stagedData = widget.data;
-    });
-  }
-
-  @override
-  void didUpdateWidget(CuboidEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.data != widget.data) {
-      setState(() {
-        _stagedData = widget.data;
-      });
-    }
-  }
-
-  void _updateStagedData(APICuboidData newData) {
-    setState(() => _stagedData = newData);
-  }
-
-  void _applyChanges() {
-    if (_stagedData != null) {
-      setCuboidData(
-        nodeId: widget.nodeId,
-        data: _stagedData!,
-      );
-      // No need to update _data here as it will be updated in the parent widget
-    }
-  }
+  // Direct API calls are made in onChanged handlers
 
   @override
   Widget build(BuildContext context) {
-    if (_stagedData == null) {
+    if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -70,43 +38,30 @@ class CuboidEditorState extends State<CuboidEditor> {
             const SizedBox(height: 8),
             IVec3Input(
               label: 'Min Corner',
-              value: _stagedData!.minCorner,
+              value: widget.data!.minCorner,
               onChanged: (newValue) {
-                _updateStagedData(APICuboidData(
-                  minCorner: newValue,
-                  extent: _stagedData!.extent,
-                ));
+                setCuboidData(
+                  nodeId: widget.nodeId,
+                  data: APICuboidData(
+                    minCorner: newValue,
+                    extent: widget.data!.extent,
+                  ),
+                );
               },
             ),
             const SizedBox(height: 8),
             IVec3Input(
               label: 'Extent',
-              value: _stagedData!.extent,
+              value: widget.data!.extent,
               onChanged: (newValue) {
-                _updateStagedData(APICuboidData(
-                  minCorner: _stagedData!.minCorner,
-                  extent: newValue,
-                ));
+                setCuboidData(
+                  nodeId: widget.nodeId,
+                  data: APICuboidData(
+                    minCorner: widget.data!.minCorner,
+                    extent: newValue,
+                  ),
+                );
               },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _stagedData != widget.data
-                      ? () {
-                          setState(() => _stagedData = widget.data);
-                        }
-                      : null,
-                  child: const Text('Reset'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _stagedData != widget.data ? _applyChanges : null,
-                  child: const Text('Apply'),
-                ),
-              ],
             ),
           ],
         ),
