@@ -252,8 +252,10 @@ fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut M
 /// * `material` - The material to apply to the mesh vertices
 pub fn tessellate_poly_mesh(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, outside_material: &Material, inside_material: Option<&Material>) {
     tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing.clone(), outside_material, true);
-    if let Some(material) = inside_material {
-        tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing, material, false);
+    if poly_mesh.open {
+        if let Some(material) = inside_material {
+            tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing, material, false);
+        } 
     }
 }
 
