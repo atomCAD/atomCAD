@@ -204,6 +204,7 @@ class NodeDataWidget extends StatelessWidget {
         return HalfPlaneEditor(
           nodeId: selectedNode.id,
           data: halfPlaneData,
+          model: model,
         );
       case 'reg_poly':
         // Fetch the polygon data here in the parent widget
@@ -214,6 +215,7 @@ class NodeDataWidget extends StatelessWidget {
         return RegPolyEditor(
           nodeId: selectedNode.id,
           data: regPolyData,
+          model: model,
         );
       default:
         return Center(

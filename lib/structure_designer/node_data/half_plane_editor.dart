@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/inputs/ivec2_input.dart';
 import 'dart:math' show gcd;
 
@@ -9,11 +9,13 @@ import 'dart:math' show gcd;
 class HalfPlaneEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIHalfPlaneData? data;
+  final StructureDesignerModel model;
 
   const HalfPlaneEditor({
     super.key,
     required this.nodeId,
     required this.data,
+    required this.model,
   });
 
   @override
@@ -21,39 +23,6 @@ class HalfPlaneEditor extends StatefulWidget {
 }
 
 class HalfPlaneEditorState extends State<HalfPlaneEditor> {
-  APIHalfPlaneData? _stagedData;
-
-  @override
-  void initState() {
-    super.initState();
-    setState(() {
-      _stagedData = widget.data;
-    });
-  }
-
-  @override
-  void didUpdateWidget(HalfPlaneEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.data != widget.data) {
-      setState(() {
-        _stagedData = widget.data;
-      });
-    }
-  }
-
-  void _updateStagedData(APIHalfPlaneData newData) {
-    setState(() => _stagedData = newData);
-  }
-
-  void _applyChanges() {
-    if (_stagedData != null) {
-      setHalfPlaneData(
-        nodeId: widget.nodeId,
-        data: _stagedData!,
-      );
-      // No need to update _data here as it will be updated in the parent widget
-    }
-  }
 
   /// Calculate the Miller index from two points
   String _calculateMillerIndex(APIIVec2 point1, APIIVec2 point2) {
@@ -82,13 +51,13 @@ class HalfPlaneEditorState extends State<HalfPlaneEditor> {
 
   @override
   Widget build(BuildContext context) {
-    if (_stagedData == null) {
+    if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
     // Calculate Miller index from the two points
     final millerIndexText =
-        _calculateMillerIndex(_stagedData!.point1, _stagedData!.point2);
+        _calculateMillerIndex(widget.data!.point1, widget.data!.point2);
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -101,23 +70,29 @@ class HalfPlaneEditorState extends State<HalfPlaneEditor> {
             const SizedBox(height: 16),
             IVec2Input(
               label: 'Point 1',
-              value: _stagedData!.point1,
+              value: widget.data!.point1,
               onChanged: (newValue) {
-                _updateStagedData(APIHalfPlaneData(
-                  point1: newValue,
-                  point2: _stagedData!.point2,
-                ));
+                widget.model.setHalfPlaneData(
+                  widget.nodeId,
+                  APIHalfPlaneData(
+                    point1: newValue,
+                    point2: widget.data!.point2,
+                  ),
+                );
               },
             ),
             const SizedBox(height: 12),
             IVec2Input(
               label: 'Point 2',
-              value: _stagedData!.point2,
+              value: widget.data!.point2,
               onChanged: (newValue) {
-                _updateStagedData(APIHalfPlaneData(
-                  point1: _stagedData!.point1,
-                  point2: newValue,
-                ));
+                widget.model.setHalfPlaneData(
+                  widget.nodeId,
+                  APIHalfPlaneData(
+                    point1: widget.data!.point1,
+                    point2: newValue,
+                  ),
+                );
               },
             ),
             const SizedBox(height: 16),
@@ -148,24 +123,6 @@ class HalfPlaneEditorState extends State<HalfPlaneEditor> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _stagedData != widget.data
-                      ? () {
-                          setState(() => _stagedData = widget.data);
-                        }
-                      : null,
-                  child: const Text('Reset'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _stagedData != widget.data ? _applyChanges : null,
-                  child: const Text('Apply'),
-                ),
-              ],
-            ),
           ],
         ),
       ),
