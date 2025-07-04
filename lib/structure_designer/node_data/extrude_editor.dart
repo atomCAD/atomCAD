@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor widget for extrude nodes
 class ExtrudeEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIExtrudeData? data;
+  final StructureDesignerModel model;
 
   const ExtrudeEditor({
     super.key,
     required this.nodeId,
     required this.data,
+    required this.model,
   });
 
   @override
@@ -19,43 +21,11 @@ class ExtrudeEditor extends StatefulWidget {
 }
 
 class ExtrudeEditorState extends State<ExtrudeEditor> {
-  APIExtrudeData? _stagedData;
-
-  @override
-  void initState() {
-    super.initState();
-    setState(() {
-      _stagedData = widget.data;
-    });
-  }
-
-  @override
-  void didUpdateWidget(ExtrudeEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.data != widget.data) {
-      setState(() {
-        _stagedData = widget.data;
-      });
-    }
-  }
-
-  void _updateStagedData(APIExtrudeData newData) {
-    setState(() => _stagedData = newData);
-  }
-
-  void _applyChanges() {
-    if (_stagedData != null) {
-      setExtrudeData(
-        nodeId: widget.nodeId,
-        data: _stagedData!,
-      );
-      // No need to update _data here as it will be updated in the parent widget
-    }
-  }
+  // Direct API calls are made in onChanged handlers
 
   @override
   Widget build(BuildContext context) {
-    if (_stagedData == null) {
+    if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -70,31 +40,15 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
             const SizedBox(height: 8),
             IntInput(
               label: 'Height',
-              value: _stagedData!.height,
+              value: widget.data!.height,
               onChanged: (newValue) {
-                _updateStagedData(APIExtrudeData(
-                  height: newValue,
-                ));
+                widget.model.setExtrudeData(
+                  widget.nodeId,
+                  APIExtrudeData(
+                    height: newValue,
+                  ),
+                );
               },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _stagedData != widget.data
-                      ? () {
-                          setState(() => _stagedData = widget.data);
-                        }
-                      : null,
-                  child: const Text('Reset'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _stagedData != widget.data ? _applyChanges : null,
-                  child: const Text('Apply'),
-                ),
-              ],
             ),
           ],
         ),

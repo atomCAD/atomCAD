@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor widget for sphere nodes
 class SphereEditor extends StatefulWidget {
   final BigInt nodeId;
   final APISphereData? data;
+  final StructureDesignerModel model;
 
   const SphereEditor({
     super.key,
     required this.nodeId,
     required this.data,
+    required this.model,
   });
 
   @override
@@ -39,9 +41,9 @@ class SphereEditorState extends State<SphereEditor> {
               label: 'Center',
               value: widget.data!.center,
               onChanged: (newValue) {
-                setSphereData(
-                  nodeId: widget.nodeId,
-                  data: APISphereData(
+                widget.model.setSphereData(
+                  widget.nodeId,
+                  APISphereData(
                     center: newValue,
                     radius: widget.data!.radius,
                   ),
@@ -54,9 +56,9 @@ class SphereEditorState extends State<SphereEditor> {
               value: widget.data!.radius,
               minimumValue: 1,
               onChanged: (newValue) {
-                setSphereData(
-                  nodeId: widget.nodeId,
-                  data: APISphereData(
+                widget.model.setSphereData(
+                  widget.nodeId,
+                  APISphereData(
                     center: widget.data!.center,
                     radius: newValue,
                   ),

@@ -86,6 +86,7 @@ class NodeDataWidget extends StatelessWidget {
         return SphereEditor(
           nodeId: selectedNode.id,
           data: sphereData,
+          model: model,
         );
       case 'half_space':
         // Fetch the half space data here in the parent widget
@@ -189,6 +190,7 @@ class NodeDataWidget extends StatelessWidget {
         return ExtrudeEditor(
           nodeId: selectedNode.id,
           data: extrudeData,
+          model: model,
         );
       case 'half_plane':
         // Fetch the half plane data here in the parent widget
