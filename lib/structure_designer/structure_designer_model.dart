@@ -372,6 +372,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setHalfSpaceData(BigInt nodeId, APIHalfSpaceData data) {
+    structure_designer_api.setHalfSpaceData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];

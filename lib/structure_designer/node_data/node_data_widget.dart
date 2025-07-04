@@ -97,6 +97,7 @@ class NodeDataWidget extends StatelessWidget {
         return HalfSpaceEditor(
           nodeId: selectedNode.id,
           data: halfSpaceData,
+          model: model,
         );
       case 'geo_trans':
         // Fetch the geo transformation data here in the parent widget

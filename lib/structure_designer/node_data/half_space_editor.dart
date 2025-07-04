@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
-import 'package:flutter_cad/inputs/int_input.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor widget for half_space nodes
 class HalfSpaceEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIHalfSpaceData? data;
+  final StructureDesignerModel model;
 
   const HalfSpaceEditor({
     super.key,
     required this.nodeId,
     required this.data,
+    required this.model,
   });
 
   @override
@@ -20,43 +21,11 @@ class HalfSpaceEditor extends StatefulWidget {
 }
 
 class HalfSpaceEditorState extends State<HalfSpaceEditor> {
-  APIHalfSpaceData? _stagedData;
-
-  @override
-  void initState() {
-    super.initState();
-    setState(() {
-      _stagedData = widget.data;
-    });
-  }
-
-  @override
-  void didUpdateWidget(HalfSpaceEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.data != widget.data) {
-      setState(() {
-        _stagedData = widget.data;
-      });
-    }
-  }
-
-  void _updateStagedData(APIHalfSpaceData newData) {
-    setState(() => _stagedData = newData);
-  }
-
-  void _applyChanges() {
-    if (_stagedData != null) {
-      setHalfSpaceData(
-        nodeId: widget.nodeId,
-        data: _stagedData!,
-      );
-      // No need to update _data here as it will be updated in the parent widget
-    }
-  }
+  // Direct API calls are made in onChanged handlers
 
   @override
   Widget build(BuildContext context) {
-    if (_stagedData == null) {
+    if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -71,43 +40,30 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
             const SizedBox(height: 8),
             IVec3Input(
               label: 'Miller Index',
-              value: _stagedData!.millerIndex,
+              value: widget.data!.millerIndex,
               onChanged: (newValue) {
-                _updateStagedData(APIHalfSpaceData(
-                  millerIndex: newValue,
-                  center: _stagedData!.center,
-                ));
+                widget.model.setHalfSpaceData(
+                  widget.nodeId,
+                  APIHalfSpaceData(
+                    millerIndex: newValue,
+                    center: widget.data!.center,
+                  ),
+                );
               },
             ),
             const SizedBox(height: 8),
             IVec3Input(
               label: 'Center',
-              value: _stagedData!.center,
+              value: widget.data!.center,
               onChanged: (newValue) {
-                _updateStagedData(APIHalfSpaceData(
-                  millerIndex: _stagedData!.millerIndex,
-                  center: newValue,
-                ));
+                widget.model.setHalfSpaceData(
+                  widget.nodeId,
+                  APIHalfSpaceData(
+                    millerIndex: widget.data!.millerIndex,
+                    center: newValue,
+                  ),
+                );
               },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _stagedData != widget.data
-                      ? () {
-                          setState(() => _stagedData = widget.data);
-                        }
-                      : null,
-                  child: const Text('Reset'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _stagedData != widget.data ? _applyChanges : null,
-                  child: const Text('Apply'),
-                ),
-              ],
             ),
           ],
         ),
