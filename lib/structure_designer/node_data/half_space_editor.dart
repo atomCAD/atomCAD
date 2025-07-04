@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -41,6 +42,8 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
             IVec3Input(
               label: 'Miller Index',
               value: widget.data!.millerIndex,
+              minimumValue: APIIVec3(x: -6, y: -6, z: -6),
+              maximumValue: APIIVec3(x: 6, y: 6, z: 6),
               onChanged: (newValue) {
                 widget.model.setHalfSpaceData(
                   widget.nodeId,

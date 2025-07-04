@@ -41,6 +41,7 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
             IntInput(
               label: 'Height',
               value: widget.data!.height,
+              minimumValue: 1,
               onChanged: (newValue) {
                 widget.model.setExtrudeData(
                   widget.nodeId,
