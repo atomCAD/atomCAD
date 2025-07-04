@@ -4,6 +4,7 @@ use glam::Vec3;
 use glam::DVec3;
 use crate::common::poly_mesh::PolyMesh;
 use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
+use crate::structure_designer::common_constants;
 
 /// Adds a triangle to the mesh, respecting the tessellation direction
 /// 
@@ -14,6 +15,95 @@ fn add_triangle(mesh: &mut Mesh, tessellate_outside: bool, v0: u32, v1: u32, v2:
         mesh.add_triangle(v0, v1, v2);
     } else {
         mesh.add_triangle(v0, v2, v1);
+    }
+}
+
+/// Adds a hatched quad to the mesh, creating a grid pattern with square holes
+/// 
+/// # Arguments
+/// * `mesh` - The mesh to add triangles/quads to
+/// * `tessellate_outside` - If true, vertices are ordered for outside view
+/// * `v_positions` - Array of 4 vertex positions in counter-clockwise order
+/// * `v_normals` - Array of 4 vertex normals corresponding to positions
+/// * `material` - Material for the vertices
+/// * `grid_size` - Size of each grid cell
+fn add_hatched_quad(
+    mesh: &mut Mesh, 
+    tessellate_outside: bool, 
+    v_positions: [&Vec3; 4], 
+    v_normals: [&Vec3; 4], 
+    material: &Material, 
+    grid_size: f32
+) {
+    // Get the quad dimensions
+    let side_length = (v_positions[1] - v_positions[0]).length();
+    
+    // Calculate how many grid cells fit in each direction
+    let grid_count = (side_length / grid_size).round().max(1.0) as usize;
+    
+    // Calculate stride vectors (how much to move per grid cell)
+    let stride_u = (*v_positions[1] - *v_positions[0]) / grid_count as f32;
+    let stride_v = (*v_positions[3] - *v_positions[0]) / grid_count as f32;
+    
+    // For each grid cell, create the frame (outer border without the inner square)
+    for u in 0..grid_count {
+        for v in 0..grid_count {
+            // frame is 1/8 of the cell size
+            let frame_thickness = 1.0 / 8.0;
+            
+            // Calculate the four corners of the current cell
+            let base_pos = *v_positions[0] + stride_u * u as f32 + stride_v * v as f32;
+            
+            // Create the outer frame vertices (all 8 points of the frame)
+            let corners = [
+                // Outer corners
+                base_pos,                               // Bottom-left outer
+                base_pos + stride_u,                   // Bottom-right outer
+                base_pos + stride_u + stride_v,       // Top-right outer
+                base_pos + stride_v,                  // Top-left outer
+                
+                // Inner corners (the hole)
+                base_pos + stride_u * frame_thickness + stride_v * frame_thickness,  // Bottom-left inner
+                base_pos + stride_u * (1.0 - frame_thickness) + stride_v * frame_thickness,  // Bottom-right inner
+                base_pos + stride_u * (1.0 - frame_thickness) + stride_v * (1.0 - frame_thickness),  // Top-right inner
+                base_pos + stride_u * frame_thickness + stride_v * (1.0 - frame_thickness),  // Top-left inner
+            ];
+            
+            // Interpolate normal based on position within the quad
+            // For simplicity, we'll use the average normal for all vertices in a grid cell
+            let u_ratio = u as f32 / grid_count as f32;
+            let v_ratio = v as f32 / grid_count as f32;
+            
+            // Bilinear interpolation of normals
+            let normal = *v_normals[0] * (1.0 - u_ratio) * (1.0 - v_ratio) +
+                         *v_normals[1] * u_ratio * (1.0 - v_ratio) +
+                         *v_normals[2] * u_ratio * v_ratio +
+                         *v_normals[3] * (1.0 - u_ratio) * v_ratio;
+            
+            let normal = if normal.length_squared() > 0.0 { normal.normalize() } else { *v_normals[0] };
+            
+            // Add vertices to the mesh
+            let vertex_indices: Vec<u32> = corners.iter().map(|pos| {
+                mesh.add_vertex(Vertex::new(pos, &normal, material))
+            }).collect();
+            
+            // Create the 8 triangles that form the frame (2 for each side of the frame)
+            // Bottom side
+            add_triangle(mesh, tessellate_outside, vertex_indices[0], vertex_indices[1], vertex_indices[5]);
+            add_triangle(mesh, tessellate_outside, vertex_indices[0], vertex_indices[5], vertex_indices[4]);
+            
+            // Right side
+            add_triangle(mesh, tessellate_outside, vertex_indices[1], vertex_indices[2], vertex_indices[6]);
+            add_triangle(mesh, tessellate_outside, vertex_indices[1], vertex_indices[6], vertex_indices[5]);
+            
+            // Top side
+            add_triangle(mesh, tessellate_outside, vertex_indices[2], vertex_indices[3], vertex_indices[7]);
+            add_triangle(mesh, tessellate_outside, vertex_indices[2], vertex_indices[7], vertex_indices[6]);
+            
+            // Left side
+            add_triangle(mesh, tessellate_outside, vertex_indices[3], vertex_indices[0], vertex_indices[4]);
+            add_triangle(mesh, tessellate_outside, vertex_indices[3], vertex_indices[4], vertex_indices[7]);
+        }
     }
 }
 
@@ -260,6 +350,36 @@ pub fn tessellate_poly_mesh(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: Me
 }
 
 fn tessellate_poly_mesh_one_sided(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, material: &Material, tessellate_outside: bool) {
+    // Special case for hatched quads: if the poly_mesh contains exactly one quad face and is marked as hatched
+    if poly_mesh.hatched && poly_mesh.faces.len() == 1 && poly_mesh.faces[0].vertices.len() == 4 {
+        // Get the vertex positions and normals directly from the poly_mesh
+        let face = &poly_mesh.faces[0];
+        let v0_idx = face.vertices[0] as usize;
+        let v1_idx = face.vertices[1] as usize;
+        let v2_idx = face.vertices[2] as usize;
+        let v3_idx = face.vertices[3] as usize;
+        
+        let v0_pos = poly_mesh.vertices[v0_idx].position.as_vec3();
+        let v1_pos = poly_mesh.vertices[v1_idx].position.as_vec3();
+        let v2_pos = poly_mesh.vertices[v2_idx].position.as_vec3();
+        let v3_pos = poly_mesh.vertices[v3_idx].position.as_vec3();
+        
+        // Get the face normal
+        let mut normal = face.normal.as_vec3();
+        if !tessellate_outside {
+            normal = -normal;
+        }
+        
+        // Use the same normal for all vertices in this simple case
+        let positions = [&v0_pos, &v1_pos, &v2_pos, &v3_pos];
+        let normals = [&normal, &normal, &normal, &normal];
+        
+        // Call add_hatched_quad directly
+        add_hatched_quad(mesh, tessellate_outside, positions, normals, material, common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32 * 0.5);
+        return;
+    }
+
+    // Normal flow for other cases
     match smoothing {
         MeshSmoothing::Smooth => tessellate_poly_mesh_smooth(poly_mesh, mesh, material, tessellate_outside),
         MeshSmoothing::Sharp => tessellate_poly_mesh_sharp(poly_mesh, mesh, material, tessellate_outside),
