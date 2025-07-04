@@ -31,6 +31,10 @@ pub struct Edge {
 /// This is an intermediate representation for mesh processing and analysis, particularly useful
 /// for detecting sharp features and optimizing vertex positions
 pub struct PolyMesh {
+    pub open: bool,
+
+    pub hatched: bool,
+
     /// Vertices of the mesh with their positions and adjacency information
     pub vertices: Vec<Vertex>,
     /// Faces of the mesh
@@ -43,8 +47,10 @@ pub struct PolyMesh {
 
 impl PolyMesh {
     /// Creates a new empty PolyMesh
-    pub fn new() -> Self {
+    pub fn new(open: bool, hatched: bool) -> Self {
         PolyMesh {
+            open,
+            hatched,
             vertices: Vec::new(),
             faces: Vec::new(),
             edges: HashMap::new(),

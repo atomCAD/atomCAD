@@ -88,7 +88,7 @@ fn generate_mesh(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
   node_evaluator: &NodeEvaluator,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) -> PolyMesh {
-  let mut mesh = PolyMesh::new();
+  let mut mesh = PolyMesh::new(false, false); // TODO; fill these 2 boolean properties correctly
   
   // First pass: Generate vertices for cells and process edges
   process_cell_edges(cells, node_evaluator, &mut mesh, geometry_visualization_preferences);

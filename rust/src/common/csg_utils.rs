@@ -12,9 +12,7 @@ use geo::{
 /// 
 /// This helps avoid issues with floating point precision in the CSG operations, where vertices
 /// that should be identical might have slight differences in their coordinates.
-pub fn convert_csg_to_poly_mesh(csg: &CSG, triangulate_2d: bool) -> PolyMesh {
-    let mut poly_mesh = PolyMesh::new();
-    
+pub fn convert_csg_to_poly_mesh(csg: &CSG, triangulate_2d: bool, hatched: bool) -> PolyMesh {
     // Use our spatial hashing structure with a small epsilon for vertex precision
     // The epsilon value should be adjusted based on the scale of your models
     let epsilon = 1e-5;
@@ -49,6 +47,8 @@ pub fn convert_csg_to_poly_mesh(csg: &CSG, triangulate_2d: bool) -> PolyMesh {
     } else {
         &polys_from_2d
     };
+
+    let mut poly_mesh = PolyMesh::new(csg.polygons.is_empty(), hatched);
 
     // Process each polygon in the CSG
     for polygon in polygons {
