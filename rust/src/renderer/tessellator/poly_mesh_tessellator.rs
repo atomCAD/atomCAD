@@ -5,13 +5,37 @@ use glam::DVec3;
 use crate::common::poly_mesh::PolyMesh;
 use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
 
+/// Adds a triangle to the mesh, respecting the tessellation direction
+/// 
+/// If tessellate_outside is true, uses v0, v1, v2 order (counter-clockwise, visible from outside)
+/// If tessellate_outside is false, uses v0, v2, v1 order (clockwise, visible from inside)
+fn add_triangle(mesh: &mut Mesh, tessellate_outside: bool, v0: u32, v1: u32, v2: u32) {
+    if tessellate_outside {
+        mesh.add_triangle(v0, v1, v2);
+    } else {
+        mesh.add_triangle(v0, v2, v1);
+    }
+}
+
+/// Adds a quad to the mesh, respecting the tessellation direction
+/// 
+/// If tessellate_outside is true, uses v0, v1, v2, v3 order (counter-clockwise, visible from outside)
+/// If tessellate_outside is false, uses v0, v3, v2, v1 order (clockwise, visible from inside)
+fn add_quad(mesh: &mut Mesh, tessellate_outside: bool, v0: u32, v1: u32, v2: u32, v3: u32) {
+    if tessellate_outside {
+        mesh.add_quad(v0, v1, v2, v3);
+    } else {
+        mesh.add_quad(v0, v3, v2, v1);
+    }
+}
+
 /// Converts a PolyMesh into an existing Mesh with smooth normals (averaged from adjacent faces)
 /// 
 /// # Arguments
 /// * `poly_mesh` - The PolyMesh to convert
 /// * `mesh` - The target mesh to add vertices and faces to
 /// * `material` - The material to apply to the mesh vertices
-fn tessellate_poly_mesh_smooth(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material) {
+fn tessellate_poly_mesh_smooth(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material, tessellate_outside: bool) {
     // First calculate normal for each vertex by averaging adjacent face normals
     let mut vertex_normals: Vec<Vec3> = vec![Vec3::ZERO; poly_mesh.vertices.len()];
       
@@ -35,15 +59,21 @@ fn tessellate_poly_mesh_smooth(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: 
     // Add all vertices to the mesh
     let vertex_indices: Vec<u32> = poly_mesh.vertices.iter().enumerate().map(|(idx, vertex)| {
         let position = vertex.position.as_vec3();
-        let normal = vertex_normals[idx];
+        // Apply normal direction based on tessellation direction
+        let mut normal = vertex_normals[idx];
+        if !tessellate_outside {
+            normal = -normal; // Flip normal for inside-facing mesh
+        }
         mesh.add_vertex(Vertex::new(&position, &normal, material))
     }).collect();
-      
+
     // Add all faces to the mesh
     for face in &poly_mesh.faces {
         // For faces with exactly 4 vertices, use add_quad
         if face.vertices.len() == 4 {
-            mesh.add_quad(
+            add_quad(
+                mesh,
+                tessellate_outside,
                 vertex_indices[face.vertices[0] as usize],
                 vertex_indices[face.vertices[1] as usize],
                 vertex_indices[face.vertices[2] as usize],
@@ -56,7 +86,7 @@ fn tessellate_poly_mesh_smooth(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: 
             for i in 1..face.vertices.len() - 1 {
                 let v1 = vertex_indices[face.vertices[i] as usize];
                 let v2 = vertex_indices[face.vertices[i + 1] as usize];
-                mesh.add_triangle(v0, v1, v2);
+                add_triangle(mesh, tessellate_outside, v0, v1, v2);
             }
         }
     }
@@ -68,13 +98,16 @@ fn tessellate_poly_mesh_smooth(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: 
 /// * `poly_mesh` - The PolyMesh to convert
 /// * `mesh` - The target mesh to add vertices and faces to
 /// * `material` - The material to apply to the mesh vertices
-fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material) {
+fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material, tessellate_outside: bool) {
     // Process each face
       
     // Sharp version: duplicate vertices for each face
     for face in &poly_mesh.faces {
         // Create a normal for this face's vertices
-        let normal = face.normal.as_vec3();
+        let mut normal = face.normal.as_vec3();
+        if !tessellate_outside {
+            normal = -normal; // Flip normal for inside-facing mesh
+        }
           
         // Create vertices for this face, all with the same normal
         let mut face_vertex_indices = Vec::with_capacity(face.vertices.len());
@@ -93,7 +126,9 @@ fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &
         // Add the face to the mesh
         if face.vertices.len() == 4 {
             // Use quad-specific method for 4-vertex faces
-            mesh.add_quad(
+            add_quad(
+                mesh,
+                tessellate_outside,
                 face_vertex_indices[0],
                 face_vertex_indices[1],
                 face_vertex_indices[2],
@@ -105,7 +140,7 @@ fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &
             for i in 1..face_vertex_indices.len() - 1 {
                 let v1 = face_vertex_indices[i];
                 let v2 = face_vertex_indices[i + 1];
-                mesh.add_triangle(v0, v1, v2);
+                add_triangle(mesh, tessellate_outside, v0, v1, v2);
             }
         }
     }
@@ -118,7 +153,7 @@ fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &
 /// * `poly_mesh` - The PolyMesh to convert
 /// * `mesh` - The target mesh to add vertices and faces to
 /// * `material` - The material to apply to the mesh vertices
-fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material) {
+fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material, tessellate_outside: bool) {
     // Maps (vertex_id, smoothing_group) to output mesh vertex indices
     let mut vertex_map: std::collections::HashMap<(u32, Option<u32>), u32> = std::collections::HashMap::new();
     
@@ -150,11 +185,16 @@ fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut M
         
         for (smoothing_group, normal_sum) in smoothing_group_normals {
             // Calculate the final normal for this smoothing group
-            let normal = if normal_sum.length_squared() > 0.0 {
+            let mut normal = if normal_sum.length_squared() > 0.0 {
                 normal_sum.normalize()
             } else {
                 DVec3::Y // Default normal if zero normal sum
             };
+            
+            // Flip normal if we're tessellating for inside view
+            if !tessellate_outside {
+                normal = -normal;
+            }
             
             // Add this vertex with the calculated normal
             let output_vertex_idx = mesh.add_vertex(Vertex::new(
@@ -183,7 +223,9 @@ fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut M
         // Add the face to the mesh
         if face.vertices.len() == 4 {
             // Special handling for quads
-            mesh.add_quad(
+            add_quad(
+                mesh,
+                tessellate_outside,
                 face_vertex_indices[0],
                 face_vertex_indices[1],
                 face_vertex_indices[2],
@@ -195,7 +237,7 @@ fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut M
             for i in 1..face_vertex_indices.len() - 1 {
                 let v1 = face_vertex_indices[i];
                 let v2 = face_vertex_indices[i + 1];
-                mesh.add_triangle(v0, v1, v2);
+                add_triangle(mesh, tessellate_outside, v0, v1, v2);
             }
         }
     }
@@ -208,17 +250,24 @@ fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut M
 /// * `mesh` - The target mesh to add vertices and faces to
 /// * `smoothing` - Controls how normals are calculated and vertices are shared
 /// * `material` - The material to apply to the mesh vertices
-pub fn tessellate_poly_mesh(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, material: &Material) {
+pub fn tessellate_poly_mesh(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, outside_material: &Material, inside_material: Option<&Material>) {
+    tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing.clone(), outside_material, true);
+    if let Some(material) = inside_material {
+        tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing, material, false);
+    }
+}
+
+fn tessellate_poly_mesh_one_sided(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, material: &Material, tessellate_outside: bool) {
     match smoothing {
-        MeshSmoothing::Smooth => tessellate_poly_mesh_smooth(poly_mesh, mesh, material),
-        MeshSmoothing::Sharp => tessellate_poly_mesh_sharp(poly_mesh, mesh, material),
-        MeshSmoothing::SmoothingGroupBased => tessellate_poly_mesh_smoothing_group_based(poly_mesh, mesh, material),
+        MeshSmoothing::Smooth => tessellate_poly_mesh_smooth(poly_mesh, mesh, material, tessellate_outside),
+        MeshSmoothing::Sharp => tessellate_poly_mesh_sharp(poly_mesh, mesh, material, tessellate_outside),
+        MeshSmoothing::SmoothingGroupBased => tessellate_poly_mesh_smoothing_group_based(poly_mesh, mesh, material, tessellate_outside),
     }
 }
 
 /// Legacy function for backward compatibility
-pub fn tessellate_quad_mesh(quad_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, material: &Material) {
-    tessellate_poly_mesh(quad_mesh, mesh, smoothing, material)
+pub fn tessellate_quad_mesh(quad_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, outside_material: &Material, inside_material: Option<&Material>) {
+    tessellate_poly_mesh(quad_mesh, mesh, smoothing, outside_material, inside_material)
 }
 
 /// Converts a PolyMesh into a LineMesh with lines representing the edges

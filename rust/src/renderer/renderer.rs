@@ -521,11 +521,14 @@ impl Renderer {
                             &Vec3::new(0.0, 1.0, 0.0), 
                             1.0, 
                             0.0
-                        )
+                        ),
+                        Some(&Material::new(
+                            &Vec3::new(1.0, 0.0, 0.0), 
+                            1.0, 
+                            0.0
+                        )),
                     );
                 }
-
-
             }
 
             //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
