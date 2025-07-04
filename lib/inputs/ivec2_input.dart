@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 
 /// A reusable widget for editing IVec2 values
@@ -6,12 +8,16 @@ class IVec2Input extends StatefulWidget {
   final String label;
   final APIIVec2 value;
   final ValueChanged<APIIVec2> onChanged;
+  final APIIVec2? minimumValue;
+  final APIIVec2? maximumValue;
 
   const IVec2Input({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.minimumValue,
+    this.maximumValue,
   });
 
   @override
@@ -22,11 +28,46 @@ class _IVec2InputState extends State<IVec2Input> {
   late TextEditingController _xController;
   late TextEditingController _yController;
 
+  late FocusNode _xFocusNode;
+  late FocusNode _yFocusNode;
+
+  // Helper method to handle scroll events for any axis
+  void _handleScrollEvent(PointerScrollEvent event, String axis) {
+    // Check if shift key is pressed for larger increments
+    final useShiftIncrement = RawKeyboard.instance.keysPressed
+        .any((key) => key == LogicalKeyboardKey.shift ||
+                 key == LogicalKeyboardKey.shiftLeft ||
+                 key == LogicalKeyboardKey.shiftRight);
+    
+    if (event.scrollDelta.dy > 0) {
+      _decrementValue(axis, useShiftIncrement: useShiftIncrement);
+    } else if (event.scrollDelta.dy < 0) {
+      _incrementValue(axis, useShiftIncrement: useShiftIncrement);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _xController = TextEditingController(text: widget.value.x.toString());
     _yController = TextEditingController(text: widget.value.y.toString());
+
+    _xFocusNode = FocusNode();
+    _yFocusNode = FocusNode();
+
+    _xFocusNode.addListener(() {
+      if (!_xFocusNode.hasFocus) {
+        // When focus is lost, update the value
+        _updateValueFromText(_xController.text, 'x');
+      }
+    });
+
+    _yFocusNode.addListener(() {
+      if (!_yFocusNode.hasFocus) {
+        // When focus is lost, update the value
+        _updateValueFromText(_yController.text, 'y');
+      }
+    });
   }
 
   @override
@@ -48,21 +89,218 @@ class _IVec2InputState extends State<IVec2Input> {
   void dispose() {
     _xController.dispose();
     _yController.dispose();
+    _xFocusNode.dispose();
+    _yFocusNode.dispose();
     super.dispose();
   }
 
-  void _handleValueChange(String text, String axis) {
-    final newValue = int.tryParse(text);
-    if (newValue != null) {
+  int? _validateInput(String text, String axis) {
+    // Try to parse the input as an integer
+    final value = int.tryParse(text);
+    if (value == null) {
+      return null;
+    }
+
+    // Check range constraints if specified
+    if (widget.minimumValue != null) {
       switch (axis) {
         case 'x':
-          widget.onChanged(APIIVec2(x: newValue, y: widget.value.y));
+          if (value < widget.minimumValue!.x) {
+            return null;
+          }
           break;
         case 'y':
-          widget.onChanged(APIIVec2(x: widget.value.x, y: newValue));
+          if (value < widget.minimumValue!.y) {
+            return null;
+          }
           break;
       }
     }
+
+    if (widget.maximumValue != null) {
+      switch (axis) {
+        case 'x':
+          if (value > widget.maximumValue!.x) {
+            return null;
+          }
+          break;
+        case 'y':
+          if (value > widget.maximumValue!.y) {
+            return null;
+          }
+          break;
+      }
+    }
+
+    // Input is valid
+    return value;
+  }
+
+  void _updateValueFromText(String text, String axis) {
+    final validValue = _validateInput(text, axis);
+    if (validValue != null) {
+      switch (axis) {
+        case 'x':
+          widget.onChanged(APIIVec2(x: validValue, y: widget.value.y));
+          break;
+        case 'y':
+          widget.onChanged(APIIVec2(x: widget.value.x, y: validValue));
+          break;
+      }
+    } else {
+      // If validation fails, restore the previous valid value for this axis
+      switch (axis) {
+        case 'x':
+          _xController.text = widget.value.x.toString();
+          _xController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _xController.text.length),
+          );
+          break;
+        case 'y':
+          _yController.text = widget.value.y.toString();
+          _yController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _yController.text.length),
+          );
+          break;
+      }
+    }
+  }
+
+  void _incrementValue(String axis, {bool useShiftIncrement = false}) {
+    int currentValue;
+    // Use increment of 10 if shift is pressed, otherwise increment by 1
+    final increment = useShiftIncrement ? 10 : 1;
+    
+    switch (axis) {
+      case 'x':
+        currentValue = int.tryParse(_xController.text) ?? widget.value.x;
+        var newValue = currentValue + increment;
+        
+        // Clamp at maxValue if specified
+        if (widget.maximumValue != null && newValue > widget.maximumValue!.x) {
+          newValue = widget.maximumValue!.x;
+        }
+        
+        final validValue = _validateInput(newValue.toString(), axis);
+        if (validValue != null) {
+          _xController.text = validValue.toString();
+          widget.onChanged(APIIVec2(x: validValue, y: widget.value.y));
+        }
+        break;
+        
+      case 'y':
+        currentValue = int.tryParse(_yController.text) ?? widget.value.y;
+        var newValue = currentValue + increment;
+        
+        // Clamp at maxValue if specified
+        if (widget.maximumValue != null && newValue > widget.maximumValue!.y) {
+          newValue = widget.maximumValue!.y;
+        }
+        
+        final validValue = _validateInput(newValue.toString(), axis);
+        if (validValue != null) {
+          _yController.text = validValue.toString();
+          widget.onChanged(APIIVec2(x: widget.value.x, y: validValue));
+        }
+        break;
+    }
+  }
+
+  void _decrementValue(String axis, {bool useShiftIncrement = false}) {
+    int currentValue;
+    // Use decrement of 10 if shift is pressed, otherwise decrement by 1
+    final decrement = useShiftIncrement ? 10 : 1;
+    
+    switch (axis) {
+      case 'x':
+        currentValue = int.tryParse(_xController.text) ?? widget.value.x;
+        var newValue = currentValue - decrement;
+        
+        // Clamp at minValue if specified
+        if (widget.minimumValue != null && newValue < widget.minimumValue!.x) {
+          newValue = widget.minimumValue!.x;
+        }
+        
+        final validValue = _validateInput(newValue.toString(), axis);
+        if (validValue != null) {
+          _xController.text = validValue.toString();
+          widget.onChanged(APIIVec2(x: validValue, y: widget.value.y));
+        }
+        break;
+        
+      case 'y':
+        currentValue = int.tryParse(_yController.text) ?? widget.value.y;
+        var newValue = currentValue - decrement;
+        
+        // Clamp at minValue if specified
+        if (widget.minimumValue != null && newValue < widget.minimumValue!.y) {
+          newValue = widget.minimumValue!.y;
+        }
+        
+        final validValue = _validateInput(newValue.toString(), axis);
+        if (validValue != null) {
+          _yController.text = validValue.toString();
+          widget.onChanged(APIIVec2(x: widget.value.x, y: validValue));
+        }
+        break;
+    }
+  }
+
+  // Build a tooltip message for a specific axis based on constraints
+  String _buildAxisTooltipMessage(String axis) {
+    final tooltipLines = [
+      'Use mouse wheel to increment/decrement',
+      'Hold SHIFT + mouse wheel for 10x steps',
+    ];
+    
+    switch (axis) {
+      case 'x':
+        if (widget.minimumValue != null) {
+          tooltipLines.add('Minimum value: ${widget.minimumValue!.x}');
+        }
+        if (widget.maximumValue != null) {
+          tooltipLines.add('Maximum value: ${widget.maximumValue!.x}');
+        }
+        break;
+      case 'y':
+        if (widget.minimumValue != null) {
+          tooltipLines.add('Minimum value: ${widget.minimumValue!.y}');
+        }
+        if (widget.maximumValue != null) {
+          tooltipLines.add('Maximum value: ${widget.maximumValue!.y}');
+        }
+        break;
+    }
+    
+    return tooltipLines.join('\n');
+  }
+  
+  // Helper method to build a TextField widget for an axis
+  Widget _buildAxisTextField({
+    required String axis,
+    required String axisLabel,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required InputDecoration baseDecoration,
+  }) {
+    return Tooltip(
+      message: _buildAxisTooltipMessage(axis),
+      preferBelow: true,
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent) {
+            _handleScrollEvent(event, axis);
+          }
+        },
+        child: TextField(
+          decoration: baseDecoration.copyWith(labelText: axisLabel),
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: TextInputType.number,
+          onSubmitted: (text) => _updateValueFromText(text, axis),
+        ),
+      ),
+    );
   }
 
   @override
@@ -80,20 +318,22 @@ class _IVec2InputState extends State<IVec2Input> {
         Row(
           children: [
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'X'),
+              child: _buildAxisTextField(
+                axis: 'x',
+                axisLabel: 'X',
                 controller: _xController,
-                keyboardType: TextInputType.number,
-                onChanged: (text) => _handleValueChange(text, 'x'),
+                focusNode: _xFocusNode,
+                baseDecoration: inputDecoration,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: TextField(
-                decoration: inputDecoration.copyWith(labelText: 'Y'),
+              child: _buildAxisTextField(
+                axis: 'y',
+                axisLabel: 'Y',
                 controller: _yController,
-                keyboardType: TextInputType.number,
-                onChanged: (text) => _handleValueChange(text, 'y'),
+                focusNode: _yFocusNode,
+                baseDecoration: inputDecoration,
               ),
             ),
           ],

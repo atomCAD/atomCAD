@@ -377,6 +377,16 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setRectData(BigInt nodeId, APIRectData data) {
+    structure_designer_api.setRectData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setCircleData(BigInt nodeId, APICircleData data) {
+    structure_designer_api.setCircleData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];

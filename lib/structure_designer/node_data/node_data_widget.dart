@@ -171,6 +171,7 @@ class NodeDataWidget extends StatelessWidget {
         return RectEditor(
           nodeId: selectedNode.id,
           data: rectData,
+          model: model,
         );
       case 'circle':
         // Fetch the circle data here in the parent widget
@@ -181,6 +182,7 @@ class NodeDataWidget extends StatelessWidget {
         return CircleEditor(
           nodeId: selectedNode.id,
           data: circleData,
+          model: model,
         );
       case 'extrude':
         // Fetch the extrude data here in the parent widget
