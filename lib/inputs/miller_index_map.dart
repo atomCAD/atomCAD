@@ -188,7 +188,7 @@ class MillerIndexMap extends StatefulWidget {
 class _DotInfo {
   final APIIVec3 miller;
   final Offset position;
-  
+
   _DotInfo(this.miller, this.position);
 }
 
@@ -198,56 +198,137 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
   final Map<APIIVec3, Offset> _dotPositions = {};
   final GlobalKey _mapKey = GlobalKey();
   Offset? _hoverPosition;
-  
+  APIIVec3? _hoveredIndex;
+  OverlayEntry? _tooltipOverlay;
+
   @override
   void initState() {
     super.initState();
     _uniqueIndices = _generateUniqueMilerIndices();
   }
-  
+
+  @override
+  void dispose() {
+    // Clean up tooltip overlay if it exists
+    _removeTooltip();
+    super.dispose();
+  }
+
   List<APIIVec3> _generateUniqueMilerIndices() {
     return widget._generateUniqueMilerIndices();
   }
-  
+
   // Calculate positions of all dots based on the container size
   void _calculateDotPositions(Size size) {
     _dotPositions.clear();
-    
+
     for (final miller in _uniqueIndices) {
       // Convert miller index to lat/long
       var latLong = MillerIndexMap.millerIndexToLatLong(miller);
-      
+
       // Apply sinusoidal projection
       var projection = MillerIndexMap.sinusoidalProjection(latLong);
-      
+
       // Map from projection coordinates to canvas coordinates
       double x = (projection.x + pi) / (2 * pi) * size.width;
       double y = size.height - ((projection.y + pi / 2) / pi * size.height);
-      
+
       _dotPositions[miller] = Offset(x, y);
     }
   }
-  
+
   // Handle mouse hover event
   void _handleHover(PointerHoverEvent event) {
-    setState(() {
-      _hoverPosition = event.localPosition;
+    final localPosition = event.localPosition;
+
+    // Find which dot (if any) is under the cursor
+    APIIVec3? foundIndex;
+    double closestDistance = double.infinity;
+    final hoverRadius = widget.dotSize * 2.0; // Detection radius
+
+    _dotPositions.forEach((miller, position) {
+      final distance = (position - localPosition).distance;
+      if (distance <= hoverRadius && distance < closestDistance) {
+        closestDistance = distance;
+        foundIndex = miller;
+      }
     });
-    
-    print('Hover position: $_hoverPosition');
+
+    // Only rebuild if the hover state changed
+    if (_hoveredIndex != foundIndex) {
+      setState(() {
+        _hoverPosition = localPosition;
+        _hoveredIndex = foundIndex;
+      });
+
+      // Update tooltip
+      _removeTooltip();
+      if (foundIndex != null) {
+        // We know foundIndex is not null here, so we can safely pass it
+        _showTooltip(foundIndex);
+      }
+    }
+  }
+
+  // Show tooltip for the given Miller index
+  void _showTooltip(APIIVec3? miller) {
+    if (miller == null) return;
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
+
+    // Get the position for the tooltip
+    final position = _dotPositions[miller];
+    if (position == null) return;
+
+    // Convert the local position to global position
+    final RenderBox? renderBox =
+        _mapKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final globalPosition = renderBox.localToGlobal(position);
+
+    // Create the overlay entry
+    _tooltipOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        left: globalPosition.dx,
+        top: globalPosition.dy - 35, // Position above the dot
+        child: Material(
+          elevation: 4.0,
+          borderRadius: BorderRadius.circular(4.0),
+          color: Colors.black87,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Text(
+              '(${miller.x}, ${miller.y}, ${miller.z})',
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Add the tooltip to the overlay
+    overlay.insert(_tooltipOverlay!);
+  }
+
+  // Remove the tooltip if it exists
+  void _removeTooltip() {
+    _tooltipOverlay?.remove();
+    _tooltipOverlay = null;
   }
 
   @override
   Widget build(BuildContext context) {
     // Calculate dot positions when the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final RenderBox? box = _mapKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox? box =
+          _mapKey.currentContext?.findRenderObject() as RenderBox?;
       if (box != null) {
         _calculateDotPositions(box.size);
         setState(() {}); // Trigger a rebuild with the calculated positions
       }
     });
-    
+
     // Reduce the current value to its simplest form
     APIIVec3 reducedValue = widget._getReducedMillerIndex(widget.value);
 
@@ -268,6 +349,13 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
           ),
           child: MouseRegion(
             onHover: _handleHover,
+            onExit: (_) {
+              setState(() {
+                _hoverPosition = null;
+                _hoveredIndex = null;
+              });
+              _removeTooltip();
+            },
             child: CustomPaint(
               painter: _MillerIndexMapPainter(
                 uniqueIndices: _uniqueIndices,
@@ -277,6 +365,7 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
                 selectedDotColor: widget.selectedDotColor,
                 dotPositions: _dotPositions,
                 hoverPosition: _hoverPosition,
+                hoveredIndex: _hoveredIndex,
               ),
               size: Size(widget.mapWidth, widget.mapHeight),
             ),
@@ -285,8 +374,7 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
         const SizedBox(height: 4),
       ],
     );
-}
-
+  }
 }
 
 /// Custom painter for drawing the Miller index map with sinusoidal projection
@@ -298,6 +386,7 @@ class _MillerIndexMapPainter extends CustomPainter {
   final Color selectedDotColor;
   final Map<APIIVec3, Offset> dotPositions;
   final Offset? hoverPosition;
+  final APIIVec3? hoveredIndex;
 
   _MillerIndexMapPainter({
     required this.uniqueIndices,
@@ -307,6 +396,7 @@ class _MillerIndexMapPainter extends CustomPainter {
     required this.selectedDotColor,
     required this.dotPositions,
     this.hoverPosition,
+    this.hoveredIndex,
   });
 
   @override
@@ -318,11 +408,16 @@ class _MillerIndexMapPainter extends CustomPainter {
     final Paint selectedDotPaint = Paint()
       ..color = selectedDotColor
       ..style = PaintingStyle.fill;
-
     final Paint gridPaint = Paint()
       ..color = Colors.grey.withOpacity(0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
+
+    // Define standard paints for dots (removing duplicates)
+
+    // Draw the background
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = Colors.white);
 
     // Draw grid lines (latitude/longitude)
     _drawGrid(canvas, size, gridPaint);
@@ -339,37 +434,49 @@ class _MillerIndexMapPainter extends CustomPainter {
         Paint()..color = Colors.red.withOpacity(0.5),
       );
     }
-    
+
     for (var miller in uniqueIndices) {
       // Skip if position hasn't been calculated yet
       if (!dotPositions.containsKey(miller)) continue;
-      
+
       // Get pre-calculated position
       final position = dotPositions[miller]!;
       final x = position.dx;
       final y = position.dy;
 
-      // Check if this is the current value
+      // Check if this is the current value or hovered index
       bool isCurrentValue =
           MillerIndexMap.isSameDirection(miller, currentValue);
+      bool isHovered = hoveredIndex != null &&
+          MillerIndexMap.isSameDirection(miller, hoveredIndex!);
 
       // Draw the dot
+      final Paint dotPaint = Paint()
+        ..color = isCurrentValue
+            ? selectedDotColor
+            : (isHovered ? Colors.amber : dotColor)
+        ..style = PaintingStyle.fill;
+
+      // Make hovered dots slightly larger
+      final double radius = dotSize * (isHovered ? 1.5 : 1.0);
+
       canvas.drawCircle(
         Offset(x, y),
-        dotSize,
-        isCurrentValue ? selectedDotPaint : dotPaint,
+        radius,
+        dotPaint,
       );
 
-      // Draw outline for the selected dot for better visibility
-      if (isCurrentValue) {
+      // Draw outline for the selected or hovered dot for better visibility
+      if (isCurrentValue || isHovered) {
         final Paint outlinePaint = Paint()
-          ..color = Colors.white
+          ..color =
+              isCurrentValue ? Colors.white : Colors.amber.withOpacity(0.6)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5;
+          ..strokeWidth = isCurrentValue ? 1.5 : 1.0;
 
         canvas.drawCircle(
           Offset(x, y),
-          dotSize + 2,
+          radius + 2,
           outlinePaint,
         );
       }
@@ -434,6 +541,7 @@ class _MillerIndexMapPainter extends CustomPainter {
         oldDelegate.dotColor != dotColor ||
         oldDelegate.selectedDotColor != selectedDotColor ||
         oldDelegate.hoverPosition != hoverPosition ||
+        oldDelegate.hoveredIndex != hoveredIndex ||
         oldDelegate.dotPositions != dotPositions;
   }
 }
