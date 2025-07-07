@@ -31,7 +31,7 @@ use csgrs::vertex::Vertex;
 use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
 
-pub const MAX_MILLER_INDEX: f64 = 6.0;
+pub const MAX_MILLER_INDEX: f64 = 4.0;
 pub const GADGET_LENGTH: f64 = 6.0;
 pub const AXIS_RADIUS: f64 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;

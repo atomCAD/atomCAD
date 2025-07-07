@@ -82,7 +82,7 @@ class MainContentArea extends StatelessWidget {
   /// Builds the node data panel with appropriate decoration based on orientation
   Widget _buildNodeDataPanel({required bool isVertical}) {
     return Container(
-      width: isVertical ? 300 : double.infinity,
+      width: isVertical ? 400 : double.infinity,
       height: isVertical ? double.infinity : 240,
       padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
