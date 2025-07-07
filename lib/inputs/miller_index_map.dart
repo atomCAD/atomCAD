@@ -1,11 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:vector_math/vector_math_64.dart' as vm;
 
 /// A widget that displays a map of possible Miller indices using a sinusoidal projection.
 /// This provides a more intuitive way to select Miller indices compared to manually entering values.
-class MillerIndexMap extends StatelessWidget {
+class MillerIndexMap extends StatefulWidget {
   final String label;
   final APIIVec3 value;
   final ValueChanged<APIIVec3> onChanged;
@@ -140,7 +141,7 @@ class MillerIndexMap extends StatelessWidget {
           if (x == 0 && y == 0 && z == 0) continue;
 
           APIIVec3 miller = APIIVec3(x: x, y: y, z: z);
-          
+
           // Get the reduced form of this Miller index
           APIIVec3 reducedMiller = _getReducedMillerIndex(miller);
 
@@ -181,40 +182,111 @@ class MillerIndexMap extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    List<APIIVec3> uniqueIndices = _generateUniqueMilerIndices();
+  State<MillerIndexMap> createState() => _MillerIndexMapState();
+}
 
+class _DotInfo {
+  final APIIVec3 miller;
+  final Offset position;
+  
+  _DotInfo(this.miller, this.position);
+}
+
+class _MillerIndexMapState extends State<MillerIndexMap> {
+  // List of unique Miller indices and their positions
+  late List<APIIVec3> _uniqueIndices;
+  final Map<APIIVec3, Offset> _dotPositions = {};
+  final GlobalKey _mapKey = GlobalKey();
+  Offset? _hoverPosition;
+  
+  @override
+  void initState() {
+    super.initState();
+    _uniqueIndices = _generateUniqueMilerIndices();
+  }
+  
+  List<APIIVec3> _generateUniqueMilerIndices() {
+    return widget._generateUniqueMilerIndices();
+  }
+  
+  // Calculate positions of all dots based on the container size
+  void _calculateDotPositions(Size size) {
+    _dotPositions.clear();
+    
+    for (final miller in _uniqueIndices) {
+      // Convert miller index to lat/long
+      var latLong = MillerIndexMap.millerIndexToLatLong(miller);
+      
+      // Apply sinusoidal projection
+      var projection = MillerIndexMap.sinusoidalProjection(latLong);
+      
+      // Map from projection coordinates to canvas coordinates
+      double x = (projection.x + pi) / (2 * pi) * size.width;
+      double y = size.height - ((projection.y + pi / 2) / pi * size.height);
+      
+      _dotPositions[miller] = Offset(x, y);
+    }
+  }
+  
+  // Handle mouse hover event
+  void _handleHover(PointerHoverEvent event) {
+    setState(() {
+      _hoverPosition = event.localPosition;
+    });
+    
+    print('Hover position: $_hoverPosition');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Calculate dot positions when the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final RenderBox? box = _mapKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null) {
+        _calculateDotPositions(box.size);
+        setState(() {}); // Trigger a rebuild with the calculated positions
+      }
+    });
+    
     // Reduce the current value to its simplest form
-    APIIVec3 reducedValue = _getReducedMillerIndex(value);
+    APIIVec3 reducedValue = widget._getReducedMillerIndex(widget.value);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('$label (max index: $maxValue)', style: Theme.of(context).textTheme.bodyLarge),
+        Text('${widget.label} (max index: ${widget.maxValue})',
+            style: Theme.of(context).textTheme.bodyLarge),
         const SizedBox(height: 8),
         Container(
-          width: mapWidth,
-          height: mapHeight,
+          key: _mapKey,
+          width: widget.mapWidth,
+          height: widget.mapHeight,
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(4.0),
+            borderRadius: BorderRadius.circular(4),
           ),
-          child: CustomPaint(
-            painter: _MillerIndexMapPainter(
-              uniqueIndices: uniqueIndices,
-              currentValue: reducedValue,
-              dotSize: dotSize,
-              dotColor: dotColor,
-              selectedDotColor: selectedDotColor,
+          child: MouseRegion(
+            onHover: _handleHover,
+            child: CustomPaint(
+              painter: _MillerIndexMapPainter(
+                uniqueIndices: _uniqueIndices,
+                currentValue: reducedValue,
+                dotSize: widget.dotSize,
+                dotColor: widget.dotColor,
+                selectedDotColor: widget.selectedDotColor,
+                dotPositions: _dotPositions,
+                hoverPosition: _hoverPosition,
+              ),
+              size: Size(widget.mapWidth, widget.mapHeight),
             ),
-            size: Size(mapWidth, mapHeight),
           ),
         ),
         const SizedBox(height: 4),
       ],
     );
-  }
+}
+
 }
 
 /// Custom painter for drawing the Miller index map with sinusoidal projection
@@ -224,6 +296,8 @@ class _MillerIndexMapPainter extends CustomPainter {
   final double dotSize;
   final Color dotColor;
   final Color selectedDotColor;
+  final Map<APIIVec3, Offset> dotPositions;
+  final Offset? hoverPosition;
 
   _MillerIndexMapPainter({
     required this.uniqueIndices,
@@ -231,6 +305,8 @@ class _MillerIndexMapPainter extends CustomPainter {
     required this.dotSize,
     required this.dotColor,
     required this.selectedDotColor,
+    required this.dotPositions,
+    this.hoverPosition,
   });
 
   @override
@@ -255,14 +331,23 @@ class _MillerIndexMapPainter extends CustomPainter {
     // x: [-π, π]
     // y: [-π/2, π/2]
 
+    // Draw hover position indicator if available
+    if (hoverPosition != null) {
+      canvas.drawCircle(
+        hoverPosition!,
+        4.0,
+        Paint()..color = Colors.red.withOpacity(0.5),
+      );
+    }
+    
     for (var miller in uniqueIndices) {
-      // Convert miller index to lat/long
-      var latLong = MillerIndexMap.millerIndexToLatLong(miller);
-      var projection = MillerIndexMap.sinusoidalProjection(latLong);
-
-      // Map from projection coordinates to canvas coordinates
-      double x = (projection.x + pi) / (2 * pi) * size.width;
-      double y = size.height - ((projection.y + pi / 2) / pi * size.height);
+      // Skip if position hasn't been calculated yet
+      if (!dotPositions.containsKey(miller)) continue;
+      
+      // Get pre-calculated position
+      final position = dotPositions[miller]!;
+      final x = position.dx;
+      final y = position.dy;
 
       // Check if this is the current value
       bool isCurrentValue =
@@ -347,6 +432,8 @@ class _MillerIndexMapPainter extends CustomPainter {
         oldDelegate.uniqueIndices != uniqueIndices ||
         oldDelegate.dotSize != dotSize ||
         oldDelegate.dotColor != dotColor ||
-        oldDelegate.selectedDotColor != selectedDotColor;
+        oldDelegate.selectedDotColor != selectedDotColor ||
+        oldDelegate.hoverPosition != hoverPosition ||
+        oldDelegate.dotPositions != dotPositions;
   }
 }
