@@ -243,6 +243,7 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
 
     // Find which dot (if any) is under the cursor
     APIIVec3? foundIndex;
+    Offset? foundPosition;
     double closestDistance = double.infinity;
     final hoverRadius = widget.dotSize * 2.0; // Detection radius
 
@@ -251,13 +252,15 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
       if (distance <= hoverRadius && distance < closestDistance) {
         closestDistance = distance;
         foundIndex = miller;
+        foundPosition = position; // Store the actual dot position
       }
     });
 
     // Only rebuild if the hover state changed
     if (_hoveredIndex != foundIndex) {
       setState(() {
-        _hoverPosition = localPosition;
+        // Use the dot's actual position (if found) instead of mouse position
+        _hoverPosition = foundPosition; // Will be null if no dot was found
         _hoveredIndex = foundIndex;
       });
 
@@ -426,14 +429,8 @@ class _MillerIndexMapPainter extends CustomPainter {
     // x: [-π, π]
     // y: [-π/2, π/2]
 
-    // Draw hover position indicator if available
-    if (hoverPosition != null) {
-      canvas.drawCircle(
-        hoverPosition!,
-        4.0,
-        Paint()..color = Colors.red.withOpacity(0.5),
-      );
-    }
+    // We no longer need a separate hover position indicator since
+    // we highlight the dot itself when hovered
 
     for (var miller in uniqueIndices) {
       // Skip if position hasn't been calculated yet
