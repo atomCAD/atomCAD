@@ -63,7 +63,7 @@ class MillerIndexMap extends StatefulWidget {
     // Y is the up direction in our coordinate system
     double latitude = asin(y);
     // For longitude, we use x and z in a right-handed system
-    double longitude = atan2(z, x);
+    double longitude = -atan2(z, x);
 
     return vm.Vector2(longitude, latitude);
   }
@@ -319,16 +319,17 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
     _tooltipOverlay?.remove();
     _tooltipOverlay = null;
   }
-  
+
   // Handle tap on the map to select a Miller index
   void _handleTap(TapUpDetails details) {
     final localPosition = details.localPosition;
-    
+
     // Find which dot (if any) was tapped
     APIIVec3? tappedIndex;
     double closestDistance = double.infinity;
-    final tapRadius = widget.dotSize * 2.5; // Slightly larger than hover for easier selection
-    
+    final tapRadius =
+        widget.dotSize * 2.5; // Slightly larger than hover for easier selection
+
     _dotPositions.forEach((miller, position) {
       final distance = (position - localPosition).distance;
       if (distance <= tapRadius && distance < closestDistance) {
@@ -336,18 +337,18 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
         tappedIndex = miller;
       }
     });
-    
+
     // If a dot was tapped, call onChanged with the selected index
     if (tappedIndex != null) {
       // Call onChanged with the selected Miller index
       widget.onChanged(tappedIndex!);
-      
+
       // Update hover state and tooltip
       setState(() {
         _hoveredIndex = tappedIndex;
         _hoverPosition = _dotPositions[tappedIndex];
       });
-      
+
       // Briefly show tooltip for visual feedback of selection
       _removeTooltip();
       _showTooltip(tappedIndex);
@@ -396,17 +397,17 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
                 _removeTooltip();
               },
               child: CustomPaint(
-              painter: _MillerIndexMapPainter(
-                uniqueIndices: _uniqueIndices,
-                currentValue: reducedValue,
-                dotSize: widget.dotSize,
-                dotColor: widget.dotColor,
-                selectedDotColor: widget.selectedDotColor,
-                dotPositions: _dotPositions,
-                hoverPosition: _hoverPosition,
-                hoveredIndex: _hoveredIndex,
-              ),
-              size: Size(widget.mapWidth, widget.mapHeight),
+                painter: _MillerIndexMapPainter(
+                  uniqueIndices: _uniqueIndices,
+                  currentValue: reducedValue,
+                  dotSize: widget.dotSize,
+                  dotColor: widget.dotColor,
+                  selectedDotColor: widget.selectedDotColor,
+                  dotPositions: _dotPositions,
+                  hoverPosition: _hoverPosition,
+                  hoveredIndex: _hoveredIndex,
+                ),
+                size: Size(widget.mapWidth, widget.mapHeight),
               ),
             ),
           ),
