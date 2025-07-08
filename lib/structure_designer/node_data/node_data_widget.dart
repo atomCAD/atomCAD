@@ -55,6 +55,7 @@ class NodeDataWidget extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.all(2.0),
             child: SingleChildScrollView(
+              //physics: const NeverScrollableScrollPhysics(),
               child: _buildNodeEditor(selectedNode, model),
             ),
           );

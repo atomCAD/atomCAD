@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 
 /// A reusable widget for editing integer values
 class IntInput extends StatefulWidget {
@@ -120,7 +122,7 @@ class _IntInputState extends State<IntInput> {
     if (widget.minimumValue != null && newValue < widget.minimumValue!) {
       newValue = widget.minimumValue!;
     }
-    
+
     // Still validate to handle other cases and ensure the value is within bounds
     final validatedValue = _validateInput(newValue.toString());
     if (validatedValue != null) {
@@ -136,15 +138,15 @@ class _IntInputState extends State<IntInput> {
       'Use mouse scroll wheel to quickly change the value',
       'Hold SHIFT while scrolling for 10x increments'
     ];
-    
+
     if (widget.minimumValue != null) {
       tooltipLines.add('Minimum value: ${widget.minimumValue}');
     }
-    
+
     if (widget.maximumValue != null) {
       tooltipLines.add('Maximum value: ${widget.maximumValue}');
     }
-    
+
     return tooltipLines.join('\n');
   }
 
@@ -158,34 +160,55 @@ class _IntInputState extends State<IntInput> {
         Tooltip(
           message: tooltipMessage,
           preferBelow: true,
-          child: Listener(
-            onPointerSignal: (event) {
-              if (event is PointerScrollEvent) {
-                // Check if shift key is pressed for larger increments
-                final useShiftIncrement = RawKeyboard.instance.keysPressed
-                    .any((key) => key == LogicalKeyboardKey.shift ||
-                               key == LogicalKeyboardKey.shiftLeft ||
-                               key == LogicalKeyboardKey.shiftRight);
-                
-                // Scrolling down (positive delta) decreases the value
-                // Scrolling up (negative delta) increases the value
-                if (event.scrollDelta.dy > 0) {
-                  _decrementValue(useShiftIncrement: useShiftIncrement);
-                } else if (event.scrollDelta.dy < 0) {
-                  _incrementValue(useShiftIncrement: useShiftIncrement);
-                }
+          child: MouseRegion(
+            // When mouse enters, block scrolling if service is available
+            onEnter: (PointerEnterEvent event) {
+              try {
+                final service = context.read<MouseWheelBlockService>();
+                service.block();
+              } catch (e) {
+                // Provider not available, do nothing
               }
             },
-            child: TextField(
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-              ),
-              controller: _controller,
-              focusNode: _focusNode,
-              keyboardType: TextInputType.number,
-              onSubmitted: (text) {
-                _updateValueFromText(text);
+            // When mouse exits, unblock scrolling if service is available
+            onExit: (PointerExitEvent event) {
+              try {
+                final service = context.read<MouseWheelBlockService>();
+                service.unblock();
+              } catch (e) {
+                // Provider not available, do nothing
+              }
+            },
+            child: Listener(
+              onPointerSignal: (event) {
+                if (event is PointerScrollEvent) {
+                  // Check if shift key is pressed for larger increments
+                  final useShiftIncrement = RawKeyboard.instance.keysPressed.any(
+                      (key) =>
+                          key == LogicalKeyboardKey.shift ||
+                          key == LogicalKeyboardKey.shiftLeft ||
+                          key == LogicalKeyboardKey.shiftRight);
+
+                  // Scrolling down (positive delta) decreases the value
+                  // Scrolling up (negative delta) increases the value
+                  if (event.scrollDelta.dy > 0) {
+                    _decrementValue(useShiftIncrement: useShiftIncrement);
+                  } else if (event.scrollDelta.dy < 0) {
+                    _incrementValue(useShiftIncrement: useShiftIncrement);
+                  }
+                }
               },
+              child: TextField(
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                controller: _controller,
+                focusNode: _focusNode,
+                keyboardType: TextInputType.number,
+                onSubmitted: (text) {
+                  _updateValueFromText(text);
+                },
+              ),
             ),
           ),
         ),

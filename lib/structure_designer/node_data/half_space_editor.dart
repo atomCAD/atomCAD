@@ -34,94 +34,92 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(4.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Half Space Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            // Max Miller Index input
-            IntInput(
-              label: 'Max Miller Index',
-              value: widget.data!.maxMillerIndex,
-              minimumValue: 1, // Must be at least 1
-              maximumValue: 10, // Set a reasonable upper limit
-              onChanged: (newValue) {
-                widget.model.setHalfSpaceData(
-                  widget.nodeId,
-                  APIHalfSpaceData(
-                    maxMillerIndex: newValue,
-                    millerIndex: widget.data!.millerIndex,
-                    center: widget.data!.center,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            // Miller Index Map (visualization)
-            MillerIndexMap(
-              label: 'Miller Index Map',
-              value: widget.data!.millerIndex,
-              onChanged: (newValue) {
-                widget.model.setHalfSpaceData(
-                  widget.nodeId,
-                  APIHalfSpaceData(
-                    maxMillerIndex: widget.data!.maxMillerIndex,
-                    millerIndex: newValue,
-                    center: widget.data!.center,
-                  ),
-                );
-              },
-              maxValue: widget.data!.maxMillerIndex,
-              mapWidth: 360,
-              mapHeight: 180,
-              dotColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey.shade600
-                  : Colors.grey.shade400,
-              selectedDotColor: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 12),
-            // Traditional numeric input for Miller Index
-            IVec3Input(
-              label: 'Miller Index (numeric)',
-              value: widget.data!.millerIndex,
-              minimumValue: APIIVec3(
-                  x: -widget.data!.maxMillerIndex,
-                  y: -widget.data!.maxMillerIndex,
-                  z: -widget.data!.maxMillerIndex),
-              maximumValue: APIIVec3(
-                  x: widget.data!.maxMillerIndex,
-                  y: widget.data!.maxMillerIndex,
-                  z: widget.data!.maxMillerIndex),
-              onChanged: (newValue) {
-                widget.model.setHalfSpaceData(
-                  widget.nodeId,
-                  APIHalfSpaceData(
-                    maxMillerIndex: widget.data!.maxMillerIndex,
-                    millerIndex: newValue,
-                    center: widget.data!.center,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            IVec3Input(
-              label: 'Center',
-              value: widget.data!.center,
-              onChanged: (newValue) {
-                widget.model.setHalfSpaceData(
-                  widget.nodeId,
-                  APIHalfSpaceData(
-                    maxMillerIndex: widget.data!.maxMillerIndex,
-                    millerIndex: widget.data!.millerIndex,
-                    center: newValue,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Half Space Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          // Max Miller Index input
+          IntInput(
+            label: 'Max Miller Index',
+            value: widget.data!.maxMillerIndex,
+            minimumValue: 1, // Must be at least 1
+            maximumValue: 10, // Set a reasonable upper limit
+            onChanged: (newValue) {
+              widget.model.setHalfSpaceData(
+                widget.nodeId,
+                APIHalfSpaceData(
+                  maxMillerIndex: newValue,
+                  millerIndex: widget.data!.millerIndex,
+                  center: widget.data!.center,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          // Miller Index Map (visualization)
+          MillerIndexMap(
+            label: 'Miller Index Map',
+            value: widget.data!.millerIndex,
+            onChanged: (newValue) {
+              widget.model.setHalfSpaceData(
+                widget.nodeId,
+                APIHalfSpaceData(
+                  maxMillerIndex: widget.data!.maxMillerIndex,
+                  millerIndex: newValue,
+                  center: widget.data!.center,
+                ),
+              );
+            },
+            maxValue: widget.data!.maxMillerIndex,
+            mapWidth: 360,
+            mapHeight: 180,
+            dotColor: Theme.of(context).brightness == Brightness.dark
+                ? Colors.grey.shade600
+                : Colors.grey.shade400,
+            selectedDotColor: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 12),
+          // Traditional numeric input for Miller Index
+          IVec3Input(
+            label: 'Miller Index (numeric)',
+            value: widget.data!.millerIndex,
+            minimumValue: APIIVec3(
+                x: -widget.data!.maxMillerIndex,
+                y: -widget.data!.maxMillerIndex,
+                z: -widget.data!.maxMillerIndex),
+            maximumValue: APIIVec3(
+                x: widget.data!.maxMillerIndex,
+                y: widget.data!.maxMillerIndex,
+                z: widget.data!.maxMillerIndex),
+            onChanged: (newValue) {
+              widget.model.setHalfSpaceData(
+                widget.nodeId,
+                APIHalfSpaceData(
+                  maxMillerIndex: widget.data!.maxMillerIndex,
+                  millerIndex: newValue,
+                  center: widget.data!.center,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Center',
+            value: widget.data!.center,
+            onChanged: (newValue) {
+              widget.model.setHalfSpaceData(
+                widget.nodeId,
+                APIHalfSpaceData(
+                  maxMillerIndex: widget.data!.maxMillerIndex,
+                  millerIndex: widget.data!.millerIndex,
+                  center: newValue,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

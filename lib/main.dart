@@ -6,6 +6,8 @@ import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 
 Future<void> main() async {
   await RustLib.init();
@@ -23,8 +25,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: EditorSelector(),
+    return ChangeNotifierProvider(
+      create: (_) => MouseWheelBlockService(),
+      child: const MaterialApp(
+        home: EditorSelector(),
+      ),
     );
   }
 }
