@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cad/common/blocking_aware_single_child_scroll_view.dart';
 import 'package:flutter_cad/structure_designer/node_data/anchor_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/circle_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
@@ -54,8 +55,7 @@ class NodeDataWidget extends StatelessWidget {
           // Wrap the editor widget in a SingleChildScrollView to handle tall editors
           return Padding(
             padding: const EdgeInsets.all(2.0),
-            child: SingleChildScrollView(
-              //physics: const NeverScrollableScrollPhysics(),
+            child: BlockingAwareSingleChildScrollView(
               child: _buildNodeEditor(selectedNode, model),
             ),
           );
