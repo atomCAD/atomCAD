@@ -30,44 +30,42 @@ class CircleEditorState extends State<CircleEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Circle Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            IVec2Input(
-              label: 'Center',
-              value: widget.data!.center,
-              onChanged: (newValue) {
-                widget.model.setCircleData(
-                  widget.nodeId,
-                  APICircleData(
-                    center: newValue,
-                    radius: widget.data!.radius,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            IntInput(
-              label: 'Radius',
-              value: widget.data!.radius,
-              onChanged: (newValue) {
-                widget.model.setCircleData(
-                  widget.nodeId,
-                  APICircleData(
-                    center: widget.data!.center,
-                    radius: newValue,
-                  ),
-                );
-              },
-              minimumValue: 1,
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Circle Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          IVec2Input(
+            label: 'Center',
+            value: widget.data!.center,
+            onChanged: (newValue) {
+              widget.model.setCircleData(
+                widget.nodeId,
+                APICircleData(
+                  center: newValue,
+                  radius: widget.data!.radius,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          IntInput(
+            label: 'Radius',
+            value: widget.data!.radius,
+            onChanged: (newValue) {
+              widget.model.setCircleData(
+                widget.nodeId,
+                APICircleData(
+                  center: widget.data!.center,
+                  radius: newValue,
+                ),
+              );
+            },
+            minimumValue: 1,
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

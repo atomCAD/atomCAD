@@ -21,7 +21,6 @@ class RegPolyEditor extends StatefulWidget {
 }
 
 class RegPolyEditorState extends State<RegPolyEditor> {
-
   @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
@@ -30,49 +29,47 @@ class RegPolyEditorState extends State<RegPolyEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Polygon Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            IntInput(
-              label: 'Number of Sides',
-              value: widget.data!.numSides,
-              onChanged: (newValue) {
-                // Ensure at least 3 sides for a valid polygon
-                final validSides = newValue < 3 ? 3 : newValue;
-                widget.model.setRegPolyData(
-                  widget.nodeId,
-                  APIRegPolyData(
-                    numSides: validSides,
-                    radius: widget.data!.radius,
-                  ),
-                );
-              },
-              minimumValue: 3,
-            ),
-            const SizedBox(height: 8),
-            IntInput(
-              label: 'Radius',
-              value: widget.data!.radius,
-              onChanged: (newValue) {
-                // Ensure radius is at least 1
-                final validRadius = newValue < 1 ? 1 : newValue;
-                widget.model.setRegPolyData(
-                  widget.nodeId,
-                  APIRegPolyData(
-                    numSides: widget.data!.numSides,
-                    radius: validRadius,
-                  ),
-                );
-              },
-              minimumValue: 1,
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Polygon Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          IntInput(
+            label: 'Number of Sides',
+            value: widget.data!.numSides,
+            onChanged: (newValue) {
+              // Ensure at least 3 sides for a valid polygon
+              final validSides = newValue < 3 ? 3 : newValue;
+              widget.model.setRegPolyData(
+                widget.nodeId,
+                APIRegPolyData(
+                  numSides: validSides,
+                  radius: widget.data!.radius,
+                ),
+              );
+            },
+            minimumValue: 3,
+          ),
+          const SizedBox(height: 8),
+          IntInput(
+            label: 'Radius',
+            value: widget.data!.radius,
+            onChanged: (newValue) {
+              // Ensure radius is at least 1
+              final validRadius = newValue < 1 ? 1 : newValue;
+              widget.model.setRegPolyData(
+                widget.nodeId,
+                APIRegPolyData(
+                  numSides: widget.data!.numSides,
+                  radius: validRadius,
+                ),
+              );
+            },
+            minimumValue: 1,
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

@@ -32,43 +32,41 @@ class CuboidEditorState extends State<CuboidEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Cuboid Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            IVec3Input(
-              label: 'Min Corner',
-              value: widget.data!.minCorner,
-              onChanged: (newValue) {
-                widget.model.setCuboidData(
-                  widget.nodeId,
-                  APICuboidData(
-                    minCorner: newValue,
-                    extent: widget.data!.extent,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            IVec3Input(
-              label: 'Extent',
-              value: widget.data!.extent,
-              minimumValue: APIIVec3(x: 1, y: 1, z: 1),
-              onChanged: (newValue) {
-                widget.model.setCuboidData(
-                  widget.nodeId,
-                  APICuboidData(
-                    minCorner: widget.data!.minCorner,
-                    extent: newValue,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Cuboid Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Min Corner',
+            value: widget.data!.minCorner,
+            onChanged: (newValue) {
+              widget.model.setCuboidData(
+                widget.nodeId,
+                APICuboidData(
+                  minCorner: newValue,
+                  extent: widget.data!.extent,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Extent',
+            value: widget.data!.extent,
+            minimumValue: APIIVec3(x: 1, y: 1, z: 1),
+            onChanged: (newValue) {
+              widget.model.setCuboidData(
+                widget.nodeId,
+                APICuboidData(
+                  minCorner: widget.data!.minCorner,
+                  extent: newValue,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

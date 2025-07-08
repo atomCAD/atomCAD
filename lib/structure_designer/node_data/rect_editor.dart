@@ -30,44 +30,42 @@ class RectEditorState extends State<RectEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Rectangle Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            IVec2Input(
-              label: 'Min Corner',
-              value: widget.data!.minCorner,
-              onChanged: (newValue) {
-                widget.model.setRectData(
-                  widget.nodeId,
-                  APIRectData(
-                    minCorner: newValue,
-                    extent: widget.data!.extent,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            IVec2Input(
-              label: 'Extent',
-              value: widget.data!.extent,
-              onChanged: (newValue) {
-                widget.model.setRectData(
-                  widget.nodeId,
-                  APIRectData(
-                    minCorner: widget.data!.minCorner,
-                    extent: newValue,
-                  ),
-                );
-              },
-              minimumValue: APIIVec2(x: 1, y: 1),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Rectangle Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          IVec2Input(
+            label: 'Min Corner',
+            value: widget.data!.minCorner,
+            onChanged: (newValue) {
+              widget.model.setRectData(
+                widget.nodeId,
+                APIRectData(
+                  minCorner: newValue,
+                  extent: widget.data!.extent,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          IVec2Input(
+            label: 'Extent',
+            value: widget.data!.extent,
+            onChanged: (newValue) {
+              widget.model.setRectData(
+                widget.nodeId,
+                APIRectData(
+                  minCorner: widget.data!.minCorner,
+                  extent: newValue,
+                ),
+              );
+            },
+            minimumValue: APIIVec2(x: 1, y: 1),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

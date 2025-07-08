@@ -31,28 +31,26 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Extrude Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            IntInput(
-              label: 'Height',
-              value: widget.data!.height,
-              minimumValue: 1,
-              onChanged: (newValue) {
-                widget.model.setExtrudeData(
-                  widget.nodeId,
-                  APIExtrudeData(
-                    height: newValue,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Extrude Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          IntInput(
+            label: 'Height',
+            value: widget.data!.height,
+            minimumValue: 1,
+            onChanged: (newValue) {
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: newValue,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

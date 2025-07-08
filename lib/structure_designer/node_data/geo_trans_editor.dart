@@ -61,57 +61,55 @@ class GeoTransEditorState extends State<GeoTransEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Geo Transformation Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            IVec3Input(
-              label: 'Translation',
-              value: _stagedData!.translation,
-              onChanged: (newValue) {
-                _updateStagedData(APIGeoTransData(
-                  transformOnlyFrame: _stagedData!.transformOnlyFrame,
-                  translation: newValue,
-                  rotation: _stagedData!.rotation,
-                ));
-              },
-            ),
-            const SizedBox(height: 8),
-            IVec3Input(
-              label: 'Rotation',
-              value: _stagedData!.rotation,
-              onChanged: (newValue) {
-                _updateStagedData(APIGeoTransData(
-                  transformOnlyFrame: _stagedData!.transformOnlyFrame,
-                  translation: _stagedData!.translation,
-                  rotation: newValue,
-                ));
-              },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _stagedData != widget.data
-                      ? () {
-                          setState(() => _stagedData = widget.data);
-                        }
-                      : null,
-                  child: const Text('Reset'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _stagedData != widget.data ? _applyChanges : null,
-                  child: const Text('Apply'),
-                ),
-              ],
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Geo Transformation Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Translation',
+            value: _stagedData!.translation,
+            onChanged: (newValue) {
+              _updateStagedData(APIGeoTransData(
+                transformOnlyFrame: _stagedData!.transformOnlyFrame,
+                translation: newValue,
+                rotation: _stagedData!.rotation,
+              ));
+            },
+          ),
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Rotation',
+            value: _stagedData!.rotation,
+            onChanged: (newValue) {
+              _updateStagedData(APIGeoTransData(
+                transformOnlyFrame: _stagedData!.transformOnlyFrame,
+                translation: _stagedData!.translation,
+                rotation: newValue,
+              ));
+            },
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _stagedData != widget.data
+                    ? () {
+                        setState(() => _stagedData = widget.data);
+                      }
+                    : null,
+                child: const Text('Reset'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _stagedData != widget.data ? _applyChanges : null,
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -23,7 +23,6 @@ class HalfPlaneEditor extends StatefulWidget {
 }
 
 class HalfPlaneEditorState extends State<HalfPlaneEditor> {
-
   /// Calculate the Miller index from two points
   String _calculateMillerIndex(APIIVec2 point1, APIIVec2 point2) {
     // Calculate direction vector
@@ -61,70 +60,68 @@ class HalfPlaneEditorState extends State<HalfPlaneEditor> {
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Half Plane Properties',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 16),
-            IVec2Input(
-              label: 'Point 1',
-              value: widget.data!.point1,
-              onChanged: (newValue) {
-                widget.model.setHalfPlaneData(
-                  widget.nodeId,
-                  APIHalfPlaneData(
-                    point1: newValue,
-                    point2: widget.data!.point2,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            IVec2Input(
-              label: 'Point 2',
-              value: widget.data!.point2,
-              onChanged: (newValue) {
-                widget.model.setHalfPlaneData(
-                  widget.nodeId,
-                  APIHalfPlaneData(
-                    point1: widget.data!.point1,
-                    point2: newValue,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            Card(
-              elevation: 1,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Calculated Properties',
-                        style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text('Miller Index:',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 8),
-                        Text(millerIndexText,
-                            style: Theme.of(context).textTheme.bodyMedium),
-                      ],
-                    ),
-                  ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Half Plane Properties',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 16),
+          IVec2Input(
+            label: 'Point 1',
+            value: widget.data!.point1,
+            onChanged: (newValue) {
+              widget.model.setHalfPlaneData(
+                widget.nodeId,
+                APIHalfPlaneData(
+                  point1: newValue,
+                  point2: widget.data!.point2,
                 ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          IVec2Input(
+            label: 'Point 2',
+            value: widget.data!.point2,
+            onChanged: (newValue) {
+              widget.model.setHalfPlaneData(
+                widget.nodeId,
+                APIHalfPlaneData(
+                  point1: widget.data!.point1,
+                  point2: newValue,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Card(
+            elevation: 1,
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Calculated Properties',
+                      style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text('Miller Index:',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      Text(millerIndexText,
+                          style: Theme.of(context).textTheme.bodyMedium),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
