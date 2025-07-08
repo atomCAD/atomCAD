@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// A reusable widget for editing IVec2 values
 class IVec2Input extends StatefulWidget {
@@ -281,9 +282,9 @@ class _IVec2InputState extends State<IVec2Input> {
   Widget _buildAxisTextField({
     required String axis,
     required String axisLabel,
+    required Color axisColor,
     required TextEditingController controller,
     required FocusNode focusNode,
-    required InputDecoration baseDecoration,
   }) {
     return Tooltip(
       message: _buildAxisTooltipMessage(axis),
@@ -314,10 +315,18 @@ class _IVec2InputState extends State<IVec2Input> {
             }
           },
           child: TextField(
-            decoration: baseDecoration.copyWith(labelText: axisLabel),
+            decoration: AppInputDecorations.standard.copyWith(
+              labelText: axisLabel,
+              labelStyle: TextStyle(
+                fontSize: 13,
+                color: axisColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             controller: controller,
             focusNode: focusNode,
             keyboardType: TextInputType.number,
+            style: AppTextStyles.inputField,
             onSubmitted: (text) => _updateValueFromText(text, axis),
           ),
         ),
@@ -327,15 +336,10 @@ class _IVec2InputState extends State<IVec2Input> {
 
   @override
   Widget build(BuildContext context) {
-    const inputDecoration = InputDecoration(
-      border: OutlineInputBorder(),
-      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label),
+        Text(widget.label, style: AppTextStyles.label),
         const SizedBox(height: 4),
         Row(
           children: [
@@ -343,19 +347,19 @@ class _IVec2InputState extends State<IVec2Input> {
               child: _buildAxisTextField(
                 axis: 'x',
                 axisLabel: 'X',
+                axisColor: AppColors.xAxisColor,
                 controller: _xController,
                 focusNode: _xFocusNode,
-                baseDecoration: inputDecoration,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4), // Reduced spacing from 8 to 4
             Expanded(
               child: _buildAxisTextField(
                 axis: 'y',
                 axisLabel: 'Y',
+                axisColor: AppColors.yAxisColor,
                 controller: _yController,
                 focusNode: _yFocusNode,
-                baseDecoration: inputDecoration,
               ),
             ),
           ],

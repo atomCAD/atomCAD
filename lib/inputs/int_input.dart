@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// A reusable widget for editing integer values
 class IntInput extends StatefulWidget {
@@ -156,7 +157,8 @@ class _IntInputState extends State<IntInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label),
+        Text(widget.label, style: AppTextStyles.label),
+        const SizedBox(height: 4),
         Tooltip(
           message: tooltipMessage,
           preferBelow: true,
@@ -199,12 +201,11 @@ class _IntInputState extends State<IntInput> {
                 }
               },
               child: TextField(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                ),
+                decoration: AppInputDecorations.standard,
                 controller: _controller,
                 focusNode: _focusNode,
                 keyboardType: TextInputType.number,
+                style: AppTextStyles.inputField,
                 onSubmitted: (text) {
                   _updateValueFromText(text);
                 },
