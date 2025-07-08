@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 
 /// A reusable widget for editing IVec3 values
 class IVec3Input extends StatefulWidget {
@@ -369,18 +371,38 @@ class _IVec3InputState extends State<IVec3Input> {
     return Tooltip(
       message: _buildAxisTooltipMessage(axis),
       preferBelow: true,
-      child: Listener(
-        onPointerSignal: (event) {
-          if (event is PointerScrollEvent) {
-            _handleScrollEvent(event, axis);
+      child: MouseRegion(
+        // When mouse enters, block scrolling if service is available
+        onEnter: (PointerEnterEvent event) {
+          try {
+            final service = context.read<MouseWheelBlockService>();
+            service.block();
+          } catch (e) {
+            // Provider not available, do nothing
           }
         },
-        child: TextField(
-          decoration: baseDecoration.copyWith(labelText: axisLabel),
-          controller: controller,
-          focusNode: focusNode,
-          keyboardType: TextInputType.number,
-          onSubmitted: (text) => _updateValueFromText(text, axis),
+        // When mouse exits, unblock scrolling if service is available
+        onExit: (PointerExitEvent event) {
+          try {
+            final service = context.read<MouseWheelBlockService>();
+            service.unblock();
+          } catch (e) {
+            // Provider not available, do nothing
+          }
+        },
+        child: Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              _handleScrollEvent(event, axis);
+            }
+          },
+          child: TextField(
+            decoration: baseDecoration.copyWith(labelText: axisLabel),
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: TextInputType.number,
+            onSubmitted: (text) => _updateValueFromText(text, axis),
+          ),
         ),
       ),
     );
