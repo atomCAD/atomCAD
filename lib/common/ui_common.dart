@@ -73,6 +73,14 @@ class AppSpacing {
   static const buttonHeight = 28.0;
   static const smallButtonWidth = 66.0;
   static const labelWidth = 48.0;
+  
+  // Input field constraints
+  static const inputFieldMinWidth = 50.0;
+  static const inputFieldMaxWidth = 100.0;
+  static const inputFieldConstraints = BoxConstraints(
+    minWidth: inputFieldMinWidth,
+    maxWidth: inputFieldMaxWidth,
+  );
 }
 
 /// Button Styles

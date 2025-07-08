@@ -37,11 +37,11 @@ class _IVec2InputState extends State<IVec2Input> {
   // Helper method to handle scroll events for any axis
   void _handleScrollEvent(PointerScrollEvent event, String axis) {
     // Check if shift key is pressed for larger increments
-    final useShiftIncrement = RawKeyboard.instance.keysPressed
-        .any((key) => key == LogicalKeyboardKey.shift ||
-                 key == LogicalKeyboardKey.shiftLeft ||
-                 key == LogicalKeyboardKey.shiftRight);
-    
+    final useShiftIncrement = RawKeyboard.instance.keysPressed.any((key) =>
+        key == LogicalKeyboardKey.shift ||
+        key == LogicalKeyboardKey.shiftLeft ||
+        key == LogicalKeyboardKey.shiftRight);
+
     if (event.scrollDelta.dy > 0) {
       _decrementValue(axis, useShiftIncrement: useShiftIncrement);
     } else if (event.scrollDelta.dy < 0) {
@@ -173,33 +173,33 @@ class _IVec2InputState extends State<IVec2Input> {
     int currentValue;
     // Use increment of 10 if shift is pressed, otherwise increment by 1
     final increment = useShiftIncrement ? 10 : 1;
-    
+
     switch (axis) {
       case 'x':
         currentValue = int.tryParse(_xController.text) ?? widget.value.x;
         var newValue = currentValue + increment;
-        
+
         // Clamp at maxValue if specified
         if (widget.maximumValue != null && newValue > widget.maximumValue!.x) {
           newValue = widget.maximumValue!.x;
         }
-        
+
         final validValue = _validateInput(newValue.toString(), axis);
         if (validValue != null) {
           _xController.text = validValue.toString();
           widget.onChanged(APIIVec2(x: validValue, y: widget.value.y));
         }
         break;
-        
+
       case 'y':
         currentValue = int.tryParse(_yController.text) ?? widget.value.y;
         var newValue = currentValue + increment;
-        
+
         // Clamp at maxValue if specified
         if (widget.maximumValue != null && newValue > widget.maximumValue!.y) {
           newValue = widget.maximumValue!.y;
         }
-        
+
         final validValue = _validateInput(newValue.toString(), axis);
         if (validValue != null) {
           _yController.text = validValue.toString();
@@ -213,33 +213,33 @@ class _IVec2InputState extends State<IVec2Input> {
     int currentValue;
     // Use decrement of 10 if shift is pressed, otherwise decrement by 1
     final decrement = useShiftIncrement ? 10 : 1;
-    
+
     switch (axis) {
       case 'x':
         currentValue = int.tryParse(_xController.text) ?? widget.value.x;
         var newValue = currentValue - decrement;
-        
+
         // Clamp at minValue if specified
         if (widget.minimumValue != null && newValue < widget.minimumValue!.x) {
           newValue = widget.minimumValue!.x;
         }
-        
+
         final validValue = _validateInput(newValue.toString(), axis);
         if (validValue != null) {
           _xController.text = validValue.toString();
           widget.onChanged(APIIVec2(x: validValue, y: widget.value.y));
         }
         break;
-        
+
       case 'y':
         currentValue = int.tryParse(_yController.text) ?? widget.value.y;
         var newValue = currentValue - decrement;
-        
+
         // Clamp at minValue if specified
         if (widget.minimumValue != null && newValue < widget.minimumValue!.y) {
           newValue = widget.minimumValue!.y;
         }
-        
+
         final validValue = _validateInput(newValue.toString(), axis);
         if (validValue != null) {
           _yController.text = validValue.toString();
@@ -255,7 +255,7 @@ class _IVec2InputState extends State<IVec2Input> {
       'Use mouse wheel to increment/decrement',
       'Hold SHIFT + mouse wheel for 10x steps',
     ];
-    
+
     switch (axis) {
       case 'x':
         if (widget.minimumValue != null) {
@@ -274,10 +274,10 @@ class _IVec2InputState extends State<IVec2Input> {
         }
         break;
     }
-    
+
     return tooltipLines.join('\n');
   }
-  
+
   // Helper method to build a TextField widget for an axis
   Widget _buildAxisTextField({
     required String axis,
@@ -286,48 +286,51 @@ class _IVec2InputState extends State<IVec2Input> {
     required TextEditingController controller,
     required FocusNode focusNode,
   }) {
-    return Tooltip(
-      message: _buildAxisTooltipMessage(axis),
-      preferBelow: true,
-      child: MouseRegion(
-        // When mouse enters, block scrolling if service is available
-        onEnter: (PointerEnterEvent event) {
-          try {
-            final service = context.read<MouseWheelBlockService>();
-            service.block();
-          } catch (e) {
-            // Provider not available, do nothing
-          }
-        },
-        // When mouse exits, unblock scrolling if service is available
-        onExit: (PointerExitEvent event) {
-          try {
-            final service = context.read<MouseWheelBlockService>();
-            service.unblock();
-          } catch (e) {
-            // Provider not available, do nothing
-          }
-        },
-        child: Listener(
-          onPointerSignal: (event) {
-            if (event is PointerScrollEvent) {
-              _handleScrollEvent(event, axis);
+    return ConstrainedBox(
+      constraints: AppSpacing.inputFieldConstraints,
+      child: Tooltip(
+        message: _buildAxisTooltipMessage(axis),
+        preferBelow: true,
+        child: MouseRegion(
+          // When mouse enters, block scrolling if service is available
+          onEnter: (PointerEnterEvent event) {
+            try {
+              final service = context.read<MouseWheelBlockService>();
+              service.block();
+            } catch (e) {
+              // Provider not available, do nothing
             }
           },
-          child: TextField(
-            decoration: AppInputDecorations.standard.copyWith(
-              labelText: axisLabel,
-              labelStyle: TextStyle(
-                fontSize: 13,
-                color: axisColor,
-                fontWeight: FontWeight.bold,
+          // When mouse exits, unblock scrolling if service is available
+          onExit: (PointerExitEvent event) {
+            try {
+              final service = context.read<MouseWheelBlockService>();
+              service.unblock();
+            } catch (e) {
+              // Provider not available, do nothing
+            }
+          },
+          child: Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent) {
+                _handleScrollEvent(event, axis);
+              }
+            },
+            child: TextField(
+              decoration: AppInputDecorations.standard.copyWith(
+                labelText: axisLabel,
+                labelStyle: TextStyle(
+                  fontSize: 13,
+                  color: axisColor,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              controller: controller,
+              focusNode: focusNode,
+              keyboardType: TextInputType.number,
+              style: AppTextStyles.inputField,
+              onSubmitted: (text) => _updateValueFromText(text, axis),
             ),
-            controller: controller,
-            focusNode: focusNode,
-            keyboardType: TextInputType.number,
-            style: AppTextStyles.inputField,
-            onSubmitted: (text) => _updateValueFromText(text, axis),
           ),
         ),
       ),
@@ -343,7 +346,7 @@ class _IVec2InputState extends State<IVec2Input> {
         const SizedBox(height: 4),
         Row(
           children: [
-            Expanded(
+            Flexible(
               child: _buildAxisTextField(
                 axis: 'x',
                 axisLabel: 'X',
@@ -353,7 +356,7 @@ class _IVec2InputState extends State<IVec2Input> {
               ),
             ),
             const SizedBox(width: 4), // Reduced spacing from 8 to 4
-            Expanded(
+            Flexible(
               child: _buildAxisTextField(
                 axis: 'y',
                 axisLabel: 'Y',

@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:vector_math/vector_math_64.dart' as vm;
 
@@ -387,8 +388,7 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('${widget.label} (max index: ${widget.maxValue})',
-            style: Theme.of(context).textTheme.bodyLarge),
+        Text(widget.label, style: AppTextStyles.label),
         const SizedBox(height: 8),
         Container(
           key: _mapKey,

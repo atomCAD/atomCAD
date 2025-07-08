@@ -159,56 +159,59 @@ class _IntInputState extends State<IntInput> {
       children: [
         Text(widget.label, style: AppTextStyles.label),
         const SizedBox(height: 4),
-        Tooltip(
-          message: tooltipMessage,
-          preferBelow: true,
-          child: MouseRegion(
-            // When mouse enters, block scrolling if service is available
-            onEnter: (PointerEnterEvent event) {
-              try {
-                final service = context.read<MouseWheelBlockService>();
-                service.block();
-              } catch (e) {
-                // Provider not available, do nothing
-              }
-            },
-            // When mouse exits, unblock scrolling if service is available
-            onExit: (PointerExitEvent event) {
-              try {
-                final service = context.read<MouseWheelBlockService>();
-                service.unblock();
-              } catch (e) {
-                // Provider not available, do nothing
-              }
-            },
-            child: Listener(
-              onPointerSignal: (event) {
-                if (event is PointerScrollEvent) {
-                  // Check if shift key is pressed for larger increments
-                  final useShiftIncrement = RawKeyboard.instance.keysPressed.any(
-                      (key) =>
-                          key == LogicalKeyboardKey.shift ||
-                          key == LogicalKeyboardKey.shiftLeft ||
-                          key == LogicalKeyboardKey.shiftRight);
-
-                  // Scrolling down (positive delta) decreases the value
-                  // Scrolling up (negative delta) increases the value
-                  if (event.scrollDelta.dy > 0) {
-                    _decrementValue(useShiftIncrement: useShiftIncrement);
-                  } else if (event.scrollDelta.dy < 0) {
-                    _incrementValue(useShiftIncrement: useShiftIncrement);
-                  }
+        ConstrainedBox(
+          constraints: AppSpacing.inputFieldConstraints,
+          child: Tooltip(
+            message: tooltipMessage,
+            preferBelow: true,
+            child: MouseRegion(
+              // When mouse enters, block scrolling if service is available
+              onEnter: (PointerEnterEvent event) {
+                try {
+                  final service = context.read<MouseWheelBlockService>();
+                  service.block();
+                } catch (e) {
+                  // Provider not available, do nothing
                 }
               },
-              child: TextField(
-                decoration: AppInputDecorations.standard,
-                controller: _controller,
-                focusNode: _focusNode,
-                keyboardType: TextInputType.number,
-                style: AppTextStyles.inputField,
-                onSubmitted: (text) {
-                  _updateValueFromText(text);
+              // When mouse exits, unblock scrolling if service is available
+              onExit: (PointerExitEvent event) {
+                try {
+                  final service = context.read<MouseWheelBlockService>();
+                  service.unblock();
+                } catch (e) {
+                  // Provider not available, do nothing
+                }
+              },
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    // Check if shift key is pressed for larger increments
+                    final useShiftIncrement = RawKeyboard.instance.keysPressed
+                        .any((key) =>
+                            key == LogicalKeyboardKey.shift ||
+                            key == LogicalKeyboardKey.shiftLeft ||
+                            key == LogicalKeyboardKey.shiftRight);
+
+                    // Scrolling down (positive delta) decreases the value
+                    // Scrolling up (negative delta) increases the value
+                    if (event.scrollDelta.dy > 0) {
+                      _decrementValue(useShiftIncrement: useShiftIncrement);
+                    } else if (event.scrollDelta.dy < 0) {
+                      _incrementValue(useShiftIncrement: useShiftIncrement);
+                    }
+                  }
                 },
+                child: TextField(
+                  decoration: AppInputDecorations.standard,
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  keyboardType: TextInputType.number,
+                  style: AppTextStyles.inputField,
+                  onSubmitted: (text) {
+                    _updateValueFromText(text);
+                  },
+                ),
               ),
             ),
           ),
