@@ -208,6 +208,20 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
   }
 
   @override
+  void didUpdateWidget(MillerIndexMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If maxValue changes, we need to regenerate the Miller indices
+    if (widget.maxValue != oldWidget.maxValue) {
+      setState(() {
+        _uniqueIndices = _generateUniqueMilerIndices();
+        _dotPositions.clear(); // Clear cached positions to force recalculation
+        _hoveredIndex = null; // Clear hover state
+        _removeTooltip(); // Remove any tooltips
+      });
+    }
+  }
+
+  @override
   void dispose() {
     // Clean up tooltip overlay if it exists
     _removeTooltip();

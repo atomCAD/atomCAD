@@ -458,6 +458,7 @@ pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
           None => return None,
         };
         Some(APIHalfSpaceData {
+          max_miller_index: half_space_data.max_miller_index,
           miller_index: to_api_ivec3(&half_space_data.miller_index),
           center: to_api_ivec3(&half_space_data.center),
         })
@@ -724,6 +725,7 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       let half_space_data = Box::new(HalfSpaceData {
+        max_miller_index: data.max_miller_index,
         miller_index: from_api_ivec3(&data.miller_index),
         center: from_api_ivec3(&data.center),
       });

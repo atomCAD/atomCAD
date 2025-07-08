@@ -266,22 +266,26 @@ class APIHalfPlaneData {
 }
 
 class APIHalfSpaceData {
+  final int maxMillerIndex;
   final APIIVec3 millerIndex;
   final APIIVec3 center;
 
   const APIHalfSpaceData({
+    required this.maxMillerIndex,
     required this.millerIndex,
     required this.center,
   });
 
   @override
-  int get hashCode => millerIndex.hashCode ^ center.hashCode;
+  int get hashCode =>
+      maxMillerIndex.hashCode ^ millerIndex.hashCode ^ center.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIHalfSpaceData &&
           runtimeType == other.runtimeType &&
+          maxMillerIndex == other.maxMillerIndex &&
           millerIndex == other.millerIndex &&
           center == other.center;
 }

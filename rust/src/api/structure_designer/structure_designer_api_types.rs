@@ -76,6 +76,7 @@ pub struct InputPinView {
   }
 
   pub struct APIHalfSpaceData {
+    pub max_miller_index: i32,
     pub miller_index: APIIVec3,
     pub center: APIIVec3,
   }

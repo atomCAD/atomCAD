@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
+import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/miller_index_map.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -40,6 +41,24 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
             Text('Half Space Properties',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
+            // Max Miller Index input
+            IntInput(
+              label: 'Max Miller Index',
+              value: widget.data!.maxMillerIndex,
+              minimumValue: 1, // Must be at least 1
+              maximumValue: 10, // Set a reasonable upper limit
+              onChanged: (newValue) {
+                widget.model.setHalfSpaceData(
+                  widget.nodeId,
+                  APIHalfSpaceData(
+                    maxMillerIndex: newValue,
+                    millerIndex: widget.data!.millerIndex,
+                    center: widget.data!.center,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
             // Miller Index Map (visualization)
             MillerIndexMap(
               label: 'Miller Index Map',
@@ -48,12 +67,13 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                 widget.model.setHalfSpaceData(
                   widget.nodeId,
                   APIHalfSpaceData(
+                    maxMillerIndex: widget.data!.maxMillerIndex,
                     millerIndex: newValue,
                     center: widget.data!.center,
                   ),
                 );
               },
-              maxValue: 4,
+              maxValue: widget.data!.maxMillerIndex,
               mapWidth: 360,
               mapHeight: 180,
               dotColor: Theme.of(context).brightness == Brightness.dark
@@ -66,12 +86,19 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
             IVec3Input(
               label: 'Miller Index (numeric)',
               value: widget.data!.millerIndex,
-              minimumValue: APIIVec3(x: -4, y: -4, z: -4),
-              maximumValue: APIIVec3(x: 4, y: 4, z: 4),
+              minimumValue: APIIVec3(
+                  x: -widget.data!.maxMillerIndex,
+                  y: -widget.data!.maxMillerIndex,
+                  z: -widget.data!.maxMillerIndex),
+              maximumValue: APIIVec3(
+                  x: widget.data!.maxMillerIndex,
+                  y: widget.data!.maxMillerIndex,
+                  z: widget.data!.maxMillerIndex),
               onChanged: (newValue) {
                 widget.model.setHalfSpaceData(
                   widget.nodeId,
                   APIHalfSpaceData(
+                    maxMillerIndex: widget.data!.maxMillerIndex,
                     millerIndex: newValue,
                     center: widget.data!.center,
                   ),
@@ -86,6 +113,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                 widget.model.setHalfSpaceData(
                   widget.nodeId,
                   APIHalfSpaceData(
+                    maxMillerIndex: widget.data!.maxMillerIndex,
                     millerIndex: widget.data!.millerIndex,
                     center: newValue,
                   ),

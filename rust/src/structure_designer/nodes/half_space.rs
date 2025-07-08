@@ -49,6 +49,7 @@ pub const SHIFT_HANDLE_LENGTH: f64 = 1.2;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfSpaceData {
+  pub max_miller_index: i32,
   #[serde(with = "ivec3_serializer")]
   pub miller_index: IVec3,
   #[serde(with = "ivec3_serializer")]
