@@ -78,7 +78,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
             dotColor: Theme.of(context).brightness == Brightness.dark
                 ? Colors.grey.shade600
                 : Colors.grey.shade400,
-            selectedDotColor: Theme.of(context).colorScheme.primary,
+            selectedDotColor: Colors.red,
           ),
           const SizedBox(height: 12),
           // Traditional numeric input for Miller Index

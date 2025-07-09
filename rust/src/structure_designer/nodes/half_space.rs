@@ -1,6 +1,7 @@
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::util::timer::Timer;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
@@ -29,14 +30,14 @@ use csgrs::vertex::Vertex;
 use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
 
-pub const CENTER_SPHERE_RADIUS: f64 = 0.35;
+pub const CENTER_SPHERE_RADIUS: f64 = 0.5;
 pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
 pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 32;
 
 // Constants for miller index disc visualization
-pub const MILLER_INDEX_DISC_DISTANCE: f64 = 4.0; // Distance from center to place discs
-pub const MILLER_INDEX_DISC_RADIUS: f64 = 0.4;   // Radius of each disc
-pub const MILLER_INDEX_DISC_THICKNESS: f64 = 0.05; // Thickness of each disc
+pub const MILLER_INDEX_DISC_DISTANCE: f64 = 5.0; // Distance from center to place discs
+pub const MILLER_INDEX_DISC_RADIUS: f64 = 0.5;   // Radius of each disc
+pub const MILLER_INDEX_DISC_THICKNESS: f64 = 0.06; // Thickness of each disc
 pub const MILLER_INDEX_DISC_DIVISIONS: u32 = 16;  // Number of divisions for disc cylinder
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -286,6 +287,9 @@ impl HalfSpaceGadget {
     /// These discs are positioned at a fixed distance from the center in the direction of each miller index
     /// The current miller index disc is highlighted with a yellowish-orange color
     fn tessellate_miller_indices_discs(&self, output_mesh: &mut Mesh, center_pos: &DVec3) {
+
+        //let _timer = Timer::new("tessellate_miller_indices_discs");
+
         // Material for regular discs - blue color
         let disc_material = Material::new(&Vec3::new(0.0, 0.3, 0.9), 0.3, 0.0);
         
@@ -349,6 +353,8 @@ impl HalfSpaceGadget {
     /// Tests if any miller index disc is hit by the given ray
     /// Returns the miller index of the hit disc (closest to ray origin), or None if no disc was hit
     fn hit_test_miller_indices_discs(&self, center_pos: &DVec3, ray_origin: DVec3, ray_direction: DVec3) -> Option<IVec3> {
+        //let _timer = Timer::new("hit_test_miller_indices_discs");
+
         let mut closest_hit: Option<(f64, IVec3)> = None;
         
         // Get the disc radius based on max miller index

@@ -8,6 +8,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::scene_composer::scene_composer::SceneComposer;
 use crate::renderer::renderer::Renderer;
 use crate::api::common_api_types::Editor;
+use crate::util::timer::Timer;
 use crate::util::transform::Transform;
 
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
@@ -251,6 +252,7 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
 }
 
   pub fn refresh_structure_designer(cad_instance: &mut CADInstance, lightweight: bool) {
+    //let _timer = Timer::new(&format!("refresh_structure_designer lightweight: {}", lightweight));
     let scene = cad_instance.structure_designer.generate_scene(lightweight);
     cad_instance.renderer.refresh(
       &scene,

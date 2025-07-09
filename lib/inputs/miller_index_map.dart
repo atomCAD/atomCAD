@@ -506,8 +506,8 @@ class _MillerIndexMapPainter extends CustomPainter {
             : (isHovered ? Colors.amber : dotColor)
         ..style = PaintingStyle.fill;
 
-      // Make hovered dots slightly larger
-      final double radius = dotSize * (isHovered ? 1.5 : 1.0);
+      // Make hovered or selected dots slightly larger
+      final double radius = dotSize * (isHovered || isCurrentValue ? 2.0 : 1.0);
 
       canvas.drawCircle(
         Offset(x, y),
@@ -518,14 +518,13 @@ class _MillerIndexMapPainter extends CustomPainter {
       // Draw outline for the selected or hovered dot for better visibility
       if (isCurrentValue || isHovered) {
         final Paint outlinePaint = Paint()
-          ..color =
-              isCurrentValue ? Colors.white : Colors.amber.withOpacity(0.6)
+          ..color = Colors.amber.withOpacity(0.6)
           ..style = PaintingStyle.stroke
           ..strokeWidth = isCurrentValue ? 1.5 : 1.0;
 
         canvas.drawCircle(
           Offset(x, y),
-          radius + 2,
+          radius + 3,
           outlinePaint,
         );
       }

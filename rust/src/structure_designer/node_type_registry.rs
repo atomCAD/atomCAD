@@ -182,7 +182,7 @@ impl NodeTypeRegistry {
       parameters: Vec::new(),
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(HalfSpaceData {
-        max_miller_index: 4,
+        max_miller_index: 2,
         miller_index: IVec3::new(0, 1, 0), // Default normal along y-axis
         center: IVec3::new(0, 0, 0),
       }),
