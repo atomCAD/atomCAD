@@ -226,7 +226,9 @@ pub fn tessellate_cylinder(
     radius: f64,
     divisions: u32,
     material: &Material,
-    include_top_and_bottom: bool) {
+    include_top_and_bottom: bool,
+    top_material: Option<&Material>,
+    bottom_material: Option<&Material>) {
   let center = (top_center + bottom_center) * 0.5;
   let dir = (top_center - bottom_center).normalize();
   let up = dir;
@@ -267,22 +269,26 @@ pub fn tessellate_cylinder(
   }
 
   if include_top_and_bottom {
+    // Use the top_material if provided, otherwise use the default material
+    let top_mat = top_material.unwrap_or(material);
     tessellate_circle_sheet (
       output_mesh,
       &top_center,
       &up,
       radius,
       divisions,
-      material,
+      top_mat,
     );
 
+    // Use the bottom_material if provided, otherwise use the default material
+    let bottom_mat = bottom_material.unwrap_or(material);
     tessellate_circle_sheet (
       output_mesh,
       &bottom_center,
       &down,
       radius,
       divisions,
-      material,
+      bottom_mat,
     );
   }
 }
@@ -315,7 +321,9 @@ pub fn tessellate_crosshair_3d(
     radius,
     divisions,
     material,
-    include_caps
+    include_caps,
+    None,
+    None
   );
   
   // Tessellate the Y-axis cylinder
@@ -326,7 +334,9 @@ pub fn tessellate_crosshair_3d(
     radius,
     divisions,
     material,
-    include_caps
+    include_caps,
+    None,
+    None
   );
   
   // Tessellate the Z-axis cylinder
@@ -337,7 +347,9 @@ pub fn tessellate_crosshair_3d(
     radius,
     divisions,
     material,
-    include_caps
+    include_caps,
+    None,
+    None
   );
 }
 
@@ -492,7 +504,9 @@ pub fn tessellate_arrow(
       cylinder_radius,
       divisions,
       material,
-      true
+      true,
+      None,
+      None
     );
 
     tessellate_cone(

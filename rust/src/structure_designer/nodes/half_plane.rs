@@ -207,7 +207,9 @@ impl Tessellatable for HalfPlaneGadget {
             common_constants::LINE_RADIUS,
             common_constants::LINE_DIVISIONS,
             &line_material,
-            true
+            true,
+            None,
+            None
         );
         
         // Draw the handles as triangular prisms oriented along Y axis

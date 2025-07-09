@@ -289,7 +289,9 @@ impl Tessellatable for PolygonGadget {
             common_constants::HANDLE_RADIUS,
             common_constants::HANDLE_DIVISIONS,
             if selected { &selected_handle_material } else { &handle_material },
-            true
+            true,
+            None,
+            None
         );
 
         // line connecting the points
@@ -300,7 +302,9 @@ impl Tessellatable for PolygonGadget {
             common_constants::LINE_RADIUS,
             common_constants::LINE_DIVISIONS,
             &line_material,
-            false
+            false,
+            None,
+            None
         );
     }
   }

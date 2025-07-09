@@ -31,7 +31,6 @@ use csgrs::vertex::Vertex;
 use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
 
-pub const MAX_MILLER_INDEX: f64 = 4.0;
 pub const GADGET_LENGTH: f64 = 6.0;
 pub const AXIS_RADIUS: f64 = 0.1;
 pub const AXIS_DIVISIONS: u32 = 16;
@@ -47,6 +46,13 @@ pub const SHIFT_HANDLE_RADIUS: f64 = 0.4;
 pub const SHIFT_HANDLE_DIVISIONS: u32 = 16;
 pub const SHIFT_HANDLE_LENGTH: f64 = 1.2;
 
+
+// Constants for miller index disc visualization
+pub const MILLER_INDEX_DISC_DISTANCE: f64 = 4.0; // Distance from center to place discs
+pub const MILLER_INDEX_DISC_RADIUS: f64 = 0.4;   // Radius of each disc
+pub const MILLER_INDEX_DISC_THICKNESS: f64 = 0.05; // Thickness of each disc
+pub const MILLER_INDEX_DISC_DIVISIONS: u32 = 16;  // Number of divisions for disc cylinder
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfSpaceData {
   pub max_miller_index: i32,
@@ -59,7 +65,7 @@ pub struct HalfSpaceData {
 impl NodeData for HalfSpaceData {
 
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
-      return Some(Box::new(HalfSpaceGadget::new(&self.miller_index, self.center)));
+      return Some(Box::new(HalfSpaceGadget::new(self.max_miller_index, &self.miller_index, self.center)));
     }
   
 }
@@ -131,12 +137,14 @@ pub fn implicit_eval_half_space<'a>(
 
 #[derive(Clone)]
 pub struct HalfSpaceGadget {
+    pub max_miller_index: i32,
     pub miller_index: IVec3,
     pub center: IVec3,
     pub visualized_plane_shift: i32,
     pub dir: DVec3, // normalized
     pub shift_handle_offset: f64,
     pub is_dragging: bool,
+    pub possible_miller_indices: HashSet<IVec3>,
 }
 
 impl Tessellatable for HalfSpaceGadget {
@@ -153,7 +161,9 @@ impl Tessellatable for HalfSpaceGadget {
           AXIS_RADIUS,
           AXIS_DIVISIONS,
           &Material::new(&Vec3::new(0.95, 0.93, 0.88), 0.4, 0.8), 
-          false);
+          false,
+          None,
+          None);
 
         // center sphere
         tessellator::tessellate_sphere(
@@ -168,6 +178,7 @@ impl Tessellatable for HalfSpaceGadget {
         let shift_handle_center = center_pos + self.dir * self.shift_handle_offset;
 
         // shift handle
+        /*
         tessellator::tessellate_cylinder(
             output_mesh,
             &(shift_handle_center - self.dir * 0.5 * SHIFT_HANDLE_LENGTH),
@@ -175,7 +186,10 @@ impl Tessellatable for HalfSpaceGadget {
             SHIFT_HANDLE_RADIUS,
             SHIFT_HANDLE_DIVISIONS,
             &Material::new(&Vec3::new(1.0, 1.0, 0.0), 0.3, 0.0), 
-            true);
+            true,
+            None,
+            None);
+        */
       
         // direction handle
         tessellator::tessellate_cylinder(
@@ -185,7 +199,9 @@ impl Tessellatable for HalfSpaceGadget {
             DIRECTION_HANDLE_RADIUS,
             DIRECTION_HANDLE_DIVISIONS,
             &Material::new(&Vec3::new(0.0, 0.0, 0.95), 0.3, 0.0), 
-            true);
+            true,
+            None,
+            None);
 
         if self.is_dragging {
             let plane_normal = self.miller_index.as_dvec3().normalize();
@@ -213,6 +229,9 @@ impl Tessellatable for HalfSpaceGadget {
                 &outside_material,
                 &inside_material,
                 &side_material);
+                
+            // Tessellate miller index discs if we're dragging the central sphere (handle index 2)
+            self.tessellate_miller_indices_discs(output_mesh, &center_pos);
         }
 
         self.tessellate_lattice_points(output_mesh);     
@@ -230,6 +249,16 @@ impl Gadget for HalfSpaceGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         // Calculate center position in world space
         let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        
+        // Test central sphere
+        if let Some(_t) = sphere_hit_test(
+            &center_pos,
+            CENTER_SPHERE_RADIUS,
+            &ray_origin,
+            &ray_direction
+        ) {
+            return Some(2); // Central sphere hit
+        }
         
         // Test shift handle
         let shift_handle_center = center_pos + self.dir * self.shift_handle_offset;
@@ -339,17 +368,22 @@ impl NodeNetworkGadget for HalfSpaceGadget {
 
 impl HalfSpaceGadget {
 
-    pub fn new(miller_index: &IVec3, center: IVec3) -> Self {
+    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3) -> Self {
         let normalized_dir = miller_index.as_dvec3().normalize();
         
-        let ret = Self {
+        let mut ret = Self {
+            max_miller_index,
             miller_index: *miller_index,
             center,
             visualized_plane_shift: 0, // No initial shift relative to center
             dir: normalized_dir,
             shift_handle_offset: 0.0,  // No initial offset
-            is_dragging: false
+            is_dragging: false,
+            possible_miller_indices: HashSet::new()
         };
+        
+        // Generate all possible miller indices
+        ret.generate_possible_miller_indices();
 
         return ret;
     }
@@ -483,8 +517,8 @@ impl HalfSpaceGadget {
     // Returns a miller index
     fn quantize_dir(&self, dir: &DVec3) -> IVec3 {
         let mut candidate_points: HashSet<IVec3> = HashSet::new();
-        let mut t = MAX_MILLER_INDEX * 0.5;
-        while t <= MAX_MILLER_INDEX {
+        let mut t = self.max_miller_index as f64 * 0.5;
+        while t <= self.max_miller_index as f64 {
             let p = dir * t;
 
             // Calculate floor and ceiling for each component to get unit cell corners
@@ -528,8 +562,9 @@ impl HalfSpaceGadget {
         let abs_y = miller_index.y.abs();
         let abs_z = miller_index.z.abs();
 
-        // Try divisions from MAX_MILLER_INDEX down to 2
-        let max_divisor = MAX_MILLER_INDEX.ceil() as i32;
+        // Set max_divisor to the maximum of the absolute values of the components
+        // This is an optimization as we don't need to check divisors larger than the largest component
+        let max_divisor = abs_x.max(abs_y).max(abs_z);
         for divisor in (2..=max_divisor).rev() {
             // Check if all components are divisible by the divisor
             if abs_x % divisor == 0 && abs_y % divisor == 0 && abs_z % divisor == 0 {
@@ -548,5 +583,77 @@ impl HalfSpaceGadget {
     fn offset_to_quantized_shift(&self, offset: f64) -> i32 {
         let shift = offset * (self.miller_index.as_dvec3().length()) / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
         return shift.round() as i32;
+    }
+    
+    /// Tessellates blue discs representing each possible miller index
+    /// These discs are positioned at a fixed distance from the center in the direction of each miller index
+    fn tessellate_miller_indices_discs(&self, output_mesh: &mut Mesh, center_pos: &DVec3) {
+        // Material for the discs - blue color
+        let disc_material = Material::new(&Vec3::new(0.0, 0.3, 0.9), 0.3, 0.0);
+        
+        // Create a red material for the inside/bottom of the disc
+        let red_material = Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0);
+
+        // Iterate through all possible miller indices
+        for miller_index in &self.possible_miller_indices {
+            // Get the normalized direction for this miller index
+            let direction = miller_index.as_dvec3().normalize();
+            
+            // Calculate the position for the disc
+            let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
+            
+            // Create a thin cylinder (disc) at this position
+            // The cylinder axis should be aligned with the direction
+            let disc_start = disc_center - direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
+            let disc_end = disc_center + direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
+            
+            // Get the dynamic disc radius based on the max miller index
+            let disc_radius = self.get_miller_index_disc_radius();
+            
+            // Tessellate the disc
+            tessellator::tessellate_cylinder(
+                output_mesh,
+                &disc_start,
+                &disc_end,
+                disc_radius,
+                MILLER_INDEX_DISC_DIVISIONS,
+                &disc_material,
+                true, // Cap the ends
+                Some(&red_material),
+                None,
+            );
+        }
+    }
+    
+    // Calculate the appropriate disc radius based on the max miller index
+    fn get_miller_index_disc_radius(&self) -> f64 {
+        let divisor = f64::max(self.max_miller_index as f64 - 1.0, 1.0);
+        MILLER_INDEX_DISC_RADIUS / divisor
+    }
+
+    /// Generates all possible miller indices within the max_miller_index range
+    /// and stores them in the possible_miller_indices HashSet after reducing to simplest form
+    fn generate_possible_miller_indices(&mut self) {
+        // Clear any existing indices
+        self.possible_miller_indices.clear();
+        
+        // Iterate through all combinations within the max_miller_index range
+        for h in -self.max_miller_index..=self.max_miller_index {
+            for k in -self.max_miller_index..=self.max_miller_index {
+                for l in -self.max_miller_index..=self.max_miller_index {
+                    // Skip the origin (0,0,0) as it's not a valid direction
+                    if h == 0 && k == 0 && l == 0 {
+                        continue;
+                    }
+                    
+                    // Create the miller index and reduce it to simplest form
+                    let miller = IVec3::new(h, k, l);
+                    let simplified = self.simplify_miller_index(miller);
+                    
+                    // Add the simplified miller index to the set
+                    self.possible_miller_indices.insert(simplified);
+                }
+            }
+        }
     }
 }

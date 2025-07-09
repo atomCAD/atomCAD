@@ -130,7 +130,9 @@ impl ClusterFrameGadget {
             ROTATOR_CYLINDER_RADIUS,
             AXIS_DIVISIONS,
             &material,
-            true);
+            true,
+            None,
+            None);
 
         tessellator::tessellate_arrow(
             output_mesh,

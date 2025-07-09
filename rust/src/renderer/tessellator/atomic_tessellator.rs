@@ -143,6 +143,8 @@ pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
       if selected { 0.2 } else { 0.8 }, 
       0.0),
     false,
+    None,
+    None
   );
 }
 

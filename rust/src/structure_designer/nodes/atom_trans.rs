@@ -133,7 +133,9 @@ impl AtomTransGadget {
             AXIS_RADIUS,
             AXIS_DIVISIONS,
             &Material::new(albedo, 0.4, 0.8), 
-            true);        
+            true,
+            None,
+            None);        
     }
 
     fn refresh_rotation_quat(&mut self) {
