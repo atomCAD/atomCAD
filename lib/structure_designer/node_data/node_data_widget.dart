@@ -17,6 +17,7 @@ import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/stamp_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -216,6 +217,17 @@ class NodeDataWidget extends StatelessWidget {
         return RegPolyEditor(
           nodeId: selectedNode.id,
           data: regPolyData,
+          model: model,
+        );
+      case 'facet_shell':
+        // Fetch the facet shell data here in the parent widget
+        final facetShellData = model.getFacetShellData(
+          selectedNode.id,
+        );
+
+        return FacetShellEditor(
+          nodeId: selectedNode.id,
+          data: facetShellData,
           model: model,
         );
       default:
