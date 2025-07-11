@@ -123,6 +123,22 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
               );
             },
           ),
+          const SizedBox(height: 8),
+          IntInput(
+            label: 'Shift',
+            value: widget.data!.shift,
+            onChanged: (newValue) {
+              widget.model.setHalfSpaceData(
+                widget.nodeId,
+                APIHalfSpaceData(
+                  maxMillerIndex: widget.data!.maxMillerIndex,
+                  millerIndex: widget.data!.millerIndex,
+                  center: widget.data!.center,
+                  shift: newValue,
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
