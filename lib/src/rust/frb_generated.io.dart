@@ -9,6 +9,7 @@ import 'api/scene_composer_api.dart';
 import 'api/scene_composer_api_types.dart';
 import 'api/structure_designer/anchor_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
+import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/geo_to_atom_api.dart';
 import 'api/structure_designer/stamp_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
@@ -66,6 +67,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExtrudeData dco_decode_api_extrude_data(dynamic raw);
+
+  @protected
+  APIFacet dco_decode_api_facet(dynamic raw);
+
+  @protected
+  APIFacetShellData dco_decode_api_facet_shell_data(dynamic raw);
 
   @protected
   APIGeoToAtomData dco_decode_api_geo_to_atom_data(dynamic raw);
@@ -141,6 +148,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExtrudeData dco_decode_box_autoadd_api_extrude_data(dynamic raw);
+
+  @protected
+  APIFacet dco_decode_box_autoadd_api_facet(dynamic raw);
+
+  @protected
+  APIFacetShellData dco_decode_box_autoadd_api_facet_shell_data(dynamic raw);
 
   @protected
   APIGeoToAtomData dco_decode_box_autoadd_api_geo_to_atom_data(dynamic raw);
@@ -232,6 +245,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APICrystalTypeInfo> dco_decode_list_api_crystal_type_info(dynamic raw);
 
   @protected
+  List<APIFacet> dco_decode_list_api_facet(dynamic raw);
+
+  @protected
   List<APISceneComposerTool> dco_decode_list_api_scene_composer_tool(
       dynamic raw);
 
@@ -294,6 +310,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExtrudeData? dco_decode_opt_box_autoadd_api_extrude_data(dynamic raw);
+
+  @protected
+  APIFacetShellData? dco_decode_opt_box_autoadd_api_facet_shell_data(
+      dynamic raw);
 
   @protected
   APIGeoToAtomData? dco_decode_opt_box_autoadd_api_geo_to_atom_data(
@@ -427,6 +447,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIExtrudeData sse_decode_api_extrude_data(SseDeserializer deserializer);
 
   @protected
+  APIFacet sse_decode_api_facet(SseDeserializer deserializer);
+
+  @protected
+  APIFacetShellData sse_decode_api_facet_shell_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIGeoToAtomData sse_decode_api_geo_to_atom_data(
       SseDeserializer deserializer);
 
@@ -509,6 +536,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExtrudeData sse_decode_box_autoadd_api_extrude_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFacet sse_decode_box_autoadd_api_facet(SseDeserializer deserializer);
+
+  @protected
+  APIFacetShellData sse_decode_box_autoadd_api_facet_shell_data(
       SseDeserializer deserializer);
 
   @protected
@@ -617,6 +651,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIFacet> sse_decode_list_api_facet(SseDeserializer deserializer);
+
+  @protected
   List<APISceneComposerTool> sse_decode_list_api_scene_composer_tool(
       SseDeserializer deserializer);
 
@@ -691,6 +728,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIExtrudeData? sse_decode_opt_box_autoadd_api_extrude_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFacetShellData? sse_decode_opt_box_autoadd_api_facet_shell_data(
       SseDeserializer deserializer);
 
   @protected
@@ -841,6 +882,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIExtrudeData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_facet(APIFacet self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_facet_shell_data(
+      APIFacetShellData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_geo_to_atom_data(
       APIGeoToAtomData self, SseSerializer serializer);
 
@@ -929,6 +977,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_extrude_data(
       APIExtrudeData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_facet(
+      APIFacet self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_facet_shell_data(
+      APIFacetShellData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_geo_to_atom_data(
@@ -1037,6 +1093,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APICrystalTypeInfo> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_facet(List<APIFacet> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_scene_composer_tool(
       List<APISceneComposerTool> self, SseSerializer serializer);
 
@@ -1115,6 +1174,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_extrude_data(
       APIExtrudeData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_facet_shell_data(
+      APIFacetShellData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_geo_to_atom_data(

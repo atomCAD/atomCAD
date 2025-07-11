@@ -12,6 +12,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart'
     as stamp_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/facet_shell_api.dart'
+    as facet_shell_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 class PinReference {
@@ -406,5 +408,60 @@ class StructureDesignerModel extends ChangeNotifier {
     preferences = structure_designer_api.getStructureDesignerPreferences();
 
     notifyListeners();
+  }
+
+  // Facet Shell API wrapper methods
+  APIFacetShellData? getFacetShellData(BigInt nodeId) {
+    if (nodeNetworkView == null) return null;
+    return facet_shell_api.getFacetShellData(nodeId: nodeId);
+  }
+
+  bool setFacetShellCenter(BigInt nodeId, APIIVec3 center, int maxMillerIndex) {
+    if (nodeNetworkView == null) return false;
+    final result = facet_shell_api.setFacetShellCenter(
+      nodeId: nodeId,
+      center: center,
+      maxMillerIndex: maxMillerIndex,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  bool addFacet(BigInt nodeId, APIFacet facet) {
+    if (nodeNetworkView == null) return false;
+    final result = facet_shell_api.addFacet(
+      nodeId: nodeId,
+      facet: facet,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  bool updateFacet(BigInt nodeId, BigInt index, APIFacet facet) {
+    if (nodeNetworkView == null) return false;
+    final result = facet_shell_api.updateFacet(
+      nodeId: nodeId,
+      index: index,
+      facet: facet,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  bool removeFacet(BigInt nodeId, BigInt index) {
+    if (nodeNetworkView == null) return false;
+    final result = facet_shell_api.removeFacet(
+      nodeId: nodeId,
+      index: index,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  bool clearFacets(BigInt nodeId) {
+    if (nodeNetworkView == null) return false;
+    final result = facet_shell_api.clearFacets(nodeId: nodeId);
+    refreshFromKernel();
+    return result;
   }
 }

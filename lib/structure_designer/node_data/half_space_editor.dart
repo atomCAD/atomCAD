@@ -53,6 +53,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   maxMillerIndex: newValue,
                   millerIndex: widget.data!.millerIndex,
                   center: widget.data!.center,
+                  shift: widget.data!.shift,
                 ),
               );
             },
@@ -69,6 +70,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   maxMillerIndex: widget.data!.maxMillerIndex,
                   millerIndex: newValue,
                   center: widget.data!.center,
+                  shift: widget.data!.shift,
                 ),
               );
             },
@@ -100,6 +102,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   maxMillerIndex: widget.data!.maxMillerIndex,
                   millerIndex: newValue,
                   center: widget.data!.center,
+                  shift: widget.data!.shift,
                 ),
               );
             },
@@ -115,6 +118,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   maxMillerIndex: widget.data!.maxMillerIndex,
                   millerIndex: widget.data!.millerIndex,
                   center: newValue,
+                  shift: widget.data!.shift,
                 ),
               );
             },

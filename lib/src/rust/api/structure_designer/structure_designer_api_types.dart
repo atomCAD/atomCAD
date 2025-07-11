@@ -7,7 +7,6 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `APIFacetShellData`, `APIFacet`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`
 
 class APIAnchorData {
@@ -196,6 +195,56 @@ class APIExtrudeData {
       other is APIExtrudeData &&
           runtimeType == other.runtimeType &&
           height == other.height;
+}
+
+class APIFacet {
+  final APIIVec3 millerIndex;
+  final int shift;
+  final bool symmetrize;
+
+  const APIFacet({
+    required this.millerIndex,
+    required this.shift,
+    required this.symmetrize,
+  });
+
+  @override
+  int get hashCode =>
+      millerIndex.hashCode ^ shift.hashCode ^ symmetrize.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFacet &&
+          runtimeType == other.runtimeType &&
+          millerIndex == other.millerIndex &&
+          shift == other.shift &&
+          symmetrize == other.symmetrize;
+}
+
+class APIFacetShellData {
+  final int maxMillerIndex;
+  final APIIVec3 center;
+  final List<APIFacet> facets;
+
+  const APIFacetShellData({
+    required this.maxMillerIndex,
+    required this.center,
+    required this.facets,
+  });
+
+  @override
+  int get hashCode =>
+      maxMillerIndex.hashCode ^ center.hashCode ^ facets.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFacetShellData &&
+          runtimeType == other.runtimeType &&
+          maxMillerIndex == other.maxMillerIndex &&
+          center == other.center &&
+          facets == other.facets;
 }
 
 class APIGeoToAtomData {
