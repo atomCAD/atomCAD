@@ -81,7 +81,19 @@ pub struct InputPinView {
     pub center: APIIVec3,
     pub shift: i32,
   }
-  
+
+  pub struct APIFacet {
+    pub miller_index: APIIVec3,
+    pub shift: i32,
+    pub symmetrize: bool,
+  }
+
+  pub struct APIFacetShellData {
+    pub max_miller_index: i32,
+    pub center: APIIVec3,
+    pub facets: Vec<APIFacet>,
+  }
+
   pub struct APIGeoTransData {
     pub translation: APIIVec3,
     pub rotation: APIIVec3,

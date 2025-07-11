@@ -4,6 +4,7 @@ use super::node_type::NodeType;
 use super::node_type::Parameter;
 use super::node_network::NodeNetwork;
 use super::nodes::extrude::ExtrudeData;
+use super::nodes::facet_shell::FacetShellData;
 use super::nodes::parameter::ParameterData;
 use super::nodes::cuboid::CuboidData;
 use super::nodes::polygon::PolygonData;
@@ -186,6 +187,17 @@ impl NodeTypeRegistry {
         miller_index: IVec3::new(0, 1, 0), // Default normal along y-axis
         center: IVec3::new(0, 0, 0),
         shift: 0,
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "facet_shell".to_string(),
+      parameters: Vec::new(),
+      output_type: DataType::Geometry,
+      node_data_creator: || Box::new(FacetShellData {
+        max_miller_index: 2,
+        center: IVec3::new(0, 0, 0),
+        facets: vec![],
       }),
     });
 
