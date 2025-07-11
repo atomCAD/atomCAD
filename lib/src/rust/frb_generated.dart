@@ -3514,12 +3514,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APIHalfSpaceData(
       maxMillerIndex: dco_decode_i_32(arr[0]),
       millerIndex: dco_decode_apii_vec_3(arr[1]),
       center: dco_decode_apii_vec_3(arr[2]),
+      shift: dco_decode_i_32(arr[3]),
     );
   }
 
@@ -4479,10 +4480,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_maxMillerIndex = sse_decode_i_32(deserializer);
     var var_millerIndex = sse_decode_apii_vec_3(deserializer);
     var var_center = sse_decode_apii_vec_3(deserializer);
+    var var_shift = sse_decode_i_32(deserializer);
     return APIHalfSpaceData(
         maxMillerIndex: var_maxMillerIndex,
         millerIndex: var_millerIndex,
-        center: var_center);
+        center: var_center,
+        shift: var_shift);
   }
 
   @protected
@@ -5580,6 +5583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.maxMillerIndex, serializer);
     sse_encode_apii_vec_3(self.millerIndex, serializer);
     sse_encode_apii_vec_3(self.center, serializer);
+    sse_encode_i_32(self.shift, serializer);
   }
 
   @protected

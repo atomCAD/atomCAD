@@ -185,6 +185,7 @@ impl NodeTypeRegistry {
         max_miller_index: 2,
         miller_index: IVec3::new(0, 1, 0), // Default normal along y-axis
         center: IVec3::new(0, 0, 0),
+        shift: 0,
       }),
     });
 

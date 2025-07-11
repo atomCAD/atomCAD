@@ -79,6 +79,7 @@ pub struct InputPinView {
     pub max_miller_index: i32,
     pub miller_index: APIIVec3,
     pub center: APIIVec3,
+    pub shift: i32,
   }
   
   pub struct APIGeoTransData {

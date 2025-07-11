@@ -24,11 +24,9 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
+use crate::structure_designer::utils::half_space_utils::create_plane;
+use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::csg_types::CSG;
-use csgrs::polygon::Polygon;
-use csgrs::vertex::Vertex;
-use crate::common::csg_utils::dvec3_to_point3;
-use crate::common::csg_utils::dvec3_to_vector3;
 
 pub const CENTER_SPHERE_RADIUS: f64 = 0.5;
 pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
@@ -47,6 +45,7 @@ pub struct HalfSpaceData {
   pub miller_index: IVec3,
   #[serde(with = "ivec3_serializer")]
   pub center: IVec3,
+  pub shift: i32,
 }
 
 impl NodeData for HalfSpaceData {
@@ -66,39 +65,15 @@ pub fn eval_half_space<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
+  let geometry = if context.explicit_geo_eval_needed {
+    create_plane(&half_space_data.miller_index, &half_space_data.center, half_space_data.shift)
+  } else {
+    CSG::new()
+  };
+  
   let dir = half_space_data.miller_index.as_dvec3().normalize();
   let center_pos = half_space_data.center.as_dvec3();
 
-  let normal = dvec3_to_vector3(dir);
-  let rotation = DQuat::from_rotation_arc(DVec3::Y, dir);
-
-  let width = 40.0;
-  let height = 40.0;
-
-  let start_x =  - width * 0.5;
-  let start_z =  - height * 0.5;
-  let end_x =   width * 0.5;
-  let end_z =   height * 0.5;
-
-  let v1 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, start_z)));
-  let v2 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, end_z)));
-  let v3 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, end_z)));
-  let v4 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, start_z)));
-
-  let geometry = if context.explicit_geo_eval_needed {
-    CSG::from_polygons(&[
-        Polygon::new(
-            vec![
-                Vertex::new(v1, normal),
-                Vertex::new(v2, normal),
-                Vertex::new(v3, normal),
-                Vertex::new(v4, normal),
-            ], None
-        ),
-    ])
-    .translate(center_pos.x, center_pos.y, center_pos.z)
-  } else { CSG::new() };
-  
   return NetworkResult::Geometry(GeometrySummary {
     frame_transform: Transform::new(
       center_pos,
@@ -114,12 +89,9 @@ pub fn implicit_eval_half_space<'a>(
   node: &Node,
   sample_point: &DVec3) -> f64 {
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
-  let float_miller = half_space_data.miller_index.as_dvec3();
-  let miller_magnitude = float_miller.length();
-  let center_pos = half_space_data.center.as_dvec3();
-  
-  // Calculate the signed distance from the point to the plane defined by the normal (miller_index) and center point
-  return float_miller.dot(*sample_point - center_pos) / miller_magnitude;
+  return implicit_eval_half_space_calc(
+    &half_space_data.miller_index, &half_space_data.center, half_space_data.shift,
+    sample_point);
 }
 
 #[derive(Clone)]
@@ -419,3 +391,4 @@ impl HalfSpaceGadget {
         }
     }
 }
+
