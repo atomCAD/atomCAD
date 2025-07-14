@@ -65,11 +65,11 @@ class FacetShellEditorState extends State<FacetShellEditor> {
               );
             },
           ),
-          
+
           const SizedBox(height: 16),
           Text('Facets', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          
+
           // Facet list with selection capability
           Container(
             decoration: BoxDecoration(
@@ -78,33 +78,36 @@ class FacetShellEditorState extends State<FacetShellEditor> {
             ),
             height: 150,
             child: widget.data!.facets.isEmpty
-              ? const Center(child: Text('No facets defined'))
-              : ListView.builder(
-                  itemCount: widget.data!.facets.length,
-                  itemBuilder: (context, index) {
-                    final facet = widget.data!.facets[index];
-                    final isSelected = widget.data!.selectedFacetIndex == BigInt.from(index);
-                    
-                    return ListTile(
-                      dense: true,
-                      selected: isSelected,
-                      selectedTileColor: Colors.lightBlue.withOpacity(0.1),
-                      title: Text('Facet $index: ${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z}'),
-                      subtitle: Text('Shift: ${facet.shift}, Symmetrize: ${facet.symmetrize}'),
-                      onTap: () {
-                        // Toggle selection
-                        widget.model.selectFacet(
-                          widget.nodeId,
-                          isSelected ? null : BigInt.from(index),
-                        );
-                      },
-                    );
-                  },
-                ),
+                ? const Center(child: Text('No facets defined'))
+                : ListView.builder(
+                    itemCount: widget.data!.facets.length,
+                    itemBuilder: (context, index) {
+                      final facet = widget.data!.facets[index];
+                      final isSelected =
+                          widget.data!.selectedFacetIndex == BigInt.from(index);
+
+                      return ListTile(
+                        dense: true,
+                        selected: isSelected,
+                        selectedTileColor: Colors.lightBlue.withOpacity(0.1),
+                        title: Text(
+                            'Facet $index: ${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z}'),
+                        subtitle: Text(
+                            'Shift: ${facet.shift}, Symmetrize: ${facet.symmetrize}'),
+                        onTap: () {
+                          // Toggle selection
+                          widget.model.selectFacet(
+                            widget.nodeId,
+                            isSelected ? null : BigInt.from(index),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Buttons row for facet actions
           Row(
             children: [
@@ -115,7 +118,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                     const APIFacet(
                       millerIndex: APIIVec3(x: 1, y: 0, z: 0),
                       shift: 0,
-                      symmetrize: false,
+                      symmetrize: true,
                     ),
                   );
                 },
@@ -124,41 +127,46 @@ class FacetShellEditorState extends State<FacetShellEditor> {
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: widget.data!.selectedFacetIndex != null
-                  ? () {
-                      widget.model.removeFacet(
-                        widget.nodeId,
-                        widget.data!.selectedFacetIndex!,
-                      );
-                    }
-                  : null,
+                    ? () {
+                        widget.model.removeFacet(
+                          widget.nodeId,
+                          widget.data!.selectedFacetIndex!,
+                        );
+                      }
+                    : null,
                 child: const Text('Remove Selected'),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: widget.data!.facets.isNotEmpty
-                  ? () => widget.model.clearFacets(widget.nodeId)
-                  : null,
+                    ? () => widget.model.clearFacets(widget.nodeId)
+                    : null,
                 child: const Text('Clear All'),
               ),
             ],
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Facet editor for the selected facet
-          if (widget.data!.selectedFacetIndex != null && 
-              widget.data!.selectedFacetIndex! < BigInt.from(widget.data!.facets.length)) 
+          if (widget.data!.selectedFacetIndex != null &&
+              widget.data!.selectedFacetIndex! <
+                  BigInt.from(widget.data!.facets.length))
             FacetEditor(
               nodeId: widget.nodeId,
               facetIndex: widget.data!.selectedFacetIndex!,
-              facet: widget.data!.facets[widget.data!.selectedFacetIndex!.toInt()],
+              facet:
+                  widget.data!.facets[widget.data!.selectedFacetIndex!.toInt()],
               maxMillerIndex: widget.data!.maxMillerIndex,
               model: widget.model,
             )
-          else 
+          else
             Text(
               'Select a facet to edit its properties',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontStyle: FontStyle.italic),
             )
         ],
       ),

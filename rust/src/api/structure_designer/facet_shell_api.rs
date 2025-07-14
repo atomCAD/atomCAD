@@ -64,7 +64,7 @@ pub fn set_facet_shell_center(node_id: u64, center: APIIVec3, max_miller_index: 
         // Update the facet shell data in-place
         facet_shell_data.center = from_api_ivec3(&center);
         facet_shell_data.max_miller_index = max_miller_index;
-        facet_shell_data.dirty = true;
+        facet_shell_data.ensure_cached_facets();
         
         refresh_renderer(cad_instance, false);
         true
@@ -96,7 +96,7 @@ pub fn add_facet(node_id: u64, facet: APIFacet) -> bool {
           shift: facet.shift,
           symmetrize: facet.symmetrize,
         });
-        facet_shell_data.dirty = true;
+        facet_shell_data.ensure_cached_facets();
         
         refresh_renderer(cad_instance, false);
         true
@@ -132,7 +132,7 @@ pub fn update_facet(node_id: u64, index: usize, facet: APIFacet) -> bool {
           shift: facet.shift,
           symmetrize: facet.symmetrize,
         };
-        facet_shell_data.dirty = true;
+        facet_shell_data.ensure_cached_facets();
         
         refresh_renderer(cad_instance, false);
         true
@@ -164,7 +164,7 @@ pub fn remove_facet(node_id: u64, index: usize) -> bool {
         
         // Remove the facet at the specified index
         facet_shell_data.facets.remove(index);
-        facet_shell_data.dirty = true;
+        facet_shell_data.ensure_cached_facets();
         
         refresh_renderer(cad_instance, false);
         true
@@ -192,7 +192,7 @@ pub fn clear_facets(node_id: u64) -> bool {
         
         // Clear all facets
         facet_shell_data.facets.clear();
-        facet_shell_data.dirty = true;
+        facet_shell_data.ensure_cached_facets();
         
         refresh_renderer(cad_instance, false);
         true
@@ -227,7 +227,7 @@ pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
         
         // Set the selected facet index
         facet_shell_data.selected_facet_index = index;
-        facet_shell_data.dirty = true;
+        // No need to regenerate cached_facets since only selection changed
         
         refresh_renderer(cad_instance, false);
         true
