@@ -194,12 +194,7 @@ impl NodeTypeRegistry {
       name: "facet_shell".to_string(),
       parameters: Vec::new(),
       output_type: DataType::Geometry,
-      node_data_creator: || Box::new(FacetShellData {
-        max_miller_index: 2,
-        center: IVec3::new(0, 0, 0),
-        facets: vec![],
-        selected_facet_index: None,
-      }),
+      node_data_creator: || Box::new(FacetShellData::default()),
     });
 
     ret.add_node_type(NodeType {

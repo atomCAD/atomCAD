@@ -41,12 +41,38 @@ pub struct Facet {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct FacetShellData {
   pub max_miller_index: i32,
   #[serde(with = "ivec3_serializer")]
   pub center: IVec3,
   pub facets: Vec<Facet>,
   pub selected_facet_index: Option<usize>,
+  
+  // These fields won't be serialized/deserialized
+  #[serde(skip)]
+  pub cached_facets: Vec<Facet>,
+  #[serde(skip)]
+  pub dirty: bool,
+}
+
+impl Default for FacetShellData {
+    fn default() -> Self {
+        Self {
+            max_miller_index: 2,
+            center: IVec3::new(0, 0, 0),
+            facets: vec![
+                Facet {
+                    miller_index: IVec3::new(0, 1, 0),
+                    shift: 1,
+                    symmetrize: true,
+                }
+            ],
+            selected_facet_index: None,
+            cached_facets: Vec::new(),
+            dirty: true,
+        }
+    }
 }
 
 impl NodeData for FacetShellData {
