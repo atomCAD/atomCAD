@@ -133,6 +133,7 @@ impl FacetShellData {
                     symmetrize: facet.symmetrize,
                 });
             }
+            //println!("Cached facets: {:?}", self.cached_facets);
         }
         
         // Cached facets are now up-to-date
