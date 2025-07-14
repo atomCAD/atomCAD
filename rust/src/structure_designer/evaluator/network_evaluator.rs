@@ -34,6 +34,7 @@ use crate::structure_designer::nodes::edit_atom::edit_atom::eval_edit_atom;
 use crate::structure_designer::nodes::stamp::eval_stamp;
 use crate::structure_designer::nodes::circle::eval_circle;
 use crate::structure_designer::nodes::rect::eval_rect;
+use crate::structure_designer::nodes::facet_shell::eval_facet_shell;
 use super::surface_splatting_2d::generate_2d_point_cloud_scene;
 use super::surface_splatting_3d::generate_point_cloud_scene;
 use super::dual_contour_3d::generate_dual_contour_3d_scene;
@@ -350,6 +351,8 @@ impl NetworkEvaluator {
       vec![eval_cuboid(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "half_space" {
       vec![eval_half_space(network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "facet_shell" {
+      vec![eval_facet_shell(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "intersect" {
       vec![eval_intersect(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "union" {

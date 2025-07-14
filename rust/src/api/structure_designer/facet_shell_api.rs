@@ -37,6 +37,7 @@ pub fn get_facet_shell_data(node_id: u64) -> Option<APIFacetShellData> {
           max_miller_index: facet_shell_data.max_miller_index,
           center: to_api_ivec3(&facet_shell_data.center),
           facets: api_facets,
+          selected_facet_index: facet_shell_data.selected_facet_index,
         })
       },
       None
@@ -187,6 +188,40 @@ pub fn clear_facets(node_id: u64) -> bool {
         
         // Clear all facets
         facet_shell_data.facets.clear();
+        
+        refresh_renderer(cad_instance, false);
+        true
+      },
+      false
+    )
+  }
+}
+
+/// Selects a facet at the specified index
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data_mut(node_id) {
+          Some(data) => data,
+          None => return false,
+        };
+        
+        let facet_shell_data = match node_data.as_any_mut().downcast_mut::<FacetShellData>() {
+          Some(data) => data,
+          None => return false,
+        };
+        
+        // If index is Some, validate it's in bounds
+        if let Some(idx) = index {
+          if idx >= facet_shell_data.facets.len() {
+            return false;
+          }
+        }
+        
+        // Set the selected facet index
+        facet_shell_data.selected_facet_index = index;
         
         refresh_renderer(cad_instance, false);
         true

@@ -536,7 +536,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     _textureRenderer?.closeTexture(textureKey);
     _textureRenderer = null;
     _texturePtr = null;
-    
+
     super.dispose();
   }
 }

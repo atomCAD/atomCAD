@@ -21,6 +21,7 @@ use crate::structure_designer::nodes::diff_2d::implicit_eval_diff_2d;
 use crate::structure_designer::nodes::half_plane::implicit_eval_half_plane;
 use crate::structure_designer::nodes::reg_poly::implicit_eval_reg_poly;
 use crate::structure_designer::nodes::polygon::implicit_eval_polygon;
+use crate::structure_designer::nodes::facet_shell::implicit_eval_facet_shell;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -64,6 +65,7 @@ impl ImplicitEvaluator {
         ret.built_in_functions.insert("cuboid".to_string(), implicit_eval_cuboid);
         ret.built_in_functions.insert("sphere".to_string(), implicit_eval_sphere);
         ret.built_in_functions.insert("half_space".to_string(), implicit_eval_half_space);
+        ret.built_in_functions.insert("facet_shell".to_string(), implicit_eval_facet_shell);
         ret.built_in_functions.insert("union".to_string(), implicit_eval_union);
         ret.built_in_functions.insert("intersect".to_string(), implicit_eval_intersect);
         ret.built_in_functions.insert("diff".to_string(), implicit_eval_diff);

@@ -43,3 +43,8 @@ bool removeFacet({required BigInt nodeId, required BigInt index}) =>
 /// Removes all facets from the facet shell
 bool clearFacets({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerFacetShellApiClearFacets(nodeId: nodeId);
+
+/// Selects a facet at the specified index
+bool selectFacet({required BigInt nodeId, BigInt? index}) =>
+    RustLib.instance.api.crateApiStructureDesignerFacetShellApiSelectFacet(
+        nodeId: nodeId, index: index);

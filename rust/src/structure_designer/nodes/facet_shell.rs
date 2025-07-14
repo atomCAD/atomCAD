@@ -46,6 +46,7 @@ pub struct FacetShellData {
   #[serde(with = "ivec3_serializer")]
   pub center: IVec3,
   pub facets: Vec<Facet>,
+  pub selected_facet_index: Option<usize>,
 }
 
 impl NodeData for FacetShellData {

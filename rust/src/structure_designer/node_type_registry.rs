@@ -198,6 +198,7 @@ impl NodeTypeRegistry {
         max_miller_index: 2,
         center: IVec3::new(0, 0, 0),
         facets: vec![],
+        selected_facet_index: None,
       }),
     });
 

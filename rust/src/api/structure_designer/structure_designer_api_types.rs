@@ -92,6 +92,7 @@ pub struct InputPinView {
     pub max_miller_index: i32,
     pub center: APIIVec3,
     pub facets: Vec<APIFacet>,
+    pub selected_facet_index: Option<usize>,
   }
 
   pub struct APIGeoTransData {

@@ -226,16 +226,21 @@ class APIFacetShellData {
   final int maxMillerIndex;
   final APIIVec3 center;
   final List<APIFacet> facets;
+  final BigInt? selectedFacetIndex;
 
   const APIFacetShellData({
     required this.maxMillerIndex,
     required this.center,
     required this.facets,
+    this.selectedFacetIndex,
   });
 
   @override
   int get hashCode =>
-      maxMillerIndex.hashCode ^ center.hashCode ^ facets.hashCode;
+      maxMillerIndex.hashCode ^
+      center.hashCode ^
+      facets.hashCode ^
+      selectedFacetIndex.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -244,7 +249,8 @@ class APIFacetShellData {
           runtimeType == other.runtimeType &&
           maxMillerIndex == other.maxMillerIndex &&
           center == other.center &&
-          facets == other.facets;
+          facets == other.facets &&
+          selectedFacetIndex == other.selectedFacetIndex;
 }
 
 class APIGeoToAtomData {

@@ -464,4 +464,14 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
     return result;
   }
+
+  bool selectFacet(BigInt nodeId, BigInt? index) {
+    if (nodeNetworkView == null) return false;
+    final result = facet_shell_api.selectFacet(
+      nodeId: nodeId,
+      index: index,
+    );
+    refreshFromKernel();
+    return result;
+  }
 }
