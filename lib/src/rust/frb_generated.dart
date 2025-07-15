@@ -3695,12 +3695,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIFacet dco_decode_api_facet(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APIFacet(
       millerIndex: dco_decode_apii_vec_3(arr[0]),
       shift: dco_decode_i_32(arr[1]),
       symmetrize: dco_decode_bool(arr[2]),
+      visible: dco_decode_bool(arr[3]),
     );
   }
 
@@ -4731,10 +4732,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_millerIndex = sse_decode_apii_vec_3(deserializer);
     var var_shift = sse_decode_i_32(deserializer);
     var var_symmetrize = sse_decode_bool(deserializer);
+    var var_visible = sse_decode_bool(deserializer);
     return APIFacet(
         millerIndex: var_millerIndex,
         shift: var_shift,
-        symmetrize: var_symmetrize);
+        symmetrize: var_symmetrize,
+        visible: var_visible);
   }
 
   @protected
@@ -5922,6 +5925,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_apii_vec_3(self.millerIndex, serializer);
     sse_encode_i_32(self.shift, serializer);
     sse_encode_bool(self.symmetrize, serializer);
+    sse_encode_bool(self.visible, serializer);
   }
 
   @protected

@@ -60,6 +60,7 @@ class FacetEditor extends StatelessWidget {
                     millerIndex: value,
                     shift: facet.shift,
                     symmetrize: facet.symmetrize,
+                    visible: facet.visible,
                   ),
                 );
               },
@@ -87,6 +88,7 @@ class FacetEditor extends StatelessWidget {
                     millerIndex: value,
                     shift: facet.shift,
                     symmetrize: facet.symmetrize,
+                    visible: facet.visible,
                   ),
                 );
               },
@@ -106,6 +108,7 @@ class FacetEditor extends StatelessWidget {
                     millerIndex: facet.millerIndex,
                     shift: value,
                     symmetrize: facet.symmetrize,
+                    visible: facet.visible,
                   ),
                 );
               },
@@ -126,6 +129,7 @@ class FacetEditor extends StatelessWidget {
                         millerIndex: facet.millerIndex,
                         shift: facet.shift,
                         symmetrize: value ?? false,
+                        visible: facet.visible,
                       ),
                     );
                   },

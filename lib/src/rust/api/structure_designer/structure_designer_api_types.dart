@@ -201,16 +201,21 @@ class APIFacet {
   final APIIVec3 millerIndex;
   final int shift;
   final bool symmetrize;
+  final bool visible;
 
   const APIFacet({
     required this.millerIndex,
     required this.shift,
     required this.symmetrize,
+    required this.visible,
   });
 
   @override
   int get hashCode =>
-      millerIndex.hashCode ^ shift.hashCode ^ symmetrize.hashCode;
+      millerIndex.hashCode ^
+      shift.hashCode ^
+      symmetrize.hashCode ^
+      visible.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -219,7 +224,8 @@ class APIFacet {
           runtimeType == other.runtimeType &&
           millerIndex == other.millerIndex &&
           shift == other.shift &&
-          symmetrize == other.symmetrize;
+          symmetrize == other.symmetrize &&
+          visible == other.visible;
 }
 
 class APIFacetShellData {

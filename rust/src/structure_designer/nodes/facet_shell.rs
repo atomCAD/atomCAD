@@ -38,6 +38,12 @@ pub struct Facet {
   pub miller_index: IVec3,
   pub shift: i32,
   pub symmetrize: bool,
+  #[serde(default = "default_visible")]
+  pub visible: bool,
+}
+
+fn default_visible() -> bool {
+  true
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,8 +66,12 @@ impl FacetShellData {
         // Clear and regenerate the cached facets
         self.cached_facets.clear();
         
-        // Process each facet
+        // Process each facet - only process visible facets
         for facet in &self.facets {
+            // Skip facets that are not visible
+            if !facet.visible {
+                continue;
+            }
             if facet.symmetrize {
                 // Generate all symmetric variants for this facet
                 let miller = facet.miller_index;
@@ -83,6 +93,7 @@ impl FacetShellData {
                         miller_index: IVec3::new(x, y, z),
                         shift,
                         symmetrize: false, // Set to false in the cached copy
+                        visible: true,     // Set visible to true for all cached facets
                     });
                 };
                 
@@ -131,6 +142,7 @@ impl FacetShellData {
                     miller_index: facet.miller_index,
                     shift: facet.shift,
                     symmetrize: facet.symmetrize,
+                    visible: true, // Always set visible to true for cached facets
                 });
             }
             //println!("Cached facets: {:?}", self.cached_facets);
@@ -168,8 +180,9 @@ impl Default for FacetShellData {
             facets: vec![
                 Facet {
                     miller_index: IVec3::new(0, 1, 0),
-                    shift: 1,
+                    shift: 2,
                     symmetrize: true,
+                    visible: true,
                 }
             ],
             selected_facet_index: None,

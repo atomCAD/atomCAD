@@ -24,6 +24,28 @@ class FacetShellEditor extends StatefulWidget {
 }
 
 class FacetShellEditorState extends State<FacetShellEditor> {
+  /// Calculates the default shift value for a new facet based on existing facets.
+  /// Facets with symmetrize=true count as 6 facets in the average.
+  /// Returns the rounded average, or 1 if there are no existing facets.
+  int calculateDefaultShift() {
+    if (widget.data == null || widget.data!.facets.isEmpty) {
+      return 1; // Default value when no facets exist
+    }
+
+    int totalShift = 0;
+    int facetCount = 0;
+
+    for (final facet in widget.data!.facets) {
+      // If symmetrize is true, count this shift 6 times (once for each symmetry plane)
+      final weight = facet.symmetrize ? 6 : 1;
+      totalShift += facet.shift * weight;
+      facetCount += weight;
+    }
+
+    // Calculate average and round to nearest integer
+    return (totalShift / facetCount).round();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
@@ -113,12 +135,14 @@ class FacetShellEditorState extends State<FacetShellEditor> {
             children: [
               ElevatedButton(
                 onPressed: () {
+                  final defaultShift = calculateDefaultShift();
                   widget.model.addFacet(
                     widget.nodeId,
-                    const APIFacet(
-                      millerIndex: APIIVec3(x: 1, y: 0, z: 0),
-                      shift: 0,
+                    APIFacet(
+                      millerIndex: const APIIVec3(x: 1, y: 0, z: 0),
+                      shift: defaultShift,
                       symmetrize: true,
+                      visible: true,
                     ),
                   );
                 },

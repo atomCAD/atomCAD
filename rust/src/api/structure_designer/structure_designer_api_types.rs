@@ -86,6 +86,7 @@ pub struct InputPinView {
     pub miller_index: APIIVec3,
     pub shift: i32,
     pub symmetrize: bool,
+    pub visible: bool,
   }
 
   pub struct APIFacetShellData {

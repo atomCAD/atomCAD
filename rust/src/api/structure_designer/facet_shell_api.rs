@@ -30,6 +30,7 @@ pub fn get_facet_shell_data(node_id: u64) -> Option<APIFacetShellData> {
             miller_index: to_api_ivec3(&facet.miller_index),
             shift: facet.shift,
             symmetrize: facet.symmetrize,
+            visible: facet.visible,
           }
         }).collect();
         
@@ -95,6 +96,7 @@ pub fn add_facet(node_id: u64, facet: APIFacet) -> bool {
           miller_index: from_api_ivec3(&facet.miller_index),
           shift: facet.shift,
           symmetrize: facet.symmetrize,
+          visible: facet.visible,
         });
         facet_shell_data.ensure_cached_facets();
         
@@ -131,6 +133,7 @@ pub fn update_facet(node_id: u64, index: usize, facet: APIFacet) -> bool {
           miller_index: from_api_ivec3(&facet.miller_index),
           shift: facet.shift,
           symmetrize: facet.symmetrize,
+          visible: facet.visible,
         };
         facet_shell_data.ensure_cached_facets();
         
