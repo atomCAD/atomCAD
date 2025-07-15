@@ -29,7 +29,7 @@ use csgrs::polygon::Polygon;
 use csgrs::vertex::Vertex;
 use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
-use crate::structure_designer::utils::half_space_utils::create_plane;
+use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, HalfSpaceVisualization};
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -207,7 +207,7 @@ pub fn eval_facet_shell<'a>(
     } else {
       // Initialize with the first facet's half-space
       let first_facet = &cached_facets[0];
-      create_plane(&first_facet.miller_index, &facet_shell_data.center, first_facet.shift)
+      create_half_space_geo(&first_facet.miller_index, &facet_shell_data.center, first_facet.shift, HalfSpaceVisualization::Cuboid)
     }
   } else {
     CSG::new()
@@ -217,7 +217,7 @@ pub fn eval_facet_shell<'a>(
   // intersect with the remaining facets' half-spaces
   if context.explicit_geo_eval_needed && cached_facets.len() > 1 {
     for facet in &cached_facets[1..] {
-      let half_space = create_plane(&facet.miller_index, &facet_shell_data.center, facet.shift);
+      let half_space = create_half_space_geo(&facet.miller_index, &facet_shell_data.center, facet.shift, HalfSpaceVisualization::Cuboid);
       geometry = geometry.intersection(&half_space);
     }
   }

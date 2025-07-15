@@ -24,7 +24,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
-use crate::structure_designer::utils::half_space_utils::create_plane;
+use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, HalfSpaceVisualization};
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::csg_types::CSG;
 
@@ -66,7 +66,11 @@ pub fn eval_half_space<'a>(
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
   let geometry = if context.explicit_geo_eval_needed {
-    create_plane(&half_space_data.miller_index, &half_space_data.center, half_space_data.shift)
+    create_half_space_geo(
+        &half_space_data.miller_index,
+        &half_space_data.center,
+        half_space_data.shift,
+        if network_stack.len() == 1 { HalfSpaceVisualization::Plane } else { HalfSpaceVisualization::Cuboid })
   } else {
     CSG::new()
   };
