@@ -474,4 +474,14 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
     return result;
   }
+
+  bool splitSymmetryMembers(BigInt nodeId, BigInt facetIndex) {
+    if (nodeNetworkView == null) return false;
+    final result = facet_shell_api.splitSymmetryMembers(
+      nodeId: nodeId,
+      facetIndex: facetIndex,
+    );
+    refreshFromKernel();
+    return result;
+  }
 }

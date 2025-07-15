@@ -5,6 +5,7 @@ import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/miller_index_map.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// Editor widget for individual facets within a facet shell
 class FacetEditor extends StatelessWidget {
@@ -137,6 +138,19 @@ class FacetEditor extends StatelessWidget {
                 const Text('Symmetrize'),
               ],
             ),
+            
+            // Split symmetry members button - only show if facet is symmetrized
+            if (facet.symmetrize) ...[  
+              const SizedBox(height: 12),
+              ElevatedButton(
+                style: AppButtonStyles.primary,
+                onPressed: () {
+                  // Split this symmetrized facet into individual facets
+                  model.splitSymmetryMembers(nodeId, facetIndex);
+                },
+                child: const Text('Split sym. members'),
+              ),
+            ],
           ],
         ),
       ),

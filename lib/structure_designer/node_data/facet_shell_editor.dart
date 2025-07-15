@@ -112,7 +112,8 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                           TableColumnHeader(title: 'Shift', width: 60),
                           TableColumnHeader(title: 'Symm.', width: 60),
                           TableColumnHeader(title: 'Visible', width: 60),
-                          Expanded(child: TableColumnHeader(title: '')), // Spacer
+                          Expanded(
+                              child: TableColumnHeader(title: '')), // Spacer
                         ],
                       ),
                       // Table rows
@@ -122,8 +123,9 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                           itemBuilder: (context, index) {
                             final facet = widget.data!.facets[index];
                             final isSelected =
-                                widget.data!.selectedFacetIndex == BigInt.from(index);
-                            
+                                widget.data!.selectedFacetIndex ==
+                                    BigInt.from(index);
+
                             return InkWell(
                               onTap: () {
                                 // Toggle selection
@@ -137,7 +139,8 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                                     ? Colors.lightBlue.withOpacity(0.1)
                                     : Colors.transparent,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4.0),
                                   child: Row(
                                     children: [
                                       // Miller index
@@ -244,7 +247,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                         );
                       }
                     : null,
-                child: const Text('Remove Selected'),
+                child: const Text('Remove'),
               ),
               const SizedBox(width: 8),
               ElevatedButton(

@@ -79,7 +79,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -835244974;
+  int get rustContentHash => -832030712;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -413,6 +413,9 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiCommonApiSetViewportSize(
       {required int width, required int height});
+
+  bool crateApiStructureDesignerFacetShellApiSplitSymmetryMembers(
+      {required BigInt nodeId, required BigInt facetIndex});
 
   StructureDesignerPreferences
       crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelf(
@@ -3390,6 +3393,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  bool crateApiStructureDesignerFacetShellApiSplitSymmetryMembers(
+      {required BigInt nodeId, required BigInt facetIndex}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_usize(facetIndex, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 113)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerFacetShellApiSplitSymmetryMembersConstMeta,
+      argValues: [nodeId, facetIndex],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerFacetShellApiSplitSymmetryMembersConstMeta =>
+          const TaskConstMeta(
+            debugName: "split_symmetry_members",
+            argNames: ["nodeId", "facetIndex"],
+          );
+
+  @override
   StructureDesignerPreferences
       crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelf(
           {required StructureDesignerPreferences that}) {
@@ -3397,7 +3428,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_structure_designer_preferences(that, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 113)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 114)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_structure_designer_preferences,
@@ -3423,7 +3454,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 114)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 115)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_structure_designer_preferences,
@@ -3448,7 +3479,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 115)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 116)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -3473,7 +3504,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_transform(absTransform, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 116)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 117)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3501,7 +3532,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(axisIndex, serializer);
         sse_encode_f_64(translation, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 117)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 118)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3530,7 +3561,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_64(nodeId, serializer);
         sse_encode_usize(index, serializer);
         sse_encode_box_autoadd_api_facet(facet, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 118)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 119)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,

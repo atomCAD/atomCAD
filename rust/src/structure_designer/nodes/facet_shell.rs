@@ -73,69 +73,7 @@ impl FacetShellData {
                 continue;
             }
             if facet.symmetrize {
-                // Generate all symmetric variants for this facet
-                let miller = facet.miller_index;
-                let shift = facet.shift;
-                
-                // Generate all permutations with sign changes
-                let h = miller.x;
-                let k = miller.y;
-                let l = miller.z;
-                
-                // Store absolute values to identify the family type
-                let abs_h = h.abs();
-                let abs_k = k.abs();
-                let abs_l = l.abs();
-                
-                // Helper closure to add a symmetrized facet with given miller indices
-                let mut add_symmetric_facet = |x: i32, y: i32, z: i32| {
-                    self.cached_facets.push(Facet {
-                        miller_index: IVec3::new(x, y, z),
-                        shift,
-                        symmetrize: false, // Set to false in the cached copy
-                        visible: true,     // Set visible to true for all cached facets
-                    });
-                };
-                
-                // Generate all permutations with sign combinations
-                // This covers all cases: {100}, {110}, {111}, {hhl}, and general {hkl}
-                
-                // Generate permutations of the absolute values
-                let abs_permutations = Self::generate_unique_permutations(abs_h, abs_k, abs_l);
-                
-                // For each base permutation, generate all sign combinations
-                for (x, y, z) in abs_permutations {
-                    // Add all sign combinations
-                    add_symmetric_facet(x, y, z);
-                    
-                    if x != 0 {
-                        add_symmetric_facet(-x, y, z);
-                    }
-                    
-                    if y != 0 {
-                        add_symmetric_facet(x, -y, z);
-                        
-                        if x != 0 {
-                            add_symmetric_facet(-x, -y, z);
-                        }
-                    }
-                    
-                    if z != 0 {
-                        add_symmetric_facet(x, y, -z);
-                        
-                        if x != 0 {
-                            add_symmetric_facet(-x, y, -z);
-                        }
-                        
-                        if y != 0 {
-                            add_symmetric_facet(x, -y, -z);
-                            
-                            if x != 0 {
-                                add_symmetric_facet(-x, -y, -z);
-                            }
-                        }
-                    }
-                }
+              self.cached_facets.extend(self.get_symmetric_variants(facet));
             } else {
                 // For non-symmetrized facets, create a new instance with the same values
                 self.cached_facets.push(Facet {
@@ -150,6 +88,122 @@ impl FacetShellData {
         
         // Cached facets are now up-to-date
     }
+
+    /// Splits a symmetrized facet into its individual symmetric variants
+    /// Returns true if the facet was split, false otherwise
+    pub fn split_symmetry_members(&mut self, facet_index: usize) -> bool {
+        // Check if the index is valid and the facet is symmetrized
+        if facet_index >= self.facets.len() {
+            return false;
+        }
+        
+        // First check if the facet has symmetrize=true
+        if !self.facets[facet_index].symmetrize {
+            return false;
+        }
+        
+        // Clone the necessary data before borrowing mutably
+        let miller_index = self.facets[facet_index].miller_index;
+        let shift = self.facets[facet_index].shift;
+        let visible = self.facets[facet_index].visible;
+        
+        // Create a temporary facet to generate variants
+        let temp_facet = Facet {
+            miller_index,
+            shift,
+            symmetrize: true,
+            visible,
+        };
+        
+        // Generate all symmetric variants
+        let variants = self.get_symmetric_variants(&temp_facet);
+        
+        // Remove the original facet
+        self.facets.remove(facet_index);
+        
+        // Add all variants (with visible set to the same as the original)
+        for mut variant in variants {
+            variant.visible = visible;
+            self.facets.push(variant);
+        }
+        
+        self.selected_facet_index = None;
+
+        // Update cached facets
+        self.ensure_cached_facets();
+        
+        true
+    }
+
+    // Generate all symmetric variants for the given facet
+    fn get_symmetric_variants(&self, facet: &Facet) -> Vec<Facet> {
+        let mut ret: Vec<Facet> = Vec::new();
+                
+        let miller = facet.miller_index;
+        let shift = facet.shift;
+                
+        // Generate all permutations with sign changes
+        let h = miller.x;
+        let k = miller.y;
+        let l = miller.z;
+                
+        // Store absolute values to identify the family type
+        let abs_h = h.abs();
+        let abs_k = k.abs();
+        let abs_l = l.abs();
+                
+        // Helper closure to add a symmetrized facet with given miller indices
+        let mut add_symmetric_facet = |x: i32, y: i32, z: i32| {
+            ret.push(Facet {
+                miller_index: IVec3::new(x, y, z),
+                shift,
+                symmetrize: false, // Set to false in the cached copy
+                visible: true,     // Set visible to true for all cached facets
+            });
+        };
+                
+        // Generate all permutations with sign combinations
+        // This covers all cases: {100}, {110}, {111}, {hhl}, and general {hkl}
+                
+        // Generate permutations of the absolute values
+        let abs_permutations = Self::generate_unique_permutations(abs_h, abs_k, abs_l);
+                
+        // For each base permutation, generate all sign combinations
+        for (x, y, z) in abs_permutations {
+            // Add all sign combinations
+            add_symmetric_facet(x, y, z);
+                    
+            if x != 0 {
+                add_symmetric_facet(-x, y, z);
+            }
+                    
+            if y != 0 {
+                add_symmetric_facet(x, -y, z);
+                        
+                if x != 0 {
+                    add_symmetric_facet(-x, -y, z);
+                }
+            }
+                    
+            if z != 0 {
+                add_symmetric_facet(x, y, -z);
+                        
+                if x != 0 {
+                    add_symmetric_facet(-x, y, -z);
+                }
+                        
+                if y != 0 {
+                    add_symmetric_facet(x, -y, -z);
+                            
+                    if x != 0 {
+                        add_symmetric_facet(-x, -y, -z);
+                    }
+                }
+            }
+        }
+        ret
+    }
+      
 
     pub fn generate_unique_permutations(a: i32, b: i32, c: i32) -> Vec<(i32, i32, i32)> {
       // Use a HashSet to automatically handle uniqueness of permutations.

@@ -239,3 +239,33 @@ pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
     )
   }
 }
+
+/// Splits a symmetrized facet into its individual symmetric variants
+#[flutter_rust_bridge::frb(sync)]
+pub fn split_symmetry_members(node_id: u64, facet_index: usize) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data_mut(node_id) {
+          Some(data) => data,
+          None => return false,
+        };
+        let facet_shell_data = match node_data.as_any_mut().downcast_mut::<FacetShellData>() {
+          Some(data) => data,
+          None => return false,
+        };
+        
+        // Split the facet into its symmetric variants
+        let result = facet_shell_data.split_symmetry_members(facet_index);
+        
+        // Refresh renderer as the facets have changed
+        if result {
+          refresh_renderer(cad_instance, false);
+        }
+        
+        result
+      },
+      false
+    )
+  }
+}
