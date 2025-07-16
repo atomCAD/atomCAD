@@ -247,11 +247,11 @@ impl Gadget for HalfSpaceGadget {
         // For the shift handle, we need to calculate its position
         let plane_normal = self.miller_index.as_dvec3().normalize();
         
-        // Calculate shifted center using the utility function
-        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64);
-        let world_shift_vector = shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-        let shifted_center = center_pos + world_shift_vector;
-        
+        let shifted_center =
+            center_pos +
+            half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64) *
+            (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
         // Calculate handle position with accessibility offset
         let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
         
