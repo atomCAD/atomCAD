@@ -43,11 +43,12 @@ pub fn calculate_shift_vector(miller_index: &IVec3, shift: f64) -> DVec3 {
   normalized_dir * shift_distance
 }
 
-
+// Calculate the continuous shift value of a half space based on its centerm miller index and
+// a mouse ray. The handle offset is the distance from the plane center to the handle.
+// Useful dragging a half plane shift handle.
 pub fn get_dragged_shift(miller_index: &IVec3, center: &IVec3, ray_origin: &DVec3, ray_direction: &DVec3, handle_offset: f64) -> f64 {
     let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
-    // Get the plane normal direction
     let float_miller = miller_index.as_dvec3();
     let miller_magnitude = float_miller.length();
             
@@ -55,39 +56,23 @@ pub fn get_dragged_shift(miller_index: &IVec3, center: &IVec3, ray_origin: &DVec
     if miller_magnitude <= 0.0 {
         return 0.0;
     }
-            
+   
     // Calculate the normalized direction vector
     let normal_dir = float_miller / miller_magnitude;
-            
-    // Create a ray along the normal direction starting from the center position
-    let normal_ray_origin = center_pos;
-    let normal_ray_direction = normal_dir;
-            
-    // Find where on the normal ray the mouse ray is closest
-    let t = get_closest_point_on_first_ray(
-        &normal_ray_origin,
-        &normal_ray_direction,
+
+    // Find where on the 'normal ray' the mouse ray is closest
+    let distance_along_normal = get_closest_point_on_first_ray(
+        &center_pos,
+        &normal_dir,
         &ray_origin,
         &ray_direction
     );
-            
-    // Calculate the point on the normal ray
-    let point_on_normal = normal_ray_origin + normal_ray_direction * t;
-            
-    // Calculate the vector from center to this point
-    let center_to_point = point_on_normal - center_pos;
-                        
-    // Project the center_to_point vector onto the normal direction to get the distance along normal
-    let distance_along_normal = center_to_point.dot(normal_dir);
-            
+      
     // Convert the world distance to cell-space distance
     let cell_space_distance = (distance_along_normal - handle_offset) / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
-    // Calculate the d-spacing (interplanar spacing) based on Miller indices
-    let d_spacing = 1.0 / miller_magnitude;
-
-    // Calculate the shift value by dividing by d-spacing and rounding to nearest integer
-    return cell_space_distance / d_spacing;
+    // (* miller_magnitude) is equivalent to (/ d-spacing)
+    return cell_space_distance * miller_magnitude;
 }
 
 pub fn create_half_space_geo(miller_index: &IVec3, center: &IVec3, shift: i32, visualization: HalfSpaceVisualization) -> CSG {

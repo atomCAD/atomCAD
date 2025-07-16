@@ -139,16 +139,10 @@ impl Tessellatable for HalfSpaceGadget {
         // Tessellate shift drag handle along the normal direction
         let plane_normal = self.miller_index.as_dvec3().normalize();
         
-        // Use half_space_utils to calculate the shift vector
-        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.dragged_shift);
-        
-        // Scale shift vector to world space
-        let world_shift_vector = shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-        
-        // Calculate the shifted center position (center of the plane)
-        let shifted_center = center_pos + world_shift_vector;
-        
-        // Use the defined constants for handle dimensions
+        let shifted_center =
+            center_pos +
+            half_space_utils::calculate_shift_vector(&self.miller_index, self.dragged_shift) *
+            (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
         
         // Calculate the final handle position with the additional offset
         let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
@@ -200,13 +194,11 @@ impl Tessellatable for HalfSpaceGadget {
 
             let thickness = 0.05;
 
-            let plane_shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64);
-        
-            // Scale shift vector to world space
-            let plane_world_shift_vector = plane_shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-            
             // Calculate the shifted center position (center of the plane)
-            let plane_shifted_center = center_pos + plane_world_shift_vector;
+            let plane_shifted_center = 
+                center_pos +
+                half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64) *
+                (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
             // A grid representing the plane
             tessellator::tessellate_grid(
