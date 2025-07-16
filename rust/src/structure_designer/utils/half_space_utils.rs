@@ -6,6 +6,8 @@ use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
 use csgrs::polygon::Polygon;
 use csgrs::vertex::Vertex;
+use crate::util::hit_test_utils::get_closest_point_on_first_ray;
+use crate::structure_designer::common_constants;
 
 /// Visualization type for the half space
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,7 +20,7 @@ pub enum HalfSpaceVisualization {
 
 /// Calculate the vector by which to shift along miller index normal direction,
 /// with magnitude based on the miller index d-spacing
-pub fn calculate_shift_vector(miller_index: &IVec3, shift: i32) -> DVec3 {
+pub fn calculate_shift_vector(miller_index: &IVec3, shift: f64) -> DVec3 {
   let float_miller = miller_index.as_dvec3();
   let miller_magnitude = float_miller.length();
   
@@ -35,10 +37,57 @@ pub fn calculate_shift_vector(miller_index: &IVec3, shift: i32) -> DVec3 {
   let normalized_dir = float_miller / miller_magnitude;
   
   // Calculate shift distance along normal direction
-  let shift_distance = shift as f64 * d_spacing;
+  let shift_distance = shift * d_spacing;
   
   // Return the shift vector
   normalized_dir * shift_distance
+}
+
+
+pub fn get_dragged_shift(miller_index: &IVec3, center: &IVec3, ray_origin: &DVec3, ray_direction: &DVec3, handle_offset: f64) -> f64 {
+    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+    // Get the plane normal direction
+    let float_miller = miller_index.as_dvec3();
+    let miller_magnitude = float_miller.length();
+            
+    // Avoid division by zero
+    if miller_magnitude <= 0.0 {
+        return 0.0;
+    }
+            
+    // Calculate the normalized direction vector
+    let normal_dir = float_miller / miller_magnitude;
+            
+    // Create a ray along the normal direction starting from the center position
+    let normal_ray_origin = center_pos;
+    let normal_ray_direction = normal_dir;
+            
+    // Find where on the normal ray the mouse ray is closest
+    let t = get_closest_point_on_first_ray(
+        &normal_ray_origin,
+        &normal_ray_direction,
+        &ray_origin,
+        &ray_direction
+    );
+            
+    // Calculate the point on the normal ray
+    let point_on_normal = normal_ray_origin + normal_ray_direction * t;
+            
+    // Calculate the vector from center to this point
+    let center_to_point = point_on_normal - center_pos;
+                        
+    // Project the center_to_point vector onto the normal direction to get the distance along normal
+    let distance_along_normal = center_to_point.dot(normal_dir);
+            
+    // Convert the world distance to cell-space distance
+    let cell_space_distance = (distance_along_normal - handle_offset) / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+    // Calculate the d-spacing (interplanar spacing) based on Miller indices
+    let d_spacing = 1.0 / miller_magnitude;
+
+    // Calculate the shift value by dividing by d-spacing and rounding to nearest integer
+    return cell_space_distance / d_spacing;
 }
 
 pub fn create_half_space_geo(miller_index: &IVec3, center: &IVec3, shift: i32, visualization: HalfSpaceVisualization) -> CSG {
@@ -46,7 +95,7 @@ pub fn create_half_space_geo(miller_index: &IVec3, center: &IVec3, shift: i32, v
   let center_pos = center.as_dvec3();
 
   // Apply the shift along the normal direction
-  let shift_vector = calculate_shift_vector(miller_index, shift);
+  let shift_vector = calculate_shift_vector(miller_index, shift as f64);
   let shifted_center = center_pos + shift_vector;
 
   let normal = dvec3_to_vector3(dir);
@@ -168,7 +217,7 @@ pub fn implicit_eval_half_space_calc(
   let center_pos = center.as_dvec3();
   
   // Apply the shift along the normal direction, using the common function
-  let shift_vector = calculate_shift_vector(miller_index, shift);
+  let shift_vector = calculate_shift_vector(miller_index, shift as f64);
   let shifted_center = center_pos + shift_vector;
   
   // Calculate the signed distance from the point to the plane defined by the normal (miller_index) and shifted center point

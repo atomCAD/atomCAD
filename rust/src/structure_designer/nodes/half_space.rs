@@ -1,6 +1,7 @@
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
 use crate::util::timer::Timer;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
@@ -115,8 +116,9 @@ pub struct HalfSpaceGadget {
     pub max_miller_index: i32,
     pub miller_index: IVec3,
     pub center: IVec3,
+    pub dragged_shift: f64, // this is rounded into 'shift'
     pub shift: i32,
-    pub is_dragging: bool,
+    pub dragged_handle_index: Option<i32>,
     pub possible_miller_indices: HashSet<IVec3>,
 }
 
@@ -138,7 +140,7 @@ impl Tessellatable for HalfSpaceGadget {
         let plane_normal = self.miller_index.as_dvec3().normalize();
         
         // Use half_space_utils to calculate the shift vector
-        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.shift);
+        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.dragged_shift);
         
         // Scale shift vector to world space
         let world_shift_vector = shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
@@ -185,7 +187,8 @@ impl Tessellatable for HalfSpaceGadget {
             None
         );
 
-        if self.is_dragging {
+        // If we are dragging any handle, show the plane grid for visual reference
+        if self.dragged_handle_index.is_some() {
             let plane_normal = self.miller_index.as_dvec3().normalize();
             let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, plane_normal);
 
@@ -197,10 +200,18 @@ impl Tessellatable for HalfSpaceGadget {
 
             let thickness = 0.05;
 
+            let plane_shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64);
+        
+            // Scale shift vector to world space
+            let plane_world_shift_vector = plane_shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+            
+            // Calculate the shifted center position (center of the plane)
+            let plane_shifted_center = center_pos + plane_world_shift_vector;
+
             // A grid representing the plane
             tessellator::tessellate_grid(
                 output_mesh,
-                &(center_pos),
+                &(plane_shifted_center),
                 &plane_rotator,
                 thickness,
                 40.0,
@@ -210,8 +221,10 @@ impl Tessellatable for HalfSpaceGadget {
                 &outside_material,
                 &inside_material,
                 &side_material);
-                
-            // Tessellate miller index discs if we're dragging the central sphere (handle index 2)
+        }
+
+        // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
+        if self.dragged_handle_index == Some(0) {
             self.tessellate_miller_indices_discs(output_mesh, &center_pos);
         } 
     }
@@ -243,7 +256,7 @@ impl Gadget for HalfSpaceGadget {
         let plane_normal = self.miller_index.as_dvec3().normalize();
         
         // Calculate shifted center using the utility function
-        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, 1);
+        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64);
         let world_shift_vector = shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
         let shifted_center = center_pos + world_shift_vector;
         
@@ -262,14 +275,15 @@ impl Gadget for HalfSpaceGadget {
             &ray_origin,
             &ray_direction
         ) {
+            println!("Shift handle hit");
             return Some(1); // Shift handle hit
         }
 
         None // No handle was hit
     }
 
-    fn start_drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
-        self.is_dragging = true;
+    fn start_drag(&mut self, handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
+        self.dragged_handle_index = Some(handle_index);
     }
 
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
@@ -277,20 +291,30 @@ impl Gadget for HalfSpaceGadget {
         let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
         
         if handle_index == 0 {
-            // Set is_dragging to true so miller index discs will be tessellated
-            self.is_dragging = true;
+            // Handle index already stored in dragged_handle_index during start_drag
             
             // Check if any miller index disc is hit
             if let Some(new_miller_index) = self.hit_test_miller_indices_discs(&center_pos, ray_origin, ray_direction) {
                 // Set the miller index to the hit disc's miller index
                 self.miller_index = new_miller_index;
             }
+        } else if handle_index == 1 {
+            // Handle dragging the shift handle
+            // We need to determine the new shift value based on where the mouse ray is closest to the normal ray
+            self.dragged_shift = get_dragged_shift(
+                &self.miller_index,
+                &self.center,
+                &ray_origin,
+                &ray_direction, 
+                SHIFT_HANDLE_ACCESSIBILITY_OFFSET
+            );
+            self.shift = self.dragged_shift.round() as i32;
         }
     }
 
     fn end_drag(&mut self) {
-        // Set is_dragging to false to stop displaying the grid and miller index discs
-        self.is_dragging = false;
+        // Clear the dragged handle index to stop displaying the grid and conditional miller index discs
+        self.dragged_handle_index = None;
     }
 }
 
@@ -303,6 +327,7 @@ impl NodeNetworkGadget for HalfSpaceGadget {
         if let Some(half_space_data) = data.as_any_mut().downcast_mut::<HalfSpaceData>() {
             half_space_data.miller_index = self.miller_index;
             half_space_data.center = self.center;
+            half_space_data.shift = self.shift;
         }
     }
 }
@@ -316,8 +341,9 @@ impl HalfSpaceGadget {
             max_miller_index,
             miller_index: *miller_index,
             center,
+            dragged_shift: shift as f64,
             shift,
-            is_dragging: false,
+            dragged_handle_index: None,
             possible_miller_indices: HashSet::new()
         };
         
