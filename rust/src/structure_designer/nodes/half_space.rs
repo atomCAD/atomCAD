@@ -18,6 +18,7 @@ use crate::structure_designer::common_constants;
 use std::collections::HashSet;
 use crate::common::gadget::Gadget;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -28,9 +29,16 @@ use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, 
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::csg_types::CSG;
 
-pub const CENTER_SPHERE_RADIUS: f64 = 0.5;
-pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
-pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 32;
+pub const CENTER_SPHERE_RADIUS: f64 = 0.25;
+const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
+const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 16;
+
+// Constants for shift drag handle
+const SHIFT_HANDLE_ACCESSIBILITY_OFFSET: f64 = 3.0;
+const SHIFT_HANDLE_AXIS_RADIUS: f64 = 0.1;
+const SHIFT_HANDLE_CYLINDER_RADIUS: f64 = 0.3;
+const SHIFT_HANDLE_CYLINDER_LENGTH: f64 = 1.0;
+const SHIFT_HANDLE_DIVISIONS: u32 = 16;
 
 // Constants for miller index disc visualization
 pub const MILLER_INDEX_DISC_DISTANCE: f64 = 5.0; // Distance from center to place discs
@@ -51,7 +59,11 @@ pub struct HalfSpaceData {
 impl NodeData for HalfSpaceData {
 
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
-      return Some(Box::new(HalfSpaceGadget::new(self.max_miller_index, &self.miller_index, self.center)));
+      return Some(Box::new(HalfSpaceGadget::new(
+        self.max_miller_index,
+        &self.miller_index,
+        self.center,
+        self.shift)));
     }
   
 }
@@ -103,6 +115,7 @@ pub struct HalfSpaceGadget {
     pub max_miller_index: i32,
     pub miller_index: IVec3,
     pub center: IVec3,
+    pub shift: i32,
     pub is_dragging: bool,
     pub possible_miller_indices: HashSet<IVec3>,
 }
@@ -120,6 +133,57 @@ impl Tessellatable for HalfSpaceGadget {
             CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
             CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
             &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
+
+        // Tessellate shift drag handle along the normal direction
+        let plane_normal = self.miller_index.as_dvec3().normalize();
+        
+        // Use half_space_utils to calculate the shift vector
+        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, self.shift);
+        
+        // Scale shift vector to world space
+        let world_shift_vector = shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        
+        // Calculate the shifted center position (center of the plane)
+        let shifted_center = center_pos + world_shift_vector;
+        
+        // Use the defined constants for handle dimensions
+        
+        // Calculate the final handle position with the additional offset
+        let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+        
+        // Define materials
+        let axis_material = Material::new(&Vec3::new(0.7, 0.7, 0.7), 1.0, 0.0); // Neutral gray
+        let handle_material = Material::new(&Vec3::new(0.2, 0.6, 0.9), 0.5, 0.0); // Blue for handle
+        
+        // Tessellate the axis cylinder (thin connection from center to handle)
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &handle_position,
+            &center_pos,
+            SHIFT_HANDLE_AXIS_RADIUS,
+            SHIFT_HANDLE_DIVISIONS,
+            &axis_material,
+            false, // No caps needed
+            None,
+            None
+        );
+        
+        // Tessellate the handle cylinder (thicker, draggable part)
+        // Place handle centered at the offset position with length along normal direction
+        let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &handle_end,
+            &handle_start,
+            SHIFT_HANDLE_CYLINDER_RADIUS,
+            SHIFT_HANDLE_DIVISIONS,
+            &handle_material,
+            true, // Include caps for the handle
+            None,
+            None
+        );
 
         if self.is_dragging {
             let plane_normal = self.miller_index.as_dvec3().normalize();
@@ -160,6 +224,7 @@ impl Tessellatable for HalfSpaceGadget {
 impl Gadget for HalfSpaceGadget {
     // Returns the index of the handle that was hit, or None if no handle was hit
     // handle 0: miller index handle (central red sphere)
+    // handle 1: shift drag handle (blue cylinder)
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         // Calculate center position in world space
         let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
@@ -172,6 +237,32 @@ impl Gadget for HalfSpaceGadget {
             &ray_direction
         ) {
             return Some(0); // Central sphere hit
+        }
+        
+        // For the shift handle, we need to calculate its position
+        let plane_normal = self.miller_index.as_dvec3().normalize();
+        
+        // Calculate shifted center using the utility function
+        let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index, 1);
+        let world_shift_vector = shift_vector * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        let shifted_center = center_pos + world_shift_vector;
+        
+        // Calculate handle position with accessibility offset
+        let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+        
+        // Calculate handle cylinder start and end points
+        let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        
+        // Test shift handle cylinder
+        if let Some(_t) = cylinder_hit_test(
+            &handle_end,
+            &handle_start,
+            SHIFT_HANDLE_CYLINDER_RADIUS,
+            &ray_origin,
+            &ray_direction
+        ) {
+            return Some(1); // Shift handle hit
         }
 
         None // No handle was hit
@@ -218,13 +309,14 @@ impl NodeNetworkGadget for HalfSpaceGadget {
 
 impl HalfSpaceGadget {
 
-    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3) -> Self {
+    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32) -> Self {
         let normalized_dir = miller_index.as_dvec3().normalize();
         
         let mut ret = Self {
             max_miller_index,
             miller_index: *miller_index,
             center,
+            shift,
             is_dragging: false,
             possible_miller_indices: HashSet::new()
         };

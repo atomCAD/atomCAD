@@ -16,22 +16,38 @@ pub enum HalfSpaceVisualization {
     Cuboid,
 }
 
+/// Calculate the vector by which to shift along miller index normal direction,
+/// with magnitude based on the miller index d-spacing
+pub fn calculate_shift_vector(miller_index: &IVec3, shift: i32) -> DVec3 {
+  let float_miller = miller_index.as_dvec3();
+  let miller_magnitude = float_miller.length();
+  
+  // Avoid division by zero
+  if miller_magnitude <= 0.0 {
+    return DVec3::ZERO;
+  }
+  
+  // Calculate the d-spacing (interplanar spacing) based on Miller indices
+  // Formula: d = 1 / √(h² + k² + l²) in normalized space where unit cell = 1
+  let d_spacing = 1.0 / miller_magnitude;
+  
+  // Calculate the normalized direction vector
+  let normalized_dir = float_miller / miller_magnitude;
+  
+  // Calculate shift distance along normal direction
+  let shift_distance = shift as f64 * d_spacing;
+  
+  // Return the shift vector
+  normalized_dir * shift_distance
+}
+
 pub fn create_half_space_geo(miller_index: &IVec3, center: &IVec3, shift: i32, visualization: HalfSpaceVisualization) -> CSG {
   let dir = miller_index.as_dvec3().normalize();
   let center_pos = center.as_dvec3();
 
-  // Calculate the d-spacing (interplanar spacing) based on Miller indices
-  // Formula: d = 1 / √(h² + k² + l²) in normalized space where unit cell = 1
-  let miller_length = miller_index.as_dvec3().length();
-  let d_spacing = if miller_length > 0.0 {
-    1.0 / miller_length
-  } else {
-    1.0 // Default to 1.0 if Miller indices are all zero
-  };
-
-  // Apply the shift along the normal direction, using d-spacing as the unit
-  let shift_distance = shift as f64 * d_spacing;
-  let shifted_center = center_pos + dir * shift_distance;
+  // Apply the shift along the normal direction
+  let shift_vector = calculate_shift_vector(miller_index, shift);
+  let shifted_center = center_pos + shift_vector;
 
   let normal = dvec3_to_vector3(dir);
   let rotation = DQuat::from_rotation_arc(DVec3::Y, dir);
@@ -151,18 +167,9 @@ pub fn implicit_eval_half_space_calc(
   let miller_magnitude = float_miller.length();
   let center_pos = center.as_dvec3();
   
-  // Calculate the d-spacing (interplanar spacing) based on Miller indices
-  // Formula: d = 1 / √(h² + k² + l²) in normalized space where unit cell = 1
-  let d_spacing = if miller_magnitude > 0.0 {
-    1.0 / miller_magnitude
-  } else {
-    1.0 // Default to 1.0 if Miller indices are all zero
-  };
-  
-  // Apply the shift along the normal direction, using d-spacing as the unit
-  let normalized_dir = float_miller / miller_magnitude;
-  let shift_distance = shift as f64 * d_spacing;
-  let shifted_center = center_pos + normalized_dir * shift_distance;
+  // Apply the shift along the normal direction, using the common function
+  let shift_vector = calculate_shift_vector(miller_index, shift);
+  let shifted_center = center_pos + shift_vector;
   
   // Calculate the signed distance from the point to the plane defined by the normal (miller_index) and shifted center point
   return float_miller.dot(*sample_point - shifted_center) / miller_magnitude;
