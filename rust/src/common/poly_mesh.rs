@@ -9,6 +9,8 @@ pub struct Face {
     pub normal: DVec3,
     /// Smoothing group ID for this face (None if not assigned to a smoothing group)
     pub smoothing_group_id: Option<u32>,
+    /// Whether this face is highlighted (e.g., for user interaction)
+    pub highlighted: bool,
 }
 
 /// Represents a vertex in the PolyMesh with position and adjacency information
@@ -99,6 +101,7 @@ impl PolyMesh {
             vertices: vertex_indices.clone(),
             normal: DVec3::ZERO,
             smoothing_group_id: None,
+            highlighted: false,
         };
         
         let face_index = self.faces.len() as u32;

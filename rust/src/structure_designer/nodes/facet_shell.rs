@@ -31,6 +31,7 @@ use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
 use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, HalfSpaceVisualization};
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
+use crate::common::poly_mesh::PolyMesh;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Facet {
@@ -61,6 +62,62 @@ pub struct FacetShellData {
 }
 
 impl FacetShellData {
+    /// Highlights the faces in the poly_mesh that correspond to the selected facet
+    pub fn highlight_selected_facets(&self, poly_mesh: &mut PolyMesh) {
+        // Early return if no facet is selected
+        let selected_idx = match self.selected_facet_index {
+            Some(idx) => idx,
+            None => return,
+        };
+        
+        // Early return if selected index is invalid
+        if selected_idx >= self.facets.len() {
+            return;
+        }
+        
+        // Get the selected facet
+        let selected_facet = &self.facets[selected_idx];
+        
+        // Create a collection of facet variants to process
+        let facet_variants = if selected_facet.symmetrize {
+            // If symmetrized, get all symmetric variants
+            self.get_symmetric_variants(selected_facet)
+        } else {
+            // Otherwise, just use the selected facet
+            vec![Facet {
+                miller_index: selected_facet.miller_index,
+                shift: selected_facet.shift,
+                symmetrize: false, // Not relevant for highlighting
+                visible: true,
+            }]
+        };
+            
+        // For each facet variant, find and highlight matching faces
+        for facet in facet_variants {
+            // Get the normal vector from miller index
+            let float_miller = facet.miller_index.as_dvec3();
+            let miller_magnitude = float_miller.length();
+            
+            // Skip invalid miller indices
+            if miller_magnitude <= 1e-6 {
+                continue;
+            }
+            
+            // Normalize the miller index to get the normal vector
+            let normal = float_miller / miller_magnitude;
+            
+            // Compare with each face normal in the PolyMesh
+            for face in &mut poly_mesh.faces {
+                // Compare normals with epsilon tolerance (0.05 radians ≈ 2.9 degrees)
+                // Dot product close to 1 means vectors are parallel                
+                // If the normals are aligned (within tolerance)
+                if face.normal.dot(normal) > 0.998 { // cos(0.05) ≈ 0.998
+                    face.highlighted = true;
+                }
+            }
+        }
+    }
+
     /// Regenerates the cached facets based on the current facets
     pub fn ensure_cached_facets(&mut self) {
         // Clear and regenerate the cached facets

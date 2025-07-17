@@ -188,7 +188,8 @@ fn tessellate_poly_mesh_smooth(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: 
 /// * `poly_mesh` - The PolyMesh to convert
 /// * `mesh` - The target mesh to add vertices and faces to
 /// * `material` - The material to apply to the mesh vertices
-fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material, tessellate_outside: bool) {
+/// * `highlighted_material` - Optional material to use for highlighted faces
+fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &Material, highlighted_material: Option<&Material>, tessellate_outside: bool) {
     // Process each face
       
     // Sharp version: duplicate vertices for each face
@@ -202,13 +203,20 @@ fn tessellate_poly_mesh_sharp(poly_mesh: &PolyMesh, mesh: &mut Mesh, material: &
         // Create vertices for this face, all with the same normal
         let mut face_vertex_indices = Vec::with_capacity(face.vertices.len());
         
+        // Determine which material to use based on whether the face is highlighted
+        let face_material = if face.highlighted {
+            highlighted_material.unwrap_or(material)
+        } else {
+            material
+        };
+        
         // Add each vertex
         for &vertex_idx in &face.vertices {
             let vertex_position = poly_mesh.vertices[vertex_idx as usize].position.as_vec3();
             let mesh_vertex_idx = mesh.add_vertex(Vertex::new(
                 &vertex_position,
                 &normal,
-                material
+                face_material
             ));
             face_vertex_indices.push(mesh_vertex_idx);
         }
@@ -339,17 +347,19 @@ fn tessellate_poly_mesh_smoothing_group_based(poly_mesh: &PolyMesh, mesh: &mut M
 /// * `poly_mesh` - The PolyMesh to convert
 /// * `mesh` - The target mesh to add vertices and faces to
 /// * `smoothing` - Controls how normals are calculated and vertices are shared
-/// * `material` - The material to apply to the mesh vertices
-pub fn tessellate_poly_mesh(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, outside_material: &Material, inside_material: Option<&Material>) {
-    tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing.clone(), outside_material, true);
+/// * `outside_material` - The material to apply to the mesh vertices for outside faces
+/// * `inside_material` - The material to apply to the mesh vertices for inside faces (if poly_mesh is open)
+/// * `highlighted_material` - The material to apply to highlighted faces
+pub fn tessellate_poly_mesh(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, outside_material: &Material, inside_material: Option<&Material>, highlighted_material: Option<&Material>) {
+    tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing.clone(), outside_material, highlighted_material, true);
     if poly_mesh.open {
         if let Some(material) = inside_material {
-            tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing, material, false);
+            tessellate_poly_mesh_one_sided(poly_mesh, mesh, smoothing, material, highlighted_material, false);
         } 
     }
 }
 
-fn tessellate_poly_mesh_one_sided(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, material: &Material, tessellate_outside: bool) {
+fn tessellate_poly_mesh_one_sided(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, material: &Material, highlighted_material: Option<&Material>, tessellate_outside: bool) {
     // Special case for hatched quads: if the poly_mesh contains exactly one quad face and is marked as hatched
     if poly_mesh.hatched && poly_mesh.faces.len() == 1 && poly_mesh.faces[0].vertices.len() == 4 {
         // Get the vertex positions and normals directly from the poly_mesh
@@ -379,17 +389,23 @@ fn tessellate_poly_mesh_one_sided(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothi
         return;
     }
 
+    // Check if there are any highlighted faces
+    let has_highlighted_faces = poly_mesh.faces.iter().any(|face| face.highlighted);
+    
+    // If there are highlighted faces, always use Sharp mode for proper highlighting
+    let effective_smoothing = if has_highlighted_faces { MeshSmoothing::Sharp } else { smoothing };
+    
     // Normal flow for other cases
-    match smoothing {
+    match effective_smoothing {
         MeshSmoothing::Smooth => tessellate_poly_mesh_smooth(poly_mesh, mesh, material, tessellate_outside),
-        MeshSmoothing::Sharp => tessellate_poly_mesh_sharp(poly_mesh, mesh, material, tessellate_outside),
+        MeshSmoothing::Sharp => tessellate_poly_mesh_sharp(poly_mesh, mesh, material, highlighted_material, tessellate_outside),
         MeshSmoothing::SmoothingGroupBased => tessellate_poly_mesh_smoothing_group_based(poly_mesh, mesh, material, tessellate_outside),
     }
 }
 
 /// Legacy function for backward compatibility
 pub fn tessellate_quad_mesh(quad_mesh: &PolyMesh, mesh: &mut Mesh, smoothing: MeshSmoothing, outside_material: &Material, inside_material: Option<&Material>) {
-    tessellate_poly_mesh(quad_mesh, mesh, smoothing, outside_material, inside_material)
+    tessellate_poly_mesh(quad_mesh, mesh, smoothing, outside_material, inside_material, None)
 }
 
 /// Converts a PolyMesh into a LineMesh with lines representing the edges

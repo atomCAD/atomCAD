@@ -28,6 +28,7 @@ use crate::structure_designer::nodes::union_2d::eval_union_2d;
 use crate::structure_designer::nodes::diff_2d::eval_diff_2d;
 use crate::structure_designer::nodes::extrude::eval_extrude;
 use crate::structure_designer::nodes::half_space::eval_half_space;
+use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::nodes::anchor::eval_anchor;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
 use crate::structure_designer::nodes::edit_atom::edit_atom::eval_edit_atom;
@@ -300,6 +301,14 @@ impl NetworkEvaluator {
           geometry_visualization_preferences.sharpness_angle_threshold_degree,
           true
         );
+        // Highlight faces if the last node is facet_shell and it's selected
+        if node.node_type_name == "facet_shell" && from_selected_node {
+          // Downcast the node data to FacetShellData
+          if let Some(facet_shell_data) = node.data.as_any_ref().downcast_ref::<FacetShellData>() {
+            // Call the highlight method
+            facet_shell_data.highlight_selected_facets(&mut poly_mesh);
+          }
+        }
         scene.poly_meshes.push(poly_mesh);
       }
   
