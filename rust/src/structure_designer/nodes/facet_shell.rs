@@ -32,6 +32,7 @@ use crate::common::csg_utils::dvec3_to_vector3;
 use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, HalfSpaceVisualization};
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::poly_mesh::PolyMesh;
+use crate::structure_designer::utils::half_space_utils;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Facet {
@@ -387,4 +388,124 @@ pub fn implicit_eval_facet_shell<'a>(
       )
     })
     .fold(f64::MIN, f64::max)
+}
+
+#[derive(Clone)]
+pub struct FacetShellGadget {
+    pub max_miller_index: i32,
+    pub miller_index: IVec3,
+    pub center: IVec3,
+    pub dragged_shift: f64, // this is rounded into 'shift'
+    pub shift: i32,
+    pub dragged_handle_index: Option<i32>,
+    pub possible_miller_indices: HashSet<IVec3>,
+}
+
+impl Tessellatable for FacetShellGadget {
+  fn tessellate(&self, output_mesh: &mut Mesh) {
+      // Calculate center position in world space
+      let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+      // center sphere
+      tessellator::tessellate_sphere(
+          output_mesh,
+          &center_pos,
+          half_space_utils::CENTER_SPHERE_RADIUS,
+          half_space_utils::CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
+          half_space_utils::CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
+          &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
+
+      // Tessellate shift drag handle along the normal direction
+      let plane_normal = self.miller_index.as_dvec3().normalize();
+      
+      let shifted_center =
+          center_pos +
+          half_space_utils::calculate_shift_vector(&self.miller_index, self.dragged_shift) *
+          (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+      
+      // Calculate the final handle position with the additional offset
+      let handle_position = shifted_center + plane_normal * half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+      
+      // Define materials
+      let axis_material = Material::new(&Vec3::new(0.7, 0.7, 0.7), 1.0, 0.0); // Neutral gray
+      let handle_material = Material::new(&Vec3::new(0.2, 0.6, 0.9), 0.5, 0.0); // Blue for handle
+      
+      // Tessellate the axis cylinder (thin connection from center to handle)
+      tessellator::tessellate_cylinder(
+          output_mesh,
+          &handle_position,
+          &center_pos,
+          half_space_utils::SHIFT_HANDLE_AXIS_RADIUS,
+          half_space_utils::SHIFT_HANDLE_DIVISIONS,
+          &axis_material,
+          false, // No caps needed
+          None,
+          None
+      );
+      
+      // Tessellate the handle cylinder (thicker, draggable part)
+      // Place handle centered at the offset position with length along normal direction
+      let handle_start = handle_position - plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+      let handle_end = handle_position + plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+      
+      tessellator::tessellate_cylinder(
+          output_mesh,
+          &handle_end,
+          &handle_start,
+          half_space_utils::SHIFT_HANDLE_CYLINDER_RADIUS,
+          half_space_utils::SHIFT_HANDLE_DIVISIONS,
+          &handle_material,
+          true, // Include caps for the handle
+          None,
+          None
+      );
+
+      // If we are dragging any handle, show the plane grid for visual reference
+      if self.dragged_handle_index.is_some() {
+          let plane_normal = self.miller_index.as_dvec3().normalize();
+          let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, plane_normal);
+
+          let roughness: f32 = 1.0;
+          let metallic: f32 = 0.0;
+          let outside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
+          let inside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
+          let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);      
+
+          let thickness = 0.05;
+
+          // Calculate the shifted center position (center of the plane)
+          let plane_shifted_center = 
+              center_pos +
+              half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64) *
+              (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+          // A grid representing the plane
+          tessellator::tessellate_grid(
+              output_mesh,
+              &(plane_shifted_center),
+              &plane_rotator,
+              thickness,
+              40.0,
+              40.0,
+              0.05,
+              1.0,
+              &outside_material,
+              &inside_material,
+              &side_material);
+      }
+
+      // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
+      if self.dragged_handle_index == Some(0) {
+        half_space_utils::tessellate_miller_indices_discs(
+            output_mesh,
+            &center_pos,
+            &self.miller_index,
+            &self.possible_miller_indices,
+            self.max_miller_index);
+      } 
+  }
+
+  fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+      Box::new(self.clone())
+  }
 }

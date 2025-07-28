@@ -1,5 +1,6 @@
 use crate::common::csg_types::CSG;
 use glam::i32::IVec3;
+use glam::f32::Vec3;
 use glam::DQuat;
 use glam::DVec3;
 use crate::common::csg_utils::dvec3_to_point3;
@@ -8,6 +9,27 @@ use csgrs::polygon::Polygon;
 use csgrs::vertex::Vertex;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 use crate::structure_designer::common_constants;
+use crate::renderer::mesh::Mesh;
+use crate::renderer::mesh::Material;
+use crate::renderer::tessellator::tessellator;
+use std::collections::HashSet;
+
+pub const CENTER_SPHERE_RADIUS: f64 = 0.25;
+pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
+pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 16;
+
+// Constants for shift drag handle
+pub const SHIFT_HANDLE_ACCESSIBILITY_OFFSET: f64 = 3.0;
+pub const SHIFT_HANDLE_AXIS_RADIUS: f64 = 0.1;
+pub const SHIFT_HANDLE_CYLINDER_RADIUS: f64 = 0.3;
+pub const SHIFT_HANDLE_CYLINDER_LENGTH: f64 = 1.0;
+pub const SHIFT_HANDLE_DIVISIONS: u32 = 16;
+
+// Constants for miller index disc visualization
+pub const MILLER_INDEX_DISC_DISTANCE: f64 = 5.0; // Distance from center to place discs
+pub const MILLER_INDEX_DISC_RADIUS: f64 = 0.5;   // Radius of each disc
+pub const MILLER_INDEX_DISC_THICKNESS: f64 = 0.06; // Thickness of each disc
+pub const MILLER_INDEX_DISC_DIVISIONS: u32 = 16;  // Number of divisions for disc cylinder
 
 /// Visualization type for the half space
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -207,4 +229,97 @@ pub fn implicit_eval_half_space_calc(
   
   // Calculate the signed distance from the point to the plane defined by the normal (miller_index) and shifted center point
   return float_miller.dot(*sample_point - shifted_center) / miller_magnitude;
+}
+
+/// Tessellates discs representing each possible miller index
+/// These discs are positioned at a fixed distance from the center in the direction of each miller index
+/// The current miller index disc is highlighted with a yellowish-orange color
+pub fn tessellate_miller_indices_discs(
+    output_mesh: &mut Mesh,
+    center_pos: &DVec3,
+    miller_index: &IVec3,
+    possible_miller_indices: &HashSet<IVec3>,
+    max_miller_index: i32,
+) {
+    // Material for regular discs - blue color
+    let disc_material = Material::new(&Vec3::new(0.0, 0.3, 0.9), 0.3, 0.0);
+        
+    // Material for the current miller index disc - yellowish orange color
+    let current_disc_material = Material::new(&Vec3::new(1.0, 0.6, 0.0), 0.3, 0.0);
+        
+    // Create a red material for the inside/bottom face of regular discs
+    let red_material = Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0);
+
+    // Get the simplified version of the current miller index for comparison
+    let simplified_current_miller = simplify_miller_index(*miller_index);
+
+    // Iterate through all possible miller indices
+    for miller_index in possible_miller_indices {
+        // Get the normalized direction for this miller index
+        let direction = miller_index.as_dvec3().normalize();
+            
+        // Calculate the position for the disc
+        let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
+            
+        // Calculate start and end points for the disc (thin cylinder)
+        let disc_start = disc_center - direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
+        let disc_end = disc_center + direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
+            
+        // Get the dynamic disc radius based on the max miller index
+        let disc_radius = get_miller_index_disc_radius(max_miller_index);
+            
+        // Check if this is the current miller index (compare simplified forms)
+        let is_current = *miller_index == simplified_current_miller;
+            
+        // Choose material based on whether this is the current miller index
+        let material = if is_current {
+            &current_disc_material
+        } else {
+            &disc_material
+        };
+
+        // Tessellate the disc
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &disc_start,
+            &disc_end,
+            disc_radius,
+            MILLER_INDEX_DISC_DIVISIONS,
+            material,
+            true, // Cap the ends
+            // If current disc, use the same orange material for top face
+            // Otherwise use red material for inside/bottom face
+            if is_current { Some(material) } else { Some(&red_material) },
+            None,
+        );
+    }
+}
+
+pub fn simplify_miller_index(miller_index: IVec3) -> IVec3 {
+    // Get absolute values for checking divisibility
+    let abs_x = miller_index.x.abs();
+    let abs_y = miller_index.y.abs();
+    let abs_z = miller_index.z.abs();
+
+    // Set max_divisor to the maximum of the absolute values of the components
+    // This is an optimization as we don't need to check divisors larger than the largest component
+    let max_divisor = abs_x.max(abs_y).max(abs_z);
+    for divisor in (2..=max_divisor).rev() {
+        // Check if all components are divisible by the divisor
+        if abs_x % divisor == 0 && abs_y % divisor == 0 && abs_z % divisor == 0 {
+            return IVec3::new(
+                miller_index.x / divisor,
+                miller_index.y / divisor,
+                miller_index.z / divisor,
+            );
+        }
+    }
+
+    // If no common divisor found, return the original miller index
+    miller_index
+}
+
+pub fn get_miller_index_disc_radius(max_miller_index: i32) -> f64 {
+    let divisor = f64::max(max_miller_index as f64 - 1.0, 1.0);
+    MILLER_INDEX_DISC_RADIUS / divisor
 }

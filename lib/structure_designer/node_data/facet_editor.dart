@@ -69,33 +69,6 @@ class FacetEditor extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // Miller Index Map for visual selection
-            MillerIndexMap(
-              label: 'Miller Index Map',
-              value: facet.millerIndex,
-              maxValue: maxMillerIndex,
-              mapWidth: 360,
-              mapHeight: 180,
-              dotColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey.shade600
-                  : Colors.grey.shade400,
-              selectedDotColor: Colors.red,
-              onChanged: (value) {
-                // Immediately update the facet when miller index is selected from map
-                model.updateFacet(
-                  nodeId,
-                  facetIndex,
-                  APIFacet(
-                    millerIndex: value,
-                    shift: facet.shift,
-                    symmetrize: facet.symmetrize,
-                    visible: facet.visible,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-
             // Shift input
             IntInput(
               label: 'Shift',
@@ -138,9 +111,9 @@ class FacetEditor extends StatelessWidget {
                 const Text('Symmetrize'),
               ],
             ),
-            
+
             // Split symmetry members button - only show if facet is symmetrized
-            if (facet.symmetrize) ...[  
+            if (facet.symmetrize) ...[
               const SizedBox(height: 12),
               ElevatedButton(
                 style: AppButtonStyles.primary,

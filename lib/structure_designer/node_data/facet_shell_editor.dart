@@ -100,7 +100,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(4),
             ),
-            height: 200, // Slightly taller to accommodate headers
+            height: 120, // Slightly taller to accommodate headers
             child: widget.data!.facets.isEmpty
                 ? const Center(child: Text('No facets defined'))
                 : Column(

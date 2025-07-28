@@ -30,23 +30,6 @@ use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, 
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::csg_types::CSG;
 
-pub const CENTER_SPHERE_RADIUS: f64 = 0.25;
-const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
-const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 16;
-
-// Constants for shift drag handle
-const SHIFT_HANDLE_ACCESSIBILITY_OFFSET: f64 = 3.0;
-const SHIFT_HANDLE_AXIS_RADIUS: f64 = 0.1;
-const SHIFT_HANDLE_CYLINDER_RADIUS: f64 = 0.3;
-const SHIFT_HANDLE_CYLINDER_LENGTH: f64 = 1.0;
-const SHIFT_HANDLE_DIVISIONS: u32 = 16;
-
-// Constants for miller index disc visualization
-pub const MILLER_INDEX_DISC_DISTANCE: f64 = 5.0; // Distance from center to place discs
-pub const MILLER_INDEX_DISC_RADIUS: f64 = 0.5;   // Radius of each disc
-pub const MILLER_INDEX_DISC_THICKNESS: f64 = 0.06; // Thickness of each disc
-pub const MILLER_INDEX_DISC_DIVISIONS: u32 = 16;  // Number of divisions for disc cylinder
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfSpaceData {
   pub max_miller_index: i32,
@@ -131,9 +114,9 @@ impl Tessellatable for HalfSpaceGadget {
         tessellator::tessellate_sphere(
             output_mesh,
             &center_pos,
-            CENTER_SPHERE_RADIUS,
-            CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
-            CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
+            half_space_utils::CENTER_SPHERE_RADIUS,
+            half_space_utils::CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
+            half_space_utils::CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
             &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
 
         // Tessellate shift drag handle along the normal direction
@@ -145,7 +128,7 @@ impl Tessellatable for HalfSpaceGadget {
             (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
         
         // Calculate the final handle position with the additional offset
-        let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+        let handle_position = shifted_center + plane_normal * half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
         
         // Define materials
         let axis_material = Material::new(&Vec3::new(0.7, 0.7, 0.7), 1.0, 0.0); // Neutral gray
@@ -156,8 +139,8 @@ impl Tessellatable for HalfSpaceGadget {
             output_mesh,
             &handle_position,
             &center_pos,
-            SHIFT_HANDLE_AXIS_RADIUS,
-            SHIFT_HANDLE_DIVISIONS,
+            half_space_utils::SHIFT_HANDLE_AXIS_RADIUS,
+            half_space_utils::SHIFT_HANDLE_DIVISIONS,
             &axis_material,
             false, // No caps needed
             None,
@@ -166,15 +149,15 @@ impl Tessellatable for HalfSpaceGadget {
         
         // Tessellate the handle cylinder (thicker, draggable part)
         // Place handle centered at the offset position with length along normal direction
-        let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-        let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        let handle_start = handle_position - plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        let handle_end = handle_position + plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
         
         tessellator::tessellate_cylinder(
             output_mesh,
             &handle_end,
             &handle_start,
-            SHIFT_HANDLE_CYLINDER_RADIUS,
-            SHIFT_HANDLE_DIVISIONS,
+            half_space_utils::SHIFT_HANDLE_CYLINDER_RADIUS,
+            half_space_utils::SHIFT_HANDLE_DIVISIONS,
             &handle_material,
             true, // Include caps for the handle
             None,
@@ -217,7 +200,12 @@ impl Tessellatable for HalfSpaceGadget {
 
         // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
         if self.dragged_handle_index == Some(0) {
-            self.tessellate_miller_indices_discs(output_mesh, &center_pos);
+            half_space_utils::tessellate_miller_indices_discs(
+                output_mesh,
+                &center_pos,
+                &self.miller_index,
+                &self.possible_miller_indices,
+                self.max_miller_index);
         } 
     }
 
@@ -237,7 +225,7 @@ impl Gadget for HalfSpaceGadget {
         // Test central sphere
         if let Some(_t) = sphere_hit_test(
             &center_pos,
-            CENTER_SPHERE_RADIUS,
+            half_space_utils::CENTER_SPHERE_RADIUS,
             &ray_origin,
             &ray_direction
         ) {
@@ -253,17 +241,17 @@ impl Gadget for HalfSpaceGadget {
             (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
         // Calculate handle position with accessibility offset
-        let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+        let handle_position = shifted_center + plane_normal * half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
         
         // Calculate handle cylinder start and end points
-        let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-        let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        let handle_start = handle_position - plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+        let handle_end = handle_position + plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
         
         // Test shift handle cylinder
         if let Some(_t) = cylinder_hit_test(
             &handle_end,
             &handle_start,
-            SHIFT_HANDLE_CYLINDER_RADIUS,
+            half_space_utils::SHIFT_HANDLE_CYLINDER_RADIUS,
             &ray_origin,
             &ray_direction
         ) {
@@ -298,7 +286,7 @@ impl Gadget for HalfSpaceGadget {
                 &self.center,
                 &ray_origin,
                 &ray_direction, 
-                SHIFT_HANDLE_ACCESSIBILITY_OFFSET
+                half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET
             );
             self.shift = self.dragged_shift.round() as i32;
         }
@@ -345,97 +333,6 @@ impl HalfSpaceGadget {
         return ret;
     }
 
-    fn simplify_miller_index(&self, miller_index: IVec3) -> IVec3 {
-        // Get absolute values for checking divisibility
-        let abs_x = miller_index.x.abs();
-        let abs_y = miller_index.y.abs();
-        let abs_z = miller_index.z.abs();
-
-        // Set max_divisor to the maximum of the absolute values of the components
-        // This is an optimization as we don't need to check divisors larger than the largest component
-        let max_divisor = abs_x.max(abs_y).max(abs_z);
-        for divisor in (2..=max_divisor).rev() {
-            // Check if all components are divisible by the divisor
-            if abs_x % divisor == 0 && abs_y % divisor == 0 && abs_z % divisor == 0 {
-                return IVec3::new(
-                    miller_index.x / divisor,
-                    miller_index.y / divisor,
-                    miller_index.z / divisor,
-                );
-            }
-        }
-
-        // If no common divisor found, return the original miller index
-        miller_index
-    }
-    
-    /// Tessellates discs representing each possible miller index
-    /// These discs are positioned at a fixed distance from the center in the direction of each miller index
-    /// The current miller index disc is highlighted with a yellowish-orange color
-    fn tessellate_miller_indices_discs(&self, output_mesh: &mut Mesh, center_pos: &DVec3) {
-
-        //let _timer = Timer::new("tessellate_miller_indices_discs");
-
-        // Material for regular discs - blue color
-        let disc_material = Material::new(&Vec3::new(0.0, 0.3, 0.9), 0.3, 0.0);
-        
-        // Material for the current miller index disc - yellowish orange color
-        let current_disc_material = Material::new(&Vec3::new(1.0, 0.6, 0.0), 0.3, 0.0);
-        
-        // Create a red material for the inside/bottom face of regular discs
-        let red_material = Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0);
-
-        // Get the simplified version of the current miller index for comparison
-        let simplified_current_miller = self.simplify_miller_index(self.miller_index);
-        
-        // Iterate through all possible miller indices
-        for miller_index in &self.possible_miller_indices {
-            // Get the normalized direction for this miller index
-            let direction = miller_index.as_dvec3().normalize();
-            
-            // Calculate the position for the disc
-            let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
-            
-            // Calculate start and end points for the disc (thin cylinder)
-            let disc_start = disc_center - direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
-            let disc_end = disc_center + direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
-            
-            // Get the dynamic disc radius based on the max miller index
-            let disc_radius = self.get_miller_index_disc_radius();
-            
-            // Check if this is the current miller index (compare simplified forms)
-            let is_current = *miller_index == simplified_current_miller;
-            
-            // Choose material based on whether this is the current miller index
-            let material = if is_current {
-                &current_disc_material
-            } else {
-                &disc_material
-            };
-            
-            // Tessellate the disc
-            tessellator::tessellate_cylinder(
-                output_mesh,
-                &disc_start,
-                &disc_end,
-                disc_radius,
-                MILLER_INDEX_DISC_DIVISIONS,
-                material,
-                true, // Cap the ends
-                // If current disc, use the same orange material for top face
-                // Otherwise use red material for inside/bottom face
-                if is_current { Some(material) } else { Some(&red_material) },
-                None,
-            );
-        }
-    }
-    
-    // Calculate the appropriate disc radius based on the max miller index
-    fn get_miller_index_disc_radius(&self) -> f64 {
-        let divisor = f64::max(self.max_miller_index as f64 - 1.0, 1.0);
-        MILLER_INDEX_DISC_RADIUS / divisor
-    }
-    
     /// Tests if any miller index disc is hit by the given ray
     /// Returns the miller index of the hit disc (closest to ray origin), or None if no disc was hit
     fn hit_test_miller_indices_discs(&self, center_pos: &DVec3, ray_origin: DVec3, ray_direction: DVec3) -> Option<IVec3> {
@@ -444,7 +341,7 @@ impl HalfSpaceGadget {
         let mut closest_hit: Option<(f64, IVec3)> = None;
         
         // Get the disc radius based on max miller index
-        let disc_radius = self.get_miller_index_disc_radius();
+        let disc_radius = half_space_utils::get_miller_index_disc_radius(self.max_miller_index);
         
         // Iterate through all possible miller indices
         for miller_index in &self.possible_miller_indices {
@@ -452,11 +349,11 @@ impl HalfSpaceGadget {
             let direction = miller_index.as_dvec3().normalize();
             
             // Calculate the position for the disc
-            let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
+            let disc_center = *center_pos + direction * half_space_utils::MILLER_INDEX_DISC_DISTANCE;
             
             // Calculate start and end points for the disc (thin cylinder)
-            let disc_start = disc_center - direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
-            let disc_end = disc_center + direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
+            let disc_start = disc_center - direction * (half_space_utils::MILLER_INDEX_DISC_THICKNESS * 0.5);
+            let disc_end = disc_center + direction * (half_space_utils::MILLER_INDEX_DISC_THICKNESS * 0.5);
             
             // Test if the ray hits this disc
             if let Some(t) = cylinder_hit_test(
@@ -496,7 +393,7 @@ impl HalfSpaceGadget {
                     
                     // Create the miller index and reduce it to simplest form
                     let miller = IVec3::new(h, k, l);
-                    let simplified = self.simplify_miller_index(miller);
+                    let simplified = half_space_utils::simplify_miller_index(miller);
                     
                     // Add the simplified miller index to the set
                     self.possible_miller_indices.insert(simplified);
