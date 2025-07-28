@@ -119,36 +119,11 @@ impl Tessellatable for HalfSpaceGadget {
         
         // If we are dragging any handle, show the plane grid for visual reference
         if self.dragged_handle_index.is_some() {
-            let plane_normal = self.miller_index.as_dvec3().normalize();
-            let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, plane_normal);
-
-            let roughness: f32 = 1.0;
-            let metallic: f32 = 0.0;
-            let outside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
-            let inside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
-            let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);      
-
-            let thickness = 0.05;
-
-            // Calculate the shifted center position (center of the plane)
-            let plane_shifted_center = 
-                center_pos +
-                half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64) *
-                (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-
-            // A grid representing the plane
-            tessellator::tessellate_grid(
+            half_space_utils::tessellate_plane_grid(
                 output_mesh,
-                &(plane_shifted_center),
-                &plane_rotator,
-                thickness,
-                40.0,
-                40.0,
-                0.05,
-                1.0,
-                &outside_material,
-                &inside_material,
-                &side_material);
+                &self.center,
+                &self.miller_index,
+                self.shift);
         }
 
         // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)

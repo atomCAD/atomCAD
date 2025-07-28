@@ -393,11 +393,12 @@ pub fn implicit_eval_facet_shell<'a>(
 #[derive(Clone)]
 pub struct FacetShellGadget {
     pub max_miller_index: i32,
-    pub miller_index: IVec3,
     pub center: IVec3,
+    pub miller_index: IVec3,
+    pub miller_index_variants: Vec<IVec3>,
+    pub shift: i32, // symmetric face variants (one element if not symmetrized)
     pub dragged_shift: f64, // this is rounded into 'shift'
-    pub shift: i32,
-    pub dragged_handle_index: Option<i32>,
+    pub dragged_handle_index: Option<i32>, // 0 for the center, from index 1: corresponds to the variant that is dragged
     pub possible_miller_indices: HashSet<IVec3>,
 }
 
@@ -405,46 +406,25 @@ impl Tessellatable for FacetShellGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
       let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
+      // Tessellate center sphere
       half_space_utils::tessellate_center_sphere(output_mesh, &self.center);
 
-      half_space_utils::tessellate_shift_drag_handle(
-          output_mesh,
-          &self.center,
-          &self.miller_index,
-          self.dragged_shift);
-
-      // If we are dragging any handle, show the plane grid for visual reference
-      if self.dragged_handle_index.is_some() {
-          let plane_normal = self.miller_index.as_dvec3().normalize();
-          let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, plane_normal);
-
-          let roughness: f32 = 1.0;
-          let metallic: f32 = 0.0;
-          let outside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
-          let inside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
-          let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);      
-
-          let thickness = 0.05;
-
-          // Calculate the shifted center position (center of the plane)
-          let plane_shifted_center = 
-              center_pos +
-              half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64) *
-              (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-
-          // A grid representing the plane
-          tessellator::tessellate_grid(
+      // Tessellate shift drag handles for all miller index variants
+      for miller_index in &self.miller_index_variants {
+          half_space_utils::tessellate_shift_drag_handle(
               output_mesh,
-              &(plane_shifted_center),
-              &plane_rotator,
-              thickness,
-              40.0,
-              40.0,
-              0.05,
-              1.0,
-              &outside_material,
-              &inside_material,
-              &side_material);
+              &self.center,
+              miller_index,
+              self.dragged_shift);
+      }
+
+      // If we are dragging a handle, show the plane grid for visual reference
+      if self.dragged_handle_index.is_some() {
+        half_space_utils::tessellate_plane_grid(
+            output_mesh,
+            &self.center,
+            &self.get_dragged_miller_index(),
+            self.shift);
       }
 
       // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
@@ -461,4 +441,15 @@ impl Tessellatable for FacetShellGadget {
   fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
       Box::new(self.clone())
   }
+}
+
+impl FacetShellGadget {
+    pub fn get_dragged_miller_index(&self) -> IVec3 {
+        if self.dragged_handle_index.is_some() && self.dragged_handle_index.unwrap() > 0 && !self.miller_index_variants.is_empty() {
+          let dragged_variant_index = (self.dragged_handle_index.unwrap() - 1) as usize;
+          return self.miller_index_variants[dragged_variant_index];
+        } else {
+          return self.miller_index;
+        }
+    }
 }

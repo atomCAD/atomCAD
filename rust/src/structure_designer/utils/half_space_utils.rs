@@ -294,6 +294,44 @@ pub fn tessellate_shift_drag_handle(
     );
 }
 
+pub fn tessellate_plane_grid(
+    output_mesh: &mut Mesh,
+    center: &IVec3,
+    miller_index: &IVec3,
+    shift: i32,
+) {
+    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let plane_normal = miller_index.as_dvec3().normalize();
+    let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, plane_normal);
+
+    let roughness: f32 = 1.0;
+    let metallic: f32 = 0.0;
+    let outside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
+    let inside_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);
+    let side_material = Material::new(&Vec3::new(0.5, 0.5, 0.5), roughness, metallic);      
+
+    let thickness = 0.05;
+
+    // Calculate the shifted center position (center of the plane)
+    let plane_shifted_center = 
+        center_pos +
+        calculate_shift_vector(miller_index, shift as f64) *
+        (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+    // A grid representing the plane
+    tessellator::tessellate_grid(
+        output_mesh,
+        &(plane_shifted_center),
+        &plane_rotator,
+        thickness,
+        40.0,
+        40.0,
+        0.05,
+        1.0,
+        &outside_material,
+        &inside_material,
+        &side_material);    
+}
 
 /// Tessellates discs representing each possible miller index
 /// These discs are positioned at a fixed distance from the center in the direction of each miller index
