@@ -231,6 +231,70 @@ pub fn implicit_eval_half_space_calc(
   return float_miller.dot(*sample_point - shifted_center) / miller_magnitude;
 }
 
+
+pub fn tessellate_center_sphere(output_mesh: &mut Mesh, center: &IVec3) {
+    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    tessellator::tessellate_sphere(
+        output_mesh,
+        &center_pos,
+        CENTER_SPHERE_RADIUS,
+        CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
+        CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
+        &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
+}
+
+pub fn tessellate_shift_drag_handle(
+    output_mesh: &mut Mesh,
+    center: &IVec3,
+    miller_index: &IVec3,
+    dragged_shift: f64) {
+    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let plane_normal = miller_index.as_dvec3().normalize();
+
+    let shifted_center =
+    center_pos +
+    calculate_shift_vector(&miller_index, dragged_shift) *
+    (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+    // Calculate the final handle position with the additional offset
+    let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+
+    // Define materials
+    let axis_material = Material::new(&Vec3::new(0.7, 0.7, 0.7), 1.0, 0.0); // Neutral gray
+    let handle_material = Material::new(&Vec3::new(0.2, 0.6, 0.9), 0.5, 0.0); // Blue for handle
+
+    // Tessellate the axis cylinder (thin connection from center to handle)
+    tessellator::tessellate_cylinder(
+        output_mesh,
+        &handle_position,
+        &center_pos,
+        SHIFT_HANDLE_AXIS_RADIUS,
+        SHIFT_HANDLE_DIVISIONS,
+        &axis_material,
+        false, // No caps needed
+        None,
+        None
+    );
+
+    // Tessellate the handle cylinder (thicker, draggable part)
+    // Place handle centered at the offset position with length along normal direction
+    let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+    let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+
+    tessellator::tessellate_cylinder(
+        output_mesh,
+        &handle_end,
+        &handle_start,
+        SHIFT_HANDLE_CYLINDER_RADIUS,
+        SHIFT_HANDLE_DIVISIONS,
+        &handle_material,
+        true, // Include caps for the handle
+        None,
+        None
+    );
+}
+
+
 /// Tessellates discs representing each possible miller index
 /// These discs are positioned at a fixed distance from the center in the direction of each miller index
 /// The current miller index disc is highlighted with a yellowish-orange color

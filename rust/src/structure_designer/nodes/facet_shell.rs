@@ -403,62 +403,15 @@ pub struct FacetShellGadget {
 
 impl Tessellatable for FacetShellGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
-      // Calculate center position in world space
       let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
-      // center sphere
-      tessellator::tessellate_sphere(
-          output_mesh,
-          &center_pos,
-          half_space_utils::CENTER_SPHERE_RADIUS,
-          half_space_utils::CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
-          half_space_utils::CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
-          &Material::new(&Vec3::new(0.95, 0.0, 0.0), 0.3, 0.0));
+      half_space_utils::tessellate_center_sphere(output_mesh, &self.center);
 
-      // Tessellate shift drag handle along the normal direction
-      let plane_normal = self.miller_index.as_dvec3().normalize();
-      
-      let shifted_center =
-          center_pos +
-          half_space_utils::calculate_shift_vector(&self.miller_index, self.dragged_shift) *
-          (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-      
-      // Calculate the final handle position with the additional offset
-      let handle_position = shifted_center + plane_normal * half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
-      
-      // Define materials
-      let axis_material = Material::new(&Vec3::new(0.7, 0.7, 0.7), 1.0, 0.0); // Neutral gray
-      let handle_material = Material::new(&Vec3::new(0.2, 0.6, 0.9), 0.5, 0.0); // Blue for handle
-      
-      // Tessellate the axis cylinder (thin connection from center to handle)
-      tessellator::tessellate_cylinder(
+      half_space_utils::tessellate_shift_drag_handle(
           output_mesh,
-          &handle_position,
-          &center_pos,
-          half_space_utils::SHIFT_HANDLE_AXIS_RADIUS,
-          half_space_utils::SHIFT_HANDLE_DIVISIONS,
-          &axis_material,
-          false, // No caps needed
-          None,
-          None
-      );
-      
-      // Tessellate the handle cylinder (thicker, draggable part)
-      // Place handle centered at the offset position with length along normal direction
-      let handle_start = handle_position - plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-      let handle_end = handle_position + plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-      
-      tessellator::tessellate_cylinder(
-          output_mesh,
-          &handle_end,
-          &handle_start,
-          half_space_utils::SHIFT_HANDLE_CYLINDER_RADIUS,
-          half_space_utils::SHIFT_HANDLE_DIVISIONS,
-          &handle_material,
-          true, // Include caps for the handle
-          None,
-          None
-      );
+          &self.center,
+          &self.miller_index,
+          self.dragged_shift);
 
       // If we are dragging any handle, show the plane grid for visual reference
       if self.dragged_handle_index.is_some() {
