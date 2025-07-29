@@ -67,6 +67,7 @@ pub fn set_facet_shell_center(node_id: u64, center: APIIVec3, max_miller_index: 
         facet_shell_data.max_miller_index = max_miller_index;
         facet_shell_data.ensure_cached_facets();
         
+        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -100,6 +101,7 @@ pub fn add_facet(node_id: u64, facet: APIFacet) -> bool {
         });
         facet_shell_data.ensure_cached_facets();
         
+        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -137,6 +139,7 @@ pub fn update_facet(node_id: u64, index: usize, facet: APIFacet) -> bool {
         };
         facet_shell_data.ensure_cached_facets();
         
+        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -169,6 +172,7 @@ pub fn remove_facet(node_id: u64, index: usize) -> bool {
         facet_shell_data.facets.remove(index);
         facet_shell_data.ensure_cached_facets();
         
+        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -197,6 +201,7 @@ pub fn clear_facets(node_id: u64) -> bool {
         facet_shell_data.facets.clear();
         facet_shell_data.ensure_cached_facets();
         
+        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -232,6 +237,7 @@ pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
         facet_shell_data.selected_facet_index = index;
         // No need to regenerate cached_facets since only selection changed
         
+        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -260,6 +266,7 @@ pub fn split_symmetry_members(node_id: u64, facet_index: usize) -> bool {
         
         // Refresh renderer as the facets have changed
         if result {
+          cad_instance.structure_designer.refresh_gadget();
           refresh_renderer(cad_instance, false);
         }
         

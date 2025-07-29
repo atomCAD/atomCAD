@@ -125,7 +125,6 @@ impl StructureDesigner {
 
   // Generates the scene to be rendered according to the displayed nodes of the active node network
   pub fn generate_scene(&mut self, lightweight: bool) -> StructureDesignerScene {
-
     let mut scene: StructureDesignerScene = StructureDesignerScene::new();
 
     if !lightweight {
@@ -467,8 +466,8 @@ impl StructureDesigner {
     }
   }
 
-  /*
-  fn refresh_gadget(&mut self) {
+  
+  pub fn refresh_gadget(&mut self) {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
       Some(name) => name,
@@ -478,7 +477,7 @@ impl StructureDesigner {
       self.gadget = network.provide_gadget();
     }
   }
-  */
+  
 
   pub fn clear_selection(&mut self) {
     // Early return if active_node_network_name is None
@@ -659,6 +658,7 @@ impl StructureDesigner {
     if let Some(gadget) = &mut self.gadget {
       gadget.end_drag();
       self.sync_gadget_data();
+      self.refresh_gadget();
     }
   }
 

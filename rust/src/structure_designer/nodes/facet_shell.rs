@@ -307,7 +307,24 @@ impl Default for FacetShellData {
 
 impl NodeData for FacetShellData {
     fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
-      return None;
+      if self.selected_facet_index.is_none() {
+        return None;
+      }
+      let selected_facet = &self.facets[self.selected_facet_index.unwrap()];
+      return Some(Box::new(FacetShellGadget {
+        max_miller_index: self.max_miller_index,
+        center: self.center,
+        miller_index: selected_facet.miller_index,
+        miller_index_variants: if selected_facet.symmetrize {
+          self.get_symmetric_variants(&selected_facet).into_iter().map(|facet| facet.miller_index).collect()
+        } else {
+          vec![selected_facet.miller_index]
+        },
+        shift: selected_facet.shift,
+        dragged_shift: selected_facet.shift as f64,
+        dragged_handle_index: None,
+        possible_miller_indices: half_space_utils::generate_possible_miller_indices(self.max_miller_index),
+      }));
     }
 }
 
@@ -440,6 +457,92 @@ impl Tessellatable for FacetShellGadget {
 
   fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
       Box::new(self.clone())
+  }
+}
+
+impl Gadget for FacetShellGadget {
+  // Returns the index of the handle that was hit, or None if no handle was hit
+  // handle 0: miller index handle (central red sphere)
+  // handle from index 1: corresponds to the variant that is dragged
+  fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+      // Test central sphere
+      if let Some(_t) = half_space_utils::hit_test_center_sphere(
+          &self.center,
+          &ray_origin,
+          &ray_direction
+      ) {
+          return Some(0); // Central sphere hit
+      }
+      
+      // Test shift handle cylinders for all miller index variants
+      for (variant_index, miller_index_variant) in self.miller_index_variants.iter().enumerate() {
+          if let Some(_t) = half_space_utils::hit_test_shift_handle(
+              &self.center,
+              miller_index_variant,
+              self.shift as f64,
+              &ray_origin,
+              &ray_direction
+          ) {
+              return Some(1 + variant_index as i32); // Shift handle hit for this variant
+          }
+      }
+
+      None // No handle was hit
+  }
+
+  fn start_drag(&mut self, handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
+      self.dragged_handle_index = Some(handle_index);
+  }
+
+  fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+      // Calculate center position in world space
+      let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+      
+      if handle_index == 0 {
+          // Handle index already stored in dragged_handle_index during start_drag
+          
+          // Check if any miller index disc is hit
+          if let Some(new_miller_index) = half_space_utils::hit_test_miller_indices_discs(
+              &center_pos,
+              &self.possible_miller_indices,
+              self.max_miller_index,
+              ray_origin,
+              ray_direction) {
+              // Set the miller index to the hit disc's miller index
+              self.miller_index = new_miller_index;
+          }
+      } else {
+          // Handle dragging the shift handle
+          // We need to determine the new shift value based on where the mouse ray is closest to the normal ray
+          self.dragged_shift = half_space_utils::get_dragged_shift(
+              &self.get_dragged_miller_index(),
+              &self.center,
+              &ray_origin,
+              &ray_direction, 
+              half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET
+          );
+          self.shift = self.dragged_shift.round() as i32;
+      }
+  }
+
+  fn end_drag(&mut self) {
+      // Clear the dragged handle index to stop displaying the grid and conditional miller index discs
+      self.dragged_handle_index = None;
+  }
+}
+
+impl NodeNetworkGadget for FacetShellGadget {
+  fn clone_box(&self) -> Box<dyn NodeNetworkGadget> {
+      Box::new(self.clone())
+  }
+
+  fn sync_data(&self, data: &mut dyn NodeData) {
+      if let Some(facet_shell_data) = data.as_any_mut().downcast_mut::<FacetShellData>() {
+        facet_shell_data.facets[facet_shell_data.selected_facet_index.unwrap()].miller_index = self.miller_index;
+        facet_shell_data.center = self.center;
+        facet_shell_data.facets[facet_shell_data.selected_facet_index.unwrap()].shift = self.shift;
+        facet_shell_data.ensure_cached_facets();
+      }
   }
 }
 

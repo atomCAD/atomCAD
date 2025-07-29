@@ -530,3 +530,29 @@ pub fn hit_test_miller_indices_discs(
     // Return just the miller index of the closest hit disc, if any
     closest_hit.map(|(_, miller_index)| miller_index)
 }
+
+pub fn generate_possible_miller_indices(max_miller_index: i32) -> HashSet<IVec3> {
+    let mut possible_miller_indices: HashSet<IVec3> = HashSet::new();
+    
+    // Iterate through all combinations within the max_miller_index range
+    for h in -max_miller_index..=max_miller_index {
+        for k in -max_miller_index..=max_miller_index {
+            for l in -max_miller_index..=max_miller_index {
+                // Skip the origin (0,0,0) as it's not a valid direction
+                if h == 0 && k == 0 && l == 0 {
+                    continue;
+                }
+                
+                // Create the miller index and reduce it to simplest form
+                let miller = IVec3::new(h, k, l);
+                let simplified = simplify_miller_index(miller);
+                
+                // Add the simplified miller index to the set
+                possible_miller_indices.insert(simplified);
+            }
+        }
+    }
+    
+    // Return the set of possible miller indices
+    possible_miller_indices
+}

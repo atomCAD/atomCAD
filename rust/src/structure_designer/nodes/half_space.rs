@@ -227,49 +227,16 @@ impl NodeNetworkGadget for HalfSpaceGadget {
 
 impl HalfSpaceGadget {
 
-    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32) -> Self {
-        let normalized_dir = miller_index.as_dvec3().normalize();
-        
-        let mut ret = Self {
+    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32) -> Self {        
+        return Self {
             max_miller_index,
             miller_index: *miller_index,
             center,
             dragged_shift: shift as f64,
             shift,
             dragged_handle_index: None,
-            possible_miller_indices: HashSet::new()
+            possible_miller_indices: half_space_utils::generate_possible_miller_indices(max_miller_index),
         };
-        
-        // Generate all possible miller indices
-        ret.generate_possible_miller_indices();
-
-        return ret;
-    }
-
-    /// Generates all possible miller indices within the max_miller_index range
-    /// and stores them in the possible_miller_indices HashSet after reducing to simplest form
-    fn generate_possible_miller_indices(&mut self) {
-        // Clear any existing indices
-        self.possible_miller_indices.clear();
-        
-        // Iterate through all combinations within the max_miller_index range
-        for h in -self.max_miller_index..=self.max_miller_index {
-            for k in -self.max_miller_index..=self.max_miller_index {
-                for l in -self.max_miller_index..=self.max_miller_index {
-                    // Skip the origin (0,0,0) as it's not a valid direction
-                    if h == 0 && k == 0 && l == 0 {
-                        continue;
-                    }
-                    
-                    // Create the miller index and reduce it to simplest form
-                    let miller = IVec3::new(h, k, l);
-                    let simplified = half_space_utils::simplify_miller_index(miller);
-                    
-                    // Add the simplified miller index to the set
-                    self.possible_miller_indices.insert(simplified);
-                }
-            }
-        }
     }
 }
 
