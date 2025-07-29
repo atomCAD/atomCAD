@@ -147,43 +147,23 @@ impl Gadget for HalfSpaceGadget {
     // handle 0: miller index handle (central red sphere)
     // handle 1: shift drag handle (blue cylinder)
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
-        // Calculate center position in world space
-        let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-        
         // Test central sphere
-        if let Some(_t) = sphere_hit_test(
-            &center_pos,
-            half_space_utils::CENTER_SPHERE_RADIUS,
+        if let Some(_t) = half_space_utils::hit_test_center_sphere(
+            &self.center,
             &ray_origin,
             &ray_direction
         ) {
             return Some(0); // Central sphere hit
         }
         
-        // For the shift handle, we need to calculate its position
-        let plane_normal = self.miller_index.as_dvec3().normalize();
-        
-        let shifted_center =
-            center_pos +
-            half_space_utils::calculate_shift_vector(&self.miller_index, self.shift as f64) *
-            (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-
-        // Calculate handle position with accessibility offset
-        let handle_position = shifted_center + plane_normal * half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
-        
-        // Calculate handle cylinder start and end points
-        let handle_start = handle_position - plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-        let handle_end = handle_position + plane_normal * (half_space_utils::SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-        
         // Test shift handle cylinder
-        if let Some(_t) = cylinder_hit_test(
-            &handle_end,
-            &handle_start,
-            half_space_utils::SHIFT_HANDLE_CYLINDER_RADIUS,
+        if let Some(_t) = half_space_utils::hit_test_shift_handle(
+            &self.center,
+            &self.miller_index,
+            self.shift as f64,
             &ray_origin,
             &ray_direction
         ) {
-            println!("Shift handle hit");
             return Some(1); // Shift handle hit
         }
 
@@ -202,7 +182,12 @@ impl Gadget for HalfSpaceGadget {
             // Handle index already stored in dragged_handle_index during start_drag
             
             // Check if any miller index disc is hit
-            if let Some(new_miller_index) = self.hit_test_miller_indices_discs(&center_pos, ray_origin, ray_direction) {
+            if let Some(new_miller_index) = half_space_utils::hit_test_miller_indices_discs(
+                &center_pos,
+                &self.possible_miller_indices,
+                self.max_miller_index,
+                ray_origin,
+                ray_direction) {
                 // Set the miller index to the hit disc's miller index
                 self.miller_index = new_miller_index;
             }
@@ -259,49 +244,6 @@ impl HalfSpaceGadget {
         ret.generate_possible_miller_indices();
 
         return ret;
-    }
-
-    /// Tests if any miller index disc is hit by the given ray
-    /// Returns the miller index of the hit disc (closest to ray origin), or None if no disc was hit
-    fn hit_test_miller_indices_discs(&self, center_pos: &DVec3, ray_origin: DVec3, ray_direction: DVec3) -> Option<IVec3> {
-        //let _timer = Timer::new("hit_test_miller_indices_discs");
-
-        let mut closest_hit: Option<(f64, IVec3)> = None;
-        
-        // Get the disc radius based on max miller index
-        let disc_radius = half_space_utils::get_miller_index_disc_radius(self.max_miller_index);
-        
-        // Iterate through all possible miller indices
-        for miller_index in &self.possible_miller_indices {
-            // Get the normalized direction for this miller index
-            let direction = miller_index.as_dvec3().normalize();
-            
-            // Calculate the position for the disc
-            let disc_center = *center_pos + direction * half_space_utils::MILLER_INDEX_DISC_DISTANCE;
-            
-            // Calculate start and end points for the disc (thin cylinder)
-            let disc_start = disc_center - direction * (half_space_utils::MILLER_INDEX_DISC_THICKNESS * 0.5);
-            let disc_end = disc_center + direction * (half_space_utils::MILLER_INDEX_DISC_THICKNESS * 0.5);
-            
-            // Test if the ray hits this disc
-            if let Some(t) = cylinder_hit_test(
-                &disc_end,
-                &disc_start,
-                disc_radius,
-                &ray_origin,
-                &ray_direction
-            ) {
-                // If this is the closest hit so far, record it
-                match closest_hit {
-                    None => closest_hit = Some((t, *miller_index)),
-                    Some((closest_t, _)) if t < closest_t => closest_hit = Some((t, *miller_index)),
-                    _ => {}
-                }
-            }
-        }
-        
-        // Return just the miller index of the closest hit disc, if any
-        closest_hit.map(|(_, miller_index)| miller_index)
     }
 
     /// Generates all possible miller indices within the max_miller_index range

@@ -8,6 +8,8 @@ use crate::common::csg_utils::dvec3_to_vector3;
 use csgrs::polygon::Polygon;
 use csgrs::vertex::Vertex;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
+use crate::util::hit_test_utils::sphere_hit_test;
+use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::common_constants;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
@@ -424,4 +426,107 @@ pub fn simplify_miller_index(miller_index: IVec3) -> IVec3 {
 pub fn get_miller_index_disc_radius(max_miller_index: i32) -> f64 {
     let divisor = f64::max(max_miller_index as f64 - 1.0, 1.0);
     MILLER_INDEX_DISC_RADIUS / divisor
+}
+
+/// Hit test the central sphere handle at the given center position
+/// Returns Some(t) if the ray hits the sphere, None otherwise
+pub fn hit_test_center_sphere(
+    center: &IVec3,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3
+) -> Option<f64> {
+    // Calculate center position in world space
+    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    
+    // Test central sphere
+    sphere_hit_test(
+        &center_pos,
+        CENTER_SPHERE_RADIUS,
+        ray_origin,
+        ray_direction
+    )
+}
+
+/// Hit test the shift handle cylinder at the given center, miller index and shift
+/// Returns Some(t) if the ray hits the cylinder, None otherwise
+pub fn hit_test_shift_handle(
+    center: &IVec3,
+    miller_index: &IVec3,
+    shift: f64,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3
+) -> Option<f64> {
+    // Calculate center position in world space
+    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    
+    // For the shift handle, we need to calculate its position
+    let plane_normal = miller_index.as_dvec3().normalize();
+    
+    let shifted_center =
+        center_pos +
+        calculate_shift_vector(miller_index, shift) *
+        (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+    // Calculate handle position with accessibility offset
+    let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+    
+    // Calculate handle cylinder start and end points
+    let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+    let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+    
+    // Test shift handle cylinder
+    cylinder_hit_test(
+        &handle_end,
+        &handle_start,
+        SHIFT_HANDLE_CYLINDER_RADIUS,
+        ray_origin,
+        ray_direction
+    )
+}
+
+/// Tests if any miller index disc is hit by the given ray
+/// Returns the miller index of the hit disc (closest to ray origin), or None if no disc was hit
+pub fn hit_test_miller_indices_discs(
+    center_pos: &DVec3,
+    possible_miller_indices: &HashSet<IVec3>,
+    max_miller_index: i32,
+    ray_origin: DVec3,
+    ray_direction: DVec3) -> Option<IVec3> {
+    //let _timer = Timer::new("hit_test_miller_indices_discs");
+
+    let mut closest_hit: Option<(f64, IVec3)> = None;
+        
+    // Get the disc radius based on max miller index
+    let disc_radius = get_miller_index_disc_radius(max_miller_index);
+        
+    // Iterate through all possible miller indices
+    for miller_index in possible_miller_indices {
+        // Get the normalized direction for this miller index
+        let direction = miller_index.as_dvec3().normalize();
+            
+        // Calculate the position for the disc
+        let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
+            
+        // Calculate start and end points for the disc (thin cylinder)
+        let disc_start = disc_center - direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
+        let disc_end = disc_center + direction * (MILLER_INDEX_DISC_THICKNESS * 0.5);
+            
+        // Test if the ray hits this disc
+        if let Some(t) = cylinder_hit_test(
+            &disc_end,
+            &disc_start,
+            disc_radius,
+            &ray_origin,
+            &ray_direction
+        ) {
+            // If this is the closest hit so far, record it
+            match closest_hit {
+                None => closest_hit = Some((t, *miller_index)),
+                Some((closest_t, _)) if t < closest_t => closest_hit = Some((t, *miller_index)),
+                _ => {}
+            }
+        }
+    }
+    // Return just the miller index of the closest hit disc, if any
+    closest_hit.map(|(_, miller_index)| miller_index)
 }
