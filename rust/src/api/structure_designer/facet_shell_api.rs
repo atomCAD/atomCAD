@@ -1,14 +1,17 @@
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::nodes::facet_shell::Facet;
+use crate::structure_designer::nodes::facet_shell;
 use crate::api::api_common::refresh_renderer;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_ivec3;
+use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::structure_designer::structure_designer_api_types::APIFacetShellData;
 use crate::api::structure_designer::structure_designer_api_types::APIFacet;
 use crate::api::common_api_types::APIIVec3;
+use crate::api::common_api_types::APIVec3;
 
 /// Gets the facet shell data for a node
 #[flutter_rust_bridge::frb(sync)]
@@ -243,6 +246,20 @@ pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
       },
       false
     )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_facet_by_ray(ray_start: APIVec3, ray_dir: APIVec3) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      let ray_start_dvec3 = from_api_vec3(&ray_start);
+      let ray_dir_dvec3 = from_api_vec3(&ray_dir);
+      if facet_shell::select_facet_by_ray(&mut instance.structure_designer, &ray_start_dvec3, &ray_dir_dvec3) {
+        instance.structure_designer.refresh_gadget();
+        refresh_renderer(instance, false);
+      }
+    });
   }
 }
 

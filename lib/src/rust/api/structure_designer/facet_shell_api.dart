@@ -49,6 +49,10 @@ bool selectFacet({required BigInt nodeId, BigInt? index}) =>
     RustLib.instance.api.crateApiStructureDesignerFacetShellApiSelectFacet(
         nodeId: nodeId, index: index);
 
+void selectFacetByRay({required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api.crateApiStructureDesignerFacetShellApiSelectFacetByRay(
+        rayStart: rayStart, rayDir: rayDir);
+
 /// Splits a symmetrized facet into its individual symmetric variants
 bool splitSymmetryMembers(
         {required BigInt nodeId, required BigInt facetIndex}) =>

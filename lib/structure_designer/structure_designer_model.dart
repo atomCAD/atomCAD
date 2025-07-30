@@ -85,6 +85,15 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void selectFacetShellFacetByRay(
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    facet_shell_api.selectFacetByRay(
+      rayStart: Vector3ToAPIVec3(rayStart),
+      rayDir: Vector3ToAPIVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
+
   void selectAnchorAtomByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     anchor_api.selectAnchorAtomByRay(

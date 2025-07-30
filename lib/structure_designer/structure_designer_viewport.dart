@@ -26,13 +26,23 @@ class _StructureDesignerViewportState
     extends CadViewportState<StructureDesignerViewport> {
   @override
   void onDefaultClick(Offset pointerPos) {
-    if (widget.graphModel.isNodeTypeActive("edit_atom")) {
+    if (widget.graphModel.isNodeTypeActive("facet_shell")) {
+      onFacetShellClick(pointerPos);
+    } else if (widget.graphModel.isNodeTypeActive("edit_atom")) {
       onEditAtomClick(pointerPos);
     } else if (widget.graphModel.isNodeTypeActive("anchor")) {
       onAnchorClick(pointerPos);
     } else if (widget.graphModel.isNodeTypeActive("stamp")) {
       onStampClick(pointerPos);
     }
+  }
+
+  void onFacetShellClick(Offset pointerPos) {
+    final ray = getRayFromPointerPos(pointerPos);
+    widget.graphModel.selectFacetShellFacetByRay(
+      ray.start,
+      ray.direction,
+    );
   }
 
   void onEditAtomClick(Offset pointerPos) {

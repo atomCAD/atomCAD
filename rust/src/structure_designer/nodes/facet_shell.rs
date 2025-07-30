@@ -1,6 +1,7 @@
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::util::timer::Timer;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
@@ -60,6 +61,68 @@ pub struct FacetShellData {
   // This field won't be serialized/deserialized
   #[serde(skip)]
   pub cached_facets: Vec<Facet>,
+  
+  // Maps each cached facet to its original facet index
+  #[serde(skip)]
+  pub cached_facet_to_original_index: Vec<usize>,
+}
+
+/// Gets the FacetShellData for the currently active facet_shell node (immutable)
+/// 
+/// Returns None if:
+/// - There is no active node network
+/// - No node is selected in the active network
+/// - The selected node is not a facet_shell node
+/// - The FacetShellData cannot be retrieved or cast
+pub fn get_active_facet_shell_data(structure_designer: &StructureDesigner) -> Option<&FacetShellData> {
+  let selected_node_id = structure_designer.get_selected_node_id_with_type("facet_shell")?;
+    
+  // Get the node data and cast it to FacetShellData
+  let node_data = structure_designer.get_node_network_data(selected_node_id)?;
+    
+  // Try to downcast to FacetShellData
+  node_data.as_any_ref().downcast_ref::<FacetShellData>()
+}
+
+/// Gets the FacetShellData for the currently active facet_shell node (mutable)
+/// 
+/// Returns None if:
+/// - There is no active node network
+/// - No node is selected in the active network
+/// - The selected node is not a facet_shell node
+/// - The FacetShellData cannot be retrieved or cast
+pub fn get_active_facet_shell_data_mut(structure_designer: &mut StructureDesigner) -> Option<&mut FacetShellData> {
+  let selected_node_id = structure_designer.get_selected_node_id_with_type("facet_shell")?;
+    
+  // Get the node data and cast it to FacetShellData
+  let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;
+    
+  // Try to downcast to FacetShellData
+  node_data.as_any_mut().downcast_mut::<FacetShellData>()
+}
+
+pub fn select_facet_by_ray(
+  structure_designer: &mut StructureDesigner,
+  ray_start: &DVec3,
+  ray_dir: &DVec3) -> bool {
+  
+  let facet_shell_data = match get_active_facet_shell_data_mut(structure_designer) {
+    Some(data) => data,
+    None => return false,
+  };
+  
+  let cached_facet_index = match facet_shell_data.hit_facet_by_ray(ray_start, ray_dir) {
+    Some(index) => index,
+    None => return false,
+  };
+  
+  // Get the original facet index from the cached facet
+  let original_facet_index = facet_shell_data.cached_facet_to_original_index[cached_facet_index];
+  
+  // Set the selected facet index
+  facet_shell_data.selected_facet_index = Some(original_facet_index);
+  
+  true
 }
 
 impl FacetShellData {
@@ -123,15 +186,22 @@ impl FacetShellData {
     pub fn ensure_cached_facets(&mut self) {
         // Clear and regenerate the cached facets
         self.cached_facets.clear();
+        self.cached_facet_to_original_index.clear();
         
         // Process each facet - only process visible facets
-        for facet in &self.facets {
+        for (original_index, facet) in self.facets.iter().enumerate() {
             // Skip facets that are not visible
             if !facet.visible {
                 continue;
             }
             if facet.symmetrize {
-              self.cached_facets.extend(self.get_symmetric_variants(facet));
+                let symmetric_variants = self.get_symmetric_variants(facet);
+                let num_variants = symmetric_variants.len();
+                self.cached_facets.extend(symmetric_variants);
+                // Map all symmetric variants to the same original facet index
+                for _ in 0..num_variants {
+                    self.cached_facet_to_original_index.push(original_index);
+                }
             } else {
                 // For non-symmetrized facets, create a new instance with the same values
                 self.cached_facets.push(Facet {
@@ -140,6 +210,8 @@ impl FacetShellData {
                     symmetrize: facet.symmetrize,
                     visible: true, // Always set visible to true for cached facets
                 });
+                // Map this cached facet to its original index
+                self.cached_facet_to_original_index.push(original_index);
             }
             //println!("Cached facets: {:?}", self.cached_facets);
         }
@@ -281,6 +353,63 @@ impl FacetShellData {
       // The order of elements in the resulting Vec is not guaranteed.
       unique_perms.into_iter().collect()
   }
+  
+  /// Hit test a ray against the facet shell polyhedron
+  /// Returns the index of the cached facet that was hit, or None if no hit
+  /// 
+  /// The algorithm finds the furthest intersection among facets hit from outside
+  /// (which corresponds to the actual surface of the convex polyhedron)
+  pub fn hit_facet_by_ray(&self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<usize> {
+      let mut best_hit: Option<(usize, f64)> = None; // (facet_index, distance)
+      
+      for (cached_index, facet) in self.cached_facets.iter().enumerate() {
+          // Calculate plane normal and position
+          let float_miller = facet.miller_index.as_dvec3();
+          let miller_magnitude = float_miller.length();
+          
+          // Skip degenerate facets
+          if miller_magnitude <= 0.0 {
+              continue;
+          }
+          
+          let normal = float_miller / miller_magnitude;
+          let shift_vector = half_space_utils::calculate_shift_vector(&facet.miller_index, facet.shift as f64);
+          let plane_point = (self.center.as_dvec3() + shift_vector) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+
+          // Ray-plane intersection
+          let denom = normal.dot(*ray_dir);
+          
+          // Skip if ray is parallel to plane
+          if denom.abs() < 1e-10 {
+              continue;
+          }
+          
+          let t = normal.dot(plane_point - *ray_start) / denom;
+          
+          // Skip if intersection is behind ray start
+          if t < 0.0 {
+              continue;
+          }
+          
+          // Check if ray hits from outside the half-space
+          // Ray hits from outside if ray direction is opposite to plane normal (negative dot product)
+          if normal.dot(*ray_dir) >= 0.0 {
+              continue;
+          }
+          
+          // Among valid hits, keep the furthest one (largest t)
+          match best_hit {
+              None => best_hit = Some((cached_index, t)),
+              Some((_, best_t)) => {
+                  if t > best_t {
+                      best_hit = Some((cached_index, t));
+                  }
+              }
+          }
+      }
+      
+      best_hit.map(|(index, _)| index)
+  }
 
 }
 
@@ -299,6 +428,7 @@ impl Default for FacetShellData {
             ],
             selected_facet_index: None,
             cached_facets: Vec::new(),
+            cached_facet_to_original_index: Vec::new(),
         };
         ret.ensure_cached_facets();
         ret
