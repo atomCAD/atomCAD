@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec2;
@@ -58,6 +61,7 @@ pub fn eval_circle<'a>(
 pub fn implicit_eval_circle<'a>(
   _evaluator: &ImplicitEvaluator,
   _registry: &NodeTypeRegistry,
+  _invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec2) -> f64 {

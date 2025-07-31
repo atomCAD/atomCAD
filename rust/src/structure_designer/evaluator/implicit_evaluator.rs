@@ -22,6 +22,8 @@ use crate::structure_designer::nodes::half_plane::implicit_eval_half_plane;
 use crate::structure_designer::nodes::reg_poly::implicit_eval_reg_poly;
 use crate::structure_designer::nodes::polygon::implicit_eval_polygon;
 use crate::structure_designer::nodes::facet_shell::implicit_eval_facet_shell;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
+use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -41,8 +43,8 @@ impl<'a> NetworkStackElement<'a> {
  * It does this by treating the abstract operators (nodes) in the node network as implicit geometry functions. 
  */
 pub struct ImplicitEvaluator {
-    built_in_functions: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, &Vec<NetworkStackElement>, &Node, &DVec3) -> f64>,
-    built_in_functions_2d: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, &Vec<NetworkStackElement>, &Node, &DVec2) -> f64>,
+    built_in_functions: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, invocation_cache: &HashMap<NodeInvocationId, NetworkResult>, &Vec<NetworkStackElement>, &Node, &DVec3) -> f64>,
+    built_in_functions_2d: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, invocation_cache: &HashMap<NodeInvocationId, NetworkResult>, &Vec<NetworkStackElement>, &Node, &DVec2) -> f64>,
 }
 
 impl ImplicitEvaluator {
@@ -109,7 +111,14 @@ impl ImplicitEvaluator {
    * Not all optimizations fit all use cases or even compatible with each other, so we might use multiple approaches
    * in different cases.
    */
-  pub fn implicit_eval<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, sample_point: &DVec3, registry: &NodeTypeRegistry) -> Vec<f64> {
+  pub fn implicit_eval<'a>(
+    &self,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    sample_point: &DVec3,
+    registry: &NodeTypeRegistry,
+    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+  ) -> Vec<f64> {
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
     if node.node_type_name == "parameter" {
@@ -120,18 +129,18 @@ impl ImplicitEvaluator {
       parent_network_stack.pop();
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
       let args : Vec<Vec<f64>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
-        self.implicit_eval(&parent_network_stack, arg_node_id, sample_point, registry)
+        self.implicit_eval(&parent_network_stack, arg_node_id, sample_point, registry, invocation_cache)
       }).collect();
       return args.concat();
     }
     if let Some(built_in_function) = self.built_in_functions.get(&node.node_type_name) {
-      let ret = built_in_function(self, registry, network_stack, node, sample_point);
+      let ret = built_in_function(self, registry, invocation_cache, network_stack, node, sample_point);
       return vec![ret];
     }
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
-      return self.implicit_eval(&child_network_stack, child_network.return_node_id.unwrap(), sample_point, registry);
+      return self.implicit_eval(&child_network_stack, child_network.return_node_id.unwrap(), sample_point, registry, invocation_cache);
     }
     return vec![0.0];
   }
@@ -155,7 +164,13 @@ impl ImplicitEvaluator {
       return self.implicit_eval_2d(&network_stack, node_id, sample_point, registry);
   }
 
-  pub fn implicit_eval_2d<'a>(&self, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, sample_point: &DVec2, registry: &NodeTypeRegistry) -> Vec<f64> {
+  pub fn implicit_eval_2d<'a>(
+    &self,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    sample_point: &DVec2,
+    registry: &NodeTypeRegistry,
+    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>) -> Vec<f64> {
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
     if node.node_type_name == "parameter" {
@@ -166,18 +181,18 @@ impl ImplicitEvaluator {
       parent_network_stack.pop();
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
       let args : Vec<Vec<f64>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
-        self.implicit_eval_2d(&parent_network_stack, arg_node_id, sample_point, registry)
+        self.implicit_eval_2d(&parent_network_stack, arg_node_id, sample_point, registry, invocation_cache)
       }).collect();
       return args.concat();
     }
     if let Some(built_in_function) = self.built_in_functions_2d.get(&node.node_type_name) {
-      let ret = built_in_function(self, registry, network_stack, node, sample_point);
+      let ret = built_in_function(self, registry, invocation_cache, network_stack, node, sample_point);
       return vec![ret];
     }
     if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
-      return self.implicit_eval_2d(&child_network_stack, child_network.return_node_id.unwrap(), sample_point, registry);
+      return self.implicit_eval_2d(&child_network_stack, child_network.return_node_id.unwrap(), sample_point, registry, invocation_cache);
     }
     return vec![0.0];
   }

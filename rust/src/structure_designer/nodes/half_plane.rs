@@ -21,6 +21,8 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::common::csg_types::CSG;
+use std::collections::HashMap;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -80,6 +82,7 @@ pub fn eval_half_plane<'a>(
 pub fn implicit_eval_half_plane<'a>(
   _evaluator: &ImplicitEvaluator,
   _registry: &NodeTypeRegistry,
+  _invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec2) -> f64 {

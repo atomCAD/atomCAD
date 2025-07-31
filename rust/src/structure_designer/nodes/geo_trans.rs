@@ -15,6 +15,8 @@ use glam::DQuat;
 use std::f64::consts::PI;
 use crate::util::transform::Transform;
 use crate::common::csg_types::CSG;
+use std::collections::HashMap;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GeoTransData {
@@ -33,6 +35,7 @@ impl NodeData for GeoTransData {
 
 pub fn implicit_eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
   registry: &NodeTypeRegistry,
+  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec3) -> f64 {
@@ -59,7 +62,8 @@ pub fn implicit_eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
           network_stack,
           node_id, 
           &transformed_point,
-          registry)[0],
+          registry,
+          invocation_cache)[0],
       None => f64::MAX
   }
 }

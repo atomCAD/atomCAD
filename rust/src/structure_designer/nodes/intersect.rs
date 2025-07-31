@@ -12,15 +12,18 @@ use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use glam::f64::DQuat;
 use crate::common::csg_types::CSG;
+use std::collections::HashMap;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
 
 pub fn implicit_eval_intersect<'a>(
   evaluator: &ImplicitEvaluator,
   registry: &NodeTypeRegistry,
+  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec3) -> f64 {
     node.arguments[0].argument_node_ids.iter().map(|node_id| {
-      evaluator.implicit_eval(network_stack, *node_id, sample_point, registry)[0]
+      evaluator.implicit_eval(network_stack, *node_id, sample_point, registry, invocation_cache)[0]
     }).reduce(f64::max).unwrap_or(f64::MIN)
 }
 

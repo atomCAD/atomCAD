@@ -12,20 +12,23 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
 use crate::common::csg_types::CSG;
+use std::collections::HashMap;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
 
 pub fn implicit_eval_diff_2d<'a>(
   evaluator: &ImplicitEvaluator,
   registry: &NodeTypeRegistry,
+  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec2) -> f64 {
 
   let ubase = node.arguments[0].argument_node_ids.iter().map(|node_id| {
-    evaluator.implicit_eval_2d(network_stack, *node_id, sample_point, registry)[0]
+    evaluator.implicit_eval_2d(network_stack, *node_id, sample_point, registry, invocation_cache)[0]
   }).reduce(f64::min).unwrap_or(f64::MAX);
 
   let usub = node.arguments[1].argument_node_ids.iter().map(|node_id| {
-    evaluator.implicit_eval_2d(network_stack, *node_id, sample_point, registry)[0]
+    evaluator.implicit_eval_2d(network_stack, *node_id, sample_point, registry, invocation_cache)[0]
   }).reduce(f64::min).unwrap_or(f64::MAX);
 
   return f64::max(ubase, -usub)

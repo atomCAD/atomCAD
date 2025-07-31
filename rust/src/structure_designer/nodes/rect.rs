@@ -13,6 +13,8 @@ use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElemen
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
+use std::collections::HashMap;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RectData {
@@ -60,6 +62,7 @@ pub fn eval_rect<'a>(
 pub fn implicit_eval_rect<'a>(
   _evaluator: &ImplicitEvaluator,
   _registry: &NodeTypeRegistry,
+  _invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec2) -> f64 {

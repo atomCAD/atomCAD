@@ -15,6 +15,8 @@ use crate::structure_designer::evaluator::network_evaluator::error_in_input;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
 use crate::util::transform::Transform;
+use std::collections::HashMap;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,6 +96,7 @@ pub fn eval_extrude<'a>(
 pub fn implicit_eval_extrude<'a>(
   evaluator: &ImplicitEvaluator,
   registry: &NodeTypeRegistry,
+  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec3) -> f64 {
@@ -106,7 +109,8 @@ pub fn implicit_eval_extrude<'a>(
         network_stack,
         node_id, 
         &sample_point.xz(),
-        registry)[0],
+        registry,
+        invocation_cache)[0],
     None => f64::MAX
   };
 
