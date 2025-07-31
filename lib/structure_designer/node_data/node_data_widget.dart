@@ -110,6 +110,7 @@ class NodeDataWidget extends StatelessWidget {
         return GeoTransEditor(
           nodeId: selectedNode.id,
           data: geoTransData,
+          model: model,
         );
       case 'atom_trans':
         // Fetch the atom transformation data here in the parent widget

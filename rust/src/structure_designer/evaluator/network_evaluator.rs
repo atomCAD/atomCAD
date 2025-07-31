@@ -80,16 +80,26 @@ pub fn error_in_input(input_name: &str) -> NetworkResult {
   NetworkResult::Error(format!("error in {} input", input_name))
 }
 
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
+pub struct NodeInvocationId {
+    root_network_name: String,
+    node_id_stack: Vec<u64>,
+}
+
 pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
   pub explicit_geo_eval_needed: bool,
+  pub record_invocations: bool,
+  pub node_invocation_cache: HashMap<NodeInvocationId, NetworkResult>,
 }
 
 impl NetworkEvaluationContext {
-  pub fn new(explicit_geo_eval_needed: bool) -> Self {
+  pub fn new(explicit_geo_eval_needed: bool, record_invocations: bool) -> Self {
     Self {
       node_errors: HashMap::new(),
       explicit_geo_eval_needed,
+      record_invocations,
+      node_invocation_cache: HashMap::new(),
     }
   }
 }
@@ -219,7 +229,10 @@ impl NetworkEvaluator {
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
     
     // Create evaluation context to track errors
-    let mut context = NetworkEvaluationContext::new(geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh);
+    let mut context = NetworkEvaluationContext::new(
+      geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh,
+      false
+    );
 
     // Create a NodeEvaluator instance to abstract SDF evaluation
     let node_evaluator = NodeEvaluator {
@@ -314,6 +327,26 @@ impl NetworkEvaluator {
   
       scene.node_errors = context.node_errors.clone();
       return scene;
+  }
+
+  // Pre-evaluates a geometry node with explicit mesh generation turned off
+  // just to cache transforms for each node invocation which will be used
+  // in implicit evaluation of the geometry.
+  // Returns the pre evaluation context which contains the transformation
+  // outputs for each node invocation.
+  fn pre_eval_geometry_node(
+    &self,
+    network_stack: Vec<NetworkStackElement>,
+    node_id: u64,
+    registry: &NodeTypeRegistry) -> HashMap<NodeInvocationId, NetworkResult> {
+    // Create evaluation context to record transformation outputs for invocations
+    let mut context = NetworkEvaluationContext::new(
+      false,
+      true
+    );
+    self.evaluate(&network_stack, node_id, registry, false, &mut context);
+
+    return context.node_invocation_cache.clone();
   }
 
   pub fn evaluate<'a>(
