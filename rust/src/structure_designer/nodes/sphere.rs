@@ -14,8 +14,7 @@ use crate::structure_designer::node_network::Node;
 use glam::f64::DVec3;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use std::collections::HashMap;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SphereData {
@@ -61,7 +60,7 @@ pub fn eval_sphere<'a>(
 pub fn implicit_eval_sphere<'a>(
   _evaluator: &ImplicitEvaluator,
   _registry: &NodeTypeRegistry,
-  _invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
+  _invocation_cache: &NodeInvocationCache,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec3) -> f64 {

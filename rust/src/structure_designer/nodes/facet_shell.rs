@@ -34,8 +34,7 @@ use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, 
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::utils::half_space_utils;
-use std::collections::HashMap;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Facet {
@@ -512,7 +511,7 @@ pub fn eval_facet_shell<'a>(
 pub fn implicit_eval_facet_shell<'a>(
   _evaluator: &ImplicitEvaluator,
   _registry: &NodeTypeRegistry,
-  _invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
+  _invocation_cache: &NodeInvocationCache,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec3) -> f64 {

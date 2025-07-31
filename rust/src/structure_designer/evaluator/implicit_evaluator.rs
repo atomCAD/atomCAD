@@ -22,8 +22,7 @@ use crate::structure_designer::nodes::half_plane::implicit_eval_half_plane;
 use crate::structure_designer::nodes::reg_poly::implicit_eval_reg_poly;
 use crate::structure_designer::nodes::polygon::implicit_eval_polygon;
 use crate::structure_designer::nodes::facet_shell::implicit_eval_facet_shell;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -43,8 +42,8 @@ impl<'a> NetworkStackElement<'a> {
  * It does this by treating the abstract operators (nodes) in the node network as implicit geometry functions. 
  */
 pub struct ImplicitEvaluator {
-    built_in_functions: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, invocation_cache: &HashMap<NodeInvocationId, NetworkResult>, &Vec<NetworkStackElement>, &Node, &DVec3) -> f64>,
-    built_in_functions_2d: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, invocation_cache: &HashMap<NodeInvocationId, NetworkResult>, &Vec<NetworkStackElement>, &Node, &DVec2) -> f64>,
+    built_in_functions: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, invocation_cache: &NodeInvocationCache, &Vec<NetworkStackElement>, &Node, &DVec3) -> f64>,
+    built_in_functions_2d: HashMap<String,fn(&ImplicitEvaluator, &NodeTypeRegistry, invocation_cache: &NodeInvocationCache, &Vec<NetworkStackElement>, &Node, &DVec2) -> f64>,
 }
 
 impl ImplicitEvaluator {
@@ -85,7 +84,7 @@ impl ImplicitEvaluator {
       node_id: u64,
       sample_point: &DVec3,
       registry: &NodeTypeRegistry,
-      invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+      invocation_cache: &NodeInvocationCache
     ) -> (DVec3, f64) {
       let epsilon: f64 = 0.001; // Small value for finite difference approximation
 
@@ -104,7 +103,7 @@ impl ImplicitEvaluator {
       node_id: u64,
       sample_point: &DVec3,
       registry: &NodeTypeRegistry,
-      invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+      invocation_cache: &NodeInvocationCache
     ) -> Vec<f64> {
         let mut network_stack = Vec::new();
         // We assign the root node network zero node id. It is not used in the evaluation.
@@ -131,7 +130,7 @@ impl ImplicitEvaluator {
     node_id: u64,
     sample_point: &DVec3,
     registry: &NodeTypeRegistry,
-    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+    invocation_cache: &NodeInvocationCache
   ) -> Vec<f64> {
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
@@ -165,7 +164,7 @@ impl ImplicitEvaluator {
     node_id: u64,
     sample_point: &DVec2,
     registry: &NodeTypeRegistry,
-    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+    invocation_cache: &NodeInvocationCache
   ) -> (DVec2, f64) {
     let epsilon: f64 = 0.001; // Small value for finite difference approximation
 
@@ -183,7 +182,7 @@ impl ImplicitEvaluator {
     node_id: u64,
     sample_point: &DVec2,
     registry: &NodeTypeRegistry,
-    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+    invocation_cache: &NodeInvocationCache
   ) -> Vec<f64> {
       let mut network_stack = Vec::new();
       // We assign the root node network zero node id. It is not used in the evaluation.
@@ -198,7 +197,7 @@ impl ImplicitEvaluator {
     node_id: u64,
     sample_point: &DVec2,
     registry: &NodeTypeRegistry,
-    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>) -> Vec<f64> {
+    invocation_cache: &NodeInvocationCache) -> Vec<f64> {
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
     if node.node_type_name == "parameter" {
@@ -232,7 +231,7 @@ pub struct NodeEvaluator<'a> {
     pub node_id: u64,
     pub registry: &'a NodeTypeRegistry,
     pub implicit_evaluator: &'a ImplicitEvaluator,
-    pub invocation_cache: HashMap<NodeInvocationId, NetworkResult>,
+    pub invocation_cache: NodeInvocationCache,
 }
 
 impl<'a> NodeEvaluator<'a> {

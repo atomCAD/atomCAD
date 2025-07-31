@@ -14,8 +14,7 @@ use std::f64::consts::PI;
 use std::cmp::max;
 use crate::util::mat_utils::consistent_round;
 use crate::common::csg_types::CSG;
-use std::collections::HashMap;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegPolyData {
@@ -100,7 +99,7 @@ fn calculate_half_plane_for_side(p1: IVec2, p2: IVec2, center: IVec2) -> (IVec2,
 pub fn implicit_eval_reg_poly<'a>(
     _evaluator: &ImplicitEvaluator,
     _registry: &NodeTypeRegistry,
-    _invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
+    _invocation_cache: &NodeInvocationCache,
     _network_stack: &Vec<NetworkStackElement<'a>>,
     node: &Node,
     sample_point: &DVec2) -> f64 {

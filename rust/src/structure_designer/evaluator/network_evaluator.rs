@@ -86,11 +86,36 @@ pub struct NodeInvocationId {
     node_id_stack: Vec<u64>,
 }
 
+impl NodeInvocationId {
+    pub fn new<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> Self {
+        let root_network_name = network_stack.first()
+            .map(|element| element.node_network.node_type.name.clone())
+            .unwrap_or_default();
+        
+        let mut node_id_stack = Vec::new();
+        
+        // Add node_id from all elements except the first one
+        for element in network_stack.iter().skip(1) {
+            node_id_stack.push(element.node_id);
+        }
+        
+        // Add the parameter node_id at the end
+        node_id_stack.push(node_id);
+        
+        NodeInvocationId {
+            root_network_name,
+            node_id_stack,
+        }
+    }
+}
+
+pub type NodeInvocationCache = HashMap<NodeInvocationId, Vec<NetworkResult>>;
+
 pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
   pub explicit_geo_eval_needed: bool,
   pub record_invocations: bool,
-  pub node_invocation_cache: HashMap<NodeInvocationId, NetworkResult>,
+  pub node_invocation_cache: NodeInvocationCache,
 }
 
 impl NetworkEvaluationContext {
@@ -346,7 +371,7 @@ impl NetworkEvaluator {
     &self,
     network_stack: Vec<NetworkStackElement>,
     node_id: u64,
-    registry: &NodeTypeRegistry) -> HashMap<NodeInvocationId, NetworkResult> {
+    registry: &NodeTypeRegistry) -> NodeInvocationCache {
     // Create evaluation context to record transformation outputs for invocations
     let mut context = NetworkEvaluationContext::new(
       false,
@@ -427,6 +452,11 @@ impl NetworkEvaluator {
       vec![NetworkResult::None]
     };
     
+    if context.record_invocations {
+      let node_invocation_id = NodeInvocationId::new(network_stack, node_id);
+      context.node_invocation_cache.insert(node_invocation_id, results.clone());
+    }
+
     // Check for errors and store them in the context
     for result in &results {
       if let NetworkResult::Error(error_message) = result {

@@ -16,6 +16,7 @@ use crate::structure_designer::common_constants::CrystalTypeInfo;
 use crate::common::atomic_structure::CrystalMetaData;
 use crate::common::crystal_utils::ZincBlendeAtomType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 
@@ -134,7 +135,7 @@ pub fn eval_geo_to_atom<'a>(
 
 fn process_box_for_atomic<'a>(
   implicit_evaluator: &ImplicitEvaluator,
-  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
+  invocation_cache: &NodeInvocationCache,
   geo_to_atom_data: &GeoToAtomData,
   network_stack: &Vec<NetworkStackElement<'a>>,
   geo_node_id: u64,
@@ -224,7 +225,7 @@ fn process_box_for_atomic<'a>(
 
 fn process_cell_for_atomic<'a>(
   implicit_evaluator: &ImplicitEvaluator,
-  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
+  invocation_cache: &NodeInvocationCache,
   geo_to_atom_data: &GeoToAtomData,
   network_stack: &Vec<NetworkStackElement<'a>>,
   geo_node_id: u64,

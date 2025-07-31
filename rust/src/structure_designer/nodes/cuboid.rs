@@ -14,8 +14,7 @@ use glam::f64::DQuat;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use crate::common::csg_types::CSG;
-use std::collections::HashMap;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CuboidData {
@@ -59,7 +58,7 @@ pub fn eval_cuboid<'a>(
 pub fn implicit_eval_cuboid<'a>(
   _evaluator: &ImplicitEvaluator,
   _registry: &NodeTypeRegistry,
-  _invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
+  _invocation_cache: &NodeInvocationCache,
   _network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec3) -> f64 {

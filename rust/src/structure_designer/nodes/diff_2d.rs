@@ -12,13 +12,12 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
 use crate::common::csg_types::CSG;
-use std::collections::HashMap;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationId;
+use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 pub fn implicit_eval_diff_2d<'a>(
   evaluator: &ImplicitEvaluator,
   registry: &NodeTypeRegistry,
-  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
+  invocation_cache: &NodeInvocationCache,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node: &Node,
   sample_point: &DVec2) -> f64 {
