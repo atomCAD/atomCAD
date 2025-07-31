@@ -334,7 +334,7 @@ impl NetworkEvaluator {
   // in implicit evaluation of the geometry.
   // Returns the pre evaluation context which contains the transformation
   // outputs for each node invocation.
-  fn pre_eval_geometry_node(
+  pub fn pre_eval_geometry_node(
     &self,
     network_stack: Vec<NetworkStackElement>,
     node_id: u64,
@@ -402,7 +402,7 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "diff" {
       vec![eval_diff(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "geo_to_atom" {
-      vec![eval_geo_to_atom(&self.implicit_evaluator, network_stack, node_id, registry)]
+      vec![eval_geo_to_atom(&self, network_stack, node_id, registry)]
     } else if node.node_type_name == "edit_atom" {
       vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)]
     } else if node.node_type_name == "atom_trans" {

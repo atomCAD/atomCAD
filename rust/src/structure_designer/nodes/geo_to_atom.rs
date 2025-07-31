@@ -2,7 +2,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_evaluator::{NetworkResult, input_missing_error};
+use crate::structure_designer::evaluator::network_evaluator::{input_missing_error, NetworkResult, NodeInvocationId};
 use crate::common::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 use glam::i32::IVec3;
@@ -15,6 +15,7 @@ use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::common_constants::CrystalTypeInfo;
 use crate::common::atomic_structure::CrystalMetaData;
 use crate::common::crystal_utils::ZincBlendeAtomType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 
@@ -84,7 +85,12 @@ impl NodeData for GeoToAtomData {
 }
 
 // generates diamond molecule from geometry in an optimized way
-pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry) -> NetworkResult {
+pub fn eval_geo_to_atom<'a>(
+  network_evaluator: &NetworkEvaluator,
+  network_stack: &Vec<NetworkStackElement<'a>>,
+  node_id: u64,
+  registry: &NodeTypeRegistry
+) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
   if node.arguments[0].argument_node_ids.is_empty() {
@@ -92,6 +98,8 @@ pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stac
   }
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();
+
+  let invocation_cache = network_evaluator.pre_eval_geometry_node(network_stack.clone(), geo_node_id, registry);
 
   let mut atomic_structure = AtomicStructure::new();
 
@@ -108,7 +116,8 @@ pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stac
   };
 
   process_box_for_atomic(
-    implicit_evaluator,
+    &network_evaluator.implicit_evaluator,
+    &invocation_cache,
     geo_to_atom_data,
     network_stack,
     geo_node_id,
@@ -125,6 +134,7 @@ pub fn eval_geo_to_atom<'a>(implicit_evaluator: &ImplicitEvaluator, network_stac
 
 fn process_box_for_atomic<'a>(
   implicit_evaluator: &ImplicitEvaluator,
+  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   geo_to_atom_data: &GeoToAtomData,
   network_stack: &Vec<NetworkStackElement<'a>>,
   geo_node_id: u64,
@@ -140,8 +150,8 @@ fn process_box_for_atomic<'a>(
   let center_point = start_pos.as_dvec3() + size.as_dvec3() / 2.0;
 
   // Evaluate SDF at the center point
-  let sdf_value = implicit_evaluator.implicit_eval(network_stack, geo_node_id, &center_point, registry)[0];
-  
+  let sdf_value = implicit_evaluator.implicit_eval(network_stack, geo_node_id, &center_point, registry, invocation_cache)[0];
+
   let half_diagonal = size.as_dvec3().length() / 2.0;
 
   // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
@@ -170,6 +180,7 @@ fn process_box_for_atomic<'a>(
                   );
                   process_cell_for_atomic(
                       implicit_evaluator,
+                      invocation_cache,
                       geo_to_atom_data,
                       network_stack,
                       geo_node_id,
@@ -198,6 +209,7 @@ fn process_box_for_atomic<'a>(
   for (sub_start, sub_size) in subdivisions {
       process_box_for_atomic(
           implicit_evaluator,
+          invocation_cache,
           geo_to_atom_data,
           network_stack,
           geo_node_id,
@@ -212,6 +224,7 @@ fn process_box_for_atomic<'a>(
 
 fn process_cell_for_atomic<'a>(
   implicit_evaluator: &ImplicitEvaluator,
+  invocation_cache: &HashMap<NodeInvocationId, NetworkResult>,
   geo_to_atom_data: &GeoToAtomData,
   network_stack: &Vec<NetworkStackElement<'a>>,
   geo_node_id: u64,
@@ -233,7 +246,7 @@ fn process_cell_for_atomic<'a>(
         let crystal_space_pos = absolute_pos.as_dvec3() / 4.0;
         let mut has_atom = filled;
         if !has_atom {
-          let value = implicit_evaluator.implicit_eval(network_stack, geo_node_id, &crystal_space_pos, registry)[0];
+          let value = implicit_evaluator.implicit_eval(network_stack, geo_node_id, &crystal_space_pos, registry, invocation_cache)[0];
           has_atom = value < DIAMOND_SAMPLE_THRESHOLD;
         }
 

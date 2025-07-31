@@ -79,24 +79,38 @@ impl ImplicitEvaluator {
     // Calculate gradient using one sided differences
     // This is faster than using central differences but potentially less accurate
     // It also returns the value at the sampled point, so that the value can be reused. 
-    pub fn get_gradient(&self, network: &NodeNetwork, node_id: u64, sample_point: &DVec3, registry: &NodeTypeRegistry) -> (DVec3, f64) {
+    pub fn get_gradient(
+      &self,
+      network: &NodeNetwork,
+      node_id: u64,
+      sample_point: &DVec3,
+      registry: &NodeTypeRegistry,
+      invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+    ) -> (DVec3, f64) {
       let epsilon: f64 = 0.001; // Small value for finite difference approximation
 
-      let value = self.eval(&network, node_id, sample_point, registry)[0];
+      let value = self.eval(&network, node_id, sample_point, registry, invocation_cache)[0];
       let gradient = DVec3::new(
-        (self.eval(&network, node_id, &(sample_point + DVec3::new(epsilon, 0.0, 0.0)), registry)[0] - value) / epsilon,
-        (self.eval(&network, node_id, &(sample_point + DVec3::new(0.0, epsilon, 0.0)), registry)[0] - value) / epsilon,
-        (self.eval(&network, node_id, &(sample_point + DVec3::new(0.0, 0.0, epsilon)), registry)[0] - value) / epsilon
+        (self.eval(&network, node_id, &(sample_point + DVec3::new(epsilon, 0.0, 0.0)), registry, invocation_cache)[0] - value) / epsilon,
+        (self.eval(&network, node_id, &(sample_point + DVec3::new(0.0, epsilon, 0.0)), registry, invocation_cache)[0] - value) / epsilon,
+        (self.eval(&network, node_id, &(sample_point + DVec3::new(0.0, 0.0, epsilon)), registry, invocation_cache)[0] - value) / epsilon
       );
       (gradient, value)
     }
 
-    pub fn eval(&self, network: &NodeNetwork, node_id: u64, sample_point: &DVec3, registry: &NodeTypeRegistry) -> Vec<f64> {
+    pub fn eval(
+      &self,
+      network: &NodeNetwork,
+      node_id: u64,
+      sample_point: &DVec3,
+      registry: &NodeTypeRegistry,
+      invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+    ) -> Vec<f64> {
         let mut network_stack = Vec::new();
         // We assign the root node network zero node id. It is not used in the evaluation.
         network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
 
-        return self.implicit_eval(&network_stack, node_id, sample_point, registry);
+        return self.implicit_eval(&network_stack, node_id, sample_point, registry, invocation_cache);
     }
 
   /*
@@ -145,23 +159,37 @@ impl ImplicitEvaluator {
     return vec![0.0];
   }
 
-  pub fn get_gradient_2d(&self, network: &NodeNetwork, node_id: u64, sample_point: &DVec2, registry: &NodeTypeRegistry) -> (DVec2, f64) {
+  pub fn get_gradient_2d(
+    &self,
+    network: &NodeNetwork,
+    node_id: u64,
+    sample_point: &DVec2,
+    registry: &NodeTypeRegistry,
+    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+  ) -> (DVec2, f64) {
     let epsilon: f64 = 0.001; // Small value for finite difference approximation
 
-    let value = self.eval_2d(&network, node_id, sample_point, registry)[0];
+    let value = self.eval_2d(&network, node_id, sample_point, registry, invocation_cache)[0];
     let gradient = DVec2::new(
-      (self.eval_2d(&network, node_id, &(sample_point + DVec2::new(epsilon, 0.0)), registry)[0] - value) / epsilon,
-      (self.eval_2d(&network, node_id, &(sample_point + DVec2::new(0.0, epsilon)), registry)[0] - value) / epsilon,
+      (self.eval_2d(&network, node_id, &(sample_point + DVec2::new(epsilon, 0.0)), registry, invocation_cache)[0] - value) / epsilon,
+      (self.eval_2d(&network, node_id, &(sample_point + DVec2::new(0.0, epsilon)), registry, invocation_cache)[0] - value) / epsilon,
     );
     (gradient, value)
   }
 
-  pub fn eval_2d(&self, network: &NodeNetwork, node_id: u64, sample_point: &DVec2, registry: &NodeTypeRegistry) -> Vec<f64> {
+  pub fn eval_2d(
+    &self,
+    network: &NodeNetwork,
+    node_id: u64,
+    sample_point: &DVec2,
+    registry: &NodeTypeRegistry,
+    invocation_cache: &HashMap<NodeInvocationId, NetworkResult>
+  ) -> Vec<f64> {
       let mut network_stack = Vec::new();
       // We assign the root node network zero node id. It is not used in the evaluation.
       network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
 
-      return self.implicit_eval_2d(&network_stack, node_id, sample_point, registry);
+      return self.implicit_eval_2d(&network_stack, node_id, sample_point, registry, invocation_cache);
   }
 
   pub fn implicit_eval_2d<'a>(
