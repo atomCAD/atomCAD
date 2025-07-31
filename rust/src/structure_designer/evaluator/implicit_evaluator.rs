@@ -232,26 +232,27 @@ pub struct NodeEvaluator<'a> {
     pub node_id: u64,
     pub registry: &'a NodeTypeRegistry,
     pub implicit_evaluator: &'a ImplicitEvaluator,
+    pub invocation_cache: HashMap<NodeInvocationId, NetworkResult>,
 }
 
 impl<'a> NodeEvaluator<'a> {
     pub fn eval(&self, sample_point: &DVec3) -> f64 {
         // Delegate to implicit_evaluator.eval and return the first element in the result array
-        self.implicit_evaluator.eval(self.network, self.node_id, sample_point, self.registry)[0]
+        self.implicit_evaluator.eval(self.network, self.node_id, sample_point, self.registry, &self.invocation_cache)[0]
     }
 
     pub fn get_gradient(&self, sample_point: &DVec3) -> (DVec3, f64) {
         // Delegate to implicit_evaluator.get_gradient
-        self.implicit_evaluator.get_gradient(self.network, self.node_id, sample_point, self.registry)
+        self.implicit_evaluator.get_gradient(self.network, self.node_id, sample_point, self.registry, &self.invocation_cache)
     }
     
     pub fn eval_2d(&self, sample_point: &DVec2) -> f64 {
         // Delegate to implicit_evaluator.eval_2d and return the first element in the result array
-        self.implicit_evaluator.eval_2d(self.network, self.node_id, sample_point, self.registry)[0]
+        self.implicit_evaluator.eval_2d(self.network, self.node_id, sample_point, self.registry, &self.invocation_cache)[0]
     }
     
     pub fn get_gradient_2d(&self, sample_point: &DVec2) -> (DVec2, f64) {
         // Delegate to implicit_evaluator.get_gradient_2d
-        self.implicit_evaluator.get_gradient_2d(self.network, self.node_id, sample_point, self.registry)
+        self.implicit_evaluator.get_gradient_2d(self.network, self.node_id, sample_point, self.registry, &self.invocation_cache)
     }
 }

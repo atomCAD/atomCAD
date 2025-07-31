@@ -247,6 +247,7 @@ impl NetworkEvaluator {
       node_id,
       registry,
       implicit_evaluator: &self.implicit_evaluator,
+      invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry),
     };
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
