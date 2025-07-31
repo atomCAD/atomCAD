@@ -121,7 +121,7 @@ impl NetworkEvaluator {
     }
   }
 
-  // traces a ray for a given geometry node
+  // traces a ray into all displayed geometry nodes in the network and returns the closest intersection distance if any
   pub fn raytrace_geometry(&self, network_name: &str, registry: &NodeTypeRegistry, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
     let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
@@ -155,6 +155,7 @@ impl NetworkEvaluator {
     min_distance
   } 
 
+  // traces a ray for a given geometry node
   pub fn raytrace_geometry_node(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
     // Constants for ray marching algorithm
     const MAX_STEPS: usize = 100;
@@ -163,7 +164,13 @@ impl NetworkEvaluator {
     
     let normalized_dir = ray_direction.normalize();
     let mut current_distance: f64 = 0.0;
-    
+
+    let mut network_stack = Vec::new();
+    // We assign the root node network zero node id. It is not used in the evaluation.
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
+    let invocation_cache = self.pre_eval_geometry_node(network_stack, node_id, registry);
+
     // Perform ray marching
     for _ in 0..MAX_STEPS {
       // Calculate current position along the ray
@@ -173,7 +180,7 @@ impl NetworkEvaluator {
       let scaled_pos = current_pos / common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
       
       // Evaluate SDF at the scaled position
-      let sdf_value = self.implicit_evaluator.eval(network, node_id, &scaled_pos, registry)[0];
+      let sdf_value = self.implicit_evaluator.eval(network, node_id, &scaled_pos, registry, &invocation_cache)[0];
       
       //println!("Current position: {:?}", current_pos);
       //println!("Scaled position: {:?}", scaled_pos);
