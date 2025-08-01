@@ -34,6 +34,10 @@ impl<'a> NetworkStackElement<'a> {
   pub fn get_top_node(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> &'a Node {
     return network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
   }
+
+  pub fn is_node_selected_in_root_network(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> bool {
+    return network_stack.first().unwrap().node_network.selected_node_id == Some(node_id);
+  }
 }
 
 /*

@@ -4,6 +4,7 @@ use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::common::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use std::collections::HashMap;
+use std::any::Any;
 use crate::common::poly_mesh::PolyMesh;
 
 pub struct StructureDesignerScene {
@@ -15,6 +16,7 @@ pub struct StructureDesignerScene {
     pub tessellatable: Option<Box<dyn Tessellatable>>,
 
     pub node_errors: HashMap<u64, String>,
+    pub selected_node_eval_cache: Option<Box<dyn Any>>,
 }
 
 impl StructureDesignerScene {
@@ -26,6 +28,7 @@ impl StructureDesignerScene {
             poly_meshes: Vec::new(),
             tessellatable: None,
             node_errors: HashMap::new(),
+            selected_node_eval_cache: None,
         }
     }
 
@@ -35,6 +38,11 @@ impl StructureDesignerScene {
         self.surface_point_cloud_2ds.extend(other.surface_point_cloud_2ds);
         self.poly_meshes.extend(other.poly_meshes);
         self.node_errors.extend(other.node_errors);
+        
+        // Take the eval cache from other if we don't have one
+        if self.selected_node_eval_cache.is_none() && other.selected_node_eval_cache.is_some() {
+            self.selected_node_eval_cache = other.selected_node_eval_cache;
+        }
         
         match other.tessellatable {
             None => {}, // Do nothing if empty

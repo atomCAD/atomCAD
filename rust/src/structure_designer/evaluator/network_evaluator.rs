@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::any::Any;
 
 use glam::f64::DVec3;
 use crate::structure_designer::node_network::NodeDisplayType;
@@ -116,6 +117,7 @@ pub struct NetworkEvaluationContext {
   pub explicit_geo_eval_needed: bool,
   pub record_invocations: bool,
   pub node_invocation_cache: NodeInvocationCache,
+  pub selected_node_eval_cache: Option<Box<dyn Any>>,
 }
 
 impl NetworkEvaluationContext {
@@ -125,6 +127,7 @@ impl NetworkEvaluationContext {
       explicit_geo_eval_needed,
       record_invocations,
       node_invocation_cache: HashMap::new(),
+      selected_node_eval_cache: None,
     }
   }
 }
@@ -308,6 +311,9 @@ impl NetworkEvaluator {
 
       // Copy the collected errors to the scene
       scene.node_errors = context.node_errors;
+
+      // Move the evaluation cache from context to scene
+      scene.selected_node_eval_cache = context.selected_node_eval_cache.take();
 
       return scene;
     }

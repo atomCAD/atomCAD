@@ -17,6 +17,11 @@ use crate::util::transform::Transform;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
+#[derive(Debug, Clone)]
+pub struct GeoTransEvalCache {
+  pub frame_transform: Transform,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GeoTransData {
   #[serde(with = "ivec3_serializer")]
@@ -98,6 +103,14 @@ pub fn eval_geo_trans<'a>(
       rotation_euler.z);
 
     let frame_transform = shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
+
+    // Store evaluation cache for selected node
+    if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+      let eval_cache = GeoTransEvalCache {
+        frame_transform: frame_transform.clone(),
+      };
+      context.selected_node_eval_cache = Some(Box::new(eval_cache));
+    }
 
     let mut geometry = None;
     if context.explicit_geo_eval_needed {
