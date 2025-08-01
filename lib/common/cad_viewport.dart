@@ -381,7 +381,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final oldDragState = dragState;
     var wasClick =
         ((pointerPos - _dragStartPointerPos).distance < _clickThreshold);
-    if (wasClick) {
+    if (wasClick && (!isGadgetDragging)) {
       onClick(pointerPos);
     }
 
