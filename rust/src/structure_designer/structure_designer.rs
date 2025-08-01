@@ -49,11 +49,6 @@ impl StructureDesigner {
 
 impl StructureDesigner {
 
-  pub fn set_last_generated_structure_designer_scene(&mut self, scene: StructureDesignerScene) {
-    self.last_generated_structure_designer_scene = scene;
-    self.refresh_scene_dependent_node_data();
-  }
-
   // Returns the first atomic structure generated from a selected node, if any
   pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
     // Find the first atomic structure with from_selected_node = true
@@ -80,7 +75,7 @@ impl StructureDesigner {
     // Get the selected node's type name
     let node_type_name = network.nodes.get(&selected_node_id)?.node_type_name.as_str();
     
-    // Check if the node is an edit_atom node
+    // Check if the node is with the needed node type name
     if node_type_name != needed_node_type_name {
       return None;
     }
@@ -124,22 +119,22 @@ impl StructureDesigner {
   }
 
   // Generates the scene to be rendered according to the displayed nodes of the active node network
-  pub fn generate_scene(&mut self, lightweight: bool) -> StructureDesignerScene {
-    let mut scene: StructureDesignerScene = StructureDesignerScene::new();
+  pub fn generate_scene(&mut self, lightweight: bool) {
+    self.last_generated_structure_designer_scene = StructureDesignerScene::new();
 
     if !lightweight {
       // Check if node_network_name exists
       let node_network_name = match &self.active_node_network_name {
         Some(name) => name,
-        None => return scene, // Return empty scene if node_network_name is None
+        None => return, // Return empty scene if node_network_name is None
       };
       
       let network = match self.node_type_registry.node_networks.get(node_network_name) {
         Some(network) => network,
-        None => return scene,
+        None => return,
       };
       for node_entry in &network.displayed_node_ids {
-        scene.merge(self.network_evaluator.generate_scene(
+        self.last_generated_structure_designer_scene.merge(self.network_evaluator.generate_scene(
           node_network_name,
           *node_entry.0,
           *node_entry.1,
@@ -149,11 +144,15 @@ impl StructureDesigner {
       }
     }
 
-    if let Some(gadget) = &self.gadget {
-      scene.tessellatable = Some(gadget.as_tessellatable());
+    self.refresh_scene_dependent_node_data();
+
+    if !lightweight {
+      self.refresh_gadget();
     }
 
-    return scene;
+    if let Some(gadget) = &self.gadget {
+      self.last_generated_structure_designer_scene.tessellatable = Some(gadget.as_tessellatable());
+    }
   }    
 
   // node network methods
@@ -314,7 +313,6 @@ impl StructureDesigner {
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_network_data(node_id, data);
-      self.gadget = network.provide_gadget();
     }
   }
 
@@ -413,7 +411,6 @@ impl StructureDesigner {
       
       // Update the selection
       let ret = network.select_node(node_id);
-      self.gadget = network.provide_gadget();
       
       // If the selection was successful, update the display policy
       if ret {
@@ -448,7 +445,6 @@ impl StructureDesigner {
       
       // Update the selection
       let ret = network.select_wire(source_node_id, destination_node_id, destination_argument_index);
-      self.gadget = network.provide_gadget();
       
       // If the selection was successful and there was a previously selected node
       if ret && previously_selected_node_id.is_some() {
@@ -491,8 +487,7 @@ impl StructureDesigner {
       
       // Clear the selection
       network.clear_selection();
-      self.gadget = network.provide_gadget();
-      
+
       // If there was a previously selected node
       if let Some(prev_id) = previously_selected_node_id {
         // Create a HashSet with just the previously selected node ID
@@ -658,7 +653,6 @@ impl StructureDesigner {
     if let Some(gadget) = &mut self.gadget {
       gadget.end_drag();
       self.sync_gadget_data();
-      self.refresh_gadget();
     }
   }
 

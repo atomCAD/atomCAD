@@ -239,7 +239,7 @@ pub fn gadget_start_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: 
       }
       
       // Call refresh_renderer inside the closure to access cad_instance
-      refresh_renderer(cad_instance, false);
+      refresh_renderer(cad_instance, true);
     });
   }
 }
