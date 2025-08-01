@@ -97,6 +97,8 @@ pub fn eval_geo_trans<'a>(
       rotation_euler.y, 
       rotation_euler.z);
 
+    let frame_transform = shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
+
     let mut geometry = None;
     if context.explicit_geo_eval_needed {
       geometry = Some(shape.csg
@@ -104,7 +106,8 @@ pub fn eval_geo_trans<'a>(
         .translate(translation.x, translation.y, translation.z));
     }
     return NetworkResult::Geometry(GeometrySummary { 
-      frame_transform: shape.frame_transform.apply_to_new(&Transform::new(translation, rotation_quat)),
+      //frame_transform: shape.frame_transform.apply_to_new(&Transform::new(translation, rotation_quat)),
+      frame_transform,
       csg: geometry.unwrap_or(CSG::new()),
     });
   } else {

@@ -46,6 +46,15 @@ impl Transform {
     Transform::new(delta_translation, delta_rotation)
   }
   
+  // apply local rotation and global translation into a new Transform struct.
+  pub fn apply_lrot_gtrans_new(&self, rel_transform: &Transform) -> Transform {
+    Transform::new(
+      self.translation + rel_transform.translation,
+      self.rotation * rel_transform.rotation
+    )
+  }
+
+
   /// Apply a relative transform to this transform
   /// 
   /// This applies the given relative transform to the current transform (self).
