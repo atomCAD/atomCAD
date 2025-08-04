@@ -463,7 +463,7 @@ impl StructureDesigner {
   }
 
   
-  pub fn refresh_gadget(&mut self) {
+  fn refresh_gadget(&mut self) {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
       Some(name) => name,
@@ -474,7 +474,6 @@ impl StructureDesigner {
     }
   }
   
-
   pub fn clear_selection(&mut self) {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {

@@ -70,7 +70,6 @@ pub fn set_facet_shell_center(node_id: u64, center: APIIVec3, max_miller_index: 
         facet_shell_data.max_miller_index = max_miller_index;
         facet_shell_data.ensure_cached_facets();
         
-        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -104,7 +103,6 @@ pub fn add_facet(node_id: u64, facet: APIFacet) -> bool {
         });
         facet_shell_data.ensure_cached_facets();
         
-        cad_instance.structure_designer.refresh_gadget();
         refresh_renderer(cad_instance, false);
         true
       },
@@ -141,8 +139,7 @@ pub fn update_facet(node_id: u64, index: usize, facet: APIFacet) -> bool {
           visible: facet.visible,
         };
         facet_shell_data.ensure_cached_facets();
-        
-        cad_instance.structure_designer.refresh_gadget();
+
         refresh_renderer(cad_instance, false);
         true
       },
@@ -174,8 +171,7 @@ pub fn remove_facet(node_id: u64, index: usize) -> bool {
         // Remove the facet at the specified index
         facet_shell_data.facets.remove(index);
         facet_shell_data.ensure_cached_facets();
-        
-        cad_instance.structure_designer.refresh_gadget();
+
         refresh_renderer(cad_instance, false);
         true
       },
@@ -203,8 +199,7 @@ pub fn clear_facets(node_id: u64) -> bool {
         // Clear all facets
         facet_shell_data.facets.clear();
         facet_shell_data.ensure_cached_facets();
-        
-        cad_instance.structure_designer.refresh_gadget();
+
         refresh_renderer(cad_instance, false);
         true
       },
@@ -239,8 +234,7 @@ pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
         // Set the selected facet index
         facet_shell_data.selected_facet_index = index;
         // No need to regenerate cached_facets since only selection changed
-        
-        cad_instance.structure_designer.refresh_gadget();
+
         refresh_renderer(cad_instance, false);
         true
       },
@@ -256,7 +250,6 @@ pub fn select_facet_by_ray(ray_start: APIVec3, ray_dir: APIVec3) {
       let ray_start_dvec3 = from_api_vec3(&ray_start);
       let ray_dir_dvec3 = from_api_vec3(&ray_dir);
       if facet_shell::select_facet_by_ray(&mut instance.structure_designer, &ray_start_dvec3, &ray_dir_dvec3) {
-        instance.structure_designer.refresh_gadget();
         refresh_renderer(instance, false);
       }
     });
@@ -283,7 +276,6 @@ pub fn split_symmetry_members(node_id: u64, facet_index: usize) -> bool {
         
         // Refresh renderer as the facets have changed
         if result {
-          cad_instance.structure_designer.refresh_gadget();
           refresh_renderer(cad_instance, false);
         }
         
