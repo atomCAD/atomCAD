@@ -253,7 +253,7 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
 
   pub fn refresh_structure_designer(cad_instance: &mut CADInstance, lightweight: bool) {
     //let _timer = Timer::new(&format!("refresh_structure_designer lightweight: {}", lightweight));
-    cad_instance.structure_designer.generate_scene(lightweight);
+    cad_instance.structure_designer.refresh(lightweight);
     cad_instance.renderer.refresh(
       &cad_instance.structure_designer.last_generated_structure_designer_scene,
       lightweight,

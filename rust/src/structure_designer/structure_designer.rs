@@ -119,7 +119,7 @@ impl StructureDesigner {
   }
 
   // Generates the scene to be rendered according to the displayed nodes of the active node network
-  pub fn generate_scene(&mut self, lightweight: bool) {
+  pub fn refresh(&mut self, lightweight: bool) {
     self.last_generated_structure_designer_scene = StructureDesignerScene::new();
 
     if !lightweight {
@@ -146,8 +146,12 @@ impl StructureDesigner {
 
     self.refresh_scene_dependent_node_data();
 
+    // Recreates the gadget if this in not a lightweight refresh
+    // in case a lightweight refresh the gasget is in action and should not be recreated.
     if !lightweight {
-      self.refresh_gadget();
+      if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+        self.gadget = network.provide_gadget();
+      }
     }
 
     if let Some(gadget) = &self.gadget {
@@ -459,18 +463,6 @@ impl StructureDesigner {
       ret
     } else {
       false
-    }
-  }
-
-  
-  fn refresh_gadget(&mut self) {
-    // Early return if active_node_network_name is None
-    let network_name = match &self.active_node_network_name {
-      Some(name) => name,
-      None => return,
-    };
-    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      self.gadget = network.provide_gadget();
     }
   }
   
