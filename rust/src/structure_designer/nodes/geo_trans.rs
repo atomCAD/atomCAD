@@ -212,7 +212,7 @@ impl GeoTransGadget {
     let translation = self.translation.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
     let rotation_euler = self.rotation.as_dvec3() * PI * 0.5;
     let rotation_quat = DQuat::from_euler(
-      glam::EulerRot::XYX,
+      glam::EulerRot::XYZ,
       rotation_euler.x, 
       rotation_euler.y, 
       rotation_euler.z);
