@@ -39,7 +39,7 @@ pub struct StampData {
 }
 
 impl NodeData for StampData {
-  fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+  fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
     None
   }
 }

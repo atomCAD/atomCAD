@@ -14,6 +14,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RectData {
@@ -24,7 +25,7 @@ pub struct RectData {
 }
 
 impl NodeData for RectData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       None
     }
 }

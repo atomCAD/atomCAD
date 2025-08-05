@@ -21,6 +21,7 @@ use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -29,7 +30,7 @@ pub struct PolygonData {
 }
 
 impl NodeData for PolygonData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       Some(Box::new(PolygonGadget::new(&self.vertices)))
     }
 }

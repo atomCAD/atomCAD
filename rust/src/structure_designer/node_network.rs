@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeDisplayType {
@@ -235,10 +236,10 @@ impl NodeNetwork {
     self.selected_wire = None;
   }
 
-  pub fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+  pub fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
     if let Some(node_id) = self.selected_node_id {
       let node = self.nodes.get(&node_id).unwrap();
-      return node.data.provide_gadget();
+      return node.data.provide_gadget(structure_designer);
     }
     None
   }

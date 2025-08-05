@@ -16,10 +16,16 @@ use std::f64::consts::PI;
 use crate::util::transform::Transform;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::common::gadget::Gadget;
+use crate::structure_designer::utils::xyz_gadget_utils;
+use crate::renderer::mesh::Mesh;
+use crate::structure_designer::common_constants;
 
 #[derive(Debug, Clone)]
 pub struct GeoTransEvalCache {
-  pub frame_transform: Transform,
+  pub input_frame_transform: Transform,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,8 +38,16 @@ pub struct GeoTransData {
 }
 
 impl NodeData for GeoTransData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
-      None
+    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+        let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+        let geo_trans_cache = eval_cache.downcast_ref::<GeoTransEvalCache>()?;
+        
+        let gadget = GeoTransGadget::new(
+            self.translation,
+            self.rotation,
+            geo_trans_cache.input_frame_transform.clone(),
+        );
+        Some(Box::new(gadget))
     }
 }
 
@@ -107,7 +121,7 @@ pub fn eval_geo_trans<'a>(
     // Store evaluation cache for selected node
     if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
       let eval_cache = GeoTransEvalCache {
-        frame_transform: frame_transform.clone(),
+        input_frame_transform: shape.frame_transform.clone(),
       };
       context.selected_node_eval_cache = Some(Box::new(eval_cache));
     }
@@ -125,5 +139,84 @@ pub fn eval_geo_trans<'a>(
     });
   } else {
     return error_in_input(&shape_input_name);
+  }
+}
+
+#[derive(Clone)]
+pub struct GeoTransGadget {
+    pub translation: IVec3,
+    pub rotation: IVec3, // intrinsic euler angles where 1 increment means 90 degrees
+    pub input_frame_transform: Transform,
+    pub frame_transform: Transform,
+}
+
+impl Tessellatable for GeoTransGadget {
+  fn tessellate(&self, output_mesh: &mut Mesh) {
+    xyz_gadget_utils::tessellate_xyz_gadget(
+      output_mesh, 
+      self.frame_transform.rotation,
+      &self.frame_transform.translation
+    );
+  }
+
+  fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+      Box::new(self.clone())
+  }
+}
+
+impl Gadget for GeoTransGadget {
+  fn hit_test(&self, _ray_origin: DVec3, _ray_direction: DVec3) -> Option<i32> {
+      None
+  }
+
+  fn start_drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
+
+  }
+
+  fn drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
+
+  }
+
+  fn end_drag(&mut self) {
+
+  }
+}
+
+impl NodeNetworkGadget for GeoTransGadget {
+  fn sync_data(&self, data: &mut dyn NodeData) {
+      if let Some(atom_trans_data) = data.as_any_mut().downcast_mut::<GeoTransData>() {
+        //TODO
+        //atom_trans_data.translation = self.translation;
+        //atom_trans_data.rotation = self.rotation;
+      }
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeNetworkGadget> {
+      Box::new(self.clone())
+  }
+}
+
+impl GeoTransGadget {
+  pub fn new(translation: IVec3, rotation: IVec3, input_frame_transform: Transform) -> Self {
+      let mut ret = Self {
+          translation,
+          rotation,
+          input_frame_transform,
+          frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
+      };
+      ret.refresh_frame_transform();
+      return ret;
+  }
+
+  fn refresh_frame_transform(&mut self) {
+    let translation = self.translation.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let rotation_euler = self.rotation.as_dvec3() * PI * 0.5;
+    let rotation_quat = DQuat::from_euler(
+      glam::EulerRot::XYX,
+      rotation_euler.x, 
+      rotation_euler.y, 
+      rotation_euler.z);
+
+    self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
   }
 }

@@ -15,6 +15,7 @@ use std::cmp::max;
 use crate::util::mat_utils::consistent_round;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegPolyData {
@@ -23,7 +24,7 @@ pub struct RegPolyData {
 }
 
 impl NodeData for RegPolyData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
         None
     }
 }

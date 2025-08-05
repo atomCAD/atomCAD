@@ -437,7 +437,7 @@ impl Default for FacetShellData {
 }
 
 impl NodeData for FacetShellData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       if self.selected_facet_index.is_none() {
         return None;
       }

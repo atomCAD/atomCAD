@@ -1,6 +1,7 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParameterData {
@@ -8,7 +9,7 @@ pub struct ParameterData {
 }
 
 impl NodeData for ParameterData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       None
     }
 }

@@ -16,6 +16,8 @@ use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_at
 use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use std::collections::HashSet;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -122,20 +124,20 @@ impl StructureDesigner {
   pub fn refresh(&mut self, lightweight: bool) {
     self.last_generated_structure_designer_scene = StructureDesignerScene::new();
 
+    // Check if node_network_name exists and clone it to avoid borrow conflicts
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return, // Return if node_network_name is None
+    };
+
     if !lightweight {
-      // Check if node_network_name exists
-      let node_network_name = match &self.active_node_network_name {
-        Some(name) => name,
-        None => return, // Return empty scene if node_network_name is None
-      };
-      
-      let network = match self.node_type_registry.node_networks.get(node_network_name) {
+      let network = match self.node_type_registry.node_networks.get(&node_network_name) {
         Some(network) => network,
         None => return,
       };
       for node_entry in &network.displayed_node_ids {
         self.last_generated_structure_designer_scene.merge(self.network_evaluator.generate_scene(
-          node_network_name,
+          &node_network_name,
           *node_entry.0,
           *node_entry.1,
           &self.node_type_registry,
@@ -145,12 +147,12 @@ impl StructureDesigner {
     }
 
     self.refresh_scene_dependent_node_data();
-
     // Recreates the gadget if this in not a lightweight refresh
     // in case a lightweight refresh the gasget is in action and should not be recreated.
     if !lightweight {
-      if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-        self.gadget = network.provide_gadget();
+      // Use immutable access to avoid borrow conflicts with provide_gadget
+      if let Some(network) = self.node_type_registry.node_networks.get(&node_network_name) {
+        self.gadget = network.provide_gadget(&self);
       }
     }
 

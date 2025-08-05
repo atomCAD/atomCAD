@@ -30,6 +30,7 @@ use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, 
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfSpaceData {
@@ -43,7 +44,7 @@ pub struct HalfSpaceData {
 
 impl NodeData for HalfSpaceData {
 
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       return Some(Box::new(HalfSpaceGadget::new(
         self.max_miller_index,
         &self.miller_index,

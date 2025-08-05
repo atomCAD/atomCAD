@@ -17,6 +17,7 @@ use crate::common::atomic_structure::CrystalMetaData;
 use crate::common::crystal_utils::ZincBlendeAtomType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 
@@ -80,7 +81,7 @@ pub struct GeoToAtomData {
 }
 
 impl NodeData for GeoToAtomData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       None
     }
 }

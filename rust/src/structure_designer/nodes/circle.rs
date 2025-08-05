@@ -14,6 +14,7 @@ use glam::f64::DVec2;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CircleData {
@@ -23,7 +24,7 @@ pub struct CircleData {
 }
 
 impl NodeData for CircleData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       None
     }
 }

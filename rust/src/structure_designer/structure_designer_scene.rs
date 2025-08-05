@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::any::Any;
 use crate::common::poly_mesh::PolyMesh;
 
+
+// StructureDesignerScene is a struct that holds the scene to be rendered in the structure designer.
 pub struct StructureDesignerScene {
     pub atomic_structures: Vec<AtomicStructure>,
     pub surface_point_clouds: Vec<SurfacePointCloud>,

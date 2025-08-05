@@ -4,8 +4,6 @@ use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::dvec3_serializer;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator;
-use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use glam::f64::DQuat;
@@ -15,10 +13,8 @@ use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElemen
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-
-pub const GADGET_LENGTH: f64 = 6.0;
-pub const AXIS_RADIUS: f64 = 0.1;
-pub const AXIS_DIVISIONS: u32 = 16;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::utils::xyz_gadget_utils;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AtomTransData {
@@ -29,7 +25,7 @@ pub struct AtomTransData {
 }
 
 impl NodeData for AtomTransData {
-    fn provide_gadget(&self) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       return Some(Box::new(AtomTransGadget::new(self.translation, self.rotation)));
     }
 }
@@ -68,14 +64,8 @@ pub struct AtomTransGadget {
 }
 
 impl Tessellatable for AtomTransGadget {
-    fn tessellate(&self, output_mesh: &mut Mesh) {        
-        let x_axis_dir = self.rotation_quat.mul_vec3(DVec3::new(1.0, 0.0, 0.0));
-        let y_axis_dir = self.rotation_quat.mul_vec3(DVec3::new(0.0, 1.0, 0.0));
-        let z_axis_dir = self.rotation_quat.mul_vec3(DVec3::new(0.0, 0.0, 1.0));
-
-        self.tessellate_axis_arrow(output_mesh, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0));
-        self.tessellate_axis_arrow(output_mesh, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0));
-        self.tessellate_axis_arrow(output_mesh, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0));
+    fn tessellate(&self, output_mesh: &mut Mesh) {
+        xyz_gadget_utils::tessellate_xyz_gadget(output_mesh, self.rotation_quat, &self.translation);
     }
 
     fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
@@ -123,19 +113,6 @@ impl AtomTransGadget {
         };
         ret.refresh_rotation_quat();
         return ret;
-    }
-
-    fn tessellate_axis_arrow(&self, output_mesh: &mut Mesh, axis_dir: &DVec3, albedo: &Vec3) {
-        tessellator::tessellate_cylinder(
-            output_mesh,
-            &(self.translation + axis_dir * GADGET_LENGTH),
-            &self.translation,
-            AXIS_RADIUS,
-            AXIS_DIVISIONS,
-            &Material::new(albedo, 0.4, 0.8), 
-            true,
-            None,
-            None);        
     }
 
     fn refresh_rotation_quat(&mut self) {

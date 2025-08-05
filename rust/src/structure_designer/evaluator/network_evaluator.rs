@@ -19,6 +19,7 @@ use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
+use crate::structure_designer::nodes::geo_trans::eval_geo_trans;
 use crate::structure_designer::nodes::sphere::eval_sphere;
 use crate::structure_designer::nodes::cuboid::eval_cuboid;
 use crate::structure_designer::nodes::intersect::eval_intersect;
@@ -243,7 +244,7 @@ impl NetworkEvaluator {
     node_id: u64,
     _display_type: NodeDisplayType, //TODO: use display_type
     registry: &NodeTypeRegistry,
-    geometry_visualization_preferences: &GeometryVisualizationPreferences
+    geometry_visualization_preferences: &GeometryVisualizationPreferences,
   ) -> StructureDesignerScene {
     //let _timer = Timer::new("generate_scene");
 
@@ -251,6 +252,11 @@ impl NetworkEvaluator {
       Some(network) => network,
       None => return StructureDesignerScene::new(),
     };
+
+    let mut context = NetworkEvaluationContext::new(
+      geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh,
+      false
+    );
 
     let mut network_stack = Vec::new();
     // We assign the root node network zero node id. It is not used in the evaluation.
@@ -262,12 +268,6 @@ impl NetworkEvaluator {
     };
 
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
-    
-    // Create evaluation context to track errors
-    let mut context = NetworkEvaluationContext::new(
-      geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh,
-      false
-    );
 
     // Create a NodeEvaluator instance to abstract SDF evaluation
     let node_evaluator = NodeEvaluator {
@@ -280,24 +280,28 @@ impl NetworkEvaluator {
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
-    if node_type.output_type == DataType::Geometry2D {
+    let mut scene = if node_type.output_type == DataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        return generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
+        generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences)
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
-        return self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences);
+        self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
+      } else {
+        StructureDesignerScene::new()
       }
     }
-    if node_type.output_type == DataType::Geometry {
+    else if node_type.output_type == DataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
-        return generate_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences);
+        generate_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences)
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        return generate_dual_contour_3d_scene(&node_evaluator, geometry_visualization_preferences);
+        generate_dual_contour_3d_scene(&node_evaluator, geometry_visualization_preferences)
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
-        return self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences);
+        self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
+      } else {
+        StructureDesignerScene::new()
       }
     }
-    if node_type.output_type == DataType::Atomic {
+    else if node_type.output_type == DataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);
 
       let mut scene = StructureDesignerScene::new();
@@ -308,17 +312,16 @@ impl NetworkEvaluator {
         cloned_atomic_structure.from_selected_node = from_selected_node;
         scene.atomic_structures.push(cloned_atomic_structure);
       };
+      scene
+    } else {
+      StructureDesignerScene::new()
+    };
 
-      // Copy the collected errors to the scene
-      scene.node_errors = context.node_errors;
+    // Copy the collected errors to the scene
+    scene.node_errors = context.node_errors.clone();
+    scene.selected_node_eval_cache = context.selected_node_eval_cache.take();
 
-      // Move the evaluation cache from context to scene
-      scene.selected_node_eval_cache = context.selected_node_eval_cache.take();
-
-      return scene;
-    }
-
-    return StructureDesignerScene::new();
+    return scene;
   }
 
   fn generate_explicit_mesh_scene<'a>(
@@ -440,7 +443,9 @@ impl NetworkEvaluator {
       vec![eval_union(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "diff" {
       vec![eval_diff(&self, network_stack, node_id, registry, context)]
-    } else if node.node_type_name == "geo_to_atom" {
+    } else if node.node_type_name == "geo_trans" {
+      vec![eval_geo_trans(&self, network_stack, node_id, registry, context)]
+    }else if node.node_type_name == "geo_to_atom" {
       vec![eval_geo_to_atom(&self, network_stack, node_id, registry)]
     } else if node.node_type_name == "edit_atom" {
       vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)]
