@@ -269,18 +269,18 @@ impl NetworkEvaluator {
 
     let node_type = registry.get_node_type(&node.node_type_name).unwrap();
 
-    // Create a NodeEvaluator instance to abstract SDF evaluation
-    let node_evaluator = NodeEvaluator {
-      network,
-      node_id,
-      registry,
-      implicit_evaluator: &self.implicit_evaluator,
-      invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry),
-    };
-
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
     let mut scene = if node_type.output_type == DataType::Geometry2D {
+      // Create a NodeEvaluator instance to abstract SDF evaluation
+      let node_evaluator = NodeEvaluator {
+        network,
+        node_id,
+        registry,
+        implicit_evaluator: &self.implicit_evaluator,
+        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry),
+      };
+
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences)
@@ -291,6 +291,14 @@ impl NetworkEvaluator {
       }
     }
     else if node_type.output_type == DataType::Geometry {
+      // Create a NodeEvaluator instance to abstract SDF evaluation
+      let node_evaluator = NodeEvaluator {
+        network,
+        node_id,
+        registry,
+        implicit_evaluator: &self.implicit_evaluator,
+        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry),
+      };
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         generate_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences)
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {

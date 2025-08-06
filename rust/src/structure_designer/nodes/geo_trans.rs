@@ -1,5 +1,5 @@
 use crate::structure_designer::evaluator::network_evaluator::{
-  error_in_input, input_missing_error, GeometrySummary, NetworkEvaluationContext, NetworkEvaluator, NetworkResult
+  error_in_input, input_missing_error, GeometrySummary, NetworkEvaluationContext, NetworkEvaluator, NetworkResult, NodeInvocationId
 };
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -58,31 +58,43 @@ pub fn implicit_eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
   node: &Node,
   sample_point: &DVec3) -> f64 {
 
-  let mut transformed_point = sample_point.clone(); 
-
   let geo_trans_data = &node.data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
 
-  if !geo_trans_data.transform_only_frame {
-    let translation = geo_trans_data.translation.as_dvec3();
-    let rotation_euler = geo_trans_data.rotation.as_dvec3() * PI * 0.5;
-
-    let rotation_quat = DQuat::from_euler(
-        glam::EulerRot::XYZ,
-        rotation_euler.x, 
-        rotation_euler.y, 
-        rotation_euler.z);
-
-    transformed_point = rotation_quat.inverse().mul_vec3(sample_point - translation); 
-  }
-
   match node.arguments[0].get_node_id() {
-      Some(node_id) => evaluator.implicit_eval(
+      Some(node_id) => {
+        let mut transformed_point = sample_point.clone(); 
+        if !geo_trans_data.transform_only_frame {
+          //convert network stack and node_id to invocation id
+          // then get the invocation result of the input of this node from the cache
+          let input_invocation_id = NodeInvocationId::new(network_stack, node.id);
+          let invocation_result = &invocation_cache.get(&input_invocation_id).unwrap()[0];
+
+          if let NetworkResult::Geometry(input_shape) = invocation_result {
+      
+          let translation = geo_trans_data.translation.as_dvec3();
+          let rotation_euler = geo_trans_data.rotation.as_dvec3() * PI * 0.5;
+      
+          let rotation_quat = DQuat::from_euler(
+              glam::EulerRot::XYZ,
+              rotation_euler.x, 
+              rotation_euler.y, 
+              rotation_euler.z);
+      
+          let frame_transform = input_shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
+          transformed_point = input_shape.frame_transform.inverse().apply_to_new(&frame_transform).inverse().apply_to_position(sample_point);
+        }
+
+        evaluator.implicit_eval(
           network_stack,
           node_id, 
           &transformed_point,
           registry,
-          invocation_cache)[0],
-      None => f64::MAX
+          invocation_cache)[0]
+      } else {
+        f64::MAX
+      }
+    },
+    None => f64::MAX
   }
 }
 
