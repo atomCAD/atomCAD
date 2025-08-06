@@ -67,7 +67,7 @@ pub fn implicit_eval_geo_trans<'a>(evaluator: &ImplicitEvaluator,
     let rotation_euler = geo_trans_data.rotation.as_dvec3() * PI * 0.5;
 
     let rotation_quat = DQuat::from_euler(
-        glam::EulerRot::XYX,
+        glam::EulerRot::XYZ,
         rotation_euler.x, 
         rotation_euler.y, 
         rotation_euler.z);
@@ -111,7 +111,7 @@ pub fn eval_geo_trans<'a>(
     let translation = geo_trans_data.translation.as_dvec3();
     let rotation_euler = geo_trans_data.rotation.as_dvec3() * PI * 0.5;
     let rotation_quat = DQuat::from_euler(
-      glam::EulerRot::XYX,
+      glam::EulerRot::XYZ,
       rotation_euler.x, 
       rotation_euler.y, 
       rotation_euler.z);
@@ -128,9 +128,25 @@ pub fn eval_geo_trans<'a>(
 
     let mut geometry = None;
     if context.explicit_geo_eval_needed {
+      // We need to be a bit tricky here.
+      // The input geometry (shape) is already transformed by the input transform.
+      // So theoretically we need to do the inverse of the input transform (shape transform) so the geometry is first transformed back
+      // to its local position.
+      // And then we apply the whole frame transform.
+      // And all of this need to be done using extrinsic euler angles in degrees because that is how the API for the geometry lib works.
+      // (glam and atomCAD uses intrinsic euler angles normally)
+
+      // extrinsic euler angles can be extracted from a quaternion using the ZYX rotation order.
+      let rotation_euler_rad_extrinsic_zyx = (frame_transform.rotation * shape.frame_transform.rotation.inverse()).to_euler(glam::EulerRot::ZYX);
       geometry = Some(shape.csg
-        .rotate(rotation_euler.x, rotation_euler.y, rotation_euler.z)
-        .translate(translation.x, translation.y, translation.z));
+        .translate(-shape.frame_transform.translation.x, -shape.frame_transform.translation.y, -shape.frame_transform.translation.z)
+        .rotate(
+          rotation_euler_rad_extrinsic_zyx.2.to_degrees(), 
+          rotation_euler_rad_extrinsic_zyx.1.to_degrees(), 
+          rotation_euler_rad_extrinsic_zyx.0.to_degrees()
+        )
+        .translate(frame_transform.translation.x, frame_transform.translation.y, frame_transform.translation.z)
+      );
     }
     return NetworkResult::Geometry(GeometrySummary { 
       //frame_transform: shape.frame_transform.apply_to_new(&Transform::new(translation, rotation_quat)),
@@ -201,7 +217,7 @@ impl GeoTransGadget {
       let mut ret = Self {
           translation,
           rotation,
-          input_frame_transform,
+          input_frame_transform: Transform::new(input_frame_transform.translation * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64), input_frame_transform.rotation),
           frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
       };
       ret.refresh_frame_transform();

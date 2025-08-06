@@ -43,7 +43,7 @@ pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: 
     let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 
     let rotation_quat = DQuat::from_euler(
-      glam::EulerRot::XYX,
+      glam::EulerRot::XYZ,
       atom_trans_data.rotation.x, 
       atom_trans_data.rotation.y, 
       atom_trans_data.rotation.z);
@@ -117,7 +117,7 @@ impl AtomTransGadget {
 
     fn refresh_rotation_quat(&mut self) {
         self.rotation_quat = DQuat::from_euler(
-            glam::EulerRot::XYX,
+            glam::EulerRot::XYZ,
             self.rotation.x, 
             self.rotation.y, 
             self.rotation.z);
