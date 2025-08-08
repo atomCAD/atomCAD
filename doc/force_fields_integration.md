@@ -58,3 +58,13 @@ Our current planned approach:
 - Use OpenMM with the merge of the OpenFF 2.2.1 force field and the MSep One extension 0.0.1 to do energy minimization if it supports our molecule.
 - Use UFF as a fallback as described above.
 
+MSep is written in GodotScript so they cannot easily integrate Python. They launch a server process written in Python (they call it openmm server) and communicattion between the Python code and GodotScript code is using sockets.
+
+https://github.com/MSEP-one/msep.one/blob/main/godot_project/python/scripts/openmm_server.py
+
+Fortunately there is a simpler way to call Python libraries from Rust: by using the pyo3 crate, so we will use this.
+
+Pyo3 allows embedding a Python interpreter directly within a Rust application. It can be used to:
+
+- Load Python modules (like rdkit, openmm, openff).
+- Pass data from Rust to Python, call Python functions with that data and get the results back into the Rust code.
