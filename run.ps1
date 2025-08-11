@@ -13,9 +13,27 @@ Write-Host "Build will use PYTHON_SYS_EXECUTABLE = $pythonExe"
 
 # --- Runtime configuration (embedded Python) ---
 # Don't set PYTHONHOME for virtual environments - let Python find the base installation
-# Instead, just add the venv site-packages to PYTHONPATH
-$env:PYTHONPATH = Join-Path $venvPath "Lib\site-packages"
-Write-Host "Runtime will use PYTHONPATH = $env:PYTHONPATH"
+# Add both venv site-packages and base Python paths to PYTHONPATH
+$venvSitePackages = Join-Path $venvPath "Lib\site-packages"
+
+# Try to detect base Python installation automatically
+$basePythonPath = $null
+$possiblePaths = @("C:\Python311\Lib\site-packages", "C:\Python312\Lib\site-packages", "C:\Python310\Lib\site-packages")
+foreach ($path in $possiblePaths) {
+    if (Test-Path $path) {
+        $basePythonPath = $path
+        break
+    }
+}
+
+# Create PYTHONPATH with venv first, then base Python if found
+if ($basePythonPath) {
+    $env:PYTHONPATH = "$venvSitePackages;$basePythonPath"
+    Write-Host "Runtime will use PYTHONPATH = $env:PYTHONPATH"
+} else {
+    $env:PYTHONPATH = $venvSitePackages
+    Write-Host "Runtime will use PYTHONPATH = $env:PYTHONPATH (base Python not found)"
+}
 Write-Host "PYTHONHOME not set - Python will use default base installation"
 
 # Remember starting directory (Flutter project root)
