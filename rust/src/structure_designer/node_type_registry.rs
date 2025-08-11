@@ -349,6 +349,19 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(StampData::new()),
     });
 
+    ret.add_node_type(NodeType {
+      name: "relax".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+              multi: false,
+          },
+      ],
+      output_type: DataType::Atomic,
+      node_data_creator: || Box::new(NoData {}),
+    });
+
     return ret;
   }
 

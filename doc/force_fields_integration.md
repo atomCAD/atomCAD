@@ -1,4 +1,4 @@
-## How should we do energy minimization?
+## How should atomCAD do energy minimization?
 
 We can do energy minimization with OpenMM (https://openmm.org/).
 
@@ -57,6 +57,7 @@ As MSEP One is MIT licensed I think we can use this file in our application.
 Our current planned approach:
 - Use OpenMM with the merge of the OpenFF 2.2.1 force field and the MSep One extension 0.0.1 to do energy minimization if it supports our molecule.
 - Use UFF as a fallback as described above.
+- Find out whether instead of using as a fallback whether UFF can be merged with the OpenFF 2.2.1 force field too.
 
 MSep is written in GodotScript so they cannot easily integrate Python. They launch a server process written in Python (they call it openmm server) and communicattion between the Python code and GodotScript code is using sockets.
 

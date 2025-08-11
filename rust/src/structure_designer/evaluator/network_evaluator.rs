@@ -38,6 +38,7 @@ use crate::structure_designer::nodes::stamp::eval_stamp;
 use crate::structure_designer::nodes::circle::eval_circle;
 use crate::structure_designer::nodes::rect::eval_rect;
 use crate::structure_designer::nodes::facet_shell::eval_facet_shell;
+use crate::structure_designer::nodes::relax::eval_relax;
 use super::surface_splatting_2d::generate_2d_point_cloud_scene;
 use super::surface_splatting_3d::generate_point_cloud_scene;
 use super::dual_contour_3d::generate_dual_contour_3d_scene;
@@ -463,6 +464,8 @@ impl NetworkEvaluator {
       vec![eval_anchor(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "stamp" {
       vec![eval_stamp(&self, network_stack, node_id, registry, decorate, context)]
+    } else if node.node_type_name == "relax" {
+      vec![eval_relax(&self, network_stack, node_id, registry, context)]
     } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
