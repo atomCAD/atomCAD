@@ -52,7 +52,7 @@ The Msep One extension contains mostly Silicon approximations and approximations
 
 As MSEP One is MIT licensed I think we can use this file in our application.
 
-## Summary
+## Plan summary
 
 Our current planned approach:
 - Use OpenMM with the merge of the OpenFF 2.2.1 force field and the MSep One extension 0.0.1 to do energy minimization if it supports our molecule.
@@ -69,3 +69,36 @@ Pyo3 allows embedding a Python interpreter directly within a Rust application. I
 
 - Load Python modules (like rdkit, openmm, openff).
 - Pass data from Rust to Python, call Python functions with that data and get the results back into the Rust code.
+
+## Python environment
+
+Currently we use the python environment of the user as is. Later we will need to set up a self-contained installation approach for atomCAD. Until then I document here what needs to be installed on the user's computer. Some of this is windows specific:
+
+### Python
+
+- Python Minimum 3.11
+
+### OpenMM
+
+installation docs:
+https://docs.openmm.org/latest/userguide/application/01_getting_started.html#installing-openmm
+
+What I did now:
+pip install openmm
+(it might turn out that conda install is better for this but we go with pip install for now)
+
+### openff-toolkit
+
+installation docs:
+https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html
+
+pip install is not available.
+Recommended to install through mamba:
+
+Here is how to install mamba:
+https://github.com/conda-forge/miniforge
+miniforge prompt is available in the star menu: conda and mamba commands are available
+
+In miniforge prompt:
+
+mamba install -c conda-forge openff-toolkit
