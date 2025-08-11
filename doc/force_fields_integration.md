@@ -105,7 +105,6 @@ mamba install -c conda-forge openff-toolkit
 
 Did not work on windows. So what I did was:
 
- C:\Python311\python.exe -m venv $env:USERPROFILE\venvs\openff
- . $env:USERPROFILE\venvs\openff\Scripts\Activate.ps1
-
+python -m pip install openmm
+python -m pip install git+https://github.com/openforcefield/openff-toolkit.git
 
