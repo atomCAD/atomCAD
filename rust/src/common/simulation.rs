@@ -30,30 +30,43 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<(), String> {
     println!("Energy minimization called on structure with {} atoms", 
              structure.get_num_of_atoms());
     
-    // Test Python integration by getting Python version
-    match test_python_integration() {
-        Ok(version) => {
-            println!("Successfully connected to Python: {}", version);
-            // TODO: Implement actual energy minimization
+    // Test Python integration by calling our simulation module
+    match call_python_minimize_energy() {
+        Ok(result) => {
+            println!("Python simulation result: {}", result);
+            // TODO: Implement actual energy minimization with atom data
             Err("Energy minimization logic not yet implemented".to_string())
         }
         Err(e) => {
-            Err(format!("Failed to connect to Python: {}", e))
+            Err(format!("Failed to call Python simulation: {}", e))
         }
     }
 }
 
-/// Test function to verify Python integration is working
-/// Returns the Python version string if successful
-fn test_python_integration() -> Result<String, String> {
+/// Calls the minimize_energy function from our Python simulation module
+/// Returns the result string from the Python function
+fn call_python_minimize_energy() -> Result<String, String> {
     Python::with_gil(|py| {
-        // Get Python version using sys.version
+        // Add the python directory to the Python path so we can import our module
         let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
-        let version: String = sys.getattr("version")
-            .map_err(|e| format!("Failed to get version attribute: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract version string: {}", e))?;
+        let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
         
-        Ok(version)
+        // Add the python directory to sys.path (assuming we're running from the project root)
+        path.call_method1("append", ("python",))
+            .map_err(|e| format!("Failed to add python directory to sys.path: {}", e))?;
+        
+        // Import our simulation module
+        let simulation_module = py.import_bound("simulation")
+            .map_err(|e| format!("Failed to import simulation module: {}", e))?;
+        
+        // Call the minimize_energy function
+        let result = simulation_module.call_method0("minimize_energy")
+            .map_err(|e| format!("Failed to call minimize_energy: {}", e))?;
+        
+        // Extract the string result
+        let result_string: String = result.extract()
+            .map_err(|e| format!("Failed to extract result string: {}", e))?;
+        
+        Ok(result_string)
     })
 }
