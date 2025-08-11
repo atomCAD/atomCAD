@@ -102,3 +102,10 @@ miniforge prompt is available in the star menu: conda and mamba commands are ava
 In miniforge prompt:
 
 mamba install -c conda-forge openff-toolkit
+
+Did not work on windows. So what I did was:
+
+ C:\Python311\python.exe -m venv $env:USERPROFILE\venvs\openff
+ . $env:USERPROFILE\venvs\openff\Scripts\Activate.ps1
+
+
