@@ -55,19 +55,6 @@ fn call_python_minimize_energy() -> Result<String, String> {
         path.call_method1("append", ("python",))
             .map_err(|e| format!("Failed to add python directory to sys.path: {}", e))?;
         
-        // Also try to add common virtual environment paths for OpenFF packages
-        let venv_paths = vec![
-            r"C:\Users\Ádám Nagy\venvs\openff\Lib\site-packages",
-            // Add more paths if needed
-        ];
-        
-        for venv_path in venv_paths {
-            // Try to add venv path, but don't fail if it doesn't exist
-            if let Err(_) = path.call_method1("append", (venv_path,)) {
-                // Path doesn't exist or can't be added, continue
-            }
-        }
-        
         // Import our simulation module
         let simulation_module = py.import_bound("simulation")
             .map_err(|e| format!("Failed to import simulation module: {}", e))?;

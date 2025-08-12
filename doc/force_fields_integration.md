@@ -97,14 +97,30 @@ Recommended to install through mamba:
 
 Here is how to install mamba:
 https://github.com/conda-forge/miniforge
-miniforge prompt is available in the star menu: conda and mamba commands are available
 
-In miniforge prompt:
+1. Install miniforge (includes mamba):
+   https://github.com/conda-forge/miniforge
 
-mamba install -c conda-forge openff-toolkit
+2. Create a dedicated conda environment with all dependencies:
+   ```
+   mamba create -n openff-py311 -c conda-forge python=3.11 openff-toolkit-base rdkit openmm packaging -y
+   ```
 
-Did not work on windows. So what I did was:
+3. For cargo build, set the Python executable:
+   ```
+   $env:PYTHON_SYS_EXECUTABLE = "C:\ProgramData\miniforge3\envs\openff-py311\python.exe"
+   cargo build
+   ```
 
-python -m pip install openmm
-python -m pip install git+https://github.com/openforcefield/openff-toolkit.git
+4. For runtime:
+.\run_atomcad_win.ps1
+or:
+.\run_atomcad_win.ps1 -Build
 
+### RDKit
+
+python -m pip install rdkit
+
+Or do this before cargo build:
+$env:PYTHON_SYS_EXECUTABLE = "C:\ProgramData\miniforge3\envs\openff-py311\python.exe"
+echo $env:PYTHON_SYS_EXECUTABLE
