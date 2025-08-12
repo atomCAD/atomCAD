@@ -105,74 +105,18 @@ def minimize_energy():
         str: Status message indicating success or failure
     """
     try:
-        # Debug: Print Python path and availability flags
-        import sys
-        debug_info = []
-        debug_info.append(f"Python executable: {sys.executable}")
-        debug_info.append(f"Python version: {sys.version}")
-        debug_info.append(f"OpenMM available: {OPENMM_AVAILABLE}")
-        debug_info.append(f"OpenFF available: {OPENFF_AVAILABLE}")
-        debug_info.append(f"OpenFF ForceField available: {OPENFF_FORCEFIELD_AVAILABLE}")
-        debug_info.append(f"OpenFF Molecule available: {OPENFF_MOLECULE_AVAILABLE}")
-        debug_info.append(f"OpenFF Topology available: {OPENFF_TOPOLOGY_AVAILABLE}")
-        debug_info.append("Python sys.path:")
-        for i, path in enumerate(sys.path):
-            debug_info.append(f"  [{i}] {path}")
-        
-        # Try to import packages manually for debugging
-        try:
-            import openmm
-            debug_info.append(f"OpenMM import successful: {openmm.__version__}")
-        except ImportError as e:
-            debug_info.append(f"OpenMM import failed: {e}")
-        
-        try:
-            import openff.toolkit
-            debug_info.append(f"OpenFF base import successful: {openff.toolkit.__version__}")
-            
-            # Now test individual OpenFF components
-            try:
-                from openff.toolkit import ForceField
-                debug_info.append("OpenFF ForceField import successful")
-            except ImportError as e:
-                debug_info.append(f"OpenFF ForceField import failed: {e}")
-            except Exception as e:
-                debug_info.append(f"OpenFF ForceField import error: {e}")
-            
-            try:
-                from openff.toolkit import Molecule
-                debug_info.append("OpenFF Molecule import successful")
-            except ImportError as e:
-                debug_info.append(f"OpenFF Molecule import failed: {e}")
-            except Exception as e:
-                debug_info.append(f"OpenFF Molecule import error: {e}")
-            
-            try:
-                from openff.toolkit import Topology
-                debug_info.append("OpenFF Topology import successful")
-            except ImportError as e:
-                debug_info.append(f"OpenFF Topology import failed: {e}")
-            except Exception as e:
-                debug_info.append(f"OpenFF Topology import error: {e}")
-                
-        except ImportError as e:
-            debug_info.append(f"OpenFF base import failed: {e}")
-        except Exception as e:
-            debug_info.append(f"OpenFF base import error: {e}")
-        
         # Check if required libraries are available
         if not OPENMM_AVAILABLE:
-            return "Error: OpenMM is not installed or available\nDebug info:\n" + "\n".join(debug_info)
+            return "Error: OpenMM is not installed or available"
         
         if not OPENFF_AVAILABLE:
-            return "Error: OpenFF toolkit is not installed or available\nDebug info:\n" + "\n".join(debug_info)
+            return "Error: OpenFF toolkit is not installed or available"
         
         # Load the force field
         force_field = _load_force_field()
         
         # TODO: In the next step, we'll add molecule processing and actual minimization
-        success_msg = f"Success: OpenFF force field loaded with {len(force_field._parameter_handlers)} parameter handlers"
-        return success_msg + "\nDebug info:\n" + "\n".join(debug_info)
+        return f"Success: OpenFF force field loaded with {len(force_field._parameter_handlers)} parameter handlers"
         
     except Exception as e:
         return f"Error: {str(e)}"
