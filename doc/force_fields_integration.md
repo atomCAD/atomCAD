@@ -72,28 +72,28 @@ Pyo3 allows embedding a Python interpreter directly within a Rust application. I
 
 ## Python environment
 
-Currently we use the python environment of the user as is. Later we will need to set up a self-contained installation approach for atomCAD. Until then I document here what needs to be installed on the user's computer. Some of this is windows specific:
+Currently we use the python environment of the user as is. Later we will need to set up a self-contained installation approach for atomCAD. Until then I document here what needs to be installed on the user's computer. Some of this is windows specific.
 
-### Python
-
-- Python Minimum 3.11
-
-### OpenMM
+We need Python 3.11, openmm and openff-toolkit
 
 installation docs:
+
 https://docs.openmm.org/latest/userguide/application/01_getting_started.html#installing-openmm
 
-What I did now:
-pip install openmm
-(it might turn out that conda install is better for this but we go with pip install for now)
-
-### openff-toolkit
-
-installation docs:
 https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html
 
-pip install is not available.
-Recommended to install through mamba:
+
+Please note that pip install is not available for openmm-forcefield.
+Recommended to install is through mamba, which is a conda drop-in replacement.
+
+## Non windows installation summary
+
+## Windows installation summary
+
+On windows installation is more problematic than on Linux and OsX
+because openff-toolkit is not available as a simple conda install and it has a reason: The there is no windows version of the Ambertools dpeendency.
+
+Fortunately Ambertools is an optional dependency and so we can install openff-toolkit without it by installing openff-toolkit-base and installing openmm explicitly.
 
 Here is how to install mamba:
 https://github.com/conda-forge/miniforge
@@ -117,10 +117,10 @@ https://github.com/conda-forge/miniforge
 or:
 .\run_atomcad_win.ps1 -Build
 
-### RDKit
+For activating the openff-py311 environment for example for running python unit tests, do this in a miniforge prompt as System Administrator:
 
-python -m pip install rdkit
+mamba activate openff-py311
 
-Or do this before cargo build:
-$env:PYTHON_SYS_EXECUTABLE = "C:\ProgramData\miniforge3\envs\openff-py311\python.exe"
-echo $env:PYTHON_SYS_EXECUTABLE
+// run python unit tests whereever your project is:
+cd c:\machine_phase_systems\flutter_cad\python
+python test_simulation.py

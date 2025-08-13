@@ -179,6 +179,18 @@ def _perform_minimization(atoms, bonds, options):
     # Create OpenFF molecule from input data
     molecule = _create_openff_molecule(atoms, bonds)
     
+    # Assign partial charges using available method (not AM1-BCC on Windows)
+    try:
+        # Try MMFF94 charges first (available via RDKit)
+        molecule.assign_partial_charges(partial_charge_method="mmff94")
+    except Exception:
+        try:
+            # Fallback to Gasteiger charges
+            molecule.assign_partial_charges(partial_charge_method="gasteiger")
+        except Exception:
+            # Last resort: use formal charges only
+            molecule.assign_partial_charges(partial_charge_method="formal_charge")
+    
     # Load force field and create system
     force_field = _load_force_field()
     topology = Topology.from_molecules([molecule])
