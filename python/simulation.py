@@ -194,7 +194,13 @@ def _perform_minimization(atoms, bonds, options):
     # Load force field and create system
     force_field = _load_force_field()
     topology = Topology.from_molecules([molecule])
-    interchange = Interchange.from_smirnoff(force_field, topology)
+    
+    # Create interchange with charge_from_molecules to use our pre-assigned charges
+    interchange = Interchange.from_smirnoff(
+        force_field, 
+        topology, 
+        charge_from_molecules=[molecule]
+    )
     
     # Convert to OpenMM
     openmm_system = interchange.to_openmm()
