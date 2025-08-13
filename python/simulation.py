@@ -179,17 +179,39 @@ def _perform_minimization(atoms, bonds, options):
     # Create OpenFF molecule from input data
     molecule = _create_openff_molecule(atoms, bonds)
     
-    # Assign partial charges using available method (not AM1-BCC on Windows)
+    # Add conformer (3D coordinates) - needed for proper force field parameter assignment
+    # Use OpenFF's Quantity for proper unit handling
+    from openff.units import unit as openff_unit
+    positions_array = []
+    for atom in atoms:
+        pos = atom['position']
+        positions_array.append([pos[0], pos[1], pos[2]])
+    
+    # Create conformer with OpenFF units (not OpenMM units)
+    conformer = np.array(positions_array) * openff_unit.angstrom
+    molecule._conformers = [conformer]
+    
+    # Assign partial charges using available methods (following MSEP pattern)
+    from openff.toolkit.utils.toolkits import RDKitToolkitWrapper
+    
     try:
         # Try MMFF94 charges first (available via RDKit)
-        molecule.assign_partial_charges(partial_charge_method="mmff94")
-    except Exception:
+        molecule.assign_partial_charges(partial_charge_method="mmff94", toolkit_registry=RDKitToolkitWrapper())
+    except Exception as e:
+        print(f"Failed to assign partial charges with method 'mmff94'. Fallback to 'gasteiger': {e}")
         try:
             # Fallback to Gasteiger charges
-            molecule.assign_partial_charges(partial_charge_method="gasteiger")
-        except Exception:
-            # Last resort: use formal charges only
-            molecule.assign_partial_charges(partial_charge_method="formal_charge")
+            molecule.assign_partial_charges(partial_charge_method="gasteiger", toolkit_registry=RDKitToolkitWrapper())
+        except Exception as e:
+            # If both fail, manually set charges to formal charges (or 0.0)
+            print(f"Failed to assign partial charges with method 'gasteiger'. Using formal charges: {e}")
+            partial_charges = []
+            for atom in atoms:
+                formal_charge = atom.get('formal_charge', 0)
+                partial_charges.append(float(formal_charge))
+            
+            from openmm.unit import elementary_charge
+            molecule.partial_charges = np.array(partial_charges) * elementary_charge
     
     # Load force field and create system
     force_field = _load_force_field()
@@ -218,10 +240,10 @@ def _perform_minimization(atoms, bonds, options):
     
     simulation.context.setPositions(np.array(positions) * angstrom)
     
-    # Minimize energy (following MSEP pattern for tolerance)
-    from openmm.unit import Quantity
-    tolerance_quantity = Quantity(value=tolerance, unit=kilojoules_per_mole)
-    simulation.minimizeEnergy(tolerance=tolerance_quantity, maxIterations=max_iterations)
+    # Minimize energy (following MSEP pattern - no tolerance parameter)
+    # OpenMM tolerance expects force units (kJ/mol/nm), not energy units (kJ/mol)
+    # MSEP doesn't pass tolerance, so we'll follow their approach
+    simulation.minimizeEnergy(maxIterations=max_iterations)
     
     # Get results
     state = simulation.context.getState(getPositions=True, getEnergy=True)
