@@ -61,6 +61,24 @@ except ImportError as e:
 # Global force field instance
 _force_field = None
 
+def _create_error_result(message):
+    """
+    Create a standardized error result dictionary.
+    
+    Args:
+        message: Error message string
+        
+    Returns:
+        Dictionary with error structure
+    """
+    return {
+        "success": False,
+        "positions": [],
+        "energy": 0.0,
+        "iterations": 0,
+        "message": message
+    }
+
 def _get_project_root():
     """Get the project root directory (parent of python folder)."""
     current_dir = Path(__file__).parent
@@ -94,29 +112,146 @@ def _load_force_field():
     except Exception as e:
         raise RuntimeError(f"Failed to load OpenFF force field: {e}")
 
-def minimize_energy():
+def minimize_energy(atoms=None, bonds=None, options=None):
     """
     Energy minimization function using OpenMM and OpenFF.
     
-    This function loads the OpenFF 2.2.1 force field and prepares it for
-    energy minimization. Currently returns a status message.
+    Args:
+        atoms: List of dictionaries with:
+            - atomic_number: int (1=H, 6=C, 7=N, 8=O, etc.)
+            - position: [x, y, z] (in Angstroms)
+            - formal_charge: int (optional, defaults to 0)
+        
+        bonds: List of dictionaries with:
+            - atom1: int (index into atoms array)
+            - atom2: int (index into atoms array) 
+            - order: int (1=single, 2=double, 3=triple)
+        
+        options: Dictionary with:
+            - max_iterations: int (default 1000)
+            - tolerance: float (default 1e-6)
     
     Returns:
-        str: Status message indicating success or failure
+        Dictionary with:
+            - success: bool
+            - positions: [[x, y, z], ...] (optimized coordinates in Angstroms)
+            - energy: float (final energy in kJ/mol)
+            - iterations: int (number of iterations used)
+            - message: str (status/error message)
     """
     try:
         # Check if required libraries are available
         if not OPENMM_AVAILABLE:
-            return "Error: OpenMM is not installed or available"
+            return _create_error_result("Error: OpenMM is not installed or available")
         
         if not OPENFF_AVAILABLE:
-            return "Error: OpenFF toolkit is not installed or available"
+            return _create_error_result("Error: OpenFF toolkit is not installed or available")
         
-        # Load the force field
-        force_field = _load_force_field()
+        # If no molecular data provided, just test the force field loading
+        if atoms is None or bonds is None:
+            force_field = _load_force_field()
+            return {
+                "success": True,
+                "positions": [],
+                "energy": 0.0,
+                "iterations": 0,
+                "message": f"Success: OpenFF force field loaded with {len(force_field._parameter_handlers)} parameter handlers"
+            }
         
-        # TODO: In the next step, we'll add molecule processing and actual minimization
-        return f"Success: OpenFF force field loaded with {len(force_field._parameter_handlers)} parameter handlers"
+        # Perform actual energy minimization
+        return _perform_minimization(atoms, bonds, options or {})
         
     except Exception as e:
-        return f"Error: {str(e)}"
+        return _create_error_result(f"Error: {str(e)}")
+
+def _perform_minimization(atoms, bonds, options):
+    """
+    Perform the actual energy minimization using OpenMM and OpenFF.
+    """
+    from openff.toolkit import Molecule, Topology
+    from openff.interchange import Interchange
+    import numpy as np
+    
+    # Set default options
+    max_iterations = options.get('max_iterations', 1000)
+    tolerance = options.get('tolerance', 1e-6)
+    
+    # Create OpenFF molecule from input data
+    molecule = _create_openff_molecule(atoms, bonds)
+    
+    # Load force field and create system
+    force_field = _load_force_field()
+    topology = Topology.from_molecules([molecule])
+    interchange = Interchange.from_smirnoff(force_field, topology)
+    
+    # Convert to OpenMM
+    openmm_system = interchange.to_openmm()
+    openmm_topology = interchange.to_openmm_topology()
+    
+    # Set up minimization
+    integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.004*picoseconds)
+    simulation = Simulation(openmm_topology, openmm_system, integrator)
+    
+    # Set initial positions
+    positions = []
+    for atom in atoms:
+        pos = atom['position']
+        positions.append([pos[0], pos[1], pos[2]])
+    
+    simulation.context.setPositions(np.array(positions) * angstrom)
+    
+    # Minimize energy
+    simulation.minimizeEnergy(tolerance=tolerance*kilojoules_per_mole, maxIterations=max_iterations)
+    
+    # Get results
+    state = simulation.context.getState(getPositions=True, getEnergy=True)
+    final_positions = state.getPositions(asNumpy=True).value_in_unit(angstrom)
+    final_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+    
+    return {
+        "success": True,
+        "positions": final_positions.tolist(),
+        "energy": float(final_energy),
+        "iterations": max_iterations,  # OpenMM doesn't report actual iterations used
+        "message": f"Energy minimization completed successfully. Final energy: {final_energy:.2f} kJ/mol"
+    }
+
+def _create_openff_molecule(atoms, bonds):
+    """
+    Create an OpenFF Molecule object from atoms and bonds data.
+    """
+    from openff.toolkit import Molecule
+    import numpy as np
+    
+    # Create empty molecule
+    molecule = Molecule()
+    
+    # Add atoms
+    atom_indices = []
+    for atom in atoms:
+        atomic_number = atom['atomic_number']
+        formal_charge = atom.get('formal_charge', 0)
+        is_aromatic = False  # Default to non-aromatic; could be enhanced later
+        
+        atom_idx = molecule.add_atom(
+            atomic_number=atomic_number,
+            formal_charge=formal_charge,
+            is_aromatic=is_aromatic
+        )
+        atom_indices.append(atom_idx)
+    
+    # Add bonds
+    for bond in bonds:
+        atom1_idx = bond['atom1']
+        atom2_idx = bond['atom2']
+        bond_order = bond['order']
+        is_aromatic = False  # Default to non-aromatic; could be enhanced later
+        
+        molecule.add_bond(
+            atom1=atom1_idx,
+            atom2=atom2_idx,
+            bond_order=bond_order,
+            is_aromatic=is_aromatic
+        )
+    
+    return molecule
