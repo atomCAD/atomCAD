@@ -218,8 +218,10 @@ def _perform_minimization(atoms, bonds, options):
     
     simulation.context.setPositions(np.array(positions) * angstrom)
     
-    # Minimize energy
-    simulation.minimizeEnergy(tolerance=tolerance*kilojoules_per_mole, maxIterations=max_iterations)
+    # Minimize energy (following MSEP pattern for tolerance)
+    from openmm.unit import Quantity
+    tolerance_quantity = Quantity(value=tolerance, unit=kilojoules_per_mole)
+    simulation.minimizeEnergy(tolerance=tolerance_quantity, maxIterations=max_iterations)
     
     # Get results
     state = simulation.context.getState(getPositions=True, getEnergy=True)
