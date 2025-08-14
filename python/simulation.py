@@ -129,7 +129,6 @@ def minimize_energy(atoms=None, bonds=None, options=None):
         
         options: Dictionary with:
             - max_iterations: int (default 1000)
-            - tolerance: float (default 1e-6)
     
     Returns:
         Dictionary with:
@@ -174,7 +173,6 @@ def _perform_minimization(atoms, bonds, options):
     
     # Set default options
     max_iterations = options.get('max_iterations', 1000)
-    tolerance = options.get('tolerance', 1e-6)
     
     # Create OpenFF molecule from input data
     molecule = _create_openff_molecule(atoms, bonds)
