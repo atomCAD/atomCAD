@@ -116,14 +116,20 @@ class TestEnergyMinimization(unittest.TestCase):
     
     def test_with_formal_charges(self):
         """Test that formal charges are handled correctly."""
-        # Simple molecule with formal charge
+        # Use methane with explicit formal charges
         atoms = [
-            {"atomic_number": 6, "position": [0.0, 0.0, 0.0], "formal_charge": 0},
-            {"atomic_number": 1, "position": [1.0, 0.0, 0.0], "formal_charge": 0},
+            {"atomic_number": 6, "position": [0.0, 0.0, 0.0], "formal_charge": 0},      # Carbon
+            {"atomic_number": 1, "position": [1.1, 0.0, 0.0], "formal_charge": 0},      # H1
+            {"atomic_number": 1, "position": [-0.37, 1.04, 0.0], "formal_charge": 0},   # H2  
+            {"atomic_number": 1, "position": [-0.37, -0.52, 0.9], "formal_charge": 0},  # H3
+            {"atomic_number": 1, "position": [-0.37, -0.52, -0.9], "formal_charge": 0}, # H4
         ]
         
         bonds = [
-            {"atom1": 0, "atom2": 1, "order": 1},
+            {"atom1": 0, "atom2": 1, "order": 1},  # C-H1
+            {"atom1": 0, "atom2": 2, "order": 1},  # C-H2
+            {"atom1": 0, "atom2": 3, "order": 1},  # C-H3
+            {"atom1": 0, "atom2": 4, "order": 1},  # C-H4
         ]
         
         result = minimize_energy(atoms, bonds)
@@ -131,13 +137,20 @@ class TestEnergyMinimization(unittest.TestCase):
     
     def test_custom_options(self):
         """Test that custom options are respected."""
+        # Use methane to test custom options (realistic molecule)
         atoms = [
-            {"atomic_number": 6, "position": [0.0, 0.0, 0.0]},
-            {"atomic_number": 1, "position": [1.0, 0.0, 0.0]},
+            {"atomic_number": 6, "position": [0.0, 0.0, 0.0]},      # Carbon
+            {"atomic_number": 1, "position": [1.1, 0.0, 0.0]},      # H1
+            {"atomic_number": 1, "position": [-0.37, 1.04, 0.0]},   # H2  
+            {"atomic_number": 1, "position": [-0.37, -0.52, 0.9]},  # H3
+            {"atomic_number": 1, "position": [-0.37, -0.52, -0.9]}, # H4
         ]
         
         bonds = [
-            {"atom1": 0, "atom2": 1, "order": 1},
+            {"atom1": 0, "atom2": 1, "order": 1},  # C-H1
+            {"atom1": 0, "atom2": 2, "order": 1},  # C-H2
+            {"atom1": 0, "atom2": 3, "order": 1},  # C-H3
+            {"atom1": 0, "atom2": 4, "order": 1},  # C-H4
         ]
         
         options = {

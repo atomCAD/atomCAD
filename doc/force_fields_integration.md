@@ -103,7 +103,7 @@ https://github.com/conda-forge/miniforge
 
 2. Create a dedicated conda environment with all dependencies:
    ```
-   mamba create -n openff-py311 -c conda-forge python=3.11 openff-toolkit-base rdkit openmm packaging -y
+   mamba create -n openff-py311 -c conda-forge python=3.11 openff-toolkit-base rdkit openmm openff-interchange-base packaging -y
    ```
 
 3. For cargo build, set the Python executable:
