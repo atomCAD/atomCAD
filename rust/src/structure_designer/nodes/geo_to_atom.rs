@@ -18,6 +18,7 @@ use crate::common::crystal_utils::ZincBlendeAtomType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::common::diamond_hydrogen_passivation::hydrogen_passivate_diamond;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 
@@ -78,6 +79,7 @@ const IN_CELL_ZINCBLENDE_TYPES: [ZincBlendeAtomType; 18] = [
 pub struct GeoToAtomData {
   pub primary_atomic_number: i32,
   pub secondary_atomic_number: i32,
+  pub hydrogen_passivation: bool,
 }
 
 impl NodeData for GeoToAtomData {
@@ -131,6 +133,11 @@ pub fn eval_geo_to_atom<'a>(
   );
 
   atomic_structure.remove_lone_atoms();
+
+  if geo_to_atom_data.hydrogen_passivation {
+    hydrogen_passivate_diamond(&mut atomic_structure);
+  }
+
   return NetworkResult::Atomic(atomic_structure);
 }
 

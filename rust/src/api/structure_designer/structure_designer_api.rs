@@ -509,6 +509,7 @@ pub fn get_geo_to_atom_data(node_id: u64) -> Option<APIGeoToAtomData> {
         Some(APIGeoToAtomData {
           primary_atomic_number: geo_to_atom_data.primary_atomic_number,
           secondary_atomic_number: geo_to_atom_data.secondary_atomic_number,
+          hydrogen_passivation: geo_to_atom_data.hydrogen_passivation,
         })
       },
       None
@@ -533,6 +534,7 @@ pub fn set_geo_to_atom_data(node_id: u64, data: APIGeoToAtomData) -> bool {
         
         geo_to_atom_data.primary_atomic_number = data.primary_atomic_number;
         geo_to_atom_data.secondary_atomic_number = data.secondary_atomic_number;
+        geo_to_atom_data.hydrogen_passivation = data.hydrogen_passivation;
         refresh_renderer(cad_instance, false);
         true
       },

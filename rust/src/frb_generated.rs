@@ -3984,9 +3984,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_primaryAtomicNumber = <i32>::sse_decode(deserializer);
         let mut var_secondaryAtomicNumber = <i32>::sse_decode(deserializer);
+        let mut var_hydrogenPassivation = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData {
             primary_atomic_number: var_primaryAtomicNumber,
             secondary_atomic_number: var_secondaryAtomicNumber,
+            hydrogen_passivation: var_hydrogenPassivation,
         };
     }
 }
@@ -5482,6 +5484,7 @@ impl flutter_rust_bridge::IntoDart
         [
             self.primary_atomic_number.into_into_dart().into_dart(),
             self.secondary_atomic_number.into_into_dart().into_dart(),
+            self.hydrogen_passivation.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6420,6 +6423,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.primary_atomic_number, serializer);
         <i32>::sse_encode(self.secondary_atomic_number, serializer);
+        <bool>::sse_encode(self.hydrogen_passivation, serializer);
     }
 }
 

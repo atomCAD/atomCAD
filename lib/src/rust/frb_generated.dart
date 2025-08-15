@@ -3785,11 +3785,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIGeoToAtomData dco_decode_api_geo_to_atom_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIGeoToAtomData(
       primaryAtomicNumber: dco_decode_i_32(arr[0]),
       secondaryAtomicNumber: dco_decode_i_32(arr[1]),
+      hydrogenPassivation: dco_decode_bool(arr[2]),
     );
   }
 
@@ -4823,9 +4824,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_primaryAtomicNumber = sse_decode_i_32(deserializer);
     var var_secondaryAtomicNumber = sse_decode_i_32(deserializer);
+    var var_hydrogenPassivation = sse_decode_bool(deserializer);
     return APIGeoToAtomData(
         primaryAtomicNumber: var_primaryAtomicNumber,
-        secondaryAtomicNumber: var_secondaryAtomicNumber);
+        secondaryAtomicNumber: var_secondaryAtomicNumber,
+        hydrogenPassivation: var_hydrogenPassivation);
   }
 
   @protected
@@ -6006,6 +6009,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.primaryAtomicNumber, serializer);
     sse_encode_i_32(self.secondaryAtomicNumber, serializer);
+    sse_encode_bool(self.hydrogenPassivation, serializer);
   }
 
   @protected

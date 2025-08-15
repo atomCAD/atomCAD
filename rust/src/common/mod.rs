@@ -13,3 +13,4 @@ pub mod csg_types;
 pub mod csg_utils;
 pub mod unique_3d_points;
 pub mod simulation;
+pub mod diamond_hydrogen_passivation;

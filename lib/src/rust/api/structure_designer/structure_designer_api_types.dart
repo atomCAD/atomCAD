@@ -262,15 +262,19 @@ class APIFacetShellData {
 class APIGeoToAtomData {
   final int primaryAtomicNumber;
   final int secondaryAtomicNumber;
+  final bool hydrogenPassivation;
 
   const APIGeoToAtomData({
     required this.primaryAtomicNumber,
     required this.secondaryAtomicNumber,
+    required this.hydrogenPassivation,
   });
 
   @override
   int get hashCode =>
-      primaryAtomicNumber.hashCode ^ secondaryAtomicNumber.hashCode;
+      primaryAtomicNumber.hashCode ^
+      secondaryAtomicNumber.hashCode ^
+      hydrogenPassivation.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -278,7 +282,8 @@ class APIGeoToAtomData {
       other is APIGeoToAtomData &&
           runtimeType == other.runtimeType &&
           primaryAtomicNumber == other.primaryAtomicNumber &&
-          secondaryAtomicNumber == other.secondaryAtomicNumber;
+          secondaryAtomicNumber == other.secondaryAtomicNumber &&
+          hydrogenPassivation == other.hydrogenPassivation;
 }
 
 class APIGeoTransData {

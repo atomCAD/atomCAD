@@ -121,6 +121,7 @@ class _GeoToAtomEditorState extends State<GeoToAtomEditor> {
                   _updateStagedData(APIGeoToAtomData(
                     primaryAtomicNumber: primary,
                     secondaryAtomicNumber: secondary,
+                    hydrogenPassivation: _stagedData!.hydrogenPassivation,
                   ));
                 }
               },
@@ -146,6 +147,7 @@ class _GeoToAtomEditorState extends State<GeoToAtomEditor> {
                   _updateStagedData(APIGeoToAtomData(
                     primaryAtomicNumber: newValue,
                     secondaryAtomicNumber: _stagedData!.secondaryAtomicNumber,
+                    hydrogenPassivation: _stagedData!.hydrogenPassivation,
                   ));
                 }
               },
@@ -164,6 +166,7 @@ class _GeoToAtomEditorState extends State<GeoToAtomEditor> {
                   _updateStagedData(APIGeoToAtomData(
                     primaryAtomicNumber: _stagedData!.primaryAtomicNumber,
                     secondaryAtomicNumber: newValue,
+                    hydrogenPassivation: _stagedData!.hydrogenPassivation,
                   ));
                 }
               },
@@ -178,6 +181,33 @@ class _GeoToAtomEditorState extends State<GeoToAtomEditor> {
             if (_stagedData?.primaryAtomicNumber != null && 
                 _stagedData?.secondaryAtomicNumber != null) 
               _buildUnitCellSizeDisplay(),
+            
+            const SizedBox(height: AppSpacing.medium),
+            const Divider(),
+            const SizedBox(height: AppSpacing.small),
+            
+            Text(
+              'Options',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            
+            // Hydrogen passivation checkbox
+            CheckboxListTile(
+              title: Text('Hydrogen Passivation'),
+              value: _stagedData?.hydrogenPassivation ?? false,
+              onChanged: (bool? value) {
+                if (value != null && _stagedData != null) {
+                  _updateStagedData(APIGeoToAtomData(
+                    primaryAtomicNumber: _stagedData!.primaryAtomicNumber,
+                    secondaryAtomicNumber: _stagedData!.secondaryAtomicNumber,
+                    hydrogenPassivation: value,
+                  ));
+                }
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
           ],
         ),
       ),

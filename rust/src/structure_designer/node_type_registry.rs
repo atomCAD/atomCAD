@@ -286,6 +286,7 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(GeoToAtomData {
         primary_atomic_number: 6,
         secondary_atomic_number: 6,
+        hydrogen_passivation: true,
       }),
     });
 

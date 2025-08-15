@@ -105,6 +105,7 @@ pub struct InputPinView {
   pub struct APIGeoToAtomData {
     pub primary_atomic_number: i32,
     pub secondary_atomic_number: i32,
+    pub hydrogen_passivation: bool,
   }
 
   pub struct APIAtomTransData {
