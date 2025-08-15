@@ -173,6 +173,7 @@ def _perform_minimization(atoms, bonds, options):
     
     # Set default options
     max_iterations = options.get('max_iterations', 1000)
+    tolerance = options.get('tolerance', 1e-6)
     
     # Create OpenFF molecule from input data
     molecule = _create_openff_molecule(atoms, bonds)

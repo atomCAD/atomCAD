@@ -245,3 +245,57 @@ pub fn calc_selection_transform(structure: &AtomicStructure) -> Option<Transform
     Some(transform)
 }
 
+/// Prints detailed information about all atoms in the AtomicStructure for debugging purposes.
+/// Shows index, atom ID, atomic number, and number of bonds for each atom.
+///
+/// # Parameters
+///
+/// * `structure` - The atomic structure to analyze and print
+///
+pub fn print_atom_info(structure: &AtomicStructure) {
+    println!("=== Atomic Structure Info ===");
+    println!("Total atoms: {}", structure.atoms.len());
+    println!("Total bonds: {}", structure.bonds.len());
+    println!();
+    
+    // Collect atom IDs for consistent ordering
+    let mut atom_ids: Vec<u64> = structure.atoms.keys().cloned().collect();
+    atom_ids.sort(); // Sort for consistent output
+    
+    println!("{:<6} {:<8} {:<12} {:<10}", "Index", "Atom ID", "Atomic Num", "Bond Count");
+    println!("{:-<40}", "");
+    
+    for (index, &atom_id) in atom_ids.iter().enumerate() {
+        if let Some(atom) = structure.get_atom(atom_id) {
+            let bond_count = atom.bond_ids.len();
+            println!("{:<6} {:<8} {:<12} {:<10}", 
+                     index, 
+                     atom_id, 
+                     atom.atomic_number, 
+                     bond_count);
+        }
+    }
+    
+    println!();
+    
+    // Print summary of bond count distribution
+    let mut bond_count_distribution = std::collections::HashMap::new();
+    for &atom_id in &atom_ids {
+        if let Some(atom) = structure.get_atom(atom_id) {
+            let bond_count = atom.bond_ids.len();
+            *bond_count_distribution.entry(bond_count).or_insert(0) += 1;
+        }
+    }
+    
+    println!("Bond count distribution:");
+    let mut bond_counts: Vec<_> = bond_count_distribution.keys().cloned().collect();
+    bond_counts.sort();
+    
+    for bond_count in bond_counts {
+        let atom_count = bond_count_distribution[&bond_count];
+        println!("  {} bonds: {} atoms", bond_count, atom_count);
+    }
+    
+    println!("=============================");
+}
+

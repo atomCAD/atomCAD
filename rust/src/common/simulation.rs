@@ -2,6 +2,7 @@ use crate::common::atomic_structure::AtomicStructure;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use glam::DVec3;
+use crate::common::atomic_structure_utils::print_atom_info;
 
 /// Performs energy minimization on an atomic structure using Python-based force fields.
 /// 
@@ -33,6 +34,7 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<(), String> {
                 Ok(())
             } else {
                 println!("Energy minimization failed: {}", result.message);
+                print_atom_info(structure);
                 Err(format!("Energy minimization failed: {}", result.message))
             }
         }
