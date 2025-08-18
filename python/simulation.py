@@ -7,6 +7,7 @@ using OpenMM with OpenFF force fields and UFF as a fallback.
 
 import os
 import sys
+import time
 from pathlib import Path
 
 # OpenMM imports
@@ -92,6 +93,7 @@ def _load_force_field():
         raise RuntimeError("OpenFF ForceField class is not available")
     
     if _force_field is not None:
+        print(f"[TIMING] Force field loading: using cached force field")
         return _force_field
     
     # Path to the OpenFF force field file
@@ -106,11 +108,72 @@ def _load_force_field():
         from openff.toolkit import ForceField
         
         # Load the OpenFF force field
+        start_time = time.time()
         _force_field = ForceField(str(force_field_path))
+        load_time = time.time() - start_time
+        print(f"[TIMING] Force field loading from file took {load_time:.3f} seconds")
         print(f"Successfully loaded OpenFF force field: {force_field_path}")
         return _force_field
     except Exception as e:
         raise RuntimeError(f"Failed to load OpenFF force field: {e}")
+
+def initialize_simulation():
+    """
+    Initialize the simulation environment by pre-loading the force field and warming up the Python runtime.
+    This should be called once at application startup to avoid the expensive initialization cost
+    during the first energy minimization.
+    
+    Returns:
+        Dictionary with:
+            - success: bool
+            - message: str (status message)
+            - initialization_time: float (seconds)
+    """
+    start_time = time.time()
+    print(f"[TIMING] Simulation initialization started")
+    
+    try:
+        # Check if required libraries are available
+        if not OPENMM_AVAILABLE:
+            return {
+                "success": False,
+                "message": "Error: OpenMM is not installed or available",
+                "initialization_time": time.time() - start_time
+            }
+        
+        if not OPENFF_AVAILABLE:
+            return {
+                "success": False,
+                "message": "Error: OpenFF toolkit is not installed or available", 
+                "initialization_time": time.time() - start_time
+            }
+        
+        # Pre-load the force field to cache it
+        force_field = _load_force_field()
+        
+        # Import commonly used modules to warm up the Python runtime
+        from openff.toolkit import Molecule, Topology
+        from openff.interchange import Interchange
+        from openff.toolkit.utils.toolkits import RDKitToolkitWrapper
+        import numpy as np
+        
+        initialization_time = time.time() - start_time
+        print(f"[TIMING] Simulation initialization completed in {initialization_time:.3f} seconds")
+        
+        return {
+            "success": True,
+            "message": f"Simulation initialized successfully. Force field loaded with {len(force_field._parameter_handlers)} parameter handlers",
+            "initialization_time": initialization_time
+        }
+        
+    except Exception as e:
+        initialization_time = time.time() - start_time
+        print(f"[TIMING] Simulation initialization failed in {initialization_time:.3f} seconds")
+        return {
+            "success": False,
+            "message": f"Initialization failed: {str(e)}",
+            "initialization_time": initialization_time
+        }
 
 def minimize_energy(atoms=None, bonds=None, options=None):
     """
@@ -138,6 +201,8 @@ def minimize_energy(atoms=None, bonds=None, options=None):
             - iterations: int (number of iterations used)
             - message: str (status/error message)
     """
+    start_time = time.time()
+    print(f"[TIMING] Python minimize_energy function started")
     try:
         # Check if required libraries are available
         if not OPENMM_AVAILABLE:
@@ -149,6 +214,8 @@ def minimize_energy(atoms=None, bonds=None, options=None):
         # If no molecular data provided, just test the force field loading
         if atoms is None or bonds is None:
             force_field = _load_force_field()
+            total_time = time.time() - start_time
+            print(f"[TIMING] Python minimize_energy (force field test only) took {total_time:.3f} seconds")
             return {
                 "success": True,
                 "positions": [],
@@ -158,9 +225,14 @@ def minimize_energy(atoms=None, bonds=None, options=None):
             }
         
         # Perform actual energy minimization
-        return _perform_minimization(atoms, bonds, options or {})
+        result = _perform_minimization(atoms, bonds, options or {})
+        total_time = time.time() - start_time
+        print(f"[TIMING] Python minimize_energy (complete) took {total_time:.3f} seconds")
+        return result
         
     except Exception as e:
+        total_time = time.time() - start_time
+        print(f"[TIMING] Python minimize_energy (error) took {total_time:.3f} seconds")
         return _create_error_result(f"Error: {str(e)}")
 
 def _perform_minimization(atoms, bonds, options):
@@ -171,12 +243,17 @@ def _perform_minimization(atoms, bonds, options):
     from openff.interchange import Interchange
     import numpy as np
     
+    print(f"[TIMING] Starting energy minimization for {len(atoms)} atoms and {len(bonds)} bonds")
+    
     # Set default options
     max_iterations = options.get('max_iterations', 1000)
     tolerance = options.get('tolerance', 1e-6)
     
     # Create OpenFF molecule from input data
+    start_time = time.time()
     molecule = _create_openff_molecule(atoms, bonds)
+    molecule_time = time.time() - start_time
+    print(f"[TIMING] OpenFF molecule creation took {molecule_time:.3f} seconds")
     
     # Add conformer (3D coordinates) - needed for proper force field parameter assignment
     # Use OpenFF's Quantity for proper unit handling
@@ -191,16 +268,19 @@ def _perform_minimization(atoms, bonds, options):
     molecule._conformers = [conformer]
     
     # Assign partial charges using available methods (following MSEP pattern)
+    start_time = time.time()
     from openff.toolkit.utils.toolkits import RDKitToolkitWrapper
     
     try:
         # Try MMFF94 charges first (available via RDKit)
         molecule.assign_partial_charges(partial_charge_method="mmff94", toolkit_registry=RDKitToolkitWrapper())
+        charge_method = "mmff94"
     except Exception as e:
         print(f"Failed to assign partial charges with method 'mmff94'. Fallback to 'gasteiger': {e}")
         try:
             # Fallback to Gasteiger charges
             molecule.assign_partial_charges(partial_charge_method="gasteiger", toolkit_registry=RDKitToolkitWrapper())
+            charge_method = "gasteiger"
         except Exception as e:
             # If both fail, manually set charges to formal charges (or 0.0)
             print(f"Failed to assign partial charges with method 'gasteiger'. Using formal charges: {e}")
@@ -211,12 +291,17 @@ def _perform_minimization(atoms, bonds, options):
             
             from openmm.unit import elementary_charge
             molecule.partial_charges = np.array(partial_charges) * elementary_charge
+            charge_method = "formal_charges"
+    
+    charge_time = time.time() - start_time
+    print(f"[TIMING] Partial charge assignment ({charge_method}) took {charge_time:.3f} seconds")
     
     # Load force field and create system
     force_field = _load_force_field()
     topology = Topology.from_molecules([molecule])
     
     # Create interchange with charge_from_molecules to use our pre-assigned charges
+    start_time = time.time()
     interchange = Interchange.from_smirnoff(
         force_field, 
         topology, 
@@ -226,6 +311,8 @@ def _perform_minimization(atoms, bonds, options):
     # Convert to OpenMM
     openmm_system = interchange.to_openmm()
     openmm_topology = interchange.to_openmm_topology()
+    system_time = time.time() - start_time
+    print(f"[TIMING] OpenMM system setup took {system_time:.3f} seconds")
     
     # Set up minimization
     integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.004*picoseconds)
@@ -242,20 +329,26 @@ def _perform_minimization(atoms, bonds, options):
     # Minimize energy (following MSEP pattern - no tolerance parameter)
     # OpenMM tolerance expects force units (kJ/mol/nm), not energy units (kJ/mol)
     # MSEP doesn't pass tolerance, so we'll follow their approach
+    start_time = time.time()
     simulation.minimizeEnergy(maxIterations=max_iterations)
+    minimization_time = time.time() - start_time
+    print(f"[TIMING] Actual energy minimization took {minimization_time:.3f} seconds")
     
     # Get results
     state = simulation.context.getState(getPositions=True, getEnergy=True)
     final_positions = state.getPositions(asNumpy=True).value_in_unit(angstrom)
     final_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
     
-    return {
+    result = {
         "success": True,
         "positions": final_positions.tolist(),
         "energy": float(final_energy),
         "iterations": max_iterations,  # OpenMM doesn't report actual iterations used
         "message": f"Energy minimization completed successfully. Final energy: {final_energy:.2f} kJ/mol"
     }
+    
+    print(f"[TIMING] Energy minimization result processing completed")
+    return result
 
 def _create_openff_molecule(atoms, bonds):
     """

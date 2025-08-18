@@ -3,6 +3,54 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use glam::DVec3;
 use crate::common::atomic_structure_utils::print_atom_info;
+use crate::util::timer::Timer;
+
+/// Initializes the Python simulation environment by pre-loading the force field.
+/// This should be called once at application startup to avoid expensive initialization
+/// during the first energy minimization call.
+pub fn initialize_simulation() -> Result<String, String> {
+    let _timer = Timer::new("Simulation initialization");
+    
+    Python::with_gil(|py| {
+        // Add the python directory to the Python path
+        let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
+        let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
+        
+        path.call_method1("append", ("python",))
+            .map_err(|e| format!("Failed to add python directory to sys.path: {}", e))?;
+        
+        // Import simulation module
+        let simulation_module = py.import_bound("simulation")
+            .map_err(|e| format!("Failed to import simulation module: {}", e))?;
+        
+        // Call the initialize_simulation function
+        let result = simulation_module.call_method0("initialize_simulation")
+            .map_err(|e| format!("Failed to call initialize_simulation: {}", e))?;
+        
+        // Extract the result dictionary
+        let result_dict = result.downcast::<PyDict>()
+            .map_err(|e| format!("Result is not a dictionary: {}", e))?;
+        
+        let success: bool = result_dict.get_item("success")
+            .map_err(|e| format!("Failed to get 'success' field: {}", e))?
+            .ok_or("Missing 'success' field")?
+            .extract()
+            .map_err(|e| format!("Failed to extract 'success': {}", e))?;
+        
+        let message: String = result_dict.get_item("message")
+            .map_err(|e| format!("Failed to get 'message' field: {}", e))?
+            .ok_or("Missing 'message' field")?
+            .extract()
+            .map_err(|e| format!("Failed to extract 'message': {}", e))?;
+        
+        if success {
+            println!("Simulation initialization successful: {}", message);
+            Ok(message)
+        } else {
+            Err(message)
+        }
+    })
+}
 
 /// Performs energy minimization on an atomic structure using Python-based force fields.
 /// 
@@ -18,18 +66,25 @@ use crate::common::atomic_structure_utils::print_atom_info;
 /// Returns `Ok(())` if the energy minimization was successful, or an error if it failed.
 /// The function updates the atom positions in the AtomicStructure with the minimized coordinates.
 pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<(), String> {
+    let _total_timer = Timer::new("Total energy minimization");
     println!("Energy minimization called on structure with {} atoms", 
              structure.get_num_of_atoms());
     
     // Extract molecular data from AtomicStructure
-    let (atoms_data, bonds_data) = extract_molecular_data(structure)?;
+    let (atoms_data, bonds_data) = {
+        let _timer = Timer::new("Data extraction from AtomicStructure");
+        extract_molecular_data(structure)?
+    };
     
     // Call Python energy minimization
     match call_python_minimize_energy_with_data(atoms_data, bonds_data) {
         Ok(result) => {
             if result.success {
                 // Update atom positions with minimized coordinates
-                update_atom_positions(structure, &result.positions)?;
+                {
+                    let _timer = Timer::new("Position updates back to AtomicStructure");
+                    update_atom_positions(structure, &result.positions)?;
+                }
                 println!("Energy minimization successful! Final energy: {:.2} kJ/mol", result.energy);
                 Ok(())
             } else {
@@ -137,54 +192,68 @@ fn call_python_minimize_energy_with_data(
     atoms_data: Vec<AtomData>, 
     bonds_data: Vec<BondData>
 ) -> Result<MinimizationResult, String> {
+    let _timer = Timer::new("Python function call (total)");
     Python::with_gil(|py| {
         // Add the python directory to the Python path so we can import our module
-        let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
-        let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
-        
-        // Add the python directory to sys.path (assuming we're running from the project root)
-        path.call_method1("append", ("python",))
-            .map_err(|e| format!("Failed to add python directory to sys.path: {}", e))?;
-        
-        // Import our simulation module
-        let simulation_module = py.import_bound("simulation")
-            .map_err(|e| format!("Failed to import simulation module: {}", e))?;
+        let simulation_module = {
+            let _timer = Timer::new("Python runtime init and module import");
+            let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
+            let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
+            
+            // Add the python directory to sys.path (assuming we're running from the project root)
+            path.call_method1("append", ("python",))
+                .map_err(|e| format!("Failed to add python directory to sys.path: {}", e))?;
+            
+            // Import our simulation module
+            py.import_bound("simulation")
+                .map_err(|e| format!("Failed to import simulation module: {}", e))?
+        };
         
         // Convert atoms data to Python format
-        let atoms_list = PyList::empty_bound(py);
-        for atom in atoms_data {
-            let atom_dict = PyDict::new_bound(py);
-            atom_dict.set_item("atomic_number", atom.atomic_number)
-                .map_err(|e| format!("Failed to set atomic_number: {}", e))?;
-            atom_dict.set_item("position", atom.position.to_vec())
-                .map_err(|e| format!("Failed to set position: {}", e))?;
-            atom_dict.set_item("formal_charge", atom.formal_charge)
-                .map_err(|e| format!("Failed to set formal_charge: {}", e))?;
-            atoms_list.append(atom_dict)
-                .map_err(|e| format!("Failed to append atom dict: {}", e))?;
-        }
-        
-        // Convert bonds data to Python format
-        let bonds_list = PyList::empty_bound(py);
-        for bond in bonds_data {
-            let bond_dict = PyDict::new_bound(py);
-            bond_dict.set_item("atom1", bond.atom1)
-                .map_err(|e| format!("Failed to set atom1: {}", e))?;
-            bond_dict.set_item("atom2", bond.atom2)
-                .map_err(|e| format!("Failed to set atom2: {}", e))?;
-            bond_dict.set_item("order", bond.order)
-                .map_err(|e| format!("Failed to set order: {}", e))?;
-            bonds_list.append(bond_dict)
-                .map_err(|e| format!("Failed to append bond dict: {}", e))?;
-        }
+        let (atoms_list, bonds_list) = {
+            let _timer = Timer::new("Data serialization to Python format");
+            let atoms_list = PyList::empty_bound(py);
+            for atom in atoms_data {
+                let atom_dict = PyDict::new_bound(py);
+                atom_dict.set_item("atomic_number", atom.atomic_number)
+                    .map_err(|e| format!("Failed to set atomic_number: {}", e))?;
+                atom_dict.set_item("position", atom.position.to_vec())
+                    .map_err(|e| format!("Failed to set position: {}", e))?;
+                atom_dict.set_item("formal_charge", atom.formal_charge)
+                    .map_err(|e| format!("Failed to set formal_charge: {}", e))?;
+                atoms_list.append(atom_dict)
+                    .map_err(|e| format!("Failed to append atom dict: {}", e))?;
+            }
+            
+            // Convert bonds data to Python format
+            let bonds_list = PyList::empty_bound(py);
+            for bond in bonds_data {
+                let bond_dict = PyDict::new_bound(py);
+                bond_dict.set_item("atom1", bond.atom1)
+                    .map_err(|e| format!("Failed to set atom1: {}", e))?;
+                bond_dict.set_item("atom2", bond.atom2)
+                    .map_err(|e| format!("Failed to set atom2: {}", e))?;
+                bond_dict.set_item("order", bond.order)
+                    .map_err(|e| format!("Failed to set order: {}", e))?;
+                bonds_list.append(bond_dict)
+                    .map_err(|e| format!("Failed to append bond dict: {}", e))?;
+            }
+            (atoms_list, bonds_list)
+        };
         
         // Call the minimize_energy function with molecular data
-        let result = simulation_module.call_method1("minimize_energy", (atoms_list, bonds_list))
-            .map_err(|e| format!("Failed to call minimize_energy: {}", e))?;
+        let result = {
+            let _timer = Timer::new("Python minimize_energy function call");
+            simulation_module.call_method1("minimize_energy", (atoms_list, bonds_list))
+                .map_err(|e| format!("Failed to call minimize_energy: {}", e))?
+        };
         
         // Extract the result dictionary
-        let result_dict = result.downcast::<PyDict>()
-            .map_err(|e| format!("Result is not a dictionary: {}", e))?;
+        let result_dict = {
+            let _timer = Timer::new("Result deserialization from Python");
+            result.downcast::<PyDict>()
+                .map_err(|e| format!("Result is not a dictionary: {}", e))?
+        };
         
         // Extract individual fields from the result
         let success: bool = result_dict.get_item("success")

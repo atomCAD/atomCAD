@@ -534,4 +534,10 @@ pub fn init_app() {
     .build()
     .unwrap()
     .block_on(initialize_cad_instance_async());
+    
+    // Initialize simulation environment to pre-load Python runtime and force field
+    match crate::common::simulation::initialize_simulation() {
+        Ok(message) => println!("Simulation initialization: {}", message),
+        Err(error) => println!("Warning: Simulation initialization failed: {}", error),
+    }
 }
