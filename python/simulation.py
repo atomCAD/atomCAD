@@ -62,6 +62,18 @@ except ImportError as e:
 # Global force field instance
 _force_field = None
 
+class IterationReporter(MinimizationReporter):
+    """Reporter to track the number of iterations during energy minimization."""
+    
+    def __init__(self):
+        super().__init__()
+        self.iteration_count = 0
+    
+    def report(self, iteration, x, grad, args):
+        """Called after each minimization iteration."""
+        self.iteration_count += 1
+        return True  # Continue minimization
+
 def _create_error_result(message):
     """
     Create a standardized error result dictionary.
@@ -335,7 +347,7 @@ def _perform_minimization(atoms, bonds, options):
     # OpenMM tolerance expects force units (kJ/mol/nm), not energy units (kJ/mol)
     # MSEP doesn't pass tolerance, so we'll follow their approach
     start_time = time.time()
-    simulation.minimizeEnergy(maxIterations=max_iterations)
+    simulation.minimizeEnergy(tolerance=10 * kilojoules_per_mole/nanometer, maxIterations=max_iterations)
     minimization_time = time.time() - start_time
     print(f"[TIMING] Actual energy minimization took {minimization_time:.3f} seconds")
     
