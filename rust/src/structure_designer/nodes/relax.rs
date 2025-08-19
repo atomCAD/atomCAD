@@ -7,6 +7,11 @@ use crate::structure_designer::evaluator::network_evaluator::input_missing_error
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
 use crate::common::simulation::minimize_energy;
 
+#[derive(Debug, Clone)]
+pub struct RelaxEvalCache {
+  pub relax_message: String,
+}
+
 pub fn eval_relax<'a>(
   network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
@@ -30,7 +35,15 @@ pub fn eval_relax<'a>(
   if let NetworkResult::Atomic(mut atomic_structure) = input_val {
 
     match minimize_energy(&mut atomic_structure) {
-      Ok(()) => {
+      Ok(result) => {
+        // Store evaluation cache for selected node
+        if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+          let eval_cache = RelaxEvalCache {
+            relax_message: result.message.clone(),
+          };
+          context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+        
         return NetworkResult::Atomic(atomic_structure);
       }
       Err(error_msg) => {

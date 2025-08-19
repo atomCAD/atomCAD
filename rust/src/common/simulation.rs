@@ -81,9 +81,10 @@ pub fn initialize_simulation() -> Result<String, String> {
 /// 
 /// # Returns
 /// 
-/// Returns `Ok(())` if the energy minimization was successful, or an error if it failed.
-/// The function updates the atom positions in the AtomicStructure with the minimized coordinates.
-pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<(), String> {
+/// Returns `Ok(MinimizationResult)` with energy, iterations, and message if successful, 
+/// or an error if it failed. The function updates the atom positions in the AtomicStructure 
+/// with the minimized coordinates.
+pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<MinimizationResult, String> {
     let _total_timer = Timer::new("Total energy minimization");
     println!("Energy minimization called on structure with {} atoms", 
              structure.get_num_of_atoms());
@@ -104,7 +105,7 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<(), String> {
                     update_atom_positions(structure, &result.positions)?;
                 }
                 println!("Energy minimization successful! Final energy: {:.2} kJ/mol", result.energy);
-                Ok(())
+                Ok(result)
             } else {
                 println!("Energy minimization failed: {}", result.message);
                 print_atom_info(structure);
@@ -119,12 +120,12 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<(), String> {
 
 /// Result structure returned from Python energy minimization
 #[derive(Debug)]
-struct MinimizationResult {
-    success: bool,
-    positions: Vec<Vec<f64>>,
-    energy: f64,
-    iterations: i32,
-    message: String,
+pub struct MinimizationResult {
+    pub success: bool,
+    pub positions: Vec<Vec<f64>>,
+    pub energy: f64,
+    pub iterations: i32,
+    pub message: String,
 }
 
 /// Atom data structure for Python interface

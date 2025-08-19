@@ -364,6 +364,7 @@ def _perform_minimization(atoms, bonds, options):
     result = {
         "success": True,
         "positions": final_positions.tolist(),
+        "start_energy": float(start_energy),
         "energy": float(final_energy),
         "iterations": iteration_reporter.iteration_count,
         "message": msg
