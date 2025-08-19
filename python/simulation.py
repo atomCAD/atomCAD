@@ -327,6 +327,11 @@ def _perform_minimization(atoms, bonds, options):
     simulation.context.setPositions(np.array(positions) * angstrom)
     
     # Minimize energy (following MSEP pattern - no tolerance parameter)
+
+# Get initial energy before minimization
+    initial_state = simulation.context.getState(getEnergy=True)
+    start_energy = initial_state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
+
     # OpenMM tolerance expects force units (kJ/mol/nm), not energy units (kJ/mol)
     # MSEP doesn't pass tolerance, so we'll follow their approach
     start_time = time.time()
@@ -338,13 +343,16 @@ def _perform_minimization(atoms, bonds, options):
     state = simulation.context.getState(getPositions=True, getEnergy=True)
     final_positions = state.getPositions(asNumpy=True).value_in_unit(angstrom)
     final_energy = state.getPotentialEnergy().value_in_unit(kilojoules_per_mole)
-    
+
+    msg = f"Energy minimization completed successfully. Initial energy: {start_energy:.2f} kJ/mol, Final energy: {final_energy:.2f} kJ/mol"
+    print(msg)
+
     result = {
         "success": True,
         "positions": final_positions.tolist(),
         "energy": float(final_energy),
         "iterations": max_iterations,  # OpenMM doesn't report actual iterations used
-        "message": f"Energy minimization completed successfully. Final energy: {final_energy:.2f} kJ/mol"
+        "message": msg
     }
     
     print(f"[TIMING] Energy minimization result processing completed")

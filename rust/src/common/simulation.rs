@@ -5,6 +5,20 @@ use glam::DVec3;
 use crate::common::atomic_structure_utils::print_atom_info;
 use crate::util::timer::Timer;
 
+#[pyclass]
+struct LoggingStdout;
+
+#[pymethods]
+impl LoggingStdout {
+    fn write(&self, data: &str) {
+        print!("{}", data);
+    }
+    
+    fn flush(&self) {
+        // Optional: implement flush for completeness
+    }
+}
+
 /// Initializes the Python simulation environment by pre-loading the force field.
 /// This should be called once at application startup to avoid expensive initialization
 /// during the first energy minimization call.
@@ -12,8 +26,12 @@ pub fn initialize_simulation() -> Result<String, String> {
     let _timer = Timer::new("Simulation initialization");
     
     Python::with_gil(|py| {
-        // Add the python directory to the Python path
+        // Set up stdout redirection to capture Python print statements
         let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
+        sys.setattr("stdout", LoggingStdout.into_py(py))
+            .map_err(|e| format!("Failed to redirect stdout: {}", e))?;
+        
+        // Add the python directory to the Python path
         let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
         
         path.call_method1("append", ("python",))
@@ -198,6 +216,11 @@ fn call_python_minimize_energy_with_data(
         let simulation_module = {
             let _timer = Timer::new("Python runtime init and module import");
             let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
+            
+            // Set up stdout redirection to capture Python print statements
+            sys.setattr("stdout", LoggingStdout.into_py(py))
+                .map_err(|e| format!("Failed to redirect stdout: {}", e))?;
+            
             let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
             
             // Add the python directory to sys.path (assuming we're running from the project root)
