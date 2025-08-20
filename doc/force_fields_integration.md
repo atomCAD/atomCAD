@@ -82,11 +82,103 @@ https://docs.openmm.org/latest/userguide/application/01_getting_started.html#ins
 
 https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html
 
-
 Please note that pip install is not available for openmm-forcefield.
 Recommended to install is through mamba, which is a conda drop-in replacement.
 
-## Non windows installation summary
+## Linux installation summary
+
+This part of the document describes a minimal, reproducible Python environment for running the Python parts of the atomCAD project (OpenMM and OpenFF Toolkit). It assumes WSL2 or a native Linux (Ubuntu/Debian) environment. This part is AI generated.
+
+---
+
+### 1. Install Miniconda (or Mambaforge)
+
+Use Miniconda for a simple install, or Mambaforge if you prefer faster dependency solving.
+
+```bash
+# Download Miniconda (or replace URL with Mambaforge if you prefer)
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+# Run installer and follow prompts
+bash Miniconda3-latest-Linux-x86_64.sh
+
+# Reload shell so `conda` is available (or open a new terminal)
+source ~/.bashrc
+```
+
+---
+
+### 2. Create a dedicated environment
+
+Prefer creating the environment from `conda-forge` to ensure binary compatibility.
+
+
+```bash
+mamba create -n atomcad -c conda-forge python=3.11 openmm openff-toolkit-base rdkit openff-interchange-base -y
+mamba activate atomcad
+```
+
+> Installing both `openmm` and `openff-toolkit` from `conda-forge` keeps native libraries and runtimes consistent.
+
+---
+
+### 3. Fix common C++ runtime issues
+
+If Python raises an error about `GLIBCXX` or missing `libstdc++.so.6` symbols, install/update the runtime packages from `conda-forge` inside the environment:
+
+```bash
+conda activate atomcad
+conda install -c conda-forge libgcc-ng libstdcxx-ng -y
+# Optionally force-reinstall openmm to ensure consistent deps
+conda install -c conda-forge openmm --update-deps --force-reinstall -y
+```
+
+---
+
+---
+
+### 4. Verify the installation
+
+Run small import checks to ensure OpenMM/OpenFF load correctly and that the environment provides the expected libraries.
+
+```bash
+conda activate atomcad
+python -c "import simtk.openmm as mm; print('OpenMM OK', mm.Platform.getPlatform(0).getName())"
+python -c "import openff.toolkit as oft; print('OpenFF OK', oft.__version__)"
+```
+
+If you see errors referencing `libstdc++` or `GLIBCXX`, go back to section 3.
+
+---
+
+### 5. Make Rust `pyo3` use this Python
+
+Tell `pyo3`/Cargo which Python binary to use when building or running the Rust bindings:
+
+```bash
+# Activate the environment (important)
+conda activate atomcad
+# Export the Python path for pyo3 builds
+export PYO3_PYTHON=$(which python)
+# Build your Rust target
+cargo build
+```
+
+Alternatively, prefix commands with `conda activate atomcad && ...` to ensure the environment is active for the command.
+
+---
+
+
+
+---
+
+Build the rust part while atomcad is activated: 
+
+cargo build
+
+run the application:
+
+LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH" flutter run
 
 ## Windows installation summary
 
