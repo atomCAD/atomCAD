@@ -4299,7 +4299,8 @@ let mut var_wireframeGeometry = <bool>::sse_decode(deserializer);
 let mut var_samplesPerUnitCell = <i32>::sse_decode(deserializer);
 let mut var_sharpnessAngleThresholdDegree = <f64>::sse_decode(deserializer);
 let mut var_meshSmoothing = <crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing};}
+let mut var_displayCameraTarget = <bool>::sse_decode(deserializer);
+return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing, display_camera_target: var_displayCameraTarget};}
                 }
 
 impl SseDecode for i32 {
@@ -6009,7 +6010,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::structure_designer::structure
 self.wireframe_geometry.into_into_dart().into_dart(),
 self.samples_per_unit_cell.into_into_dart().into_dart(),
 self.sharpness_angle_threshold_degree.into_into_dart().into_dart(),
-self.mesh_smoothing.into_into_dart().into_dart()
+self.mesh_smoothing.into_into_dart().into_dart(),
+self.display_camera_target.into_into_dart().into_dart()
                 ].into_dart()
                 }
             }
@@ -6665,7 +6667,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_preference
 <bool>::sse_encode(self.wireframe_geometry, serializer);
 <i32>::sse_encode(self.samples_per_unit_cell, serializer);
 <f64>::sse_encode(self.sharpness_angle_threshold_degree, serializer);
-<crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_encode(self.mesh_smoothing, serializer);}
+<crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_encode(self.mesh_smoothing, serializer);
+<bool>::sse_encode(self.display_camera_target, serializer);}
                 }
 
 impl SseEncode for i32 {

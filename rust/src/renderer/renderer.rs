@@ -9,6 +9,7 @@ use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
 use super::tessellator::surface_point_tessellator;
+use super::tessellator::tessellator::tessellate_sphere;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
@@ -465,6 +466,23 @@ impl Renderer {
         let mut lightweight_mesh = Mesh::new();
         if let Some(tessellatable) = scene.tessellatable() {
             tessellatable.tessellate(&mut lightweight_mesh);
+        }
+        
+        // Tessellate camera target sphere if enabled
+        if geometry_visualization_preferences.display_camera_target {
+            let red_material = Material::new(
+                &Vec3::new(1.0, 0.0, 0.0), // Red color
+                0.5, // roughness
+                0.0, // metallic
+            );
+            tessellate_sphere(
+                &mut lightweight_mesh,
+                &self.camera.target,
+                0.2, // Small radius for visibility
+                8,   // horizontal_divisions
+                8,   // vertical_divisions
+                &red_material,
+            );
         }
         
         //println!("lightweight tessellated {} vertices and {} indices", 

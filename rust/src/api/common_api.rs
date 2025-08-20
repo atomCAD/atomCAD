@@ -382,7 +382,8 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
         
         // Update the camera buffer
         cad_instance.renderer.update_camera_buffer();
-        
+
+        refresh_renderer(cad_instance, true);    
         return;
       } else {
         // Fallback: Check if both the camera forward vector and input ray hit the XZ plane
@@ -412,6 +413,7 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
           // Update the camera buffer
           cad_instance.renderer.update_camera_buffer();
           
+          refresh_renderer(cad_instance, true);
           return;
         }
       }

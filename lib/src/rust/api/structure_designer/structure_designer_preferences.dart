@@ -21,6 +21,7 @@ class GeometryVisualizationPreferences {
   int samplesPerUnitCell;
   double sharpnessAngleThresholdDegree;
   MeshSmoothing meshSmoothing;
+  bool displayCameraTarget;
 
   GeometryVisualizationPreferences({
     required this.geometryVisualization,
@@ -28,6 +29,7 @@ class GeometryVisualizationPreferences {
     required this.samplesPerUnitCell,
     required this.sharpnessAngleThresholdDegree,
     required this.meshSmoothing,
+    required this.displayCameraTarget,
   });
 
   @override
@@ -36,7 +38,8 @@ class GeometryVisualizationPreferences {
       wireframeGeometry.hashCode ^
       samplesPerUnitCell.hashCode ^
       sharpnessAngleThresholdDegree.hashCode ^
-      meshSmoothing.hashCode;
+      meshSmoothing.hashCode ^
+      displayCameraTarget.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -48,7 +51,8 @@ class GeometryVisualizationPreferences {
           samplesPerUnitCell == other.samplesPerUnitCell &&
           sharpnessAngleThresholdDegree ==
               other.sharpnessAngleThresholdDegree &&
-          meshSmoothing == other.meshSmoothing;
+          meshSmoothing == other.meshSmoothing &&
+          displayCameraTarget == other.displayCameraTarget;
 }
 
 /// Enum to control mesh smoothing behavior during tessellation

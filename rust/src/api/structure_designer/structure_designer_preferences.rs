@@ -34,6 +34,8 @@ pub struct GeometryVisualizationPreferences {
   pub sharpness_angle_threshold_degree: f64,
   #[frb(non_final)]
   pub mesh_smoothing: MeshSmoothing,
+  #[frb(non_final)]
+  pub display_camera_target: bool,
 }
 
 #[frb]
@@ -68,6 +70,7 @@ impl StructureDesignerPreferences {
         samples_per_unit_cell: 4,
         sharpness_angle_threshold_degree: 29.0,
         mesh_smoothing: MeshSmoothing::SmoothingGroupBased,
+        display_camera_target: true,
       },
       node_display_preferences: NodeDisplayPreferences {
         display_policy: NodeDisplayPolicy::PreferSelected,
