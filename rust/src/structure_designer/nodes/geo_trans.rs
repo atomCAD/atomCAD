@@ -272,11 +272,9 @@ impl GeoTransGadget {
     }
     
     // Get the local axis direction based on the current rotation
-    let local_axis_dir = match axis_index {
-      0 => self.frame_transform.rotation.mul_vec3(DVec3::new(1.0, 0.0, 0.0)), // X axis
-      1 => self.frame_transform.rotation.mul_vec3(DVec3::new(0.0, 1.0, 0.0)), // Y axis
-      2 => self.frame_transform.rotation.mul_vec3(DVec3::new(0.0, 0.0, 1.0)), // Z axis
-      _ => return false, // Invalid axis index
+    let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, axis_index) {
+      Some(dir) => dir,
+      None => return false, // Invalid axis index
     };
     
     // Calculate the movement vector

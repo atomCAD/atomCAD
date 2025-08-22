@@ -138,3 +138,12 @@ pub fn get_dragged_axis_offset(
         ray_direction  // mouse ray direction
     )
 }
+
+pub fn get_local_axis_direction(rotation_quat: DQuat, axis_index: i32) -> Option<DVec3> {
+    match axis_index {
+        0 => Some(rotation_quat.mul_vec3(DVec3::new(1.0, 0.0, 0.0))), // X axis
+        1 => Some(rotation_quat.mul_vec3(DVec3::new(0.0, 1.0, 0.0))), // Y axis
+        2 => Some(rotation_quat.mul_vec3(DVec3::new(0.0, 0.0, 1.0))), // Z axis
+        _ => None, // Invalid axis index
+    }
+}
