@@ -251,7 +251,12 @@ Outputs the boolean intersection of two 2D geometries. The 'shapes' input pin is
 #### diff_2d
 
 Outputs the boolean difference of two 2D geometries.
-We could design this node to have two 'single pin' inputs but for convenience reasons (to avoid needing to use too many nodes)
+
+![](./structure_designer_images/diff_2d_node.png)
+
+![](./structure_designer_images/diff_2d_viewport.png)
+
+We could have designed this node to have two 'single pin' inputs but for convenience reasons (to avoid needing to use too many nodes)
 both of its input pins are multi pins and first a union operation is done on the individual input pins before the diff operation.
 The node expression is the following:
 
@@ -259,13 +264,19 @@ The node expression is the following:
 diff_2d(base, sub) = diff_2d(union_2d(...each base input...), union_2d(...each sub input...))
 ```
 
-![](./structure_designer_images/diff_2d_node.png)
-
-![](./structure_designer_images/diff_2d_viewport.png)
-
 ### 3D Geometry nodes
 
+These nodes output a 3D geometry which can be used later as an input to an atom_to_geo node to create an atomic structure.
+Positions and sizes are usually discrete integer numbers meant in crystal lattice coordinates.
+
+#### A note on the scaling of geometry in the viewport
+
+When displaying geometry, crystal lattice coordinates are converted to amstrongs by multiplying them with the diamond crystal structure unit cell size (**3.567 Ångströms**). The grid displayed in the viewport is also scaled by this factor. If you use an geo_to_atom node to convert a geometry to diamond, its size will be the same. But if you convert the geometry to another crystal structure the size will be different: it will be scaled instead by the unit cell size of that crystal structure.
+
+
 #### extrude
+
+Extrudes a 2D geometry to a 3D geometry.
 
 ![](./structure_designer_images/extrude_node.png)
 
@@ -307,23 +318,23 @@ Outputs a half space.
 It is possible to manually edit properties of the half space or use the gadget which appears
 when the node is selected.
 
-- The 'Center' property is a 3d integer vector. It is displayed as a red sphere in the gadget.
-- The 'Miller Index' property is also a 3d integer vector which determines the normal of the half space. You need not enter it manually: one way to enter it is selecting it on the 'earth-like' map. The amount of points appearing on the map depends on the 'Max Miller Index' property which you can also select. 
-- 'Shift' is an integer property and it defines the shift from the center in the direction of the Miller Index.
+- The `Center` property is a 3d integer vector. It is displayed as a red sphere in the gadget.
+- The `Miller Index` property is also a 3d integer vector which determines the normal of the half space. You need not enter it manually: one way to enter it is selecting it on the 'earth-like' map. The amount of points appearing on the map depends on the `Max Miller Index` property which you can also select. 
+- `Shift` is an integer property and it defines the shift from the center in the direction of the Miller Index.
 Its integer number is meant in the smallest possbile increments where at each shift value the plane goes through
 crystal lattice points.
 
-The boundary of a half space is an infinite plane. In atomCAD a half space is rendered specially compared to other geometry.
-Even in solid rendering mode it is rendered as a grid of stripes.
+The boundary of a half space is an **infinite plane**. In atomCAD a half space is rendered specially compared to other geometry.
+Even in solid rendering mode it is rendered as a **grid of stripes**.
 The reason is that normal solid rendering would not give enough information about its spatial placement. (We would just see that the whole screen is covered in green, which would not be very helpful.)
 Once a half space participates in boolean operations we no longer render it as a grid of stripes: results of boolean operations are rendered normally as any other geometry.
 
 ##### Manipulating the half space gadget
 
-You can also menipulate the half space by interacting with the gadget.
-First, you can drag the light blue cylinder to modify the shift value of the plane.
-Second, you can click on the red sphere at the center: when you do this circular discs appear on a sphere surface,
-each corresponding to a miller index. You can select one of the disks by dragging the mouse to one of them while you
+The half space can be manipulatedby interacting with the gadget.
+- First, you can **drag the light blue cylinder** to modify the **shift** value of the plane.
+- Second, you can **click on the red sphere** at the center: when you do this circular discs appear on a sphere surface,
+each corresponding to a **miller index**. You can select one of the disks by dragging the mouse to one of them while you
 hold the mouse left button and release the left button on the appripriate one.
 The amount of circular discs appearing depends on the 'Max Miller Index' property you selected.
 
@@ -332,13 +343,38 @@ The amount of circular discs appearing depends on the 'Max Miller Index' propert
 
 #### facet_shell
 
+Builds a finite polyhedral **shell** by clipping an infinite lattice with a user‑supplied set of half‑spaces.
+Internally it is implemented as the intersection of a set of half spaces: the reason for having this as a separate
+built-in node is a set of convenience features.
+Ideal for generating octahedra, dodecahedra, truncated polyhedra, Wulff shapes.
+
 ![](./structure_designer_images/facet_shell_node.png)
 
 ![](./structure_designer_images/facet_shell_props.png)
 
 ![](./structure_designer_images/facet_shell_viewport.png)
 
+This node generally offers the same features as the half_space node, but some additional features are also available:
+
+- clicking on a facet selectes it.
+- when a facet is selected you can manipulate it the same way as a half space.
+- if you turn on the **symmetrize** boolean property for a facet, the facet will be symmetrized using the natural point group symmetry according to the miller index family. Basically a symmetrized facet is replaced with a set of facets according to the following table:
+
+```
+Miller family | Num. of planes | Equivalents generated
+{100}         | 6              | (±1, 0, 0), (0, ±1, 0), (0, 0, ±1) — the six cube faces
+{110}         | 12             | All permutations of (±1, ±1, 0) — normals pointing to the mid‑edges of the cube
+{111}         | 8              | All sign combinations of (±1, ±1, ±1) — normals pointing to the eight corners of the cube
+{hhl} (h≠l)   | 24             | All permutations of (±h, ±h, ±l) — “mixed” families where two indices are equal, one distinct
+General (hkl) | 48             | All permutations of (±h, ±k, ±l) — the full 48‑member orbit under O<sub>h</sub>
+```
+
+- The 'Split symmetry members' button creates individual facets from the symmetry variants of a facet.
+
 #### union
+
+Outputs the boolean union of any number of 3D geometries. The 'shapes' input pin is a multi pin.
+
 
 ![](./structure_designer_images/union_node.png)
 
@@ -346,17 +382,32 @@ The amount of circular discs appearing depends on the 'Max Miller Index' propert
 
 #### intersect
 
+Outputs the boolean intersection of two 3D geometries. The 'shapes' input pin is a multi pin.
+
 ![](./structure_designer_images/intersect_node.png)
 
 ![](./structure_designer_images/intersect_viewport.png)
 
 #### diff
 
+Outputs the boolean difference of two 3D geometries.
+
 ![](./structure_designer_images/diff_node.png)
 
 ![](./structure_designer_images/diff_viewport.png)
 
+We could have designed this node to have two 'single pin' inputs but for convenience reasons (to avoid needing to use too many nodes)
+both of its input pins are multi pins and first a union operation is done on the individual input pins before the diff operation.
+The node expression is the following:
+
+```
+diff(base, sub) = diff(union(...each base input...), union(...each sub input...))
+```
+
 #### geo_trans
+
+Transforms a geometry in the discrete lattice space.
+'Continuous' transformation in the lattice space is not allowed (for continuous transformations use the atom_trans node which is only available for atomic structures).
 
 ![](./structure_designer_images/geo_trans_node.png)
 
@@ -364,18 +415,149 @@ The amount of circular discs appearing depends on the 'Max Miller Index' propert
 
 ![](./structure_designer_images/geo_trans_viewport.png)
 
+The integer coordinates for translation are of course meant in crystal lattice coordinates.
+The integer cooridinates for rotation are meant in multiples of 90 degrees.
+
+The gadget for the node is currently only displayed but not draggable.
+
+TODEV: The gadget should be draggable to allow for translations.
+TODEV: The gadget should allow for rotations.
+
+##### Nuances of the geometry transformations in atomCAD
+
+When designing the geometry transformation system in atomCAD we had to make some choices. In all cases our aim was to make the system as intuitive as possbile. The choices are the following:
+
+- in an atomCAD node network every geometry output contains not only the geometry itself but also a transformation gizmo orientation and position (6 degree of freedom). We also call this the **local coordinate system** or **local transform** of the geometry output but we often just casually refer to it as the placement of **the transformation gizmo**. 
+- The translation vector of the geo_trans node is meant in world space irrespective of the orientation of the transformation gizmo.
+- The rotation angles are meant as euler angles applied in the order xyx on the local gadget axes. 
+- For geometry we have a simple guiding axiom: **geometry** is always **rigidly attached to the transformation
+gizmo**. (Geometry never moves in the transformation gizmo's local coordinate system.)
+- All non-transformation nodes have a default placement for the transformation gizmo: For example in case of a cuboid or sphere the position is the center of mass, the orientation is the identity rotation. For unions and intersection the position is the average of the positions of the inputs and the rotation is the identity rotation. 
+
+The reason for our choices:
+- rotation is simple to reason about if interpreted as local rotations
+- translation is more easy to reason about as world space translation
+
+Disadvantages:
+- In case of rotated axes when dragging a gizmo axis (e.g. dragging the x axis)
+actually a different axis coordinate is changed in the node data (e.g. y coordinate is changed, as the local x axis is the global y axis)
+
+Ultimately the main question is: what was the user's intent with that node? While it is hard to capture intent we think that
+these choices are the best we can do for most cases.
+
 ### Atomic structure nodes
 
 #### geo_to_atom
 
-#### edit_atom
+Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its input.
+
+![](./structure_designer_images/geo_to_atom_node.png)
+
+![](./structure_designer_images/geo_to_atom_props.png)
+
+![](./structure_designer_images/geo_to_atom_viewport.png)
 
 #### atom_trans
 
+The atom_trans node is similar to the geo_trans node but it is available for atomic structures instead of geometry
+and the transformation happens not in integer lattice space but in continuous space where one unit is one angstrom.
+
+![](./structure_designer_images/atom_trans_node.png)
+
+![](./structure_designer_images/atom_trans_props.png)
+
+![](./structure_designer_images/atom_trans_viewport.png)
+
+We repeat here the main design decisions which are common with the geo_trans node:
+
+- similarly to geometry output every atomic structure output also contains a transformation gizmo orientation and position. 
+- The translation vector of the atom_trans node is meant in world space irrespective of the orientation of the transformation gizmo.
+- The rotation angles are meant as euler angles in degrees applied in the order xyx on the local gadget axes. 
+- atomic structures are always **rigidly attached to the transformation
+gizmo**. (atomic structures never moves in the transformation gizmo's local coordinate system.)
+
+TODEV: The gadget is displayed but is should also be draggable to support translations and rotations.
+
+#### edit_atom
+
+This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. There user can freely group atomic editing commands into edit_atom_nodes at their will. 
+
+![](./structure_designer_images/edit_atom_node.png)
+
+The edit atom node is probably the most complex node in atomCAD. When you select this node you can feel like you are in a separate sub-application inside atomCAD. The node properties section of this node contains the user interface of this 'atom editor sub-application'. 
+
+The UI contains undo and redo buttons which are controlling only the commands inside the node (this is not a global undo redo functionality of the application).
+
+The atom editor UI is based on 'tools': one tool can be active at a time. The active tool determines how you can interact with the
+atomic structure on the viewport.
+
+##### Default tool
+
+![](./structure_designer_images/edit_atom_props_default_tool.png)
+
+Features:
+- Select atoms and bonds using the left mouse button. Simple click replaces the selection, shift click adds to the selection and control click inverts the selection of the clicked object.
+- Delete selected
+- Replace all selected atom with a specific element
+- Transform (move and rotate) selected atoms
+
+TODEV: gizmo for the transformation of the selected atoms
+
+##### Add atom tool
+
+![](./structure_designer_images/edit_atom_props_add_atom_tool.png)
+
+- Add a specific atom by left-clicking in the viewport
+
+##### Add bond tool
+
+![](./structure_designer_images/edit_atom_props_add_bond_tool.png)
+
+- Add bonds by left-clicking on two atoms in the viewport
+
 #### anchor
+
+This node is a helper node for the stamp node: It enables the user to select an atom as the anchor atom
+for the molecule in case if will be used as a 'stamp' input of the stamp node.
+
+![](./structure_designer_images/anchor_node.png)
+
+![](./structure_designer_images/anchor_props.png)
+
+![](./structure_designer_images/anchor_viewport.png)
 
 #### stamp
 
+This node can be used to stamp defects in a crystal structure.
+
+![](./structure_designer_images/stamp_node.png)
+
+The node has two atomic structure inputs:
+
+- 'crystal': The crystal structure in which the defect(s) will be stamped
+- 'stamp': The molecule which will be stamped into the crystal
+
+![](./structure_designer_images/stamp_props.png)
+
+You can stamp multiple so-called **stamp placements** into a crystal using the same stamp node. For example you can stamp multiple
+T-centers into a crystal with one single stamp node.
+
+The stamp placement can be created by clicking on an atom in the crystal. The stamp will be placed so that the anchor atom of the stamp will be at the clicked atom. You can also select the orientation of the placement.
+
+![](./structure_designer_images/stamp_props_orientation.png)
+
+![](./structure_designer_images/stamp_viewport.png)
+
 #### relax
 
+An atomic structure can be energy-minimized using the relax node.
 
+![](./structure_designer_images/relax_node.png)
+
+![](./structure_designer_images/relax_props.png)
+
+Relaxation is done using OpenFF an OpenMM. More details: [./force_fields_integartion.md]()
+
+TODEV: input parameters of the energy minimization and the possibility of locking specific atoms. See: https://kanban.mps.inc/cards/1579948050741200107
+
+TODEV: for convenience also make a 'relax' command available as a command inside the `edit_atom` node.
