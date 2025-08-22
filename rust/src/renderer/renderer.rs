@@ -9,7 +9,7 @@ use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
 use super::tessellator::atomic_tessellator;
 use super::tessellator::surface_point_tessellator;
-use super::tessellator::tessellator::tessellate_sphere;
+use super::tessellator::tessellator::tessellate_cuboid;
 use super::camera::Camera;
 use glam::f32::Vec3;
 use glam::f32::Mat4;
@@ -475,16 +475,17 @@ impl Renderer {
                 0.5, // roughness
                 0.0, // metallic
             );
-            tessellate_sphere(
+            tessellate_cuboid(
                 &mut lightweight_mesh,
                 &self.camera.target,
-                0.2, // Small radius for visibility
-                8,   // horizontal_divisions
-                8,   // vertical_divisions
+                &DVec3::new(0.4, 0.4, 0.4),
+                &DQuat::IDENTITY,
+                &red_material,
+                &red_material,
                 &red_material,
             );
         }
-        
+
         //println!("lightweight tessellated {} vertices and {} indices", 
         //         lightweight_mesh.vertices.len(), lightweight_mesh.indices.len());
 

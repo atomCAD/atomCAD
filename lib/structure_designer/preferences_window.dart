@@ -271,6 +271,26 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Camera target display checkbox
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _preferences.geometryVisualizationPreferences.displayCameraTarget,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.geometryVisualizationPreferences.displayCameraTarget = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('Display camera target'),
+                            ],
+                          ),
                         ],
                       ),
                     ),

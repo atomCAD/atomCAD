@@ -70,7 +70,7 @@ impl StructureDesignerPreferences {
         samples_per_unit_cell: 4,
         sharpness_angle_threshold_degree: 29.0,
         mesh_smoothing: MeshSmoothing::SmoothingGroupBased,
-        display_camera_target: true,
+        display_camera_target: false,
       },
       node_display_preferences: NodeDisplayPreferences {
         display_policy: NodeDisplayPolicy::PreferSelected,
