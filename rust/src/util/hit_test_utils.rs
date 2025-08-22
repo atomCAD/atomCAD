@@ -47,13 +47,15 @@ pub fn sphere_hit_test(
     }
 }
 
+/*
+ * This function calculates the parameter 't' on ray1 where the two rays are closest to each other.
+   based on the formula for distance between two skew lines.
+ */
 pub fn get_closest_point_on_first_ray(
     ray1_origin: &DVec3,
     ray1_direction: &DVec3,
     ray2_origin: &DVec3,
     ray2_direction: &DVec3) -> f64 {
-    // This function calculates the parameter 't' on ray1 where the two rays are closest to each other.
-    // Based on the formula for distance between two skew lines.
     
     // Normalize directions to ensure proper calculations
     let dir1 = ray1_direction.normalize();

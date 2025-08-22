@@ -176,6 +176,8 @@ pub struct GeoTransGadget {
     pub rotation: IVec3, // intrinsic euler angles where 1 increment means 90 degrees
     pub input_frame_transform: Transform,
     pub frame_transform: Transform,
+    pub dragged_handle_index: Option<i32>,
+    pub start_drag_offset: f64,
 }
 
 impl Tessellatable for GeoTransGadget {
@@ -193,29 +195,51 @@ impl Tessellatable for GeoTransGadget {
 }
 
 impl Gadget for GeoTransGadget {
-  fn hit_test(&self, _ray_origin: DVec3, _ray_direction: DVec3) -> Option<i32> {
-      None
+  fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+      xyz_gadget_utils::xyz_gadget_hit_test(
+          self.frame_transform.rotation,
+          &self.frame_transform.translation,
+          &ray_origin,
+          &ray_direction
+      )
   }
 
-  fn start_drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
-
+  fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    self.dragged_handle_index = Some(handle_index);
+    self.start_drag_offset = xyz_gadget_utils::get_dragged_axis_offset(
+        self.frame_transform.rotation,
+        &self.frame_transform.translation,
+        handle_index,
+        &ray_origin,
+        &ray_direction
+    );
   }
 
-  fn drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
-
+  fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    let current_offset = xyz_gadget_utils::get_dragged_axis_offset(
+        self.frame_transform.rotation,
+        &self.frame_transform.translation,
+        handle_index,
+        &ray_origin,
+        &ray_direction
+    );
+    let offset_delta = current_offset - self.start_drag_offset;
+    if self.apply_drag_offset(handle_index, offset_delta) {
+      self.start_drag(handle_index, ray_origin, ray_direction);
+    }
   }
 
   fn end_drag(&mut self) {
-
+    self.dragged_handle_index = None;
   }
 }
 
 impl NodeNetworkGadget for GeoTransGadget {
   fn sync_data(&self, data: &mut dyn NodeData) {
       if let Some(atom_trans_data) = data.as_any_mut().downcast_mut::<GeoTransData>() {
-        //TODO
-        //atom_trans_data.translation = self.translation;
-        //atom_trans_data.rotation = self.rotation;
+        let delta_translation = (self.frame_transform.translation - self.input_frame_transform.translation) / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        atom_trans_data.translation = delta_translation.round().as_ivec3();
+        atom_trans_data.rotation = self.rotation;
       }
   }
 
@@ -231,9 +255,38 @@ impl GeoTransGadget {
           rotation,
           input_frame_transform: Transform::new(input_frame_transform.translation * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64), input_frame_transform.rotation),
           frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
+          dragged_handle_index: None,
+          start_drag_offset: 0.0,
       };
       ret.refresh_frame_transform();
       return ret;
+  }
+
+  // Returns whether the application of the drag offset was successful and the drag start should be reset
+  fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
+    let rounded_delta = (offset_delta / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64)).round();
+    
+    // Early return if no movement
+    if rounded_delta == 0.0 {
+      return false;
+    }
+    
+    // Get the local axis direction based on the current rotation
+    let local_axis_dir = match axis_index {
+      0 => self.frame_transform.rotation.mul_vec3(DVec3::new(1.0, 0.0, 0.0)), // X axis
+      1 => self.frame_transform.rotation.mul_vec3(DVec3::new(0.0, 1.0, 0.0)), // Y axis
+      2 => self.frame_transform.rotation.mul_vec3(DVec3::new(0.0, 0.0, 1.0)), // Z axis
+      _ => return false, // Invalid axis index
+    };
+    
+    // Calculate the movement vector
+    let movement_distance = rounded_delta * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let movement_vector = local_axis_dir * movement_distance;
+    
+    // Apply the movement to the frame transform
+    self.frame_transform.translation += movement_vector;
+    
+    return true;
   }
 
   fn refresh_frame_transform(&mut self) {
