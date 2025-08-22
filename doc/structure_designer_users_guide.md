@@ -556,7 +556,7 @@ An atomic structure can be energy-minimized using the relax node.
 
 ![](./structure_designer_images/relax_props.png)
 
-Relaxation is done using OpenFF an OpenMM. More details: [./force_fields_integartion.md]()
+Relaxation is done using OpenFF an OpenMM. More details: [./force_fields_integartion.md](./force_fields_integartion.md)
 
 TODEV: input parameters of the energy minimization and the possibility of locking specific atoms. See: https://kanban.mps.inc/cards/1579948050741200107
 
