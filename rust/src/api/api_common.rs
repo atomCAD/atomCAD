@@ -241,14 +241,7 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
 pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.add_node_network("sample");
     kernel.set_active_node_network_name(Some("sample".to_string()));
-    let cuboid_id = kernel.add_node("cuboid", DVec2::new(30.0, 30.0));
-    let sphere_id = kernel.add_node("sphere", DVec2::new(100.0, 100.0));
-    let diff_id_1 = kernel.add_node("diff", DVec2::new(300.0, 80.0));
-    let diff_id_2 = kernel.add_node("diff", DVec2::new(500.0, 80.0));
-  
-    kernel.connect_nodes(cuboid_id, diff_id_1, 0);
-    kernel.connect_nodes(sphere_id, diff_id_1, 1);
-    kernel.connect_nodes(diff_id_1, diff_id_2, 1);
+    kernel.add_node("cuboid", DVec2::new(30.0, 30.0));
 }
 
   pub fn refresh_structure_designer(cad_instance: &mut CADInstance, lightweight: bool) {
