@@ -820,9 +820,6 @@ impl AtomicStructure {
     }
   }
   
-  
-
-
   pub fn transform(&mut self, rotation: &DQuat, translation: &DVec3) {
     // First, collect all atom IDs that will be transformed
     let atom_ids: Vec<u64> = self.atoms.keys().cloned().collect();

@@ -114,7 +114,7 @@ Prefer creating the environment from `conda-forge` to ensure binary compatibilit
 
 
 ```bash
-mamba create -n atomcad -c conda-forge python=3.11 openmm openff-toolkit-base rdkit openff-interchange-base -y
+mamba create -n atomcad -c conda-forge python=3.11 libgcc-ng libstdcxx-ng openmm openff-toolkit-base rdkit openff-interchange-base -y
 mamba activate atomcad
 ```
 

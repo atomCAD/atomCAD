@@ -15,6 +15,12 @@ use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::utils::xyz_gadget_utils;
+use crate::util::transform::Transform;
+
+#[derive(Debug, Clone)]
+pub struct AtomTransEvalCache {
+  pub input_frame_transform: Transform,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AtomTransData {
@@ -25,8 +31,15 @@ pub struct AtomTransData {
 }
 
 impl NodeData for AtomTransData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-      return Some(Box::new(AtomTransGadget::new(self.translation, self.rotation)));
+    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+        let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+        let atom_trans_cache = eval_cache.downcast_ref::<AtomTransEvalCache>()?;
+
+        return Some(Box::new(AtomTransGadget::new(
+            self.translation,
+            self.rotation, 
+            atom_trans_cache.input_frame_transform.clone()
+        )));
     }
 }
 
@@ -40,6 +53,7 @@ pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: 
 
   let result = &network_evaluator.evaluate(network_stack, input_molecule_node_id, registry, false, context)[0];
   if let NetworkResult::Atomic(atomic_structure) = result {
+
     let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 
     let rotation_quat = DQuat::from_euler(
@@ -48,8 +62,28 @@ pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: 
       atom_trans_data.rotation.y, 
       atom_trans_data.rotation.z);
 
+    let frame_transform = atomic_structure.frame_transform.apply_lrot_gtrans_new(&Transform::new(atom_trans_data.translation, rotation_quat));
+
+    // Store evaluation cache for selected node
+    if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+        let eval_cache = AtomTransEvalCache {
+          input_frame_transform: atomic_structure.frame_transform.clone(),
+        };
+        context.selected_node_eval_cache = Some(Box::new(eval_cache));
+    }
+
+    // The input is already transformed by the input transform.
+    // So we need to do the inverse of the input transform so the structure is first transformed back
+    // to its local position.
+    // And then we apply the whole frame transform.
+
     let mut result_atomic_structure = atomic_structure.clone();
-    result_atomic_structure.transform(&rotation_quat, &atom_trans_data.translation);
+
+    let inverse_input_transform = atomic_structure.frame_transform.inverse();
+
+    result_atomic_structure.transform(&inverse_input_transform.rotation, &inverse_input_transform.translation);
+    result_atomic_structure.transform(&frame_transform.rotation, &frame_transform.translation);
+    result_atomic_structure.frame_transform = frame_transform;
 
     return NetworkResult::Atomic(result_atomic_structure);
   }
@@ -60,12 +94,17 @@ pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: 
 pub struct AtomTransGadget {
     pub translation: DVec3,
     pub rotation: DVec3, // intrinsic euler angles in radians
-    pub rotation_quat: DQuat,
+    pub input_frame_transform: Transform,
+    pub frame_transform: Transform,
 }
 
 impl Tessellatable for AtomTransGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
-        xyz_gadget_utils::tessellate_xyz_gadget(output_mesh, self.rotation_quat, &self.translation);
+        xyz_gadget_utils::tessellate_xyz_gadget(
+            output_mesh, 
+            self.frame_transform.rotation,
+            &self.frame_transform.translation
+        );
     }
 
     fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
@@ -105,22 +144,25 @@ impl NodeNetworkGadget for AtomTransGadget {
 }
 
 impl AtomTransGadget {
-    pub fn new(translation: DVec3, rotation: DVec3) -> Self {
+    pub fn new(translation: DVec3, rotation: DVec3, input_frame_transform: Transform) -> Self {
         let mut ret = Self {
             translation,
             rotation,
-            rotation_quat: DQuat::IDENTITY.clone(),
+            input_frame_transform,
+            frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
         };
-        ret.refresh_rotation_quat();
+        ret.refresh_frame_transform();
         return ret;
     }
 
-    fn refresh_rotation_quat(&mut self) {
-        self.rotation_quat = DQuat::from_euler(
-            glam::EulerRot::XYZ,
-            self.rotation.x, 
-            self.rotation.y, 
-            self.rotation.z);
+    fn refresh_frame_transform(&mut self) {
+        let rotation_quat = DQuat::from_euler(
+          glam::EulerRot::XYZ,
+          self.rotation.x, 
+          self.rotation.y, 
+          self.rotation.z);
+    
+        self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(self.translation, rotation_quat));
     }
 }
 
