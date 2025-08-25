@@ -236,10 +236,10 @@ impl Gadget for GeoTransGadget {
 
 impl NodeNetworkGadget for GeoTransGadget {
   fn sync_data(&self, data: &mut dyn NodeData) {
-      if let Some(atom_trans_data) = data.as_any_mut().downcast_mut::<GeoTransData>() {
+      if let Some(geo_trans_data) = data.as_any_mut().downcast_mut::<GeoTransData>() {
         let delta_translation = (self.frame_transform.translation - self.input_frame_transform.translation) / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-        atom_trans_data.translation = delta_translation.round().as_ivec3();
-        atom_trans_data.rotation = self.rotation;
+        geo_trans_data.translation = delta_translation.round().as_ivec3();
+        geo_trans_data.rotation = self.rotation;
       }
   }
 

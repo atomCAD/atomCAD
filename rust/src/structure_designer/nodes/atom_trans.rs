@@ -96,6 +96,8 @@ pub struct AtomTransGadget {
     pub rotation: DVec3, // intrinsic euler angles in radians
     pub input_frame_transform: Transform,
     pub frame_transform: Transform,
+    pub dragged_handle_index: Option<i32>,
+    pub start_drag_offset: f64,
 }
 
 impl Tessellatable for AtomTransGadget {
@@ -113,29 +115,51 @@ impl Tessellatable for AtomTransGadget {
 }
 
 impl Gadget for AtomTransGadget {
-    fn hit_test(&self, _ray_origin: DVec3, _ray_direction: DVec3) -> Option<i32> {
-        None
+    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+        xyz_gadget_utils::xyz_gadget_hit_test(
+            self.frame_transform.rotation,
+            &self.frame_transform.translation,
+            &ray_origin,
+            &ray_direction
+        )
     }
-
-    fn start_drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
-
+  
+    fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+      self.dragged_handle_index = Some(handle_index);
+      self.start_drag_offset = xyz_gadget_utils::get_dragged_axis_offset(
+          self.frame_transform.rotation,
+          &self.frame_transform.translation,
+          handle_index,
+          &ray_origin,
+          &ray_direction
+      );
     }
-
-    fn drag(&mut self, _handle_index: i32, _ray_origin: DVec3, _ray_direction: DVec3) {
-
+  
+    fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+      let current_offset = xyz_gadget_utils::get_dragged_axis_offset(
+          self.frame_transform.rotation,
+          &self.frame_transform.translation,
+          handle_index,
+          &ray_origin,
+          &ray_direction
+      );
+      let offset_delta = current_offset - self.start_drag_offset;
+      if self.apply_drag_offset(handle_index, offset_delta) {
+        self.start_drag(handle_index, ray_origin, ray_direction);
+      }
     }
-
+  
     fn end_drag(&mut self) {
-
+      self.dragged_handle_index = None;
     }
 }
 
 impl NodeNetworkGadget for AtomTransGadget {
     fn sync_data(&self, data: &mut dyn NodeData) {
-        if let Some(atom_trans_data) = data.as_any_mut().downcast_mut::<AtomTransData>() {
-            atom_trans_data.translation = self.translation;
-            atom_trans_data.rotation = self.rotation;
-        }
+      if let Some(atom_trans_data) = data.as_any_mut().downcast_mut::<AtomTransData>() {
+        atom_trans_data.translation = self.frame_transform.translation - self.input_frame_transform.translation;
+        atom_trans_data.rotation = self.rotation;
+      }
     }
 
     fn clone_box(&self) -> Box<dyn NodeNetworkGadget> {
@@ -150,9 +174,26 @@ impl AtomTransGadget {
             rotation,
             input_frame_transform,
             frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
+            dragged_handle_index: None,
+            start_drag_offset: 0.0,
         };
         ret.refresh_frame_transform();
         return ret;
+    }
+
+    // Returns whether the application of the drag offset was successful and the drag start should be reset
+    fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
+        // Get the local axis direction based on the current rotation
+        let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, axis_index) {
+            Some(dir) => dir,
+            None => return false, // Invalid axis index
+        };    
+        let movement_vector = local_axis_dir * offset_delta;
+    
+        // Apply the movement to the frame transform
+        self.frame_transform.translation += movement_vector;
+    
+        return true;
     }
 
     fn refresh_frame_transform(&mut self) {
