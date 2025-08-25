@@ -63,7 +63,9 @@ When zooming the camera zoom speed will be determined by the camera target depth
 
 What happens when the ray trace do not hit any content? In this case we try to rely on the XZ plane. Currently we hit a ray from the eye both through the mouse position and both in the camera forward direction and if both hit the XZ plane we take the intersection through the camera forward direction as the camera target point.
 
-TODEV: option to be able to see the camera target point.
+The 'camera target' is displayed as a red cube in atomCAD if the 'display camera target' option is turned on.
+It can be turned on and off at the end of the Preferences panel (comes up clicking the Edit/Preferences menu item).
+
 TODEV: The XZ plane handling probably needs to be revised.
 
 ## Node network composability and Node networks list panel
@@ -418,10 +420,7 @@ Transforms a geometry in the discrete lattice space.
 The integer coordinates for translation are of course meant in crystal lattice coordinates.
 The integer cooridinates for rotation are meant in multiples of 90 degrees.
 
-The gadget for the node is currently only displayed but not draggable.
-
-TODEV: The gadget should be draggable to allow for translations.
-TODEV: The gadget should allow for rotations.
+The gadget for the node is draggable and allows translations.
 
 ##### Nuances of the geometry transformations in atomCAD
 
@@ -476,7 +475,9 @@ We repeat here the main design decisions which are common with the geo_trans nod
 - atomic structures are always **rigidly attached to the transformation
 gizmo**. (atomic structures never moves in the transformation gizmo's local coordinate system.)
 
-TODEV: The gadget is displayed but is should also be draggable to support translations and rotations.
+The gadget for the node is draggable and allows translations.
+
+TODEV: The gadget should also support rotations.
 
 #### edit_atom
 
@@ -501,7 +502,7 @@ Features:
 - Replace all selected atom with a specific element
 - Transform (move and rotate) selected atoms
 
-TODEV: gizmo for the transformation of the selected atoms
+TODEV: gadget for the transformation of the selected atoms
 
 ##### Add atom tool
 
