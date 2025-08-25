@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/inputs/vec3_input.dart';
+import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor widget for atom_trans nodes
 class AtomTransEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIAtomTransData? data;
+  final StructureDesignerModel model;
 
   const AtomTransEditor({
     super.key,
     required this.nodeId,
     required this.data,
+    required this.model,
   });
 
   @override
@@ -19,43 +21,11 @@ class AtomTransEditor extends StatefulWidget {
 }
 
 class AtomTransEditorState extends State<AtomTransEditor> {
-  APIAtomTransData? _stagedData;
-
-  @override
-  void initState() {
-    super.initState();
-    setState(() {
-      _stagedData = widget.data;
-    });
-  }
-
-  @override
-  void didUpdateWidget(AtomTransEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.data != widget.data) {
-      setState(() {
-        _stagedData = widget.data;
-      });
-    }
-  }
-
-  void _updateStagedData(APIAtomTransData newData) {
-    setState(() => _stagedData = newData);
-  }
-
-  void _applyChanges() {
-    if (_stagedData != null) {
-      setAtomTransData(
-        nodeId: widget.nodeId,
-        data: _stagedData!,
-      );
-      // No need to update _data here as it will be updated in the parent widget
-    }
-  }
+  // Direct API calls are made in onChanged handlers
 
   @override
   Widget build(BuildContext context) {
-    if (_stagedData == null) {
+    if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -69,43 +39,30 @@ class AtomTransEditorState extends State<AtomTransEditor> {
           const SizedBox(height: 8),
           Vec3Input(
             label: 'Translation',
-            value: _stagedData!.translation,
+            value: widget.data!.translation,
             onChanged: (newValue) {
-              _updateStagedData(APIAtomTransData(
-                translation: newValue,
-                rotation: _stagedData!.rotation,
-              ));
+              widget.model.setAtomTransData(
+                widget.nodeId,
+                APIAtomTransData(
+                  translation: newValue,
+                  rotation: widget.data!.rotation,
+                ),
+              );
             },
           ),
           const SizedBox(height: 8),
           Vec3Input(
             label: 'Rotation',
-            value: _stagedData!.rotation,
+            value: widget.data!.rotation,
             onChanged: (newValue) {
-              _updateStagedData(APIAtomTransData(
-                translation: _stagedData!.translation,
-                rotation: newValue,
-              ));
+              widget.model.setAtomTransData(
+                widget.nodeId,
+                APIAtomTransData(
+                  translation: widget.data!.translation,
+                  rotation: newValue,
+                ),
+              );
             },
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _stagedData != widget.data
-                    ? () {
-                        setState(() => _stagedData = widget.data);
-                      }
-                    : null,
-                child: const Text('Reset'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _stagedData != widget.data ? _applyChanges : null,
-                child: const Text('Apply'),
-              ),
-            ],
           ),
         ],
       ),

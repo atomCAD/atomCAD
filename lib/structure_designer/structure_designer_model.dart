@@ -413,6 +413,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setAtomTransData(BigInt nodeId, APIAtomTransData data) {
+    structure_designer_api.setAtomTransData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];

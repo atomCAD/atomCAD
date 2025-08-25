@@ -122,6 +122,7 @@ class NodeDataWidget extends StatelessWidget {
         return AtomTransEditor(
           nodeId: selectedNode.id,
           data: atomTransData,
+          model: model,
         );
       case 'geo_to_atom':
         // Fetch the geo to atom data here in the parent widget
