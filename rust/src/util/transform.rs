@@ -96,6 +96,23 @@ impl Transform {
   pub fn apply_to_position_in_place(&self, position: &mut DVec3) {
     *position = self.rotation.mul_vec3(*position) + self.translation;
   }
+
+  /// Scale the translation of this transform by a given factor
+  /// 
+  /// Returns a new Transform with the translation scaled by the given factor
+  /// in each direction. The rotation remains unchanged.
+  /// 
+  /// # Arguments
+  /// * `scale` - The scaling factor to apply to the translation
+  /// 
+  /// # Returns
+  /// A new Transform with scaled translation
+  pub fn scale(&self, scale: f64) -> Transform {
+    Transform {
+      translation: self.translation * scale,
+      rotation: self.rotation,
+    }
+  }
 }
 
 impl Default for Transform {

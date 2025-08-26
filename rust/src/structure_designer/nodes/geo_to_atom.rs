@@ -103,9 +103,13 @@ pub fn eval_geo_to_atom<'a>(
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();
 
-  let invocation_cache = network_evaluator.pre_eval_geometry_node(network_stack.clone(), geo_node_id, registry);
+  let (invocation_cache, pre_eval_result) = network_evaluator.pre_eval_geometry_node(network_stack.clone(), geo_node_id, registry);
 
   let mut atomic_structure = AtomicStructure::new();
+
+  if let NetworkResult::Geometry(mesh) = pre_eval_result {
+    atomic_structure.frame_transform = mesh.frame_transform.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+  }
 
   // id:0 means there is no atom there
   let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();

@@ -199,7 +199,7 @@ impl NetworkEvaluator {
     // We assign the root node network zero node id. It is not used in the evaluation.
     network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
 
-    let invocation_cache = self.pre_eval_geometry_node(network_stack, node_id, registry);
+    let invocation_cache = self.pre_eval_geometry_node(network_stack, node_id, registry).0;
 
     // Perform ray marching
     for _ in 0..MAX_STEPS {
@@ -279,7 +279,7 @@ impl NetworkEvaluator {
         node_id,
         registry,
         implicit_evaluator: &self.implicit_evaluator,
-        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry),
+        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry).0,
       };
 
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
@@ -298,7 +298,7 @@ impl NetworkEvaluator {
         node_id,
         registry,
         implicit_evaluator: &self.implicit_evaluator,
-        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry),
+        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry).0,
       };
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         generate_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences)
@@ -389,15 +389,15 @@ impl NetworkEvaluator {
     &self,
     network_stack: Vec<NetworkStackElement>,
     node_id: u64,
-    registry: &NodeTypeRegistry) -> NodeInvocationCache {
+    registry: &NodeTypeRegistry) -> (NodeInvocationCache, NetworkResult) {
     // Create evaluation context to record transformation outputs for invocations
     let mut context = NetworkEvaluationContext::new(
       false,
       true
     );
-    self.evaluate(&network_stack, node_id, registry, false, &mut context);
+    let result = self.evaluate(&network_stack, node_id, registry, false, &mut context)[0].clone();
 
-    return context.node_invocation_cache.clone();
+    return (context.node_invocation_cache.clone(), result);
   }
 
   pub fn evaluate<'a>(
