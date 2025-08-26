@@ -16,8 +16,6 @@ use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_at
 use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use std::collections::HashSet;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,

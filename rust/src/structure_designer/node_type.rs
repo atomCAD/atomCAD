@@ -1,6 +1,7 @@
 use crate::structure_designer::node_data::NodeData;
+use serde::{Serialize, Deserialize};
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum DataType {
   Geometry2D,
   Geometry,

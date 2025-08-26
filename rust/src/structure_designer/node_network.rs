@@ -14,6 +14,21 @@ pub enum NodeDisplayType {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ValidationError {
+  pub error_text: String,
+  pub node_id: Option<u64>,
+}
+
+impl ValidationError {
+  pub fn new(error_text: String, node_id: Option<u64>) -> Self {
+    Self {
+      error_text,
+      node_id,
+    }
+  }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Argument {
   // A set of argument values as parameters can have the 'multiple' flag set.
   pub argument_node_ids: HashSet<u64>, // Set of node ids for which the output is referenced
@@ -61,6 +76,8 @@ pub struct NodeNetwork {
   pub displayed_node_ids: HashMap<u64, NodeDisplayType>, // Map of nodes that are currently displayed with their display type (Normal or Ghost)
   pub selected_node_id: Option<u64>, // Currently selected node, if any
   pub selected_wire: Option<Wire>, // Currently selected wire
+  pub valid: bool, // Whether the node network is valid and can be evaluated
+  pub validation_errors: Vec<ValidationError>, // List of validation errors if any
 }
 
 
@@ -112,6 +129,8 @@ impl NodeNetwork {
       displayed_node_ids: HashMap::new(),
       selected_node_id: None,
       selected_wire: None,
+      valid: true,
+      validation_errors: Vec::new(),
     };
 
     return ret;

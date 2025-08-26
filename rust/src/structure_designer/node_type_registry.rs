@@ -43,6 +43,10 @@ impl NodeTypeRegistry {
       output_type: DataType::Geometry, // is not used, the parameter node's output type will be determined by the node network's node type.
       node_data_creator: || Box::new(ParameterData {
         param_index: 0,
+        param_name: "param".to_string(),
+        data_type: DataType::Geometry,
+        multi: false,
+        sort_order: 0,
       }),
     });
 
@@ -222,21 +226,6 @@ impl NodeTypeRegistry {
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
     });
-
-    /*
-    ret.add_node_type(NodeType {
-      name: "negate".to_string(),
-      parameters: vec![
-          Parameter {
-              name: "shape".to_string(),
-              data_type: DataType::Geometry,
-              multi: false,
-          },
-      ],
-      output_type: DataType::Geometry,
-      node_data_creator: || Box::new(NoData {}),
-    });
-    */
 
     ret.add_node_type(NodeType {
       name: "diff".to_string(),
