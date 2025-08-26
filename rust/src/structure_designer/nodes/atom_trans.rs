@@ -160,7 +160,13 @@ impl NodeNetworkGadget for AtomTransGadget {
     fn sync_data(&self, data: &mut dyn NodeData) {
       if let Some(atom_trans_data) = data.as_any_mut().downcast_mut::<AtomTransData>() {
         atom_trans_data.translation = self.frame_transform.translation - self.input_frame_transform.translation;
-        atom_trans_data.rotation = self.rotation;
+        
+        // Calculate relative rotation from input to current frame transform
+        let relative_rotation_quat = self.frame_transform.rotation * self.input_frame_transform.rotation.inverse();
+        
+        // Convert to intrinsic XYZ euler angles
+        let (x, y, z) = relative_rotation_quat.to_euler(glam::EulerRot::XYZ);
+        atom_trans_data.rotation = DVec3::new(x, y, z);
       }
     }
 
