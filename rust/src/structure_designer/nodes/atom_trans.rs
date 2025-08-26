@@ -105,7 +105,8 @@ impl Tessellatable for AtomTransGadget {
         xyz_gadget_utils::tessellate_xyz_gadget(
             output_mesh, 
             self.frame_transform.rotation,
-            &self.frame_transform.translation
+            &self.frame_transform.translation,
+            true,
         );
     }
 
@@ -120,7 +121,8 @@ impl Gadget for AtomTransGadget {
             self.frame_transform.rotation,
             &self.frame_transform.translation,
             &ray_origin,
-            &ray_direction
+            &ray_direction,
+            true
         )
     }
   
@@ -183,17 +185,41 @@ impl AtomTransGadget {
 
     // Returns whether the application of the drag offset was successful and the drag start should be reset
     fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
-        // Get the local axis direction based on the current rotation
-        let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, axis_index) {
-            Some(dir) => dir,
-            None => return false, // Invalid axis index
-        };    
-        let movement_vector = local_axis_dir * offset_delta;
-    
-        // Apply the movement to the frame transform
-        self.frame_transform.translation += movement_vector;
-    
-        return true;
+        match axis_index {
+            // Translation handles (0, 1, 2)
+            0 | 1 | 2 => {
+                // Get the local axis direction based on the current rotation
+                let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, axis_index) {
+                    Some(dir) => dir,
+                    None => return false, // Invalid axis index
+                };    
+                let movement_vector = local_axis_dir * offset_delta;
+            
+                // Apply the movement to the frame transform
+                self.frame_transform.translation += movement_vector;
+                
+                return true;
+            },
+            // Rotation handles (3, 4, 5)
+            3 | 4 | 5 => {
+                // Map rotation handle indices to axis indices (3->0, 4->1, 5->2)
+                let rotation_axis_index = axis_index - 3;
+                
+                // Get the local axis direction for rotation
+                let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, rotation_axis_index) {
+                    Some(dir) => dir,
+                    None => return false, // Invalid axis index
+                };
+                
+                let rotation_angle = offset_delta * xyz_gadget_utils::ROTATION_SENSITIVITY;
+                let rotation_quat = DQuat::from_axis_angle(local_axis_dir, rotation_angle);
+
+                self.frame_transform.rotation = rotation_quat * self.frame_transform.rotation;
+                
+                return true;
+            },
+            _ => return false, // Invalid axis index
+        }
     }
 
     fn refresh_frame_transform(&mut self) {

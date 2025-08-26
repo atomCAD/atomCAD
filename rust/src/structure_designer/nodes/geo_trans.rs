@@ -185,7 +185,8 @@ impl Tessellatable for GeoTransGadget {
     xyz_gadget_utils::tessellate_xyz_gadget(
       output_mesh, 
       self.frame_transform.rotation,
-      &self.frame_transform.translation
+      &self.frame_transform.translation,
+      false // Don't include rotation handles for now
     );
   }
 
@@ -200,7 +201,8 @@ impl Gadget for GeoTransGadget {
           self.frame_transform.rotation,
           &self.frame_transform.translation,
           &ray_origin,
-          &ray_direction
+          &ray_direction,
+          false // Don't include rotation handles for now
       )
   }
 
