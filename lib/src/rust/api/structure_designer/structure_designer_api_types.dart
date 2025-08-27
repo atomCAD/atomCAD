@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`
 
 class APIAnchorData {
   final APIIVec3? position;
@@ -119,6 +119,13 @@ class APICuboidData {
           runtimeType == other.runtimeType &&
           minCorner == other.minCorner &&
           extent == other.extent;
+}
+
+enum APIDataType {
+  geometry2D,
+  geometry,
+  atomic,
+  ;
 }
 
 class APIEditAtomData {
@@ -361,6 +368,41 @@ class APIHalfSpaceData {
           millerIndex == other.millerIndex &&
           center == other.center &&
           shift == other.shift;
+}
+
+class APIParameterData {
+  final BigInt paramIndex;
+  final String paramName;
+  final APIDataType dataType;
+  final bool multi;
+  final int sortOrder;
+
+  const APIParameterData({
+    required this.paramIndex,
+    required this.paramName,
+    required this.dataType,
+    required this.multi,
+    required this.sortOrder,
+  });
+
+  @override
+  int get hashCode =>
+      paramIndex.hashCode ^
+      paramName.hashCode ^
+      dataType.hashCode ^
+      multi.hashCode ^
+      sortOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIParameterData &&
+          runtimeType == other.runtimeType &&
+          paramIndex == other.paramIndex &&
+          paramName == other.paramName &&
+          dataType == other.dataType &&
+          multi == other.multi &&
+          sortOrder == other.sortOrder;
 }
 
 class APIRectData {

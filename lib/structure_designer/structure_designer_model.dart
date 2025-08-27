@@ -418,6 +418,15 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setParameterData(BigInt nodeId, APIParameterData data) {
+    structure_designer_api.setParameterData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APIParameterData? getParameterData(BigInt nodeId) {
+    return structure_designer_api.getParameterData(nodeId: nodeId);
+  }
+
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];

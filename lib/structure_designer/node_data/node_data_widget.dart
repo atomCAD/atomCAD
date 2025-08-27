@@ -19,6 +19,7 @@ import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/stamp_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -237,6 +238,15 @@ class NodeDataWidget extends StatelessWidget {
         // Relax editor doesn't need to fetch data - it gets it from the API
         return RelaxEditor(
           nodeId: selectedNode.id,
+          model: model,
+        );
+      case 'parameter':
+        // Fetch the parameter data here in the parent widget
+        final parameterData = model.getParameterData(selectedNode.id);
+
+        return ParameterEditor(
+          nodeId: selectedNode.id,
+          data: parameterData,
           model: model,
         );
       default:

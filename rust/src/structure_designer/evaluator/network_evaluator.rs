@@ -415,11 +415,14 @@ impl NetworkEvaluator {
       let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
       let mut parent_network_stack = network_stack.clone();
       parent_network_stack.pop();
+      vec![NetworkResult::None]
+      /*
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
       let args : Vec<Vec<NetworkResult>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
         self.evaluate(&parent_network_stack, arg_node_id, registry, false, context)
       }).collect();
       args.concat()
+      */
     } else if node.node_type_name == "circle" {
       vec![eval_circle(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {

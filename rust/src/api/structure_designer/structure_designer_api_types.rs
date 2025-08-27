@@ -13,6 +13,13 @@ pub enum APIEditAtomTool {
   AddBond,
 }
 
+#[derive(Clone)]
+pub enum APIDataType {
+  Geometry2D,
+  Geometry,
+  Atomic
+}
+
 pub struct InputPinView {
     pub name: String,
     pub data_type: String,
@@ -149,4 +156,12 @@ pub struct InputPinView {
 
   pub struct APIStampView {
     pub selected_stamp_placement: Option<APIStampPlacement>,
+  }
+
+  pub struct APIParameterData {
+    pub param_index: usize,
+    pub param_name: String,
+    pub data_type: APIDataType,
+    pub multi: bool,
+    pub sort_order: i32,
   }

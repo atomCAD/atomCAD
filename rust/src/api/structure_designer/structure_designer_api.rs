@@ -45,7 +45,28 @@ use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APIRectData;
+use super::structure_designer_api_types::APIParameterData;
+use super::structure_designer_api_types::APIDataType;
+use crate::structure_designer::nodes::parameter::ParameterData;
+use crate::structure_designer::node_type::DataType;
 use super::structure_designer_preferences::StructureDesignerPreferences;
+
+// Conversion functions between DataType and APIDataType
+fn to_api_data_type(data_type: &DataType) -> APIDataType {
+  match data_type {
+    DataType::Geometry2D => APIDataType::Geometry2D,
+    DataType::Geometry => APIDataType::Geometry,
+    DataType::Atomic => APIDataType::Atomic,
+  }
+}
+
+fn from_api_data_type(api_data_type: &APIDataType) -> DataType {
+  match api_data_type {
+    APIDataType::Geometry2D => DataType::Geometry2D,
+    APIDataType::Geometry => DataType::Geometry,
+    APIDataType::Atomic => DataType::Atomic,
+  }
+}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -624,6 +645,32 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let parameter_data = match node_data.as_any_ref().downcast_ref::<ParameterData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIParameterData {
+          param_index: parameter_data.param_index,
+          param_name: parameter_data.param_name.clone(),
+          data_type: to_api_data_type(&parameter_data.data_type),
+          multi: parameter_data.multi,
+          sort_order: parameter_data.sort_order,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_rect_data(node_id: u64, data: APIRectData) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
@@ -763,6 +810,23 @@ pub fn set_atom_trans_data(node_id: u64, data: APIAtomTransData) {
         rotation: from_api_vec3(&data.rotation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, atom_trans_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let parameter_data = Box::new(ParameterData {
+        param_index: data.param_index,
+        param_name: data.param_name,
+        data_type: from_api_data_type(&data.data_type),
+        multi: data.multi,
+        sort_order: data.sort_order,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);
       refresh_renderer(cad_instance, false);
     });
   }

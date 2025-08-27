@@ -9,6 +9,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
+// These functions are ignored because they are not marked as `pub`: `from_api_data_type`, `to_api_data_type`
+
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
 
@@ -129,6 +131,11 @@ APIEditAtomData? getEditAtomData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetEditAtomData(
             nodeId: nodeId);
 
+APIParameterData? getParameterData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetParameterData(
+        nodeId: nodeId);
+
 void setRectData({required BigInt nodeId, required APIRectData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRectData(
@@ -180,6 +187,12 @@ void setAtomTransData(
         {required BigInt nodeId, required APIAtomTransData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetAtomTransData(
+            nodeId: nodeId, data: data);
+
+void setParameterData(
+        {required BigInt nodeId, required APIParameterData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetParameterData(
             nodeId: nodeId, data: data);
 
 void deleteSelected() => RustLib.instance.api

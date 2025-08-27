@@ -49,7 +49,15 @@ class _IntInputState extends State<IntInput> {
     if (oldWidget.value != widget.value) {
       final selection = _controller.selection;
       _controller.text = widget.value.toString();
-      _controller.selection = selection;
+      
+      // Ensure the selection is valid for the new text length
+      final newTextLength = _controller.text.length;
+      if (selection.isValid && selection.end <= newTextLength) {
+        _controller.selection = selection;
+      } else {
+        // Set cursor to end of text if selection is invalid
+        _controller.selection = TextSelection.collapsed(offset: newTextLength);
+      }
     }
   }
 
