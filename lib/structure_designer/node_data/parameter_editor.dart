@@ -122,18 +122,6 @@ class ParameterEditorState extends State<ParameterEditor> {
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           
-          // Parameter Index
-          IntInput(
-            label: 'Parameter Index',
-            value: _stagedParamIndex.toInt(),
-            minimumValue: 0,
-            onChanged: (newValue) {
-              _stagedParamIndex = BigInt.from(newValue);
-              _markChanged();
-            },
-          ),
-          const SizedBox(height: 8),
-          
           // Parameter Name
           TextField(
             controller: _paramNameController,
@@ -142,7 +130,9 @@ class ParameterEditorState extends State<ParameterEditor> {
               border: OutlineInputBorder(),
             ),
             onChanged: (newValue) {
-              _stagedParamName = newValue;
+              setState(() {
+                _stagedParamName = newValue;
+              });
               _markChanged();
             },
           ),
@@ -175,7 +165,9 @@ class ParameterEditorState extends State<ParameterEditor> {
             }).toList(),
             onChanged: (newValue) {
               if (newValue != null) {
-                _stagedDataType = newValue;
+                setState(() {
+                  _stagedDataType = newValue;
+                });
                 _markChanged();
               }
             },
@@ -189,7 +181,9 @@ class ParameterEditorState extends State<ParameterEditor> {
             value: _stagedMulti,
             onChanged: (newValue) {
               if (newValue != null) {
-                _stagedMulti = newValue;
+                setState(() {
+                  _stagedMulti = newValue;
+                });
                 _markChanged();
               }
             },
@@ -201,9 +195,23 @@ class ParameterEditorState extends State<ParameterEditor> {
             label: 'Sort Order',
             value: _stagedSortOrder,
             onChanged: (newValue) {
-              _stagedSortOrder = newValue;
+              setState(() {
+                _stagedSortOrder = newValue;
+              });
               _markChanged();
             },
+          ),
+          const SizedBox(height: 16),
+          
+          // Parameter Index (readonly, calculated by Rust)
+          TextField(
+            controller: TextEditingController(text: _stagedParamIndex.toString()),
+            decoration: const InputDecoration(
+              labelText: 'Parameter Index (calculated)',
+              border: OutlineInputBorder(),
+              enabled: false,
+            ),
+            readOnly: true,
           ),
           const SizedBox(height: 16),
           
