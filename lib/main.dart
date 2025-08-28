@@ -23,9 +23,8 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // Set this to true to force textScaleFactor to 1.0 (uncomment the line below to enable)
-  // static const bool forceTextScaleFactor = true;
-  static const bool forceTextScaleFactor = false;
+  // Set this to true to force textScaleFactor to 1.0
+  static const bool forceTextScaleFactor = true;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +36,7 @@ class MyApp extends StatelessWidget {
           // Debug: Print the current textScaleFactor
           final textScaleFactor = MediaQuery.of(context).textScaleFactor;
           print('Current textScaleFactor: $textScaleFactor');
-          
+
           if (forceTextScaleFactor) {
             print('Forcing textScaleFactor to 1.0');
             return MediaQuery(
@@ -45,7 +44,7 @@ class MyApp extends StatelessWidget {
               child: child!,
             );
           }
-          
+
           return child!;
         },
       ),
