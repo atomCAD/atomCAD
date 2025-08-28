@@ -3,6 +3,7 @@ use super::node_type::DataType;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
 use super::node_network::NodeNetwork;
+use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::facet_shell::FacetShellData;
 use super::nodes::parameter::ParameterData;
@@ -376,6 +377,30 @@ impl NodeTypeRegistry {
             .values()
             .map(|network| network.node_type.name.clone())
             .collect()
+  }
+
+  pub fn get_node_networks_with_validation(&self) -> Vec<APINetworkWithValidationErrors> {
+    self.node_networks
+      .values()
+      .map(|network| {
+        let validation_errors = if network.validation_errors.is_empty() {
+          None
+        } else {
+          Some(
+            network.validation_errors
+              .iter()
+              .map(|error| error.error_text.clone())
+              .collect::<Vec<String>>()
+              .join("\n")
+          )
+        };
+        
+        APINetworkWithValidationErrors {
+          name: network.node_type.name.clone(),
+          validation_errors,
+        }
+      })
+      .collect()
   }
 
   pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {

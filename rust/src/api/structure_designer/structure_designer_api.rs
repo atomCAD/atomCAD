@@ -5,7 +5,7 @@ use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
-use crate::api::structure_designer::structure_designer_api_types::NodeNetworkView;
+use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors};
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
@@ -196,6 +196,18 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
     with_cad_instance_or(
       |cad_instance| {
         Some(cad_instance.structure_designer.node_type_registry.get_node_network_names())
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_node_networks_with_validation() -> Option<Vec<APINetworkWithValidationErrors>> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        Some(cad_instance.structure_designer.node_type_registry.get_node_networks_with_validation())
       },
       None
     )

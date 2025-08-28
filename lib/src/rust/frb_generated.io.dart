@@ -91,6 +91,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
 
   @protected
+  APINetworkWithValidationErrors dco_decode_api_network_with_validation_errors(
+      dynamic raw);
+
+  @protected
   APIParameterData dco_decode_api_parameter_data(dynamic raw);
 
   @protected
@@ -261,6 +265,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIFacet> dco_decode_list_api_facet(dynamic raw);
 
   @protected
+  List<APINetworkWithValidationErrors>
+      dco_decode_list_api_network_with_validation_errors(dynamic raw);
+
+  @protected
   List<APISceneComposerTool> dco_decode_list_api_scene_composer_tool(
       dynamic raw);
 
@@ -393,6 +401,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
+  List<APINetworkWithValidationErrors>?
+      dco_decode_opt_list_api_network_with_validation_errors(dynamic raw);
+
+  @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
 
   @protected
@@ -487,6 +499,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
+
+  @protected
+  APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
+      SseDeserializer deserializer);
 
   @protected
   APIParameterData sse_decode_api_parameter_data(SseDeserializer deserializer);
@@ -686,6 +702,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APIFacet> sse_decode_list_api_facet(SseDeserializer deserializer);
 
   @protected
+  List<APINetworkWithValidationErrors>
+      sse_decode_list_api_network_with_validation_errors(
+          SseDeserializer deserializer);
+
+  @protected
   List<APISceneComposerTool> sse_decode_list_api_scene_composer_tool(
       SseDeserializer deserializer);
 
@@ -842,6 +863,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
+  List<APINetworkWithValidationErrors>?
+      sse_decode_opt_list_api_network_with_validation_errors(
+          SseDeserializer deserializer);
+
+  @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
       SseDeserializer deserializer);
 
@@ -945,6 +971,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_network_with_validation_errors(
+      APINetworkWithValidationErrors self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_parameter_data(
@@ -1149,6 +1179,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_api_facet(List<APIFacet> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_network_with_validation_errors(
+      List<APINetworkWithValidationErrors> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_scene_composer_tool(
       List<APISceneComposerTool> self, SseSerializer serializer);
 
@@ -1307,6 +1341,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_api_network_with_validation_errors(
+      List<APINetworkWithValidationErrors>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_u_64_node_view(

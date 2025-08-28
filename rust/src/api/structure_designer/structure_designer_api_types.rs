@@ -165,3 +165,8 @@ pub struct InputPinView {
     pub multi: bool,
     pub sort_order: i32,
   }
+
+  pub struct APINetworkWithValidationErrors {
+    pub name: String,
+    pub validation_errors: Option<String>,
+  }

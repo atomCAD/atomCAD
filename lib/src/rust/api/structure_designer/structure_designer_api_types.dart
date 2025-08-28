@@ -370,6 +370,27 @@ class APIHalfSpaceData {
           shift == other.shift;
 }
 
+class APINetworkWithValidationErrors {
+  final String name;
+  final String? validationErrors;
+
+  const APINetworkWithValidationErrors({
+    required this.name,
+    this.validationErrors,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ validationErrors.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINetworkWithValidationErrors &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          validationErrors == other.validationErrors;
+}
+
 class APIParameterData {
   final BigInt paramIndex;
   final String paramName;

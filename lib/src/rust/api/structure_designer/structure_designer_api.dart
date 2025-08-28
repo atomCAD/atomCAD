@@ -38,6 +38,10 @@ List<String>? getNodeTypeNames() => RustLib.instance.api
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
 
+List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetNodeNetworksWithValidation();
+
 void addNewNodeNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
 
