@@ -243,6 +243,18 @@ impl StructureDesigner {
       
       // Apply display policy considering only this node as dirty
       self.apply_node_display_policy(Some(&dirty_nodes));
+      
+      // Check if we need to validate the network
+      let should_validate = node_type_name == "parameter" || {
+        // Check if this node references an invalid node network
+        self.node_type_registry.node_networks.get(node_type_name)
+          .map(|network| !network.valid)
+          .unwrap_or(false)
+      };
+      
+      if should_validate {
+        self.validate_active_network();
+      }
     }
     
     node_id
@@ -316,8 +328,25 @@ impl StructureDesigner {
       Some(name) => name,
       None => return,
     };
+    
+    // Check if this is a parameter node before modification
+    let is_parameter_node = if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+      if let Some(node) = network.nodes.get(&node_id) {
+        node.node_type_name == "parameter"
+      } else {
+        false
+      }
+    } else {
+      false
+    };
+    
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_network_data(node_id, data);
+    }
+    
+    // Validate if this was a parameter node modification
+    if is_parameter_node {
+      self.validate_active_network();
     }
   }
 
@@ -501,12 +530,23 @@ impl StructureDesigner {
     
     // Collect nodes that will need to be marked as dirty after deletion
     let mut dirty_nodes = HashSet::new();
+    let mut should_validate = false;
     
     if let Some(node_network) = self.node_type_registry.node_networks.get(node_network_name) {
       // If a node is selected, all connected nodes will be dirty
       if let Some(selected_node_id) = node_network.selected_node_id {
         // Get all nodes connected to the selected node
         dirty_nodes = node_network.get_connected_node_ids(selected_node_id);
+        
+        // Check if the selected node requires validation
+        if let Some(node) = node_network.nodes.get(&selected_node_id) {
+          should_validate = node.node_type_name == "parameter" || {
+            // Check if this node references an invalid node network
+            self.node_type_registry.node_networks.get(&node.node_type_name)
+              .map(|network| !network.valid)
+              .unwrap_or(false)
+          };
+        }
       } 
       // If a wire is selected, both source and destination nodes will be dirty
       else if let Some(ref wire) = node_network.selected_wire {
@@ -523,6 +563,11 @@ impl StructureDesigner {
     // Only apply display policy if there were dirty nodes
     if !dirty_nodes.is_empty() {
       self.apply_node_display_policy(Some(&dirty_nodes));
+    }
+    
+    // Validate if we deleted a parameter node or invalid network node
+    if should_validate {
+      self.validate_active_network();
     }
   }
 
