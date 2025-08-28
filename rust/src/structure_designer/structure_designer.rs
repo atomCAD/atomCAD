@@ -15,6 +15,7 @@ use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
+use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::HashSet;
 
 pub struct StructureDesigner {
@@ -722,4 +723,81 @@ impl StructureDesigner {
 
     result
   }
+
+  /// Validates the active node network and propagates validation to dependent networks
+  /// 
+  /// This method implements dependency invalidation propagation:
+  /// - When a network becomes valid, invalid parent networks need revalidation
+  /// - When a network becomes invalid, valid parent networks need revalidation
+  /// - Continues until no more networks need validation
+  pub fn validate_active_network(&mut self) -> Option<NetworkValidationResult> {
+    // Get the active network name
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return None,
+    };
+    
+    // Initialize the set of networks to validate
+    let mut to_validate = HashSet::new();
+    to_validate.insert(network_name.clone());
+    
+    let mut final_result = None;
+    
+    // Process networks until the set is empty
+    while let Some(current_network_name) = to_validate.iter().next().cloned() {
+      to_validate.remove(&current_network_name);
+      
+      // Get the current validation state before validation
+      let was_valid = self.node_type_registry.node_networks
+        .get(&current_network_name)
+        .map(|network| network.valid)
+        .unwrap_or(false);
+      
+      // Validate the current network
+      let validation_result = {
+        // Check if network exists first
+        if !self.node_type_registry.node_networks.contains_key(&current_network_name) {
+          continue; // Skip if network doesn't exist
+        }
+        
+        // Extract the network temporarily to avoid borrowing conflicts
+        let mut network = self.node_type_registry.node_networks.remove(&current_network_name).unwrap();
+        
+        // Validate with the registry (now we only have immutable access to registry)
+        let result = validate_network(&mut network, &self.node_type_registry);
+        
+        // Put the network back
+        self.node_type_registry.node_networks.insert(current_network_name.clone(), network);
+        
+        result
+      };
+      
+      // Store the result if this is the originally requested network
+      if current_network_name == network_name {
+        final_result = Some(validation_result.clone());
+      }
+      
+      // Check if validation state changed
+      let is_now_valid = validation_result.valid;
+      if was_valid != is_now_valid {
+        // Find all parent networks that use this network as a node
+        let parent_networks = self.node_type_registry.find_parent_networks(&current_network_name);
+        
+        // Add parent networks to validation set if their validity differs from expected
+        for parent_name in parent_networks {
+          if let Some(parent_network) = self.node_type_registry.node_networks.get(&parent_name) {
+            // Add to validation set if:
+            // - Parent is invalid and child became valid (parent might become valid)
+            // - Parent is valid and child became invalid (parent might become invalid)
+            if (!parent_network.valid && is_now_valid) || (parent_network.valid && !is_now_valid) {
+              to_validate.insert(parent_name);
+            }
+          }
+        }
+      }
+    }
+    
+    final_result
+  }
+  
 }

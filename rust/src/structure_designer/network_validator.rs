@@ -4,6 +4,7 @@ use crate::structure_designer::node_type::Parameter;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone)]
 pub struct NetworkValidationResult {
     pub valid: bool,
     pub interface_changed: bool,

@@ -399,4 +399,33 @@ impl NodeTypeRegistry {
   fn add_node_type(&mut self, node_type: NodeType) {
     self.built_in_node_types.insert(node_type.name.clone(), node_type);
   }
+  
+  /// Finds all networks that use the specified network as a node
+  /// 
+  /// # Parameters
+  /// * `network_name` - The name of the network to find parents for
+  /// 
+  /// # Returns
+  /// A vector of network names that contain nodes of the specified network type
+  pub fn find_parent_networks(&self, network_name: &str) -> Vec<String> {
+    let mut parent_networks = Vec::new();
+    
+    // Search through all networks to find ones that use this network as a node
+    for (parent_name, parent_network) in &self.node_networks {
+      // Skip the network itself
+      if parent_name == network_name {
+        continue;
+      }
+      
+      // Check if any node in the parent network uses this network as its type
+      for node in parent_network.nodes.values() {
+        if node.node_type_name == network_name {
+          parent_networks.push(parent_name.clone());
+          break; // No need to check other nodes in this network
+        }
+      }
+    }
+    
+    parent_networks
+  }
 }
