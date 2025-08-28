@@ -50,7 +50,7 @@ class DraggedWire {
 
 /// Manages the entire node graph.
 class StructureDesignerModel extends ChangeNotifier {
-  List<String> nodeNetworkNames = [];
+  List<APINetworkWithValidationErrors> nodeNetworkNames = [];
   NodeNetworkView? nodeNetworkView;
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
@@ -238,7 +238,7 @@ class StructureDesignerModel extends ChangeNotifier {
       if (nodeNetworkView != null && nodeNetworkView!.name == oldName) {
         nodeNetworkView = structure_designer_api.getNodeNetworkView();
       }
-      nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+      nodeNetworkNames = structure_designer_api.getNodeNetworksWithValidation() ?? [];
       notifyListeners();
     }
   }
@@ -252,12 +252,12 @@ class StructureDesignerModel extends ChangeNotifier {
     structure_designer_api.addNewNodeNetwork();
 
     // Refresh the list of node networks
-    nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+    nodeNetworkNames = structure_designer_api.getNodeNetworksWithValidation() ?? [];
 
     // If we want to automatically set the new network as active,
     // we would need to get its name first (it's the last one in the list)
     if (nodeNetworkNames.isNotEmpty) {
-      final newNetworkName = nodeNetworkNames.last;
+      final newNetworkName = nodeNetworkNames.last.name;
       setActiveNodeNetwork(newNetworkName);
     }
   }
@@ -429,7 +429,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
-    nodeNetworkNames = structure_designer_api.getNodeNetworkNames() ?? [];
+    nodeNetworkNames = structure_designer_api.getNodeNetworksWithValidation() ?? [];
     activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();

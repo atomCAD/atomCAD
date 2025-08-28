@@ -70,11 +70,13 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                     : ListView.builder(
                         itemCount: nodeNetworks.length,
                         itemBuilder: (context, index) {
-                          final networkName = nodeNetworks[index];
+                          final network = nodeNetworks[index];
+                          final networkName = network.name;
                           final bool isActive =
                               networkName == activeNetworkName;
                           final bool isEditing =
                               _editingNetworkName == networkName;
+                          final bool hasValidationErrors = network.validationErrors != null;
 
                           // Create a context menu for right-click actions
                           return Builder(
@@ -126,12 +128,24 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                 onDoubleTap: () {
                                   _startRenaming(networkName);
                                 },
-                                child: ListTile(
-                                  dense: true,
-                                  visualDensity:
-                                      AppSpacing.compactVerticalDensity,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 0),
+                                child: Tooltip(
+                                  message: hasValidationErrors ? network.validationErrors! : '',
+                                  child: Container(
+                                    decoration: hasValidationErrors
+                                        ? BoxDecoration(
+                                            border: Border.all(
+                                              color: Colors.red,
+                                              width: 2.0,
+                                            ),
+                                            borderRadius: BorderRadius.circular(4.0),
+                                          )
+                                        : null,
+                                    child: ListTile(
+                                      dense: true,
+                                      visualDensity:
+                                          AppSpacing.compactVerticalDensity,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 0),
                                   title: isEditing
                                       ? TextField(
                                           controller: _renameController,
@@ -172,17 +186,19 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                           networkName,
                                           style: AppTextStyles.regular,
                                         ),
-                                  selected: isActive,
-                                  selectedTileColor:
-                                      AppColors.selectionBackground,
-                                  selectedColor: AppColors.selectionForeground,
-                                  onTap: () {
-                                    if (isEditing) {
-                                      return; // Don't change selection when in edit mode
-                                    }
-                                    // Set the active node network
-                                    model.setActiveNodeNetwork(networkName);
-                                  },
+                                      selected: isActive,
+                                      selectedTileColor:
+                                          AppColors.selectionBackground,
+                                      selectedColor: AppColors.selectionForeground,
+                                      onTap: () {
+                                        if (isEditing) {
+                                          return; // Don't change selection when in edit mode
+                                        }
+                                        // Set the active node network
+                                        model.setActiveNodeNetwork(networkName);
+                                      },
+                                    ),
+                                  ),
                                 ),
                               );
                             },
