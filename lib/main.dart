@@ -23,12 +23,31 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  // Set this to true to force textScaleFactor to 1.0 (uncomment the line below to enable)
+  // static const bool forceTextScaleFactor = true;
+  static const bool forceTextScaleFactor = false;
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => MouseWheelBlockService(),
-      child: const MaterialApp(
-        home: EditorSelector(),
+      child: MaterialApp(
+        home: const EditorSelector(),
+        builder: (context, child) {
+          // Debug: Print the current textScaleFactor
+          final textScaleFactor = MediaQuery.of(context).textScaleFactor;
+          print('Current textScaleFactor: $textScaleFactor');
+          
+          if (forceTextScaleFactor) {
+            print('Forcing textScaleFactor to 1.0');
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+              child: child!,
+            );
+          }
+          
+          return child!;
+        },
       ),
     );
   }
