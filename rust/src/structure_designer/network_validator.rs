@@ -1,8 +1,8 @@
-use crate::structure_designer::node_network::{NodeNetwork, ValidationError};
+use crate::structure_designer::node_network::{NodeNetwork, ValidationError, Argument};
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::node_type::Parameter;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub struct NetworkValidationResult {
@@ -120,8 +120,21 @@ fn check_interface_changed(network: &NodeNetwork) -> bool {
 }
 
 fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> bool {
-    // Iterate through all nodes and their arguments to validate wires
+    // First pass: collect nodes that need argument count fixes
+    let mut nodes_to_fix = Vec::new();
+    
     for (dest_node_id, dest_node) in &network.nodes {
+        // Check if this node references a node network and validate its validity
+        if let Some(referenced_network) = node_type_registry.node_networks.get(&dest_node.node_type_name) {
+            if !referenced_network.valid {
+                network.validation_errors.push(ValidationError::new(
+                    format!("Node {} references invalid node network '{}'", dest_node_id, dest_node.node_type_name),
+                    Some(*dest_node_id)
+                ));
+                return false;
+            }
+        }
+        
         // Get the destination node type to access parameter information
         let dest_node_type = match node_type_registry.get_node_type(&dest_node.node_type_name) {
             Some(node_type) => node_type,
@@ -134,19 +147,42 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
             }
         };
         
-        // Validate each argument (input pin) of the destination node
+        // Check if argument count needs fixing
+        let expected_param_count = dest_node_type.parameters.len();
+        let current_arg_count = dest_node.arguments.len();
+        
+        if current_arg_count != expected_param_count {
+            nodes_to_fix.push((*dest_node_id, expected_param_count, current_arg_count));
+        }
+    }
+    
+    // Second pass: apply argument count fixes
+    for (node_id, expected_count, current_count) in nodes_to_fix {
+        let dest_node_mut = network.nodes.get_mut(&node_id).unwrap();
+        
+        if current_count < expected_count {
+            // Add empty arguments when too few
+            for _ in current_count..expected_count {
+                dest_node_mut.arguments.push(Argument { 
+                    argument_node_ids: HashSet::new() 
+                });
+            }
+        } else {
+            // Remove excess arguments when too many
+            dest_node_mut.arguments.truncate(expected_count);
+        }
+    }
+    
+    // Third pass: validate wires after fixes
+    for (dest_node_id, dest_node) in &network.nodes {
+        let dest_node_type = node_type_registry.get_node_type(&dest_node.node_type_name).unwrap();
+        
+        // Now validate each argument (input pin) of the destination node
+        // Re-get the node reference after potential modification
+        let dest_node = network.nodes.get(dest_node_id).unwrap();
         for (arg_index, argument) in dest_node.arguments.iter().enumerate() {
             // Get parameter information for this argument
-            let parameter = match dest_node_type.parameters.get(arg_index) {
-                Some(param) => param,
-                None => {
-                    network.validation_errors.push(ValidationError::new(
-                        format!("Node '{}' has more arguments than parameters defined in its type", dest_node.node_type_name),
-                        Some(*dest_node_id)
-                    ));
-                    return false;
-                }
-            };
+            let parameter = &dest_node_type.parameters[arg_index];
             
             // Validate non-multi input pins have at most one connection
             if !parameter.multi && argument.argument_node_ids.len() > 1 {
@@ -171,6 +207,17 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                         return false;
                     }
                 };
+                
+                // Check if this source node references a node network and validate its validity
+                if let Some(referenced_network) = node_type_registry.node_networks.get(&source_node.node_type_name) {
+                    if !referenced_network.valid {
+                        network.validation_errors.push(ValidationError::new(
+                            format!("Source node {} references invalid node network '{}'", source_node_id, source_node.node_type_name),
+                            Some(*source_node_id)
+                        ));
+                        return false;
+                    }
+                }
                 
                 // Get the source node type to access its output type
                 let source_node_type = match node_type_registry.get_node_type(&source_node.node_type_name) {
