@@ -777,16 +777,20 @@ impl StructureDesigner {
         final_result = Some(validation_result.clone());
       }
       
-      // Check if validation state changed
+      // Check if validation state changed OR interface changed
       let is_now_valid = validation_result.valid;
-      if was_valid != is_now_valid {
+      let interface_changed = validation_result.interface_changed;
+      
+      if was_valid != is_now_valid || interface_changed {
         // Find all parent networks that use this network as a node
         let parent_networks = self.node_type_registry.find_parent_networks(&current_network_name);
         
-        // Add parent networks to validation set if their validity differs from expected
         for parent_name in parent_networks {
-          if let Some(parent_network) = self.node_type_registry.node_networks.get(&parent_name) {
-            // Add to validation set if:
+          if interface_changed {
+            // If interface changed, validate ALL parent networks regardless of their current state
+            to_validate.insert(parent_name);
+          } else if let Some(parent_network) = self.node_type_registry.node_networks.get(&parent_name) {
+            // If only validity changed, add parent networks based on validity logic:
             // - Parent is invalid and child became valid (parent might become valid)
             // - Parent is valid and child became invalid (parent might become invalid)
             if (!parent_network.valid && is_now_valid) || (parent_network.valid && !is_now_valid) {
