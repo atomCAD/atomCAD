@@ -273,11 +273,41 @@ pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &NodeType
         };
     }
     
-    // TODO: Add other validation functions here in future steps
+    // Update the network's output type based on return node
+    let output_type_changed = update_network_output_type(network, node_type_registry);
     
     NetworkValidationResult {
         valid: network.valid,
-        interface_changed,
+        interface_changed: interface_changed || output_type_changed,
     }
 }
 
+fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> bool {
+    let old_output_type = network.node_type.output_type;
+    
+    // Determine the new output type based on return_node_id
+    let new_output_type = if let Some(return_node_id) = network.return_node_id {
+        // Get the return node
+        if let Some(return_node) = network.nodes.get(&return_node_id) {
+            // Get the node type to find its output type
+            if let Some(node_type) = node_type_registry.get_node_type(&return_node.node_type_name) {
+                node_type.output_type
+            } else {
+                // If node type not found, default to None
+                crate::structure_designer::node_type::DataType::None
+            }
+        } else {
+            // Return node doesn't exist, set to None
+            crate::structure_designer::node_type::DataType::None
+        }
+    } else {
+        // No return node, output type is None
+        crate::structure_designer::node_type::DataType::None
+    };
+    
+    // Update the network's output type
+    network.node_type.output_type = new_output_type;
+    
+    // Return true if the output type changed
+    old_output_type != new_output_type
+}

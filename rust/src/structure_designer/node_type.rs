@@ -3,6 +3,7 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum DataType {
+  None,
   Geometry2D,
   Geometry,
   Atomic
@@ -10,6 +11,7 @@ pub enum DataType {
 
 pub fn data_type_to_str(data_type: &DataType) -> String {
   match data_type {
+    DataType::None => "None".to_string(),
     DataType::Geometry2D => "Geometry2D".to_string(),
     DataType::Geometry => "Geometry".to_string(),
     DataType::Atomic => "Atomic".to_string(),

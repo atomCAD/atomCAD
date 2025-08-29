@@ -54,6 +54,7 @@ use super::structure_designer_preferences::StructureDesignerPreferences;
 // Conversion functions between DataType and APIDataType
 fn to_api_data_type(data_type: &DataType) -> APIDataType {
   match data_type {
+    DataType::None => APIDataType::None,
     DataType::Geometry2D => APIDataType::Geometry2D,
     DataType::Geometry => APIDataType::Geometry,
     DataType::Atomic => APIDataType::Atomic,
@@ -62,6 +63,7 @@ fn to_api_data_type(data_type: &DataType) -> APIDataType {
 
 fn from_api_data_type(api_data_type: &APIDataType) -> DataType {
   match api_data_type {
+    APIDataType::None => DataType::None,
     APIDataType::Geometry2D => DataType::Geometry2D,
     APIDataType::Geometry => DataType::Geometry,
     APIDataType::Atomic => DataType::Atomic,
