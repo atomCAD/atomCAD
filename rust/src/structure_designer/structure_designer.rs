@@ -222,13 +222,26 @@ impl StructureDesigner {
       None => return 0,
     };
     // First get the node type info
-    let (num_parameters, node_data) = match self.node_type_registry.get_node_type(node_type_name) {
+    let (num_parameters, mut node_data) = match self.node_type_registry.get_node_type(node_type_name) {
       Some(node_type) => {
         let data_creator = &node_type.node_data_creator;
         (node_type.parameters.len(), (data_creator)())
       },
       None => return 0,
     };
+
+    // Special handling for parameter nodes
+    if node_type_name == "parameter" {
+      if let Some(node_network) = self.node_type_registry.node_networks.get(node_network_name) {
+        let current_param_count = node_network.node_type.parameters.len();
+        
+        // Downcast to ParameterData and set properties
+        if let Some(param_data) = node_data.as_any_mut().downcast_mut::<crate::structure_designer::nodes::parameter::ParameterData>() {
+          param_data.param_name = format!("param{}", current_param_count);
+          param_data.sort_order = current_param_count as i32;
+        }
+      }
+    }
 
     // Early return if the node network doesn't exist
     let node_id = self.node_type_registry.node_networks.get_mut(node_network_name)
