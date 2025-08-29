@@ -60,3 +60,38 @@ When a node network becomes invalid we invalidate all the node networks that use
 Technically the NodeNetwork gets a new 'validated' boolean property.
 
 Network validation is done by a dedicated struct called NetworkValidator.
+
+## Migration to property - parameter equivalence
+
+Currently a node has parameters (input pins) and properties (settable on the UI),
+stored in objects inherited from the NodeData trait.
+
+It would be ideal that all properties were also parameters so that they could be programmatically set.
+Doing it all at once would be too much work all at once, so let's do it gradually.
+
+- We introduce some new DataType-s like IVec3, Vec3, etc...
+- We introduce new parameters of some nodes with the same name or similar name as some properties.
+Example: min_corner and extent parameters for cuboid.
+
+- We change the eval and implicit eval functions for the node so that it gets the data from the parameter value if provided
+and from the property only if a parameter value is not provided.
+
+On the UI it would be ideal that if a parameter value is provided the editable property is hidden. An even better feature would
+be that although the editable property is hidden, a read only value is displayed: the currently evaluated value for that input pin.
+
+This does not seem to be too much work to do for an example node for some example parameters, but it is quite a lot of work to do it
+for all the nodes and all parameters. On the other hand doing it for one example node I can eliminate all the risks.
+So I need to implement this asap for the cuboid node and the min_corner and extent parameters.
+
+Next I should do it for the geo_trans and the atom_trans nodes as those are the highest probability candidates for usage.
+
+
+## 'default' input pin of parameter nodes
+
+When editing a network which is typically used as a subnetwork it is hard to show meaningful evaluated
+content unless there are defult values for the parameters.
+Therefore we introduce an input pin for the parameter nodes named 'default'. This should have the same type
+as the output pin of the parameter node (which is the parameter data type).
+The default pin is only evaluated when the parameter is evaluated in a context that there is no parent node network on
+the call stack.
+When nothing is connected to a parameter node the node evaluation will result in the missing input error.
