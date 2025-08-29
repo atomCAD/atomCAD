@@ -34,8 +34,8 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     for (node_id, param_data) in &parameter_nodes {
         if let Some(existing_node_id) = param_names.get(&param_data.param_name) {
             network.validation_errors.push(ValidationError::new(
-                format!("Duplicate parameter name '{}' found in nodes {} and {}", 
-                    param_data.param_name, existing_node_id, node_id),
+                format!("Duplicate parameter name '{}'", 
+                    param_data.param_name),
                 Some(*node_id)
             ));
             return false;
@@ -49,8 +49,8 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     for (node_id, param_data) in &parameter_nodes {
         if let Some(existing_node_id) = sort_orders.get(&param_data.sort_order) {
             network.validation_errors.push(ValidationError::new(
-                format!("Duplicate sort order {} found in nodes {} and {}", 
-                    param_data.sort_order, existing_node_id, node_id),
+                format!("Duplicate sort order {}", 
+                    param_data.sort_order),
                 Some(*node_id)
             ));
             return false;
@@ -128,7 +128,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
         if let Some(referenced_network) = node_type_registry.node_networks.get(&dest_node.node_type_name) {
             if !referenced_network.valid {
                 network.validation_errors.push(ValidationError::new(
-                    format!("Node {} references invalid node network '{}'", dest_node_id, dest_node.node_type_name),
+                    format!("References invalid node network '{}'", dest_node.node_type_name),
                     Some(*dest_node_id)
                 ));
                 return false;
@@ -187,8 +187,8 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
             // Validate non-multi input pins have at most one connection
             if !parameter.multi && argument.argument_node_ids.len() > 1 {
                 network.validation_errors.push(ValidationError::new(
-                    format!("Non-multi parameter '{}' of node {} has {} connections, but only 1 is allowed", 
-                        parameter.name, dest_node_id, argument.argument_node_ids.len()),
+                        format!("Non-multi parameter '{}' has {} connections, but only 1 is allowed", 
+                        parameter.name, argument.argument_node_ids.len()),
                     Some(*dest_node_id)
                 ));
                 return false;
@@ -201,7 +201,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                     Some(node) => node,
                     None => {
                         network.validation_errors.push(ValidationError::new(
-                            format!("Wire references non-existent source node {}", source_node_id),
+                            "Wire references non-existent source node".to_string(),
                             Some(*dest_node_id)
                         ));
                         return false;
@@ -212,7 +212,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 if let Some(referenced_network) = node_type_registry.node_networks.get(&source_node.node_type_name) {
                     if !referenced_network.valid {
                         network.validation_errors.push(ValidationError::new(
-                            format!("Source node {} references invalid node network '{}'", source_node_id, source_node.node_type_name),
+                            format!("Source node references invalid node network '{}'", source_node.node_type_name),
                             Some(*source_node_id)
                         ));
                         return false;
@@ -234,8 +234,8 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 // Validate data type compatibility
                 if source_node_type.output_type != parameter.data_type {
                     network.validation_errors.push(ValidationError::new(
-                        format!("Data type mismatch: source node {} outputs {:?}, but destination parameter '{}' expects {:?}", 
-                            source_node_id, source_node_type.output_type, parameter.name, parameter.data_type),
+                        format!("Data type mismatch: input expects {:?}, but source outputs {:?}", 
+                            parameter.data_type, source_node_type.output_type),
                         Some(*dest_node_id)
                     ));
                     return false;

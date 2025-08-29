@@ -107,8 +107,29 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             });
           }
 
-          // Get error for this node from last_generated_structure_designer_scene if it exists
-          let error = cad_instance.structure_designer.last_generated_structure_designer_scene.node_errors.get(&node.id).cloned();
+          // Collect validation errors for this node
+          let mut error_messages = Vec::new();
+          
+          // Add validation errors from the node network
+          for validation_error in &node_network.validation_errors {
+            if validation_error.node_id == Some(node.id) {
+              error_messages.push(validation_error.error_text.clone());
+            }
+          }
+          
+          // Only add evaluation errors if there are no validation errors in the entire network
+          if node_network.validation_errors.is_empty() {
+            if let Some(eval_error) = cad_instance.structure_designer.last_generated_structure_designer_scene.node_errors.get(&node.id) {
+              error_messages.push(eval_error.clone());
+            }
+          }
+          
+          // Combine all errors with newline separator
+          let error = if error_messages.is_empty() {
+            None
+          } else {
+            Some(error_messages.join("\n"))
+          };
 
           node_network_view.nodes.insert(node.id, NodeView {
             id: node.id,
