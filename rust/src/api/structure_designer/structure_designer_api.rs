@@ -131,12 +131,14 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             Some(error_messages.join("\n"))
           };
 
+          let output_type = cad_instance.structure_designer.node_type_registry.get_node_output_type(node);
+
           node_network_view.nodes.insert(node.id, NodeView {
             id: node.id,
             node_type_name: node.node_type_name.clone(),
             position: to_api_vec2(&node.position),
             input_pins,
-            output_type: data_type_to_str(&node_type.output_type),
+            output_type: data_type_to_str(&output_type),
             selected: node_network.selected_node_id == Some(node.id),
             displayed: node_network.is_node_displayed(node.id),
             return_node: node_network.return_node_id == Some(node.id),

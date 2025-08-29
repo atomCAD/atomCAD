@@ -23,6 +23,7 @@ use super::nodes::anchor::AnchorData;
 use super::nodes::stamp::StampData;
 use super::node_data::NoData;
 use glam::{IVec3, DVec3, IVec2};
+use crate::structure_designer::node_network::Node;
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
@@ -410,6 +411,16 @@ impl NodeTypeRegistry {
     }
     let node_network = self.node_networks.get(node_type_name)?;
     return Some(&node_network.node_type);
+  }
+
+  pub fn get_node_output_type(&self, node: &Node) -> DataType {
+    if node.node_type_name == "parameter" {
+      if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
+        return param_data.data_type;
+      }
+    }
+    let node_type = self.get_node_type(&node.node_type_name).unwrap();
+    node_type.output_type
   }
 
   pub fn get_parameter_name(&self, node_type_name: &str, parameter_index: usize) -> String {

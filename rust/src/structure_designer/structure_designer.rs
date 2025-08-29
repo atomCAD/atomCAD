@@ -178,7 +178,7 @@ impl StructureDesigner {
       NodeType {
         name: node_network_name.to_string(),
         parameters: Vec::new(),
-        output_type: DataType::Geometry, // TODO: change this
+        output_type: DataType::None,
         node_data_creator: || Box::new(NoData {}),
       }
     ));
@@ -707,7 +707,6 @@ impl StructureDesigner {
   }
 
   /// Sets a node as the return node for the active network.
-  /// Determines the output type using the NodeTypeRegistry and updates the network's output_type.
   /// 
   /// # Parameters
   /// * `node_id` - The ID of the node to set as the return node, or None to clear the return node
@@ -725,36 +724,16 @@ impl StructureDesigner {
     if node_id.is_none() {
       if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
         network.return_node_id = None;
+        self.validate_active_network();
         return true;
       }
       return false;
     }
-    
-    // Unwrap the node_id as we know it's Some
-    let node_id_unwrapped = node_id.unwrap();
-    
-    // Get the node from the network to determine its type
-    let node_type_name = {
-      let network = match self.node_type_registry.node_networks.get(network_name) {
-        Some(network) => network,
-        None => return false,
-      };
-      
-      match network.nodes.get(&node_id_unwrapped) {
-        Some(node) => node.node_type_name.clone(),
-        None => return false,
-      }
-    };
-    
-    // Get the output type from the node type registry
-    let output_type = match self.node_type_registry.get_node_type(&node_type_name) {
-      Some(node_type) => node_type.output_type,
-      None => return false,
-    };
-    
-    // Set the return node with the determined output type
+
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      network.set_return_node(node_id_unwrapped, output_type)
+      let ret = network.set_return_node(node_id.unwrap());
+      self.validate_active_network();
+      ret
     } else {
       false
     }

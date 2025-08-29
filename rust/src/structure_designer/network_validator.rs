@@ -232,10 +232,10 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 };
                 
                 // Validate data type compatibility
-                if source_node_type.output_type != parameter.data_type {
+                if node_type_registry.get_node_output_type(source_node) != parameter.data_type {
                     network.validation_errors.push(ValidationError::new(
                         format!("Data type mismatch: input expects {:?}, but source outputs {:?}", 
-                            parameter.data_type, source_node_type.output_type),
+                            parameter.data_type, node_type_registry.get_node_output_type(source_node)),
                         Some(*dest_node_id)
                     ));
                     return false;
@@ -290,12 +290,7 @@ fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &No
         // Get the return node
         if let Some(return_node) = network.nodes.get(&return_node_id) {
             // Get the node type to find its output type
-            if let Some(node_type) = node_type_registry.get_node_type(&return_node.node_type_name) {
-                node_type.output_type
-            } else {
-                // If node type not found, default to None
-                crate::structure_designer::node_type::DataType::None
-            }
+            node_type_registry.get_node_output_type(return_node)
         } else {
             // Return node doesn't exist, set to None
             crate::structure_designer::node_type::DataType::None

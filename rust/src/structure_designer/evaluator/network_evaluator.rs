@@ -166,8 +166,7 @@ impl NetworkEvaluator {
         None => return None,
       };
   
-      let node_type = registry.get_node_type(&node.node_type_name).unwrap();
-      if node_type.output_type != DataType::Geometry {
+      if registry.get_node_output_type(node) != DataType::Geometry {
         continue; // Skip non-geometry nodes
       }
       
@@ -268,11 +267,9 @@ impl NetworkEvaluator {
       None => return StructureDesignerScene::new(),
     };
 
-    let node_type = registry.get_node_type(&node.node_type_name).unwrap();
-
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
-    let mut scene = if node_type.output_type == DataType::Geometry2D {
+    let mut scene = if registry.get_node_output_type(node) == DataType::Geometry2D {
       // Create a NodeEvaluator instance to abstract SDF evaluation
       let node_evaluator = NodeEvaluator {
         network,
@@ -291,7 +288,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if node_type.output_type == DataType::Geometry {
+    else if registry.get_node_output_type(node) == DataType::Geometry {
       // Create a NodeEvaluator instance to abstract SDF evaluation
       let node_evaluator = NodeEvaluator {
         network,
@@ -310,7 +307,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if node_type.output_type == DataType::Atomic {
+    else if registry.get_node_output_type(node) == DataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);
 
       let mut scene = StructureDesignerScene::new();
