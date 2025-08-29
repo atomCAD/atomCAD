@@ -122,6 +122,7 @@ class APICuboidData {
 }
 
 enum APIDataType {
+  none,
   geometry2D,
   geometry,
   atomic,

@@ -3991,9 +3991,10 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
-            0 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D,
-1 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry,
-2 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic,
+            0 => crate::api::structure_designer::structure_designer_api_types::APIDataType::None,
+1 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D,
+2 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry,
+3 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic,
             _ => unreachable!("Invalid variant for APIDataType: {}", inner),
         };
     }
@@ -5509,9 +5510,10 @@ impl flutter_rust_bridge::IntoDart
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
-            Self::Geometry2D => 0.into_dart(),
-            Self::Geometry => 1.into_dart(),
-            Self::Atomic => 2.into_dart(),
+            Self::None => 0.into_dart(),
+            Self::Geometry2D => 1.into_dart(),
+            Self::Geometry => 2.into_dart(),
+            Self::Atomic => 3.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -6612,9 +6614,10 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIDataType {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D => { 0 }
-crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry => { 1 }
-crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic => { 2 }
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIDataType::None => { 0 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry => { 2 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic => { 3 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }
