@@ -67,7 +67,7 @@ Currently a node has parameters (input pins) and properties (settable on the UI)
 stored in objects inherited from the NodeData trait.
 
 It would be ideal that all properties were also parameters so that they could be programmatically set.
-Doing it all at once would be too much work all at once, so let's do it gradually.
+It would be too much work all at once, so let's do it gradually.
 
 - We introduce some new DataType-s like IVec3, Vec3, etc...
 - We introduce new parameters of some nodes with the same name or similar name as some properties.

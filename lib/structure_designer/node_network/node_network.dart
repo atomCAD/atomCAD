@@ -10,9 +10,9 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 
 // Node dimensions and layout constants
 const double NODE_WIDTH = 130.0;
-const double NODE_VERT_WIRE_OFFSET = 39.0;
-const double NODE_VERT_WIRE_OFFSET_EMPTY = 46.0;
-const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 21.0;
+const double NODE_VERT_WIRE_OFFSET = 33.0;
+const double NODE_VERT_WIRE_OFFSET_EMPTY = 42.0;
+const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 22.0;
 const double CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
 
 // Wire appearance constants

@@ -8,6 +8,8 @@ import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 // Pin appearance constants
 const double PIN_SIZE = 14.0;
 const double PIN_BORDER_WIDTH = 5.0;
+const double PIN_HIT_AREA_WIDTH = 24.0; // Larger hit area for easier dragging
+const double PIN_HIT_AREA_HEIGHT = 22.0;
 
 // Node appearance constants
 const Color NODE_BACKGROUND_COLOR = Color(0xFF212121); // Colors.grey[900]
@@ -84,9 +86,22 @@ class PinWidget extends StatelessWidget {
         return Draggable<PinReference>(
           data: pinReference,
           feedback: SizedBox.shrink(),
-          childWhenDragging:
-              PinViewWidget(dataType: pinReference.dataType, multi: multi),
-          child: PinViewWidget(dataType: pinReference.dataType, multi: multi),
+          childWhenDragging: Container(
+            width: PIN_HIT_AREA_WIDTH,
+            height: PIN_HIT_AREA_HEIGHT,
+            child: Center(
+              child:
+                  PinViewWidget(dataType: pinReference.dataType, multi: multi),
+            ),
+          ),
+          child: Container(
+            width: PIN_HIT_AREA_WIDTH,
+            height: PIN_HIT_AREA_HEIGHT,
+            child: Center(
+              child:
+                  PinViewWidget(dataType: pinReference.dataType, multi: multi),
+            ),
+          ),
           onDragUpdate: (details) {
             final nodeNetworkBox = _findNodeNetworkRenderBox(context);
             if (nodeNetworkBox != null) {
@@ -234,7 +249,7 @@ class NodeWidget extends StatelessWidget {
         ),
         // Main Body
         Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(2),
           child: Row(
             children: [
               // Left Side (Inputs)
@@ -327,7 +342,7 @@ class NodeWidget extends StatelessWidget {
     return Row(
       children: [
         PinWidget(pinReference: pinReference, multi: multi),
-        SizedBox(width: 6),
+        SizedBox(width: 2),
         Text(
           label,
           style: TextStyle(color: Colors.white, fontSize: 14),
