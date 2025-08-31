@@ -232,7 +232,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 };
                 
                 // Validate data type compatibility
-                if node_type_registry.get_node_output_type(source_node) != parameter.data_type {
+                if node_type_registry.get_node_output_type(source_node) != node_type_registry.get_node_param_data_type(dest_node, arg_index) {
                     network.validation_errors.push(ValidationError::new(
                         format!("Data type mismatch: input expects {:?}, but source outputs {:?}", 
                             parameter.data_type, node_type_registry.get_node_output_type(source_node)),

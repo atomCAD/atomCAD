@@ -102,7 +102,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             let param = &node_type.parameters[i];
             input_pins.push(InputPinView {
               name: param.name.clone(),
-              data_type: data_type_to_str(&param.data_type),
+              data_type: data_type_to_str(&cad_instance.structure_designer.node_type_registry.get_node_param_data_type(node, i)),
               multi: param.multi,
             });
           }

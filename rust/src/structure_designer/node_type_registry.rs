@@ -41,8 +41,14 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "parameter".to_string(),
-      parameters: Vec::new(),
-      output_type: DataType::Geometry, // is not used, the parameter node's output type will be determined by the node network's node type.
+      parameters: vec![
+          Parameter {
+              name: "default".to_string(),
+              data_type: DataType::Geometry, // will change based on  ParameterData::data_type.
+              multi: false,
+          },
+      ],
+      output_type: DataType::Geometry, // will change based on ParameterData::data_type.
       node_data_creator: || Box::new(ParameterData {
         param_index: 0,
         param_name: "param".to_string(),
@@ -421,6 +427,16 @@ impl NodeTypeRegistry {
     }
     let node_type = self.get_node_type(&node.node_type_name).unwrap();
     node_type.output_type
+  }
+
+  pub fn get_node_param_data_type(&self,  node: &Node, parameter_index: usize) -> DataType {
+    if node.node_type_name == "parameter" && parameter_index == 0 {
+      if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
+        return param_data.data_type;
+      }
+    }
+    let node_type = self.get_node_type(&node.node_type_name).unwrap();
+    node_type.parameters[parameter_index].data_type
   }
 
   pub fn get_parameter_name(&self, node_type_name: &str, parameter_index: usize) -> String {

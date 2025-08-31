@@ -8,6 +8,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::evaluator::network_evaluator::error_in_input;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParameterData {
@@ -24,6 +25,43 @@ impl NodeData for ParameterData {
     }
 }
 
+fn eval_default<'a>(
+  network_evaluator: &NetworkEvaluator,
+  network_stack: &Vec<NetworkStackElement<'a>>,
+  node_id: u64,
+  registry: &NodeTypeRegistry,
+  context: &mut NetworkEvaluationContext,
+) -> Vec<NetworkResult> {
+  let node = NetworkStackElement::get_top_node(network_stack, node_id);
+  
+  if node.arguments[0].is_empty() {
+    return vec![NetworkResult::Error("input is missing".to_string())];
+  }
+  
+  let results: Result<Vec<_>, _> = node.arguments[0].argument_node_ids.iter()
+    .map(|input_node_id| {
+      let result = network_evaluator.evaluate(
+        network_stack,
+        *input_node_id,
+        registry, 
+        false,
+        context
+      );
+      if let NetworkResult::Error(_error) = &result[0] {
+        Err(())
+      } else {
+        Ok(result)
+      }
+    })
+    .collect();
+  
+  if results.is_err() {
+    return vec![error_in_input("default")];
+  }
+  
+  results.unwrap().into_iter().flatten().collect()
+}
+
 pub fn eval_parameter<'a>(
   network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
@@ -32,11 +70,10 @@ pub fn eval_parameter<'a>(
   context: &mut NetworkEvaluationContext,
 ) -> Vec<NetworkResult> {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
   let evaled_in_isolation = network_stack.len() < 2;
 
   if evaled_in_isolation {
-    return vec![NetworkResult::Error("input is missing".to_string())];
+    return eval_default(network_evaluator, network_stack, node_id, registry, context);
   }
 
   let parent_node_id = network_stack.last().unwrap().node_id;
@@ -48,7 +85,7 @@ pub fn eval_parameter<'a>(
   // evaluate all the arguments of the parent node if any
   let argument_node_ids = &parent_node.arguments[param_data.param_index].argument_node_ids;
   if argument_node_ids.is_empty() {
-    return vec![NetworkResult::Error("input is missing".to_string())];
+    return eval_default(network_evaluator, network_stack, node_id, registry, context);
   }
   let args : Vec<Vec<NetworkResult>> = argument_node_ids.iter().map(|&arg_node_id| {
     network_evaluator.evaluate(&parent_network_stack, arg_node_id, registry, false, context)
