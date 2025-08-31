@@ -5,6 +5,7 @@ use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
+use crate::api::common_api_types::APIResult;
 use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors};
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
@@ -910,22 +911,33 @@ pub fn save_node_networks(file_path: String) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn load_node_networks(file_path: String) -> bool {
+pub fn load_node_networks(file_path: String) -> APIResult {
   unsafe {
     with_mut_cad_instance_or(
       |cad_instance| {
         // Call the method in StructureDesigner
         let result = cad_instance.structure_designer.load_node_networks(&file_path);
         
-        // Refresh the renderer to reflect any loaded structures
+        print!("Result: {:?}", result);
+
+        // Refresh the renderer to reflect any loaded structures (even if there was an error)
         refresh_renderer(cad_instance, false);
         
         match result {
-          Ok(_) => true,
-          Err(_) => false
+          Ok(_) => APIResult {
+            success: true,
+            error_message: String::new(),
+          },
+          Err(e) => APIResult {
+            success: false,
+            error_message: e.to_string(),
+          }
         }
       },
-      false
+      APIResult {
+        success: false,
+        error_message: "CAD instance not available".to_string(),
+      }
     )
   }
 }

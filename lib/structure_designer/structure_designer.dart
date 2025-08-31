@@ -183,7 +183,28 @@ class _StructureDesignerState extends State<StructureDesigner> {
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
       debugPrint('Design file selected: $filePath');
-      graphModel.loadNodeNetworks(filePath);
+      final loadResult = graphModel.loadNodeNetworks(filePath);
+      
+      if (!loadResult.success) {
+        // Show error dialog
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('Load Error'),
+                content: Text(loadResult.errorMessage),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+      }
     } else {
       debugPrint('No design file selected');
     }

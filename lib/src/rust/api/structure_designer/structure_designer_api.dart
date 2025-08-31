@@ -210,7 +210,7 @@ bool saveNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks(
         filePath: filePath);
 
-bool loadNodeNetworks({required String filePath}) => RustLib.instance.api
+APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
         filePath: filePath);
 

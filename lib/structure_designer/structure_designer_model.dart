@@ -156,9 +156,10 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void loadNodeNetworks(String filePath) {
-    structure_designer_api.loadNodeNetworks(filePath: filePath);
+  APIResult loadNodeNetworks(String filePath) {
+    final result = structure_designer_api.loadNodeNetworks(filePath: filePath);
     refreshFromKernel();
+    return result;
   }
 
   void setActiveNodeNetwork(String nodeNetworkName) {
@@ -238,7 +239,8 @@ class StructureDesignerModel extends ChangeNotifier {
       if (nodeNetworkView != null && nodeNetworkView!.name == oldName) {
         nodeNetworkView = structure_designer_api.getNodeNetworkView();
       }
-      nodeNetworkNames = structure_designer_api.getNodeNetworksWithValidation() ?? [];
+      nodeNetworkNames =
+          structure_designer_api.getNodeNetworksWithValidation() ?? [];
       notifyListeners();
     }
   }
@@ -252,7 +254,8 @@ class StructureDesignerModel extends ChangeNotifier {
     structure_designer_api.addNewNodeNetwork();
 
     // Refresh the list of node networks
-    nodeNetworkNames = structure_designer_api.getNodeNetworksWithValidation() ?? [];
+    nodeNetworkNames =
+        structure_designer_api.getNodeNetworksWithValidation() ?? [];
 
     // If we want to automatically set the new network as active,
     // we would need to get its name first (it's the last one in the list)
@@ -429,7 +432,8 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
-    nodeNetworkNames = structure_designer_api.getNodeNetworksWithValidation() ?? [];
+    nodeNetworkNames =
+        structure_designer_api.getNodeNetworksWithValidation() ?? [];
     activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();

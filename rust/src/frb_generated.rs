@@ -4199,6 +4199,18 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode for crate::api::common_api_types::APIResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_success = <bool>::sse_decode(deserializer);
+        let mut var_errorMessage = <String>::sse_decode(deserializer);
+        return crate::api::common_api_types::APIResult {
+            success: var_success,
+            error_message: var_errorMessage,
+        };
+    }
+}
+
 impl SseDecode for crate::api::scene_composer_api_types::APISceneComposerTool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5896,6 +5908,27 @@ impl
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::APIResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.success.into_into_dart().into_dart(),
+            self.error_message.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::common_api_types::APIResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::common_api_types::APIResult>
+    for crate::api::common_api_types::APIResult
+{
+    fn into_into_dart(self) -> crate::api::common_api_types::APIResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::scene_composer_api_types::APISceneComposerTool {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -6756,6 +6789,14 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.num_sides, serializer);
         <i32>::sse_encode(self.radius, serializer);
+    }
+}
+
+impl SseEncode for crate::api::common_api_types::APIResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.success, serializer);
+        <String>::sse_encode(self.error_message, serializer);
     }
 }
 

@@ -20,6 +20,7 @@ pub fn data_type_to_str(data_type: &DataType) -> String {
 
 pub fn str_to_data_type(s: &str) -> Option<DataType> {
   match s {
+    "None" => Some(DataType::None),
     "Geometry2D" => Some(DataType::Geometry2D),
     "Geometry" => Some(DataType::Geometry),
     "Atomic" => Some(DataType::Atomic),

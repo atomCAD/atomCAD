@@ -268,7 +268,7 @@ abstract class RustLibApi extends BaseApi {
   bool crateApiStructureDesignerGeoToAtomApiIsUnitCellSizeEstimated(
       {required int primaryAtomicNumber, required int secondaryAtomicNumber});
 
-  bool crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
+  APIResult crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
       {required String filePath});
 
   void crateApiCommonApiMoveCamera(
@@ -2088,7 +2088,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  bool crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
+  APIResult crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
       {required String filePath}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -2097,7 +2097,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_bool,
+        decodeSuccessData: sse_decode_api_result,
         decodeErrorData: null,
       ),
       constMeta:
@@ -4012,6 +4012,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIResult dco_decode_api_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIResult(
+      success: dco_decode_bool(arr[0]),
+      errorMessage: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
   APISceneComposerTool dco_decode_api_scene_composer_tool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return APISceneComposerTool.values[raw as int];
@@ -5099,6 +5111,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_numSides = sse_decode_i_32(deserializer);
     var var_radius = sse_decode_i_32(deserializer);
     return APIRegPolyData(numSides: var_numSides, radius: var_radius);
+  }
+
+  @protected
+  APIResult sse_decode_api_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_success = sse_decode_bool(deserializer);
+    var var_errorMessage = sse_decode_String(deserializer);
+    return APIResult(success: var_success, errorMessage: var_errorMessage);
   }
 
   @protected
@@ -6343,6 +6363,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.numSides, serializer);
     sse_encode_i_32(self.radius, serializer);
+  }
+
+  @protected
+  void sse_encode_api_result(APIResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.success, serializer);
+    sse_encode_String(self.errorMessage, serializer);
   }
 
   @protected

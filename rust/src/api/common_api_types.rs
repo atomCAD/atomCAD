@@ -67,3 +67,9 @@ pub struct ElementSummary {
   pub atomic_number: i32,
   pub element_name: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct APIResult {
+  pub success: bool,
+  pub error_message: String,
+}

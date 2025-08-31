@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
 
 class APICamera {
   final APIVec3 eye;
@@ -68,6 +68,27 @@ enum APICameraCanonicalView {
   left,
   right,
   ;
+}
+
+class APIResult {
+  final bool success;
+  final String errorMessage;
+
+  const APIResult({
+    required this.success,
+    required this.errorMessage,
+  });
+
+  @override
+  int get hashCode => success.hashCode ^ errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          errorMessage == other.errorMessage;
 }
 
 class APITransform {

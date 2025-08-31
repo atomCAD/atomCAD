@@ -104,6 +104,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRegPolyData dco_decode_api_reg_poly_data(dynamic raw);
 
   @protected
+  APIResult dco_decode_api_result(dynamic raw);
+
+  @protected
   APISceneComposerTool dco_decode_api_scene_composer_tool(dynamic raw);
 
   @protected
@@ -512,6 +515,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRegPolyData sse_decode_api_reg_poly_data(SseDeserializer deserializer);
+
+  @protected
+  APIResult sse_decode_api_result(SseDeserializer deserializer);
 
   @protected
   APISceneComposerTool sse_decode_api_scene_composer_tool(
@@ -986,6 +992,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_reg_poly_data(
       APIRegPolyData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_result(APIResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_scene_composer_tool(
