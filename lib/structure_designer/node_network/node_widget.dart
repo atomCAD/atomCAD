@@ -329,6 +329,7 @@ class NodeWidget extends StatelessWidget {
         showDuration: const Duration(seconds: 5),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         preferBelow: true,
+        verticalOffset: 35.0,
         child: nodeWidget,
       );
     }
