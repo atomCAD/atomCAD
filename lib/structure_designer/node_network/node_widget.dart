@@ -40,23 +40,27 @@ class PinViewWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = getDataTypeColor(dataType);
 
-    return Center(
-      child: Container(
-          width: PIN_SIZE,
-          height: PIN_SIZE,
-          decoration: multi
-              ? BoxDecoration(
-                  border: Border.all(
-                    color: color, // Set the border color
-                    width: PIN_BORDER_WIDTH, // Set the border width
-                  ),
-                  shape: BoxShape.circle,
-                  color: Colors.black,
-                )
-              : BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color,
-                )),
+    return Tooltip(
+      message: dataType,
+      preferBelow: false,
+      child: Center(
+        child: Container(
+            width: PIN_SIZE,
+            height: PIN_SIZE,
+            decoration: multi
+                ? BoxDecoration(
+                    border: Border.all(
+                      color: color, // Set the border color
+                      width: PIN_BORDER_WIDTH, // Set the border width
+                    ),
+                    shape: BoxShape.circle,
+                    color: Colors.black,
+                  )
+                : BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: color,
+                  )),
+      ),
     );
   }
 }
