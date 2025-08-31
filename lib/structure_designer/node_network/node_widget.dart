@@ -81,53 +81,57 @@ class PinWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<PinReference>(
-      builder: (context, candidateData, rejectedData) {
-        return Draggable<PinReference>(
-          data: pinReference,
-          feedback: SizedBox.shrink(),
-          childWhenDragging: Container(
-            width: PIN_HIT_AREA_WIDTH,
-            height: PIN_HIT_AREA_HEIGHT,
-            child: Center(
-              child:
-                  PinViewWidget(dataType: pinReference.dataType, multi: multi),
+    return Container(
+      width: PIN_HIT_AREA_WIDTH,
+      height: PIN_HIT_AREA_HEIGHT,
+      child: DragTarget<PinReference>(
+        builder: (context, candidateData, rejectedData) {
+          return Draggable<PinReference>(
+            data: pinReference,
+            feedback: SizedBox.shrink(),
+            childWhenDragging: Container(
+              width: PIN_HIT_AREA_WIDTH,
+              height: PIN_HIT_AREA_HEIGHT,
+              child: Center(
+                child: PinViewWidget(
+                    dataType: pinReference.dataType, multi: multi),
+              ),
             ),
-          ),
-          child: Container(
-            width: PIN_HIT_AREA_WIDTH,
-            height: PIN_HIT_AREA_HEIGHT,
-            child: Center(
-              child:
-                  PinViewWidget(dataType: pinReference.dataType, multi: multi),
+            child: Container(
+              width: PIN_HIT_AREA_WIDTH,
+              height: PIN_HIT_AREA_HEIGHT,
+              child: Center(
+                child: PinViewWidget(
+                    dataType: pinReference.dataType, multi: multi),
+              ),
             ),
-          ),
-          onDragUpdate: (details) {
-            final nodeNetworkBox = _findNodeNetworkRenderBox(context);
-            if (nodeNetworkBox != null) {
-              final position =
-                  nodeNetworkBox.globalToLocal(details.globalPosition);
+            onDragUpdate: (details) {
+              final nodeNetworkBox = _findNodeNetworkRenderBox(context);
+              if (nodeNetworkBox != null) {
+                final position =
+                    nodeNetworkBox.globalToLocal(details.globalPosition);
+                Provider.of<StructureDesignerModel>(context, listen: false)
+                    .dragWire(pinReference, position);
+              }
+            },
+            onDragEnd: (details) {
               Provider.of<StructureDesignerModel>(context, listen: false)
-                  .dragWire(pinReference, position);
-            }
-          },
-          onDragEnd: (details) {
-            Provider.of<StructureDesignerModel>(context, listen: false)
-                .cancelDragWire();
-          },
-        );
-      },
-      onWillAcceptWithDetails: (details) {
-        return details.data.dataType ==
-                pinReference.dataType && // same data type
-            (details.data.pinIndex < 0) !=
-                (pinReference.pinIndex < 0); // output to input
-      },
-      onAcceptWithDetails: (details) {
-        //print("Connected pin ${details.data} to pin $pinReference");
-        Provider.of<StructureDesignerModel>(context, listen: false)
-            .connectPins(details.data, pinReference);
-      },
+                  .cancelDragWire();
+            },
+          );
+        },
+        onWillAcceptWithDetails: (details) {
+          return details.data.dataType ==
+                  pinReference.dataType && // same data type
+              (details.data.pinIndex < 0) !=
+                  (pinReference.pinIndex < 0); // output to input
+        },
+        onAcceptWithDetails: (details) {
+          //print("Connected pin ${details.data} to pin $pinReference");
+          Provider.of<StructureDesignerModel>(context, listen: false)
+              .connectPins(details.data, pinReference);
+        },
+      ),
     );
   }
 }
