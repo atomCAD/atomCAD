@@ -24,6 +24,7 @@ use crate::structure_designer::nodes::sphere::eval_sphere;
 use crate::structure_designer::nodes::cuboid::eval_cuboid;
 use crate::structure_designer::nodes::intersect::eval_intersect;
 use crate::structure_designer::nodes::union::eval_union;
+use crate::structure_designer::nodes::parameter::eval_parameter;
 use crate::structure_designer::nodes::diff::eval_diff;
 use crate::structure_designer::nodes::intersect_2d::eval_intersect_2d;
 use crate::structure_designer::nodes::union_2d::eval_union_2d;
@@ -407,19 +408,7 @@ impl NetworkEvaluator {
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
     let results = if node.node_type_name == "parameter" {
-      let parent_node_id = network_stack.last().unwrap().node_id;
-
-      let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
-      let mut parent_network_stack = network_stack.clone();
-      parent_network_stack.pop();
-      vec![NetworkResult::None]
-      /*
-      let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
-      let args : Vec<Vec<NetworkResult>> = parent_node.arguments[param_data.param_index].argument_node_ids.iter().map(|&arg_node_id| {
-        self.evaluate(&parent_network_stack, arg_node_id, registry, false, context)
-      }).collect();
-      args.concat()
-      */
+      eval_parameter(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "circle" {
       vec![eval_circle(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {
@@ -466,10 +455,13 @@ impl NetworkEvaluator {
       vec![eval_stamp(&self, network_stack, node_id, registry, decorate, context)]
     } else if node.node_type_name == "relax" {
       vec![eval_relax(&self, network_stack, node_id, registry, context)]
-    } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
+    } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) { // custom node
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
-      self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry, false, context)
+      let result = self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry, false, context);
+      if let NetworkResult::Error(_error) = &result[0] {
+        vec![NetworkResult::Error(format!("Error in {}", node.node_type_name))]
+      } else { result }
     } else {
       vec![NetworkResult::None]
     };
