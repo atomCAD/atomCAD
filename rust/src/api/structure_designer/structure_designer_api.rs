@@ -56,6 +56,12 @@ use super::structure_designer_preferences::StructureDesignerPreferences;
 fn to_api_data_type(data_type: &DataType) -> APIDataType {
   match data_type {
     DataType::None => APIDataType::None,
+    DataType::Int => APIDataType::Int,
+    DataType::Float => APIDataType::Float,
+    DataType::Vec2 => APIDataType::Vec2,
+    DataType::Vec3 => APIDataType::Vec3,
+    DataType::IVec2 => APIDataType::IVec2,
+    DataType::IVec3 => APIDataType::IVec3,
     DataType::Geometry2D => APIDataType::Geometry2D,
     DataType::Geometry => APIDataType::Geometry,
     DataType::Atomic => APIDataType::Atomic,
@@ -65,6 +71,12 @@ fn to_api_data_type(data_type: &DataType) -> APIDataType {
 fn from_api_data_type(api_data_type: &APIDataType) -> DataType {
   match api_data_type {
     APIDataType::None => DataType::None,
+    APIDataType::Int => DataType::Int,
+    APIDataType::Float => DataType::Float,
+    APIDataType::Vec2 => DataType::Vec2,
+    APIDataType::Vec3 => DataType::Vec3,
+    APIDataType::IVec2 => DataType::IVec2,
+    APIDataType::IVec3 => DataType::IVec3,
     APIDataType::Geometry2D => DataType::Geometry2D,
     APIDataType::Geometry => DataType::Geometry,
     APIDataType::Atomic => DataType::Atomic,

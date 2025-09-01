@@ -4,6 +4,12 @@ use serde::{Serialize, Deserialize};
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum DataType {
   None,
+  Int,
+  Float,
+  Vec2,
+  Vec3,
+  IVec2,
+  IVec3,
   Geometry2D,
   Geometry,
   Atomic
@@ -12,6 +18,12 @@ pub enum DataType {
 pub fn data_type_to_str(data_type: &DataType) -> String {
   match data_type {
     DataType::None => "None".to_string(),
+    DataType::Int => "Int".to_string(),
+    DataType::Float => "Float".to_string(),
+    DataType::Vec2 => "Vec2".to_string(),
+    DataType::Vec3 => "Vec3".to_string(),
+    DataType::IVec2 => "IVec2".to_string(),
+    DataType::IVec3 => "IVec3".to_string(),
     DataType::Geometry2D => "Geometry2D".to_string(),
     DataType::Geometry => "Geometry".to_string(),
     DataType::Atomic => "Atomic".to_string(),
@@ -21,6 +33,12 @@ pub fn data_type_to_str(data_type: &DataType) -> String {
 pub fn str_to_data_type(s: &str) -> Option<DataType> {
   match s {
     "None" => Some(DataType::None),
+    "Int" => Some(DataType::Int),
+    "Float" => Some(DataType::Float),
+    "Vec2" => Some(DataType::Vec2),
+    "Vec3" => Some(DataType::Vec3),
+    "IVec2" => Some(DataType::IVec2),
+    "IVec3" => Some(DataType::IVec3),
     "Geometry2D" => Some(DataType::Geometry2D),
     "Geometry" => Some(DataType::Geometry),
     "Atomic" => Some(DataType::Atomic),

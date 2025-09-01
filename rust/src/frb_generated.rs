@@ -3992,9 +3992,15 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::structure_designer::structure_designer_api_types::APIDataType::None,
-1 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D,
-2 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry,
-3 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic,
+1 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Int,
+2 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Float,
+3 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Vec2,
+4 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Vec3,
+5 => crate::api::structure_designer::structure_designer_api_types::APIDataType::IVec2,
+6 => crate::api::structure_designer::structure_designer_api_types::APIDataType::IVec3,
+7 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D,
+8 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry,
+9 => crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic,
             _ => unreachable!("Invalid variant for APIDataType: {}", inner),
         };
     }
@@ -5523,9 +5529,15 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::None => 0.into_dart(),
-            Self::Geometry2D => 1.into_dart(),
-            Self::Geometry => 2.into_dart(),
-            Self::Atomic => 3.into_dart(),
+            Self::Int => 1.into_dart(),
+            Self::Float => 2.into_dart(),
+            Self::Vec2 => 3.into_dart(),
+            Self::Vec3 => 4.into_dart(),
+            Self::IVec2 => 5.into_dart(),
+            Self::IVec3 => 6.into_dart(),
+            Self::Geometry2D => 7.into_dart(),
+            Self::Geometry => 8.into_dart(),
+            Self::Atomic => 9.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -6648,9 +6660,15 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIDataType::None => { 0 }
-crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D => { 1 }
-crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry => { 2 }
-crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic => { 3 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Int => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Float => { 2 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Vec2 => { 3 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Vec3 => { 4 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::IVec2 => { 5 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::IVec3 => { 6 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry2D => { 7 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Geometry => { 8 }
+crate::api::structure_designer::structure_designer_api_types::APIDataType::Atomic => { 9 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

@@ -16,6 +16,12 @@ pub enum APIEditAtomTool {
 #[derive(Clone)]
 pub enum APIDataType {
   None,
+  Int,
+  Float,
+  Vec2,
+  Vec3,
+  IVec2,
+  IVec3,
   Geometry2D,
   Geometry,
   Atomic

@@ -172,7 +172,18 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "cuboid".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+            name: "min_corner".to_string(),
+            data_type: DataType::IVec3,
+            multi: false,
+        },
+        Parameter {
+          name: "extent".to_string(),
+          data_type: DataType::IVec3,
+          multi: false,
+        },
+      ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(CuboidData {
         min_corner: IVec3::new(-1, -1, -1),
