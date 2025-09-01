@@ -4,7 +4,7 @@ use std::any::Any;
 use glam::f64::DVec3;
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::structure_designer::node_network::NodeNetwork;
-use crate::structure_designer::node_type::DataType;
+use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::half_plane::eval_half_plane;
 use crate::structure_designer::nodes::polygon::eval_polygon;
@@ -167,7 +167,7 @@ impl NetworkEvaluator {
         None => return None,
       };
   
-      if registry.get_node_output_type(node) != DataType::Geometry {
+      if registry.get_node_output_type(node) != APIDataType::Geometry {
         continue; // Skip non-geometry nodes
       }
       
@@ -270,7 +270,7 @@ impl NetworkEvaluator {
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
-    let mut scene = if registry.get_node_output_type(node) == DataType::Geometry2D {
+    let mut scene = if registry.get_node_output_type(node) == APIDataType::Geometry2D {
       // Create a NodeEvaluator instance to abstract SDF evaluation
       let node_evaluator = NodeEvaluator {
         network,
@@ -289,7 +289,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if registry.get_node_output_type(node) == DataType::Geometry {
+    else if registry.get_node_output_type(node) == APIDataType::Geometry {
       // Create a NodeEvaluator instance to abstract SDF evaluation
       let node_evaluator = NodeEvaluator {
         network,
@@ -308,7 +308,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if registry.get_node_output_type(node) == DataType::Atomic {
+    else if registry.get_node_output_type(node) == APIDataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);
 
       let mut scene = StructureDesignerScene::new();

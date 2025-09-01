@@ -5,6 +5,7 @@ use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::APITransform;
 use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
 
 #[derive(Clone)]
 pub enum APIEditAtomTool {
@@ -13,7 +14,7 @@ pub enum APIEditAtomTool {
   AddBond,
 }
 
-#[derive(Clone)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum APIDataType {
   None,
   Int,

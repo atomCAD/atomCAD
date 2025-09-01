@@ -4,7 +4,7 @@ use glam::f64::DVec3;
 use glam::f64::DVec2;
 use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
-use super::node_type::DataType;
+use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_data::NoData;
@@ -178,7 +178,7 @@ impl StructureDesigner {
       NodeType {
         name: node_network_name.to_string(),
         parameters: Vec::new(),
-        output_type: DataType::None,
+        output_type: APIDataType::None,
         node_data_creator: || Box::new(NoData {}),
       }
     ));

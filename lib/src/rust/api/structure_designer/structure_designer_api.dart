@@ -9,8 +9,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `from_api_data_type`, `to_api_data_type`
-
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
 
@@ -217,6 +215,11 @@ APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
 bool isNodeTypeActive({required String nodeType}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiIsNodeTypeActive(
         nodeType: nodeType);
+
+String getApiDataTypeDisplayName({required APIDataType dataType}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetApiDataTypeDisplayName(
+            dataType: dataType);
 
 StructureDesignerPreferences? getStructureDesignerPreferences() => RustLib
     .instance.api

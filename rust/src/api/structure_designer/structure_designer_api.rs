@@ -49,39 +49,7 @@ use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIDataType;
 use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::structure_designer::node_type::DataType;
 use super::structure_designer_preferences::StructureDesignerPreferences;
-
-// Conversion functions between DataType and APIDataType
-fn to_api_data_type(data_type: &DataType) -> APIDataType {
-  match data_type {
-    DataType::None => APIDataType::None,
-    DataType::Int => APIDataType::Int,
-    DataType::Float => APIDataType::Float,
-    DataType::Vec2 => APIDataType::Vec2,
-    DataType::Vec3 => APIDataType::Vec3,
-    DataType::IVec2 => APIDataType::IVec2,
-    DataType::IVec3 => APIDataType::IVec3,
-    DataType::Geometry2D => APIDataType::Geometry2D,
-    DataType::Geometry => APIDataType::Geometry,
-    DataType::Atomic => APIDataType::Atomic,
-  }
-}
-
-fn from_api_data_type(api_data_type: &APIDataType) -> DataType {
-  match api_data_type {
-    APIDataType::None => DataType::None,
-    APIDataType::Int => DataType::Int,
-    APIDataType::Float => DataType::Float,
-    APIDataType::Vec2 => DataType::Vec2,
-    APIDataType::Vec3 => DataType::Vec3,
-    APIDataType::IVec2 => DataType::IVec2,
-    APIDataType::IVec3 => DataType::IVec3,
-    APIDataType::Geometry2D => DataType::Geometry2D,
-    APIDataType::Geometry => DataType::Geometry,
-    APIDataType::Atomic => DataType::Atomic,
-  }
-}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -710,7 +678,7 @@ pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
         Some(APIParameterData {
           param_index: parameter_data.param_index,
           param_name: parameter_data.param_name.clone(),
-          data_type: to_api_data_type(&parameter_data.data_type),
+          data_type: parameter_data.data_type,
           multi: parameter_data.multi,
           sort_order: parameter_data.sort_order,
         })
@@ -872,7 +840,7 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
       let parameter_data = Box::new(ParameterData {
         param_index: data.param_index,
         param_name: data.param_name,
-        data_type: from_api_data_type(&data.data_type),
+        data_type: data.data_type,
         multi: data.multi,
         sort_order: data.sort_order,
       });
@@ -962,6 +930,11 @@ pub fn is_node_type_active(node_type: String) -> bool {
       false
     )
   }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_api_data_type_display_name(data_type: APIDataType) -> String {
+  data_type_to_str(&data_type)
 }
 
 #[flutter_rust_bridge::frb(sync)]

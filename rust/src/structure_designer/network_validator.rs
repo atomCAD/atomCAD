@@ -293,11 +293,11 @@ fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &No
             node_type_registry.get_node_output_type(return_node)
         } else {
             // Return node doesn't exist, set to None
-            crate::structure_designer::node_type::DataType::None
+            crate::api::structure_designer::structure_designer_api_types::APIDataType::None
         }
     } else {
         // No return node, output type is None
-        crate::structure_designer::node_type::DataType::None
+        crate::api::structure_designer::structure_designer_api_types::APIDataType::None
     };
     
     // Update the network's output type

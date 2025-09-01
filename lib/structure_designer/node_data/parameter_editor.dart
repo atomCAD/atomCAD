@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor widget for parameter nodes
@@ -69,24 +70,9 @@ class ParameterEditorState extends State<ParameterEditor> {
               border: OutlineInputBorder(),
             ),
             items: APIDataType.values.map((dataType) {
-              String displayName;
-              switch (dataType) {
-                case APIDataType.none:
-                  displayName = 'None';
-                  break;
-                case APIDataType.geometry2D:
-                  displayName = 'Geometry 2D';
-                  break;
-                case APIDataType.geometry:
-                  displayName = 'Geometry';
-                  break;
-                case APIDataType.atomic:
-                  displayName = 'Atomic';
-                  break;
-              }
               return DropdownMenuItem(
                 value: dataType,
-                child: Text(displayName),
+                child: Text(getApiDataTypeDisplayName(dataType: dataType)),
               );
             }).toList(),
             onChanged: (newValue) {
