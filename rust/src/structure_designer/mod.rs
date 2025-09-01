@@ -12,4 +12,5 @@ pub mod serialization;
 pub mod node_display_policy_resolver;
 pub mod utils;
 pub mod network_validator;
+pub mod geo_tree;
 

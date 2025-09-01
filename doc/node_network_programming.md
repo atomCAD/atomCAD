@@ -95,3 +95,17 @@ as the output pin of the parameter node (which is the parameter data type).
 The default pin is only evaluated when the parameter is evaluated in a context that there is no parent node network on
 the call stack.
 When nothing is connected to a parameter node the node evaluation will result in the missing input error.
+
+## Refactor implicit evaluation
+
+Making everything programmable forced me to think through the evaluation process.
+Implicit evaluation is not a good fit for a functional evaluation process
+as when implicitly evaluating a geometry each node needs to be evaluated for lots of sample points and calculating subtrees over and over while getting the same value would waste resources extensively.
+
+Currently we use the same node network to do explicit evaluation and do implicit evaluation for Geometry sub networks. This is not scalable for the generic case.
+
+An elegant solution is to completely separate implicit evaluation into a completely
+different subsystem. On the node network there should be only explicit evaluation,
+but the output of that evaluation in case of geometry nodes is a geometry algebraic expression. This geometrric algebraic expression is stored as a tree.
+This can be then used for implicit evaluation, but implicit evaluation in this case
+is already a completely different subsystem which has nothing to to do with the node network.
