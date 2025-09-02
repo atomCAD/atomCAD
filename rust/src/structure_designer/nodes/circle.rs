@@ -15,6 +15,7 @@ use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CircleData {
@@ -38,23 +39,17 @@ pub fn eval_circle<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let circle_data = &node.data.as_any_ref().downcast_ref::<CircleData>().unwrap();
 
-  let center = circle_data.center.as_dvec2();
-
-  let geometry = if context.explicit_geo_eval_needed { CSG::circle(
-    circle_data.radius as f64,
-    32,
-    None
-  )
-  .translate(center.x, center.y, 0.0) } else { CSG::new() };
-
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
       frame_transform: Transform2D::new(
         circle_data.center.as_dvec2(),
         0.0,
       ),
-      csg: geometry,
-    });
+      geo_tree_root: GeoNode::Circle {
+        center: circle_data.center,
+        radius: circle_data.radius,
+      },
+  });
 }
 
 pub fn implicit_eval_circle<'a>(

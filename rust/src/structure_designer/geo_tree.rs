@@ -1,12 +1,14 @@
 use glam::i32::IVec3;
 use glam::i32::IVec2;
+use crate::util::transform::Transform;
 
 /*
  * geo_tree is a simple geometry expression tree implementation.
  * It can be implicitly evaluated or converted to polygon representation.
  * Geometry and Geometry2D nodes in an atomCAD node network output this representation.
  */
-pub enum GeoNode {
+#[derive(Clone)]
+ pub enum GeoNode {
   HalfSpace {
     miller_index: IVec3,
     center: IVec3,
@@ -24,27 +26,46 @@ pub enum GeoNode {
     center: IVec3,
     radius: i32,
   },
+  Rect {
+    min_corner: IVec2,
+    extent: IVec2,
+  },
+  Cuboid {
+    min_corner: IVec3,
+    extent: IVec3,
+  },
   Polygon {
     vertices: Vec<IVec2>,
   },
   Extrude {
-    z_start: i32,
-    z_end: i32,
+    height: i32,
     shape: Box<GeoNode>,
   },
   Transform {
-    translation: IVec3,
-    rotation: IVec3, // intrinsic euler angles where 1 increment means 90 degrees.
+    transform: Transform,
     shape: Box<GeoNode>,
   },
-  Union {
+  Union2D {
     shapes: Vec<GeoNode>,
   },
-  Intersection {
+  Union3D {
     shapes: Vec<GeoNode>,
   },
-  Difference {
+  Intersection2D {
+    shapes: Vec<GeoNode>,
+  },
+  Intersection3D {
+    shapes: Vec<GeoNode>,
+  },
+  Difference2D {
+    base: Box<GeoNode>,
+    sub: Box<GeoNode>
+  },
+  Difference3D {
     base: Box<GeoNode>,
     sub: Box<GeoNode>
   },
 }
+
+mod csg_conversion;
+

@@ -16,6 +16,7 @@ use crate::util::mat_utils::consistent_round;
 use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegPolyData {
@@ -36,17 +37,14 @@ pub fn eval_reg_poly<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: 
     let num_sides = max(3, polygon_data.num_sides);
     let radius = max(1, polygon_data.radius);
 
-    let mut points: Vec<[f64; 2]> = Vec::new();
+    let mut vertices: Vec<IVec2> = Vec::new();
 
     for i in 0..num_sides {
         // Calculate the ideal angle for this vertex
         let angle = kth_angle(i, num_sides);        
         // Find the lattice point for this angle
-        let p = find_lattice_point(angle, radius);
-        points.push([p.x as f64, p.y as f64]);
+        vertices.push(find_lattice_point(angle, radius));
     }
-
-    let geometry = CSG::polygon(&points, None);
 
     // Create a transform at the center of the polygon (origin)
     // No rotation is needed for this type of shape
@@ -56,7 +54,7 @@ pub fn eval_reg_poly<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: 
           DVec2::new(0.0, 0.0),  // Center at origin
           0.0,                   // No rotation
         ),
-        csg: geometry,
+        geo_tree_root: GeoNode::Polygon { vertices },
       }
     );
 }

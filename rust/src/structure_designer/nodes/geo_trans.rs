@@ -1,6 +1,7 @@
 use crate::structure_designer::evaluator::network_evaluator::{
   error_in_input, input_missing_error, GeometrySummary, NetworkEvaluationContext, NetworkEvaluator, NetworkResult, NodeInvocationId
 };
+use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
@@ -14,7 +15,6 @@ use glam::f64::DVec3;
 use glam::DQuat;
 use std::f64::consts::PI;
 use crate::util::transform::Transform;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::renderer::tessellator::tessellator::Tessellatable;
@@ -138,32 +138,23 @@ pub fn eval_geo_trans<'a>(
       context.selected_node_eval_cache = Some(Box::new(eval_cache));
     }
 
-    let mut geometry = None;
-    if context.explicit_geo_eval_needed {
-      // We need to be a bit tricky here.
-      // The input geometry (shape) is already transformed by the input transform.
-      // So theoretically we need to do the inverse of the input transform (shape transform) so the geometry is first transformed back
-      // to its local position.
-      // And then we apply the whole frame transform.
-      // And all of this need to be done using extrinsic euler angles in degrees because that is how the API for the geometry lib works.
-      // (glam and atomCAD uses intrinsic euler angles normally)
+    // We need to be a bit tricky here.
+    // The input geometry (shape) is already transformed by the input transform.
+    // So theoretically we need to do the inverse of the input transform (shape transform) so the geometry is first transformed back
+    // to its local position.
+    // And then we apply the whole frame transform.
+    let rot = frame_transform.rotation * shape.frame_transform.rotation.inverse();
+    let tr = Transform::new(
+      rot.mul_vec3(-shape.frame_transform.translation) + frame_transform.translation, 
+      rot
+    );
 
-      // extrinsic euler angles can be extracted from a quaternion using the ZYX rotation order.
-      let rotation_euler_rad_extrinsic_zyx = (frame_transform.rotation * shape.frame_transform.rotation.inverse()).to_euler(glam::EulerRot::ZYX);
-      geometry = Some(shape.csg
-        .translate(-shape.frame_transform.translation.x, -shape.frame_transform.translation.y, -shape.frame_transform.translation.z)
-        .rotate(
-          rotation_euler_rad_extrinsic_zyx.2.to_degrees(), 
-          rotation_euler_rad_extrinsic_zyx.1.to_degrees(), 
-          rotation_euler_rad_extrinsic_zyx.0.to_degrees()
-        )
-        .translate(frame_transform.translation.x, frame_transform.translation.y, frame_transform.translation.z)
-      );
-    }
     return NetworkResult::Geometry(GeometrySummary { 
-      //frame_transform: shape.frame_transform.apply_to_new(&Transform::new(translation, rotation_quat)),
       frame_transform,
-      csg: geometry.unwrap_or(CSG::new()),
+      geo_tree_root: GeoNode::Transform {
+        transform: tr,
+        shape: Box::new(shape.geo_tree_root),
+      },
     });
   } else {
     return error_in_input(&shape_input_name);

@@ -1,5 +1,6 @@
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -11,7 +12,6 @@ use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use glam::f64::DQuat;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 
 pub fn implicit_eval_union<'a>(
@@ -41,7 +41,7 @@ pub fn eval_union<'a>(
     return input_missing_error(&shapes_input_name);
   }
 
-  let mut geometry = None;
+  let mut shapes: Vec<GeoNode> = Vec::new();
   let mut frame_translation = DVec3::ZERO;
   for input_node_id in node.arguments[0].argument_node_ids.iter() {
     let shape_val = network_evaluator.evaluate(
@@ -55,13 +55,7 @@ pub fn eval_union<'a>(
       return error_in_input(&shapes_input_name);
     }
     else if let NetworkResult::Geometry(shape) = shape_val {
-      if context.explicit_geo_eval_needed {
-        if geometry.is_none() {
-          geometry = Some(shape.csg);
-        } else {
-          geometry = Some(geometry.unwrap().union(&shape.csg));
-        } 
-      }
+      shapes.push(shape.geo_tree_root); 
       frame_translation += shape.frame_transform.translation;
     }
   }
@@ -73,6 +67,6 @@ pub fn eval_union<'a>(
       frame_translation,
       DQuat::IDENTITY,
     ),
-    csg: geometry.unwrap_or(CSG::new()),
+    geo_tree_root: GeoNode::Union3D { shapes },
   });
 }

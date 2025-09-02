@@ -25,7 +25,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
-use crate::common::csg_types::CSG;
 use csgrs::polygon::Polygon;
 use csgrs::vertex::Vertex;
 use crate::common::csg_utils::dvec3_to_point3;
@@ -35,6 +34,7 @@ use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Facet {
@@ -467,44 +467,25 @@ pub fn eval_facet_shell<'a>(
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let facet_shell_data = node.data.as_any_ref().downcast_ref::<FacetShellData>().unwrap();
-  
-  // Use the cached facets for evaluation
-  let cached_facets = &facet_shell_data.cached_facets;
 
-  // Only create geometry if explicit geometry evaluation is needed
-  // Otherwise, return an empty CSG object
-  let mut geometry = if context.explicit_geo_eval_needed {
-    // If we have no facets, return an empty CSG object
-    if cached_facets.is_empty() {
-      CSG::new()
-    } else {
-      // Initialize with the first facet's half-space
-      let first_facet = &cached_facets[0];
-      create_half_space_geo(&first_facet.miller_index, &facet_shell_data.center, first_facet.shift, HalfSpaceVisualization::Cuboid)
+  let shapes: Vec<GeoNode> = facet_shell_data.cached_facets.iter().map(|facet| {
+    GeoNode::HalfSpace {
+      miller_index: facet.miller_index,
+      center: facet_shell_data.center,
+      shift: facet.shift,
     }
-  } else {
-    CSG::new()
-  };
+  }).collect();
 
-  // If we have facets and need explicit geometry evaluation,
-  // intersect with the remaining facets' half-spaces
-  if context.explicit_geo_eval_needed && cached_facets.len() > 1 {
-    for facet in &cached_facets[1..] {
-      let half_space = create_half_space_geo(&facet.miller_index, &facet_shell_data.center, facet.shift, HalfSpaceVisualization::Cuboid);
-      geometry = geometry.intersection(&half_space);
-    }
-  }
-  
   // Calculate transform for the result
   // Use center position for translation
   let center_pos = facet_shell_data.center.as_dvec3();
-  
+
   return NetworkResult::Geometry(GeometrySummary {
     frame_transform: Transform::new(
       center_pos,
       DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
     ),
-    csg: geometry
+    geo_tree_root: GeoNode::Intersection3D { shapes }
   });
 }
 

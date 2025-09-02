@@ -12,12 +12,11 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
-
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExtrudeData {
@@ -47,46 +46,32 @@ pub fn eval_extrude<'a>(
   }
 
   let input_node_id = node.arguments[0].get_node_id().unwrap();
-  let shape_val = &network_evaluator.evaluate(
+  let shape_val = network_evaluator.evaluate(
     network_stack,
     input_node_id,
     registry,
     false,
     context
-  )[0];
+  )[0].clone();
 
   if let NetworkResult::Error(_error) = shape_val {
     return error_in_input(&shape_input_name);
   }
   if let NetworkResult::Geometry2D(shape) = shape_val {
-    let extruded_geometry = if context.explicit_geo_eval_needed {
-      let mut extruded = shape.csg.extrude(extrude_data.height as f64);
-
-      // swap y and z coordinates
-      for polygon in &mut extruded.polygons {        
-        for vertex in &mut polygon.vertices {
-            let tmp = vertex.pos.y;
-            vertex.pos.y = vertex.pos.z;
-            vertex.pos.z = tmp;
-
-            let tmp_norm = vertex.normal.y;
-            vertex.normal.y = vertex.normal.z;
-            vertex.normal.z = tmp_norm;
-        }
-      }
-
-      extruded.inverse()
-    } else {
-      CSG::new()
-    };
     let frame_translation_2d = shape.frame_transform.translation;
 
+    let frame_transform = Transform::new(
+      DVec3::new(frame_translation_2d.x, 0.0, frame_translation_2d.y),
+      DQuat::from_rotation_y(shape.frame_transform.rotation),
+    );
+
+    let s = shape.geo_tree_root;
     return NetworkResult::Geometry(GeometrySummary { 
-      frame_transform: Transform::new(
-        DVec3::new(frame_translation_2d.x, 0.0, frame_translation_2d.y),
-        DQuat::from_rotation_y(shape.frame_transform.rotation),
-      ),
-      csg: extruded_geometry,
+      frame_transform,
+      geo_tree_root: GeoNode::Extrude { 
+        height: extrude_data.height,
+        shape: Box::new(s),
+      },
     });
   } else {
     return error_in_input(&shape_input_name);

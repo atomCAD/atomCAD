@@ -12,10 +12,10 @@ use glam::f64::DQuat;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use glam::f64::DVec3;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SphereData {
@@ -41,20 +41,15 @@ pub fn eval_sphere<'a>(
 
   let center = sphere_data.center.as_dvec3();
 
-  let geometry = if context.explicit_geo_eval_needed { CSG::sphere(
-    sphere_data.radius as f64,
-    24,
-    12,
-    None
-  )
-    .translate(center.x, center.y, center.z) } else { CSG::new() };
-
   return NetworkResult::Geometry(GeometrySummary { 
     frame_transform: Transform::new(
     center,
     DQuat::IDENTITY,
     ),
-    csg: geometry,
+    geo_tree_root: GeoNode::Sphere {
+      center: sphere_data.center,
+      radius: sphere_data.radius,
+    },
   });
 }
 

@@ -8,8 +8,8 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::geo_tree::GeoNode;
 
 pub fn implicit_eval_union_2d<'a>(
   evaluator: &ImplicitEvaluator,
@@ -38,7 +38,7 @@ pub fn eval_union_2d<'a>(
     return input_missing_error(&shapes_input_name);
   }
 
-  let mut geometry = None;
+  let mut shapes: Vec<GeoNode> = Vec::new();
   let mut frame_translation = DVec2::ZERO;
   for input_node_id in node.arguments[0].argument_node_ids.iter() {
     let shape_val = network_evaluator.evaluate(
@@ -52,13 +52,7 @@ pub fn eval_union_2d<'a>(
       return error_in_input(&shapes_input_name);
     }
     else if let NetworkResult::Geometry2D(shape) = shape_val {
-      if context.explicit_geo_eval_needed {
-        if geometry.is_none() {
-          geometry = Some(shape.csg);
-        } else {
-          geometry = Some(geometry.unwrap().union(&shape.csg));
-        } 
-      }
+      shapes.push(shape.geo_tree_root);
       frame_translation += shape.frame_transform.translation;
     }
   }
@@ -70,6 +64,6 @@ pub fn eval_union_2d<'a>(
       frame_translation,
       0.0,
     ),
-    csg: geometry.unwrap_or(CSG::new()),
+    geo_tree_root: GeoNode::Union2D { shapes },
   });
 }

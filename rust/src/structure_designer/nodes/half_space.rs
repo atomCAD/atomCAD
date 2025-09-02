@@ -1,4 +1,5 @@
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
@@ -26,9 +27,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
-use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, HalfSpaceVisualization};
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 
@@ -63,16 +62,6 @@ pub fn eval_half_space<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
 
-  let geometry = if context.explicit_geo_eval_needed {
-    create_half_space_geo(
-        &half_space_data.miller_index,
-        &half_space_data.center,
-        half_space_data.shift,
-        if network_stack.len() == 1 { HalfSpaceVisualization::Plane } else { HalfSpaceVisualization::Cuboid })
-  } else {
-    CSG::new()
-  };
-  
   let dir = half_space_data.miller_index.as_dvec3().normalize();
   let center_pos = half_space_data.center.as_dvec3();
 
@@ -81,7 +70,12 @@ pub fn eval_half_space<'a>(
       center_pos,
       DQuat::from_rotation_arc(DVec3::Y, dir),
     ),
-    csg: geometry});
+    geo_tree_root: GeoNode::HalfSpace {
+        miller_index: half_space_data.miller_index,
+        center: half_space_data.center,
+        shift: half_space_data.shift,
+    },
+  });
 }
 
 pub fn implicit_eval_half_space<'a>(

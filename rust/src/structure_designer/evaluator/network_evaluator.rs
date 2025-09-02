@@ -45,19 +45,19 @@ use super::surface_splatting_3d::generate_point_cloud_scene;
 use super::dual_contour_3d::generate_dual_contour_3d_scene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
-use crate::common::csg_types::CSG;
 use crate::common::csg_utils::convert_csg_to_poly_mesh;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
   pub frame_transform: Transform2D,
-  pub csg: CSG,
+  pub geo_tree_root: GeoNode,
 }
 
 #[derive(Clone)]
 pub struct GeometrySummary {
   pub frame_transform: Transform,
-  pub csg: CSG,
+  pub geo_tree_root: GeoNode,
 }
 
 #[derive(Clone)]
@@ -343,8 +343,8 @@ impl NetworkEvaluator {
       
       // Extract CSG from either geometry type (3D or 2D)
       let csg = match result {
-        NetworkResult::Geometry(geometry_summary) => Some(&geometry_summary.csg),
-        NetworkResult::Geometry2D(geometry_summary_2d) => Some(&geometry_summary_2d.csg),
+        NetworkResult::Geometry(geometry_summary) => Some(geometry_summary.geo_tree_root.to_csg()),
+        NetworkResult::Geometry2D(geometry_summary_2d) => Some(geometry_summary_2d.geo_tree_root.to_csg()),
         _ => None,
       };
 

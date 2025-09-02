@@ -13,8 +13,8 @@ use crate::structure_designer::evaluator::network_evaluator::input_missing_error
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use glam::f64::DQuat;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
+use crate::structure_designer::geo_tree::GeoNode;
 
 pub fn implicit_eval_diff<'a>(
   evaluator: &ImplicitEvaluator,
@@ -76,8 +76,7 @@ pub fn eval_diff<'a>(
       return error_in_input(&sub_input_name);
     }
 
-    geometry = Some(geometry.unwrap().difference(&sub_geometry.unwrap()));
-    //geometry = Some(geometry.unwrap().intersection(&sub_geometry.unwrap().inverse()));
+    geometry = Some(GeoNode::Difference3D { base: Box::new(geometry.unwrap()), sub: Box::new(sub_geometry.unwrap()) });
 
     frame_translation += sub_frame_translation;
     frame_translation *= 0.5;
@@ -88,7 +87,7 @@ pub fn eval_diff<'a>(
       frame_translation,
       DQuat::IDENTITY,
     ),
-    csg: geometry.unwrap(),
+    geo_tree_root: geometry.unwrap(),
   });
 }
 
@@ -97,8 +96,8 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   argument_node_ids: &HashSet<u64>,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> (Option<CSG>, DVec3) {
-  let mut geometry = None;
+) -> (Option<GeoNode>, DVec3) {
+  let mut shapes: Vec<GeoNode> = Vec::new();
   let mut frame_translation = DVec3::ZERO;
   for input_node_id in argument_node_ids.iter() {
     let shape_val = network_evaluator.evaluate(
@@ -112,16 +111,10 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
       return (None, DVec3::ZERO);
     }
     else if let NetworkResult::Geometry(shape) = shape_val {
-      if context.explicit_geo_eval_needed {
-        if geometry.is_none() {
-          geometry = Some(shape.csg);
-        } else {
-          geometry = Some(geometry.unwrap().union(&shape.csg));
-        } 
-      }
+      shapes.push(shape.geo_tree_root);
       frame_translation += shape.frame_transform.translation;
     }
   }
   frame_translation /= argument_node_ids.len() as f64;
-  return (geometry, frame_translation);
+  return (Some(GeoNode::Union3D { shapes }), frame_translation);
 }

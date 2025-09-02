@@ -20,9 +20,9 @@ use crate::renderer::tessellator::tessellator;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -53,20 +53,7 @@ pub fn eval_half_plane<'a>(
 
   // Calculate direction vector from point1 to point2
   let dir_vector = half_plane_data.point2.as_dvec2() - point1;
-  let dir = dir_vector.normalize();
   let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
-  
-  let center_pos = point1 + dir_vector * 0.5;
-
-  let width = 100.0;
-  let height = 100.0;
-
-  let geometry = if context.explicit_geo_eval_needed {
-    let tr = center_pos - dir * width * 0.5 - normal * height;
-    CSG::square(width, height, None)
-    .rotate(0.0, 0.0, dir.y.atan2(dir.x).to_degrees())
-    .translate(tr.x, tr.y, 0.0)
-  } else { CSG::new() };
 
   // Use point1 as the position and calculate the angle for the transform
   return NetworkResult::Geometry2D(
@@ -75,7 +62,7 @@ pub fn eval_half_plane<'a>(
         point1,
         normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
       ),
-      csg: geometry,
+      geo_tree_root: GeoNode::HalfPlane { point1: half_plane_data.point1, point2: half_plane_data.point2 },
     });
 }
 

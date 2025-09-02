@@ -8,7 +8,6 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::util::transform::Transform2D;
 use glam::DVec2;
@@ -22,6 +21,7 @@ use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -39,21 +39,13 @@ pub fn eval_polygon<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let polygon_data = &node.data.as_any_ref().downcast_ref::<PolygonData>().unwrap();
 
-  let mut points: Vec<[f64; 2]> = Vec::new();
-
-  for i in 0..polygon_data.vertices.len() {
-      points.push([polygon_data.vertices[i].x as f64, polygon_data.vertices[i].y as f64]);
-  }
-
-  let geometry = CSG::polygon(&points, None);
-
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
       frame_transform: Transform2D::new(
         DVec2::new(0.0, 0.0),
         0.0,
       ),
-      csg: geometry,
+      geo_tree_root: GeoNode::Polygon { vertices: polygon_data.vertices.clone() },
     }
   );
 }

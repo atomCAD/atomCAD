@@ -15,6 +15,7 @@ use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::geo_tree::GeoNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RectData {
@@ -43,19 +44,16 @@ pub fn eval_rect<'a>(
   let extent = rect_data.extent.as_dvec2();
   let center = min_corner + extent / 2.0;
 
-  let geometry = if context.explicit_geo_eval_needed { 
-    CSG::square(extent.x, extent.y, None).translate(min_corner.x, min_corner.y, 0.0)
-  } else { 
-    CSG::new()
-  };
-
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
       frame_transform: Transform2D::new(
         center,
         0.0,
       ),
-      csg: geometry,
+      geo_tree_root: GeoNode::Rect {
+        min_corner: rect_data.min_corner,
+        extent: rect_data.extent 
+      },
     });
 }
 

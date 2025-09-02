@@ -1,3 +1,4 @@
+use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
@@ -13,7 +14,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DQuat;
 use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_network::Node;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 
@@ -44,15 +44,15 @@ pub fn eval_cuboid<'a>(
   let extent = cuboid_data.extent.as_dvec3();
   let center = min_corner + extent / 2.0;
 
-  let geometry = if context.explicit_geo_eval_needed { CSG::cube(extent.x, extent.y, extent.z, None)
-    .translate(min_corner.x, min_corner.y, min_corner.z) } else { CSG::new() };
-
   return NetworkResult::Geometry(GeometrySummary { 
     frame_transform: Transform::new(
       center,
       DQuat::IDENTITY,
     ),
-    csg: geometry,
+    geo_tree_root: GeoNode::Cuboid {
+      min_corner: cuboid_data.min_corner,
+      extent: cuboid_data.extent 
+    },
   });
 }
 
