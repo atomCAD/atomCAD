@@ -20,6 +20,16 @@ use super::super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::edit_atom_data_serialization::edit_atom_data_to_serializable;
 use super::edit_atom_data_serialization::serializable_to_edit_atom_data;
 use super::edit_atom_data_serialization::SerializableEditAtomData;
+use super::super::nodes::rect::RectData;
+use super::super::nodes::circle::CircleData;
+use super::super::nodes::reg_poly::RegPolyData;
+use super::super::nodes::polygon::PolygonData;
+use super::super::nodes::half_plane::HalfPlaneData;
+use super::super::nodes::extrude::ExtrudeData;
+use super::super::nodes::facet_shell::FacetShellData;
+use super::super::nodes::geo_to_atom::GeoToAtomData;
+use super::super::nodes::anchor::AnchorData;
+use super::super::nodes::stamp::StampData;
 use super::super::node_network::NodeDisplayType;
 
 // The current version of the serialization format
@@ -186,6 +196,76 @@ pub fn node_to_serializable(id: u64, node: &Node) -> io::Result<SerializableNode
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"));
             }
         },
+        "rect" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<RectData>() {
+                ("rect".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for rect"));
+            }
+        },
+        "circle" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<CircleData>() {
+                ("circle".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for circle"));
+            }
+        },
+        "reg_poly" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<RegPolyData>() {
+                ("reg_poly".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for reg_poly"));
+            }
+        },
+        "polygon" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<PolygonData>() {
+                ("polygon".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for polygon"));
+            }
+        },
+        "half_plane" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<HalfPlaneData>() {
+                ("half_plane".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for half_plane"));
+            }
+        },
+        "extrude" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<ExtrudeData>() {
+                ("extrude".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for extrude"));
+            }
+        },
+        "facet_shell" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<FacetShellData>() {
+                ("facet_shell".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for facet_shell"));
+            }
+        },
+        "geo_to_atom" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<GeoToAtomData>() {
+                ("geo_to_atom".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for geo_to_atom"));
+            }
+        },
+        "anchor" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<AnchorData>() {
+                ("anchor".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for anchor"));
+            }
+        },
+        "stamp" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<StampData>() {
+                ("stamp".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for stamp"));
+            }
+        },
         _ => {
             // For nodes with NoData or other types we don't specifically handle
             ("no_data".to_string(), serde_json::json!({}))
@@ -237,6 +317,46 @@ pub fn serializable_to_node(serializable: &SerializableNode) -> io::Result<Node>
         "edit_atom" => {
             let serializable_data: SerializableEditAtomData = serde_json::from_value(serializable.data.clone())?;
             Box::new(serializable_to_edit_atom_data(&serializable_data)?)
+        },
+        "rect" => {
+            let rect_data: RectData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(rect_data)
+        },
+        "circle" => {
+            let circle_data: CircleData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(circle_data)
+        },
+        "reg_poly" => {
+            let reg_poly_data: RegPolyData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(reg_poly_data)
+        },
+        "polygon" => {
+            let polygon_data: PolygonData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(polygon_data)
+        },
+        "half_plane" => {
+            let half_plane_data: HalfPlaneData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(half_plane_data)
+        },
+        "extrude" => {
+            let extrude_data: ExtrudeData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(extrude_data)
+        },
+        "facet_shell" => {
+            let facet_shell_data: FacetShellData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(facet_shell_data)
+        },
+        "geo_to_atom" => {
+            let geo_to_atom_data: GeoToAtomData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(geo_to_atom_data)
+        },
+        "anchor" => {
+            let anchor_data: AnchorData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(anchor_data)
+        },
+        "stamp" => {
+            let stamp_data: StampData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(stamp_data)
         },
         _ => {
             // Default to NoData for unknown types
