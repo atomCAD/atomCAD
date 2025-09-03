@@ -68,4 +68,5 @@ use crate::util::transform::Transform;
 }
 
 mod csg_conversion;
+mod implicit_eval;
 

@@ -96,7 +96,7 @@ The default pin is only evaluated when the parameter is evaluated in a context t
 the call stack.
 When nothing is connected to a parameter node the node evaluation will result in the missing input error.
 
-## Refactor implicit evaluation
+## Refactor implicit evaluation (geo_tree)
 
 Making everything programmable forced me to think through the evaluation process.
 Implicit evaluation is not a good fit for a functional evaluation process
