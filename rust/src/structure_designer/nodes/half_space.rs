@@ -7,28 +7,19 @@ use crate::util::timer::Timer;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
-use glam::f32::Vec3;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::mesh::Material;
-use crate::renderer::tessellator::tessellator;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::util::hit_test_utils::sphere_hit_test;
-use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::common_constants;
 use std::collections::HashSet;
 use crate::common::gadget::Gadget;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::node_network::Node;
-use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,19 +67,6 @@ pub fn eval_half_space<'a>(
         shift: half_space_data.shift,
     },
   });
-}
-
-pub fn implicit_eval_half_space<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _invocation_cache: &NodeInvocationCache,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-  let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
-  return implicit_eval_half_space_calc(
-    &half_space_data.miller_index, &half_space_data.center, half_space_data.shift,
-    sample_point);
 }
 
 #[derive(Clone)]

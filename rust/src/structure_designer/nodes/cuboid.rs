@@ -2,19 +2,15 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
-use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::util::transform::Transform;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DQuat;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::node_network::Node;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -54,21 +50,4 @@ pub fn eval_cuboid<'a>(
       extent: cuboid_data.extent 
     },
   });
-}
-
-pub fn implicit_eval_cuboid<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _invocation_cache: &NodeInvocationCache,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-  let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
-
-  let max_corner = cuboid_data.min_corner + cuboid_data.extent;
-  let x_val = f64::max((cuboid_data.min_corner.x as f64) - sample_point.x, sample_point.x - (max_corner.x as f64));
-  let y_val = f64::max((cuboid_data.min_corner.y as f64) - sample_point.y, sample_point.y - (max_corner.y as f64));
-  let z_val = f64::max((cuboid_data.min_corner.z as f64) - sample_point.z, sample_point.z - (max_corner.z as f64));
-
-  return f64::max(f64::max(x_val, y_val), z_val);
 }

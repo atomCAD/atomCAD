@@ -10,17 +10,14 @@ use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::node_network::Node;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 
@@ -64,28 +61,6 @@ pub fn eval_half_plane<'a>(
       ),
       geo_tree_root: GeoNode::HalfPlane { point1: half_plane_data.point1, point2: half_plane_data.point2 },
     });
-}
-
-pub fn implicit_eval_half_plane<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _invocation_cache: &NodeInvocationCache,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec2) -> f64 {
-  let half_plane_data = &node.data.as_any_ref().downcast_ref::<HalfPlaneData>().unwrap();
-  
-  // Convert points to double precision for calculations
-  let point1 = half_plane_data.point1.as_dvec2();
-  let point2 = half_plane_data.point2.as_dvec2();
-  
-  // Calculate line direction and normal
-  let dir_vector = point2 - point1;
-  let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
-  
-  // Calculate signed distance from sample_point to the line
-  // Formula: distance = normal·(sample_point - point1)
-  return normal.dot(*sample_point - point1);
 }
 
 #[derive(Clone)]

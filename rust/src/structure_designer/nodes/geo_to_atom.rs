@@ -2,8 +2,8 @@ use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometr
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_evaluator::{input_missing_error, NetworkResult, NodeInvocationId};
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::{input_missing_error, NetworkResult};
 use crate::common::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 use glam::i32::IVec3;
@@ -11,7 +11,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::common_constants;
 use crate::util::box_subdivision::subdivide_box;
 use crate::common::crystal_utils::in_crystal_pos_to_id;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::common_constants::CrystalTypeInfo;
 use crate::common::atomic_structure::CrystalMetaData;

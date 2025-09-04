@@ -1,19 +1,14 @@
-use crate::common::csg_types::CSG;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
 use glam::i32::IVec2;
-use glam::f64::DVec2;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec2_serializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::node_network::Node;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 
@@ -57,18 +52,3 @@ pub fn eval_rect<'a>(
     });
 }
 
-pub fn implicit_eval_rect<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _invocation_cache: &NodeInvocationCache,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec2) -> f64 {
-  let rect_data = &node.data.as_any_ref().downcast_ref::<RectData>().unwrap();
-
-  let max_corner = rect_data.min_corner + rect_data.extent;
-  let x_val = f64::max((rect_data.min_corner.x as f64) - sample_point.x, sample_point.x - (max_corner.x as f64));
-  let y_val = f64::max((rect_data.min_corner.y as f64) - sample_point.y, sample_point.y - (max_corner.y as f64));
-
-  return f64::max(x_val, y_val);
-}

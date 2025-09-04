@@ -3,17 +3,12 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec2_serializer;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::node_network::Node;
-use glam::f64::DVec2;
-use crate::common::csg_types::CSG;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 
@@ -52,15 +47,3 @@ pub fn eval_circle<'a>(
   });
 }
 
-pub fn implicit_eval_circle<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _invocation_cache: &NodeInvocationCache,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec2) -> f64 {
-  let sphere_data = &node.data.as_any_ref().downcast_ref::<CircleData>().unwrap();
-
-  return (sample_point - DVec2::new(sphere_data.center.x as f64, sphere_data.center.y as f64)).length() 
-    - (sphere_data.radius as f64);
-}

@@ -2,11 +2,10 @@ use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::vec_ivec2_serializer;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
 use crate::util::transform::Transform2D;
@@ -18,8 +17,6 @@ use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
 use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
-use crate::structure_designer::node_network::Node;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 
@@ -48,126 +45,6 @@ pub fn eval_polygon<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u
       geo_tree_root: GeoNode::Polygon { vertices: polygon_data.vertices.clone() },
     }
   );
-}
-
-/// Calculates the minimum distance from a point to a line segment
-fn point_to_line_segment_distance(point: &DVec2, line_start: &DVec2, line_end: &DVec2) -> f64 {
-    let line_vector = *line_end - *line_start;
-    let line_length_squared = line_vector.length_squared();
-    
-    // Handle degenerate case where line segment is actually a point
-    if line_length_squared < 1e-10 {
-        return (*point - *line_start).length();
-    }
-    
-    // Calculate projection of point onto line
-    let t = f64::max(0.0, f64::min(1.0, (*point - *line_start).dot(line_vector) / line_length_squared));
-    
-    // Calculate closest point on the line segment
-    let closest_point = *line_start + line_vector * t;
-    
-    // Return distance from point to closest point on line segment
-    (*point - closest_point).length()
-}
-
-/// Checks if a line segment from point1 to point2 intersects with a ray
-/// cast from test_point in the positive X direction
-fn line_segment_intersects_ray(test_point: &DVec2, point1: &DVec2, point2: &DVec2) -> bool {
-    // Early exclusion: both endpoints are above or below the ray
-    if (point1.y > test_point.y && point2.y > test_point.y) || 
-       (point1.y < test_point.y && point2.y < test_point.y) {
-        return false;
-    }
-    
-    // Early exclusion: both endpoints are to the left of the test point
-    if point1.x < test_point.x && point2.x < test_point.x {
-        return false;
-    }
-    
-    // Calculate intersection point of line segment with horizontal ray
-    if (point1.y - test_point.y).abs() < 1e-10 || (point2.y - test_point.y).abs() < 1e-10 {
-        // One endpoint is on the ray - special case
-        // Count intersection only if the endpoint is the lower one
-        if (point1.y - test_point.y).abs() < 1e-10 {
-            return point1.y > point2.y && point1.x >= test_point.x;
-        } else {
-            return point2.y > point1.y && point2.x >= test_point.x;
-        }
-    } else {
-        // Normal case - check if ray intersects line segment
-        let t = (test_point.y - point1.y) / (point2.y - point1.y);
-        if t >= 0.0 && t <= 1.0 {
-            let x_intersect = point1.x + t * (point2.x - point1.x);
-            return x_intersect >= test_point.x;
-        }
-    }
-    
-    false
-}
-
-/// Check if a point is inside a polygon using ray casting algorithm
-fn is_point_inside_polygon(point: &DVec2, vertices: &Vec<DVec2>) -> bool {
-    let num_vertices = vertices.len();
-    if num_vertices < 3 {
-        return false; // Not a proper polygon
-    }
-    
-    // Cast a ray from the point in the positive X direction
-    // and count intersections with polygon edges
-    let mut intersections = 0;
-    
-    for i in 0..num_vertices {
-        let j = (i + 1) % num_vertices;
-        if line_segment_intersects_ray(point, &vertices[i], &vertices[j]) {
-            intersections += 1;
-        }
-    }
-    
-    // If number of intersections is odd, point is inside the polygon
-    intersections % 2 == 1
-}
-
-pub fn implicit_eval_polygon<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _invocation_cache: &NodeInvocationCache,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec2) -> f64 {
-    // Get polygon data from node
-    let polygon_data = &node.data.as_any_ref().downcast_ref::<PolygonData>().unwrap();
-    
-    // Convert vertices to double precision for calculations
-    let vertices_dvec2: Vec<DVec2> = polygon_data.vertices.iter()
-        .map(|v| v.as_dvec2())
-        .collect();
-    
-    // Handle degenerate case - not enough vertices for a polygon
-    if vertices_dvec2.len() < 3 {
-        return f64::MAX;
-    }
-    
-    // Calculate minimum distance to any line segment (absolute value of SDF)
-    let mut min_distance = f64::MAX;
-    for i in 0..vertices_dvec2.len() {
-        let j = (i + 1) % vertices_dvec2.len();
-        let distance = point_to_line_segment_distance(
-            sample_point, 
-            &vertices_dvec2[i], 
-            &vertices_dvec2[j]
-        );
-        min_distance = min_distance.min(distance);
-    }
-    
-    // Determine sign using ray casting
-    let is_inside = is_point_inside_polygon(sample_point, &vertices_dvec2);
-    
-    // Apply sign: negative inside, positive outside
-    if is_inside {
-        -min_distance
-    } else {
-        min_distance
-    }
 }
 
 #[derive(Clone)]

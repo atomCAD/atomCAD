@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::any::Any;
 
-use glam::f64::DVec3;
 use crate::structure_designer::node_network::NodeDisplayType;
-use crate::structure_designer::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::half_plane::eval_half_plane;
@@ -11,13 +9,9 @@ use crate::structure_designer::nodes::polygon::eval_polygon;
 use crate::structure_designer::nodes::reg_poly::eval_reg_poly;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::common::atomic_structure::AtomicStructure;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
-use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
 use crate::structure_designer::nodes::geo_trans::eval_geo_trans;
 use crate::structure_designer::nodes::sphere::eval_sphere;
@@ -47,6 +41,24 @@ use crate::api::structure_designer::structure_designer_preferences::GeometryVisu
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::common::csg_utils::convert_csg_to_poly_mesh;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::node_network::NodeNetwork;
+use crate::structure_designer::node_network::Node;
+
+#[derive(Clone)]
+pub struct NetworkStackElement<'a> {
+  pub node_network: &'a NodeNetwork,
+  pub node_id: u64,
+}
+
+impl<'a> NetworkStackElement<'a> {
+  pub fn get_top_node(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> &'a Node {
+    return network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+  }
+
+  pub fn is_node_selected_in_root_network(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> bool {
+    return network_stack.first().unwrap().node_network.selected_node_id == Some(node_id);
+  }
+}
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -136,19 +148,16 @@ impl NetworkEvaluationContext {
 }
 
 pub struct NetworkEvaluator {
-    pub implicit_evaluator: ImplicitEvaluator,
 }
 
 /*
  * Node network evaluator.
  * The node network evaluator is able to generate displayable representation for a node in a node network.
- * It delegates implicit geometry evaluation to ImplicitEvaluator.
  * It delegates node related evaluation to functions in node specific modules.
  */
 impl NetworkEvaluator {
   pub fn new() -> Self {
     Self {
-      implicit_evaluator: ImplicitEvaluator::new(),
     }
   }
 
@@ -186,15 +195,6 @@ impl NetworkEvaluator {
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
     let mut scene = if registry.get_node_output_type(node) == APIDataType::Geometry2D {
-      // Create a NodeEvaluator instance to abstract SDF evaluation
-      let node_evaluator = NodeEvaluator {
-        network,
-        node_id,
-        registry,
-        implicit_evaluator: &self.implicit_evaluator,
-        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry).0,
-      };
-
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
@@ -212,14 +212,6 @@ impl NetworkEvaluator {
       }
     }
     else if registry.get_node_output_type(node) == APIDataType::Geometry {
-      // Create a NodeEvaluator instance to abstract SDF evaluation
-      let node_evaluator = NodeEvaluator {
-        network,
-        node_id,
-        registry,
-        implicit_evaluator: &self.implicit_evaluator,
-        invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry).0,
-      };
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
         if let NetworkResult::Geometry(geometry_summary) = result {

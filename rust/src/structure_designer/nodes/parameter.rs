@@ -3,7 +3,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;

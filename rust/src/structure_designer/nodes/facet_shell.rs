@@ -6,35 +6,22 @@ use crate::util::timer::Timer;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
-use glam::f32::Vec3;
-use glam::f64::DQuat;
 use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::mesh::Material;
-use crate::renderer::tessellator::tessellator;
-use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::util::hit_test_utils::sphere_hit_test;
-use crate::util::hit_test_utils::cylinder_hit_test;
-use crate::structure_designer::common_constants;
 use std::collections::HashSet;
 use crate::common::gadget::Gadget;
 use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::node_network::Node;
-use csgrs::polygon::Polygon;
-use csgrs::vertex::Vertex;
-use crate::common::csg_utils::dvec3_to_point3;
-use crate::common::csg_utils::dvec3_to_vector3;
-use crate::structure_designer::utils::half_space_utils::{create_half_space_geo, HalfSpaceVisualization};
-use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::utils::half_space_utils;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::common_constants;
+use crate::renderer::tessellator::tessellator::Tessellatable;
+use glam::f64::DQuat;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Facet {
@@ -487,37 +474,6 @@ pub fn eval_facet_shell<'a>(
     ),
     geo_tree_root: GeoNode::Intersection3D { shapes }
   });
-}
-
-pub fn implicit_eval_facet_shell<'a>(
-  _evaluator: &ImplicitEvaluator,
-  _registry: &NodeTypeRegistry,
-  _invocation_cache: &NodeInvocationCache,
-  _network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec3) -> f64 {
-  let facet_shell_data = node.data.as_any_ref().downcast_ref::<FacetShellData>().unwrap();
-  
-  // Use the cached facets for evaluation
-  let cached_facets = &facet_shell_data.cached_facets;
-  
-  // If there are no facets, return MAX value (infinitely far outside)
-  if cached_facets.is_empty() {
-    return f64::MAX;
-  }
-  
-  // Calculate the signed distance for each facet and return the maximum
-  // Using max for intersection in implicit geometry
-  cached_facets.iter()
-    .map(|facet| {
-      implicit_eval_half_space_calc(
-        &facet.miller_index,
-        &facet_shell_data.center,
-        facet.shift,
-        sample_point
-      )
-    })
-    .fold(f64::MIN, f64::max)
 }
 
 #[derive(Clone)]

@@ -1,6 +1,4 @@
-use crate::structure_designer::evaluator::implicit_evaluator::ImplicitEvaluator;
-use crate::structure_designer::node_network::Node;
-use crate::structure_designer::evaluator::implicit_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
@@ -9,20 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::error_in_input;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::geo_tree::GeoNode;
-
-pub fn implicit_eval_intersect_2d<'a>(
-  evaluator: &ImplicitEvaluator,
-  registry: &NodeTypeRegistry,
-  invocation_cache: &NodeInvocationCache,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node: &Node,
-  sample_point: &DVec2) -> f64 {
-    node.arguments[0].argument_node_ids.iter().map(|node_id| {
-      evaluator.implicit_eval_2d(network_stack, *node_id, sample_point, registry, invocation_cache)[0]
-    }).reduce(f64::max).unwrap_or(f64::MIN)
-}
 
 pub fn eval_intersect_2d<'a>(
   network_evaluator: &NetworkEvaluator,
