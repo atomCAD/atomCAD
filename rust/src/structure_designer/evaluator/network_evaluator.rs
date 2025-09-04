@@ -152,91 +152,6 @@ impl NetworkEvaluator {
     }
   }
 
-  // traces a ray into all displayed geometry nodes in the network and returns the closest intersection distance if any
-  pub fn raytrace_geometry(&self, network_name: &str, registry: &NodeTypeRegistry, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
-    let network = match registry.node_networks.get(network_name) {
-      Some(network) => network,
-      None => return None,
-    };
-    
-    let mut min_distance: Option<f64> = None;
-    
-    for node_entry in &network.displayed_node_ids {
-      let node = match network.nodes.get(&node_entry.0) {
-        Some(node) => node,
-        None => return None,
-      };
-  
-      if registry.get_node_output_type(node) != APIDataType::Geometry {
-        continue; // Skip non-geometry nodes
-      }
-      
-      // Raytrace the current geometry node
-      if let Some(distance) = self.raytrace_geometry_node(network, *node_entry.0, registry, ray_origin, ray_direction) {
-        // Update minimum distance if this is the first hit or closer than previous hits
-        min_distance = match min_distance {
-          None => Some(distance),
-          Some(current_min) if distance < current_min => Some(distance),
-          _ => min_distance,
-        };
-      }
-    }
-    
-    min_distance
-  } 
-
-  // traces a ray for a given geometry node
-  pub fn raytrace_geometry_node(&self, network: &NodeNetwork, node_id: u64, registry: &NodeTypeRegistry, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
-    // Constants for ray marching algorithm
-    const MAX_STEPS: usize = 100;
-    const MAX_DISTANCE: f64 = 5000.0;
-    const SURFACE_THRESHOLD: f64 = 0.01;
-    
-    let normalized_dir = ray_direction.normalize();
-    let mut current_distance: f64 = 0.0;
-
-    let mut network_stack = Vec::new();
-    // We assign the root node network zero node id. It is not used in the evaluation.
-    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
-
-    let invocation_cache = self.pre_eval_geometry_node(network_stack, node_id, registry).0;
-
-    // Perform ray marching
-    for _ in 0..MAX_STEPS {
-      // Calculate current position along the ray
-      let current_pos = *ray_origin + normalized_dir * current_distance;
-      
-      // Scale the position by dividing by DIAMOND_UNIT_CELL_SIZE_ANGSTROM to match the scale used in rendering
-      let scaled_pos = current_pos / common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-      
-      // Evaluate SDF at the scaled position
-      let sdf_value = self.implicit_evaluator.eval(network, node_id, &scaled_pos, registry, &invocation_cache)[0];
-      
-      //println!("Current position: {:?}", current_pos);
-      //println!("Scaled position: {:?}", scaled_pos);
-      //println!("SDF value: {}", sdf_value);
-
-      // If we're close enough to the surface, return the distance
-      if sdf_value.abs() < SURFACE_THRESHOLD {
-        return Some(current_distance);
-      }
-      
-      // If we've gone too far, give up
-      if current_distance > MAX_DISTANCE {
-        return None;
-      }
-      
-      // Step forward by the SDF value - this is safe because
-      // the absolute value of the gradient of an SDF cannot be bigger than 1
-      // This means the SDF value tells us how far we can safely march without missing the surface
-      // We need to scale the SDF value back to world space by multiplying by DIAMOND_UNIT_CELL_SIZE_ANGSTROM
-      current_distance += sdf_value * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-    }
-
-    // No intersection found within the maximum number of steps
-    None
-  }
-
   // Creates the Scene that will be displayed for the given node by the Renderer, and is retained
   // for interaction purposes
   pub fn generate_scene(
@@ -282,9 +197,11 @@ impl NetworkEvaluator {
 
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
+        let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
-          generate_2d_point_cloud_scene(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences)
+          let mut ret = generate_2d_point_cloud_scene(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences);
+          ret.geo_trees.push(geometry_summary_2d.geo_tree_root);
+          ret
         } else {
           StructureDesignerScene::new()
         }
@@ -304,16 +221,20 @@ impl NetworkEvaluator {
         invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry).0,
       };
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
-        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
+        let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
         if let NetworkResult::Geometry(geometry_summary) = result {
-          generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences) 
+          let mut ret = generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences);
+          ret.geo_trees.push(geometry_summary.geo_tree_root);
+          ret
         } else {
           StructureDesignerScene::new()
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
+        let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
         if let NetworkResult::Geometry(geometry_summary) = result {
-          generate_dual_contour_3d_scene(&geometry_summary.geo_tree_root, geometry_visualization_preferences)
+          let mut ret = generate_dual_contour_3d_scene(&geometry_summary.geo_tree_root, geometry_visualization_preferences);
+          ret.geo_trees.push(geometry_summary.geo_tree_root);
+          ret
         } else {
           StructureDesignerScene::new()
         }
@@ -354,10 +275,10 @@ impl NetworkEvaluator {
     geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
       let mut scene = StructureDesignerScene::new();
-      let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, context)[0];
+      let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, context).into_iter().next().unwrap();
       
       // Extract CSG from either geometry type (3D or 2D)
-      let csg = match result {
+      let csg = match &result {
         NetworkResult::Geometry(geometry_summary) => Some(geometry_summary.geo_tree_root.to_csg()),
         NetworkResult::Geometry2D(geometry_summary_2d) => Some(geometry_summary_2d.geo_tree_root.to_csg()),
         _ => None,
@@ -390,6 +311,20 @@ impl NetworkEvaluator {
       }
   
       scene.node_errors = context.node_errors.clone();
+      
+      // Extract geo_tree_root from the result based on its type
+      match result {
+        NetworkResult::Geometry(geometry_summary) => {
+          scene.geo_trees.push(geometry_summary.geo_tree_root);
+        },
+        NetworkResult::Geometry2D(geometry_summary_2d) => {
+          scene.geo_trees.push(geometry_summary_2d.geo_tree_root);
+        },
+        _ => {
+          // No geo_tree_root for other result types
+        }
+      }
+      
       return scene;
   }
 
@@ -495,7 +430,5 @@ impl NetworkEvaluator {
     
     results
   }
-
-
 
 }

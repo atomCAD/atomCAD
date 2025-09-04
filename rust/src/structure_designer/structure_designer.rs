@@ -17,6 +17,9 @@ use crate::api::structure_designer::structure_designer_preferences::StructureDes
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::HashSet;
+use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
+use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
+use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -121,7 +124,6 @@ impl StructureDesigner {
 
   // Generates the scene to be rendered according to the displayed nodes of the active node network
   pub fn refresh(&mut self, lightweight: bool) {
-    self.last_generated_structure_designer_scene = StructureDesignerScene::new();
 
     // Check if node_network_name exists and clone it to avoid borrow conflicts
     let node_network_name = match &self.active_node_network_name {
@@ -134,6 +136,7 @@ impl StructureDesigner {
         Some(network) => network,
         None => return,
       };
+      self.last_generated_structure_designer_scene = StructureDesignerScene::new();
       for node_entry in &network.displayed_node_ids {
         self.last_generated_structure_designer_scene.merge(self.network_evaluator.generate_scene(
           &node_network_name,
@@ -617,18 +620,29 @@ impl StructureDesigner {
       }
     }
     
-    // Next, check implicit geometry in the active network
-    if let Some(network_name) = &self.active_node_network_name {
-      if let Some(distance) = self.network_evaluator.raytrace_geometry(network_name, &self.node_type_registry, ray_origin, ray_direction) {
-        // Update minimum distance if this hit is closer
-        min_distance = match min_distance {
-          None => Some(distance),
-          Some(current_min) if distance < current_min => Some(distance),
-          _ => min_distance,
-        };
-      }
+    let geo_trees = &self.last_generated_structure_designer_scene.geo_trees;
+  
+    // Convert GeoNodes to ImplicitGeometry3D trait references
+    let geometries: Vec<&dyn ImplicitGeometry3D> = 
+      geo_trees.iter().map(|geo_node| geo_node as &dyn ImplicitGeometry3D).collect();
+  
+    // Raytrace the implicit geometries using the world scale
+    if let Some(geo_distance) = raytrace_geometries(
+      &geometries, 
+      ray_origin, 
+      ray_direction, 
+      DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+    ) {
+      // Update minimum distance if this hit is closer
+      min_distance = match min_distance {
+        None => Some(geo_distance),
+        Some(current_min) if geo_distance < current_min => Some(geo_distance),
+        _ => min_distance,
+      };
     }
-    
+  
+    //println!("raytrace min_distance: {:?}", min_distance);
+
     min_distance
   }
   
