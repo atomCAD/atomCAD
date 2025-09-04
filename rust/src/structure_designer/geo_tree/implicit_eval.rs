@@ -5,6 +5,25 @@ use crate::util::transform::Transform;
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 
 impl GeoNode {
+
+  // Calculate gradient using one sided differences
+  // This is faster than using central differences but potentially less accurate
+  // It also returns the value at the sampled point, so that the value can be reused. 
+  pub fn get_gradient(
+    &self,
+    sample_point: &DVec3
+  ) -> (DVec3, f64) {
+    let epsilon: f64 = 0.001; // Small value for finite difference approximation
+
+    let value = self.implicit_eval_3d(sample_point);
+    let gradient = DVec3::new(
+      (self.implicit_eval_3d(&(sample_point + DVec3::new(epsilon, 0.0, 0.0))) - value) / epsilon,
+      (self.implicit_eval_3d(&(sample_point + DVec3::new(0.0, epsilon, 0.0))) - value) / epsilon,
+      (self.implicit_eval_3d(&(sample_point + DVec3::new(0.0, 0.0, epsilon))) - value) / epsilon
+    );
+    (gradient, value)
+  }
+
   pub fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64 {
     match self {
       GeoNode::HalfSpace { miller_index, center, shift } => {
@@ -34,6 +53,20 @@ impl GeoNode {
       // 2D shapes should use implicit_eval_2d instead
       _ => panic!("2D shapes should be evaluated using implicit_eval_2d")
     }
+  }
+
+  pub fn get_gradient_2d(
+    &self,
+    sample_point: &DVec2,
+  ) -> (DVec2, f64) {
+    let epsilon: f64 = 0.001; // Small value for finite difference approximation
+
+    let value = self.implicit_eval_2d(sample_point);
+    let gradient = DVec2::new(
+      (self.implicit_eval_2d(&(sample_point + DVec2::new(epsilon, 0.0))) - value) / epsilon,
+      (self.implicit_eval_2d(&(sample_point + DVec2::new(0.0, epsilon))) - value) / epsilon,
+    );
+    (gradient, value)
   }
 
   pub fn implicit_eval_2d(&self, sample_point: &DVec2) -> f64 {

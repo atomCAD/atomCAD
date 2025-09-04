@@ -1,7 +1,7 @@
 use crate::common::surface_point_cloud::SurfacePointCloud2D;
+use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::evaluator::implicit_evaluator::NodeEvaluator;
 use crate::structure_designer::common_constants;
 use lru::LruCache;
 use glam::i32::IVec2;
@@ -11,7 +11,7 @@ use crate::common::surface_point_cloud::SurfacePoint2D;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
 pub fn generate_2d_point_cloud_scene(
-  node_evaluator: &NodeEvaluator,
+  root_geo_node: &GeoNode,
   context: &mut NetworkEvaluationContext,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) -> StructureDesignerScene {
@@ -23,7 +23,7 @@ pub fn generate_2d_point_cloud_scene(
   let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
   process_rect_for_point_cloud(
-      &node_evaluator,
+      &root_geo_node,
       &(common_constants::IMPLICIT_VOLUME_MIN.xz() * geometry_visualization_preferences.samples_per_unit_cell),
       &((common_constants::IMPLICIT_VOLUME_MAX.xz() - common_constants::IMPLICIT_VOLUME_MIN.xz()) * geometry_visualization_preferences.samples_per_unit_cell),
       &mut eval_cache,
@@ -35,40 +35,40 @@ pub fn generate_2d_point_cloud_scene(
   
   // Copy any collected errors to the scene
   scene.node_errors = context.node_errors.clone();
-  
+
   scene
 }
 
 fn process_rect_for_point_cloud(
-  node_evaluator: &NodeEvaluator,
+  root_geo_node: &GeoNode,
   start_pos: &IVec2,
   size: &IVec2,
   eval_cache: &mut LruCache<IVec2, f64>,
   point_cloud: &mut SurfacePointCloud2D,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) {
 
-let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
-let epsilon = 0.001;
+  let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
+  let epsilon = 0.001;
 
-// Calculate the center point of the rect
-let center_point = (start_pos.as_dvec2() + size.as_dvec2() / 2.0) / spu;
+  // Calculate the center point of the rect
+  let center_point = (start_pos.as_dvec2() + size.as_dvec2() / 2.0) / spu;
 
-// Evaluate SDF at the center point using NodeEvaluator's eval_2d method
-let sdf_value = node_evaluator.eval_2d(&center_point);
+  // Evaluate SDF at the center point using NodeEvaluator's eval_2d method
+  let sdf_value = root_geo_node.implicit_eval_2d(&center_point);
 
-let half_diagonal = size.as_dvec2().length() / spu / 2.0;
+  let half_diagonal = size.as_dvec2().length() / spu / 2.0;
 
-// If absolute SDF value is greater than half diagonal, there's no surface in this rect
-if sdf_value.abs() > half_diagonal + epsilon {
+  // If absolute SDF value is greater than half diagonal, there's no surface in this rect
+  if sdf_value.abs() > half_diagonal + epsilon {
     return;
-}
+  }
 
-// Determine if we should subdivide in each dimension (size >= 4)
-let should_subdivide_x = size.x >= 4;
-let should_subdivide_y = size.y >= 4;
+  // Determine if we should subdivide in each dimension (size >= 4)
+  let should_subdivide_x = size.x >= 4;
+  let should_subdivide_y = size.y >= 4;
 
-// If we can't subdivide in any direction, process each cell individually
-if !should_subdivide_x && !should_subdivide_y {
+  // If we can't subdivide in any direction, process each cell individually
+  if !should_subdivide_x && !should_subdivide_y {
     // Process each cell within the rect
     for x in 0..size.x {
         for y in 0..size.y {
@@ -77,7 +77,7 @@ if !should_subdivide_x && !should_subdivide_y {
                     start_pos.y + y,
                 );
                 process_2d_cell_for_point_cloud(
-                    node_evaluator,
+                    root_geo_node,
                     &cell_pos,
                     eval_cache,
                     point_cloud,
@@ -86,36 +86,35 @@ if !should_subdivide_x && !should_subdivide_y {
         }
     }
     return;
-}
+  }
 
-// Otherwise, subdivide the rect and recursively process each subdivision
-let subdivisions = subdivide_rect(
+  // Otherwise, subdivide the rect and recursively process each subdivision
+  let subdivisions = subdivide_rect(
     start_pos,
     size,
     should_subdivide_x,
     should_subdivide_y,
-);
+  );
 
-// Process each subdivision recursively
-for (sub_start, sub_size) in subdivisions {
+  // Process each subdivision recursively
+  for (sub_start, sub_size) in subdivisions {
     process_rect_for_point_cloud(
-        node_evaluator,
+        root_geo_node,
         &sub_start,
         &sub_size,
         eval_cache,
         point_cloud,
         geometry_visualization_preferences
     );
+  }
 }
-}
-
 
 fn process_2d_cell_for_point_cloud(
-node_evaluator: &NodeEvaluator,
-int_pos: &IVec2,
-eval_cache: &mut LruCache<IVec2, f64>,
-point_cloud: &mut SurfacePointCloud2D,
-geometry_visualization_preferences: &GeometryVisualizationPreferences) {
+  root_geo_node: &GeoNode,
+  int_pos: &IVec2,
+  eval_cache: &mut LruCache<IVec2, f64>,
+  point_cloud: &mut SurfacePointCloud2D,
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) {
   let spu = geometry_visualization_preferences.samples_per_unit_cell as f64;
 
   // Define the corner points for the current square
@@ -132,7 +131,7 @@ geometry_visualization_preferences: &GeometryVisualizationPreferences) {
       cached_value
     } else {
       let p = ip.as_dvec2() / spu;
-      let value = node_evaluator.eval_2d(&p);
+      let value = root_geo_node.implicit_eval_2d(&p);
       //println!("Evaluating point: {:?}, value: {}", ip, value);
       eval_cache.put(*ip, value);
       value
@@ -141,7 +140,7 @@ geometry_visualization_preferences: &GeometryVisualizationPreferences) {
 
   if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
       let center_point = (corner_points[0].as_dvec2() + 0.5) / spu;
-      let gradient_val = node_evaluator.get_gradient_2d(&center_point);
+      let gradient_val = root_geo_node.get_gradient_2d(&center_point);
       let gradient = gradient_val.0;
       let value = gradient_val.1;
       let gradient_magnitude_sq = gradient.length_squared();

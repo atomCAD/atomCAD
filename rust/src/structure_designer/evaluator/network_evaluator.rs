@@ -237,8 +237,8 @@ impl NetworkEvaluator {
     None
   }
 
-  // Creates the Scene that will be displayed for the given node
-  // Currently creates it from scratch, no caching is used.
+  // Creates the Scene that will be displayed for the given node by the Renderer, and is retained
+  // for interaction purposes
   pub fn generate_scene(
     &self,
     network_name: &str,
@@ -282,7 +282,12 @@ impl NetworkEvaluator {
 
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        generate_2d_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences)
+        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
+        if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
+          generate_2d_point_cloud_scene(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences)
+        } else {
+          StructureDesignerScene::new()
+        }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
         self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
       } else {
@@ -299,9 +304,19 @@ impl NetworkEvaluator {
         invocation_cache: self.pre_eval_geometry_node(network_stack.clone(), node_id, registry).0,
       };
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
-        generate_point_cloud_scene(&node_evaluator, &mut context, geometry_visualization_preferences)
+        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
+        if let NetworkResult::Geometry(geometry_summary) = result {
+          generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences) 
+        } else {
+          StructureDesignerScene::new()
+        }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        generate_dual_contour_3d_scene(&node_evaluator, geometry_visualization_preferences)
+        let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
+        if let NetworkResult::Geometry(geometry_summary) = result {
+          generate_dual_contour_3d_scene(&geometry_summary.geo_tree_root, geometry_visualization_preferences)
+        } else {
+          StructureDesignerScene::new()
+        }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
         self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
       } else {
