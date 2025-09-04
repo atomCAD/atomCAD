@@ -16,10 +16,10 @@ use crate::structure_designer::common_constants::CrystalTypeInfo;
 use crate::common::atomic_structure::CrystalMetaData;
 use crate::common::crystal_utils::ZincBlendeAtomType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::network_evaluator::NodeInvocationCache;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::diamond_hydrogen_passivation::hydrogen_passivate_diamond;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 
@@ -104,7 +104,8 @@ pub fn eval_geo_to_atom<'a>(
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();
 
-  let (invocation_cache, pre_eval_result) = network_evaluator.pre_eval_geometry_node(network_stack.clone(), geo_node_id, registry);
+  let mut context = NetworkEvaluationContext::new();
+  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), node_id, registry, false, &mut context)[0].clone();
 
   let mesh = match pre_eval_result {
     NetworkResult::Geometry(mesh) => mesh,
@@ -128,7 +129,6 @@ pub fn eval_geo_to_atom<'a>(
 
   process_box_for_atomic(
     &mesh.geo_tree_root,
-    &invocation_cache,
     geo_to_atom_data,
     network_stack,
     geo_node_id,
@@ -150,7 +150,6 @@ pub fn eval_geo_to_atom<'a>(
 
 fn process_box_for_atomic<'a>(
   geo_tree_root: &GeoNode,
-  invocation_cache: &NodeInvocationCache,
   geo_to_atom_data: &GeoToAtomData,
   network_stack: &Vec<NetworkStackElement<'a>>,
   geo_node_id: u64,
@@ -196,7 +195,6 @@ fn process_box_for_atomic<'a>(
                   );
                   process_cell_for_atomic(
                       geo_tree_root,
-                      invocation_cache,
                       geo_to_atom_data,
                       network_stack,
                       geo_node_id,
@@ -225,7 +223,6 @@ fn process_box_for_atomic<'a>(
   for (sub_start, sub_size) in subdivisions {
       process_box_for_atomic(
           geo_tree_root,
-          invocation_cache,
           geo_to_atom_data,
           network_stack,
           geo_node_id,
@@ -240,7 +237,6 @@ fn process_box_for_atomic<'a>(
 
 fn process_cell_for_atomic<'a>(
   geo_tree_root: &GeoNode,
-  invocation_cache: &NodeInvocationCache,
   geo_to_atom_data: &GeoToAtomData,
   network_stack: &Vec<NetworkStackElement<'a>>,
   geo_node_id: u64,

@@ -125,23 +125,15 @@ impl NodeInvocationId {
     }
 }
 
-pub type NodeInvocationCache = HashMap<NodeInvocationId, Vec<NetworkResult>>;
-
 pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
-  pub explicit_geo_eval_needed: bool,
-  pub record_invocations: bool,
-  pub node_invocation_cache: NodeInvocationCache,
   pub selected_node_eval_cache: Option<Box<dyn Any>>,
 }
 
 impl NetworkEvaluationContext {
-  pub fn new(explicit_geo_eval_needed: bool, record_invocations: bool) -> Self {
+  pub fn new() -> Self {
     Self {
       node_errors: HashMap::new(),
-      explicit_geo_eval_needed,
-      record_invocations,
-      node_invocation_cache: HashMap::new(),
       selected_node_eval_cache: None,
     }
   }
@@ -178,10 +170,7 @@ impl NetworkEvaluator {
       None => return StructureDesignerScene::new(),
     };
 
-    let mut context = NetworkEvaluationContext::new(
-      geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh,
-      false
-    );
+    let mut context = NetworkEvaluationContext::new();
 
     let mut network_stack = Vec::new();
     // We assign the root node network zero node id. It is not used in the evaluation.
@@ -320,26 +309,6 @@ impl NetworkEvaluator {
       return scene;
   }
 
-  // Pre-evaluates a geometry node with explicit mesh generation turned off
-  // just to cache transforms for each node invocation which will be used
-  // in implicit evaluation of the geometry.
-  // Returns the pre evaluation context which contains the transformation
-  // outputs for each node invocation.
-  pub fn pre_eval_geometry_node(
-    &self,
-    network_stack: Vec<NetworkStackElement>,
-    node_id: u64,
-    registry: &NodeTypeRegistry) -> (NodeInvocationCache, NetworkResult) {
-    // Create evaluation context to record transformation outputs for invocations
-    let mut context = NetworkEvaluationContext::new(
-      false,
-      true
-    );
-    let result = self.evaluate(&network_stack, node_id, registry, false, &mut context)[0].clone();
-
-    return (context.node_invocation_cache.clone(), result);
-  }
-
   pub fn evaluate<'a>(
     &self,
     network_stack: &Vec<NetworkStackElement<'a>>,
@@ -407,11 +376,6 @@ impl NetworkEvaluator {
     } else {
       vec![NetworkResult::None]
     };
-    
-    if context.record_invocations {
-      let node_invocation_id = NodeInvocationId::new(network_stack, node_id);
-      context.node_invocation_cache.insert(node_invocation_id, results.clone());
-    }
 
     // Check for errors and store them in the context
     for result in &results {
