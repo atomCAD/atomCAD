@@ -3,13 +3,58 @@ use glam::f64::{DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};
 use crate::util::transform::Transform;
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
+use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry2D;
+use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 
-impl GeoNode {
+impl ImplicitGeometry2D for GeoNode {
+  fn get_gradient_2d(
+    &self,
+    sample_point: &DVec2,
+  ) -> (DVec2, f64) {
+    let epsilon: f64 = 0.001; // Small value for finite difference approximation
 
+    let value = self.implicit_eval_2d(sample_point);
+    let gradient = DVec2::new(
+      (self.implicit_eval_2d(&(sample_point + DVec2::new(epsilon, 0.0))) - value) / epsilon,
+      (self.implicit_eval_2d(&(sample_point + DVec2::new(0.0, epsilon))) - value) / epsilon,
+    );
+    (gradient, value)
+  }
+
+  fn implicit_eval_2d(&self, sample_point: &DVec2) -> f64 {
+    match self {
+      GeoNode::HalfPlane { point1, point2 } => {
+        Self::half_plane_implicit_eval(*point1, *point2, sample_point)
+      }
+      GeoNode::Circle { center, radius } => {
+        Self::circle_implicit_eval(*center, *radius, sample_point)
+      }
+      GeoNode::Rect { min_corner, extent } => {
+        Self::rect_implicit_eval(*min_corner, *extent, sample_point)
+      }
+      GeoNode::Polygon { vertices } => {
+        Self::polygon_implicit_eval(vertices, sample_point)
+      }
+      GeoNode::Union2D { shapes } => {
+        Self::union_2d_implicit_eval(shapes, sample_point)
+      }
+      GeoNode::Intersection2D { shapes } => {
+        Self::intersection_2d_implicit_eval(shapes, sample_point)
+      }
+      GeoNode::Difference2D { base, sub } => {
+        Self::difference_2d_implicit_eval(base, sub, sample_point)
+      }
+      // 3D shapes should use implicit_eval_3d instead
+      _ => panic!("3D shapes should be evaluated using implicit_eval_3d")
+    }
+  }
+}
+
+impl ImplicitGeometry3D for GeoNode {
   // Calculate gradient using one sided differences
   // This is faster than using central differences but potentially less accurate
   // It also returns the value at the sampled point, so that the value can be reused. 
-  pub fn get_gradient(
+  fn get_gradient(
     &self,
     sample_point: &DVec3
   ) -> (DVec3, f64) {
@@ -24,7 +69,7 @@ impl GeoNode {
     (gradient, value)
   }
 
-  pub fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64 {
+  fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64 {
     match self {
       GeoNode::HalfSpace { miller_index, center, shift } => {
         Self::half_space_implicit_eval(*miller_index, *center, *shift, sample_point)
@@ -54,49 +99,9 @@ impl GeoNode {
       _ => panic!("2D shapes should be evaluated using implicit_eval_2d")
     }
   }
+}
 
-  pub fn get_gradient_2d(
-    &self,
-    sample_point: &DVec2,
-  ) -> (DVec2, f64) {
-    let epsilon: f64 = 0.001; // Small value for finite difference approximation
-
-    let value = self.implicit_eval_2d(sample_point);
-    let gradient = DVec2::new(
-      (self.implicit_eval_2d(&(sample_point + DVec2::new(epsilon, 0.0))) - value) / epsilon,
-      (self.implicit_eval_2d(&(sample_point + DVec2::new(0.0, epsilon))) - value) / epsilon,
-    );
-    (gradient, value)
-  }
-
-  pub fn implicit_eval_2d(&self, sample_point: &DVec2) -> f64 {
-    match self {
-      GeoNode::HalfPlane { point1, point2 } => {
-        Self::half_plane_implicit_eval(*point1, *point2, sample_point)
-      }
-      GeoNode::Circle { center, radius } => {
-        Self::circle_implicit_eval(*center, *radius, sample_point)
-      }
-      GeoNode::Rect { min_corner, extent } => {
-        Self::rect_implicit_eval(*min_corner, *extent, sample_point)
-      }
-      GeoNode::Polygon { vertices } => {
-        Self::polygon_implicit_eval(vertices, sample_point)
-      }
-      GeoNode::Union2D { shapes } => {
-        Self::union_2d_implicit_eval(shapes, sample_point)
-      }
-      GeoNode::Intersection2D { shapes } => {
-        Self::intersection_2d_implicit_eval(shapes, sample_point)
-      }
-      GeoNode::Difference2D { base, sub } => {
-        Self::difference_2d_implicit_eval(base, sub, sample_point)
-      }
-      // 3D shapes should use implicit_eval_3d instead
-      _ => panic!("3D shapes should be evaluated using implicit_eval_3d")
-    }
-  }
-
+impl GeoNode {
   fn half_space_implicit_eval(miller_index: IVec3, center: IVec3, shift: i32, sample_point: &DVec3) -> f64 {
     implicit_eval_half_space_calc(&miller_index, &center, shift, sample_point)
   }

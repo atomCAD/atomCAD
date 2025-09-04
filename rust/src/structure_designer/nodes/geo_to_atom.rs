@@ -1,3 +1,4 @@
+use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
