@@ -8,10 +8,9 @@ use crate::common::surface_point_cloud::SurfacePoint;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
-use crate::structure_designer::geo_tree::GeoNode;
 
 pub fn generate_point_cloud_scene(
-  root_geo_node: &GeoNode,
+  geometry: &dyn ImplicitGeometry3D,
   context: &mut NetworkEvaluationContext,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
   let mut point_cloud = SurfacePointCloud::new();
@@ -23,7 +22,7 @@ pub fn generate_point_cloud_scene(
   let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
   process_box_for_point_cloud(
-      root_geo_node,
+      geometry,
       &(common_constants::IMPLICIT_VOLUME_MIN * geometry_visualization_preferences.samples_per_unit_cell),
       &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * geometry_visualization_preferences.samples_per_unit_cell),
       &mut eval_cache,
@@ -40,7 +39,7 @@ pub fn generate_point_cloud_scene(
 }
 
 fn process_box_for_point_cloud(
-  root_geo_node: &GeoNode,
+  geometry: &dyn ImplicitGeometry3D,
   start_pos: &IVec3,
   size: &IVec3,
   eval_cache: &mut LruCache<IVec3, f64>,
@@ -54,7 +53,7 @@ fn process_box_for_point_cloud(
   let center_point = (start_pos.as_dvec3() + size.as_dvec3() / 2.0) / spu;
 
   // Evaluate SDF at the center point
-  let sdf_value = root_geo_node.implicit_eval_3d(&center_point);
+  let sdf_value = geometry.implicit_eval_3d(&center_point);
 
   let half_diagonal = size.as_dvec3().length() / spu / 2.0;
 
@@ -80,7 +79,7 @@ fn process_box_for_point_cloud(
                     start_pos.z + z
                 );
                 process_cell_for_point_cloud(
-                    root_geo_node,
+                    geometry,
                     &cell_pos,
                     eval_cache,
                     point_cloud,
@@ -104,7 +103,7 @@ fn process_box_for_point_cloud(
   // Process each subdivision recursively
   for (sub_start, sub_size) in subdivisions {
     process_box_for_point_cloud(
-        root_geo_node,
+        geometry,
         &sub_start,
         &sub_size,
         eval_cache,
@@ -115,7 +114,7 @@ fn process_box_for_point_cloud(
 }
 
 fn process_cell_for_point_cloud(
-  root_geo_node: &GeoNode,
+  geometry: &dyn ImplicitGeometry3D,
   int_pos: &IVec3,
   eval_cache: &mut LruCache<IVec3, f64>,
   point_cloud: &mut SurfacePointCloud,
@@ -140,7 +139,7 @@ fn process_cell_for_point_cloud(
         cached_value
       } else {
         let p = ip.as_dvec3() / spu;
-        let value = root_geo_node.implicit_eval_3d(&p);
+        let value = geometry.implicit_eval_3d(&p);
         //println!("Evaluating point: {:?}, value: {}", ip, value);
         eval_cache.put(*ip, value);
         value
@@ -149,7 +148,7 @@ fn process_cell_for_point_cloud(
 
     if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
         let center_point = (corner_points[0].as_dvec3() + 0.5) / spu;
-        let gradient_val = root_geo_node.get_gradient(&center_point);
+        let gradient_val = geometry.get_gradient(&center_point);
         let gradient = gradient_val.0;
         let value = gradient_val.1;
         let gradient_magnitude_sq = gradient.length_squared();

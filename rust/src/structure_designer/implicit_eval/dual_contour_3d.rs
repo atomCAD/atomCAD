@@ -7,7 +7,6 @@ use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::implicit_eval::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
-use crate::structure_designer::geo_tree::GeoNode;
 
 /*
  * Terminology for Dual Contouring:
@@ -58,7 +57,7 @@ const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
 const SDF_ZERO_TOLERANCE: f64 = 1e-9;
 
 pub fn generate_dual_contour_3d_scene(
-  root_geo_node: &GeoNode,
+  root_geo_node: &dyn ImplicitGeometry3D,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) -> StructureDesignerScene {
   let mut cells = generate_cells(root_geo_node, geometry_visualization_preferences);
@@ -71,7 +70,7 @@ pub fn generate_dual_contour_3d_scene(
   scene
 }
 
-fn generate_cells(root_geo_node: &GeoNode, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> HashMap<(i32, i32, i32), DCCell> {
+fn generate_cells(root_geo_node: &dyn ImplicitGeometry3D, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> HashMap<(i32, i32, i32), DCCell> {
   let mut cells = HashMap::new();
 
   generate_cells_for_box(
@@ -86,7 +85,7 @@ fn generate_cells(root_geo_node: &GeoNode, geometry_visualization_preferences: &
 
 fn generate_mesh(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
-  root_geo_node: &GeoNode,
+  root_geo_node: &dyn ImplicitGeometry3D,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) -> PolyMesh {
   let mut mesh = PolyMesh::new(false, false); // TODO; fill these 2 boolean properties correctly
   
@@ -105,7 +104,7 @@ fn generate_mesh(
 
 fn process_cell_edges(
   cells: &mut HashMap<(i32, i32, i32), DCCell>, 
-  root_geo_node: &GeoNode, 
+  root_geo_node: &dyn ImplicitGeometry3D, 
   mesh: &mut PolyMesh,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) {
@@ -237,7 +236,7 @@ fn get_cell_center_pos(cell_key: (i32, i32, i32), samples_per_unit_cell: i32) ->
 }
 
 // Function to find the zero-crossing point on an edge using binary search
-fn find_edge_intersection(root_geo_node: &GeoNode, p1: &DVec3, p2: &DVec3) -> DVec3 {
+fn find_edge_intersection(root_geo_node: &dyn ImplicitGeometry3D, p1: &DVec3, p2: &DVec3) -> DVec3 {
   let mut a = *p1;
   let mut b = *p2;
   let mut sdf_a = root_geo_node.implicit_eval_3d(&a);
@@ -272,7 +271,7 @@ fn find_edge_intersection(root_geo_node: &GeoNode, p1: &DVec3, p2: &DVec3) -> DV
 // Optimize vertex positions using QEF minimization
 fn optimize_vertex_positions(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
-  _root_geo_node: &GeoNode,
+  _root_geo_node: &dyn ImplicitGeometry3D,
   mesh: &mut PolyMesh,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) {
   let spu = get_spu(geometry_visualization_preferences.samples_per_unit_cell);
@@ -313,7 +312,7 @@ fn optimize_vertex_positions(
 }
 
 fn generate_cells_for_box(
-  root_geo_node: &GeoNode,
+  root_geo_node: &dyn ImplicitGeometry3D,
   start_pos: &IVec3,
   size: &IVec3,
   cells: &mut HashMap<(i32, i32, i32), DCCell>,

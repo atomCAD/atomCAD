@@ -1,5 +1,4 @@
 use crate::common::surface_point_cloud::SurfacePointCloud2D;
-use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry2D;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -12,7 +11,7 @@ use crate::common::surface_point_cloud::SurfacePoint2D;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
 pub fn generate_2d_point_cloud_scene(
-  root_geo_node: &GeoNode,
+  geometry: &dyn ImplicitGeometry2D,
   context: &mut NetworkEvaluationContext,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) -> StructureDesignerScene {
@@ -24,7 +23,7 @@ pub fn generate_2d_point_cloud_scene(
   let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
   process_rect_for_point_cloud(
-      &root_geo_node,
+      geometry,
       &(common_constants::IMPLICIT_VOLUME_MIN.xz() * geometry_visualization_preferences.samples_per_unit_cell),
       &((common_constants::IMPLICIT_VOLUME_MAX.xz() - common_constants::IMPLICIT_VOLUME_MIN.xz()) * geometry_visualization_preferences.samples_per_unit_cell),
       &mut eval_cache,
@@ -41,7 +40,7 @@ pub fn generate_2d_point_cloud_scene(
 }
 
 fn process_rect_for_point_cloud(
-  root_geo_node: &GeoNode,
+  geometry: &dyn ImplicitGeometry2D,
   start_pos: &IVec2,
   size: &IVec2,
   eval_cache: &mut LruCache<IVec2, f64>,
@@ -55,7 +54,7 @@ fn process_rect_for_point_cloud(
   let center_point = (start_pos.as_dvec2() + size.as_dvec2() / 2.0) / spu;
 
   // Evaluate SDF at the center point using NodeEvaluator's eval_2d method
-  let sdf_value = root_geo_node.implicit_eval_2d(&center_point);
+  let sdf_value = geometry.implicit_eval_2d(&center_point);
 
   let half_diagonal = size.as_dvec2().length() / spu / 2.0;
 
@@ -78,7 +77,7 @@ fn process_rect_for_point_cloud(
                     start_pos.y + y,
                 );
                 process_2d_cell_for_point_cloud(
-                    root_geo_node,
+                    geometry,
                     &cell_pos,
                     eval_cache,
                     point_cloud,
@@ -100,7 +99,7 @@ fn process_rect_for_point_cloud(
   // Process each subdivision recursively
   for (sub_start, sub_size) in subdivisions {
     process_rect_for_point_cloud(
-        root_geo_node,
+        geometry,
         &sub_start,
         &sub_size,
         eval_cache,
@@ -111,7 +110,7 @@ fn process_rect_for_point_cloud(
 }
 
 fn process_2d_cell_for_point_cloud(
-  root_geo_node: &GeoNode,
+  geometry: &dyn ImplicitGeometry2D,
   int_pos: &IVec2,
   eval_cache: &mut LruCache<IVec2, f64>,
   point_cloud: &mut SurfacePointCloud2D,
@@ -132,7 +131,7 @@ fn process_2d_cell_for_point_cloud(
       cached_value
     } else {
       let p = ip.as_dvec2() / spu;
-      let value = root_geo_node.implicit_eval_2d(&p);
+      let value = geometry.implicit_eval_2d(&p);
       //println!("Evaluating point: {:?}, value: {}", ip, value);
       eval_cache.put(*ip, value);
       value
@@ -141,7 +140,7 @@ fn process_2d_cell_for_point_cloud(
 
   if values.iter().any(|&v| v >= 0.0) && values.iter().any(|&v| v < 0.0) {
       let center_point = (corner_points[0].as_dvec2() + 0.5) / spu;
-      let gradient_val = root_geo_node.get_gradient_2d(&center_point);
+      let gradient_val = geometry.get_gradient_2d(&center_point);
       let gradient = gradient_val.0;
       let value = gradient_val.1;
       let gradient_magnitude_sq = gradient.length_squared();
