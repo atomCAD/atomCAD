@@ -33,15 +33,21 @@ Color getDataTypeColor(String dataType) {
 class PinViewWidget extends StatelessWidget {
   final String dataType;
   final bool multi;
+  final String? outputString;
 
-  const PinViewWidget({super.key, required this.dataType, required this.multi});
+  const PinViewWidget({super.key, required this.dataType, required this.multi, this.outputString});
 
   @override
   Widget build(BuildContext context) {
     final color = getDataTypeColor(dataType);
 
+    String tooltipMessage = dataType;
+    if (outputString != null && outputString!.isNotEmpty) {
+      tooltipMessage = '$dataType\n$outputString';
+    }
+
     return Tooltip(
-      message: dataType,
+      message: tooltipMessage,
       preferBelow: false,
       child: Center(
         child: Container(
@@ -68,7 +74,8 @@ class PinViewWidget extends StatelessWidget {
 class PinWidget extends StatelessWidget {
   final PinReference pinReference;
   final bool multi;
-  PinWidget({required this.pinReference, required this.multi})
+  final String? outputString;
+  PinWidget({required this.pinReference, required this.multi, this.outputString})
       : super(key: ValueKey(pinReference.pinIndex));
 
   RenderBox? _findNodeNetworkRenderBox(BuildContext context) {
@@ -98,7 +105,7 @@ class PinWidget extends StatelessWidget {
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
                 child: PinViewWidget(
-                    dataType: pinReference.dataType, multi: multi),
+                    dataType: pinReference.dataType, multi: multi, outputString: outputString),
               ),
             ),
             child: Container(
@@ -106,7 +113,7 @@ class PinWidget extends StatelessWidget {
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
                 child: PinViewWidget(
-                    dataType: pinReference.dataType, multi: multi),
+                    dataType: pinReference.dataType, multi: multi, outputString: outputString),
               ),
             ),
             onDragUpdate: (details) {
@@ -277,6 +284,7 @@ class NodeWidget extends StatelessWidget {
               PinWidget(
                 pinReference: PinReference(node.id, -1, node.outputType),
                 multi: false,
+                outputString: node.outputString,
               ),
             ],
           ),
@@ -359,4 +367,5 @@ class NodeWidget extends StatelessWidget {
       ],
     );
   }
+
 }

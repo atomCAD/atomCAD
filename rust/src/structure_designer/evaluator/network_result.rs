@@ -34,6 +34,26 @@ pub enum NetworkResult {
   Error(String),
 }
 
+impl NetworkResult {
+  /// Returns a user-readable string representation for displayable variants.
+  /// Returns None for Geometry2D, Geometry, Atomic, and Error variants.
+  pub fn to_display_string(&self) -> Option<String> {
+    match self {
+      NetworkResult::None => None,
+      NetworkResult::Int(value) => Some(value.to_string()),
+      NetworkResult::Float(value) => Some(format!("{:.6}", value)),
+      NetworkResult::Vec2(vec) => Some(format!("({:.6}, {:.6})", vec.x, vec.y)),
+      NetworkResult::Vec3(vec) => Some(format!("({:.6}, {:.6}, {:.6})", vec.x, vec.y, vec.z)),
+      NetworkResult::IVec2(vec) => Some(format!("({}, {})", vec.x, vec.y)),
+      NetworkResult::IVec3(vec) => Some(format!("({}, {}, {})", vec.x, vec.y, vec.z)),
+      NetworkResult::Geometry2D(_) => None,
+      NetworkResult::Geometry(_) => None,
+      NetworkResult::Atomic(_) => None,
+      NetworkResult::Error(_) => None,
+    }
+  }
+}
+
 /// Creates a consistent error message for missing input in node evaluation
 /// 
 /// # Arguments

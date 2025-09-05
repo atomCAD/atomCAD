@@ -348,6 +348,23 @@ impl NetworkEvaluator {
       }
     }
     
+    // Process results for display strings
+    let display_strings: Vec<String> = results
+      .iter()
+      .filter_map(|result| result.to_display_string())
+      .collect();
+    
+    if !display_strings.is_empty() {
+      let output_string = if display_strings.len() == 1 {
+        display_strings[0].clone()
+      } else {
+        format!("[{}]", display_strings.join(", "))
+      };
+      context.node_output_strings.insert(node_id, output_string);
+    }
+    
+
+    
     results
   }
 
