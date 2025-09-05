@@ -19,6 +19,7 @@ pub struct StructureDesignerScene {
     pub tessellatable: Option<Box<dyn Tessellatable>>,
 
     pub node_errors: HashMap<u64, String>,
+    pub node_output_strings: HashMap<u64, String>,
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
 }
 
@@ -32,6 +33,7 @@ impl StructureDesignerScene {
             poly_meshes: Vec::new(),
             tessellatable: None,
             node_errors: HashMap::new(),
+            node_output_strings: HashMap::new(),
             selected_node_eval_cache: None,
         }
     }
@@ -43,7 +45,7 @@ impl StructureDesignerScene {
         self.surface_point_cloud_2ds.extend(other.surface_point_cloud_2ds);
         self.poly_meshes.extend(other.poly_meshes);
         self.node_errors.extend(other.node_errors);
-        
+        self.node_output_strings.extend(other.node_output_strings);        
         // Take the eval cache from other if we don't have one
         if self.selected_node_eval_cache.is_none() && other.selected_node_eval_cache.is_some() {
             self.selected_node_eval_cache = other.selected_node_eval_cache;

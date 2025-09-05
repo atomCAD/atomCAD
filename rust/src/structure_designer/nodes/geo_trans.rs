@@ -1,5 +1,8 @@
 use crate::structure_designer::evaluator::network_evaluator::{
-  error_in_input, input_missing_error, GeometrySummary, NetworkEvaluationContext, NetworkEvaluator, NetworkResult
+  NetworkEvaluationContext, NetworkEvaluator
+};
+use crate::structure_designer::evaluator::network_result::{
+  error_in_input, input_missing_error, GeometrySummary, NetworkResult
 };
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;

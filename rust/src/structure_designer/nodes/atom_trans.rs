@@ -7,7 +7,7 @@ use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use glam::f64::DQuat;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::common::atomic_structure::AtomicStructure;

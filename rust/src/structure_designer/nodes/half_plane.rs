@@ -1,5 +1,5 @@
 use crate::structure_designer::common_constants;
-use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
+use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -9,7 +9,7 @@ use crate::common::serialization_utils::ivec2_serializer;
 use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::renderer::mesh::Mesh;

@@ -1,9 +1,9 @@
-use crate::structure_designer::evaluator::network_evaluator::GeometrySummary2D;
+use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
 use serde::{Serialize, Deserialize};
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DVec2;

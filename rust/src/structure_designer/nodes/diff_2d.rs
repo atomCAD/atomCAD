@@ -5,11 +5,12 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
-use crate::structure_designer::evaluator::network_evaluator::{GeometrySummary2D, NetworkEvaluationContext};
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
-use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use crate::structure_designer::evaluator::network_result::input_missing_error;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 
 pub fn eval_diff_2d<'a>(
   network_evaluator: &NetworkEvaluator,

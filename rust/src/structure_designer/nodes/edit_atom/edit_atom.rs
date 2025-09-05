@@ -3,7 +3,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use crate::common::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::util::transform::Transform;
-use crate::structure_designer::evaluator::network_evaluator::{NetworkResult, input_missing_error, error_in_input};
+use crate::structure_designer::evaluator::network_result::{NetworkResult, input_missing_error, error_in_input};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;

@@ -1,13 +1,13 @@
-use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DVec3;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
-use crate::structure_designer::evaluator::network_evaluator::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::util::transform::Transform;
-use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
+use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use glam::f64::DQuat;
 

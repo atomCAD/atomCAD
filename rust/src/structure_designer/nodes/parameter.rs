@@ -5,10 +5,10 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParameterData {

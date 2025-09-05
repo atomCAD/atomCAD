@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 use std::any::Any;
 
-use glam::i32::IVec2;
-use glam::i32::IVec3;
-use glam::f64::DVec2;
-use glam::f64::DVec3;
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -12,10 +8,7 @@ use crate::structure_designer::nodes::half_plane::eval_half_plane;
 use crate::structure_designer::nodes::polygon::eval_polygon;
 use crate::structure_designer::nodes::reg_poly::eval_reg_poly;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
-use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::common_constants;
-use crate::util::transform::Transform;
-use crate::util::transform::Transform2D;
 use crate::structure_designer::nodes::ivec3::eval_ivec3;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
 use crate::structure_designer::nodes::geo_trans::eval_geo_trans;
@@ -45,9 +38,9 @@ use crate::structure_designer::implicit_eval::dual_contour_3d::generate_dual_con
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::common::csg_utils::convert_csg_to_poly_mesh;
-use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -63,48 +56,6 @@ impl<'a> NetworkStackElement<'a> {
   pub fn is_node_selected_in_root_network(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> bool {
     return network_stack.first().unwrap().node_network.selected_node_id == Some(node_id);
   }
-}
-
-#[derive(Clone)]
-pub struct GeometrySummary2D {
-  pub frame_transform: Transform2D,
-  pub geo_tree_root: GeoNode,
-}
-
-#[derive(Clone)]
-pub struct GeometrySummary {
-  pub frame_transform: Transform,
-  pub geo_tree_root: GeoNode,
-}
-
-#[derive(Clone)]
-pub enum NetworkResult {
-  None,
-  Int(i32),
-  Float(f64),
-  Vec2(DVec2),
-  Vec3(DVec3),
-  IVec2(IVec2),
-  IVec3(IVec3),
-  Geometry2D(GeometrySummary2D),
-  Geometry(GeometrySummary),
-  Atomic(AtomicStructure),
-  Error(String),
-}
-
-/// Creates a consistent error message for missing input in node evaluation
-/// 
-/// # Arguments
-/// * `input_name` - The name of the missing input (e.g., 'molecule', 'shape')
-/// 
-/// # Returns
-/// * `NetworkResult::Error` with a formatted error message
-pub fn input_missing_error(input_name: &str) -> NetworkResult {
-  NetworkResult::Error(format!("{} input is missing", input_name))
-}
-
-pub fn error_in_input(input_name: &str) -> NetworkResult {
-  NetworkResult::Error(format!("error in {} input", input_name))
 }
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
@@ -138,6 +89,7 @@ impl NodeInvocationId {
 
 pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
+  pub node_output_strings: HashMap<u64, String>,
   pub selected_node_eval_cache: Option<Box<dyn Any>>,
 }
 
@@ -145,6 +97,7 @@ impl NetworkEvaluationContext {
   pub fn new() -> Self {
     Self {
       node_errors: HashMap::new(),
+      node_output_strings: HashMap::new(),
       selected_node_eval_cache: None,
     }
   }
@@ -196,7 +149,8 @@ impl NetworkEvaluator {
 
     let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
 
-    let mut scene = if registry.get_node_output_type(node) == APIDataType::Geometry2D {
+    let mut scene = 
+    if registry.get_node_output_type(node) == APIDataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
@@ -250,8 +204,9 @@ impl NetworkEvaluator {
       StructureDesignerScene::new()
     };
 
-    // Copy the collected errors to the scene
+    // Copy the collected errors and output strings to the scene
     scene.node_errors = context.node_errors.clone();
+    scene.node_output_strings = context.node_output_strings.clone();
     scene.selected_node_eval_cache = context.selected_node_eval_cache.take();
 
     return scene;
@@ -299,8 +254,6 @@ impl NetworkEvaluator {
         }
         scene.poly_meshes.push(poly_mesh);
       }
-  
-      scene.node_errors = context.node_errors.clone();
       
       // Extract geo_tree_root from the result based on its type
       match result {

@@ -3,7 +3,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_evaluator::{input_missing_error, NetworkResult};
+use crate::structure_designer::evaluator::network_result::{input_missing_error, NetworkResult};
 use crate::common::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 use glam::i32::IVec3;

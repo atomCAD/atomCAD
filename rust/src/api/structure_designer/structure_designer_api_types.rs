@@ -46,6 +46,7 @@ pub struct InputPinView {
     pub displayed: bool,
     pub return_node: bool,
     pub error: Option<String>,
+    pub output_string: Option<String>,
   }
   
   pub struct WireView {

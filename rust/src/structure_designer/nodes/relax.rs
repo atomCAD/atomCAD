@@ -1,10 +1,10 @@
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::common::atomic_structure::AtomicStructure;
-use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
-use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use crate::structure_designer::evaluator::network_result::input_missing_error;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::common::simulation::minimize_energy;
 
 #[derive(Debug, Clone)]

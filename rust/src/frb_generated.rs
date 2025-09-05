@@ -4737,6 +4737,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_displayed = <bool>::sse_decode(deserializer);
         let mut var_returnNode = <bool>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
+        let mut var_outputString = <Option<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::NodeView {
             id: var_id,
             node_type_name: var_nodeTypeName,
@@ -4747,6 +4748,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             displayed: var_displayed,
             return_node: var_returnNode,
             error: var_error,
+            output_string: var_outputString,
         };
     }
 }
@@ -6547,6 +6549,7 @@ impl flutter_rust_bridge::IntoDart
             self.displayed.into_into_dart().into_dart(),
             self.return_node.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
+            self.output_string.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -7297,6 +7300,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.displayed, serializer);
         <bool>::sse_encode(self.return_node, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
+        <Option<String>>::sse_encode(self.output_string, serializer);
     }
 }
 

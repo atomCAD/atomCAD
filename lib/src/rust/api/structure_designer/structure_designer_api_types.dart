@@ -611,6 +611,7 @@ class NodeView {
   final bool displayed;
   final bool returnNode;
   final String? error;
+  final String? outputString;
 
   NodeView({
     required this.id,
@@ -622,6 +623,7 @@ class NodeView {
     required this.displayed,
     required this.returnNode,
     this.error,
+    this.outputString,
   });
 
   @override
@@ -634,7 +636,8 @@ class NodeView {
       selected.hashCode ^
       displayed.hashCode ^
       returnNode.hashCode ^
-      error.hashCode;
+      error.hashCode ^
+      outputString.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -649,7 +652,8 @@ class NodeView {
           selected == other.selected &&
           displayed == other.displayed &&
           returnNode == other.returnNode &&
-          error == other.error;
+          error == other.error &&
+          outputString == other.outputString;
 }
 
 class WireView {

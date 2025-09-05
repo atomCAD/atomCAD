@@ -114,6 +114,8 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             Some(error_messages.join("\n"))
           };
 
+          let output_string = cad_instance.structure_designer.last_generated_structure_designer_scene.node_output_strings.get(&node.id).cloned();
+
           let output_type = cad_instance.structure_designer.node_type_registry.get_node_output_type(node);
 
           node_network_view.nodes.insert(node.id, NodeView {
@@ -126,6 +128,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             displayed: node_network.is_node_displayed(node.id),
             return_node: node_network.return_node_id == Some(node.id),
             error,
+            output_string,
           });
         }
 

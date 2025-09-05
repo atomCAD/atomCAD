@@ -2,7 +2,7 @@
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::imat3::IMat3;
@@ -20,8 +20,8 @@ use crate::common::crystal_utils::{
   in_crystal_pos_to_id,
   get_zinc_blende_atom_type_for_pos,
 };
-use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
-use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use crate::structure_designer::evaluator::network_result::input_missing_error;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 use std::collections::HashMap;
 use std::collections::HashSet;
 

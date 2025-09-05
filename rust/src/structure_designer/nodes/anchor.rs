@@ -1,7 +1,7 @@
 use crate::{common::atomic_structure::AtomDisplayState, structure_designer::evaluator::network_evaluator::NetworkEvaluator};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_evaluator::NetworkResult;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::common::atomic_structure::AtomicStructure;
@@ -12,8 +12,8 @@ use crate::common::crystal_utils::{in_crystal_pos_to_id, is_crystal_atom_id, id_
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::atomic_structure::HitTestResult;
 use glam::f64::DVec3;
-use crate::structure_designer::evaluator::network_evaluator::input_missing_error;
-use crate::structure_designer::evaluator::network_evaluator::error_in_input;
+use crate::structure_designer::evaluator::network_result::input_missing_error;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 
 
 #[derive(Debug, Serialize, Deserialize)]
