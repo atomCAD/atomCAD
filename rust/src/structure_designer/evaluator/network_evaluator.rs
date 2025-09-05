@@ -183,10 +183,11 @@ impl NetworkEvaluator {
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
+    let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
+
     let mut scene = if registry.get_node_output_type(node) == APIDataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
           let mut ret = generate_2d_point_cloud_scene(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences);
           ret.geo_trees.push(geometry_summary_2d.geo_tree_root);
@@ -195,14 +196,13 @@ impl NetworkEvaluator {
           StructureDesignerScene::new()
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
-        self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
+        self.generate_explicit_mesh_scene(result, &network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
       } else {
         StructureDesignerScene::new()
       }
     }
     else if registry.get_node_output_type(node) == APIDataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
-        let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
         if let NetworkResult::Geometry(geometry_summary) = result {
           let mut ret = generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences);
           ret.geo_trees.push(geometry_summary.geo_tree_root);
@@ -211,7 +211,6 @@ impl NetworkEvaluator {
           StructureDesignerScene::new()
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
         if let NetworkResult::Geometry(geometry_summary) = result {
           let mut ret = generate_dual_contour_3d_scene(&geometry_summary.geo_tree_root, geometry_visualization_preferences);
           ret.geo_trees.push(geometry_summary.geo_tree_root);
@@ -220,7 +219,7 @@ impl NetworkEvaluator {
           StructureDesignerScene::new()
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
-        self.generate_explicit_mesh_scene(&network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
+        self.generate_explicit_mesh_scene(result, &network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
       } else {
         StructureDesignerScene::new()
       }
@@ -230,7 +229,6 @@ impl NetworkEvaluator {
 
       let mut scene = StructureDesignerScene::new();
 
-      let result = &self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context)[0];
       if let NetworkResult::Atomic(atomic_structure) = result {
         let mut cloned_atomic_structure = atomic_structure.clone();
         cloned_atomic_structure.from_selected_node = from_selected_node;
@@ -250,13 +248,13 @@ impl NetworkEvaluator {
 
   fn generate_explicit_mesh_scene<'a>(
     &self,
+    result: NetworkResult,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node_id: u64, registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
     geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
       let mut scene = StructureDesignerScene::new();
-      let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, context).into_iter().next().unwrap();
       
       // Extract CSG from either geometry type (3D or 2D)
       let csg = match &result {
@@ -355,7 +353,7 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "geo_trans" {
       vec![eval_geo_trans(&self, network_stack, node_id, registry, context)]
     }else if node.node_type_name == "geo_to_atom" {
-      vec![eval_geo_to_atom(&self, network_stack, node_id, registry)]
+      vec![eval_geo_to_atom(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "edit_atom" {
       vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)]
     } else if node.node_type_name == "atom_trans" {

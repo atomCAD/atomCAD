@@ -94,7 +94,8 @@ pub fn eval_geo_to_atom<'a>(
   network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node_id: u64,
-  registry: &NodeTypeRegistry
+  registry: &NodeTypeRegistry,
+  context: &mut NetworkEvaluationContext
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
@@ -104,8 +105,7 @@ pub fn eval_geo_to_atom<'a>(
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();
 
-  let mut context = NetworkEvaluationContext::new();
-  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, registry, false, &mut context)[0].clone();
+  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, registry, false, context)[0].clone();
 
   let mesh = match pre_eval_result {
     NetworkResult::Geometry(mesh) => mesh,
