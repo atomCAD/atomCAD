@@ -41,6 +41,7 @@ use crate::common::csg_utils::convert_csg_to_poly_mesh;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -271,6 +272,38 @@ impl NetworkEvaluator {
       return scene;
   }
 
+
+  // Convenience helper method for the most common evaluation scenario:
+  // evaluates a single argument and returns a single element of the result.
+  // Returns None if the input was not connected.
+  // Can return an Error NetworkResult, or a valid NetworkResult.
+  pub fn evaluate_single_arg<'a>(
+    &self,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64, registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    parameter_index: usize,
+  ) -> Option<NetworkResult> {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+    let input_name = registry.get_parameter_name(&node.node_type_name, parameter_index);
+    if let Some(input_node_id) = node.arguments[parameter_index].get_node_id() {
+      let result = self.evaluate(
+        network_stack,
+        input_node_id,
+        registry, 
+        false,
+        context
+      )[0].clone();
+      if let NetworkResult::Error(_error) = result {
+        return Some(error_in_input(&input_name));
+      }
+      return Some(result);
+    } else {
+      return None;
+    }
+  }
+
   pub fn evaluate<'a>(
     &self,
     network_stack: &Vec<NetworkStackElement<'a>>,
@@ -305,7 +338,7 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "sphere" {
       vec![eval_sphere(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "cuboid" {
-      vec![eval_cuboid(network_stack, node_id, registry, context)]
+      vec![eval_cuboid(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "half_space" {
       vec![eval_half_space(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "facet_shell" {

@@ -6,12 +6,14 @@ use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::util::transform::Transform;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DQuat;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CuboidData {
@@ -28,17 +30,38 @@ impl NodeData for CuboidData {
 }
 
 pub fn eval_cuboid<'a>(
+  network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node_id: u64,
-  _registry: &NodeTypeRegistry,
+  registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
 
-  let min_corner = cuboid_data.min_corner.as_dvec3();
-  let extent = cuboid_data.extent.as_dvec3();
-  let center = min_corner + extent / 2.0;
+  let mut min_corner = cuboid_data.min_corner;
+  if let Some(result) = network_evaluator.evaluate_single_arg(network_stack, node_id, registry, context, 0) {
+    if let NetworkResult::Error(error) = result {
+      return NetworkResult::Error(error);
+    }
+    if let NetworkResult::IVec3(vec) = result {
+      min_corner = vec;
+    }
+  }
+
+  let mut extent = cuboid_data.extent;
+  if let Some(result) = network_evaluator.evaluate_single_arg(network_stack, node_id, registry, context, 1) {
+    if let NetworkResult::Error(error) = result {
+      return NetworkResult::Error(error);
+    }
+    if let NetworkResult::IVec3(vec) = result {
+      extent = vec;
+    }
+  }
+
+  let real_min_corner = min_corner.as_dvec3();
+  let real_extent = extent.as_dvec3();
+  let center = real_min_corner + real_extent / 2.0;
 
   return NetworkResult::Geometry(GeometrySummary { 
     frame_transform: Transform::new(
@@ -46,8 +69,8 @@ pub fn eval_cuboid<'a>(
       DQuat::IDENTITY,
     ),
     geo_tree_root: GeoNode::Cuboid {
-      min_corner: cuboid_data.min_corner,
-      extent: cuboid_data.extent 
+      min_corner: min_corner,
+      extent: extent 
     },
   });
 }
