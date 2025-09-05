@@ -61,6 +61,10 @@ pub struct InputPinView {
     pub wires: Vec<WireView>,
   }
 
+  pub struct APIIVec3Data {
+    pub value: APIIVec3,
+  }
+
   pub struct APIRectData {
     pub min_corner: APIIVec2,
     pub extent: APIIVec2,

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
+use super::nodes::ivec3::IVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use super::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
@@ -55,6 +56,31 @@ impl NodeTypeRegistry {
         data_type: APIDataType::Geometry,
         multi: false,
         sort_order: 0,
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "ivec3".to_string(),
+      parameters: vec![
+        Parameter {
+            name: "x".to_string(),
+            data_type: APIDataType::Int,
+            multi: false,
+        },
+        Parameter {
+            name: "y".to_string(),
+            data_type: APIDataType::Int,
+            multi: false,
+        },
+        Parameter {
+            name: "z".to_string(),
+            data_type: APIDataType::Int,
+            multi: false,
+        },        
+      ],
+      output_type: APIDataType::IVec3,
+      node_data_creator: || Box::new(IVec3Data {
+        value: IVec3::new(0, 0, 0)
       }),
     });
 

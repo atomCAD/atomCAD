@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 use std::any::Any;
 
+use glam::i32::IVec2;
+use glam::i32::IVec3;
+use glam::f64::DVec2;
+use glam::f64::DVec3;
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -12,6 +16,7 @@ use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::common_constants;
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
+use crate::structure_designer::nodes::ivec3::eval_ivec3;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
 use crate::structure_designer::nodes::geo_trans::eval_geo_trans;
 use crate::structure_designer::nodes::sphere::eval_sphere;
@@ -75,6 +80,12 @@ pub struct GeometrySummary {
 #[derive(Clone)]
 pub enum NetworkResult {
   None,
+  Int(i32),
+  Float(f64),
+  Vec2(DVec2),
+  Vec3(DVec3),
+  IVec2(IVec2),
+  IVec3(IVec3),
   Geometry2D(GeometrySummary2D),
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
@@ -318,7 +329,9 @@ impl NetworkEvaluator {
 
     let results = if node.node_type_name == "parameter" {
       eval_parameter(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "circle" {
+    } else if node.node_type_name == "ivec3" {
+      vec![eval_ivec3(network_stack, node_id, registry, context)]
+    }else if node.node_type_name == "circle" {
       vec![eval_circle(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {
       vec![eval_rect(network_stack, node_id, registry, context)]

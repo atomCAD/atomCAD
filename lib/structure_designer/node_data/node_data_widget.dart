@@ -20,6 +20,7 @@ import 'package:flutter_cad/structure_designer/node_data/stamp_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/ivec3_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -247,6 +248,17 @@ class NodeDataWidget extends StatelessWidget {
         return ParameterEditor(
           nodeId: selectedNode.id,
           data: parameterData,
+          model: model,
+        );
+      case 'ivec3':
+        // Fetch the ivec3 data here in the parent widget
+        final ivec3Data = getIvec3Data(
+          nodeId: selectedNode.id,
+        );
+
+        return IVec3Editor(
+          nodeId: selectedNode.id,
+          data: ivec3Data,
           model: model,
         );
       default:

@@ -78,6 +78,9 @@ APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetExtrudeData(
         nodeId: nodeId);
 
+APIIVec3Data? getIvec3Data({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetIvec3Data(nodeId: nodeId);
+
 APIRectData? getRectData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetRectData(nodeId: nodeId);
 
@@ -137,6 +140,11 @@ APIParameterData? getParameterData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetParameterData(
         nodeId: nodeId);
+
+void setIvec3Data({required BigInt nodeId, required APIIVec3Data data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetIvec3Data(
+            nodeId: nodeId, data: data);
 
 void setRectData({required BigInt nodeId, required APIRectData data}) =>
     RustLib.instance.api

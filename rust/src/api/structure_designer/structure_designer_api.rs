@@ -7,6 +7,7 @@ use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::common_api_types::APIResult;
 use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors};
+use crate::structure_designer::nodes::ivec3::IVec3Data;
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
@@ -18,6 +19,7 @@ use crate::api::structure_designer::structure_designer_api_types::InputPinView;
 use crate::api::structure_designer::structure_designer_api_types::NodeView;
 use crate::api::structure_designer::structure_designer_api_types::WireView;
 use crate::api::common_api_types::APIVec2;
+use crate::api::structure_designer::structure_designer_api_types::APIIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
@@ -316,6 +318,28 @@ pub fn get_extrude_data(node_id: u64) -> Option<APIExtrudeData> {
         };
         Some(APIExtrudeData {
           height: extrude_data.height,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_ivec3_data(node_id: u64) -> Option<APIIVec3Data> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let ivec3_data = match node_data.as_any_ref().downcast_ref::<IVec3Data>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIIVec3Data {
+          value: to_api_ivec3(&ivec3_data.value)
         })
       },
       None
@@ -685,6 +709,19 @@ pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
       },
       None
     )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_ivec3_data(node_id: u64, data: APIIVec3Data) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let ivec3_data = Box::new(IVec3Data {
+        value: from_api_ivec3(&data.value),
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, ivec3_data);
+      refresh_renderer(cad_instance, false);
+    });
   }
 }
 

@@ -22,3 +22,4 @@ pub mod reg_poly;
 pub mod polygon;
 pub mod facet_shell;
 pub mod relax;
+pub mod ivec3;

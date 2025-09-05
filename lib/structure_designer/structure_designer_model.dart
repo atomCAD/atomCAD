@@ -371,6 +371,11 @@ class StructureDesignerModel extends ChangeNotifier {
     return nodeId;
   }
 
+  void setIvec3Data(BigInt nodeId, APIIVec3Data data) {
+    structure_designer_api.setIvec3Data(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setCuboidData(BigInt nodeId, APICuboidData data) {
     structure_designer_api.setCuboidData(nodeId: nodeId, data: data);
     refreshFromKernel();

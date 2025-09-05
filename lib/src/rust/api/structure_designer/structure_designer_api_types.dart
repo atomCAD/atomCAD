@@ -535,6 +535,24 @@ class APIStampView {
           selectedStampPlacement == other.selectedStampPlacement;
 }
 
+class APIIVec3Data {
+  final APIIVec3 value;
+
+  const APIIVec3Data({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIVec3Data &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+}
+
 class InputPinView {
   final String name;
   final String dataType;
