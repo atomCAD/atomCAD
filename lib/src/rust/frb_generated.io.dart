@@ -376,6 +376,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIFloatData? dco_decode_opt_box_autoadd_api_float_data(dynamic raw);
+
+  @protected
   APIGeoToAtomData? dco_decode_opt_box_autoadd_api_geo_to_atom_data(
       dynamic raw);
 
@@ -883,6 +886,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFacetShellData? sse_decode_opt_box_autoadd_api_facet_shell_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFloatData? sse_decode_opt_box_autoadd_api_float_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1428,6 +1435,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_facet_shell_data(
       APIFacetShellData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_float_data(
+      APIFloatData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_geo_to_atom_data(

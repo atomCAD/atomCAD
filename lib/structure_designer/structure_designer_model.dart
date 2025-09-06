@@ -371,8 +371,33 @@ class StructureDesignerModel extends ChangeNotifier {
     return nodeId;
   }
 
+  void setIntData(BigInt nodeId, APIIntData data) {
+    structure_designer_api.setIntData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setFloatData(BigInt nodeId, APIFloatData data) {
+    structure_designer_api.setFloatData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setIvec2Data(BigInt nodeId, APIIVec2Data data) {
+    structure_designer_api.setIvec2Data(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setIvec3Data(BigInt nodeId, APIIVec3Data data) {
     structure_designer_api.setIvec3Data(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setVec2Data(BigInt nodeId, APIVec2Data data) {
+    structure_designer_api.setVec2Data(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setVec3Data(BigInt nodeId, APIVec3Data data) {
+    structure_designer_api.setVec3Data(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

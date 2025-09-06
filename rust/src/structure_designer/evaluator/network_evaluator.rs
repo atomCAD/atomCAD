@@ -9,7 +9,12 @@ use crate::structure_designer::nodes::polygon::eval_polygon;
 use crate::structure_designer::nodes::reg_poly::eval_reg_poly;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::common_constants;
+use crate::structure_designer::nodes::int::eval_int;
+use crate::structure_designer::nodes::float::eval_float;
+use crate::structure_designer::nodes::ivec2::eval_ivec2;
 use crate::structure_designer::nodes::ivec3::eval_ivec3;
+use crate::structure_designer::nodes::vec2::eval_vec2;
+use crate::structure_designer::nodes::vec3::eval_vec3;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
 use crate::structure_designer::nodes::geo_trans::eval_geo_trans;
 use crate::structure_designer::nodes::sphere::eval_sphere;
@@ -315,9 +320,19 @@ impl NetworkEvaluator {
 
     let results = if node.node_type_name == "parameter" {
       eval_parameter(&self, network_stack, node_id, registry, context)
+    } else if node.node_type_name == "int" {
+      vec![eval_int(network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "float" {
+      vec![eval_float(network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "ivec2" {
+      vec![eval_ivec2(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "ivec3" {
       vec![eval_ivec3(network_stack, node_id, registry, context)]
-    }else if node.node_type_name == "circle" {
+    } else if node.node_type_name == "vec2" {
+      vec![eval_vec2(network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "vec3" {
+      vec![eval_vec3(network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "circle" {
       vec![eval_circle(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {
       vec![eval_rect(network_stack, node_id, registry, context)]

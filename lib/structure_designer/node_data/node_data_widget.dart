@@ -21,6 +21,11 @@ import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec3_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/ivec2_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/vec3_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/int_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/float_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/vec2_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -259,6 +264,61 @@ class NodeDataWidget extends StatelessWidget {
         return IVec3Editor(
           nodeId: selectedNode.id,
           data: ivec3Data,
+          model: model,
+        );
+      case 'ivec2':
+        // Fetch the ivec2 data here in the parent widget
+        final ivec2Data = getIvec2Data(
+          nodeId: selectedNode.id,
+        );
+
+        return IVec2Editor(
+          nodeId: selectedNode.id,
+          data: ivec2Data,
+          model: model,
+        );
+      case 'vec3':
+        // Fetch the vec3 data here in the parent widget
+        final vec3Data = getVec3Data(
+          nodeId: selectedNode.id,
+        );
+
+        return Vec3Editor(
+          nodeId: selectedNode.id,
+          data: vec3Data,
+          model: model,
+        );
+      case 'int':
+        // Fetch the int data here in the parent widget
+        final intData = getIntData(
+          nodeId: selectedNode.id,
+        );
+
+        return IntEditor(
+          nodeId: selectedNode.id,
+          data: intData,
+          model: model,
+        );
+      case 'float':
+        // Fetch the float data here in the parent widget
+        final floatData = getFloatData(
+          nodeId: selectedNode.id,
+        );
+
+        return FloatEditor(
+          nodeId: selectedNode.id,
+          data: floatData,
+          model: model,
+        );
+      case 'vec2':
+        // Fetch the vec2 data here in the parent widget
+        final vec2Data = getVec2Data(
+          nodeId: selectedNode.id,
+        );
+
+        return Vec2Editor(
+          nodeId: selectedNode.id,
+          data: vec2Data,
           model: model,
         );
       default:

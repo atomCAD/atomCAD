@@ -361,6 +361,28 @@ pub fn get_int_data(node_id: u64) -> Option<APIIntData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_float_data(node_id: u64) -> Option<APIFloatData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let float_data = match node_data.as_any_ref().downcast_ref::<FloatData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIFloatData {
+          value: float_data.value
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_ivec2_data(node_id: u64) -> Option<APIIVec2Data> {
   unsafe {
     with_cad_instance_or(

@@ -1,7 +1,12 @@
 use std::collections::HashMap;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
+use super::nodes::int::IntData;
+use super::nodes::float::FloatData;
+use super::nodes::ivec2::IVec2Data;
 use super::nodes::ivec3::IVec3Data;
+use super::nodes::vec2::Vec2Data;
+use super::nodes::vec3::Vec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use super::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
@@ -23,7 +28,7 @@ use super::nodes::geo_to_atom::GeoToAtomData;
 use super::nodes::anchor::AnchorData;
 use super::nodes::stamp::StampData;
 use super::node_data::NoData;
-use glam::{IVec3, DVec3, IVec2};
+use glam::{IVec3, DVec2, DVec3, IVec2};
 use crate::structure_designer::node_network::Node;
 
 pub struct NodeTypeRegistry {
@@ -60,6 +65,44 @@ impl NodeTypeRegistry {
     });
 
     ret.add_node_type(NodeType {
+      name: "int".to_string(),
+      parameters: vec![],
+      output_type: APIDataType::Int,
+      node_data_creator: || Box::new(IntData {
+        value: 0
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "float".to_string(),
+      parameters: vec![],
+      output_type: APIDataType::Float,
+      node_data_creator: || Box::new(FloatData {
+        value: 0.0
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "ivec2".to_string(),
+      parameters: vec![
+        Parameter {
+            name: "x".to_string(),
+            data_type: APIDataType::Int,
+            multi: false,
+        },
+        Parameter {
+            name: "y".to_string(),
+            data_type: APIDataType::Int,
+            multi: false,
+        },        
+      ],
+      output_type: APIDataType::IVec2,
+      node_data_creator: || Box::new(IVec2Data {
+        value: IVec2::new(0, 0)
+      }),
+    });
+
+    ret.add_node_type(NodeType {
       name: "ivec3".to_string(),
       parameters: vec![
         Parameter {
@@ -81,6 +124,51 @@ impl NodeTypeRegistry {
       output_type: APIDataType::IVec3,
       node_data_creator: || Box::new(IVec3Data {
         value: IVec3::new(0, 0, 0)
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "vec2".to_string(),
+      parameters: vec![
+        Parameter {
+            name: "x".to_string(),
+            data_type: APIDataType::Float,
+            multi: false,
+        },
+        Parameter {
+            name: "y".to_string(),
+            data_type: APIDataType::Float,
+            multi: false,
+        },        
+      ],
+      output_type: APIDataType::Vec2,
+      node_data_creator: || Box::new(Vec2Data {
+        value: DVec2::new(0.0, 0.0)
+      }),
+    });
+
+    ret.add_node_type(NodeType {
+      name: "vec3".to_string(),
+      parameters: vec![
+        Parameter {
+            name: "x".to_string(),
+            data_type: APIDataType::Float,
+            multi: false,
+        },
+        Parameter {
+            name: "y".to_string(),
+            data_type: APIDataType::Float,
+            multi: false,
+        },
+        Parameter {
+            name: "z".to_string(),
+            data_type: APIDataType::Float,
+            multi: false,
+        },        
+      ],
+      output_type: APIDataType::Vec3,
+      node_data_creator: || Box::new(Vec3Data {
+        value: DVec3::new(0.0, 0.0, 0.0)
       }),
     });
 
