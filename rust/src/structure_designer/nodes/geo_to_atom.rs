@@ -130,9 +130,6 @@ pub fn eval_geo_to_atom<'a>(
   process_box_for_atomic(
     &mesh.geo_tree_root,
     geo_to_atom_data,
-    network_stack,
-    geo_node_id,
-    registry,
     &common_constants::IMPLICIT_VOLUME_MIN,
     &(common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN),
     &mut atom_pos_to_id,
@@ -151,9 +148,6 @@ pub fn eval_geo_to_atom<'a>(
 fn process_box_for_atomic<'a>(
   geo_tree_root: &GeoNode,
   geo_to_atom_data: &GeoToAtomData,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  geo_node_id: u64,
-  registry: &NodeTypeRegistry,
   start_pos: &IVec3,
   size: &IVec3,
   atom_pos_to_id: &mut HashMap<IVec3, u64>,
@@ -196,9 +190,6 @@ fn process_box_for_atomic<'a>(
                   process_cell_for_atomic(
                       geo_tree_root,
                       geo_to_atom_data,
-                      network_stack,
-                      geo_node_id,
-                      registry,
                       &cell_pos,
                       atom_pos_to_id,
                       atomic_structure,
@@ -224,9 +215,6 @@ fn process_box_for_atomic<'a>(
       process_box_for_atomic(
           geo_tree_root,
           geo_to_atom_data,
-          network_stack,
-          geo_node_id,
-          registry,
           &sub_start,
           &sub_size,
           atom_pos_to_id,
@@ -238,9 +226,6 @@ fn process_box_for_atomic<'a>(
 fn process_cell_for_atomic<'a>(
   geo_tree_root: &GeoNode,
   geo_to_atom_data: &GeoToAtomData,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  geo_node_id: u64,
-  registry: &NodeTypeRegistry,
   int_pos: &IVec3,
   atom_pos_to_id: &mut HashMap<IVec3, u64>,
   atomic_structure: &mut AtomicStructure,

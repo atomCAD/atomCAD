@@ -62,8 +62,28 @@ pub struct InputPinView {
     pub wires: Vec<WireView>,
   }
 
+  pub struct APIIntData {
+    pub value: i32,
+  }
+
+  pub struct APIFloatData {
+    pub value: f64,
+  }
+
+  pub struct APIIVec2Data {
+    pub value: APIIVec2,
+  }
+  
   pub struct APIIVec3Data {
     pub value: APIIVec3,
+  }
+
+  pub struct APIVec2Data {
+    pub value: APIVec2,
+  }
+  
+  pub struct APIVec3Data {
+    pub value: APIVec3,
   }
 
   pub struct APIRectData {

@@ -23,3 +23,8 @@ pub mod polygon;
 pub mod facet_shell;
 pub mod relax;
 pub mod ivec3;
+pub mod vec3;
+pub mod int;
+pub mod float;
+pub mod ivec2;
+pub mod vec2;

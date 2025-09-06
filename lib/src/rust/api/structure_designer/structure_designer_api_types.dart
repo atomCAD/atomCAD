@@ -273,6 +273,24 @@ class APIFacetShellData {
           selectedFacetIndex == other.selectedFacetIndex;
 }
 
+class APIFloatData {
+  final double value;
+
+  const APIFloatData({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFloatData &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+}
+
 class APIGeoToAtomData {
   final int primaryAtomicNumber;
   final int secondaryAtomicNumber;
@@ -375,6 +393,24 @@ class APIHalfSpaceData {
           millerIndex == other.millerIndex &&
           center == other.center &&
           shift == other.shift;
+}
+
+class APIIntData {
+  final int value;
+
+  const APIIntData({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIntData &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
 }
 
 class APINetworkWithValidationErrors {
@@ -533,6 +569,60 @@ class APIStampView {
       other is APIStampView &&
           runtimeType == other.runtimeType &&
           selectedStampPlacement == other.selectedStampPlacement;
+}
+
+class APIVec2Data {
+  final APIVec2 value;
+
+  const APIVec2Data({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIVec2Data &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+}
+
+class APIVec3Data {
+  final APIVec3 value;
+
+  const APIVec3Data({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIVec3Data &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+}
+
+class APIIVec2Data {
+  final APIIVec2 value;
+
+  const APIIVec2Data({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIVec2Data &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
 }
 
 class APIIVec3Data {

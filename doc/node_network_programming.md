@@ -109,3 +109,45 @@ different subsystem. On the node network there should be only explicit evaluatio
 but the output of that evaluation in case of geometry nodes is a geometry algebraic expression. This geometrric algebraic expression is stored as a tree.
 This can be then used for implicit evaluation, but implicit evaluation in this case
 is already a completely different subsystem which has nothing to to do with the node network.
+
+## Types
+
+The atomCAD node network currently has a very simple type system.
+There is no 'type constructors' (no 'array of' or 'struct of' type constructs). (Arrays are implicitly supported though as we will see.)
+We might introduce more complex types in the future though.
+
+Pin types are the following:
+
+  Int,
+  Float,
+  Vec2,
+  Vec3,
+  IVec2,
+  IVec3,
+  Geometry2D,
+  Geometry,
+  Atomic
+
+Calculated values can have the type of the output pin or the 'Error' type.
+
+### Arrays
+
+Arrays are supported 'implicitly' in a way that each output value can be an array of the given type (or Error). A single value is just a one length arrray.
+
+Some rules regarding arrays:
+
+- In case of 'multi' pins (where multiple output pins are connected to a single input pin)
+the arrays are concatenated.
+- When the node expects one single none-error value on an input, the following happen:
+  - if the array is empty an error occurs on the input
+  - if the arrays has multiple elements the first element is taken without error
+  - If the first element is Error, obviously there is an error on the input
+
+### Type conversion
+
+Usually pins with the same type can be connected, but there are also some exceptions,
+where automatic conversion happens:
+
+- Int can be converted to Float and vica versa (rounding)
+- IVec2 can be converted to Vec2 and vica versa (rounding)
+- IVec3 can be converted to Vec3 and vica versa (rounding)

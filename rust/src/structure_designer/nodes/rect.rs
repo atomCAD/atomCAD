@@ -30,7 +30,7 @@ pub fn eval_rect<'a>(
   network_stack: &Vec<NetworkStackElement<'a>>,
   node_id: u64,
   _registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext,
+  _context: &mut NetworkEvaluationContext,
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let rect_data = &node.data.as_any_ref().downcast_ref::<RectData>().unwrap();

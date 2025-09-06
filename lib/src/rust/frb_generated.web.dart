@@ -81,6 +81,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFacetShellData dco_decode_api_facet_shell_data(dynamic raw);
 
   @protected
+  APIFloatData dco_decode_api_float_data(dynamic raw);
+
+  @protected
   APIGeoToAtomData dco_decode_api_geo_to_atom_data(dynamic raw);
 
   @protected
@@ -91,6 +94,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
+
+  @protected
+  APIIntData dco_decode_api_int_data(dynamic raw);
 
   @protected
   APINetworkWithValidationErrors dco_decode_api_network_with_validation_errors(
@@ -127,10 +133,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec2 dco_decode_api_vec_2(dynamic raw);
 
   @protected
+  APIVec2Data dco_decode_api_vec_2_data(dynamic raw);
+
+  @protected
   APIVec3 dco_decode_api_vec_3(dynamic raw);
 
   @protected
+  APIVec3Data dco_decode_api_vec_3_data(dynamic raw);
+
+  @protected
   APIIVec2 dco_decode_apii_vec_2(dynamic raw);
+
+  @protected
+  APIIVec2Data dco_decode_apii_vec_2_data(dynamic raw);
 
   @protected
   APIIVec3 dco_decode_apii_vec_3(dynamic raw);
@@ -175,6 +190,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFacetShellData dco_decode_box_autoadd_api_facet_shell_data(dynamic raw);
 
   @protected
+  APIFloatData dco_decode_box_autoadd_api_float_data(dynamic raw);
+
+  @protected
   APIGeoToAtomData dco_decode_box_autoadd_api_geo_to_atom_data(dynamic raw);
 
   @protected
@@ -185,6 +203,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APIIntData dco_decode_box_autoadd_api_int_data(dynamic raw);
 
   @protected
   APIParameterData dco_decode_box_autoadd_api_parameter_data(dynamic raw);
@@ -211,7 +232,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
 
   @protected
+  APIVec2Data dco_decode_box_autoadd_api_vec_2_data(dynamic raw);
+
+  @protected
   APIVec3 dco_decode_box_autoadd_api_vec_3(dynamic raw);
+
+  @protected
+  APIVec3Data dco_decode_box_autoadd_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIIVec2Data dco_decode_box_autoadd_apii_vec_2_data(dynamic raw);
 
   @protected
   APIIVec3 dco_decode_box_autoadd_apii_vec_3(dynamic raw);
@@ -361,6 +391,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
 
   @protected
+  APIIntData? dco_decode_opt_box_autoadd_api_int_data(dynamic raw);
+
+  @protected
   APIParameterData? dco_decode_opt_box_autoadd_api_parameter_data(dynamic raw);
 
   @protected
@@ -381,6 +414,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
+
+  @protected
+  APIVec2Data? dco_decode_opt_box_autoadd_api_vec_2_data(dynamic raw);
+
+  @protected
+  APIVec3Data? dco_decode_opt_box_autoadd_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIIVec2Data? dco_decode_opt_box_autoadd_apii_vec_2_data(dynamic raw);
 
   @protected
   APIIVec3? dco_decode_opt_box_autoadd_apii_vec_3(dynamic raw);
@@ -502,6 +544,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFloatData sse_decode_api_float_data(SseDeserializer deserializer);
+
+  @protected
   APIGeoToAtomData sse_decode_api_geo_to_atom_data(
       SseDeserializer deserializer);
 
@@ -513,6 +558,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
+
+  @protected
+  APIIntData sse_decode_api_int_data(SseDeserializer deserializer);
 
   @protected
   APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
@@ -551,10 +599,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
 
   @protected
+  APIVec2Data sse_decode_api_vec_2_data(SseDeserializer deserializer);
+
+  @protected
   APIVec3 sse_decode_api_vec_3(SseDeserializer deserializer);
 
   @protected
+  APIVec3Data sse_decode_api_vec_3_data(SseDeserializer deserializer);
+
+  @protected
   APIIVec2 sse_decode_apii_vec_2(SseDeserializer deserializer);
+
+  @protected
+  APIIVec2Data sse_decode_apii_vec_2_data(SseDeserializer deserializer);
 
   @protected
   APIIVec3 sse_decode_apii_vec_3(SseDeserializer deserializer);
@@ -607,6 +664,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFloatData sse_decode_box_autoadd_api_float_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIGeoToAtomData sse_decode_box_autoadd_api_geo_to_atom_data(
       SseDeserializer deserializer);
 
@@ -621,6 +682,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIHalfSpaceData sse_decode_box_autoadd_api_half_space_data(
       SseDeserializer deserializer);
+
+  @protected
+  APIIntData sse_decode_box_autoadd_api_int_data(SseDeserializer deserializer);
 
   @protected
   APIParameterData sse_decode_box_autoadd_api_parameter_data(
@@ -654,7 +718,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec2 sse_decode_box_autoadd_api_vec_2(SseDeserializer deserializer);
 
   @protected
+  APIVec2Data sse_decode_box_autoadd_api_vec_2_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIVec3 sse_decode_box_autoadd_api_vec_3(SseDeserializer deserializer);
+
+  @protected
+  APIVec3Data sse_decode_box_autoadd_api_vec_3_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIVec2Data sse_decode_box_autoadd_apii_vec_2_data(
+      SseDeserializer deserializer);
 
   @protected
   APIIVec3 sse_decode_box_autoadd_apii_vec_3(SseDeserializer deserializer);
@@ -828,6 +904,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIIntData? sse_decode_opt_box_autoadd_api_int_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIParameterData? sse_decode_opt_box_autoadd_api_parameter_data(
       SseDeserializer deserializer);
 
@@ -853,6 +933,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform? sse_decode_opt_box_autoadd_api_transform(
+      SseDeserializer deserializer);
+
+  @protected
+  APIVec2Data? sse_decode_opt_box_autoadd_api_vec_2_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIVec3Data? sse_decode_opt_box_autoadd_api_vec_3_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIVec2Data? sse_decode_opt_box_autoadd_apii_vec_2_data(
       SseDeserializer deserializer);
 
   @protected
@@ -985,6 +1077,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIFacetShellData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_float_data(APIFloatData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_geo_to_atom_data(
       APIGeoToAtomData self, SseSerializer serializer);
 
@@ -999,6 +1094,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_int_data(APIIntData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_network_with_validation_errors(
@@ -1039,10 +1137,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_vec_2_data(APIVec2Data self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_vec_3(APIVec3 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_vec_3_data(APIVec3Data self, SseSerializer serializer);
+
+  @protected
   void sse_encode_apii_vec_2(APIIVec2 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_apii_vec_2_data(APIIVec2Data self, SseSerializer serializer);
 
   @protected
   void sse_encode_apii_vec_3(APIIVec3 self, SseSerializer serializer);
@@ -1097,6 +1204,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIFacetShellData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_float_data(
+      APIFloatData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_geo_to_atom_data(
       APIGeoToAtomData self, SseSerializer serializer);
 
@@ -1111,6 +1222,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_int_data(
+      APIIntData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_parameter_data(
@@ -1144,7 +1259,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_vec_2_data(
+      APIVec2Data self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_vec_3(APIVec3 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_vec_3_data(
+      APIVec3Data self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_apii_vec_2_data(
+      APIIVec2Data self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_apii_vec_3(
@@ -1321,6 +1448,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_int_data(
+      APIIntData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_parameter_data(
       APIParameterData? self, SseSerializer serializer);
 
@@ -1347,6 +1478,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_transform(
       APITransform? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_vec_2_data(
+      APIVec2Data? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_vec_3_data(
+      APIVec3Data? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_apii_vec_2_data(
+      APIIVec2Data? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_apii_vec_3(
