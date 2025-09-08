@@ -11,6 +11,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RectData {
@@ -27,17 +28,36 @@ impl NodeData for RectData {
 }
 
 pub fn eval_rect<'a>(
+  network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node_id: u64,
-  _registry: &NodeTypeRegistry,
-  _context: &mut NetworkEvaluationContext,
+  registry: &NodeTypeRegistry,
+  context: &mut NetworkEvaluationContext,
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let rect_data = &node.data.as_any_ref().downcast_ref::<RectData>().unwrap();
 
-  let min_corner = rect_data.min_corner.as_dvec2();
-  let extent = rect_data.extent.as_dvec2();
-  let center = min_corner + extent / 2.0;
+  let min_corner = match network_evaluator.evaluate_or_default(
+    network_stack, node_id, registry, context, 0, 
+    rect_data.min_corner, 
+    NetworkResult::extract_ivec2
+  ) {
+    Ok(value) => value,
+    Err(error) => return error,
+  };
+
+  let extent = match network_evaluator.evaluate_or_default(
+    network_stack, node_id, registry, context, 1, 
+    rect_data.extent, 
+    NetworkResult::extract_ivec2
+  ) {
+    Ok(value) => value,
+    Err(error) => return error,
+  };
+
+  let real_min_corner = min_corner.as_dvec2();
+  let real_extent = extent.as_dvec2();
+  let center = real_min_corner + real_extent / 2.0;
 
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
@@ -46,8 +66,8 @@ pub fn eval_rect<'a>(
         0.0,
       ),
       geo_tree_root: GeoNode::Rect {
-        min_corner: rect_data.min_corner,
-        extent: rect_data.extent 
+        min_corner: min_corner,
+        extent: extent 
       },
     });
 }

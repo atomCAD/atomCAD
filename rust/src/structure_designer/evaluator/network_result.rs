@@ -99,6 +99,22 @@ impl NetworkResult {
     }
   }
 
+  /// Extracts a Vec2 value from the NetworkResult, returns None if not a Vec2
+  pub fn extract_vec2(self) -> Option<DVec2> {
+    match self {
+      NetworkResult::Vec2(vec) => Some(vec),
+      _ => None,
+    }
+  }
+
+  /// Extracts a Vec3 value from the NetworkResult, returns None if not a Vec3
+  pub fn extract_vec3(self) -> Option<DVec3> {
+    match self {
+      NetworkResult::Vec3(vec) => Some(vec),
+      _ => None,
+    }
+  }
+
   /// Converts this NetworkResult to the specified target data type
   /// Returns self if the types already match, otherwise performs conversion
   pub fn convert_to(self, target_type: APIDataType) -> NetworkResult {

@@ -55,13 +55,31 @@ pub fn eval_atom_trans<'a>(network_evaluator: &NetworkEvaluator, network_stack: 
 
     let atom_trans_data = &node.data.as_any_ref().downcast_ref::<AtomTransData>().unwrap();
 
+    let translation = match network_evaluator.evaluate_or_default(
+      network_stack, node_id, registry, context, 1, 
+      atom_trans_data.translation, 
+      NetworkResult::extract_vec3
+    ) {
+      Ok(value) => value,
+      Err(error) => return error,
+    };
+  
+    let rotation = match network_evaluator.evaluate_or_default(
+      network_stack, node_id, registry, context, 2, 
+      atom_trans_data.rotation, 
+      NetworkResult::extract_vec3
+    ) {
+      Ok(value) => value,
+      Err(error) => return error,
+    };
+
     let rotation_quat = DQuat::from_euler(
       glam::EulerRot::XYZ,
-      atom_trans_data.rotation.x, 
-      atom_trans_data.rotation.y, 
-      atom_trans_data.rotation.z);
+      rotation.x, 
+      rotation.y, 
+      rotation.z);
 
-    let frame_transform = atomic_structure.frame_transform.apply_lrot_gtrans_new(&Transform::new(atom_trans_data.translation, rotation_quat));
+    let frame_transform = atomic_structure.frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
 
     // Store evaluation cache for selected node
     if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {

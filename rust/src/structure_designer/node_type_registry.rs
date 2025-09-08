@@ -174,7 +174,18 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "rect".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+            name: "min_corner".to_string(),
+            data_type: APIDataType::IVec2,
+            multi: false,
+        },
+        Parameter {
+          name: "extent".to_string(),
+          data_type: APIDataType::IVec2,
+          multi: false,
+        },
+      ],
       output_type: APIDataType::Geometry2D,
       node_data_creator: || Box::new(RectData {
         min_corner: IVec2::new(-1, -1),
@@ -184,7 +195,18 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "circle".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+            name: "center".to_string(),
+            data_type: APIDataType::IVec2,
+            multi: false,
+        },
+        Parameter {
+          name: "radius".to_string(),
+          data_type: APIDataType::Int,
+          multi: false,
+        },
+      ],
       output_type: APIDataType::Geometry2D,
       node_data_creator: || Box::new(CircleData {
         center: IVec2::new(0, 0),
@@ -307,7 +329,18 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "sphere".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+            name: "center".to_string(),
+            data_type: APIDataType::IVec3,
+            multi: false,
+        },
+        Parameter {
+          name: "radius".to_string(),
+          data_type: APIDataType::Int,
+          multi: false,
+        },
+      ],
       output_type: APIDataType::Geometry,
       node_data_creator: || Box::new(SphereData {
         center: IVec3::new(0, 0, 0),
@@ -386,6 +419,16 @@ impl NodeTypeRegistry {
               data_type: APIDataType::Geometry,
               multi: false,
           },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: APIDataType::IVec3,
+            multi: false,
+          },
+          Parameter {
+            name: "rotation".to_string(),
+            data_type: APIDataType::IVec3,
+            multi: false,
+          },
       ],
       output_type: APIDataType::Geometry,
       node_data_creator: || Box::new(GeoTransData {
@@ -432,6 +475,16 @@ impl NodeTypeRegistry {
               name: "molecule".to_string(),
               data_type: APIDataType::Atomic,
               multi: false,
+          },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: APIDataType::Vec3,
+            multi: false,
+          },
+          Parameter {
+            name: "rotation".to_string(),
+            data_type: APIDataType::Vec3,
+            multi: false,
           },
       ],
       output_type: APIDataType::Atomic,

@@ -11,6 +11,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CircleData {
@@ -26,23 +27,42 @@ impl NodeData for CircleData {
 }
 
 pub fn eval_circle<'a>(
+  network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node_id: u64,
-  _registry: &NodeTypeRegistry,
+  registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let circle_data = &node.data.as_any_ref().downcast_ref::<CircleData>().unwrap();
 
+  let center = match network_evaluator.evaluate_or_default(
+    network_stack, node_id, registry, context, 0, 
+    circle_data.center, 
+    NetworkResult::extract_ivec2
+  ) {
+    Ok(value) => value,
+    Err(error) => return error,
+  };
+
+  let radius = match network_evaluator.evaluate_or_default(
+    network_stack, node_id, registry, context, 1, 
+    circle_data.radius, 
+    NetworkResult::extract_int
+  ) {
+    Ok(value) => value,
+    Err(error) => return error,
+  };
+
   return NetworkResult::Geometry2D(
     GeometrySummary2D {
       frame_transform: Transform2D::new(
-        circle_data.center.as_dvec2(),
+        center.as_dvec2(),
         0.0,
       ),
       geo_tree_root: GeoNode::Circle {
-        center: circle_data.center,
-        radius: circle_data.radius,
+        center: center,
+        radius: radius,
       },
   });
 }

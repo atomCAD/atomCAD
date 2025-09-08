@@ -73,15 +73,34 @@ pub fn eval_geo_trans<'a>(
   } else if let NetworkResult::Geometry(shape) = shape_val {
 
     let geo_trans_data = &node.data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
-    let translation = geo_trans_data.translation.as_dvec3();
-    let rotation_euler = geo_trans_data.rotation.as_dvec3() * PI * 0.5;
+
+    let translation = match network_evaluator.evaluate_or_default(
+      network_stack, node_id, registry, context, 1, 
+      geo_trans_data.translation, 
+      NetworkResult::extract_ivec3
+    ) {
+      Ok(value) => value,
+      Err(error) => return error,
+    };
+  
+    let rotation = match network_evaluator.evaluate_or_default(
+      network_stack, node_id, registry, context, 2, 
+      geo_trans_data.rotation, 
+      NetworkResult::extract_ivec3
+    ) {
+      Ok(value) => value,
+      Err(error) => return error,
+    };
+
+    let real_translation = translation.as_dvec3();
+    let rotation_euler = rotation.as_dvec3() * PI * 0.5;
     let rotation_quat = DQuat::from_euler(
       glam::EulerRot::XYZ,
       rotation_euler.x, 
       rotation_euler.y, 
       rotation_euler.z);
 
-    let frame_transform = shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
+    let frame_transform = shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
 
     // Store evaluation cache for selected node
     if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {

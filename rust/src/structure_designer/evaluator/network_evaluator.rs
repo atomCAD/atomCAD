@@ -344,9 +344,9 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "vec3" {
       vec![eval_vec3(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "circle" {
-      vec![eval_circle(network_stack, node_id, registry, context)]
+      vec![eval_circle(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {
-      vec![eval_rect(network_stack, node_id, registry, context)]
+      vec![eval_rect(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "reg_poly" {
       vec![eval_reg_poly(network_stack, node_id, registry)]
     } else if node.node_type_name == "polygon" {
@@ -362,7 +362,7 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "extrude" {
       vec![eval_extrude(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "sphere" {
-      vec![eval_sphere(network_stack, node_id, registry, context)]
+      vec![eval_sphere(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "cuboid" {
       vec![eval_cuboid(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "half_space" {
