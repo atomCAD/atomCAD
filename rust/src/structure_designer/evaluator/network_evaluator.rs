@@ -281,7 +281,14 @@ impl NetworkEvaluator {
       if let NetworkResult::Error(_error) = result {
         return Some(error_in_input(&input_name));
       }
-      return Some(result);
+      
+      // Get the expected input type for this parameter
+      let expected_type = registry.get_node_param_data_type(node, parameter_index);
+      
+      // Convert the result to the expected type
+      let converted_result = result.convert_to(expected_type);
+      
+      return Some(converted_result);
     } else {
       return None;
     }

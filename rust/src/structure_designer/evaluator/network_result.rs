@@ -6,6 +6,7 @@ use crate::common::atomic_structure::AtomicStructure;
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -35,6 +36,80 @@ pub enum NetworkResult {
 }
 
 impl NetworkResult {
+  /// Returns the APIDataType corresponding to this NetworkResult variant
+  pub fn get_data_type(&self) -> APIDataType {
+    match self {
+      NetworkResult::None => APIDataType::None,
+      NetworkResult::Int(_) => APIDataType::Int,
+      NetworkResult::Float(_) => APIDataType::Float,
+      NetworkResult::Vec2(_) => APIDataType::Vec2,
+      NetworkResult::Vec3(_) => APIDataType::Vec3,
+      NetworkResult::IVec2(_) => APIDataType::IVec2,
+      NetworkResult::IVec3(_) => APIDataType::IVec3,
+      NetworkResult::Geometry2D(_) => APIDataType::Geometry2D,
+      NetworkResult::Geometry(_) => APIDataType::Geometry,
+      NetworkResult::Atomic(_) => APIDataType::Atomic,
+      NetworkResult::Error(_) => APIDataType::None, // Errors don't have a meaningful data type
+    }
+  }
+
+  /// Converts this NetworkResult to the specified target data type
+  /// Returns self if the types already match, otherwise performs conversion
+  pub fn convert_to(self, target_type: APIDataType) -> NetworkResult {
+    // If types already match, return self
+    if self.get_data_type() == target_type {
+      return self;
+    }
+
+    // Handle Error and None cases - they cannot be converted
+    match &self {
+      NetworkResult::Error(_) | NetworkResult::None => return self,
+      _ => {}
+    }
+
+    // Perform conversions
+    match (self, target_type) {
+      // Int -> Float
+      (NetworkResult::Int(value), APIDataType::Float) => {
+        NetworkResult::Float(value as f64)
+      }
+      
+      // Float -> Int (rounded)
+      (NetworkResult::Float(value), APIDataType::Int) => {
+        NetworkResult::Int(value.round() as i32)
+      }
+      
+      // IVec2 -> Vec2
+      (NetworkResult::IVec2(vec), APIDataType::Vec2) => {
+        NetworkResult::Vec2(DVec2::new(vec.x as f64, vec.y as f64))
+      }
+      
+      // Vec2 -> IVec2 (rounded)
+      (NetworkResult::Vec2(vec), APIDataType::IVec2) => {
+        NetworkResult::IVec2(IVec2::new(vec.x.round() as i32, vec.y.round() as i32))
+      }
+      
+      // IVec3 -> Vec3
+      (NetworkResult::IVec3(vec), APIDataType::Vec3) => {
+        NetworkResult::Vec3(DVec3::new(vec.x as f64, vec.y as f64, vec.z as f64))
+      }
+      
+      // Vec3 -> IVec3 (rounded)
+      (NetworkResult::Vec3(vec), APIDataType::IVec3) => {
+        NetworkResult::IVec3(IVec3::new(vec.x.round() as i32, vec.y.round() as i32, vec.z.round() as i32))
+      }
+      
+      // All other conversions are invalid - return an error
+      (original, target) => {
+        NetworkResult::Error(format!(
+          "Cannot convert {:?} to {:?}", 
+          original.get_data_type(), 
+          target
+        ))
+      }
+    }
+  }
+
   /// Returns a user-readable string representation for displayable variants.
   /// Returns None for Geometry2D, Geometry, Atomic, and Error variants.
   pub fn to_display_string(&self) -> Option<String> {
