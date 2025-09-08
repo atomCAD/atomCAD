@@ -53,6 +53,52 @@ impl NetworkResult {
     }
   }
 
+  /// Returns true if this NetworkResult is an Error variant
+  pub fn is_error(&self) -> bool {
+    matches!(self, NetworkResult::Error(_))
+  }
+
+  /// If this is an Error variant, returns it. Otherwise returns None.
+  /// Useful for early error propagation in node evaluation.
+  pub fn propagate_error(self) -> Option<NetworkResult> {
+    match self {
+      NetworkResult::Error(_) => Some(self),
+      _ => None,
+    }
+  }
+
+  /// Extracts an IVec3 value from the NetworkResult, returns None if not an IVec3
+  pub fn extract_ivec3(self) -> Option<IVec3> {
+    match self {
+      NetworkResult::IVec3(vec) => Some(vec),
+      _ => None,
+    }
+  }
+
+  /// Extracts an IVec2 value from the NetworkResult, returns None if not an IVec2
+  pub fn extract_ivec2(self) -> Option<IVec2> {
+    match self {
+      NetworkResult::IVec2(vec) => Some(vec),
+      _ => None,
+    }
+  }
+
+  /// Extracts an Int value from the NetworkResult, returns None if not an Int
+  pub fn extract_int(self) -> Option<i32> {
+    match self {
+      NetworkResult::Int(value) => Some(value),
+      _ => None,
+    }
+  }
+
+  /// Extracts a Float value from the NetworkResult, returns None if not a Float
+  pub fn extract_float(self) -> Option<f64> {
+    match self {
+      NetworkResult::Float(value) => Some(value),
+      _ => None,
+    }
+  }
+
   /// Converts this NetworkResult to the specified target data type
   /// Returns self if the types already match, otherwise performs conversion
   pub fn convert_to(self, target_type: APIDataType) -> NetworkResult {

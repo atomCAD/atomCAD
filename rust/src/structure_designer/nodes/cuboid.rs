@@ -39,25 +39,23 @@ pub fn eval_cuboid<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
 
-  let mut min_corner = cuboid_data.min_corner;
-  if let Some(result) = network_evaluator.evaluate_single_arg(network_stack, node_id, registry, context, 0) {
-    if let NetworkResult::Error(error) = result {
-      return NetworkResult::Error(error);
-    }
-    if let NetworkResult::IVec3(vec) = result {
-      min_corner = vec;
-    }
-  }
+  let min_corner = match network_evaluator.evaluate_or_default(
+    network_stack, node_id, registry, context, 0, 
+    cuboid_data.min_corner, 
+    NetworkResult::extract_ivec3
+  ) {
+    Ok(value) => value,
+    Err(error) => return error,
+  };
 
-  let mut extent = cuboid_data.extent;
-  if let Some(result) = network_evaluator.evaluate_single_arg(network_stack, node_id, registry, context, 1) {
-    if let NetworkResult::Error(error) = result {
-      return NetworkResult::Error(error);
-    }
-    if let NetworkResult::IVec3(vec) = result {
-      extent = vec;
-    }
-  }
+  let extent = match network_evaluator.evaluate_or_default(
+    network_stack, node_id, registry, context, 1, 
+    cuboid_data.extent, 
+    NetworkResult::extract_ivec3
+  ) {
+    Ok(value) => value,
+    Err(error) => return error,
+  };
 
   let real_min_corner = min_corner.as_dvec3();
   let real_extent = extent.as_dvec3();

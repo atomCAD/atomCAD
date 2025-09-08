@@ -255,6 +255,32 @@ impl NetworkEvaluator {
   }
 
 
+  /// Helper method for the common pattern: get value from node data, or override with input pin
+  /// Returns the input pin value if connected, otherwise returns the default value
+  /// If the input pin evaluation results in an error, returns that error
+  pub fn evaluate_or_default<'a, T>(
+    &self,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    parameter_index: usize,
+    default_value: T,
+    extractor: impl FnOnce(NetworkResult) -> Option<T>,
+  ) -> Result<T, NetworkResult> {
+    if let Some(result) = self.evaluate_single_arg(network_stack, node_id, registry, context, parameter_index) {
+      // Check for error first
+      if result.is_error() {
+        return Err(result);
+      }
+      // Try to extract the value
+      if let Some(value) = extractor(result) {
+        return Ok(value);
+      }
+    }
+    Ok(default_value)
+  }
+
   // Convenience helper method for the most common evaluation scenario:
   // evaluates a single argument and returns a single element of the result.
   // Returns None if the input was not connected.
