@@ -336,13 +336,13 @@ impl NetworkEvaluator {
     } else if node.node_type_name == "float" {
       vec![eval_float(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "ivec2" {
-      vec![eval_ivec2(network_stack, node_id, registry, context)]
+      vec![eval_ivec2(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "ivec3" {
-      vec![eval_ivec3(network_stack, node_id, registry, context)]
+      vec![eval_ivec3(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "vec2" {
-      vec![eval_vec2(network_stack, node_id, registry, context)]
+      vec![eval_vec2(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "vec3" {
-      vec![eval_vec3(network_stack, node_id, registry, context)]
+      vec![eval_vec3(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "circle" {
       vec![eval_circle(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "rect" {
