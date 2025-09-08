@@ -70,29 +70,6 @@ pub struct NodeInvocationId {
     node_id_stack: Vec<u64>,
 }
 
-impl NodeInvocationId {
-    pub fn new<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> Self {
-        let root_network_name = network_stack.first()
-            .map(|element| element.node_network.node_type.name.clone())
-            .unwrap_or_default();
-        
-        let mut node_id_stack = Vec::new();
-        
-        // Add node_id from all elements except the first one
-        for element in network_stack.iter().skip(1) {
-            node_id_stack.push(element.node_id);
-        }
-        
-        // Add the parameter node_id at the end
-        node_id_stack.push(node_id);
-        
-        NodeInvocationId {
-            root_network_name,
-            node_id_stack,
-        }
-    }
-}
-
 pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
   pub node_output_strings: HashMap<u64, String>,
@@ -285,7 +262,8 @@ impl NetworkEvaluator {
   pub fn evaluate_single_arg<'a>(
     &self,
     network_stack: &Vec<NetworkStackElement<'a>>,
-    node_id: u64, registry: &NodeTypeRegistry,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
     parameter_index: usize,
   ) -> Option<NetworkResult> {

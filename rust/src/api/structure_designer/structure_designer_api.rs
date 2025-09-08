@@ -190,6 +190,18 @@ pub fn add_node(node_type_name: &str, position: APIVec2) -> u64 {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn can_connect_nodes(source_node_id: u64, dest_node_id: u64, dest_param_index: usize) -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.can_connect_nodes(source_node_id, dest_node_id, dest_param_index)
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn connect_nodes(source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {

@@ -35,7 +35,11 @@ class PinViewWidget extends StatelessWidget {
   final bool multi;
   final String? outputString;
 
-  const PinViewWidget({super.key, required this.dataType, required this.multi, this.outputString});
+  const PinViewWidget(
+      {super.key,
+      required this.dataType,
+      required this.multi,
+      this.outputString});
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +79,8 @@ class PinWidget extends StatelessWidget {
   final PinReference pinReference;
   final bool multi;
   final String? outputString;
-  PinWidget({required this.pinReference, required this.multi, this.outputString})
+  PinWidget(
+      {required this.pinReference, required this.multi, this.outputString})
       : super(key: ValueKey(pinReference.pinIndex));
 
   RenderBox? _findNodeNetworkRenderBox(BuildContext context) {
@@ -105,7 +110,9 @@ class PinWidget extends StatelessWidget {
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
                 child: PinViewWidget(
-                    dataType: pinReference.dataType, multi: multi, outputString: outputString),
+                    dataType: pinReference.dataType,
+                    multi: multi,
+                    outputString: outputString),
               ),
             ),
             child: Container(
@@ -113,7 +120,9 @@ class PinWidget extends StatelessWidget {
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
                 child: PinViewWidget(
-                    dataType: pinReference.dataType, multi: multi, outputString: outputString),
+                    dataType: pinReference.dataType,
+                    multi: multi,
+                    outputString: outputString),
               ),
             ),
             onDragUpdate: (details) {
@@ -132,10 +141,8 @@ class PinWidget extends StatelessWidget {
           );
         },
         onWillAcceptWithDetails: (details) {
-          return details.data.dataType ==
-                  pinReference.dataType && // same data type
-              (details.data.pinIndex < 0) !=
-                  (pinReference.pinIndex < 0); // output to input
+          return Provider.of<StructureDesignerModel>(context, listen: false)
+              .canConnectPins(details.data, pinReference);
         },
         onAcceptWithDetails: (details) {
           //print("Connected pin ${details.data} to pin $pinReference");
@@ -367,5 +374,4 @@ class NodeWidget extends StatelessWidget {
       ],
     );
   }
-
 }

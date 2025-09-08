@@ -202,6 +202,17 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  bool canConnectPins(PinReference pin1, PinReference pin2) {
+    final outPin = pin1.pinIndex < 0 ? pin1 : pin2;
+    final inPin = pin1.pinIndex < 0 ? pin2 : pin1;
+
+    return structure_designer_api.canConnectNodes(
+      sourceNodeId: outPin.nodeId,
+      destNodeId: inPin.nodeId,
+      destParamIndex: BigInt.from(inPin.pinIndex),
+    );
+  }
+
   void connectPins(PinReference pin1, PinReference pin2) {
     final outPin = pin1.pinIndex < 0 ? pin1 : pin2;
     final inPin = pin1.pinIndex < 0 ? pin2 : pin1;

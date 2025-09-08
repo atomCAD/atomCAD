@@ -287,6 +287,22 @@ impl StructureDesigner {
     }
   }
 
+  pub fn can_connect_nodes(&self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) -> bool {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    
+    // Get the network
+    let network = match self.node_type_registry.node_networks.get(node_network_name) {
+      Some(network) => network,
+      None => return false,
+    };
+    
+    network.can_connect_nodes(source_node_id, dest_node_id, dest_param_index, &self.node_type_registry)
+  }
+
   pub fn connect_nodes(&mut self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
     // Early return if active_node_network_name is None
     let node_network_name = match &self.active_node_network_name {

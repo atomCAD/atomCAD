@@ -162,6 +162,33 @@ impl NodeNetwork {
     }
   }
 
+  pub fn can_connect_nodes(&self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize, node_type_registry: &crate::structure_designer::node_type_registry::NodeTypeRegistry) -> bool {
+    // Check if both nodes exist
+    let source_node = match self.nodes.get(&source_node_id) {
+      Some(node) => node,
+      None => return false,
+    };
+    
+    let dest_node = match self.nodes.get(&dest_node_id) {
+      Some(node) => node,
+      None => return false,
+    };
+    
+    // Check if the destination parameter index is valid
+    if dest_param_index >= dest_node.arguments.len() {
+      return false;
+    }
+    
+    // Get the output type of the source node
+    let source_output_type = node_type_registry.get_node_output_type(source_node);
+    
+    // Get the expected input type for the destination parameter
+    let dest_param_type = node_type_registry.get_node_param_data_type(dest_node, dest_param_index);
+    
+    // Check if the data types are compatible using conversion rules
+    node_type_registry.can_be_converted_to(source_output_type, dest_param_type)
+  }
+
   pub fn connect_nodes(&mut self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize, dest_param_is_multi: bool) {
     if let Some(dest_node) = self.nodes.get_mut(&dest_node_id) {
       let argument = &mut dest_node.arguments[dest_param_index];

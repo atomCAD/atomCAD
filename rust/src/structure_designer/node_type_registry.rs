@@ -577,6 +577,39 @@ impl NodeTypeRegistry {
     self.built_in_node_types.insert(node_type.name.clone(), node_type);
   }
   
+  /// Checks if a source data type can be converted to a destination data type
+  /// 
+  /// # Parameters
+  /// * `source_type` - The source data type
+  /// * `dest_type` - The destination data type
+  /// 
+  /// # Returns
+  /// True if the source type can be converted to the destination type
+  pub fn can_be_converted_to(&self, source_type: APIDataType, dest_type: APIDataType) -> bool {
+    // Same types are always compatible
+    if source_type == dest_type {
+      return true;
+    }
+    
+    // Define conversion rules
+    match (source_type, dest_type) {
+      // Int <-> Float conversions
+      (APIDataType::Int, APIDataType::Float) => true,
+      (APIDataType::Float, APIDataType::Int) => true,
+      
+      // IVec2 <-> Vec2 conversions
+      (APIDataType::IVec2, APIDataType::Vec2) => true,
+      (APIDataType::Vec2, APIDataType::IVec2) => true,
+      
+      // IVec3 <-> Vec3 conversions
+      (APIDataType::IVec3, APIDataType::Vec3) => true,
+      (APIDataType::Vec3, APIDataType::IVec3) => true,
+      
+      // All other combinations are not compatible
+      _ => false,
+    }
+  }
+
   /// Finds all networks that use the specified network as a node
   /// 
   /// # Parameters
