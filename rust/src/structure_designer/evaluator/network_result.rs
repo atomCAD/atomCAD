@@ -23,6 +23,7 @@ pub struct GeometrySummary {
 #[derive(Clone)]
 pub enum NetworkResult {
   None,
+  Bool(bool),
   Int(i32),
   Float(f64),
   Vec2(DVec2),
@@ -40,6 +41,7 @@ impl NetworkResult {
   pub fn get_data_type(&self) -> APIDataType {
     match self {
       NetworkResult::None => APIDataType::None,
+      NetworkResult::Bool(_) => APIDataType::Bool,
       NetworkResult::Int(_) => APIDataType::Int,
       NetworkResult::Float(_) => APIDataType::Float,
       NetworkResult::Vec2(_) => APIDataType::Vec2,
@@ -79,6 +81,14 @@ impl NetworkResult {
   pub fn extract_ivec2(self) -> Option<IVec2> {
     match self {
       NetworkResult::IVec2(vec) => Some(vec),
+      _ => None,
+    }
+  }
+
+  /// Extracts a Bool value from the NetworkResult, returns None if not a Bool
+  pub fn extract_bool(self) -> Option<bool> {
+    match self {
+      NetworkResult::Bool(value) => Some(value),
       _ => None,
     }
   }
@@ -131,6 +141,16 @@ impl NetworkResult {
 
     // Perform conversions
     match (self, target_type) {
+      // Bool -> Int
+      (NetworkResult::Bool(value), APIDataType::Int) => {
+        NetworkResult::Int(if value { 1 } else { 0 })
+      }
+      
+      // Int -> Bool (0 = false, non-zero = true)
+      (NetworkResult::Int(value), APIDataType::Bool) => {
+        NetworkResult::Bool(value != 0)
+      }
+      
       // Int -> Float
       (NetworkResult::Int(value), APIDataType::Float) => {
         NetworkResult::Float(value as f64)
@@ -177,6 +197,7 @@ impl NetworkResult {
   pub fn to_display_string(&self) -> Option<String> {
     match self {
       NetworkResult::None => None,
+      NetworkResult::Bool(value) => Some(value.to_string()),
       NetworkResult::Int(value) => Some(value.to_string()),
       NetworkResult::Float(value) => Some(format!("{:.6}", value)),
       NetworkResult::Vec2(vec) => Some(format!("({:.6}, {:.6})", vec.x, vec.y)),

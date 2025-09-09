@@ -17,6 +17,7 @@ pub enum APIEditAtomTool {
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum APIDataType {
   None,
+  Bool,
   Int,
   Float,
   Vec2,
