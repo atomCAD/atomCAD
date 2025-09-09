@@ -38,6 +38,10 @@ impl Parser {
           Token::Caret => Some((70, 69)), // right-assoc: use lower rbp
           Token::Star | Token::Slash => Some((60, 61)),
           Token::Plus | Token::Minus => Some((50, 51)),
+          Token::Lt | Token::Le | Token::Gt | Token::Ge => Some((40, 41)),
+          Token::EqEq | Token::Ne => Some((30, 31)),
+          Token::And => Some((20, 21)),
+          Token::Or => Some((10, 11)),
           _ => None,
       }
   }
@@ -46,6 +50,7 @@ impl Parser {
       // parse prefix / primary
       let mut lhs = match self.bump() {
           Token::Number(n) => Expr::Number(n),
+          Token::Bool(b) => Expr::Bool(b),
           Token::Ident(name) => {
               // var or call
               if let Token::LParen = self.peek() {
@@ -86,6 +91,11 @@ impl Parser {
               let rhs = self.parse_bp(100)?;
               Expr::Unary(UnOp::Neg, Box::new(rhs))
           }
+          Token::Not => {
+              // unary not
+              let rhs = self.parse_bp(100)?;
+              Expr::Unary(UnOp::Not, Box::new(rhs))
+          }
           other => return Err(format!("Unexpected token in prefix: {:?}", other)),
       };
 
@@ -103,6 +113,14 @@ impl Parser {
                   Token::Star => BinOp::Mul,
                   Token::Slash => BinOp::Div,
                   Token::Caret => BinOp::Pow,
+                  Token::EqEq => BinOp::Eq,
+                  Token::Ne => BinOp::Ne,
+                  Token::Lt => BinOp::Lt,
+                  Token::Le => BinOp::Le,
+                  Token::Gt => BinOp::Gt,
+                  Token::Ge => BinOp::Ge,
+                  Token::And => BinOp::And,
+                  Token::Or => BinOp::Or,
                   _ => unreachable!(),
               };
               lhs = Expr::Binary(Box::new(lhs), binop, Box::new(rhs));

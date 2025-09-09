@@ -100,6 +100,66 @@ mod lexer_tests {
         let tokens = tokenize("");
         assert_eq!(tokens, vec![Token::Eof]);
     }
+
+    #[test]
+    fn test_tokenize_boolean_literals() {
+        let tokens = tokenize("true");
+        assert_eq!(tokens, vec![Token::Bool(true), Token::Eof]);
+
+        let tokens = tokenize("false");
+        assert_eq!(tokens, vec![Token::Bool(false), Token::Eof]);
+    }
+
+    #[test]
+    fn test_tokenize_comparison_operators() {
+        let tokens = tokenize("== != < <= > >=");
+        assert_eq!(tokens, vec![
+            Token::EqEq,
+            Token::Ne,
+            Token::Lt,
+            Token::Le,
+            Token::Gt,
+            Token::Ge,
+            Token::Eof
+        ]);
+    }
+
+    #[test]
+    fn test_tokenize_logical_operators() {
+        let tokens = tokenize("&& || !");
+        assert_eq!(tokens, vec![
+            Token::And,
+            Token::Or,
+            Token::Not,
+            Token::Eof
+        ]);
+    }
+
+    #[test]
+    fn test_tokenize_boolean_expressions() {
+        let tokens = tokenize("x == 5 && !flag");
+        assert_eq!(tokens, vec![
+            Token::Ident("x".to_string()),
+            Token::EqEq,
+            Token::Number(5.0),
+            Token::And,
+            Token::Not,
+            Token::Ident("flag".to_string()),
+            Token::Eof
+        ]);
+
+        let tokens = tokenize("a <= b || c != d");
+        assert_eq!(tokens, vec![
+            Token::Ident("a".to_string()),
+            Token::Le,
+            Token::Ident("b".to_string()),
+            Token::Or,
+            Token::Ident("c".to_string()),
+            Token::Ne,
+            Token::Ident("d".to_string()),
+            Token::Eof
+        ]);
+    }
 }
 
 mod parser_tests {
@@ -271,5 +331,104 @@ mod parser_tests {
         let expr1 = parse("x+y").unwrap();
         let expr2 = parse("  x  +  y  ").unwrap();
         assert_eq!(expr1.to_prefix_string(), expr2.to_prefix_string());
+    }
+
+    #[test]
+    fn test_parse_boolean_literals() {
+        let expr = parse("true").unwrap();
+        assert_eq!(expr.to_prefix_string(), "true");
+
+        let expr = parse("false").unwrap();
+        assert_eq!(expr.to_prefix_string(), "false");
+    }
+
+    #[test]
+    fn test_parse_comparison_operators() {
+        let expr = parse("x == y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(== x y)");
+
+        let expr = parse("a != b").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(!= a b)");
+
+        let expr = parse("x < y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(< x y)");
+
+        let expr = parse("a <= b").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(<= a b)");
+
+        let expr = parse("x > y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(> x y)");
+
+        let expr = parse("a >= b").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(>= a b)");
+    }
+
+    #[test]
+    fn test_parse_logical_operators() {
+        let expr = parse("x && y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(&& x y)");
+
+        let expr = parse("a || b").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(|| a b)");
+
+        let expr = parse("!x").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(not x)");
+
+        let expr = parse("!!x").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(not (not x))");
+    }
+
+    #[test]
+    fn test_parse_boolean_precedence() {
+        // Comparison has higher precedence than logical AND
+        let expr = parse("x < 5 && y > 3").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(&& (< x 5) (> y 3))");
+
+        // Logical AND has higher precedence than logical OR
+        let expr = parse("a || b && c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(|| a (&& b c))");
+
+        // Arithmetic has higher precedence than comparison
+        let expr = parse("x + 1 > y * 2").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(> (+ x 1) (* y 2))");
+
+        // Equality has lower precedence than comparison
+        let expr = parse("x < y == a > b").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(== (< x y) (> a b))");
+    }
+
+    #[test]
+    fn test_parse_boolean_associativity() {
+        // Logical operators are left associative
+        let expr = parse("a && b && c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(&& (&& a b) c)");
+
+        let expr = parse("a || b || c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(|| (|| a b) c)");
+
+        // Comparison operators are left associative
+        let expr = parse("a < b < c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(< (< a b) c)");
+    }
+
+    #[test]
+    fn test_parse_complex_boolean_expressions() {
+        let expr = parse("!flag && (x > 0 || y < 10)").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(&& (not flag) (|| (> x 0) (< y 10)))");
+
+        let expr = parse("a == b && c != d || e >= f").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(|| (&& (== a b) (!= c d)) (>= e f))");
+
+        let expr = parse("x + y > z && !done").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(&& (> (+ x y) z) (not done))");
+    }
+
+    #[test]
+    fn test_parse_mixed_arithmetic_boolean() {
+        let expr = parse("2 * x + 1 == y ^ 2").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(== (+ (* 2 x) 1) (^ y 2))");
+
+        let expr = parse("sin(x) > 0.5 && cos(y) < 0.8").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(&& (> (call sin x) 0.5) (< (call cos y) 0.8))");
     }
 }

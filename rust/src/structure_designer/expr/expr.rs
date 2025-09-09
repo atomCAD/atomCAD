@@ -2,16 +2,22 @@
 pub enum UnOp {
     Neg,
     Pos,
+    Not,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinOp {
     Add, Sub, Mul, Div, Pow,
+    // Comparison operators
+    Eq, Ne, Lt, Le, Gt, Ge,
+    // Logical operators
+    And, Or,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
     Number(f64),
+    Bool(bool),
     Var(String),
     Unary(UnOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
@@ -23,11 +29,13 @@ impl Expr {
     pub fn to_prefix_string(&self) -> String {
         match self {
             Expr::Number(n) => n.to_string(),
+            Expr::Bool(b) => b.to_string(),
             Expr::Var(name) => name.clone(),
             Expr::Unary(op, expr) => {
                 let op_str = match op {
                     UnOp::Neg => "neg",
                     UnOp::Pos => "pos",
+                    UnOp::Not => "not",
                 };
                 format!("({} {})", op_str, expr.to_prefix_string())
             }
@@ -38,6 +46,14 @@ impl Expr {
                     BinOp::Mul => "*",
                     BinOp::Div => "/",
                     BinOp::Pow => "^",
+                    BinOp::Eq => "==",
+                    BinOp::Ne => "!=",
+                    BinOp::Lt => "<",
+                    BinOp::Le => "<=",
+                    BinOp::Gt => ">",
+                    BinOp::Ge => ">=",
+                    BinOp::And => "&&",
+                    BinOp::Or => "||",
                 };
                 format!("({} {} {})", op_str, left.to_prefix_string(), right.to_prefix_string())
             }

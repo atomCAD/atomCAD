@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Number(f64),
+    Bool(bool),
     Ident(String),
     Plus,
     Minus,
@@ -10,6 +11,17 @@ pub enum Token {
     LParen,
     RParen,
     Comma,
+    // Comparison operators
+    EqEq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    // Logical operators
+    And,
+    Or,
+    Not,
     Eof,
 }
 
@@ -75,7 +87,11 @@ impl<'a> Lexer<'a> {
             }
             Some(c) if c.is_ascii_alphabetic() || c == '_' => {
                 let id = self.eat_while(|ch| ch.is_ascii_alphanumeric() || ch == '_');
-                Token::Ident(id)
+                match id.as_str() {
+                    "true" => Token::Bool(true),
+                    "false" => Token::Bool(false),
+                    _ => Token::Ident(id),
+                }
             }
             Some('+') => { self.i += 1; Token::Plus }
             Some('-') => { self.i += 1; Token::Minus }
@@ -85,6 +101,63 @@ impl<'a> Lexer<'a> {
             Some('(') => { self.i += 1; Token::LParen }
             Some(')') => { self.i += 1; Token::RParen }
             Some(',') => { self.i += 1; Token::Comma }
+            Some('=') => {
+                self.i += 1;
+                if let Some('=') = self.peek() {
+                    self.i += 1;
+                    Token::EqEq
+                } else {
+                    // Single '=' is not a valid token in our language
+                    Token::Eof
+                }
+            }
+            Some('!') => {
+                self.i += 1;
+                if let Some('=') = self.peek() {
+                    self.i += 1;
+                    Token::Ne
+                } else {
+                    Token::Not
+                }
+            }
+            Some('<') => {
+                self.i += 1;
+                if let Some('=') = self.peek() {
+                    self.i += 1;
+                    Token::Le
+                } else {
+                    Token::Lt
+                }
+            }
+            Some('>') => {
+                self.i += 1;
+                if let Some('=') = self.peek() {
+                    self.i += 1;
+                    Token::Ge
+                } else {
+                    Token::Gt
+                }
+            }
+            Some('&') => {
+                self.i += 1;
+                if let Some('&') = self.peek() {
+                    self.i += 1;
+                    Token::And
+                } else {
+                    // Single '&' is not valid in our language
+                    Token::Eof
+                }
+            }
+            Some('|') => {
+                self.i += 1;
+                if let Some('|') = self.peek() {
+                    self.i += 1;
+                    Token::Or
+                } else {
+                    // Single '|' is not valid in our language
+                    Token::Eof
+                }
+            }
             Some(other) => {
                 self.i += 1;
                 // unknown char -> skip
