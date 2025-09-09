@@ -19,13 +19,15 @@ pub enum BinOp {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Number(f64),
+    Int(i32),
+    Float(f64),
     Bool(bool),
     Var(String),
     Unary(UnOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
     Call(String, Vec<Expr>),
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>), // if condition then expr1 else expr2
+    MemberAccess(Box<Expr>, String), // expr.member (e.g., vec.x, vec.y, vec.z)
 }
 
 impl Expr {
@@ -33,7 +35,8 @@ impl Expr {
     pub fn validate(&self, context: &crate::structure_designer::expr::validation::ValidationContext) -> Result<APIDataType, String> {
         
         match self {
-            Expr::Number(_) => Ok(APIDataType::Float),
+            Expr::Int(_) => Ok(APIDataType::Int),
+            Expr::Float(_) => Ok(APIDataType::Float),
             Expr::Bool(_) => Ok(APIDataType::Bool),
             Expr::Var(name) => {
                 context.variables.get(name)
@@ -66,10 +69,34 @@ impl Expr {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Pow => {
                         // Arithmetic operations
                         match (left_type, right_type) {
+                            // Scalar arithmetic
                             (APIDataType::Int, APIDataType::Int) => Ok(APIDataType::Int),
                             (APIDataType::Float, APIDataType::Float) => Ok(APIDataType::Float),
                             (APIDataType::Int, APIDataType::Float) | (APIDataType::Float, APIDataType::Int) => Ok(APIDataType::Float),
-                            _ => Err(format!("Arithmetic operation {:?} requires numeric types, got {:?} and {:?}", op, left_type, right_type))
+                            
+                            // Vector-vector arithmetic (component-wise)
+                            (APIDataType::Vec2, APIDataType::Vec2) => Ok(APIDataType::Vec2),
+                            (APIDataType::Vec3, APIDataType::Vec3) => Ok(APIDataType::Vec3),
+                            (APIDataType::IVec2, APIDataType::IVec2) => Ok(APIDataType::IVec2),
+                            (APIDataType::IVec3, APIDataType::IVec3) => Ok(APIDataType::IVec3),
+                            
+                            // Vector type promotion (ivec + vec → vec)
+                            (APIDataType::IVec2, APIDataType::Vec2) | (APIDataType::Vec2, APIDataType::IVec2) => Ok(APIDataType::Vec2),
+                            (APIDataType::IVec3, APIDataType::Vec3) | (APIDataType::Vec3, APIDataType::IVec3) => Ok(APIDataType::Vec3),
+                            
+                            // Vector-scalar operations (only for Mul and Div)
+                            (APIDataType::Vec2, APIDataType::Float) | (APIDataType::Float, APIDataType::Vec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec2),
+                            (APIDataType::Vec3, APIDataType::Float) | (APIDataType::Float, APIDataType::Vec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec3),
+                            (APIDataType::IVec2, APIDataType::Int) | (APIDataType::Int, APIDataType::IVec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::IVec2),
+                            (APIDataType::IVec3, APIDataType::Int) | (APIDataType::Int, APIDataType::IVec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::IVec3),
+                            
+                            // Mixed vector-scalar with promotion
+                            (APIDataType::Vec2, APIDataType::Int) | (APIDataType::Int, APIDataType::Vec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec2),
+                            (APIDataType::Vec3, APIDataType::Int) | (APIDataType::Int, APIDataType::Vec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec3),
+                            (APIDataType::IVec2, APIDataType::Float) | (APIDataType::Float, APIDataType::IVec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec2),
+                            (APIDataType::IVec3, APIDataType::Float) | (APIDataType::Float, APIDataType::IVec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec3),
+                            
+                            _ => Err(format!("Arithmetic operation {:?} not supported for types {:?} and {:?}", op, left_type, right_type))
                         }
                     }
                     BinOp::Eq | BinOp::Ne => {
@@ -145,6 +172,20 @@ impl Expr {
                     Err(format!("Conditional branches have incompatible types: {:?} and {:?}", then_type, else_type))
                 }
             }
+            Expr::MemberAccess(expr, member) => {
+                let expr_type = expr.validate(context)?;
+                match (expr_type, member.as_str()) {
+                    // Vec2 components
+                    (APIDataType::Vec2, "x" | "y") => Ok(APIDataType::Float),
+                    // Vec3 components
+                    (APIDataType::Vec3, "x" | "y" | "z") => Ok(APIDataType::Float),
+                    // IVec2 components
+                    (APIDataType::IVec2, "x" | "y") => Ok(APIDataType::Int),
+                    // IVec3 components
+                    (APIDataType::IVec3, "x" | "y" | "z") => Ok(APIDataType::Int),
+                    _ => Err(format!("Type {:?} does not have member '{}'", expr_type, member))
+                }
+            }
         }
     }
     
@@ -152,7 +193,8 @@ impl Expr {
     pub fn evaluate(&self, context: &crate::structure_designer::expr::validation::EvaluationContext) -> NetworkResult {
         
         match self {
-            Expr::Number(n) => NetworkResult::Float(*n),
+            Expr::Int(n) => NetworkResult::Int(*n),
+            Expr::Float(n) => NetworkResult::Float(*n),
             Expr::Bool(b) => NetworkResult::Bool(*b),
             Expr::Var(name) => {
                 context.variables.get(name)
@@ -237,6 +279,30 @@ impl Expr {
                     else_expr.evaluate(context)
                 }
             }
+            Expr::MemberAccess(expr, member) => {
+                let value = expr.evaluate(context);
+                if let NetworkResult::Error(_) = value {
+                    return value;
+                }
+                
+                match (value, member.as_str()) {
+                    // Vec2 components
+                    (NetworkResult::Vec2(vec), "x") => NetworkResult::Float(vec.x),
+                    (NetworkResult::Vec2(vec), "y") => NetworkResult::Float(vec.y),
+                    // Vec3 components
+                    (NetworkResult::Vec3(vec), "x") => NetworkResult::Float(vec.x),
+                    (NetworkResult::Vec3(vec), "y") => NetworkResult::Float(vec.y),
+                    (NetworkResult::Vec3(vec), "z") => NetworkResult::Float(vec.z),
+                    // IVec2 components
+                    (NetworkResult::IVec2(vec), "x") => NetworkResult::Int(vec.x),
+                    (NetworkResult::IVec2(vec), "y") => NetworkResult::Int(vec.y),
+                    // IVec3 components
+                    (NetworkResult::IVec3(vec), "x") => NetworkResult::Int(vec.x),
+                    (NetworkResult::IVec3(vec), "y") => NetworkResult::Int(vec.y),
+                    (NetworkResult::IVec3(vec), "z") => NetworkResult::Int(vec.z),
+                    _ => NetworkResult::Error(format!("Cannot access member '{}' on value", member))
+                }
+            }
         }
     }
     
@@ -249,6 +315,9 @@ impl Expr {
             (APIDataType::Int, APIDataType::Float) | (APIDataType::Float, APIDataType::Int) => true,
             // Bool and Int are compatible for logical operations
             (APIDataType::Bool, APIDataType::Int) | (APIDataType::Int, APIDataType::Bool) => true,
+            // Vector type compatibility (for comparisons)
+            (APIDataType::IVec2, APIDataType::Vec2) | (APIDataType::Vec2, APIDataType::IVec2) => true,
+            (APIDataType::IVec3, APIDataType::Vec3) | (APIDataType::Vec3, APIDataType::IVec3) => true,
             _ => false
         }
     }
@@ -261,37 +330,17 @@ impl Expr {
             BinOp::Sub => Self::arithmetic_op(left, right, |a, b| a - b, |a, b| a - b),
             BinOp::Mul => Self::arithmetic_op(left, right, |a, b| a * b, |a, b| a * b),
             BinOp::Div => {
-                match (left, right) {
-                    (NetworkResult::Int(a), NetworkResult::Int(b)) => {
-                        if b == 0 {
-                            NetworkResult::Error("Division by zero".to_string())
-                        } else {
-                            NetworkResult::Int(a / b)
-                        }
+                // Check for division by zero first
+                match &right {
+                    NetworkResult::Int(0) => {
+                        return NetworkResult::Error("Division by zero".to_string());
                     }
-                    (NetworkResult::Float(a), NetworkResult::Float(b)) => {
-                        if b == 0.0 {
-                            NetworkResult::Error("Division by zero".to_string())
-                        } else {
-                            NetworkResult::Float(a / b)
-                        }
+                    NetworkResult::Float(f) if *f == 0.0 => {
+                        return NetworkResult::Error("Division by zero".to_string());
                     }
-                    (NetworkResult::Int(a), NetworkResult::Float(b)) => {
-                        if b == 0.0 {
-                            NetworkResult::Error("Division by zero".to_string())
-                        } else {
-                            NetworkResult::Float(a as f64 / b)
-                        }
-                    }
-                    (NetworkResult::Float(a), NetworkResult::Int(b)) => {
-                        if b == 0 {
-                            NetworkResult::Error("Division by zero".to_string())
-                        } else {
-                            NetworkResult::Float(a / b as f64)
-                        }
-                    }
-                    _ => NetworkResult::Error("Division requires numeric types".to_string())
+                    _ => {}
                 }
+                Self::arithmetic_op(left, right, |a, b| a / b, |a, b| a / b)
             }
             BinOp::Pow => Self::arithmetic_op(left, right, |a, b| a.pow(b as u32), |a, b| a.powf(b)),
             BinOp::Eq => Self::comparison_op(left, right, |a, b| a == b, |a, b| (a - b).abs() < f64::EPSILON),
@@ -308,16 +357,100 @@ impl Expr {
     /// Helper for arithmetic operations
     fn arithmetic_op<F1, F2>(left: NetworkResult, right: NetworkResult, int_op: F1, float_op: F2) -> NetworkResult
     where
-        F1: FnOnce(i32, i32) -> i32,
-        F2: FnOnce(f64, f64) -> f64,
+        F1: Fn(i32, i32) -> i32,
+        F2: Fn(f64, f64) -> f64,
     {
+        use glam::f64::{DVec2, DVec3};
+        use glam::i32::{IVec2, IVec3};
         
         match (left, right) {
+            // Scalar operations
             (NetworkResult::Int(a), NetworkResult::Int(b)) => NetworkResult::Int(int_op(a, b)),
             (NetworkResult::Float(a), NetworkResult::Float(b)) => NetworkResult::Float(float_op(a, b)),
             (NetworkResult::Int(a), NetworkResult::Float(b)) => NetworkResult::Float(float_op(a as f64, b)),
             (NetworkResult::Float(a), NetworkResult::Int(b)) => NetworkResult::Float(float_op(a, b as f64)),
-            _ => NetworkResult::Error("Arithmetic operation requires numeric types".to_string())
+            
+            // Vector-vector operations (component-wise)
+            (NetworkResult::Vec2(a), NetworkResult::Vec2(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a.x, b.x), float_op(a.y, b.y)))
+            }
+            (NetworkResult::Vec3(a), NetworkResult::Vec3(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a.x, b.x), float_op(a.y, b.y), float_op(a.z, b.z)))
+            }
+            (NetworkResult::IVec2(a), NetworkResult::IVec2(b)) => {
+                NetworkResult::IVec2(IVec2::new(int_op(a.x, b.x), int_op(a.y, b.y)))
+            }
+            (NetworkResult::IVec3(a), NetworkResult::IVec3(b)) => {
+                NetworkResult::IVec3(IVec3::new(int_op(a.x, b.x), int_op(a.y, b.y), int_op(a.z, b.z)))
+            }
+            
+            // Vector type promotion (ivec + vec → vec)
+            (NetworkResult::IVec2(a), NetworkResult::Vec2(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a.x as f64, b.x), float_op(a.y as f64, b.y)))
+            }
+            (NetworkResult::Vec2(a), NetworkResult::IVec2(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a.x, b.x as f64), float_op(a.y, b.y as f64)))
+            }
+            (NetworkResult::IVec3(a), NetworkResult::Vec3(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a.x as f64, b.x), float_op(a.y as f64, b.y), float_op(a.z as f64, b.z)))
+            }
+            (NetworkResult::Vec3(a), NetworkResult::IVec3(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a.x, b.x as f64), float_op(a.y, b.y as f64), float_op(a.z, b.z as f64)))
+            }
+            
+            // Vector-scalar operations (only for multiplication and division)
+            (NetworkResult::Vec2(a), NetworkResult::Float(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a.x, b), float_op(a.y, b)))
+            }
+            (NetworkResult::Float(a), NetworkResult::Vec2(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a, b.x), float_op(a, b.y)))
+            }
+            (NetworkResult::Vec3(a), NetworkResult::Float(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a.x, b), float_op(a.y, b), float_op(a.z, b)))
+            }
+            (NetworkResult::Float(a), NetworkResult::Vec3(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a, b.x), float_op(a, b.y), float_op(a, b.z)))
+            }
+            (NetworkResult::IVec2(a), NetworkResult::Int(b)) => {
+                NetworkResult::IVec2(IVec2::new(int_op(a.x, b), int_op(a.y, b)))
+            }
+            (NetworkResult::Int(a), NetworkResult::IVec2(b)) => {
+                NetworkResult::IVec2(IVec2::new(int_op(a, b.x), int_op(a, b.y)))
+            }
+            (NetworkResult::IVec3(a), NetworkResult::Int(b)) => {
+                NetworkResult::IVec3(IVec3::new(int_op(a.x, b), int_op(a.y, b), int_op(a.z, b)))
+            }
+            (NetworkResult::Int(a), NetworkResult::IVec3(b)) => {
+                NetworkResult::IVec3(IVec3::new(int_op(a, b.x), int_op(a, b.y), int_op(a, b.z)))
+            }
+            
+            // Mixed vector-scalar with promotion
+            (NetworkResult::Vec2(a), NetworkResult::Int(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a.x, b as f64), float_op(a.y, b as f64)))
+            }
+            (NetworkResult::Int(a), NetworkResult::Vec2(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a as f64, b.x), float_op(a as f64, b.y)))
+            }
+            (NetworkResult::Vec3(a), NetworkResult::Int(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a.x, b as f64), float_op(a.y, b as f64), float_op(a.z, b as f64)))
+            }
+            (NetworkResult::Int(a), NetworkResult::Vec3(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a as f64, b.x), float_op(a as f64, b.y), float_op(a as f64, b.z)))
+            }
+            (NetworkResult::IVec2(a), NetworkResult::Float(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a.x as f64, b), float_op(a.y as f64, b)))
+            }
+            (NetworkResult::Float(a), NetworkResult::IVec2(b)) => {
+                NetworkResult::Vec2(DVec2::new(float_op(a, b.x as f64), float_op(a, b.y as f64)))
+            }
+            (NetworkResult::IVec3(a), NetworkResult::Float(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a.x as f64, b), float_op(a.y as f64, b), float_op(a.z as f64, b)))
+            }
+            (NetworkResult::Float(a), NetworkResult::IVec3(b)) => {
+                NetworkResult::Vec3(DVec3::new(float_op(a, b.x as f64), float_op(a, b.y as f64), float_op(a, b.z as f64)))
+            }
+            
+            _ => NetworkResult::Error("Arithmetic operation not supported for these types".to_string())
         }
     }
     
@@ -362,7 +495,8 @@ impl Expr {
     /// Convert the expression to prefix notation string representation
     pub fn to_prefix_string(&self) -> String {
         match self {
-            Expr::Number(n) => n.to_string(),
+            Expr::Int(n) => n.to_string(),
+            Expr::Float(n) => n.to_string(),
             Expr::Bool(b) => b.to_string(),
             Expr::Var(name) => name.clone(),
             Expr::Unary(op, expr) => {
@@ -407,6 +541,9 @@ impl Expr {
                     condition.to_prefix_string(), 
                     then_expr.to_prefix_string(), 
                     else_expr.to_prefix_string())
+            }
+            Expr::MemberAccess(expr, member) => {
+                format!("({}.{})", expr.to_prefix_string(), member)
             }
         }
     }

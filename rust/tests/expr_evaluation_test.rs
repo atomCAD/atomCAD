@@ -9,7 +9,7 @@ mod evaluation_tests {
 
     #[test]
     fn test_number_evaluation() {
-        let expr = Expr::Number(42.5);
+        let expr = Expr::Float(42.5);
         let context = EvaluationContext::new();
         
         let result = expr.evaluate(&context);
@@ -59,9 +59,9 @@ mod evaluation_tests {
     #[test]
     fn test_arithmetic_addition() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(5.0)),
+            Box::new(Expr::Float(5.0)),
             BinOp::Add,
-            Box::new(Expr::Number(3.0))
+            Box::new(Expr::Float(3.0))
         );
         let context = EvaluationContext::new();
         
@@ -75,9 +75,9 @@ mod evaluation_tests {
     #[test]
     fn test_arithmetic_subtraction() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(10.0)),
+            Box::new(Expr::Float(10.0)),
             BinOp::Sub,
-            Box::new(Expr::Number(3.0))
+            Box::new(Expr::Float(3.0))
         );
         let context = EvaluationContext::new();
         
@@ -91,9 +91,9 @@ mod evaluation_tests {
     #[test]
     fn test_arithmetic_multiplication() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(4.0)),
+            Box::new(Expr::Float(4.0)),
             BinOp::Mul,
-            Box::new(Expr::Number(2.5))
+            Box::new(Expr::Float(2.5))
         );
         let context = EvaluationContext::new();
         
@@ -107,9 +107,9 @@ mod evaluation_tests {
     #[test]
     fn test_arithmetic_division() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(15.0)),
+            Box::new(Expr::Float(15.0)),
             BinOp::Div,
-            Box::new(Expr::Number(3.0))
+            Box::new(Expr::Float(3.0))
         );
         let context = EvaluationContext::new();
         
@@ -123,9 +123,9 @@ mod evaluation_tests {
     #[test]
     fn test_division_by_zero() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(10.0)),
+            Box::new(Expr::Float(10.0)),
             BinOp::Div,
-            Box::new(Expr::Number(0.0))
+            Box::new(Expr::Float(0.0))
         );
         let context = EvaluationContext::new();
         
@@ -139,9 +139,9 @@ mod evaluation_tests {
     #[test]
     fn test_arithmetic_power() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(2.0)),
+            Box::new(Expr::Float(2.0)),
             BinOp::Pow,
-            Box::new(Expr::Number(3.0))
+            Box::new(Expr::Float(3.0))
         );
         let context = EvaluationContext::new();
         
@@ -155,9 +155,9 @@ mod evaluation_tests {
     #[test]
     fn test_comparison_less_than() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(3.0)),
+            Box::new(Expr::Float(3.0)),
             BinOp::Lt,
-            Box::new(Expr::Number(5.0))
+            Box::new(Expr::Float(5.0))
         );
         let context = EvaluationContext::new();
         
@@ -171,9 +171,9 @@ mod evaluation_tests {
     #[test]
     fn test_comparison_greater_than() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(7.0)),
+            Box::new(Expr::Float(7.0)),
             BinOp::Gt,
-            Box::new(Expr::Number(5.0))
+            Box::new(Expr::Float(5.0))
         );
         let context = EvaluationContext::new();
         
@@ -187,9 +187,9 @@ mod evaluation_tests {
     #[test]
     fn test_comparison_equality() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(5.0)),
+            Box::new(Expr::Float(5.0)),
             BinOp::Eq,
-            Box::new(Expr::Number(5.0))
+            Box::new(Expr::Float(5.0))
         );
         let context = EvaluationContext::new();
         
@@ -203,9 +203,9 @@ mod evaluation_tests {
     #[test]
     fn test_comparison_inequality() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(3.0)),
+            Box::new(Expr::Float(3.0)),
             BinOp::Ne,
-            Box::new(Expr::Number(5.0))
+            Box::new(Expr::Float(5.0))
         );
         let context = EvaluationContext::new();
         
@@ -284,7 +284,7 @@ mod evaluation_tests {
     fn test_unary_negation() {
         let expr = Expr::Unary(
             UnOp::Neg,
-            Box::new(Expr::Number(42.0))
+            Box::new(Expr::Float(42.0))
         );
         let context = EvaluationContext::new();
         
@@ -299,7 +299,7 @@ mod evaluation_tests {
     fn test_unary_positive() {
         let expr = Expr::Unary(
             UnOp::Pos,
-            Box::new(Expr::Number(42.0))
+            Box::new(Expr::Float(42.0))
         );
         let context = EvaluationContext::new();
         
@@ -344,7 +344,7 @@ mod evaluation_tests {
     fn test_function_call_sin() {
         let expr = Expr::Call(
             "sin".to_string(),
-            vec![Expr::Number(0.0)]
+            vec![Expr::Float(0.0)]
         );
         let context = EvaluationContext::with_standard_functions();
         
@@ -359,7 +359,7 @@ mod evaluation_tests {
     fn test_function_call_sqrt() {
         let expr = Expr::Call(
             "sqrt".to_string(),
-            vec![Expr::Number(16.0)]
+            vec![Expr::Float(16.0)]
         );
         let context = EvaluationContext::with_standard_functions();
         
@@ -374,7 +374,7 @@ mod evaluation_tests {
     fn test_function_call_sqrt_negative() {
         let expr = Expr::Call(
             "sqrt".to_string(),
-            vec![Expr::Number(-1.0)]
+            vec![Expr::Float(-1.0)]
         );
         let context = EvaluationContext::with_standard_functions();
         
@@ -389,7 +389,7 @@ mod evaluation_tests {
     fn test_function_call_unknown() {
         let expr = Expr::Call(
             "unknown_func".to_string(),
-            vec![Expr::Number(1.0)]
+            vec![Expr::Float(1.0)]
         );
         let context = EvaluationContext::new();
         
@@ -404,8 +404,8 @@ mod evaluation_tests {
     fn test_conditional_true_branch() {
         let expr = Expr::Conditional(
             Box::new(Expr::Bool(true)),
-            Box::new(Expr::Number(42.0)),
-            Box::new(Expr::Number(24.0))
+            Box::new(Expr::Float(42.0)),
+            Box::new(Expr::Float(24.0))
         );
         let context = EvaluationContext::new();
         
@@ -420,8 +420,8 @@ mod evaluation_tests {
     fn test_conditional_false_branch() {
         let expr = Expr::Conditional(
             Box::new(Expr::Bool(false)),
-            Box::new(Expr::Number(42.0)),
-            Box::new(Expr::Number(24.0))
+            Box::new(Expr::Float(42.0)),
+            Box::new(Expr::Float(24.0))
         );
         let context = EvaluationContext::new();
         
@@ -443,7 +443,7 @@ mod evaluation_tests {
             Box::new(Expr::Binary(
                 Box::new(Expr::Var("x".to_string())),
                 BinOp::Add,
-                Box::new(Expr::Number(2.0))
+                Box::new(Expr::Float(2.0))
             )),
             BinOp::Mul,
             Box::new(Expr::Call(
@@ -469,10 +469,10 @@ mod evaluation_tests {
             Box::new(Expr::Bool(true)),
             Box::new(Expr::Conditional(
                 Box::new(Expr::Bool(false)),
-                Box::new(Expr::Number(1.0)),
-                Box::new(Expr::Number(2.0))
+                Box::new(Expr::Float(1.0)),
+                Box::new(Expr::Float(2.0))
             )),
-            Box::new(Expr::Number(3.0))
+            Box::new(Expr::Float(3.0))
         );
         let context = EvaluationContext::new();
         
@@ -488,12 +488,12 @@ mod evaluation_tests {
         // Division by zero should propagate through complex expressions
         let expr = Expr::Binary(
             Box::new(Expr::Binary(
-                Box::new(Expr::Number(10.0)),
+                Box::new(Expr::Float(10.0)),
                 BinOp::Div,
-                Box::new(Expr::Number(0.0)) // Division by zero
+                Box::new(Expr::Float(0.0)) // Division by zero
             )),
             BinOp::Add,
-            Box::new(Expr::Number(5.0))
+            Box::new(Expr::Float(5.0))
         );
         let context = EvaluationContext::new();
         

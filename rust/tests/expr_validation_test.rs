@@ -9,7 +9,7 @@ mod validation_tests {
 
     #[test]
     fn test_number_validation() {
-        let expr = Expr::Number(42.0);
+        let expr = Expr::Float(42.0);
         let context = ValidationContext::new();
         
         let result = expr.validate(&context);
@@ -48,9 +48,9 @@ mod validation_tests {
     #[test]
     fn test_arithmetic_validation_int_int() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(5.0)),
+            Box::new(Expr::Float(5.0)),
             BinOp::Add,
-            Box::new(Expr::Number(3.0))
+            Box::new(Expr::Float(3.0))
         );
         let context = ValidationContext::new();
         
@@ -61,9 +61,9 @@ mod validation_tests {
     #[test]
     fn test_arithmetic_validation_mixed_types() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(5.0)),
+            Box::new(Expr::Float(5.0)),
             BinOp::Mul,
-            Box::new(Expr::Number(3.14))
+            Box::new(Expr::Float(3.14))
         );
         let context = ValidationContext::new();
         
@@ -74,9 +74,9 @@ mod validation_tests {
     #[test]
     fn test_comparison_validation() {
         let expr = Expr::Binary(
-            Box::new(Expr::Number(5.0)),
+            Box::new(Expr::Float(5.0)),
             BinOp::Lt,
-            Box::new(Expr::Number(10.0))
+            Box::new(Expr::Float(10.0))
         );
         let context = ValidationContext::new();
         
@@ -101,7 +101,7 @@ mod validation_tests {
     fn test_unary_neg_validation() {
         let expr = Expr::Unary(
             UnOp::Neg,
-            Box::new(Expr::Number(42.0))
+            Box::new(Expr::Float(42.0))
         );
         let context = ValidationContext::new();
         
@@ -125,7 +125,7 @@ mod validation_tests {
     fn test_function_call_validation_success() {
         let expr = Expr::Call(
             "sin".to_string(),
-            vec![Expr::Number(3.14)]
+            vec![Expr::Float(3.14)]
         );
         let context = ValidationContext::with_standard_functions();
         
@@ -137,7 +137,7 @@ mod validation_tests {
     fn test_function_call_validation_unknown_function() {
         let expr = Expr::Call(
             "unknown_func".to_string(),
-            vec![Expr::Number(1.0)]
+            vec![Expr::Float(1.0)]
         );
         let context = ValidationContext::new();
         
@@ -150,7 +150,7 @@ mod validation_tests {
     fn test_function_call_validation_wrong_arg_count() {
         let expr = Expr::Call(
             "sin".to_string(),
-            vec![Expr::Number(1.0), Expr::Number(2.0)] // sin expects 1 arg
+            vec![Expr::Float(1.0), Expr::Float(2.0)] // sin expects 1 arg
         );
         let context = ValidationContext::with_standard_functions();
         
@@ -163,8 +163,8 @@ mod validation_tests {
     fn test_conditional_validation_success() {
         let expr = Expr::Conditional(
             Box::new(Expr::Bool(true)),
-            Box::new(Expr::Number(1.0)),
-            Box::new(Expr::Number(2.0))
+            Box::new(Expr::Float(1.0)),
+            Box::new(Expr::Float(2.0))
         );
         let context = ValidationContext::new();
         
@@ -176,8 +176,8 @@ mod validation_tests {
     fn test_conditional_validation_type_promotion() {
         let expr = Expr::Conditional(
             Box::new(Expr::Bool(true)),
-            Box::new(Expr::Number(1.0)), // Float
-            Box::new(Expr::Number(2.0))  // Float (both numbers are parsed as Float)
+            Box::new(Expr::Float(1.0)), // Float
+            Box::new(Expr::Float(2.0))  // Float (both numbers are parsed as Float)
         );
         let context = ValidationContext::new();
         
@@ -189,7 +189,7 @@ mod validation_tests {
     fn test_conditional_validation_incompatible_branches() {
         let expr = Expr::Conditional(
             Box::new(Expr::Bool(true)),
-            Box::new(Expr::Number(1.0)),
+            Box::new(Expr::Float(1.0)),
             Box::new(Expr::Bool(false)) // Incompatible with Float
         );
         let context = ValidationContext::new();
@@ -202,9 +202,9 @@ mod validation_tests {
     #[test]
     fn test_conditional_validation_invalid_condition() {
         let expr = Expr::Conditional(
-            Box::new(Expr::Number(1.0)), // Float condition should work (non-zero = true)
-            Box::new(Expr::Number(1.0)),
-            Box::new(Expr::Number(2.0))
+            Box::new(Expr::Float(1.0)), // Float condition should work (non-zero = true)
+            Box::new(Expr::Float(1.0)),
+            Box::new(Expr::Float(2.0))
         );
         let context = ValidationContext::new();
         
@@ -226,7 +226,7 @@ mod validation_tests {
                 Box::new(Expr::Binary(
                     Box::new(Expr::Var("x".to_string())),
                     BinOp::Add,
-                    Box::new(Expr::Number(2.0))
+                    Box::new(Expr::Float(2.0))
                 )),
                 BinOp::Mul,
                 Box::new(Expr::Call(
@@ -235,7 +235,7 @@ mod validation_tests {
                 ))
             )),
             BinOp::Gt,
-            Box::new(Expr::Number(0.0))
+            Box::new(Expr::Float(0.0))
         );
         
         let result = expr.validate(&context);

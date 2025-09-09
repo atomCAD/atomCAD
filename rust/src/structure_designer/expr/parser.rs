@@ -49,7 +49,14 @@ impl Parser {
   fn parse_bp(&mut self, min_bp: u8) -> Result<Expr, String> {
       // parse prefix / primary
       let mut lhs = match self.bump() {
-          Token::Number(n) => Expr::Number(n),
+          Token::Number(n) => {
+              // Determine if this should be Int or Float based on whether it has a decimal point
+              if n.fract() == 0.0 && n >= i32::MIN as f64 && n <= i32::MAX as f64 {
+                  Expr::Int(n as i32)
+              } else {
+                  Expr::Float(n)
+              }
+          },
           Token::Bool(b) => Expr::Bool(b),
           Token::Ident(name) => {
               // var or call

@@ -58,6 +58,16 @@ impl ValidationContext {
         context.functions.insert("abs_int".to_string(), 
             FunctionSignature::new(vec![APIDataType::Int], APIDataType::Int));
         
+        // Vector constructor functions
+        context.functions.insert("vec2".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Float, APIDataType::Float], APIDataType::Vec2));
+        context.functions.insert("vec3".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Float, APIDataType::Float, APIDataType::Float], APIDataType::Vec3));
+        context.functions.insert("ivec2".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Int, APIDataType::Int], APIDataType::IVec2));
+        context.functions.insert("ivec3".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Int, APIDataType::Int, APIDataType::Int], APIDataType::IVec3));
+        
         context
     }
 
@@ -186,6 +196,85 @@ impl EvaluationContext {
                 Some(val) => NetworkResult::Int(val.abs()),
                 None => NetworkResult::Error("abs_int() requires an int argument".to_string()),
             }
+        }));
+        
+        // Vector constructor functions
+        context.functions.insert("vec2".to_string(), Box::new(|args| {
+            if args.len() != 2 {
+                return NetworkResult::Error("vec2() requires exactly 2 arguments".to_string());
+            }
+            let x = match args[0].clone() {
+                NetworkResult::Float(val) => val,
+                NetworkResult::Int(val) => val as f64,
+                _ => return NetworkResult::Error("vec2() requires numeric arguments".to_string()),
+            };
+            let y = match args[1].clone() {
+                NetworkResult::Float(val) => val,
+                NetworkResult::Int(val) => val as f64,
+                _ => return NetworkResult::Error("vec2() requires numeric arguments".to_string()),
+            };
+            NetworkResult::Vec2(glam::f64::DVec2::new(x, y))
+        }));
+        
+        context.functions.insert("vec3".to_string(), Box::new(|args| {
+            if args.len() != 3 {
+                return NetworkResult::Error("vec3() requires exactly 3 arguments".to_string());
+            }
+            let x = match args[0].clone() {
+                NetworkResult::Float(val) => val,
+                NetworkResult::Int(val) => val as f64,
+                _ => return NetworkResult::Error("vec3() requires numeric arguments".to_string()),
+            };
+            let y = match args[1].clone() {
+                NetworkResult::Float(val) => val,
+                NetworkResult::Int(val) => val as f64,
+                _ => return NetworkResult::Error("vec3() requires numeric arguments".to_string()),
+            };
+            let z = match args[2].clone() {
+                NetworkResult::Float(val) => val,
+                NetworkResult::Int(val) => val as f64,
+                _ => return NetworkResult::Error("vec3() requires numeric arguments".to_string()),
+            };
+            NetworkResult::Vec3(glam::f64::DVec3::new(x, y, z))
+        }));
+        
+        context.functions.insert("ivec2".to_string(), Box::new(|args| {
+            if args.len() != 2 {
+                return NetworkResult::Error("ivec2() requires exactly 2 arguments".to_string());
+            }
+            let x = match args[0].clone() {
+                NetworkResult::Int(val) => val,
+                NetworkResult::Float(val) => val.round() as i32,
+                _ => return NetworkResult::Error("ivec2() requires numeric arguments".to_string()),
+            };
+            let y = match args[1].clone() {
+                NetworkResult::Int(val) => val,
+                NetworkResult::Float(val) => val.round() as i32,
+                _ => return NetworkResult::Error("ivec2() requires numeric arguments".to_string()),
+            };
+            NetworkResult::IVec2(glam::i32::IVec2::new(x, y))
+        }));
+        
+        context.functions.insert("ivec3".to_string(), Box::new(|args| {
+            if args.len() != 3 {
+                return NetworkResult::Error("ivec3() requires exactly 3 arguments".to_string());
+            }
+            let x = match args[0].clone() {
+                NetworkResult::Int(val) => val,
+                NetworkResult::Float(val) => val.round() as i32,
+                _ => return NetworkResult::Error("ivec3() requires numeric arguments".to_string()),
+            };
+            let y = match args[1].clone() {
+                NetworkResult::Int(val) => val,
+                NetworkResult::Float(val) => val.round() as i32,
+                _ => return NetworkResult::Error("ivec3() requires numeric arguments".to_string()),
+            };
+            let z = match args[2].clone() {
+                NetworkResult::Int(val) => val,
+                NetworkResult::Float(val) => val.round() as i32,
+                _ => return NetworkResult::Error("ivec3() requires numeric arguments".to_string()),
+            };
+            NetworkResult::IVec3(glam::i32::IVec3::new(x, y, z))
         }));
         
         context
