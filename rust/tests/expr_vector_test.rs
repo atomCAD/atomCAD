@@ -644,6 +644,208 @@ mod vector_tests {
         assert!(result.unwrap_err().contains("not supported for types"));
     }
 
+    // ========== Vector Math Function Tests ==========
+
+    #[test]
+    fn test_length2_validation() {
+        let mut context = ValidationContext::with_standard_functions();
+        context.add_variable("v".to_string(), APIDataType::Vec2);
+        
+        let expr = Expr::Call("length2".to_string(), vec![Expr::Var("v".to_string())]);
+        let result = expr.validate(&context);
+        assert_eq!(result, Ok(APIDataType::Float));
+    }
+
+    #[test]
+    fn test_length2_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("v".to_string(), NetworkResult::Vec2(DVec2::new(3.0, 4.0)));
+        
+        let expr = Expr::Call("length2".to_string(), vec![Expr::Var("v".to_string())]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Float(val) => assert_eq!(val, 5.0), // sqrt(3² + 4²) = 5
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_length3_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("v".to_string(), NetworkResult::Vec3(DVec3::new(1.0, 2.0, 2.0)));
+        
+        let expr = Expr::Call("length3".to_string(), vec![Expr::Var("v".to_string())]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Float(val) => assert_eq!(val, 3.0), // sqrt(1² + 2² + 2²) = 3
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_normalize2_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("v".to_string(), NetworkResult::Vec2(DVec2::new(3.0, 4.0)));
+        
+        let expr = Expr::Call("normalize2".to_string(), vec![Expr::Var("v".to_string())]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Vec2(vec) => {
+                assert!((vec.x - 0.6).abs() < 1e-10); // 3/5 = 0.6
+                assert!((vec.y - 0.8).abs() < 1e-10); // 4/5 = 0.8
+                assert!((vec.length() - 1.0).abs() < 1e-10); // Should be unit length
+            },
+            _ => panic!("Expected Vec2 result"),
+        }
+    }
+
+    #[test]
+    fn test_normalize3_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("v".to_string(), NetworkResult::Vec3(DVec3::new(1.0, 2.0, 2.0)));
+        
+        let expr = Expr::Call("normalize3".to_string(), vec![Expr::Var("v".to_string())]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Vec3(vec) => {
+                assert!((vec.x - 1.0/3.0).abs() < 1e-10); // 1/3
+                assert!((vec.y - 2.0/3.0).abs() < 1e-10); // 2/3
+                assert!((vec.z - 2.0/3.0).abs() < 1e-10); // 2/3
+                assert!((vec.length() - 1.0).abs() < 1e-10); // Should be unit length
+            },
+            _ => panic!("Expected Vec3 result"),
+        }
+    }
+
+    #[test]
+    fn test_normalize_zero_vector_error() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("v".to_string(), NetworkResult::Vec2(DVec2::new(0.0, 0.0)));
+        
+        let expr = Expr::Call("normalize2".to_string(), vec![Expr::Var("v".to_string())]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Error(msg) => assert!(msg.contains("Cannot normalize zero-length vector")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_dot2_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("a".to_string(), NetworkResult::Vec2(DVec2::new(2.0, 3.0)));
+        context.add_variable("b".to_string(), NetworkResult::Vec2(DVec2::new(4.0, 5.0)));
+        
+        let expr = Expr::Call("dot2".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Float(val) => assert_eq!(val, 23.0), // 2*4 + 3*5 = 8 + 15 = 23
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_dot3_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("a".to_string(), NetworkResult::Vec3(DVec3::new(1.0, 2.0, 3.0)));
+        context.add_variable("b".to_string(), NetworkResult::Vec3(DVec3::new(4.0, 5.0, 6.0)));
+        
+        let expr = Expr::Call("dot3".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Float(val) => assert_eq!(val, 32.0), // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_cross_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("a".to_string(), NetworkResult::Vec3(DVec3::new(1.0, 0.0, 0.0)));
+        context.add_variable("b".to_string(), NetworkResult::Vec3(DVec3::new(0.0, 1.0, 0.0)));
+        
+        let expr = Expr::Call("cross".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Vec3(vec) => {
+                assert_eq!(vec.x, 0.0);
+                assert_eq!(vec.y, 0.0);
+                assert_eq!(vec.z, 1.0); // (1,0,0) × (0,1,0) = (0,0,1)
+            },
+            _ => panic!("Expected Vec3 result"),
+        }
+    }
+
+    #[test]
+    fn test_distance2_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("a".to_string(), NetworkResult::Vec2(DVec2::new(0.0, 0.0)));
+        context.add_variable("b".to_string(), NetworkResult::Vec2(DVec2::new(3.0, 4.0)));
+        
+        let expr = Expr::Call("distance2".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Float(val) => assert_eq!(val, 5.0), // distance from origin to (3,4) = 5
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_distance3_evaluation() {
+        let mut context = EvaluationContext::with_standard_functions();
+        context.add_variable("a".to_string(), NetworkResult::Vec3(DVec3::new(0.0, 0.0, 0.0)));
+        context.add_variable("b".to_string(), NetworkResult::Vec3(DVec3::new(1.0, 2.0, 2.0)));
+        
+        let expr = Expr::Call("distance3".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Float(val) => assert_eq!(val, 3.0), // distance from origin to (1,2,2) = 3
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_complex_vector_math_expression() {
+        // Test: normalize2(vec2(3.0, 4.0)) * length2(vec2(6.0, 8.0))
+        let context = EvaluationContext::with_standard_functions();
+        
+        let expr = Expr::Binary(
+            Box::new(Expr::Call("normalize2".to_string(), vec![
+                Expr::Call("vec2".to_string(), vec![Expr::Float(3.0), Expr::Float(4.0)])
+            ])),
+            BinOp::Mul,
+            Box::new(Expr::Call("length2".to_string(), vec![
+                Expr::Call("vec2".to_string(), vec![Expr::Float(6.0), Expr::Float(8.0)])
+            ]))
+        );
+        
+        let result = expr.evaluate(&context);
+        match result {
+            NetworkResult::Vec2(vec) => {
+                // normalize2(3,4) = (0.6, 0.8), length2(6,8) = 10
+                // (0.6, 0.8) * 10 = (6.0, 8.0)
+                assert_eq!(vec.x, 6.0);
+                assert_eq!(vec.y, 8.0);
+            },
+            _ => panic!("Expected Vec2 result"),
+        }
+    }
+
     #[test]
     fn test_mismatched_vector_dimensions() {
         let mut context = ValidationContext::new();

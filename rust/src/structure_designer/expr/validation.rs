@@ -68,6 +68,26 @@ impl ValidationContext {
         context.functions.insert("ivec3".to_string(), 
             FunctionSignature::new(vec![APIDataType::Int, APIDataType::Int, APIDataType::Int], APIDataType::IVec3));
         
+        // Vector math functions - using specific names for now to avoid overloading issues
+        context.functions.insert("length2".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec2], APIDataType::Float));
+        context.functions.insert("length3".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec3], APIDataType::Float));
+        context.functions.insert("normalize2".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec2], APIDataType::Vec2));
+        context.functions.insert("normalize3".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec3], APIDataType::Vec3));
+        context.functions.insert("dot2".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec2, APIDataType::Vec2], APIDataType::Float));
+        context.functions.insert("dot3".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec3, APIDataType::Vec3], APIDataType::Float));
+        context.functions.insert("cross".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec3, APIDataType::Vec3], APIDataType::Vec3));
+        context.functions.insert("distance2".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec2, APIDataType::Vec2], APIDataType::Float));
+        context.functions.insert("distance3".to_string(), 
+            FunctionSignature::new(vec![APIDataType::Vec3, APIDataType::Vec3], APIDataType::Float));
+        
         context
     }
 
@@ -275,6 +295,111 @@ impl EvaluationContext {
                 _ => return NetworkResult::Error("ivec3() requires numeric arguments".to_string()),
             };
             NetworkResult::IVec3(glam::i32::IVec3::new(x, y, z))
+        }));
+        
+        // Vector math functions
+        context.functions.insert("length2".to_string(), Box::new(|args| {
+            if args.len() != 1 {
+                return NetworkResult::Error("length2() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Vec2(vec) => NetworkResult::Float(vec.length()),
+                _ => NetworkResult::Error("length2() requires a Vec2 argument".to_string()),
+            }
+        }));
+        
+        context.functions.insert("length3".to_string(), Box::new(|args| {
+            if args.len() != 1 {
+                return NetworkResult::Error("length3() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Vec3(vec) => NetworkResult::Float(vec.length()),
+                _ => NetworkResult::Error("length3() requires a Vec3 argument".to_string()),
+            }
+        }));
+        
+        context.functions.insert("normalize2".to_string(), Box::new(|args| {
+            if args.len() != 1 {
+                return NetworkResult::Error("normalize2() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Vec2(vec) => {
+                    let length = vec.length();
+                    if length == 0.0 {
+                        NetworkResult::Error("Cannot normalize zero-length vector".to_string())
+                    } else {
+                        NetworkResult::Vec2(*vec / length)
+                    }
+                },
+                _ => NetworkResult::Error("normalize2() requires a Vec2 argument".to_string()),
+            }
+        }));
+        
+        context.functions.insert("normalize3".to_string(), Box::new(|args| {
+            if args.len() != 1 {
+                return NetworkResult::Error("normalize3() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Vec3(vec) => {
+                    let length = vec.length();
+                    if length == 0.0 {
+                        NetworkResult::Error("Cannot normalize zero-length vector".to_string())
+                    } else {
+                        NetworkResult::Vec3(*vec / length)
+                    }
+                },
+                _ => NetworkResult::Error("normalize3() requires a Vec3 argument".to_string()),
+            }
+        }));
+        
+        context.functions.insert("dot2".to_string(), Box::new(|args| {
+            if args.len() != 2 {
+                return NetworkResult::Error("dot2() requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (NetworkResult::Vec2(a), NetworkResult::Vec2(b)) => NetworkResult::Float(a.dot(*b)),
+                _ => NetworkResult::Error("dot2() requires two Vec2 arguments".to_string()),
+            }
+        }));
+        
+        context.functions.insert("dot3".to_string(), Box::new(|args| {
+            if args.len() != 2 {
+                return NetworkResult::Error("dot3() requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (NetworkResult::Vec3(a), NetworkResult::Vec3(b)) => NetworkResult::Float(a.dot(*b)),
+                _ => NetworkResult::Error("dot3() requires two Vec3 arguments".to_string()),
+            }
+        }));
+        
+        context.functions.insert("cross".to_string(), Box::new(|args| {
+            if args.len() != 2 {
+                return NetworkResult::Error("cross() requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (NetworkResult::Vec3(a), NetworkResult::Vec3(b)) => NetworkResult::Vec3(a.cross(*b)),
+                _ => NetworkResult::Error("cross() requires two Vec3 arguments".to_string()),
+            }
+        }));
+        
+        context.functions.insert("distance2".to_string(), Box::new(|args| {
+            if args.len() != 2 {
+                return NetworkResult::Error("distance2() requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (NetworkResult::Vec2(a), NetworkResult::Vec2(b)) => NetworkResult::Float((*a - *b).length()),
+                _ => NetworkResult::Error("distance2() requires two Vec2 arguments".to_string()),
+            }
+        }));
+        
+        context.functions.insert("distance3".to_string(), Box::new(|args| {
+            if args.len() != 2 {
+                return NetworkResult::Error("distance3() requires exactly 2 arguments".to_string());
+            }
+            match (&args[0], &args[1]) {
+                (NetworkResult::Vec3(a), NetworkResult::Vec3(b)) => NetworkResult::Float((*a - *b).length()),
+                _ => NetworkResult::Error("distance3() requires two Vec3 arguments".to_string()),
+            }
         }));
         
         context
