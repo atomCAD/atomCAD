@@ -114,3 +114,10 @@ impl Parser {
       Ok(lhs)
   }
 }
+
+/// Public function to parse a string input into an expression
+pub fn parse(input: &str) -> Result<Expr, String> {
+    let tokens = crate::structure_designer::expr::lexer::tokenize(input);
+    let mut parser = Parser::new(tokens);
+    parser.parse()
+}

@@ -107,3 +107,9 @@ impl<'a> Lexer<'a> {
         out
     }
 }
+
+/// Public function to tokenize a string input
+pub fn tokenize(input: &str) -> Vec<Token> {
+    let lexer = Lexer::new(input);
+    lexer.tokenize()
+}

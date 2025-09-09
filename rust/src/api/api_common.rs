@@ -121,12 +121,12 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   /// 
   /// # Examples
   /// 
-  /// ```
-  /// use crate::api::api_common::with_mut_cad_instance;
+  /// ```no_run
+  /// use rust_lib_flutter_cad::api::api_common::with_mut_cad_instance;
   /// 
   /// unsafe {
   ///     with_mut_cad_instance(|instance| {
-  ///         instance.renderer.set_viewport_size(width, height);
+  ///         instance.renderer.set_viewport_size(800, 600);
   ///     });
   /// }
   /// ```
@@ -151,13 +151,13 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   /// 
   /// # Examples
   /// 
-  /// ```
-  /// use crate::api::api_common::with_mut_cad_instance_or;
+  /// ```no_run
+  /// use rust_lib_flutter_cad::api::api_common::with_mut_cad_instance_or;
   /// 
   /// unsafe {
-  ///     let result = with_mut_cad_instance_or(
+  ///     let success = with_mut_cad_instance_or(
   ///         |instance| {
-  ///             instance.renderer.update_something();
+  ///             // perform operation
   ///             true // success
   ///         },
   ///         false // failure
@@ -186,8 +186,8 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   /// 
   /// # Examples
   /// 
-  /// ```
-  /// use crate::api::api_common::with_cad_instance;
+  /// ```no_run
+  /// use rust_lib_flutter_cad::api::api_common::with_cad_instance;
   /// 
   /// unsafe {
   ///     with_cad_instance(|instance| {
@@ -217,13 +217,13 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   /// 
   /// # Examples
   /// 
-  /// ```
-  /// use crate::api::api_common::with_cad_instance_or;
+  /// ```no_run
+  /// use rust_lib_flutter_cad::api::api_common::with_cad_instance_or;
   /// 
   /// unsafe {
-  ///     let result = with_cad_instance_or(
-  ///         |instance| instance.renderer.get_viewport_size(),
-  ///         (0, 0)
+  ///     let aspect_ratio = with_cad_instance_or(
+  ///         |instance| instance.renderer.camera.aspect,
+  ///         1.0
   ///     );
   /// }
   /// ```
