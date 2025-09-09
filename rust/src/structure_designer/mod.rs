@@ -14,5 +14,6 @@ pub mod utils;
 pub mod network_validator;
 pub mod geo_tree;
 pub mod implicit_eval;
+pub mod expr;
 
 
