@@ -22,6 +22,10 @@ pub enum Token {
     And,
     Or,
     Not,
+    // Conditional operators
+    If,
+    Then,
+    Else,
     Eof,
 }
 
@@ -90,6 +94,9 @@ impl<'a> Lexer<'a> {
                 match id.as_str() {
                     "true" => Token::Bool(true),
                     "false" => Token::Bool(false),
+                    "if" => Token::If,
+                    "then" => Token::Then,
+                    "else" => Token::Else,
                     _ => Token::Ident(id),
                 }
             }

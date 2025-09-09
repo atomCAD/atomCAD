@@ -160,6 +160,34 @@ mod lexer_tests {
             Token::Eof
         ]);
     }
+
+    #[test]
+    fn test_tokenize_conditional_keywords() {
+        let tokens = tokenize("if then else");
+        assert_eq!(tokens, vec![
+            Token::If,
+            Token::Then,
+            Token::Else,
+            Token::Eof
+        ]);
+    }
+
+    #[test]
+    fn test_tokenize_conditional_expression() {
+        let tokens = tokenize("if x > 0 then 1 else -1");
+        assert_eq!(tokens, vec![
+            Token::If,
+            Token::Ident("x".to_string()),
+            Token::Gt,
+            Token::Number(0.0),
+            Token::Then,
+            Token::Number(1.0),
+            Token::Else,
+            Token::Minus,
+            Token::Number(1.0),
+            Token::Eof
+        ]);
+    }
 }
 
 mod parser_tests {
@@ -430,5 +458,59 @@ mod parser_tests {
 
         let expr = parse("sin(x) > 0.5 && cos(y) < 0.8").unwrap();
         assert_eq!(expr.to_prefix_string(), "(&& (> (call sin x) 0.5) (< (call cos y) 0.8))");
+    }
+
+    #[test]
+    fn test_parse_conditional_basic() {
+        let expr = parse("if true then 1 else 0").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if true then 1 else 0)");
+
+        let expr = parse("if x > 0 then 1 else -1").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if (> x 0) then 1 else (neg 1))");
+
+        let expr = parse("if flag then a else b").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if flag then a else b)");
+    }
+
+    #[test]
+    fn test_parse_conditional_complex() {
+        let expr = parse("if x > 0 && y < 10 then x + y else 0").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if (&& (> x 0) (< y 10)) then (+ x y) else 0)");
+
+        let expr = parse("if !done then compute(x) else result").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if (not done) then (call compute x) else result)");
+    }
+
+    #[test]
+    fn test_parse_conditional_nested() {
+        let expr = parse("if x > 0 then if y > 0 then 1 else 2 else 3").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if (> x 0) then (if (> y 0) then 1 else 2) else 3)");
+    }
+
+    #[test]
+    fn test_parse_conditional_with_arithmetic() {
+        let expr = parse("if x == 0 then sin(y) else cos(z) + 1").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if (== x 0) then (call sin y) else (+ (call cos z) 1))");
+
+        let expr = parse("2 * if flag then a else b").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(* 2 (if flag then a else b))");
+    }
+
+    #[test]
+    fn test_parse_conditional_errors() {
+        // Missing then
+        assert!(parse("if x > 0 else 1").is_err());
+        
+        // Missing else
+        assert!(parse("if x > 0 then 1").is_err());
+        
+        // Missing condition
+        assert!(parse("if then 1 else 0").is_err());
+        
+        // Missing then expression
+        assert!(parse("if true then else 0").is_err());
+        
+        // Missing else expression
+        assert!(parse("if true then 1 else").is_err());
     }
 }

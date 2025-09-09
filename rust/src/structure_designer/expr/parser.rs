@@ -96,6 +96,23 @@ impl Parser {
               let rhs = self.parse_bp(100)?;
               Expr::Unary(UnOp::Not, Box::new(rhs))
           }
+          Token::If => {
+              // if-then-else conditional
+              let condition = self.parse_bp(0)?;
+              match self.bump() {
+                  Token::Then => {
+                      let then_expr = self.parse_bp(0)?;
+                      match self.bump() {
+                          Token::Else => {
+                              let else_expr = self.parse_bp(0)?;
+                              Expr::Conditional(Box::new(condition), Box::new(then_expr), Box::new(else_expr))
+                          }
+                          other => return Err(format!("Expected 'else' after then expression, got {:?}", other)),
+                      }
+                  }
+                  other => return Err(format!("Expected 'then' after if condition, got {:?}", other)),
+              }
+          }
           other => return Err(format!("Unexpected token in prefix: {:?}", other)),
       };
 

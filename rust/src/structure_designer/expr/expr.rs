@@ -22,6 +22,7 @@ pub enum Expr {
     Unary(UnOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
     Call(String, Vec<Expr>),
+    Conditional(Box<Expr>, Box<Expr>, Box<Expr>), // if condition then expr1 else expr2
 }
 
 impl Expr {
@@ -67,6 +68,12 @@ impl Expr {
                 } else {
                     format!("(call {} {})", name, args_str)
                 }
+            }
+            Expr::Conditional(condition, then_expr, else_expr) => {
+                format!("(if {} then {} else {})", 
+                    condition.to_prefix_string(), 
+                    then_expr.to_prefix_string(), 
+                    else_expr.to_prefix_string())
             }
         }
     }
