@@ -247,10 +247,18 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
     true
 }
 
-pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> NetworkValidationResult {
+pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry, initial_errors: Option<Vec<crate::structure_designer::node_network::ValidationError>>) -> NetworkValidationResult {
     // Clear previous validation state
     network.valid = true;
     network.validation_errors.clear();
+    
+    // Add initial errors first if provided
+    if let Some(errors) = initial_errors {
+        for error in errors {
+            network.validation_errors.push(error);
+            network.valid = false;
+        }
+    }
     
     // Check if interface changed before validation (to detect changes)
     let interface_changed = check_interface_changed(network);
@@ -306,3 +314,4 @@ fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &No
     // Return true if the output type changed
     old_output_type != new_output_type
 }
+

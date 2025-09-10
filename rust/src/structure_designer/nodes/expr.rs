@@ -9,6 +9,10 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::expr::validation::ValidationContext;
+use crate::structure_designer::expr::parser::parse;
+use crate::structure_designer::node_network::ValidationError;
+use crate::structure_designer::expr::expr::Expr;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExprParameter {
@@ -19,6 +23,67 @@ pub struct ExprParameter {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExprData {
   pub parameters: Vec<ExprParameter>,
+  pub expression: String,
+  #[serde(skip)]
+  pub expr: Option<Expr>,
+  #[serde(skip)]
+  pub error: Option<String>,
+  #[serde(skip)]
+  pub output_type: Option<APIDataType>,
+}
+
+impl ExprData {
+    /// Parses and validates the expression and returns any validation errors
+    pub fn parse_and_validate(&mut self, node_id: u64) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+        
+        // Clear previous state
+        self.expr = None;
+        self.error = None;
+        self.output_type = None;
+        
+        // Skip validation if expression is empty
+        if self.expression.trim().is_empty() {
+            return errors;
+        }
+        
+        // Parse the expression
+        let parsed_expr = match parse(&self.expression) {
+            Ok(expr) => {
+                self.expr = Some(expr.clone());
+                expr
+            },
+            Err(parse_error) => {
+                let error_msg = format!("Parse error: {}", parse_error);
+                self.error = Some(error_msg.clone());
+                errors.push(ValidationError::new(error_msg, Some(node_id)));
+                return errors;
+            }
+        };
+        
+        // Create validation context with standard functions and parameters
+        let mut context = ValidationContext::with_standard_functions();
+        
+        // Add parameters as variables to the validation context
+        for param in &self.parameters {
+            context.add_variable(param.name.clone(), param.data_type);
+        }
+        
+        // Validate the parsed expression
+        match parsed_expr.validate(&context) {
+            Ok(output_type) => {
+                // Expression is valid - set the output type
+                self.output_type = Some(output_type);
+            }, 
+            Err(validation_error) => {
+                let error_msg = format!("Validation error: {}", validation_error);
+                self.error = Some(error_msg.clone());
+                errors.push(ValidationError::new(error_msg, Some(node_id)));
+            }
+        }
+        
+        errors
+    }
 }
 
 impl NodeData for ExprData {

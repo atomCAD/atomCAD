@@ -212,4 +212,7 @@ pub struct APIExprParameter {
 
 pub struct APIExprData {
   pub parameters: Vec<APIExprParameter>,
+  pub expression: String,
+  pub error: Option<String>,
+  pub output_type: Option<APIDataType>,
 }

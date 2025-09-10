@@ -8,6 +8,7 @@ use super::nodes::ivec3::IVec3Data;
 use super::nodes::vec2::Vec2Data;
 use super::nodes::vec3::Vec3Data;
 use super::nodes::expr::ExprData;
+use super::nodes::expr::ExprParameter;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use super::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
@@ -68,9 +69,18 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "expr".to_string(),
       parameters: vec![],
-      output_type: APIDataType::Geometry, // will change based on the expression
+      output_type: APIDataType::None, // will change based on the expression
       node_data_creator: || Box::new(ExprData {
-        parameters: Vec::new()
+        parameters: vec![
+          ExprParameter {
+            name: "x".to_string(),
+            data_type: APIDataType::Float,
+          },
+        ],
+        expression: "x".to_string(),
+        expr: None,
+        error: None,
+        output_type: None,
       }),
     });
 

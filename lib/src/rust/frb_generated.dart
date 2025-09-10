@@ -4365,10 +4365,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIExprData dco_decode_api_expr_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APIExprData(
       parameters: dco_decode_list_api_expr_parameter(arr[0]),
+      expression: dco_decode_String(arr[1]),
+      error: dco_decode_opt_String(arr[2]),
+      outputType: dco_decode_opt_box_autoadd_api_data_type(arr[3]),
     );
   }
 
@@ -4761,6 +4764,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_cuboid_data(raw);
+  }
+
+  @protected
+  APIDataType dco_decode_box_autoadd_api_data_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_data_type(raw);
   }
 
   @protected
@@ -5217,6 +5226,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIDataType? dco_decode_opt_box_autoadd_api_data_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_data_type(raw);
+  }
+
+  @protected
   APIEditAtomData? dco_decode_opt_box_autoadd_api_edit_atom_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_api_edit_atom_data(raw);
@@ -5663,7 +5678,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIExprData sse_decode_api_expr_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_parameters = sse_decode_list_api_expr_parameter(deserializer);
-    return APIExprData(parameters: var_parameters);
+    var var_expression = sse_decode_String(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    var var_outputType = sse_decode_opt_box_autoadd_api_data_type(deserializer);
+    return APIExprData(
+        parameters: var_parameters,
+        expression: var_expression,
+        error: var_error,
+        outputType: var_outputType);
   }
 
   @protected
@@ -5986,6 +6008,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_cuboid_data(deserializer));
+  }
+
+  @protected
+  APIDataType sse_decode_box_autoadd_api_data_type(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_data_type(deserializer));
   }
 
   @protected
@@ -6558,6 +6587,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_api_cuboid_data(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIDataType? sse_decode_opt_box_autoadd_api_data_type(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_data_type(deserializer));
     } else {
       return null;
     }
@@ -7150,6 +7191,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_expr_data(APIExprData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_api_expr_parameter(self.parameters, serializer);
+    sse_encode_String(self.expression, serializer);
+    sse_encode_opt_String(self.error, serializer);
+    sse_encode_opt_box_autoadd_api_data_type(self.outputType, serializer);
   }
 
   @protected
@@ -7418,6 +7462,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APICuboidData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_cuboid_data(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_data_type(
+      APIDataType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_data_type(self, serializer);
   }
 
   @protected
@@ -7932,6 +7983,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_cuboid_data(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_data_type(
+      APIDataType? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_data_type(self, serializer);
     }
   }
 

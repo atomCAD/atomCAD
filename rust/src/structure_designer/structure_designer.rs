@@ -354,31 +354,44 @@ impl StructureDesigner {
     }
   }
 
-  pub fn set_node_network_data(&mut self, node_id: u64, data: Box<dyn NodeData>) {
+  pub fn set_node_network_data(&mut self, node_id: u64, mut data: Box<dyn NodeData>) {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
       Some(name) => name,
       None => return,
     };
     
-    // Check if this is a parameter node before modification
-    let is_parameter_node = if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+    // Check node type before modification
+    let (is_parameter_node, is_expr_node) = if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
       if let Some(node) = network.nodes.get(&node_id) {
-        node.node_type_name == "parameter"
+        (node.node_type_name == "parameter", node.node_type_name == "expr")
       } else {
-        false
+        (false, false)
       }
     } else {
-      false
+      (false, false)
     };
+    
+    // For expr nodes, validate the expression before setting the data
+    let mut expr_validation_errors = Vec::new();
+    if is_expr_node {
+      if let Some(expr_data) = data.as_any_mut().downcast_mut::<crate::structure_designer::nodes::expr::ExprData>() {
+        expr_validation_errors = expr_data.parse_and_validate(node_id);
+      }
+    }
     
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_network_data(node_id, data);
     }
     
-    // Validate if this was a parameter node modification
-    if is_parameter_node {
-      self.validate_active_network();
+    // Validate if this was a parameter or expr node modification
+    if is_parameter_node || is_expr_node {
+      let initial_errors = if expr_validation_errors.is_empty() {
+        None
+      } else {
+        Some(expr_validation_errors)
+      };
+      self.validate_active_network_with_initial_errors(initial_errors);
     }
   }
 
@@ -799,6 +812,11 @@ impl StructureDesigner {
   /// - When a network becomes invalid, valid parent networks need revalidation
   /// - Continues until no more networks need validation
   pub fn validate_active_network(&mut self) -> Option<NetworkValidationResult> {
+    self.validate_active_network_with_initial_errors(None)
+  }
+
+  /// Validates the active network with optional initial validation errors (e.g., from expr nodes)
+  fn validate_active_network_with_initial_errors(&mut self, initial_errors: Option<Vec<crate::structure_designer::node_network::ValidationError>>) -> Option<NetworkValidationResult> {
     // Get the active network name
     let network_name = match &self.active_node_network_name {
       Some(name) => name.clone(),
@@ -831,8 +849,15 @@ impl StructureDesigner {
         // Extract the network temporarily to avoid borrowing conflicts
         let mut network = self.node_type_registry.node_networks.remove(&current_network_name).unwrap();
         
-        // Validate with the registry (now we only have immutable access to registry)
-        let result = validate_network(&mut network, &self.node_type_registry);
+        // Use initial errors only for the originally requested network
+        let errors_to_use = if current_network_name == network_name {
+          initial_errors.clone()
+        } else {
+          None
+        };
+        
+        // Validate with the registry and initial errors
+        let result = validate_network(&mut network, &self.node_type_registry, errors_to_use);
         
         // Put the network back
         self.node_type_registry.node_networks.insert(current_network_name.clone(), network);

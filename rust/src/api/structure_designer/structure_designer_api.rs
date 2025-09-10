@@ -868,6 +868,9 @@ pub fn get_expr_data(node_id: u64) -> Option<APIExprData> {
             name: param.name.clone(),
             data_type: param.data_type,
           }).collect(),
+          expression: expr_data.expression.clone(),
+          error: expr_data.error.clone(),
+          output_type: expr_data.output_type,
         })
       },
       None
@@ -1124,6 +1127,10 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) {
           name: api_param.name,
           data_type: api_param.data_type,
         }).collect(),
+        expression: data.expression,
+        expr: None,
+        error: None,
+        output_type: None,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, expr_data);
       refresh_renderer(cad_instance, false);

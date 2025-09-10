@@ -196,20 +196,33 @@ enum APIEditAtomTool {
 
 class APIExprData {
   final List<APIExprParameter> parameters;
+  final String expression;
+  final String? error;
+  final APIDataType? outputType;
 
   const APIExprData({
     required this.parameters,
+    required this.expression,
+    this.error,
+    this.outputType,
   });
 
   @override
-  int get hashCode => parameters.hashCode;
+  int get hashCode =>
+      parameters.hashCode ^
+      expression.hashCode ^
+      error.hashCode ^
+      outputType.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIExprData &&
           runtimeType == other.runtimeType &&
-          parameters == other.parameters;
+          parameters == other.parameters &&
+          expression == other.expression &&
+          error == other.error &&
+          outputType == other.outputType;
 }
 
 class APIExprParameter {

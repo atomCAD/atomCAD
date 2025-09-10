@@ -179,6 +179,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw);
 
   @protected
+  APIDataType dco_decode_box_autoadd_api_data_type(dynamic raw);
+
+  @protected
   APIEditAtomData dco_decode_box_autoadd_api_edit_atom_data(dynamic raw);
 
   @protected
@@ -373,6 +376,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw);
+
+  @protected
+  APIDataType? dco_decode_opt_box_autoadd_api_data_type(dynamic raw);
 
   @protected
   APIEditAtomData? dco_decode_opt_box_autoadd_api_edit_atom_data(dynamic raw);
@@ -667,6 +673,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIDataType sse_decode_box_autoadd_api_data_type(
+      SseDeserializer deserializer);
+
+  @protected
   APIEditAtomData sse_decode_box_autoadd_api_edit_atom_data(
       SseDeserializer deserializer);
 
@@ -899,6 +909,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICuboidData? sse_decode_opt_box_autoadd_api_cuboid_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDataType? sse_decode_opt_box_autoadd_api_data_type(
       SseDeserializer deserializer);
 
   @protected
@@ -1229,6 +1243,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICuboidData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_data_type(
+      APIDataType self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_edit_atom_data(
       APIEditAtomData self, SseSerializer serializer);
 
@@ -1467,6 +1485,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_cuboid_data(
       APICuboidData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_data_type(
+      APIDataType? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_edit_atom_data(

@@ -22,10 +22,58 @@ class ExprEditor extends StatefulWidget {
 }
 
 class ExprEditorState extends State<ExprEditor> {
+  late TextEditingController _expressionController;
+  late FocusNode _expressionFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _expressionController = TextEditingController(text: widget.data?.expression ?? '');
+    _expressionFocusNode = FocusNode();
+    _expressionFocusNode.addListener(() {
+      if (!_expressionFocusNode.hasFocus) {
+        // When focus is lost, update the expression
+        _updateExpressionFromText(_expressionController.text);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(ExprEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data?.expression != widget.data?.expression) {
+      _expressionController.text = widget.data?.expression ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _expressionController.dispose();
+    _expressionFocusNode.dispose();
+    super.dispose();
+  }
+
   void _updateExprData(List<APIExprParameter> parameters) {
     widget.model.setExprData(
       widget.nodeId,
-      APIExprData(parameters: parameters),
+      APIExprData(
+        parameters: parameters,
+        expression: widget.data?.expression ?? '',
+        error: widget.data?.error,
+        outputType: widget.data?.outputType,
+      ),
+    );
+  }
+
+  void _updateExpressionFromText(String expression) {
+    widget.model.setExprData(
+      widget.nodeId,
+      APIExprData(
+        parameters: widget.data?.parameters ?? [],
+        expression: expression,
+        error: widget.data?.error,
+        outputType: widget.data?.outputType,
+      ),
     );
   }
 
@@ -73,6 +121,52 @@ class ExprEditorState extends State<ExprEditor> {
           Text('Expression Properties',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
+          
+          // Expression text area
+          TextFormField(
+            controller: _expressionController,
+            focusNode: _expressionFocusNode,
+            decoration: const InputDecoration(
+              labelText: 'Expression',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              hintText: 'Enter mathematical expression (e.g., x * 2 + sin(y))',
+            ),
+            maxLines: 3,
+            minLines: 1,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (text) {
+              _updateExpressionFromText(text);
+            },
+          ),
+          
+          // Error message display
+          if (widget.data?.error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(4.0),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.error,
+                    width: 1.0,
+                  ),
+                ),
+                child: Text(
+                  widget.data!.error!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    fontSize: 12.0,
+                  ),
+                ),
+              ),
+            ),
+          
+          const SizedBox(height: 16),
           
           // Parameters section
           Row(
@@ -194,6 +288,42 @@ class ExprEditorState extends State<ExprEditor> {
                 ),
               );
             }).toList(),
+          
+          // Output type display
+          if (widget.data?.outputType != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12.0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 1.0,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.output,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      size: 16.0,
+                    ),
+                    const SizedBox(width: 8.0),
+                    Text(
+                      'Output Type: ${getApiDataTypeDisplayName(dataType: widget.data!.outputType!)}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        fontSize: 14.0,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

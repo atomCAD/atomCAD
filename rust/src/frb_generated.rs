@@ -4440,8 +4440,16 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_parameters = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIExprParameter,
         >>::sse_decode(deserializer);
+        let mut var_expression = <String>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
+        let mut var_outputType = <Option<
+            crate::api::structure_designer::structure_designer_api_types::APIDataType,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIExprData {
             parameters: var_parameters,
+            expression: var_expression,
+            error: var_error,
+            output_type: var_outputType,
         };
     }
 }
@@ -5241,6 +5249,19 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::structure_designer::structure_designer_api_types::APICuboidData>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIDataType>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIDataType>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -6225,7 +6246,13 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIExprData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.parameters.into_into_dart().into_dart()].into_dart()
+        [
+            self.parameters.into_into_dart().into_dart(),
+            self.expression.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+            self.output_type.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -7497,6 +7524,9 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIExprParameter>>::sse_encode(self.parameters, serializer);
+        <String>::sse_encode(self.expression, serializer);
+        <Option<String>>::sse_encode(self.error, serializer);
+        <Option<crate::api::structure_designer::structure_designer_api_types::APIDataType>>::sse_encode(self.output_type, serializer);
     }
 }
 
@@ -8109,6 +8139,20 @@ impl SseEncode
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::structure_designer::structure_designer_api_types::APICuboidData>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIDataType>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIDataType>::sse_encode(
+                value, serializer,
+            );
         }
     }
 }
