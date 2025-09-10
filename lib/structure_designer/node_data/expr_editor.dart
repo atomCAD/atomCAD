@@ -115,66 +115,79 @@ class ExprEditorState extends State<ExprEditor> {
                 margin: const EdgeInsets.only(bottom: 8.0),
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Parameter ${index + 1}',
-                            style: Theme.of(context).textTheme.titleSmall,
+                      // Parameter name input - takes up available space
+                      Expanded(
+                        flex: 3,
+                        child: TextFormField(
+                          initialValue: parameter.name,
+                          decoration: const InputDecoration(
+                            labelText: 'Name',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            isDense: true,
                           ),
-                          IconButton(
-                            onPressed: () => _removeParameter(index),
-                            icon: const Icon(Icons.delete),
-                            tooltip: 'Delete Parameter',
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      // Parameter name input
-                      StringInput(
-                        label: 'Name',
-                        value: parameter.name,
-                        onChanged: (newName) {
-                          _updateParameter(
-                            index,
-                            APIExprParameter(
-                              name: newName,
-                              dataType: parameter.dataType,
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      // Data type dropdown
-                      DropdownButtonFormField<APIDataType>(
-                        value: parameter.dataType,
-                        decoration: const InputDecoration(
-                          labelText: 'Data Type',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: APIDataType.values.map((dataType) {
-                          return DropdownMenuItem(
-                            value: dataType,
-                            child: Text(getApiDataTypeDisplayName(dataType: dataType)),
-                          );
-                        }).toList(),
-                        onChanged: (newDataType) {
-                          if (newDataType != null) {
+                          onChanged: (newName) {
                             _updateParameter(
                               index,
                               APIExprParameter(
-                                name: parameter.name,
-                                dataType: newDataType,
+                                name: newName,
+                                dataType: parameter.dataType,
                               ),
                             );
-                          }
-                        },
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      
+                      // Data type dropdown - more constrained
+                      Expanded(
+                        flex: 3,
+                        child: DropdownButtonFormField<APIDataType>(
+                          value: parameter.dataType,
+                          decoration: const InputDecoration(
+                            labelText: 'Type',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            isDense: true,
+                          ),
+                          isExpanded: true,
+                          items: APIDataType.values.map((dataType) {
+                            return DropdownMenuItem(
+                              value: dataType,
+                              child: Text(
+                                getApiDataTypeDisplayName(dataType: dataType),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (newDataType) {
+                            if (newDataType != null) {
+                              _updateParameter(
+                                index,
+                                APIExprParameter(
+                                  name: parameter.name,
+                                  dataType: newDataType,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      
+                      // Delete button - more compact
+                      SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: IconButton(
+                          onPressed: () => _removeParameter(index),
+                          icon: const Icon(Icons.delete, size: 18),
+                          tooltip: 'Delete Parameter',
+                          color: Theme.of(context).colorScheme.error,
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
                     ],
                   ),
