@@ -166,6 +166,9 @@ APIParameterData? getParameterData({required BigInt nodeId}) => RustLib
     .crateApiStructureDesignerStructureDesignerApiGetParameterData(
         nodeId: nodeId);
 
+APIExprData? getExprData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetExprData(nodeId: nodeId);
+
 void setIntData({required BigInt nodeId, required APIIntData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetIntData(
@@ -253,6 +256,11 @@ void setParameterData(
         {required BigInt nodeId, required APIParameterData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetParameterData(
+            nodeId: nodeId, data: data);
+
+void setExprData({required BigInt nodeId, required APIExprData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetExprData(
             nodeId: nodeId, data: data);
 
 void deleteSelected() => RustLib.instance.api

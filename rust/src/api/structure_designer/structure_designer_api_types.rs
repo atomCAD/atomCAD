@@ -204,3 +204,12 @@ pub struct InputPinView {
     pub name: String,
     pub validation_errors: Option<String>,
   }
+
+pub struct APIExprParameter {
+  pub name: String,
+  pub data_type: APIDataType,
+}
+
+pub struct APIExprData {
+  pub parameters: Vec<APIExprParameter>,
+}

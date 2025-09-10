@@ -28,3 +28,5 @@ pub mod int;
 pub mod float;
 pub mod ivec2;
 pub mod vec2;
+pub mod expr;
+

@@ -123,6 +123,7 @@ class APICuboidData {
 
 enum APIDataType {
   none,
+  bool,
   int,
   float,
   vec2,
@@ -191,6 +192,45 @@ enum APIEditAtomTool {
   addAtom,
   addBond,
   ;
+}
+
+class APIExprData {
+  final List<APIExprParameter> parameters;
+
+  const APIExprData({
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode => parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIExprData &&
+          runtimeType == other.runtimeType &&
+          parameters == other.parameters;
+}
+
+class APIExprParameter {
+  final String name;
+  final APIDataType dataType;
+
+  const APIExprParameter({
+    required this.name,
+    required this.dataType,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ dataType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIExprParameter &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          dataType == other.dataType;
 }
 
 class APIExtrudeData {

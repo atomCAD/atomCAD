@@ -61,6 +61,9 @@ use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIDataType;
 use crate::structure_designer::nodes::parameter::ParameterData;
+use crate::structure_designer::nodes::expr::ExprData;
+use super::structure_designer_api_types::APIExprData;
+use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 
 #[flutter_rust_bridge::frb(sync)]
@@ -848,6 +851,31 @@ pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_expr_data(node_id: u64) -> Option<APIExprData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let expr_data = match node_data.as_any_ref().downcast_ref::<ExprData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIExprData {
+          parameters: expr_data.parameters.iter().map(|param| APIExprParameter {
+            name: param.name.clone(),
+            data_type: param.data_type,
+          }).collect(),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_int_data(node_id: u64, data: APIIntData) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
@@ -1082,6 +1110,22 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
         sort_order: data.sort_order,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_expr_data(node_id: u64, data: APIExprData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let expr_data = Box::new(ExprData {
+        parameters: data.parameters.into_iter().map(|api_param| crate::structure_designer::nodes::expr::ExprParameter {
+          name: api_param.name,
+          data_type: api_param.data_type,
+        }).collect(),
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, expr_data);
       refresh_renderer(cad_instance, false);
     });
   }

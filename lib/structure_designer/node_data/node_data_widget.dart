@@ -26,6 +26,7 @@ import 'package:flutter_cad/structure_designer/node_data/vec3_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/int_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/float_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/vec2_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/expr_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -319,6 +320,15 @@ class NodeDataWidget extends StatelessWidget {
         return Vec2Editor(
           nodeId: selectedNode.id,
           data: vec2Data,
+          model: model,
+        );
+      case 'expr':
+        // Fetch the expr data here in the parent widget
+        final exprData = model.getExprData(selectedNode.id);
+
+        return ExprEditor(
+          nodeId: selectedNode.id,
+          data: exprData,
           model: model,
         );
       default:
