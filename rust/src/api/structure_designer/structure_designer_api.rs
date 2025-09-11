@@ -89,7 +89,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
         for (_id, node) in node_network.nodes.iter() {
           let mut input_pins: Vec<InputPinView> = Vec::new();
-          let node_type = match cad_instance.structure_designer.node_type_registry.get_node_type(&node.node_type_name) {
+          let node_type = match cad_instance.structure_designer.node_type_registry.get_node_type_for_node(node) {
             Some(nt) => nt,
             None => return None
           };

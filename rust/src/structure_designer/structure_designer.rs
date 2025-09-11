@@ -251,8 +251,21 @@ impl StructureDesigner {
       .map(|node_network| node_network.add_node(node_type_name, position, num_parameters, node_data))
       .unwrap_or(0);
     
+    // If we successfully added a node, initialize custom node type if needed
+    if node_id != 0 && (node_type_name == "parameter" || node_type_name == "expr") {
+      // Split the borrow to avoid conflicts
+      let (built_in_types, node_networks) = (&self.node_type_registry.built_in_node_types, &mut self.node_type_registry.node_networks);
+      if let Some(network) = node_networks.get_mut(node_network_name) {
+        if let Some(node) = network.nodes.get_mut(&node_id) {
+          // Call the populate function with the split borrows
+          crate::structure_designer::node_type_registry::NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node);
+        }
+      }
+    }
+    
     // If we successfully added a node, apply the display policy with this node as dirty
     if node_id != 0 {
+      
       // Create a HashSet with just the new node ID
       let mut dirty_nodes = HashSet::new();
       dirty_nodes.insert(node_id);
@@ -275,6 +288,7 @@ impl StructureDesigner {
     
     node_id
   }
+
 
   pub fn move_node(&mut self, node_id: u64, position: DVec2) {
     // Early return if active_node_network_name is None
@@ -324,7 +338,7 @@ impl StructureDesigner {
       };
 
       // Get the node type and check parameter
-      match self.node_type_registry.get_node_type(&dest_node.node_type_name) {
+      match self.node_type_registry.get_node_type_for_node(&dest_node) {
         Some(node_type) => {
           if dest_param_index >= node_type.parameters.len() {
             return;
@@ -382,6 +396,18 @@ impl StructureDesigner {
     
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_network_data(node_id, data);
+    }
+    
+    // Cache custom NodeType for parameter and expr nodes after data is set
+    if is_parameter_node || is_expr_node {
+      // Split the borrow to avoid conflicts
+      let (built_in_types, node_networks) = (&self.node_type_registry.built_in_node_types, &mut self.node_type_registry.node_networks);
+      if let Some(network) = node_networks.get_mut(network_name) {
+        if let Some(node) = network.nodes.get_mut(&node_id) {
+          // Call the populate function with the split borrows
+          crate::structure_designer::node_type_registry::NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node);
+        }
+      }
     }
     
     // Validate if this was a parameter or expr node modification

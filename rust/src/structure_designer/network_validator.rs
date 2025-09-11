@@ -136,7 +136,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
         }
         
         // Get the destination node type to access parameter information
-        let dest_node_type = match node_type_registry.get_node_type(&dest_node.node_type_name) {
+        let dest_node_type = match node_type_registry.get_node_type_for_node(&dest_node) {
             Some(node_type) => node_type,
             None => {
                 network.validation_errors.push(ValidationError::new(
@@ -175,7 +175,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
     
     // Third pass: validate wires after fixes
     for (dest_node_id, dest_node) in &network.nodes {
-        let dest_node_type = node_type_registry.get_node_type(&dest_node.node_type_name).unwrap();
+        let dest_node_type = node_type_registry.get_node_type_for_node(dest_node).unwrap();
         
         // Now validate each argument (input pin) of the destination node
         // Re-get the node reference after potential modification
@@ -220,7 +220,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 }
                 
                 // Get the source node type to access its output type
-                let source_node_type = match node_type_registry.get_node_type(&source_node.node_type_name) {
+                let source_node_type = match node_type_registry.get_node_type_for_node(&source_node) {
                     Some(node_type) => node_type,
                     None => {
                         network.validation_errors.push(ValidationError::new(

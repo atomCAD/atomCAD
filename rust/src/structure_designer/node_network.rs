@@ -59,6 +59,7 @@ pub struct Node {
   pub position: DVec2,
   pub arguments: Vec<Argument>,
   pub data: Box<dyn NodeData>,
+  pub custom_node_type: Option<NodeType>,
 }
 
 
@@ -149,6 +150,7 @@ impl NodeNetwork {
       position,
       arguments,
       data: node_data,
+      custom_node_type: None,
     };
     
     self.next_node_id += 1;

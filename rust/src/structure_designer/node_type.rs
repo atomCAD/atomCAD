@@ -35,6 +35,7 @@ pub fn str_to_data_type(s: &str) -> Option<APIDataType> {
   }
 }
 
+#[derive(Clone)]
 pub struct Parameter {
   pub name: String,
   pub data_type: APIDataType,
@@ -42,6 +43,7 @@ pub struct Parameter {
 }
 
 // A built-in or user defined node type.
+#[derive(Clone)]
 pub struct NodeType {
   pub name: String, // name of the node type
   pub parameters: Vec<Parameter>,

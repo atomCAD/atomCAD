@@ -289,7 +289,7 @@ pub fn node_to_serializable(id: u64, node: &Node) -> io::Result<SerializableNode
 /// * `io::Result<Node>` - The deserialized Node or an error if deserialization fails
 pub fn serializable_to_node(serializable: &SerializableNode) -> io::Result<Node> {
     // Create the node data based on data_type
-    let node_data: Box<dyn NodeData> = match serializable.data_type.as_str() {
+    let data: Box<dyn NodeData> = match serializable.data_type.as_str() {
         "cuboid" => {
             let cuboid_data: CuboidData = serde_json::from_value(serializable.data.clone())?;
             Box::new(cuboid_data)
@@ -370,7 +370,8 @@ pub fn serializable_to_node(serializable: &SerializableNode) -> io::Result<Node>
         node_type_name: serializable.node_type_name.clone(),
         position: serializable.position,
         arguments: serializable.arguments.clone(),
-        data: node_data,
+        data,
+        custom_node_type: None,
     })
 }
 
@@ -497,7 +498,8 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
 
     // Process each network
     for (name, serializable_network) in serializable_registry.node_networks {
-        let network = serializable_to_node_network(&serializable_network)?;
+        let mut network = serializable_to_node_network(&serializable_network)?;
+        registry.initialize_custom_node_types_for_network(&mut network);
         registry.node_networks.insert(name, network);
     }
     

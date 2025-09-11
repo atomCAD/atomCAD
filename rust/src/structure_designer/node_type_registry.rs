@@ -10,8 +10,9 @@ use super::nodes::vec3::Vec3Data;
 use super::nodes::expr::ExprData;
 use super::nodes::expr::ExprParameter;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
-use super::node_network::NodeNetwork;
+use crate::structure_designer::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
+use crate::structure_designer::node_network::Node;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::facet_shell::FacetShellData;
 use super::nodes::parameter::ParameterData;
@@ -31,7 +32,6 @@ use super::nodes::anchor::AnchorData;
 use super::nodes::stamp::StampData;
 use super::node_data::NoData;
 use glam::{IVec3, DVec2, DVec3, IVec2};
-use crate::structure_designer::node_network::Node;
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
@@ -608,32 +608,88 @@ impl NodeTypeRegistry {
       .collect()
   }
 
-  pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {
+  pub fn get_node_type(&self, node_type_name: &str) -> Option<NodeType> {
     let node_type = self.built_in_node_types.get(node_type_name);
-    if let Some(_nt) = node_type {
-      return node_type;
+    if let Some(nt) = node_type {
+      return Some(nt.clone());
     }
     let node_network = self.node_networks.get(node_type_name)?;
-    return Some(&node_network.node_type);
+    return Some(node_network.node_type.clone());
+  }
+
+  /// Gets a dynamic node type for a specific node instance, handling parameter and expr nodes
+  pub fn get_node_type_for_node<'a>(&'a self, node: &'a Node) -> Option<&'a NodeType> {
+    // First check if the node has a cached custom node type
+    if let Some(ref custom_node_type) = node.custom_node_type {
+      return Some(custom_node_type);
+    }
+    
+    // For regular nodes, get the standard node type
+    if let Some(node_type) = self.built_in_node_types.get(&node.node_type_name) {
+      return Some(node_type);
+    }
+    
+    // Check if it's a custom network node type
+    if let Some(node_network) = self.node_networks.get(&node.node_type_name) {
+      return Some(&node_network.node_type);
+    }
+    
+    None
+  }
+
+  /// Initializes custom node type cache for all parameter and expr nodes in a network
+  pub fn initialize_custom_node_types_for_network(&self, network: &mut NodeNetwork) {
+    for node in network.nodes.values_mut() {
+      self.populate_custom_node_type_cache(node);
+    }
+  }
+
+  /// Static helper function to populate custom node type cache without borrowing conflicts
+  pub fn populate_custom_node_type_cache_with_types(built_in_types: &std::collections::HashMap<String, NodeType>, node: &mut Node) {
+    match node.node_type_name.as_str() {
+      "parameter" => {
+        if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<crate::structure_designer::nodes::parameter::ParameterData>() {
+          if let Some(base_node_type) = built_in_types.get("parameter") {
+            let mut custom_node_type = base_node_type.clone();
+            
+            // Update the parameter data type and multi flag
+            custom_node_type.parameters[0].data_type = param_data.data_type;
+            custom_node_type.parameters[0].multi = param_data.multi;
+            
+            node.custom_node_type = Some(custom_node_type);
+          }
+        }
+      },
+      "expr" => {
+        if let Some(expr_data) = (*node.data).as_any_ref().downcast_ref::<crate::structure_designer::nodes::expr::ExprData>() {
+          if let Some(base_node_type) = built_in_types.get("expr") {
+            let mut custom_node_type = base_node_type.clone();
+            
+            // Update the output type if available
+            if let Some(output_type) = expr_data.output_type {
+              custom_node_type.output_type = output_type;
+            }
+            
+            node.custom_node_type = Some(custom_node_type);
+          }
+        }
+      },
+      _ => {}
+    }
+  }
+
+  /// Populates the custom node type cache for parameter and expr nodes
+  pub fn populate_custom_node_type_cache(&self, node: &mut Node) {
+    Self::populate_custom_node_type_cache_with_types(&self.built_in_node_types, node);
   }
 
   pub fn get_node_output_type(&self, node: &Node) -> APIDataType {
-    if node.node_type_name == "parameter" {
-      if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
-        return param_data.data_type;
-      }
-    }
-    let node_type = self.get_node_type(&node.node_type_name).unwrap();
+    let node_type = self.get_node_type_for_node(node).unwrap();
     node_type.output_type
   }
 
-  pub fn get_node_param_data_type(&self,  node: &Node, parameter_index: usize) -> APIDataType {
-    if node.node_type_name == "parameter" && parameter_index == 0 {
-      if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
-        return param_data.data_type;
-      }
-    }
-    let node_type = self.get_node_type(&node.node_type_name).unwrap();
+  pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> APIDataType {
+    let node_type = self.get_node_type_for_node(node).unwrap();
     node_type.parameters[parameter_index].data_type
   }
 
@@ -711,4 +767,95 @@ impl NodeTypeRegistry {
     
     parent_networks
   }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::structure_designer::node_network::Node;
+    use crate::structure_designer::nodes::parameter::ParameterData;
+    use crate::structure_designer::nodes::expr::{ExprData, ExprParameter};
+    use crate::api::structure_designer::structure_designer_api_types::APIDataType;
+
+    #[test]
+    fn test_dynamic_parameter_node_type() {
+        let registry = NodeTypeRegistry::new();
+        
+        // Create a parameter node with Float data type
+        let param_data = ParameterData {
+            param_index: 0,
+            param_name: "test_param".to_string(),
+            data_type: APIDataType::Float,
+            multi: false,
+            sort_order: 0,
+        };
+        
+        let node = Node {
+            node_type_name: "parameter".to_string(),
+            data: Box::new(param_data),
+            arguments: vec![],
+            position: (0.0, 0.0),
+            custom_node_type: None,
+        };
+        
+        // Get the dynamic node type
+        let node_type = registry.get_node_type_for_node(&node).unwrap();
+        
+        // Verify the node type has been updated correctly
+        assert_eq!(node_type.output_type, APIDataType::Float);
+        assert_eq!(node_type.parameters[0].data_type, APIDataType::Float);
+        assert_eq!(node_type.parameters[0].multi, false);
+    }
+
+    #[test]
+    fn test_dynamic_expr_node_type() {
+        let registry = NodeTypeRegistry::new();
+        
+        // Create an expr node with custom parameters
+        let expr_data = ExprData {
+            parameters: vec![
+                ExprParameter {
+                    name: "x".to_string(),
+                    data_type: APIDataType::Float,
+                },
+                ExprParameter {
+                    name: "y".to_string(),
+                    data_type: APIDataType::Int,
+                },
+            ],
+            expression: "x + y".to_string(),
+            expr: None,
+            error: None,
+            output_type: Some(APIDataType::Float),
+        };
+        
+        let node = Node {
+            node_type_name: "expr".to_string(),
+            data: Box::new(expr_data),
+            arguments: vec![],
+            position: (0.0, 0.0),
+            custom_node_type: None,
+        };
+        
+        // Get the dynamic node type
+        let node_type = registry.get_node_type_for_node(&node).unwrap();
+        
+        // Verify the node type has been updated correctly
+        assert_eq!(node_type.output_type, APIDataType::Float);
+        assert_eq!(node_type.parameters.len(), 2);
+        assert_eq!(node_type.parameters[0].name, "x");
+        assert_eq!(node_type.parameters[0].data_type, APIDataType::Float);
+        assert_eq!(node_type.parameters[1].name, "y");
+        assert_eq!(node_type.parameters[1].data_type, APIDataType::Int);
+    }
+
+    #[test]
+    fn test_regular_node_type() {
+        let registry = NodeTypeRegistry::new();
+        
+        // Test that regular nodes still work correctly
+        let node_type = registry.get_node_type("int").unwrap();
+        assert_eq!(node_type.output_type, APIDataType::Int);
+        assert_eq!(node_type.parameters.len(), 0);
+    }
 }

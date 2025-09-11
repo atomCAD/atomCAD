@@ -8,7 +8,6 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::scene_composer::scene_composer::SceneComposer;
 use crate::renderer::renderer::Renderer;
 use crate::api::common_api_types::Editor;
-use crate::util::timer::Timer;
 use crate::util::transform::Transform;
 
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
