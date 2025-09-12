@@ -8,7 +8,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::expr::validation::get_function_signatures;
 use std::collections::HashMap;
 use crate::structure_designer::expr::parser::parse;
@@ -102,9 +101,6 @@ pub fn eval_expr<'a>(
 ) -> Vec<NetworkResult> {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let expr_data = &node.data.as_any_ref().downcast_ref::<ExprData>().unwrap();
-
-//evaluate(&self, context: &EvaluationContext) -> NetworkResult {
-
 
   return Vec::new();  
 }

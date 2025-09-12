@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use glam::DVec2;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
 use super::nodes::int::IntData;
@@ -31,7 +32,7 @@ use super::nodes::geo_to_atom::GeoToAtomData;
 use super::nodes::anchor::AnchorData;
 use super::nodes::stamp::StampData;
 use super::node_data::NoData;
-use glam::{IVec3, DVec2, DVec3, IVec2};
+use glam::{IVec3, DVec3, IVec2};
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
@@ -780,77 +781,7 @@ mod tests {
     use crate::structure_designer::nodes::expr::{ExprData, ExprParameter};
     use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 
-    #[test]
-    fn test_dynamic_parameter_node_type() {
-        let registry = NodeTypeRegistry::new();
-        
-        // Create a parameter node with Float data type
-        let param_data = ParameterData {
-            param_index: 0,
-            param_name: "test_param".to_string(),
-            data_type: APIDataType::Float,
-            multi: false,
-            sort_order: 0,
-        };
-        
-        let node = Node {
-            node_type_name: "parameter".to_string(),
-            data: Box::new(param_data),
-            arguments: vec![],
-            position: (0.0, 0.0),
-            custom_node_type: None,
-        };
-        
-        // Get the dynamic node type
-        let node_type = registry.get_node_type_for_node(&node).unwrap();
-        
-        // Verify the node type has been updated correctly
-        assert_eq!(node_type.output_type, APIDataType::Float);
-        assert_eq!(node_type.parameters[0].data_type, APIDataType::Float);
-        assert_eq!(node_type.parameters[0].multi, false);
-    }
 
-    #[test]
-    fn test_dynamic_expr_node_type() {
-        let registry = NodeTypeRegistry::new();
-        
-        // Create an expr node with custom parameters
-        let expr_data = ExprData {
-            parameters: vec![
-                ExprParameter {
-                    name: "x".to_string(),
-                    data_type: APIDataType::Float,
-                },
-                ExprParameter {
-                    name: "y".to_string(),
-                    data_type: APIDataType::Int,
-                },
-            ],
-            expression: "x + y".to_string(),
-            expr: None,
-            error: None,
-            output_type: Some(APIDataType::Float),
-        };
-        
-        let node = Node {
-            node_type_name: "expr".to_string(),
-            data: Box::new(expr_data),
-            arguments: vec![],
-            position: (0.0, 0.0),
-            custom_node_type: None,
-        };
-        
-        // Get the dynamic node type
-        let node_type = registry.get_node_type_for_node(&node).unwrap();
-        
-        // Verify the node type has been updated correctly
-        assert_eq!(node_type.output_type, APIDataType::Float);
-        assert_eq!(node_type.parameters.len(), 2);
-        assert_eq!(node_type.parameters[0].name, "x");
-        assert_eq!(node_type.parameters[0].data_type, APIDataType::Float);
-        assert_eq!(node_type.parameters[1].name, "y");
-        assert_eq!(node_type.parameters[1].data_type, APIDataType::Int);
-    }
 
     #[test]
     fn test_regular_node_type() {

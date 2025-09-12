@@ -1,7 +1,8 @@
 use rust_lib_flutter_cad::structure_designer::expr::expr::*;
-use rust_lib_flutter_cad::structure_designer::expr::validation::*;
+use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_signatures};
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIDataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use std::collections::HashMap;
 
 #[cfg(test)]
 mod validation_tests {
@@ -10,37 +11,37 @@ mod validation_tests {
     #[test]
     fn test_number_validation() {
         let expr = Expr::Float(42.0);
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
     #[test]
     fn test_bool_validation() {
         let expr = Expr::Bool(true);
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Bool));
     }
 
     #[test]
     fn test_variable_validation_success() {
         let expr = Expr::Var("x".to_string());
-        let mut context = ValidationContext::new();
-        context.add_variable("x".to_string(), APIDataType::Float);
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), APIDataType::Float);
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
     #[test]
     fn test_variable_validation_failure() {
         let expr = Expr::Var("unknown".to_string());
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown variable: unknown"));
     }
@@ -52,9 +53,9 @@ mod validation_tests {
             BinOp::Add,
             Box::new(Expr::Float(3.0))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
@@ -65,9 +66,9 @@ mod validation_tests {
             BinOp::Mul,
             Box::new(Expr::Float(3.14))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
@@ -78,9 +79,9 @@ mod validation_tests {
             BinOp::Lt,
             Box::new(Expr::Float(10.0))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Bool));
     }
 
@@ -91,9 +92,9 @@ mod validation_tests {
             BinOp::And,
             Box::new(Expr::Bool(false))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Bool));
     }
 
@@ -103,9 +104,9 @@ mod validation_tests {
             UnOp::Neg,
             Box::new(Expr::Float(42.0))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
@@ -115,9 +116,9 @@ mod validation_tests {
             UnOp::Not,
             Box::new(Expr::Bool(true))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Bool));
     }
 
@@ -127,9 +128,9 @@ mod validation_tests {
             "sin".to_string(),
             vec![Expr::Float(3.14)]
         );
-        let context = ValidationContext::with_standard_functions();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
@@ -139,9 +140,9 @@ mod validation_tests {
             "unknown_func".to_string(),
             vec![Expr::Float(1.0)]
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown function: unknown_func"));
     }
@@ -152,9 +153,9 @@ mod validation_tests {
             "sin".to_string(),
             vec![Expr::Float(1.0), Expr::Float(2.0)] // sin expects 1 arg
         );
-        let context = ValidationContext::with_standard_functions();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("expects 1 arguments, got 2"));
     }
@@ -166,9 +167,9 @@ mod validation_tests {
             Box::new(Expr::Float(1.0)),
             Box::new(Expr::Float(2.0))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
@@ -179,9 +180,9 @@ mod validation_tests {
             Box::new(Expr::Float(1.0)), // Float
             Box::new(Expr::Float(2.0))  // Float (both numbers are parsed as Float)
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Float));
     }
 
@@ -192,9 +193,9 @@ mod validation_tests {
             Box::new(Expr::Float(1.0)),
             Box::new(Expr::Bool(false)) // Incompatible with Float
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("incompatible types"));
     }
@@ -206,9 +207,9 @@ mod validation_tests {
             Box::new(Expr::Float(1.0)),
             Box::new(Expr::Float(2.0))
         );
-        let context = ValidationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         // This should actually succeed since Float can be used as condition
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("must be boolean or int"));
@@ -217,9 +218,9 @@ mod validation_tests {
     #[test]
     fn test_complex_expression_validation() {
         // (x + 2.0) * sin(y) > 0.0
-        let mut context = ValidationContext::with_standard_functions();
-        context.add_variable("x".to_string(), APIDataType::Float);
-        context.add_variable("y".to_string(), APIDataType::Float);
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), APIDataType::Float);
+        variables.insert("y".to_string(), APIDataType::Float);
         
         let expr = Expr::Binary(
             Box::new(Expr::Binary(
@@ -238,7 +239,7 @@ mod validation_tests {
             Box::new(Expr::Float(0.0))
         );
         
-        let result = expr.validate(&context);
+        let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(APIDataType::Bool));
     }
 }

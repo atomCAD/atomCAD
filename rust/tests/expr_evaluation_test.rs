@@ -1,7 +1,8 @@
 use rust_lib_flutter_cad::structure_designer::expr::expr::*;
-use rust_lib_flutter_cad::structure_designer::expr::validation::*;
+use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_implementations};
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIDataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use std::collections::HashMap;
 
 #[cfg(test)]
 mod evaluation_tests {
@@ -10,9 +11,9 @@ mod evaluation_tests {
     #[test]
     fn test_number_evaluation() {
         let expr = Expr::Float(42.5);
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 42.5),
             _ => panic!("Expected Float result"),
@@ -22,9 +23,9 @@ mod evaluation_tests {
     #[test]
     fn test_bool_evaluation() {
         let expr = Expr::Bool(true);
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -34,10 +35,10 @@ mod evaluation_tests {
     #[test]
     fn test_variable_evaluation_success() {
         let expr = Expr::Var("x".to_string());
-        let mut context = EvaluationContext::new();
-        context.add_variable("x".to_string(), NetworkResult::Float(3.14));
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), NetworkResult::Float(3.14));
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 3.14),
             _ => panic!("Expected Float result"),
@@ -47,9 +48,9 @@ mod evaluation_tests {
     #[test]
     fn test_variable_evaluation_failure() {
         let expr = Expr::Var("unknown".to_string());
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Error(msg) => assert!(msg.contains("Unknown variable: unknown")),
             _ => panic!("Expected Error result"),
@@ -63,9 +64,9 @@ mod evaluation_tests {
             BinOp::Add,
             Box::new(Expr::Float(3.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 8.0),
             _ => panic!("Expected Float result"),
@@ -79,9 +80,9 @@ mod evaluation_tests {
             BinOp::Sub,
             Box::new(Expr::Float(3.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 7.0),
             _ => panic!("Expected Float result"),
@@ -95,9 +96,9 @@ mod evaluation_tests {
             BinOp::Mul,
             Box::new(Expr::Float(2.5))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 10.0),
             _ => panic!("Expected Float result"),
@@ -111,9 +112,9 @@ mod evaluation_tests {
             BinOp::Div,
             Box::new(Expr::Float(3.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 5.0),
             _ => panic!("Expected Float result"),
@@ -127,9 +128,9 @@ mod evaluation_tests {
             BinOp::Div,
             Box::new(Expr::Float(0.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Error(msg) => assert!(msg.contains("Division by zero")),
             _ => panic!("Expected Error result"),
@@ -143,9 +144,9 @@ mod evaluation_tests {
             BinOp::Pow,
             Box::new(Expr::Float(3.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 8.0),
             _ => panic!("Expected Float result"),
@@ -159,9 +160,9 @@ mod evaluation_tests {
             BinOp::Lt,
             Box::new(Expr::Float(5.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -175,9 +176,9 @@ mod evaluation_tests {
             BinOp::Gt,
             Box::new(Expr::Float(5.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -191,9 +192,9 @@ mod evaluation_tests {
             BinOp::Eq,
             Box::new(Expr::Float(5.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -207,9 +208,9 @@ mod evaluation_tests {
             BinOp::Ne,
             Box::new(Expr::Float(5.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -223,9 +224,9 @@ mod evaluation_tests {
             BinOp::And,
             Box::new(Expr::Bool(true))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -239,9 +240,9 @@ mod evaluation_tests {
             BinOp::And,
             Box::new(Expr::Bool(false))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(!val),
             _ => panic!("Expected Bool result"),
@@ -255,9 +256,9 @@ mod evaluation_tests {
             BinOp::Or,
             Box::new(Expr::Bool(true))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -271,9 +272,9 @@ mod evaluation_tests {
             BinOp::Or,
             Box::new(Expr::Bool(false))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(!val),
             _ => panic!("Expected Bool result"),
@@ -286,9 +287,9 @@ mod evaluation_tests {
             UnOp::Neg,
             Box::new(Expr::Float(42.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, -42.0),
             _ => panic!("Expected Float result"),
@@ -301,9 +302,9 @@ mod evaluation_tests {
             UnOp::Pos,
             Box::new(Expr::Float(42.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 42.0),
             _ => panic!("Expected Float result"),
@@ -316,9 +317,9 @@ mod evaluation_tests {
             UnOp::Not,
             Box::new(Expr::Bool(true))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(!val),
             _ => panic!("Expected Bool result"),
@@ -331,9 +332,9 @@ mod evaluation_tests {
             UnOp::Not,
             Box::new(Expr::Bool(false))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Bool(val) => assert!(val),
             _ => panic!("Expected Bool result"),
@@ -346,9 +347,10 @@ mod evaluation_tests {
             "sin".to_string(),
             vec![Expr::Float(0.0)]
         );
-        let context = EvaluationContext::with_standard_functions();
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, functions);
         match result {
             NetworkResult::Float(val) => assert!((val - 0.0).abs() < 1e-10),
             _ => panic!("Expected Float result"),
@@ -361,9 +363,10 @@ mod evaluation_tests {
             "sqrt".to_string(),
             vec![Expr::Float(16.0)]
         );
-        let context = EvaluationContext::with_standard_functions();
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, functions);
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 4.0),
             _ => panic!("Expected Float result"),
@@ -376,9 +379,10 @@ mod evaluation_tests {
             "sqrt".to_string(),
             vec![Expr::Float(-1.0)]
         );
-        let context = EvaluationContext::with_standard_functions();
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, functions);
         match result {
             NetworkResult::Error(msg) => assert!(msg.contains("sqrt() of negative number")),
             _ => panic!("Expected Error result"),
@@ -391,9 +395,9 @@ mod evaluation_tests {
             "unknown_func".to_string(),
             vec![Expr::Float(1.0)]
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Error(msg) => assert!(msg.contains("Unknown function: unknown_func")),
             _ => panic!("Expected Error result"),
@@ -407,9 +411,9 @@ mod evaluation_tests {
             Box::new(Expr::Float(42.0)),
             Box::new(Expr::Float(24.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 42.0),
             _ => panic!("Expected Float result"),
@@ -423,9 +427,9 @@ mod evaluation_tests {
             Box::new(Expr::Float(42.0)),
             Box::new(Expr::Float(24.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 24.0),
             _ => panic!("Expected Float result"),
@@ -435,9 +439,10 @@ mod evaluation_tests {
     #[test]
     fn test_complex_expression() {
         // (x + 2.0) * sin(y) where x = 3.0, y = π/2
-        let mut context = EvaluationContext::with_standard_functions();
-        context.add_variable("x".to_string(), NetworkResult::Float(3.0));
-        context.add_variable("y".to_string(), NetworkResult::Float(std::f64::consts::PI / 2.0));
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), NetworkResult::Float(3.0));
+        variables.insert("y".to_string(), NetworkResult::Float(std::f64::consts::PI / 2.0));
+        let functions = get_function_implementations();
         
         let expr = Expr::Binary(
             Box::new(Expr::Binary(
@@ -452,7 +457,7 @@ mod evaluation_tests {
             ))
         );
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, functions);
         match result {
             NetworkResult::Float(val) => {
                 // (3.0 + 2.0) * sin(π/2) = 5.0 * 1.0 = 5.0
@@ -474,9 +479,9 @@ mod evaluation_tests {
             )),
             Box::new(Expr::Float(3.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Float(val) => assert_eq!(val, 2.0),
             _ => panic!("Expected Float result"),
@@ -495,9 +500,9 @@ mod evaluation_tests {
             BinOp::Add,
             Box::new(Expr::Float(5.0))
         );
-        let context = EvaluationContext::new();
+        let variables = HashMap::new();
         
-        let result = expr.evaluate(&context);
+        let result = expr.evaluate(&variables, get_function_implementations());
         match result {
             NetworkResult::Error(msg) => assert!(msg.contains("Division by zero")),
             _ => panic!("Expected Error result"),
