@@ -55,7 +55,7 @@ impl StampData {
 
 pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let crystal_input_name = registry.get_parameter_name(&node.node_type_name, 0);
+  let crystal_input_name = registry.get_parameter_name(&node, 0);
 
   if node.arguments[0].is_empty() {
     return input_missing_error(&crystal_input_name);
@@ -68,7 +68,7 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
     return error_in_input(&crystal_input_name);
   }
 
-  let stamp_input_name = registry.get_parameter_name(&node.node_type_name, 1);
+  let stamp_input_name = registry.get_parameter_name(&node, 1);
 
   if node.arguments[1].is_empty() {
     return input_missing_error(&stamp_input_name);

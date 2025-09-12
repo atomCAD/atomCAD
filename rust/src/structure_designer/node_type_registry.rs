@@ -608,13 +608,13 @@ impl NodeTypeRegistry {
       .collect()
   }
 
-  pub fn get_node_type(&self, node_type_name: &str) -> Option<NodeType> {
+  pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {
     let node_type = self.built_in_node_types.get(node_type_name);
     if let Some(nt) = node_type {
-      return Some(nt.clone());
+      return Some(nt);
     }
     let node_network = self.node_networks.get(node_type_name)?;
-    return Some(node_network.node_type.clone());
+    return Some(&node_network.node_type);
   }
 
   /// Gets a dynamic node type for a specific node instance, handling parameter and expr nodes
@@ -651,10 +651,11 @@ impl NodeTypeRegistry {
         if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<crate::structure_designer::nodes::parameter::ParameterData>() {
           if let Some(base_node_type) = built_in_types.get("parameter") {
             let mut custom_node_type = base_node_type.clone();
-            
-            // Update the parameter data type and multi flag
+
             custom_node_type.parameters[0].data_type = param_data.data_type;
             custom_node_type.parameters[0].multi = param_data.multi;
+
+            custom_node_type.output_type = param_data.data_type;
             
             node.custom_node_type = Some(custom_node_type);
           }
@@ -665,10 +666,17 @@ impl NodeTypeRegistry {
           if let Some(base_node_type) = built_in_types.get("expr") {
             let mut custom_node_type = base_node_type.clone();
             
-            // Update the output type if available
-            if let Some(output_type) = expr_data.output_type {
-              custom_node_type.output_type = output_type;
-            }
+            // Update the output type - use APIDataType::None if expr_data.output_type is None
+            custom_node_type.output_type = expr_data.output_type.unwrap_or(APIDataType::None);
+            
+            // Convert ExprParameter to Parameter
+            custom_node_type.parameters = expr_data.parameters.iter()
+              .map(|expr_param| Parameter {
+                name: expr_param.name.clone(),
+                data_type: expr_param.data_type,
+                multi: false, // Expression parameters are single-valued
+              })
+              .collect();
             
             node.custom_node_type = Some(custom_node_type);
           }
@@ -683,18 +691,13 @@ impl NodeTypeRegistry {
     Self::populate_custom_node_type_cache_with_types(&self.built_in_node_types, node);
   }
 
-  pub fn get_node_output_type(&self, node: &Node) -> APIDataType {
-    let node_type = self.get_node_type_for_node(node).unwrap();
-    node_type.output_type
-  }
-
   pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> APIDataType {
     let node_type = self.get_node_type_for_node(node).unwrap();
     node_type.parameters[parameter_index].data_type
   }
 
-  pub fn get_parameter_name(&self, node_type_name: &str, parameter_index: usize) -> String {
-    let node_type = self.get_node_type(node_type_name).unwrap();
+  pub fn get_parameter_name(&self, node: &Node, parameter_index: usize) -> String {
+    let node_type = self.get_node_type_for_node(node).unwrap();
     node_type.parameters[parameter_index].name.clone()
   }
 

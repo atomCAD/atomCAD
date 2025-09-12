@@ -35,7 +35,7 @@ pub fn eval_extrude<'a>(
 ) -> NetworkResult {
   //let _timer = Timer::new("eval_extrude");
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let shape_input_name = registry.get_parameter_name(&node.node_type_name, 0);
+  let shape_input_name = registry.get_parameter_name(&node, 0);
   let extrude_data = &node.data.as_any_ref().downcast_ref::<ExtrudeData>().unwrap();
 
   if node.arguments[0].is_empty() {

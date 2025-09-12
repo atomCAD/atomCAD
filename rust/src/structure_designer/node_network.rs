@@ -182,7 +182,7 @@ impl NodeNetwork {
     }
     
     // Get the output type of the source node
-    let source_output_type = node_type_registry.get_node_output_type(source_node);
+    let source_output_type = node_type_registry.get_node_type_for_node(source_node).unwrap().output_type;
     
     // Get the expected input type for the destination parameter
     let dest_param_type = node_type_registry.get_node_param_data_type(dest_node, dest_param_index);

@@ -129,7 +129,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
           let output_string = cad_instance.structure_designer.last_generated_structure_designer_scene.node_output_strings.get(&node.id).cloned();
 
-          let output_type = cad_instance.structure_designer.node_type_registry.get_node_output_type(node);
+          let output_type = cad_instance.structure_designer.node_type_registry.get_node_type_for_node(node).unwrap().output_type;
 
           node_network_view.nodes.insert(node.id, NodeView {
             id: node.id,

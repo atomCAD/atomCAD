@@ -21,8 +21,8 @@ pub fn eval_diff_2d<'a>(
 ) -> NetworkResult {
   //let _timer = Timer::new("eval_diff");
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let base_input_name = registry.get_parameter_name(&node.node_type_name, 0);
-  let sub_input_name = registry.get_parameter_name(&node.node_type_name, 1);
+  let base_input_name = registry.get_parameter_name(&node, 0);
+  let sub_input_name = registry.get_parameter_name(&node, 1);
 
   if node.arguments[0].is_empty() {
     return input_missing_error(&base_input_name);

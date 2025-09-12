@@ -59,7 +59,7 @@ pub fn eval_geo_trans<'a>(
   context: &mut NetworkEvaluationContext,
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let shape_input_name = registry.get_parameter_name(&node.node_type_name, 0);
+  let shape_input_name = registry.get_parameter_name(&node, 0);
 
   if node.arguments[0].is_empty() {
     return input_missing_error(&shape_input_name);

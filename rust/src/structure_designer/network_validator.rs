@@ -232,10 +232,10 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 };
                 
                 // Validate data type compatibility
-                if node_type_registry.get_node_output_type(source_node) != node_type_registry.get_node_param_data_type(dest_node, arg_index) {
+                if node_type_registry.get_node_type_for_node(source_node).unwrap().output_type != node_type_registry.get_node_param_data_type(dest_node, arg_index) {
                     network.validation_errors.push(ValidationError::new(
                         format!("Data type mismatch: input expects {:?}, but source outputs {:?}", 
-                            parameter.data_type, node_type_registry.get_node_output_type(source_node)),
+                            parameter.data_type, node_type_registry.get_node_type_for_node(source_node).unwrap().output_type),
                         Some(*dest_node_id)
                     ));
                     return false;
@@ -298,7 +298,7 @@ fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &No
         // Get the return node
         if let Some(return_node) = network.nodes.get(&return_node_id) {
             // Get the node type to find its output type
-            node_type_registry.get_node_output_type(return_node)
+            node_type_registry.get_node_type_for_node(return_node).unwrap().output_type
         } else {
             // Return node doesn't exist, set to None
             crate::api::structure_designer::structure_designer_api_types::APIDataType::None

@@ -133,7 +133,7 @@ impl NetworkEvaluator {
     let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
 
     let mut scene = 
-    if registry.get_node_output_type(node) == APIDataType::Geometry2D {
+    if registry.get_node_type_for_node(node).unwrap().output_type == APIDataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
@@ -149,7 +149,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if registry.get_node_output_type(node) == APIDataType::Geometry {
+    else if registry.get_node_type_for_node(node).unwrap().output_type == APIDataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         if let NetworkResult::Geometry(geometry_summary) = result {
           let mut ret = generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences);
@@ -172,7 +172,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if registry.get_node_output_type(node) == APIDataType::Atomic {
+    else if registry.get_node_type_for_node(node).unwrap().output_type == APIDataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);
 
       let mut scene = StructureDesignerScene::new();
@@ -295,7 +295,7 @@ impl NetworkEvaluator {
   ) -> Option<NetworkResult> {
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
-    let input_name = registry.get_parameter_name(&node.node_type_name, parameter_index);
+    let input_name = registry.get_parameter_name(&node, parameter_index);
     if let Some(input_node_id) = node.arguments[parameter_index].get_node_id() {
       let result = self.evaluate(
         network_stack,
