@@ -1,6 +1,5 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
-use serde::{Serialize, Deserialize};
 
 pub fn data_type_to_str(data_type: &APIDataType) -> String {
   match data_type {

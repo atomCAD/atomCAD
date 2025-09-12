@@ -246,7 +246,6 @@ impl Gadget for PolygonGadget {
             
             // Get the indices of the two vertices that form the line segment
             let start_vertex_index = segment_index;
-            let end_vertex_index = (segment_index + 1) % self.vertices.len();
             
             // Find the lattice point where the ray intersects the XZ plane
             if let Some(new_vertex) = self.find_lattice_point_by_ray(&ray_origin, &ray_direction) {
@@ -264,7 +263,7 @@ impl Gadget for PolygonGadget {
         }
     }
 
-    fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    fn drag(&mut self, _handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
         // Skip dragging if not in drag mode
         if !self.is_dragging {
             return;

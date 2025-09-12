@@ -1,5 +1,7 @@
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
+use crate::structure_designer::expr::validation::EvaluationContext;
+use crate::structure_designer::expr::validation::ValidationContext;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UnOp {
@@ -32,7 +34,7 @@ pub enum Expr {
 
 impl Expr {
     /// Validates the expression and returns its inferred type
-    pub fn validate(&self, context: &crate::structure_designer::expr::validation::ValidationContext) -> Result<APIDataType, String> {
+    pub fn validate(&self, context: &ValidationContext) -> Result<APIDataType, String> {
         
         match self {
             Expr::Int(_) => Ok(APIDataType::Int),
@@ -190,7 +192,7 @@ impl Expr {
     }
     
     /// Evaluates the expression and returns the result
-    pub fn evaluate(&self, context: &crate::structure_designer::expr::validation::EvaluationContext) -> NetworkResult {
+    pub fn evaluate(&self, context: &EvaluationContext) -> NetworkResult {
         
         match self {
             Expr::Int(n) => NetworkResult::Int(*n),

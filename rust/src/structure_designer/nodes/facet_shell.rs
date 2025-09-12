@@ -2,7 +2,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::timer::Timer;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::ivec3_serializer;
@@ -450,7 +449,7 @@ pub fn eval_facet_shell<'a>(
   network_stack: &Vec<NetworkStackElement<'a>>,
   node_id: u64,
   _registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext
+  _context: &mut NetworkEvaluationContext
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let facet_shell_data = node.data.as_any_ref().downcast_ref::<FacetShellData>().unwrap();

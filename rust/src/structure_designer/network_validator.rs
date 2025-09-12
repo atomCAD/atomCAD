@@ -32,7 +32,7 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     // Validate param_name uniqueness
     let mut param_names: HashMap<String, u64> = HashMap::new();
     for (node_id, param_data) in &parameter_nodes {
-        if let Some(existing_node_id) = param_names.get(&param_data.param_name) {
+        if let Some(_existing_node_id) = param_names.get(&param_data.param_name) {
             network.validation_errors.push(ValidationError::new(
                 format!("Duplicate parameter name '{}'", 
                     param_data.param_name),
@@ -47,7 +47,7 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     // Validate sort_order uniqueness
     let mut sort_orders: HashMap<i32, u64> = HashMap::new();
     for (node_id, param_data) in &parameter_nodes {
-        if let Some(existing_node_id) = sort_orders.get(&param_data.sort_order) {
+        if let Some(_existing_node_id) = sort_orders.get(&param_data.sort_order) {
             network.validation_errors.push(ValidationError::new(
                 format!("Duplicate sort order {}", 
                     param_data.sort_order),
@@ -220,7 +220,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 }
                 
                 // Get the source node type to access its output type
-                let source_node_type = match node_type_registry.get_node_type_for_node(&source_node) {
+                let _source_node_type = match node_type_registry.get_node_type_for_node(&source_node) {
                     Some(node_type) => node_type,
                     None => {
                         network.validation_errors.push(ValidationError::new(

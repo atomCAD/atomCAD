@@ -165,7 +165,7 @@ impl<'a> Lexer<'a> {
                     Token::Eof
                 }
             }
-            Some(other) => {
+            Some(_other) => {
                 self.i += 1;
                 // unknown char -> skip
                 Token::Eof

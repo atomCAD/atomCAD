@@ -199,8 +199,8 @@ impl NetworkEvaluator {
     &self,
     result: NetworkResult,
     network_stack: &Vec<NetworkStackElement<'a>>,
-    node_id: u64, registry: &NodeTypeRegistry,
-    context: &mut NetworkEvaluationContext,
+    node_id: u64, _registry: &NodeTypeRegistry,
+    _context: &mut NetworkEvaluationContext,
     geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
       let mut scene = StructureDesignerScene::new();
