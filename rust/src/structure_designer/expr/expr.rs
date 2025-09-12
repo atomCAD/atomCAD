@@ -1,7 +1,7 @@
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
-use crate::structure_designer::expr::validation::EvaluationContext;
-use crate::structure_designer::expr::validation::ValidationContext;
+use crate::structure_designer::expr::validation::{EvaluationContext, ValidationContext, FunctionSignature, EvaluationFunction};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UnOp {
@@ -34,19 +34,19 @@ pub enum Expr {
 
 impl Expr {
     /// Validates the expression and returns its inferred type
-    pub fn validate(&self, context: &ValidationContext) -> Result<APIDataType, String> {
+    pub fn validate(&self, variables: &HashMap<String, APIDataType>, functions: &HashMap<String, FunctionSignature>) -> Result<APIDataType, String> {
         
         match self {
             Expr::Int(_) => Ok(APIDataType::Int),
             Expr::Float(_) => Ok(APIDataType::Float),
             Expr::Bool(_) => Ok(APIDataType::Bool),
             Expr::Var(name) => {
-                context.variables.get(name)
+                variables.get(name)
                     .copied()
                     .ok_or_else(|| format!("Unknown variable: {}", name))
             }
             Expr::Unary(op, expr) => {
-                let expr_type = expr.validate(context)?;
+                let expr_type = expr.validate(variables, functions)?;
                 match op {
                     UnOp::Neg | UnOp::Pos => {
                         match expr_type {
@@ -64,8 +64,8 @@ impl Expr {
                 }
             }
             Expr::Binary(left, op, right) => {
-                let left_type = left.validate(context)?;
-                let right_type = right.validate(context)?;
+                let left_type = left.validate(variables, functions)?;
+                let right_type = right.validate(variables, functions)?;
                 
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Pow => {
@@ -132,7 +132,7 @@ impl Expr {
             }
             Expr::Call(name, args) => {
                 // Validate function exists
-                let signature = context.functions.get(name)
+                let signature = functions.get(name)
                     .ok_or_else(|| format!("Unknown function: {}", name))?;
                 
                 // Check argument count
@@ -143,7 +143,7 @@ impl Expr {
                 
                 // Validate each argument type
                 for (i, (arg, expected_type)) in args.iter().zip(&signature.parameter_types).enumerate() {
-                    let arg_type = arg.validate(context)?;
+                    let arg_type = arg.validate(variables, functions)?;
                     if !Self::types_compatible(arg_type, *expected_type) {
                         return Err(format!("Function {} argument {} expects type {:?}, got {:?}", 
                             name, i + 1, expected_type, arg_type));
@@ -153,9 +153,9 @@ impl Expr {
                 Ok(signature.return_type)
             }
             Expr::Conditional(condition, then_expr, else_expr) => {
-                let condition_type = condition.validate(context)?;
-                let then_type = then_expr.validate(context)?;
-                let else_type = else_expr.validate(context)?;
+                let condition_type = condition.validate(variables, functions)?;
+                let then_type = then_expr.validate(variables, functions)?;
+                let else_type = else_expr.validate(variables, functions)?;
                 
                 // Condition must be boolean or int
                 match condition_type {
@@ -175,7 +175,7 @@ impl Expr {
                 }
             }
             Expr::MemberAccess(expr, member) => {
-                let expr_type = expr.validate(context)?;
+                let expr_type = expr.validate(variables, functions)?;
                 match (expr_type, member.as_str()) {
                     // Vec2 components
                     (APIDataType::Vec2, "x" | "y") => Ok(APIDataType::Float),
@@ -192,19 +192,19 @@ impl Expr {
     }
     
     /// Evaluates the expression and returns the result
-    pub fn evaluate(&self, context: &EvaluationContext) -> NetworkResult {
+    pub fn evaluate(&self, variables: &HashMap<String, NetworkResult>, functions: &HashMap<String, EvaluationFunction>) -> NetworkResult {
         
         match self {
             Expr::Int(n) => NetworkResult::Int(*n),
             Expr::Float(n) => NetworkResult::Float(*n),
             Expr::Bool(b) => NetworkResult::Bool(*b),
             Expr::Var(name) => {
-                context.variables.get(name)
+                variables.get(name)
                     .cloned()
                     .unwrap_or_else(|| NetworkResult::Error(format!("Unknown variable: {}", name)))
             }
             Expr::Unary(op, expr) => {
-                let value = expr.evaluate(context);
+                let value = expr.evaluate(variables, functions);
                 if let NetworkResult::Error(_) = value {
                     return value;
                 }
@@ -233,12 +233,12 @@ impl Expr {
                 }
             }
             Expr::Binary(left, op, right) => {
-                let left_val = left.evaluate(context);
+                let left_val = left.evaluate(variables, functions);
                 if let NetworkResult::Error(_) = left_val {
                     return left_val;
                 }
                 
-                let right_val = right.evaluate(context);
+                let right_val = right.evaluate(variables, functions);
                 if let NetworkResult::Error(_) = right_val {
                     return right_val;
                 }
@@ -249,7 +249,7 @@ impl Expr {
                 // Evaluate all arguments first
                 let mut arg_values = Vec::new();
                 for arg in args {
-                    let val = arg.evaluate(context);
+                    let val = arg.evaluate(variables, functions);
                     if let NetworkResult::Error(_) = val {
                         return val;
                     }
@@ -257,14 +257,14 @@ impl Expr {
                 }
                 
                 // Call the function
-                if let Some(func) = context.functions.get(name) {
+                if let Some(func) = functions.get(name) {
                     func(&arg_values)
                 } else {
                     NetworkResult::Error(format!("Unknown function: {}", name))
                 }
             }
             Expr::Conditional(condition, then_expr, else_expr) => {
-                let condition_val = condition.evaluate(context);
+                let condition_val = condition.evaluate(variables, functions);
                 if let NetworkResult::Error(_) = condition_val {
                     return condition_val;
                 }
@@ -276,13 +276,13 @@ impl Expr {
                 };
                 
                 if is_true {
-                    then_expr.evaluate(context)
+                    then_expr.evaluate(variables, functions)
                 } else {
-                    else_expr.evaluate(context)
+                    else_expr.evaluate(variables, functions)
                 }
             }
             Expr::MemberAccess(expr, member) => {
-                let value = expr.evaluate(context);
+                let value = expr.evaluate(variables, functions);
                 if let NetworkResult::Error(_) = value {
                     return value;
                 }

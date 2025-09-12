@@ -70,7 +70,7 @@ impl ExprData {
         }
         
         // Validate the parsed expression
-        match parsed_expr.validate(&context) {
+        match parsed_expr.validate(&context.variables, &context.functions) {
             Ok(output_type) => {
                 // Expression is valid - set the output type
                 self.output_type = Some(output_type);
@@ -101,5 +101,9 @@ pub fn eval_expr<'a>(
 ) -> Vec<NetworkResult> {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let expr_data = &node.data.as_any_ref().downcast_ref::<ExprData>().unwrap();
+
+//evaluate(&self, context: &EvaluationContext) -> NetworkResult {
+
+
   return Vec::new();  
 }
