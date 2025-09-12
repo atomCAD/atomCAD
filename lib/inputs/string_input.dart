@@ -67,25 +67,20 @@ class _StringInputState extends State<StringInput> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.label, style: AppTextStyles.label),
-        const SizedBox(height: 4),
-        ConstrainedBox(
-          constraints: AppSpacing.inputFieldConstraints,
-          child: TextField(
-            decoration: AppInputDecorations.standard,
-            controller: _controller,
-            focusNode: _focusNode,
-            keyboardType: TextInputType.text,
-            style: AppTextStyles.inputField,
-            onSubmitted: (text) {
-              _updateValueFromText(text);
-            },
-          ),
+    return ConstrainedBox(
+      constraints: AppSpacing.inputFieldConstraints,
+      child: TextField(
+        decoration: AppInputDecorations.standard.copyWith(
+          labelText: widget.label,
         ),
-      ],
+        controller: _controller,
+        focusNode: _focusNode,
+        keyboardType: TextInputType.text,
+        style: AppTextStyles.inputField,
+        onSubmitted: (text) {
+          _updateValueFromText(text);
+        },
+      ),
     );
   }
 }

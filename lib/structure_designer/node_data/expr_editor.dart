@@ -214,14 +214,9 @@ class ExprEditorState extends State<ExprEditor> {
                       // Parameter name input - takes up available space
                       Expanded(
                         flex: 3,
-                        child: TextFormField(
-                          initialValue: parameter.name,
-                          decoration: const InputDecoration(
-                            labelText: 'Name',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                            isDense: true,
-                          ),
+                        child: StringInput(
+                          label: 'Name',
+                          value: parameter.name,
                           onChanged: (newName) {
                             _updateParameter(
                               index,

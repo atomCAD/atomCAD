@@ -26,21 +26,22 @@ const double HIT_TEST_WIRE_WIDTH = 12.0;
 const Color DEFAULT_DATA_TYPE_COLOR = Colors.grey;
 const Map<String, Color> DATA_TYPE_COLORS = {
   // Primitive numbers (warm colors)
-  'Int': Color(0xFFFFB74D),        // Light orange
-  'Float': Color(0xFFFF8A65),      // Light deep orange
-  
+  'Bool': Color(0xFFFF4D4D), // deep orange
+  'Int': Color(0xFFFFB74D), // Light orange
+  'Float': Color(0xFFFF8A65), // Light deep orange
+
   // Vector types (cool blues - mathematical coordinates)
-  'Vec2': Color(0xFF4DD0E1),       // Light cyan
-  'Vec3': Color(0xFF64B5F6),       // Light blue
-  'IVec2': Color(0xFF81D4FA),      // Light blue variant
-  'IVec3': Color(0xFF9575CD),      // Light indigo
-  
+  'Vec2': Color(0xFF4DD0E1), // Light cyan
+  'Vec3': Color(0xFF64B5F6), // Light blue
+  'IVec2': Color(0xFF81D4FA), // Light blue variant
+  'IVec3': Color(0xFF9575CD), // Light indigo
+
   // Geometry types (purple family - abstract shapes)
   'Geometry2D': Color(0xFFBA68C8), // Light purple
-  'Geometry': Color(0xFF9C27B0),   // Light deep purple
-  
+  'Geometry': Color(0xFF9C27B0), // Light deep purple
+
   // Physical types (green family - real-world matter)
-  'Atomic': Color(0xFF66BB6A),     // Light green
+  'Atomic': Color(0xFF66BB6A), // Light green
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
