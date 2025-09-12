@@ -77,11 +77,28 @@ class ExprEditorState extends State<ExprEditor> {
     );
   }
 
+  String _generateParameterName(int index) {
+    // Use x, y, z for first three parameters
+    if (index == 0) return 'x';
+    if (index == 1) return 'y';
+    if (index == 2) return 'z';
+    
+    // After x, y, z, use w, u, v, s, t, then a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r
+    const additionalNames = ['w', 'u', 'v', 's', 't', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r'];
+    
+    if (index - 3 < additionalNames.length) {
+      return additionalNames[index - 3];
+    }
+    
+    // If we run out of single letters, use param pattern
+    return 'param${index + 1}';
+  }
+
   void _addParameter() {
     final currentParameters = widget.data?.parameters ?? [];
     final newParameters = List<APIExprParameter>.from(currentParameters)
       ..add(APIExprParameter(
-        name: 'param${currentParameters.length + 1}',
+        name: _generateParameterName(currentParameters.length),
         dataType: APIDataType.float,
       ));
     _updateExprData(newParameters);
@@ -187,15 +204,13 @@ class ExprEditorState extends State<ExprEditor> {
 
           // Parameters list
           if (parameters.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Center(
-                  child: Text(
-                    'No parameters defined. Click "Add Parameter" to get started.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Center(
+                child: Text(
+                  'No parameters defined. Click "Add Parameter" to get started.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -205,81 +220,78 @@ class ExprEditorState extends State<ExprEditor> {
               final index = entry.key;
               final parameter = entry.value;
               
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8.0),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Row(
-                    children: [
-                      // Parameter name input - takes up available space
-                      Expanded(
-                        flex: 3,
-                        child: StringInput(
-                          label: 'Name',
-                          value: parameter.name,
-                          onChanged: (newName) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Row(
+                  children: [
+                    // Parameter name input - takes up available space
+                    Expanded(
+                      flex: 3,
+                      child: StringInput(
+                        label: 'Name',
+                        value: parameter.name,
+                        onChanged: (newName) {
+                          _updateParameter(
+                            index,
+                            APIExprParameter(
+                              name: newName,
+                              dataType: parameter.dataType,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    
+                    // Data type dropdown - more constrained
+                    Expanded(
+                      flex: 3,
+                      child: DropdownButtonFormField<APIDataType>(
+                        value: parameter.dataType,
+                        decoration: const InputDecoration(
+                          labelText: 'Type',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          isDense: true,
+                        ),
+                        isExpanded: true,
+                        items: APIDataType.values.map((dataType) {
+                          return DropdownMenuItem(
+                            value: dataType,
+                            child: Text(
+                              getApiDataTypeDisplayName(dataType: dataType),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (newDataType) {
+                          if (newDataType != null) {
                             _updateParameter(
                               index,
                               APIExprParameter(
-                                name: newName,
-                                dataType: parameter.dataType,
+                                name: parameter.name,
+                                dataType: newDataType,
                               ),
                             );
-                          },
-                        ),
+                          }
+                        },
                       ),
-                      const SizedBox(width: 6),
-                      
-                      // Data type dropdown - more constrained
-                      Expanded(
-                        flex: 3,
-                        child: DropdownButtonFormField<APIDataType>(
-                          value: parameter.dataType,
-                          decoration: const InputDecoration(
-                            labelText: 'Type',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                            isDense: true,
-                          ),
-                          isExpanded: true,
-                          items: APIDataType.values.map((dataType) {
-                            return DropdownMenuItem(
-                              value: dataType,
-                              child: Text(
-                                getApiDataTypeDisplayName(dataType: dataType),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (newDataType) {
-                            if (newDataType != null) {
-                              _updateParameter(
-                                index,
-                                APIExprParameter(
-                                  name: parameter.name,
-                                  dataType: newDataType,
-                                ),
-                              );
-                            }
-                          },
-                        ),
+                    ),
+                    const SizedBox(width: 4),
+                    
+                    // Delete button - more compact
+                    SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: IconButton(
+                        onPressed: () => _removeParameter(index),
+                        icon: const Icon(Icons.delete, size: 18),
+                        tooltip: 'Delete Parameter',
+                        color: Theme.of(context).colorScheme.error,
+                        padding: EdgeInsets.zero,
                       ),
-                      const SizedBox(width: 4),
-                      
-                      // Delete button - more compact
-                      SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: IconButton(
-                          onPressed: () => _removeParameter(index),
-                          icon: const Icon(Icons.delete, size: 18),
-                          tooltip: 'Delete Parameter',
-                          color: Theme.of(context).colorScheme.error,
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             }).toList(),
