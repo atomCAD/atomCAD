@@ -542,4 +542,7 @@ pub fn init_app() {
         Ok(message) => println!("Simulation initialization: {}", message),
         Err(error) => println!("Warning: Simulation initialization failed: {}", error),
     }
+    
+    // Initialize expression function registries for better performance
+    crate::structure_designer::expr::validation::init_function_registries();
 }

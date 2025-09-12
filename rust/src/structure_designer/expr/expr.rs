@@ -1,6 +1,6 @@
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
-use crate::structure_designer::expr::validation::{EvaluationContext, ValidationContext, FunctionSignature, EvaluationFunction};
+use crate::structure_designer::expr::validation::{FunctionSignature, EvaluationFunction};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]

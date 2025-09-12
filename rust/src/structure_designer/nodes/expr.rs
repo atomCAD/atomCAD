@@ -9,7 +9,8 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_result::error_in_input;
-use crate::structure_designer::expr::validation::ValidationContext;
+use crate::structure_designer::expr::validation::get_function_signatures;
+use std::collections::HashMap;
 use crate::structure_designer::expr::parser::parse;
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::expr::expr::Expr;
@@ -61,16 +62,16 @@ impl ExprData {
             }
         };
         
-        // Create validation context with standard functions and parameters
-        let mut context = ValidationContext::with_standard_functions();
+        // Create variables map for validation
+        let mut variables = HashMap::new();
         
-        // Add parameters as variables to the validation context
+        // Add parameters as variables
         for param in &self.parameters {
-            context.add_variable(param.name.clone(), param.data_type);
+            variables.insert(param.name.clone(), param.data_type);
         }
         
-        // Validate the parsed expression
-        match parsed_expr.validate(&context.variables, &context.functions) {
+        // Validate the parsed expression using global function registry
+        match parsed_expr.validate(&variables, get_function_signatures()) {
             Ok(output_type) => {
                 // Expression is valid - set the output type
                 self.output_type = Some(output_type);
