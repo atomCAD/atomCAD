@@ -81,7 +81,7 @@ impl NodeTypeRegistry {
         expression: "x".to_string(),
         expr: None,
         error: None,
-        output_type: None,
+        output_type: Some(APIDataType::Float),
       }),
     });
 

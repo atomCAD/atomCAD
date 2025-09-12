@@ -258,6 +258,7 @@ impl StructureDesigner {
       if let Some(network) = node_networks.get_mut(node_network_name) {
         if let Some(node) = network.nodes.get_mut(&node_id) {
           // Call the populate function with the split borrows
+          println!("populate_custom_node_type_cache_with_types from StructureDesigner::add_node node_id: {}", node_id);
           crate::structure_designer::node_type_registry::NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node);
         }
       }
