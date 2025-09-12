@@ -658,7 +658,7 @@ impl NodeTypeRegistry {
 
             custom_node_type.output_type = param_data.data_type;
             
-            node.custom_node_type = Some(custom_node_type);
+            node.set_custom_node_type(Some(custom_node_type));
           }
         }
       },
@@ -678,8 +678,8 @@ impl NodeTypeRegistry {
                 multi: false, // Expression parameters are single-valued
               })
               .collect();
-            
-            node.custom_node_type = Some(custom_node_type);
+
+            node.set_custom_node_type(Some(custom_node_type));
           }
         }
       },

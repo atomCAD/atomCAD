@@ -62,6 +62,50 @@ pub struct Node {
   pub custom_node_type: Option<NodeType>,
 }
 
+impl Node {
+  /// Sets the custom node type and intelligently preserves existing argument connections
+  /// when parameter names match between old and new node types
+  pub fn set_custom_node_type(&mut self, custom_node_type: Option<NodeType>) {
+    if let Some(ref new_node_type) = custom_node_type {
+      // Check if we can preserve existing arguments
+      let can_preserve = if let Some(ref old_node_type) = self.custom_node_type {
+        // Check if parameters have same names in same order
+        old_node_type.parameters.len() == new_node_type.parameters.len() &&
+        old_node_type.parameters.iter()
+          .zip(new_node_type.parameters.iter())
+          .all(|(old_param, new_param)| old_param.name == new_param.name)
+      } else {
+        false
+      };
+
+      if can_preserve {
+        // Parameters match exactly, keep existing arguments
+        // (no changes to self.arguments)
+      } else {
+        // Parameters changed, need to rebuild arguments array
+        let mut new_arguments = vec![Argument { argument_node_ids: HashSet::new() }; new_node_type.parameters.len()];
+        
+        // Try to preserve connections for matching parameter names
+        if let Some(ref old_node_type) = self.custom_node_type {
+          for (new_index, new_param) in new_node_type.parameters.iter().enumerate() {
+            // Find matching parameter name in old node type
+            if let Some(old_index) = old_node_type.parameters.iter()
+              .position(|old_param| old_param.name == new_param.name) {
+              // Copy argument connections from old position to new position
+              if old_index < self.arguments.len() {
+                new_arguments[new_index] = self.arguments[old_index].clone();
+              }
+            }
+          }
+        }
+        
+        self.arguments = new_arguments;
+      }
+    }
+    self.custom_node_type = custom_node_type;
+  }
+}
+
 
 
 /*

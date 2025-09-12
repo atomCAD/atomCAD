@@ -5,10 +5,10 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, error_in_input, input_missing_error};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::expr::validation::get_function_signatures;
+use crate::structure_designer::expr::validation::{get_function_signatures, get_function_implementations};
 use std::collections::HashMap;
 use crate::structure_designer::expr::parser::parse;
 use crate::structure_designer::node_network::ValidationError;
@@ -98,9 +98,40 @@ pub fn eval_expr<'a>(
   node_id: u64,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> Vec<NetworkResult> {
+) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let expr_data = &node.data.as_any_ref().downcast_ref::<ExprData>().unwrap();
 
-  return Vec::new();  
+  // Collect variable values for evaluation
+  let mut variables: HashMap<String, NetworkResult> = HashMap::new();
+  
+  // Go through all parameter indices and evaluate them
+  for (param_index, param) in expr_data.parameters.iter().enumerate() {
+    if let Some(result) = network_evaluator.evaluate_single_arg(
+      network_stack,
+      node_id,
+      registry,
+      context,
+      param_index,
+    ) {
+      // Check if the result is an error
+      if let NetworkResult::Error(_) = result {
+        return error_in_input(&param.name);
+      }
+      
+      // Add the variable to our collection
+      variables.insert(param.name.clone(), result);
+    } else {
+      // Input pin is not connected
+      return input_missing_error(&param.name);
+    }
+  }
+  
+  // If we have a parsed expression, evaluate it
+  if let Some(ref expr) = expr_data.expr {
+    let function_implementations = get_function_implementations();
+    expr.evaluate(&variables, function_implementations)
+  } else {
+    NetworkResult::Error("Expression not parsed".to_string())
+  }
 }
