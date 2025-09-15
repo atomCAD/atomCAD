@@ -1203,8 +1203,8 @@ pub fn set_return_node_id(node_id: Option<u64>) -> bool {
 #[flutter_rust_bridge::frb(sync)]
 pub fn save_node_networks(file_path: String) -> bool {
   unsafe {
-    with_cad_instance_or(
-      |cad_instance| {
+    with_mut_cad_instance_or(
+      |cad_instance | {
         // Call the method in StructureDesigner
         match cad_instance.structure_designer.save_node_networks(&file_path) {
           Ok(_) => true,

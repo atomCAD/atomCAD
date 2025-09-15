@@ -463,7 +463,7 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork) -> i
 /// 
 /// # Returns
 /// * `io::Result<()>` - Ok if the save operation was successful, Err otherwise
-pub fn save_node_networks_to_file(registry: &NodeTypeRegistry, file_path: &str) -> io::Result<()> {
+pub fn save_node_networks_to_file(registry: &mut NodeTypeRegistry, file_path: &str) -> io::Result<()> {
     // Convert the node networks to a serializable format
     let mut serializable_networks = Vec::new();
     
@@ -488,7 +488,9 @@ pub fn save_node_networks_to_file(registry: &NodeTypeRegistry, file_path: &str) 
     
     // Write to file
     fs::write(file_path, json_data)?;
-    
+
+    registry.design_file_name = Some(file_path.to_string());
+
     Ok(())
 }
 

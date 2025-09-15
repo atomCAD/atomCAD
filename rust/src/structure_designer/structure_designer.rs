@@ -809,8 +809,8 @@ impl StructureDesigner {
   }
 
   // Saves node networks to a file
-  pub fn save_node_networks(&self, file_path: &str) -> std::io::Result<()> {
-    node_networks_serialization::save_node_networks_to_file(&self.node_type_registry, file_path)
+  pub fn save_node_networks(&mut self, file_path: &str) -> std::io::Result<()> {
+    node_networks_serialization::save_node_networks_to_file(&mut self.node_type_registry, file_path)
   }
 
   // Loads node networks from a file
