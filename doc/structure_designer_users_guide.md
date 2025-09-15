@@ -92,11 +92,18 @@ Each node have exactly one output pin.
 
 An input pin can have a small dot in it: This singifies that the input pin is a 'multi pin': this means that multiple wires can go to this pin. How these are interpreted are always discussed at the documentation of the specific nodes.
 
-The color of a pin represents its data type. A wire can go only from an output pin to an input pin and they must have the same color. The following colors are used:
+Each pin has a data type. It can be read by hovering over the pin with the mouse. The color of the pin also represents its data type. A wire can go only from an output pin to an input pin and they must have the same data type, or the output pin type must be convertible to the input pin type. The following data types are used:
 
-- Purple: 2D geometry
-- Blue: 3D geometry
-- Green: Atomic structure
+- Bool,
+- Int,
+- Float,
+- Vec2, (2D vector)
+- Vec3, (3D vector)
+- IVec2, (2D integer vector)
+- IVec3, (3D integer vector)
+- 2D geometry,
+- 3D geometry,
+- Atomic structure
 
 ### Navigating in the node network editor panel
 
@@ -166,13 +173,146 @@ For loading and saving a design and for opening the preferences panel:
 
 ## Nodes reference
 
-We categorize nodes bz their output pin data type. Therefore there are the following types of nodes:
+We categorize nodes by their functionality and/or output pin data type. There are the following categories of nodes:
 
+- Math nodes
 - 2D Geometry nodes
 - 3D Geometry nodes
 - Atomic structure nodes
 
 You create 2D geometry to eventually use the *extrude* node to create 3D geometry from it. You create 3D geometry to eventually use the *geo_to_atom* node to create an atomic structure from it.
+
+### Math nodes
+
+#### int
+
+Outputs an integer value. 
+
+#### float
+
+Outputs a float value. 
+
+#### ivec2
+
+Outputs an IVec2 value.
+
+#### ivec3
+
+Outputs an IVec3 value.
+
+#### vec2
+
+Outputs a Vec2 value.
+
+#### vec3
+
+Outputs a Vec3 value.
+
+#### expr
+
+You can type in a mathematical expression and it will be evaluated on its output node.
+The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
+
+The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
+
+**Expression Language Features:**
+
+**Literals**
+- integer literals (e.g., `42`, `-10`)
+- floating point literals (e.g., `3.14`, `1.5e-3`, `.5`)
+- boolean values (`true`, `false`)
+
+**Arithmetic Operators:**
+- `+` - Addition
+- `-` - Subtraction  
+- `*` - Multiplication
+- `/` - Division
+- `^` - Exponentiation
+- `+x`, `-x` - Unary plus/minus
+
+**Comparison Operators:**
+- `==` - Equality
+- `!=` - Inequality
+- `<` - Less than
+- `<=` - Less than or equal
+- `>` - Greater than
+- `>=` - Greater than or equal
+
+**Logical Operators:**
+- `&&` - Logical AND
+- `||` - Logical OR
+- `!` - Logical NOT
+
+**Conditional Expressions:**
+```
+if condition then value1 else value2
+```
+Example: `if x > 0 then 1 else -1`
+
+**Vector Operations:**
+
+*Vector Constructors:*
+- `vec2(x, y)` - Create 2D float vector
+- `vec3(x, y, z)` - Create 3D float vector
+- `ivec2(x, y)` - Create 2D integer vector
+- `ivec3(x, y, z)` - Create 3D integer vector
+
+*Member Access:*
+- `vector.x`, `vector.y`, `vector.z` - Access vector components
+
+*Vector Arithmetic:*
+- Vector + Vector (component-wise)
+- Vector - Vector (component-wise)
+- Vector * Vector (component-wise)
+- Vector * Scalar (scaling)
+- Scalar * Vector (scaling)
+- Vector / Scalar (scaling)
+
+*Type Promotion:*
+
+Integers and integer vectors automatically promote to floats and float vectors when mixed with floats.
+
+**Vector Math Functions:**
+- `length2(vec2)` - Calculate 2D vector magnitude
+- `length3(vec3)` - Calculate 3D vector magnitude
+- `normalize2(vec2)` - Normalize 2D vector to unit length
+- `normalize3(vec3)` - Normalize 3D vector to unit length
+- `dot2(vec2, vec2)` - 2D dot product
+- `dot3(vec3, vec3)` - 3D dot product
+- `cross(vec3, vec3)` - 3D cross product
+- `distance2(vec2, vec2)` - Distance between 2D points
+- `distance3(vec3, vec3)` - Distance between 3D points
+
+**Mathematical Functions:**
+- `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
+- `sqrt(x)` - Square root
+- `abs(x)` - Absolute value (float)
+- `abs_int(x)` - Absolute value (integer)
+- `floor(x)`, `ceil(x)`, `round(x)` - Rounding functions
+
+**Operator Precedence (highest to lowest):**
+1. Function calls, member access, parentheses
+2. Unary operators (`+`, `-`, `!`)
+3. Exponentiation (`^`) - right associative
+4. Multiplication, division (`*`, `/`)
+5. Addition, subtraction (`+`, `-`)
+6. Comparison operators (`<`, `<=`, `>`, `>=`)
+7. Equality operators (`==`, `!=`)
+8. Logical AND (`&&`)
+9. Logical OR (`||`)
+10. Conditional expressions (`if-then-else`)
+
+**Example Expressions:**
+```
+2 * x + 1                           // Simple arithmetic
+vec3(1, 2, 3) * 2.0                // Vector scaling  
+length3(vec3(3, 4, 0))              // Vector length (returns 5.0)
+if x > 0 then sqrt(x) else 0       // Conditional with function
+dot3(normalize3(a), normalize3(b))  // Normalized dot product
+sin(3.14159 / 4) * 2               // Trigonometry
+vec2(x, y).x + vec2(z, w).y        // Member access
+distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
+```
 
 ### 2D Geometry nodes
 
@@ -445,6 +585,12 @@ Ultimately the main question is: what was the user's intent with that node? Whil
 these choices are the best we can do for most cases.
 
 ### Atomic structure nodes
+
+#### import_xyz
+
+Imports an atomic structure from an xyz file.
+It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole
+project to another location or machine the XYZ file references will remain valid.
 
 #### geo_to_atom
 
