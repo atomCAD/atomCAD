@@ -38,6 +38,7 @@ use glam::{IVec3, DVec3, IVec2};
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
   pub node_networks: HashMap<String, NodeNetwork>,
+  pub design_file_name: Option<String>,
 }
 
 impl NodeTypeRegistry {
@@ -47,6 +48,7 @@ impl NodeTypeRegistry {
     let mut ret = Self {
       built_in_node_types: HashMap::new(),
       node_networks: HashMap::new(),
+      design_file_name: None,
     };
 
     ret.add_node_type(NodeType {

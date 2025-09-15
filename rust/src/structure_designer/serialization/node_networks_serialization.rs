@@ -503,5 +503,8 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
         registry.node_networks.insert(name, network);
     }
     
+    // Set the design file name after successful load
+    registry.design_file_name = Some(file_path.to_string());
+    
     Ok(())
 }
