@@ -14,6 +14,7 @@ import 'api/structure_designer/anchor_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/geo_to_atom_api.dart';
+import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/stamp_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
@@ -100,6 +101,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
+
+  @protected
+  APIImportXYZData dco_decode_api_import_xyz_data(dynamic raw);
 
   @protected
   APIIntData dco_decode_api_int_data(dynamic raw);
@@ -215,6 +219,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APIImportXYZData dco_decode_box_autoadd_api_import_xyz_data(dynamic raw);
 
   @protected
   APIIntData dco_decode_box_autoadd_api_int_data(dynamic raw);
@@ -415,6 +422,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
 
   @protected
+  APIImportXYZData? dco_decode_opt_box_autoadd_api_import_xyz_data(dynamic raw);
+
+  @protected
   APIIntData? dco_decode_opt_box_autoadd_api_int_data(dynamic raw);
 
   @protected
@@ -590,6 +600,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
 
   @protected
+  APIImportXYZData sse_decode_api_import_xyz_data(SseDeserializer deserializer);
+
+  @protected
   APIIntData sse_decode_api_int_data(SseDeserializer deserializer);
 
   @protected
@@ -719,6 +732,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIImportXYZData sse_decode_box_autoadd_api_import_xyz_data(
       SseDeserializer deserializer);
 
   @protected
@@ -958,6 +975,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIImportXYZData? sse_decode_opt_box_autoadd_api_import_xyz_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIIntData? sse_decode_opt_box_autoadd_api_int_data(
       SseDeserializer deserializer);
 
@@ -1157,6 +1178,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_import_xyz_data(
+      APIImportXYZData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_int_data(APIIntData self, SseSerializer serializer);
 
   @protected
@@ -1291,6 +1316,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_import_xyz_data(
+      APIImportXYZData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_int_data(
@@ -1531,6 +1560,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_half_space_data(
       APIHalfSpaceData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_import_xyz_data(
+      APIImportXYZData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_int_data(

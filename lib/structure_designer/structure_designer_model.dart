@@ -14,6 +14,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart'
     as stamp_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/facet_shell_api.dart'
     as facet_shell_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
+    as import_xyz_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 class PinReference {
@@ -478,6 +480,19 @@ class StructureDesignerModel extends ChangeNotifier {
 
   APIExprData? getExprData(BigInt nodeId) {
     return structure_designer_api.getExprData(nodeId: nodeId);
+  }
+
+  void setImportXyzData(BigInt nodeId, APIImportXYZData data) {
+    structure_designer_api.setImportXyzData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APIImportXYZData? getImportXyzData(BigInt nodeId) {
+    return structure_designer_api.getImportXyzData(nodeId: nodeId);
+  }
+
+  APIResult importXyz(BigInt nodeId) {
+    return import_xyz_api.importXyz(nodeId: nodeId);
   }
 
   void refreshFromKernel() {

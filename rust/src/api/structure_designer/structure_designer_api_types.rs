@@ -216,3 +216,7 @@ pub struct APIExprData {
   pub error: Option<String>,
   pub output_type: Option<APIDataType>,
 }
+
+pub struct APIImportXYZData {
+  pub file_name: Option<String>,
+}

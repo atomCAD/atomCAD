@@ -47,6 +47,7 @@ use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::nodes::anchor::AnchorData;
+use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::api::api_common::to_api_vec2;
 use crate::api::api_common::from_api_vec2;
 use crate::api::api_common::to_api_ivec3;
@@ -63,6 +64,7 @@ use super::structure_designer_api_types::APIDataType;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::expr::ExprData;
 use super::structure_designer_api_types::APIExprData;
+use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 
@@ -623,6 +625,28 @@ pub fn get_anchor_data(node_id: u64) -> Option<APIAnchorData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_import_xyz_data(node_id: u64) -> Option<APIImportXYZData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let import_xyz_data = match node_data.as_any_ref().downcast_ref::<ImportXYZData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIImportXYZData {
+          file_name: import_xyz_data.file_name.clone(),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_sphere_data(node_id: u64) -> Option<APISphereData> {
   unsafe {
     with_cad_instance_or(
@@ -1096,6 +1120,20 @@ pub fn set_atom_trans_data(node_id: u64, data: APIAtomTransData) {
         rotation: from_api_vec3(&data.rotation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, atom_trans_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_import_xyz_data(node_id: u64, data: APIImportXYZData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let import_xyz_data = Box::new(ImportXYZData {
+        file_name: data.file_name.clone(),
+        atomic_structure: None,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, import_xyz_data);
       refresh_renderer(cad_instance, false);
     });
   }

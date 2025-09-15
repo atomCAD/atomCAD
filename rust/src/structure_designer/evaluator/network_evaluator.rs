@@ -10,6 +10,7 @@ use crate::structure_designer::nodes::reg_poly::eval_reg_poly;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::nodes::expr::eval_expr;
+use crate::structure_designer::nodes::import_xyz::eval_import_xyz;
 use crate::structure_designer::nodes::int::eval_int;
 use crate::structure_designer::nodes::float::eval_float;
 use crate::structure_designer::nodes::ivec2::eval_ivec2;
@@ -388,7 +389,9 @@ impl NetworkEvaluator {
       vec![eval_atom_trans(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "anchor" {
       vec![eval_anchor(&self, network_stack, node_id, registry, context)]
-    } else if node.node_type_name == "stamp" {
+    } else if node.node_type_name == "import_xyz" {
+      vec![eval_import_xyz(&self, network_stack, node_id, registry, context)]
+    }else if node.node_type_name == "stamp" {
       vec![eval_stamp(&self, network_stack, node_id, registry, decorate, context)]
     } else if node.node_type_name == "relax" {
       vec![eval_relax(&self, network_stack, node_id, registry, context)]

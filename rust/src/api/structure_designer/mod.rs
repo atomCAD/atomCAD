@@ -7,3 +7,4 @@ pub mod stamp_api;
 pub mod structure_designer_preferences;
 pub mod facet_shell_api;
 pub mod relax_api;
+pub mod import_xyz_api;

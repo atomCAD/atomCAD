@@ -448,6 +448,24 @@ class APIHalfSpaceData {
           shift == other.shift;
 }
 
+class APIImportXYZData {
+  final String? fileName;
+
+  const APIImportXYZData({
+    this.fileName,
+  });
+
+  @override
+  int get hashCode => fileName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIImportXYZData &&
+          runtimeType == other.runtimeType &&
+          fileName == other.fileName;
+}
+
 class APIIntData {
   final int value;
 
