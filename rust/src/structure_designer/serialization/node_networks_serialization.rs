@@ -30,6 +30,8 @@ use super::super::nodes::facet_shell::FacetShellData;
 use super::super::nodes::geo_to_atom::GeoToAtomData;
 use super::super::nodes::anchor::AnchorData;
 use super::super::nodes::stamp::StampData;
+use super::super::nodes::import_xyz::ImportXYZData;
+use super::super::nodes::expr::ExprData;
 use super::super::node_network::NodeDisplayType;
 
 // The current version of the serialization format
@@ -266,6 +268,20 @@ pub fn node_to_serializable(id: u64, node: &Node) -> io::Result<SerializableNode
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for stamp"));
             }
         },
+        "import_xyz" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<ImportXYZData>() {
+                ("import_xyz".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for import_xyz"));
+            }
+        },
+        "expr" => {
+            if let Some(data) = node.data.as_any_ref().downcast_ref::<ExprData>() {
+                ("expr".to_string(), serde_json::to_value(data)?)
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for expr"));
+            }
+        },
         _ => {
             // For nodes with NoData or other types we don't specifically handle
             ("no_data".to_string(), serde_json::json!({}))
@@ -357,6 +373,14 @@ pub fn serializable_to_node(serializable: &SerializableNode) -> io::Result<Node>
         "stamp" => {
             let stamp_data: StampData = serde_json::from_value(serializable.data.clone())?;
             Box::new(stamp_data)
+        },
+        "import_xyz" => {
+            let import_xyz_data: ImportXYZData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(import_xyz_data)
+        },
+        "expr" => {
+            let expr_data: ExprData = serde_json::from_value(serializable.data.clone())?;
+            Box::new(expr_data)
         },
         _ => {
             // Default to NoData for unknown types

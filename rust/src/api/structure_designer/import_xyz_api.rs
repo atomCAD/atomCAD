@@ -4,11 +4,17 @@ use crate::common::atomic_structure_utils::auto_create_bonds;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::api::common_api_types::APIResult;
 use crate::common::xyz_loader::load_xyz;
+use crate::util::path_utils::{resolve_path, try_make_relative, get_parent_directory};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn import_xyz(node_id: u64) -> APIResult {
   unsafe {
     with_mut_cad_instance(|instance| {
+      // Get the design file directory before any mutable borrows
+      let design_file_dir = instance.structure_designer.node_type_registry.design_file_name
+        .as_ref()
+        .and_then(|design_path| get_parent_directory(design_path));
+
       let node_data = match instance.structure_designer.get_node_network_data_mut(node_id) {
         Some(data) => data,
         None => {
@@ -29,7 +35,7 @@ pub fn import_xyz(node_id: u64) -> APIResult {
       };
 
       // Get the file path from the import_xyz_data
-      let file_path = match &import_xyz_data.file_name {
+      let stored_file_path = match &import_xyz_data.file_name {
         Some(path) => path,
         None => {
           return APIResult {
@@ -39,8 +45,29 @@ pub fn import_xyz(node_id: u64) -> APIResult {
         }
       };
 
-      // Load the XYZ file using the load_xyz function
-      match load_xyz(file_path) {
+      // Resolve the path (convert relative to absolute if needed)
+      let resolved_path = match resolve_path(stored_file_path, design_file_dir.as_deref()) {
+        Ok((path, _was_relative)) => path,
+        Err(error) => {
+          return APIResult {
+            success: false,
+            error_message: format!("Failed to resolve file path: {}", error),
+          };
+        }
+      };
+
+      // Try to convert absolute path to relative if it's under the design directory
+      // This helps with portability when copying projects
+      if let Some(ref design_dir) = design_file_dir {
+        let (potentially_relative_path, should_update) = try_make_relative(&resolved_path, Some(design_dir));
+        if should_update && potentially_relative_path != *stored_file_path {
+          // Update the stored path to use relative path for better portability
+          import_xyz_data.file_name = Some(potentially_relative_path);
+        }
+      }
+
+      // Load the XYZ file using the resolved absolute path
+      match load_xyz(&resolved_path) {
         Ok(mut atomic_structure) => {
           auto_create_bonds(&mut atomic_structure);
           // Set the atomic structure in the import_xyz_data
