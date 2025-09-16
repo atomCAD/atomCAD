@@ -8,6 +8,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_data::NoData;
+use crate::structure_designer::node_type::{no_data_saver, no_data_loader};
 use super::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
@@ -183,6 +184,8 @@ impl StructureDesigner {
         parameters: Vec::new(),
         output_type: APIDataType::None,
         node_data_creator: || Box::new(NoData {}),
+        node_data_saver: no_data_saver,
+        node_data_loader: no_data_loader,
       }
     ));
   }
@@ -810,7 +813,8 @@ impl StructureDesigner {
 
   // Saves node networks to a file
   pub fn save_node_networks(&mut self, file_path: &str) -> std::io::Result<()> {
-    node_networks_serialization::save_node_networks_to_file(&mut self.node_type_registry, file_path)
+    use std::path::Path;
+    node_networks_serialization::save_node_networks_to_file(&mut self.node_type_registry, Path::new(file_path))
   }
 
   // Loads node networks from a file

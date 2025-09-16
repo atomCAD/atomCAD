@@ -16,10 +16,6 @@ use super::super::nodes::half_space::HalfSpaceData;
 use super::super::nodes::geo_trans::GeoTransData;
 use super::super::nodes::atom_trans::AtomTransData;
 use super::super::nodes::parameter::ParameterData;
-use super::super::nodes::edit_atom::edit_atom::EditAtomData;
-use super::edit_atom_data_serialization::edit_atom_data_to_serializable;
-use super::edit_atom_data_serialization::serializable_to_edit_atom_data;
-use super::edit_atom_data_serialization::SerializableEditAtomData;
 use super::super::nodes::rect::RectData;
 use super::super::nodes::circle::CircleData;
 use super::super::nodes::reg_poly::RegPolyData;
@@ -132,6 +128,8 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         parameters,
         output_type,
         node_data_creator: || Box::new(NoData {}), // Default, will be replaced with actual data
+        node_data_saver: crate::structure_designer::node_type::no_data_saver,
+        node_data_loader: crate::structure_designer::node_type::no_data_loader,
     })
 }
 
@@ -142,150 +140,17 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
 /// 
 /// # Returns
 /// * `io::Result<SerializableNode>` - The serializable node or an error if serialization fails
-pub fn node_to_serializable(id: u64, node: &Node) -> io::Result<SerializableNode> {
+pub fn node_to_serializable(id: u64, node: &Node, registry: &NodeTypeRegistry) -> io::Result<SerializableNode> {
     // Handle the polymorphic node data based on its type
     let node_type_name = node.node_type_name.clone();
     
-    // Convert the node data to a JSON value based on type
-    let (data_type, json_data) = match node_type_name.as_str() {
-        "cuboid" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<CuboidData>() {
-                ("cuboid".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for cuboid"));
-            }
-        },
-        "sphere" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<SphereData>() {
-                ("sphere".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for sphere"));
-            }
-        },
-        "half_space" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<HalfSpaceData>() {
-                ("half_space".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for half_space"));
-            }
-        },
-        "geo_trans" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<GeoTransData>() {
-                ("geo_trans".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for geo_trans"));
-            }
-        },
-        "atom_trans" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<AtomTransData>() {
-                ("atom_trans".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for atom_trans"));
-            }
-        },
-        "parameter" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<ParameterData>() {
-                ("parameter".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for parameter"));
-            }
-        },
-        "edit_atom" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<EditAtomData>() {
-                let serializable_data = edit_atom_data_to_serializable(data)?;
-                ("edit_atom".to_string(), serde_json::to_value(serializable_data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"));
-            }
-        },
-        "rect" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<RectData>() {
-                ("rect".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for rect"));
-            }
-        },
-        "circle" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<CircleData>() {
-                ("circle".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for circle"));
-            }
-        },
-        "reg_poly" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<RegPolyData>() {
-                ("reg_poly".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for reg_poly"));
-            }
-        },
-        "polygon" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<PolygonData>() {
-                ("polygon".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for polygon"));
-            }
-        },
-        "half_plane" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<HalfPlaneData>() {
-                ("half_plane".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for half_plane"));
-            }
-        },
-        "extrude" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<ExtrudeData>() {
-                ("extrude".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for extrude"));
-            }
-        },
-        "facet_shell" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<FacetShellData>() {
-                ("facet_shell".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for facet_shell"));
-            }
-        },
-        "geo_to_atom" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<GeoToAtomData>() {
-                ("geo_to_atom".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for geo_to_atom"));
-            }
-        },
-        "anchor" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<AnchorData>() {
-                ("anchor".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for anchor"));
-            }
-        },
-        "stamp" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<StampData>() {
-                ("stamp".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for stamp"));
-            }
-        },
-        "import_xyz" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<ImportXYZData>() {
-                ("import_xyz".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for import_xyz"));
-            }
-        },
-        "expr" => {
-            if let Some(data) = node.data.as_any_ref().downcast_ref::<ExprData>() {
-                ("expr".to_string(), serde_json::to_value(data)?)
-            } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for expr"));
-            }
-        },
-        _ => {
-            // For nodes with NoData or other types we don't specifically handle
-            ("no_data".to_string(), serde_json::json!({}))
-        }
+    // Convert the node data to a JSON value using the registry
+    let (data_type, json_data) = if let Some(node_type) = registry.built_in_node_types.get(&node_type_name) {
+        let json_data = (node_type.node_data_saver)(node.data.as_ref())?;
+        (node_type_name.clone(), json_data)
+    } else {
+        // Fallback for unknown types
+        ("no_data".to_string(), serde_json::json!({}))
     };
     
     // Create the serializable node
@@ -303,89 +168,13 @@ pub fn node_to_serializable(id: u64, node: &Node) -> io::Result<SerializableNode
 /// 
 /// # Returns
 /// * `io::Result<Node>` - The deserialized Node or an error if deserialization fails
-pub fn serializable_to_node(serializable: &SerializableNode) -> io::Result<Node> {
-    // Create the node data based on data_type
-    let data: Box<dyn NodeData> = match serializable.data_type.as_str() {
-        "cuboid" => {
-            let cuboid_data: CuboidData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(cuboid_data)
-        },
-        "sphere" => {
-            let sphere_data: SphereData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(sphere_data)
-        },
-        "half_space" => {
-            let half_space_data: HalfSpaceData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(half_space_data)
-        },
-        "geo_trans" => {
-            let geo_trans_data: GeoTransData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(geo_trans_data)
-        },
-        "atom_trans" => {
-            let atom_trans_data: AtomTransData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(atom_trans_data)
-        },
-        "parameter" => {
-            let param_data: ParameterData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(param_data)
-        },
-        "edit_atom" => {
-            let serializable_data: SerializableEditAtomData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(serializable_to_edit_atom_data(&serializable_data)?)
-        },
-        "rect" => {
-            let rect_data: RectData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(rect_data)
-        },
-        "circle" => {
-            let circle_data: CircleData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(circle_data)
-        },
-        "reg_poly" => {
-            let reg_poly_data: RegPolyData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(reg_poly_data)
-        },
-        "polygon" => {
-            let polygon_data: PolygonData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(polygon_data)
-        },
-        "half_plane" => {
-            let half_plane_data: HalfPlaneData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(half_plane_data)
-        },
-        "extrude" => {
-            let extrude_data: ExtrudeData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(extrude_data)
-        },
-        "facet_shell" => {
-            let facet_shell_data: FacetShellData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(facet_shell_data)
-        },
-        "geo_to_atom" => {
-            let geo_to_atom_data: GeoToAtomData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(geo_to_atom_data)
-        },
-        "anchor" => {
-            let anchor_data: AnchorData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(anchor_data)
-        },
-        "stamp" => {
-            let stamp_data: StampData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(stamp_data)
-        },
-        "import_xyz" => {
-            let import_xyz_data: ImportXYZData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(import_xyz_data)
-        },
-        "expr" => {
-            let expr_data: ExprData = serde_json::from_value(serializable.data.clone())?;
-            Box::new(expr_data)
-        },
-        _ => {
-            // Default to NoData for unknown types
-            Box::new(NoData {})
-        }
+pub fn serializable_to_node(serializable: &SerializableNode, registry: &NodeTypeRegistry) -> io::Result<Node> {
+    // Create the node data using the registry
+    let data: Box<dyn NodeData> = if let Some(node_type) = registry.built_in_node_types.get(&serializable.data_type) {
+        (node_type.node_data_loader)(&serializable.data)?
+    } else {
+        // Default to NoData for unknown types
+        Box::new(NoData {})
     };
     
     // Create the Node instance
@@ -403,12 +192,12 @@ pub fn serializable_to_node(serializable: &SerializableNode) -> io::Result<Node>
 /// 
 /// # Returns
 /// * `io::Result<SerializableNodeNetwork>` - The serializable network or an error if serialization fails
-pub fn node_network_to_serializable(network: &NodeNetwork) -> io::Result<SerializableNodeNetwork> {
+pub fn node_network_to_serializable(network: &NodeNetwork, registry: &NodeTypeRegistry) -> io::Result<SerializableNodeNetwork> {
     // Convert each node to a SerializableNode
     let mut serializable_nodes = Vec::new();
     
     for (id, node) in &network.nodes {
-        let serializable_node = node_to_serializable(*id, node)?;
+        let serializable_node = node_to_serializable(*id, node, registry)?;
         serializable_nodes.push(serializable_node);
     }
     
@@ -432,7 +221,7 @@ pub fn node_network_to_serializable(network: &NodeNetwork) -> io::Result<Seriali
 /// 
 /// # Returns
 /// * `io::Result<NodeNetwork>` - The deserialized network or an error if deserialization fails
-pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork) -> io::Result<NodeNetwork> {
+pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, registry: &NodeTypeRegistry) -> io::Result<NodeNetwork> {
     // Create the node type from the serializable node type
     let node_type = serializable_to_node_type(&serializable.node_type)?;
     
@@ -448,7 +237,7 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork) -> i
     
     // Process each node
     for serializable_node in &serializable.nodes {
-        let node = serializable_to_node(serializable_node)?;
+        let node = serializable_to_node(serializable_node, registry)?;
         network.nodes.insert(node.id, node);
     }
     
@@ -459,16 +248,16 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork) -> i
 /// 
 /// # Parameters
 /// * `registry` - The NodeTypeRegistry to save
-/// * `file_path` - The file path to save to as a string
+/// * `file_path` - Path to the output JSON file
 /// 
 /// # Returns
-/// * `io::Result<()>` - Ok if the save operation was successful, Err otherwise
-pub fn save_node_networks_to_file(registry: &mut NodeTypeRegistry, file_path: &str) -> io::Result<()> {
+/// * `io::Result<()>` - Success or an error if saving fails
+pub fn save_node_networks_to_file(registry: &mut NodeTypeRegistry, file_path: &Path) -> io::Result<()> {
     // Convert the node networks to a serializable format
     let mut serializable_networks = Vec::new();
     
     for (name, network) in &registry.node_networks {
-        let serializable_network = node_network_to_serializable(network)?;
+        let serializable_network = node_network_to_serializable(network, registry)?;
         serializable_networks.push((name.clone(), serializable_network));
     }
     
@@ -489,7 +278,7 @@ pub fn save_node_networks_to_file(registry: &mut NodeTypeRegistry, file_path: &s
     // Write to file
     fs::write(file_path, json_data)?;
 
-    registry.design_file_name = Some(file_path.to_string());
+    registry.design_file_name = Some(file_path.to_string_lossy().to_string());
 
     Ok(())
 }
@@ -524,7 +313,7 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
 
     // Process each network
     for (name, serializable_network) in serializable_registry.node_networks {
-        let mut network = serializable_to_node_network(&serializable_network)?;
+        let mut network = serializable_to_node_network(&serializable_network, registry)?;
         registry.initialize_custom_node_types_for_network(&mut network);
         registry.node_networks.insert(name, network);
     }

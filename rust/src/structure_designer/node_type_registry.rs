@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::io;
+use serde_json::Value;
 use glam::DVec2;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
@@ -32,7 +34,9 @@ use super::nodes::geo_to_atom::GeoToAtomData;
 use super::nodes::anchor::AnchorData;
 use super::nodes::import_xyz::ImportXYZData;
 use super::nodes::stamp::StampData;
-use super::node_data::NoData;
+use crate::structure_designer::node_data::NoData;
+use super::node_type::{generic_node_data_saver, generic_node_data_loader, no_data_saver, no_data_loader};
+use crate::structure_designer::serialization::edit_atom_data_serialization::{edit_atom_data_to_serializable, serializable_to_edit_atom_data, SerializableEditAtomData};
 use glam::{IVec3, DVec3, IVec2};
 
 pub struct NodeTypeRegistry {
@@ -68,6 +72,8 @@ impl NodeTypeRegistry {
         multi: false,
         sort_order: 0,
       }),
+      node_data_saver: generic_node_data_saver::<ParameterData>,
+      node_data_loader: generic_node_data_loader::<ParameterData>,
     });
 
     ret.add_node_type(NodeType {
@@ -86,6 +92,8 @@ impl NodeTypeRegistry {
         error: None,
         output_type: Some(APIDataType::Float),
       }),
+      node_data_saver: generic_node_data_saver::<ExprData>,
+      node_data_loader: generic_node_data_loader::<ExprData>,
     });
 
     ret.add_node_type(NodeType {
@@ -95,6 +103,8 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(IntData {
         value: 0
       }),
+      node_data_saver: generic_node_data_saver::<IntData>,
+      node_data_loader: generic_node_data_loader::<IntData>,
     });
 
     ret.add_node_type(NodeType {
@@ -104,6 +114,8 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(FloatData {
         value: 0.0
       }),
+      node_data_saver: generic_node_data_saver::<FloatData>,
+      node_data_loader: generic_node_data_loader::<FloatData>,
     });
 
     ret.add_node_type(NodeType {
@@ -124,6 +136,8 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(IVec2Data {
         value: IVec2::new(0, 0)
       }),
+      node_data_saver: generic_node_data_saver::<IVec2Data>,
+      node_data_loader: generic_node_data_loader::<IVec2Data>,
     });
 
     ret.add_node_type(NodeType {
@@ -149,6 +163,8 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(IVec3Data {
         value: IVec3::new(0, 0, 0)
       }),
+      node_data_saver: generic_node_data_saver::<IVec3Data>,
+      node_data_loader: generic_node_data_loader::<IVec3Data>,
     });
 
     ret.add_node_type(NodeType {
@@ -169,6 +185,8 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(Vec2Data {
         value: DVec2::new(0.0, 0.0)
       }),
+      node_data_saver: generic_node_data_saver::<Vec2Data>,
+      node_data_loader: generic_node_data_loader::<Vec2Data>,
     });
 
     ret.add_node_type(NodeType {
@@ -194,6 +212,8 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(Vec3Data {
         value: DVec3::new(0.0, 0.0, 0.0)
       }),
+      node_data_saver: generic_node_data_saver::<Vec3Data>,
+      node_data_loader: generic_node_data_loader::<Vec3Data>,
     });
 
     ret.add_node_type(NodeType {
@@ -215,6 +235,8 @@ impl NodeTypeRegistry {
         min_corner: IVec2::new(-1, -1),
         extent: IVec2::new(2, 2),
       }),
+      node_data_saver: generic_node_data_saver::<RectData>,
+      node_data_loader: generic_node_data_loader::<RectData>,
     });
 
     ret.add_node_type(NodeType {
@@ -236,6 +258,8 @@ impl NodeTypeRegistry {
         center: IVec2::new(0, 0),
         radius: 1,
       }),
+      node_data_saver: generic_node_data_saver::<CircleData>,
+      node_data_loader: generic_node_data_loader::<CircleData>,
     });
 
     ret.add_node_type(NodeType {
@@ -246,6 +270,8 @@ impl NodeTypeRegistry {
         num_sides: 3,
         radius: 3,
       }),
+      node_data_saver: generic_node_data_saver::<RegPolyData>,
+      node_data_loader: generic_node_data_loader::<RegPolyData>,
     });
 
     ret.add_node_type(NodeType {
@@ -259,6 +285,8 @@ impl NodeTypeRegistry {
           IVec2::new(0, 1),
         ],
       }),
+      node_data_saver: generic_node_data_saver::<PolygonData>,
+      node_data_loader: generic_node_data_loader::<PolygonData>,
     });
 
     ret.add_node_type(NodeType {
@@ -272,6 +300,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Geometry2D,
       node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -285,6 +315,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Geometry2D,
       node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -303,6 +335,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Geometry2D,
       node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -313,6 +347,8 @@ impl NodeTypeRegistry {
         point1: IVec2::new(0, 0),
         point2: IVec2::new(1, 0),
       }),
+      node_data_saver: generic_node_data_saver::<HalfPlaneData>,
+      node_data_loader: generic_node_data_loader::<HalfPlaneData>,
     });
 
     ret.add_node_type(NodeType {
@@ -328,6 +364,8 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(ExtrudeData {
         height: 1,
       }),
+      node_data_saver: generic_node_data_saver::<ExtrudeData>,
+      node_data_loader: generic_node_data_loader::<ExtrudeData>,
     });
 
     ret.add_node_type(NodeType {
@@ -349,6 +387,8 @@ impl NodeTypeRegistry {
         min_corner: IVec3::new(-1, -1, -1),
         extent: IVec3::new(2, 2, 2),
       }),
+      node_data_saver: generic_node_data_saver::<CuboidData>,
+      node_data_loader: generic_node_data_loader::<CuboidData>,
     });
 
     ret.add_node_type(NodeType {
@@ -370,6 +410,8 @@ impl NodeTypeRegistry {
         center: IVec3::new(0, 0, 0),
         radius: 1,
       }),
+      node_data_saver: generic_node_data_saver::<SphereData>,
+      node_data_loader: generic_node_data_loader::<SphereData>,
     });
 
     ret.add_node_type(NodeType {
@@ -382,6 +424,8 @@ impl NodeTypeRegistry {
         center: IVec3::new(0, 0, 0),
         shift: 0,
       }),
+      node_data_saver: generic_node_data_saver::<HalfSpaceData>,
+      node_data_loader: generic_node_data_loader::<HalfSpaceData>,
     });
 
     ret.add_node_type(NodeType {
@@ -389,6 +433,8 @@ impl NodeTypeRegistry {
       parameters: Vec::new(),
       output_type: APIDataType::Geometry,
       node_data_creator: || Box::new(FacetShellData::default()),
+      node_data_saver: generic_node_data_saver::<FacetShellData>,
+      node_data_loader: generic_node_data_loader::<FacetShellData>,
     });
 
     ret.add_node_type(NodeType {
@@ -402,6 +448,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -415,6 +463,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -433,6 +483,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -460,6 +512,8 @@ impl NodeTypeRegistry {
         rotation: IVec3::new(0, 0, 0),
         transform_only_frame: false,
       }),
+      node_data_saver: generic_node_data_saver::<GeoTransData>,
+      node_data_loader: generic_node_data_loader::<GeoTransData>,
     });
 
     ret.add_node_type(NodeType {
@@ -477,6 +531,8 @@ impl NodeTypeRegistry {
         secondary_atomic_number: 6,
         hydrogen_passivation: true,
       }),
+      node_data_saver: generic_node_data_saver::<GeoToAtomData>,
+      node_data_loader: generic_node_data_loader::<GeoToAtomData>,
     });
 
     ret.add_node_type(NodeType {
@@ -490,6 +546,19 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(EditAtomData::new()),
+      node_data_saver: |node_data| {
+        if let Some(data) = node_data.as_any_ref().downcast_ref::<EditAtomData>() {
+          let serializable_data = edit_atom_data_to_serializable(data)?;
+          serde_json::to_value(serializable_data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        } else {
+          Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"))
+        }
+      },
+      node_data_loader: |value| {
+        let serializable_data: SerializableEditAtomData = serde_json::from_value(value.clone())
+          .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        Ok(Box::new(serializable_to_edit_atom_data(&serializable_data)?))
+      },
     });
 
     ret.add_node_type(NodeType {
@@ -516,6 +585,8 @@ impl NodeTypeRegistry {
         translation: DVec3::new(0.0, 0.0, 0.0),
         rotation: DVec3::new(0.0, 0.0, 0.0),
       }),
+      node_data_saver: generic_node_data_saver::<AtomTransData>,
+      node_data_loader: generic_node_data_loader::<AtomTransData>,
     });
 
     ret.add_node_type(NodeType {
@@ -523,6 +594,8 @@ impl NodeTypeRegistry {
       parameters: vec![],
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(ImportXYZData::new()),
+      node_data_saver: generic_node_data_saver::<ImportXYZData>,
+      node_data_loader: generic_node_data_loader::<ImportXYZData>,
     });
 
     ret.add_node_type(NodeType {
@@ -536,6 +609,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(AnchorData::new()),
+      node_data_saver: generic_node_data_saver::<AnchorData>,
+      node_data_loader: generic_node_data_loader::<AnchorData>,
     });
 
     ret.add_node_type(NodeType {
@@ -554,6 +629,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(StampData::new()),
+      node_data_saver: generic_node_data_saver::<StampData>,
+      node_data_loader: generic_node_data_loader::<StampData>,
     });
 
     ret.add_node_type(NodeType {
@@ -567,6 +644,8 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
     });
 
     return ret;
