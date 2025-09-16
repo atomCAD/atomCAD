@@ -7,6 +7,11 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::common::atomic_structure::AtomicStructure;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::common::xyz_loader::load_xyz;
+use crate::common::atomic_structure_utils::auto_create_bonds;
+use crate::util::path_utils::{resolve_path, get_parent_directory};
+use serde_json::Value;
+use std::io;
 
 
 #[derive(Serialize, Deserialize)]
@@ -45,4 +50,38 @@ pub fn eval_import_xyz<'a>(
       Some(atomic_structure) => NetworkResult::Atomic(atomic_structure.clone()),
       None => NetworkResult::Error("No atomic structure imported".to_string()),
   };
+}
+
+/// Special loader for ImportXYZData that loads the atomic structure after deserializing
+pub fn import_xyz_data_loader(value: &Value, design_dir: Option<&str>) -> io::Result<Box<dyn NodeData>> {
+    // First deserialize the basic data
+    let mut data: ImportXYZData = serde_json::from_value(value.clone())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    
+    // If there's a file name, try to load the atomic structure
+    if let Some(ref file_name) = data.file_name {
+        // Resolve the path (convert relative to absolute if needed)
+        match resolve_path(file_name, design_dir) {
+            Ok((resolved_path, _was_relative)) => {
+                // Load the XYZ file using the resolved absolute path
+                match load_xyz(&resolved_path) {
+                    Ok(mut atomic_structure) => {
+                        auto_create_bonds(&mut atomic_structure);
+                        data.atomic_structure = Some(atomic_structure);
+                    }
+                    Err(_xyz_error) => {
+                        // If loading fails, leave atomic_structure as None
+                        // This allows the node to exist but show an error when evaluated
+                        data.atomic_structure = None;
+                    }
+                }
+            }
+            Err(_path_error) => {
+                // If path resolution fails, leave atomic_structure as None
+                data.atomic_structure = None;
+            }
+        }
+    }
+    
+    Ok(Box::new(data))
 }

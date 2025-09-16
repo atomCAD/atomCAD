@@ -32,7 +32,7 @@ use super::nodes::atom_trans::AtomTransData;
 use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
 use super::nodes::anchor::AnchorData;
-use super::nodes::import_xyz::ImportXYZData;
+use super::nodes::import_xyz::{ImportXYZData, import_xyz_data_loader};
 use super::nodes::stamp::StampData;
 use crate::structure_designer::node_data::NoData;
 use super::node_type::{generic_node_data_saver, generic_node_data_loader, no_data_saver, no_data_loader};
@@ -595,7 +595,7 @@ impl NodeTypeRegistry {
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(ImportXYZData::new()),
       node_data_saver: generic_node_data_saver::<ImportXYZData>,
-      node_data_loader: generic_node_data_loader::<ImportXYZData>,
+      node_data_loader: import_xyz_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -867,6 +867,7 @@ mod tests {
     use super::*;
     use crate::structure_designer::node_network::Node;
     use crate::structure_designer::nodes::parameter::ParameterData;
+    use crate::structure_designer::nodes::import_xyz::{ImportXYZData, import_xyz_data_loader};
     use crate::structure_designer::nodes::expr::{ExprData, ExprParameter};
     use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 
