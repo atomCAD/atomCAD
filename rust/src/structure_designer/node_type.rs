@@ -9,6 +9,7 @@ pub fn data_type_to_str(data_type: &APIDataType) -> String {
   match data_type {
     APIDataType::None => "None".to_string(),
     APIDataType::Bool => "Bool".to_string(),
+    APIDataType::String => "String".to_string(),
     APIDataType::Int => "Int".to_string(),
     APIDataType::Float => "Float".to_string(),
     APIDataType::Vec2 => "Vec2".to_string(),
@@ -25,6 +26,7 @@ pub fn str_to_data_type(s: &str) -> Option<APIDataType> {
   match s {
     "None" => Some(APIDataType::None),
     "Bool" => Some(APIDataType::Bool),
+    "String" => Some(APIDataType::String),
     "Int" => Some(APIDataType::Int),
     "Float" => Some(APIDataType::Float),
     "Vec2" => Some(APIDataType::Vec2),

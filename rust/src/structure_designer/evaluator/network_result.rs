@@ -24,6 +24,7 @@ pub struct GeometrySummary {
 pub enum NetworkResult {
   None,
   Bool(bool),
+  String(String),
   Int(i32),
   Float(f64),
   Vec2(DVec2),
@@ -42,6 +43,7 @@ impl NetworkResult {
     match self {
       NetworkResult::None => APIDataType::None,
       NetworkResult::Bool(_) => APIDataType::Bool,
+      NetworkResult::String(_) => APIDataType::String,
       NetworkResult::Int(_) => APIDataType::Int,
       NetworkResult::Float(_) => APIDataType::Float,
       NetworkResult::Vec2(_) => APIDataType::Vec2,
@@ -198,6 +200,7 @@ impl NetworkResult {
     match self {
       NetworkResult::None => None,
       NetworkResult::Bool(value) => Some(value.to_string()),
+      NetworkResult::String(value) => Some(value.to_string()),
       NetworkResult::Int(value) => Some(value.to_string()),
       NetworkResult::Float(value) => Some(format!("{:.6}", value)),
       NetworkResult::Vec2(vec) => Some(format!("({:.6}, {:.6})", vec.x, vec.y)),

@@ -18,6 +18,7 @@ pub enum APIEditAtomTool {
 pub enum APIDataType {
   None,
   Bool,
+  String,
   Int,
   Float,
   Vec2,
