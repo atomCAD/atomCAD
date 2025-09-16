@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::xyz_loader::load_xyz;
 use crate::common::atomic_structure_utils::auto_create_bonds;
-use crate::util::path_utils::{resolve_path, get_parent_directory};
+use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
 use std::io;
 
@@ -84,4 +84,23 @@ pub fn import_xyz_data_loader(value: &Value, design_dir: Option<&str>) -> io::Re
     }
     
     Ok(Box::new(data))
+}
+
+/// Special saver for ImportXYZData that converts file path to relative before saving
+pub fn import_xyz_data_saver(node_data: &mut dyn NodeData, design_dir: Option<&str>) -> io::Result<Value> {
+    if let Some(data) = node_data.as_any_mut().downcast_mut::<ImportXYZData>() {
+        // If there's a file name and design directory, try to convert to relative path
+        if let (Some(file_name), Some(design_dir)) = (&data.file_name, design_dir) {
+            let (potentially_relative_path, should_update) = try_make_relative(file_name, Some(design_dir));
+            if should_update {
+                // Update the stored path to use relative path for better portability
+                data.file_name = Some(potentially_relative_path);
+            }
+        }
+        
+        // Now serialize the (potentially modified) data
+        serde_json::to_value(data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    } else {
+        Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for import_xyz"))
+    }
 }
