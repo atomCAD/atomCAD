@@ -546,15 +546,15 @@ impl NodeTypeRegistry {
       ],
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(EditAtomData::new()),
-      node_data_saver: |node_data| {
-        if let Some(data) = node_data.as_any_ref().downcast_ref::<EditAtomData>() {
+      node_data_saver: |node_data, _design_dir| {
+        if let Some(data) = node_data.as_any_mut().downcast_ref::<EditAtomData>() {
           let serializable_data = edit_atom_data_to_serializable(data)?;
           serde_json::to_value(serializable_data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
         } else {
           Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"))
         }
       },
-      node_data_loader: |value| {
+      node_data_loader: |value, _design_dir| {
         let serializable_data: SerializableEditAtomData = serde_json::from_value(value.clone())
           .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         Ok(Box::new(serializable_to_edit_atom_data(&serializable_data)?))

@@ -140,13 +140,13 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
 /// 
 /// # Returns
 /// * `io::Result<SerializableNode>` - The serializable node or an error if serialization fails
-pub fn node_to_serializable(id: u64, node: &Node, registry: &NodeTypeRegistry) -> io::Result<SerializableNode> {
+pub fn node_to_serializable(id: u64, node: &mut Node, built_in_node_types: &std::collections::HashMap<String, crate::structure_designer::node_type::NodeType>, design_dir: Option<&str>) -> io::Result<SerializableNode> {
     // Handle the polymorphic node data based on its type
     let node_type_name = node.node_type_name.clone();
     
-    // Convert the node data to a JSON value using the registry
-    let (data_type, json_data) = if let Some(node_type) = registry.built_in_node_types.get(&node_type_name) {
-        let json_data = (node_type.node_data_saver)(node.data.as_ref())?;
+    // Convert the node data to a JSON value using the built-in node types
+    let (data_type, json_data) = if let Some(node_type) = built_in_node_types.get(&node_type_name) {
+        let json_data = (node_type.node_data_saver)(node.data.as_mut(), design_dir)?;
         (node_type_name.clone(), json_data)
     } else {
         // Fallback for unknown types
@@ -168,10 +168,10 @@ pub fn node_to_serializable(id: u64, node: &Node, registry: &NodeTypeRegistry) -
 /// 
 /// # Returns
 /// * `io::Result<Node>` - The deserialized Node or an error if deserialization fails
-pub fn serializable_to_node(serializable: &SerializableNode, registry: &NodeTypeRegistry) -> io::Result<Node> {
-    // Create the node data using the registry
-    let data: Box<dyn NodeData> = if let Some(node_type) = registry.built_in_node_types.get(&serializable.data_type) {
-        (node_type.node_data_loader)(&serializable.data)?
+pub fn serializable_to_node(serializable: &SerializableNode, built_in_node_types: &std::collections::HashMap<String, crate::structure_designer::node_type::NodeType>, design_dir: Option<&str>) -> io::Result<Node> {
+    // Create the node data using the built-in node types
+    let data: Box<dyn NodeData> = if let Some(node_type) = built_in_node_types.get(&serializable.data_type) {
+        (node_type.node_data_loader)(&serializable.data, design_dir)?
     } else {
         // Default to NoData for unknown types
         Box::new(NoData {})
@@ -192,12 +192,12 @@ pub fn serializable_to_node(serializable: &SerializableNode, registry: &NodeType
 /// 
 /// # Returns
 /// * `io::Result<SerializableNodeNetwork>` - The serializable network or an error if serialization fails
-pub fn node_network_to_serializable(network: &NodeNetwork, registry: &NodeTypeRegistry) -> io::Result<SerializableNodeNetwork> {
+pub fn node_network_to_serializable(network: &mut NodeNetwork, built_in_node_types: &std::collections::HashMap<String, crate::structure_designer::node_type::NodeType>, design_dir: Option<&str>) -> io::Result<SerializableNodeNetwork> {
     // Convert each node to a SerializableNode
     let mut serializable_nodes = Vec::new();
     
-    for (id, node) in &network.nodes {
-        let serializable_node = node_to_serializable(*id, node, registry)?;
+    for (id, node) in &mut network.nodes {
+        let serializable_node = node_to_serializable(*id, node, built_in_node_types, design_dir)?;
         serializable_nodes.push(serializable_node);
     }
     
@@ -221,7 +221,7 @@ pub fn node_network_to_serializable(network: &NodeNetwork, registry: &NodeTypeRe
 /// 
 /// # Returns
 /// * `io::Result<NodeNetwork>` - The deserialized network or an error if deserialization fails
-pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, registry: &NodeTypeRegistry) -> io::Result<NodeNetwork> {
+pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, built_in_node_types: &std::collections::HashMap<String, crate::structure_designer::node_type::NodeType>, design_dir: Option<&str>) -> io::Result<NodeNetwork> {
     // Create the node type from the serializable node type
     let node_type = serializable_to_node_type(&serializable.node_type)?;
     
@@ -237,7 +237,7 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, regi
     
     // Process each node
     for serializable_node in &serializable.nodes {
-        let node = serializable_to_node(serializable_node, registry)?;
+        let node = serializable_to_node(serializable_node, built_in_node_types, design_dir)?;
         network.nodes.insert(node.id, node);
     }
     
@@ -253,11 +253,14 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, regi
 /// # Returns
 /// * `io::Result<()>` - Success or an error if saving fails
 pub fn save_node_networks_to_file(registry: &mut NodeTypeRegistry, file_path: &Path) -> io::Result<()> {
+    // Extract design directory early
+    let design_dir = file_path.parent().and_then(|p| p.to_str());
+    
     // Convert the node networks to a serializable format
     let mut serializable_networks = Vec::new();
     
-    for (name, network) in &registry.node_networks {
-        let serializable_network = node_network_to_serializable(network, registry)?;
+    for (name, network) in &mut registry.node_networks {
+        let serializable_network = node_network_to_serializable(network, &registry.built_in_node_types, design_dir)?;
         serializable_networks.push((name.clone(), serializable_network));
     }
     
@@ -292,6 +295,9 @@ pub fn save_node_networks_to_file(registry: &mut NodeTypeRegistry, file_path: &P
 /// # Returns
 /// * `io::Result<()>` - Ok if the load operation was successful, Err otherwise
 pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: &str) -> io::Result<()> {
+    // Extract design directory early
+    let design_dir = std::path::Path::new(file_path).parent().and_then(|p| p.to_str());
+    
     // Read the file content
     let mut file = fs::File::open(file_path)?;
     let mut json_data = String::new();
@@ -313,7 +319,7 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
 
     // Process each network
     for (name, serializable_network) in serializable_registry.node_networks {
-        let mut network = serializable_to_node_network(&serializable_network, registry)?;
+        let mut network = serializable_to_node_network(&serializable_network, &registry.built_in_node_types, design_dir)?;
         registry.initialize_custom_node_types_for_network(&mut network);
         registry.node_networks.insert(name, network);
     }
