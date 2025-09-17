@@ -38,15 +38,45 @@ impl ImportXYZData {
 }
 
 pub fn eval_import_xyz<'a>(
-  _network_evaluator: &NetworkEvaluator,
+  network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
   node_id: u64,
-  _registry: &NodeTypeRegistry,
-  _context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
+  registry: &NodeTypeRegistry,
+  context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let node_data = &node.data.as_any_ref().downcast_ref::<ImportXYZData>().unwrap();
 
-  return match &node_data.atomic_structure {
+  let atomic_structure = if let Some(result) = network_evaluator.evaluate_single_arg(network_stack, node_id, registry, context, 0) {
+    // Check for error first
+    if result.is_error() {
+      return result;
+    }
+    
+    // Extract the file name from the string result
+    if let NetworkResult::String(file_name) = result {
+      // Load the XYZ file using the file name parameter
+      let design_dir = registry.design_file_name
+        .as_ref()
+        .and_then(|design_path| get_parent_directory(design_path));
+      
+      match resolve_path(&file_name, design_dir.as_deref()) {
+        Ok((resolved_path, _was_relative)) => {
+          match load_xyz(&resolved_path, true) {
+            Ok(atomic_structure) => Some(atomic_structure),
+            Err(_) => return NetworkResult::Error(format!("Failed to load XYZ file: {}", file_name)),
+          }
+        }
+        Err(_) => return NetworkResult::Error(format!("Failed to resolve path: {}", file_name)),
+      }
+    } else {
+      return NetworkResult::Error("Expected string parameter for file name".to_string());
+    }
+  } else {
+    // No parameter provided, use the preloaded atomic structure
+    node_data.atomic_structure.clone()
+  };
+
+  return match atomic_structure {
       Some(atomic_structure) => NetworkResult::Atomic(atomic_structure.clone()),
       None => NetworkResult::Error("No atomic structure imported".to_string()),
   };
@@ -64,9 +94,8 @@ pub fn import_xyz_data_loader(value: &Value, design_dir: Option<&str>) -> io::Re
         match resolve_path(file_name, design_dir) {
             Ok((resolved_path, _was_relative)) => {
                 // Load the XYZ file using the resolved absolute path
-                match load_xyz(&resolved_path) {
+                match load_xyz(&resolved_path, true) {
                     Ok(mut atomic_structure) => {
-                        auto_create_bonds(&mut atomic_structure);
                         data.atomic_structure = Some(atomic_structure);
                     }
                     Err(_xyz_error) => {

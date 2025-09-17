@@ -47,8 +47,7 @@ impl SceneComposer {
   }
 
   pub fn import_xyz(&mut self, file_path: &str) -> Result<(), XyzError> {
-    let mut model = load_xyz(&file_path)?;
-    auto_create_bonds(&mut model);
+    let mut model = load_xyz(&file_path, true)?;
     detect_bonded_substructures(&mut model);
     if self.model.model.get_num_of_atoms() > 0 {
       self.model.model.add_atomic_structure(&model);

@@ -5,6 +5,7 @@ use thiserror::Error;
 use crate::common::atomic_structure::AtomicStructure;
 use glam::f64::DVec3;
 use crate::common::common_constants::CHEMICAL_ELEMENTS;
+use crate::common::atomic_structure_utils::auto_create_bonds;
 
 #[derive(Debug, Error)]
 pub enum XyzError {
@@ -18,7 +19,7 @@ pub enum XyzError {
     FloatParse(#[from] ParseFloatError),
 }
 
-pub fn load_xyz(file_path: &str) -> Result<AtomicStructure, XyzError> {
+pub fn load_xyz(file_path: &str, create_bonds: bool) -> Result<AtomicStructure, XyzError> {
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
@@ -62,6 +63,10 @@ pub fn load_xyz(file_path: &str) -> Result<AtomicStructure, XyzError> {
             num_atoms,
             atomic_structure.get_num_of_atoms()
         )));
+    }
+
+    if create_bonds {
+        auto_create_bonds(&mut atomic_structure);
     }
 
     Ok(atomic_structure)

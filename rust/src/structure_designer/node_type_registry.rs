@@ -614,7 +614,13 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "import_xyz".to_string(),
-      parameters: vec![],
+      parameters: vec![
+        Parameter {
+          name: "file_name".to_string(),
+          data_type: APIDataType::String,
+          multi: false,
+        },
+      ],
       output_type: APIDataType::Atomic,
       node_data_creator: || Box::new(ImportXYZData::new()),
       node_data_saver: import_xyz_data_saver,

@@ -67,9 +67,8 @@ pub fn import_xyz(node_id: u64) -> APIResult {
       }
 
       // Load the XYZ file using the resolved absolute path
-      match load_xyz(&resolved_path) {
-        Ok(mut atomic_structure) => {
-          auto_create_bonds(&mut atomic_structure);
+      match load_xyz(&resolved_path, true) {
+        Ok(atomic_structure) => {
           // Set the atomic structure in the import_xyz_data
           import_xyz_data.atomic_structure = Some(atomic_structure);
           
