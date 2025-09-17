@@ -602,4 +602,12 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
     return result;
   }
+
+  /// Exports all visible atomic structures as a single XYZ file
+  APIResult exportVisibleAtomicStructuresAsXyz(String filePath) {
+    final ret = structure_designer_api.exportVisibleAtomicStructuresAsXyz(
+        filePath: filePath);
+    refreshFromKernel();
+    return ret;
+  }
 }

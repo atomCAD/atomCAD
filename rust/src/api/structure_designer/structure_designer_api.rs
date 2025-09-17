@@ -1393,3 +1393,28 @@ pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferen
     });
   }
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_visible_atomic_structures_as_xyz(file_path: String) -> APIResult {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        // Call the method in StructureDesigner
+        match cad_instance.structure_designer.export_visible_atomic_structures_as_xyz(&file_path) {
+          Ok(_) => APIResult {
+            success: true,
+            error_message: String::new(),
+          },
+          Err(e) => APIResult {
+            success: false,
+            error_message: e,
+          }
+        }
+      },
+      APIResult {
+        success: false,
+        error_message: "CAD instance not available".to_string(),
+      }
+    )
+  }
+}

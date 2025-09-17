@@ -21,6 +21,7 @@ use std::collections::HashSet;
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use crate::common::xyz_saver::save_xyz;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -925,6 +926,34 @@ impl StructureDesigner {
     }
     
     final_result
+  }
+
+  /// Exports all visible atomic structures as a single XYZ file
+  /// Merges all atomic structures from the last generated scene into one structure before saving
+  pub fn export_visible_atomic_structures_as_xyz(&self, file_path: &str) -> Result<(), String> {
+    // Check if we have any atomic structures to export
+    if self.last_generated_structure_designer_scene.atomic_structures.is_empty() {
+      return Err("No atomic structures available to export".to_string());
+    }
+
+    // Create a new atomic structure to hold the merged result
+    let mut merged_structure = AtomicStructure::new();
+
+    // Merge all atomic structures into one
+    for atomic_structure in &self.last_generated_structure_designer_scene.atomic_structures {
+      merged_structure.add_atomic_structure(atomic_structure);
+    }
+
+    // Check if the merged structure has any atoms
+    if merged_structure.get_num_of_atoms() == 0 {
+      return Err("No atoms found in the atomic structures to export".to_string());
+    }
+
+    // Save the merged structure as XYZ file
+    match save_xyz(&merged_structure, file_path) {
+      Ok(()) => Ok(()),
+      Err(err) => Err(format!("Failed to save XYZ file '{}': {}", file_path, err)),
+    }
   }
   
 }

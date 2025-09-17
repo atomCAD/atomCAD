@@ -66,6 +66,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
                     onPressed: _saveDesignAs,
                     child: const Text('Save Design As'),
                   ),
+                  MenuItemButton(
+                    onPressed: _exportVisibleAsXyz,
+                    child: const Text('Export visible as XYZ'),
+                  ),
                 ],
               ),
 
@@ -249,5 +253,60 @@ class _StructureDesignerState extends State<StructureDesigner> {
     setState(() {
       verticalDivision = !verticalDivision;
     });
+  }
+
+  /// Export visible atomic structures as XYZ file
+  Future<void> _exportVisibleAsXyz() async {
+    try {
+      // Open file picker for saving XYZ files
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Export visible as XYZ',
+        fileName: 'structure.xyz',
+        type: FileType.custom,
+        allowedExtensions: ['xyz'],
+      );
+
+      if (outputFile != null) {
+        // Call the export method
+        final result = graphModel.exportVisibleAtomicStructuresAsXyz(outputFile);
+        
+        // Check if there was an error
+        if (!result.success) {
+          // Show error dialog
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Export Error'),
+                content: Text(result.errorMessage),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      // Handle any unexpected errors
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Export Error'),
+            content: Text('An unexpected error occurred: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 }

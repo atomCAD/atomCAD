@@ -334,3 +334,8 @@ void setStructureDesignerPreferences(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetStructureDesignerPreferences(
             preferences: preferences);
+
+APIResult exportVisibleAtomicStructuresAsXyz({required String filePath}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresAsXyz(
+        filePath: filePath);
