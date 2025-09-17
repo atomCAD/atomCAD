@@ -11,6 +11,8 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::nodes::expr::eval_expr;
 use crate::structure_designer::nodes::import_xyz::eval_import_xyz;
+use crate::structure_designer::nodes::string::eval_string;
+use crate::structure_designer::nodes::bool::eval_bool;
 use crate::structure_designer::nodes::int::eval_int;
 use crate::structure_designer::nodes::float::eval_float;
 use crate::structure_designer::nodes::ivec2::eval_ivec2;
@@ -335,7 +337,11 @@ impl NetworkEvaluator {
       eval_parameter(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "expr" {
       vec![eval_expr(&self, network_stack, node_id, registry, context)]
-    }else if node.node_type_name == "int" {
+    } else if node.node_type_name == "string" {
+      vec![eval_string(network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "bool" {
+      vec![eval_bool(network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "int" {
       vec![eval_int(network_stack, node_id, registry, context)]
     } else if node.node_type_name == "float" {
       vec![eval_float(network_stack, node_id, registry, context)]

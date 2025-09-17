@@ -48,6 +48,24 @@ class APIAtomTransData {
           rotation == other.rotation;
 }
 
+class APIBoolData {
+  final bool value;
+
+  const APIBoolData({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIBoolData &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+}
+
 class APICircleData {
   final APIIVec2 center;
   final int radius;
@@ -124,6 +142,7 @@ class APICuboidData {
 enum APIDataType {
   none,
   bool,
+  string,
   int,
   float,
   vec2,
@@ -640,6 +659,24 @@ class APIStampView {
       other is APIStampView &&
           runtimeType == other.runtimeType &&
           selectedStampPlacement == other.selectedStampPlacement;
+}
+
+class APIStringData {
+  final String value;
+
+  const APIStringData({
+    required this.value,
+  });
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIStringData &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
 }
 
 class APIVec2Data {

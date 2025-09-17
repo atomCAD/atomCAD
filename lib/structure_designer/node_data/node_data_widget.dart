@@ -24,6 +24,8 @@ import 'package:flutter_cad/structure_designer/node_data/ivec3_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/vec3_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/int_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/string_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/bool_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/float_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/vec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/expr_editor.dart';
@@ -299,6 +301,28 @@ class NodeDataWidget extends StatelessWidget {
         return IntEditor(
           nodeId: selectedNode.id,
           data: intData,
+          model: model,
+        );
+      case 'string':
+        // Fetch the string data here in the parent widget
+        final stringData = getStringData(
+          nodeId: selectedNode.id,
+        );
+
+        return StringEditor(
+          nodeId: selectedNode.id,
+          data: stringData,
+          model: model,
+        );
+      case 'bool':
+        // Fetch the bool data here in the parent widget
+        final boolData = getBoolData(
+          nodeId: selectedNode.id,
+        );
+
+        return BoolEditor(
+          nodeId: selectedNode.id,
+          data: boolData,
           model: model,
         );
       case 'float':

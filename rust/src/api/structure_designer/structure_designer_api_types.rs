@@ -68,6 +68,14 @@ pub struct InputPinView {
     pub value: i32,
   }
 
+  pub struct APIStringData {
+    pub value: String,
+  }
+
+  pub struct APIBoolData {
+    pub value: bool,
+  }
+
   pub struct APIFloatData {
     pub value: f64,
   }

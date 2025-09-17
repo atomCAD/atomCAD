@@ -30,4 +30,7 @@ pub mod ivec2;
 pub mod vec2;
 pub mod expr;
 pub mod import_xyz;
+pub mod bool;
+pub mod string;
+
 

@@ -7,6 +7,8 @@ use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::common_api_types::APIResult;
 use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors};
+use crate::structure_designer::nodes::string::StringData;
+use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::int::IntData;
 use crate::structure_designer::nodes::float::FloatData;
 use crate::structure_designer::nodes::vec2::Vec2Data;
@@ -24,6 +26,8 @@ use crate::api::structure_designer::structure_designer_api_types::InputPinView;
 use crate::api::structure_designer::structure_designer_api_types::NodeView;
 use crate::api::structure_designer::structure_designer_api_types::WireView;
 use crate::api::common_api_types::APIVec2;
+use crate::api::structure_designer::structure_designer_api_types::APIStringData;
+use crate::api::structure_designer::structure_designer_api_types::APIBoolData;
 use crate::api::structure_designer::structure_designer_api_types::APIIntData;
 use crate::api::structure_designer::structure_designer_api_types::APIFloatData;
 use crate::api::structure_designer::structure_designer_api_types::APIVec2Data;
@@ -370,6 +374,50 @@ pub fn get_int_data(node_id: u64) -> Option<APIIntData> {
         };
         Some(APIIntData {
           value: int_data.value
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_string_data(node_id: u64) -> Option<APIStringData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let string_data = match node_data.as_any_ref().downcast_ref::<StringData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIStringData {
+          value: string_data.value.clone(),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_bool_data(node_id: u64) -> Option<APIBoolData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let bool_data = match node_data.as_any_ref().downcast_ref::<BoolData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIBoolData {
+          value: bool_data.value
         })
       },
       None
@@ -910,6 +958,32 @@ pub fn set_int_data(node_id: u64, data: APIIntData) {
         value: data.value,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, int_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_string_data(node_id: u64, data: APIStringData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let string_data = Box::new(StringData {
+        value: data.value,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, string_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_bool_data(node_id: u64, data: APIBoolData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let bool_data = Box::new(BoolData {
+        value: data.value,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, bool_data);
       refresh_renderer(cad_instance, false);
     });
   }

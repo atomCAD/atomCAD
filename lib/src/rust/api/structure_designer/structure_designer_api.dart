@@ -91,6 +91,12 @@ APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
 APIIntData? getIntData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetIntData(nodeId: nodeId);
 
+APIStringData? getStringData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetStringData(nodeId: nodeId);
+
+APIBoolData? getBoolData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetBoolData(nodeId: nodeId);
+
 APIFloatData? getFloatData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetFloatData(nodeId: nodeId);
 
@@ -177,6 +183,16 @@ APIExprData? getExprData({required BigInt nodeId}) => RustLib.instance.api
 void setIntData({required BigInt nodeId, required APIIntData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetIntData(
+            nodeId: nodeId, data: data);
+
+void setStringData({required BigInt nodeId, required APIStringData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetStringData(
+            nodeId: nodeId, data: data);
+
+void setBoolData({required BigInt nodeId, required APIBoolData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetBoolData(
             nodeId: nodeId, data: data);
 
 void setFloatData({required BigInt nodeId, required APIFloatData data}) =>

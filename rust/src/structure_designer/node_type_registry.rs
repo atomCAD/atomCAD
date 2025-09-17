@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::io;
-use serde_json::Value;
 use glam::DVec2;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
+use super::nodes::string::StringData;
+use super::nodes::bool::BoolData;
 use super::nodes::int::IntData;
 use super::nodes::float::FloatData;
 use super::nodes::ivec2::IVec2Data;
@@ -94,6 +95,28 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<ExprData>,
       node_data_loader: generic_node_data_loader::<ExprData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "string".to_string(),
+      parameters: vec![],
+      output_type: APIDataType::String,
+      node_data_creator: || Box::new(StringData {
+        value: "".to_string(),
+      }),
+      node_data_saver: generic_node_data_saver::<StringData>,
+      node_data_loader: generic_node_data_loader::<StringData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "bool".to_string(),
+      parameters: vec![],
+      output_type: APIDataType::Bool,
+      node_data_creator: || Box::new(BoolData {
+        value: false
+      }),
+      node_data_saver: generic_node_data_saver::<BoolData>,
+      node_data_loader: generic_node_data_loader::<BoolData>,
     });
 
     ret.add_node_type(NodeType {

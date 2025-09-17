@@ -67,8 +67,8 @@ class _StringInputState extends State<StringInput> {
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: AppSpacing.inputFieldConstraints,
+    return SizedBox(
+      width: double.infinity,
       child: TextField(
         decoration: AppInputDecorations.standard.copyWith(
           labelText: widget.label,
