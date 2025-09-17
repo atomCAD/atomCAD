@@ -52,6 +52,7 @@ use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::nodes::anchor::AnchorData;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
+use crate::structure_designer::nodes::export_xyz::ExportXYZData;
 use crate::api::api_common::to_api_vec2;
 use crate::api::api_common::from_api_vec2;
 use crate::api::api_common::to_api_ivec3;
@@ -69,6 +70,7 @@ use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::expr::ExprData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIImportXYZData;
+use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 
@@ -695,6 +697,28 @@ pub fn get_import_xyz_data(node_id: u64) -> Option<APIImportXYZData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_export_xyz_data(node_id: u64) -> Option<APIExportXYZData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let export_xyz_data = match node_data.as_any_ref().downcast_ref::<ExportXYZData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIExportXYZData {
+          file_name: export_xyz_data.file_name.clone(),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_sphere_data(node_id: u64) -> Option<APISphereData> {
   unsafe {
     with_cad_instance_or(
@@ -1212,6 +1236,20 @@ pub fn set_import_xyz_data(node_id: u64, data: APIImportXYZData) {
     });
   }
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_export_xyz_data(node_id: u64, data: APIExportXYZData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let export_xyz_data = Box::new(ExportXYZData {
+        file_name: data.file_name.clone(),
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, export_xyz_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_parameter_data(node_id: u64, data: APIParameterData) {

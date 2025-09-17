@@ -34,6 +34,7 @@ use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
 use super::nodes::anchor::AnchorData;
 use super::nodes::import_xyz::{ImportXYZData, import_xyz_data_loader, import_xyz_data_saver};
+use super::nodes::export_xyz::{ExportXYZData, export_xyz_data_loader, export_xyz_data_saver};
 use super::nodes::stamp::StampData;
 use crate::structure_designer::node_data::NoData;
 use super::node_type::{generic_node_data_saver, generic_node_data_loader, no_data_saver, no_data_loader};
@@ -625,6 +626,26 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(ImportXYZData::new()),
       node_data_saver: import_xyz_data_saver,
       node_data_loader: import_xyz_data_loader,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "export_xyz".to_string(),
+      parameters: vec![
+        Parameter {
+          name: "molecule".to_string(),
+          data_type: APIDataType::Atomic,
+          multi: false,
+        },
+        Parameter {
+          name: "file_name".to_string(),
+          data_type: APIDataType::String,
+          multi: false,
+        },
+      ],
+      output_type: APIDataType::Atomic,
+      node_data_creator: || Box::new(ExportXYZData::new()),
+      node_data_saver: export_xyz_data_saver,
+      node_data_loader: export_xyz_data_loader,
     });
 
     ret.add_node_type(NodeType {

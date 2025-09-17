@@ -8,7 +8,6 @@ use crate::common::atomic_structure::AtomicStructure;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::xyz_loader::load_xyz;
-use crate::common::atomic_structure_utils::auto_create_bonds;
 use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
 use std::io;

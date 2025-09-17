@@ -33,7 +33,7 @@ pub fn absolute_to_relative(absolute_path: &str, base_dir: &str) -> Option<Strin
 }
 
 /// Converts a relative path to an absolute path based on a base directory
-/// Returns None if the base directory doesn't exist or conversion fails
+/// Returns None if conversion fails
 pub fn relative_to_absolute(relative_path: &str, base_dir: &str) -> Option<String> {
     let rel_path = Path::new(relative_path);
     let base_path = Path::new(base_dir);
@@ -43,29 +43,24 @@ pub fn relative_to_absolute(relative_path: &str, base_dir: &str) -> Option<Strin
         return None;
     }
     
-    // Ensure base directory exists and is absolute
-    if !base_path.is_absolute() || !base_path.exists() {
+    // Ensure base directory is absolute
+    if !base_path.is_absolute() {
         return None;
     }
     
-    // Join paths and canonicalize
+    // Join paths and return the absolute path
     let combined = base_path.join(rel_path);
-    combined.canonicalize().ok()?.to_str().map(|s| s.to_string())
+    combined.to_str().map(|s| s.to_string())
 }
 
 /// Resolves a path that could be either relative or absolute
 /// If relative, converts to absolute using base_dir
-/// If absolute, returns as-is if it exists
+/// If absolute, returns as-is
 /// Returns the resolved absolute path and whether it was originally relative
 pub fn resolve_path(path: &str, base_dir: Option<&str>) -> Result<(String, bool), String> {
     if is_absolute_path(path) {
-        // Path is absolute - verify it exists
-        let path_obj = Path::new(path);
-        if path_obj.exists() {
-            Ok((path.to_string(), false))
-        } else {
-            Err(format!("Absolute path does not exist: {}", path))
-        }
+        // Path is absolute - return as-is
+        Ok((path.to_string(), false))
     } else {
         // Path is relative - need base directory
         match base_dir {

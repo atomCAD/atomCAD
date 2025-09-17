@@ -11,6 +11,7 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::nodes::expr::eval_expr;
 use crate::structure_designer::nodes::import_xyz::eval_import_xyz;
+use crate::structure_designer::nodes::export_xyz::eval_export_xyz;
 use crate::structure_designer::nodes::string::eval_string;
 use crate::structure_designer::nodes::bool::eval_bool;
 use crate::structure_designer::nodes::int::eval_int;
@@ -51,6 +52,8 @@ use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+
+use super::network_result::input_missing_error;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -285,6 +288,33 @@ impl NetworkEvaluator {
     Ok(default_value)
   }
 
+  /// Helper method for the common pattern: get single value from required input pin
+  /// Returns the input pin value if connected, otherwise returns the missing input error
+  /// If the input pin evaluation results in an error, returns that error
+  pub fn evaluate_required<'a, T>(
+    &self,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    parameter_index: usize,
+    extractor: impl FnOnce(NetworkResult) -> Option<T>,
+  ) -> Result<T, NetworkResult> {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    let input_name = registry.get_parameter_name(&node, parameter_index);
+    if let Some(result) = self.evaluate_single_arg(network_stack, node_id, registry, context, parameter_index) {
+      // Check for error first
+      if result.is_error() {
+        return Err(result);
+      }
+      // Try to extract the value
+      if let Some(value) = extractor(result) {
+        return Ok(value);
+      }
+    }
+    Err(input_missing_error(&input_name))
+  }
+
   // Convenience helper method for the most common evaluation scenario:
   // evaluates a single argument and returns a single element of the result.
   // Returns None if the input was not connected.
@@ -397,7 +427,9 @@ impl NetworkEvaluator {
       vec![eval_anchor(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "import_xyz" {
       vec![eval_import_xyz(&self, network_stack, node_id, registry, context)]
-    }else if node.node_type_name == "stamp" {
+    } else if node.node_type_name == "export_xyz" {
+      vec![eval_export_xyz(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "stamp" {
       vec![eval_stamp(&self, network_stack, node_id, registry, decorate, context)]
     } else if node.node_type_name == "relax" {
       vec![eval_relax(&self, network_stack, node_id, registry, context)]

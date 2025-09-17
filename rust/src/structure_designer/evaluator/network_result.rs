@@ -87,6 +87,14 @@ impl NetworkResult {
     }
   }
 
+  /// Extracts a String value from the NetworkResult, returns None if not a String
+  pub fn extract_string(self) -> Option<String> {
+    match self {
+      NetworkResult::String(value) => Some(value),
+      _ => None,
+    }
+  }
+
   /// Extracts a Bool value from the NetworkResult, returns None if not a Bool
   pub fn extract_bool(self) -> Option<bool> {
     match self {
@@ -123,6 +131,14 @@ impl NetworkResult {
   pub fn extract_vec3(self) -> Option<DVec3> {
     match self {
       NetworkResult::Vec3(vec) => Some(vec),
+      _ => None,
+    }
+  }
+
+  /// Extracts a String value from the NetworkResult, returns None if not a String
+  pub fn extract_atomic(self) -> Option<AtomicStructure> {
+    match self {
+      NetworkResult::Atomic(value) => Some(value),
       _ => None,
     }
   }

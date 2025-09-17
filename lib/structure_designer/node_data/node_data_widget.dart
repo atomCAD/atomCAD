@@ -30,6 +30,7 @@ import 'package:flutter_cad/structure_designer/node_data/float_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/vec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/expr_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -363,6 +364,17 @@ class NodeDataWidget extends StatelessWidget {
         return ImportXyzEditor(
           nodeId: selectedNode.id,
           data: importXyzData,
+          model: model,
+        );
+      case 'export_xyz':
+        // Fetch the export_xyz data here in the parent widget
+        final exportXyzData = getExportXyzData(
+          nodeId: selectedNode.id,
+        );
+
+        return ExportXyzEditor(
+          nodeId: selectedNode.id,
+          data: exportXyzData,
           model: model,
         );
       default:

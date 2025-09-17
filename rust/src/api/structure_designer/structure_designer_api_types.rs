@@ -229,3 +229,7 @@ pub struct APIExprData {
 pub struct APIImportXYZData {
   pub file_name: Option<String>,
 }
+
+pub struct APIExportXYZData {
+  pub file_name: String,
+}

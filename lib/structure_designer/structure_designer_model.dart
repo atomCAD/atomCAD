@@ -501,6 +501,15 @@ class StructureDesignerModel extends ChangeNotifier {
     return structure_designer_api.getImportXyzData(nodeId: nodeId);
   }
 
+  void setExportXyzData(BigInt nodeId, APIExportXYZData data) {
+    structure_designer_api.setExportXyzData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APIExportXYZData? getExportXyzData(BigInt nodeId) {
+    return structure_designer_api.getExportXyzData(nodeId: nodeId);
+  }
+
   APIResult importXyz(BigInt nodeId) {
     var result = import_xyz_api.importXyz(nodeId: nodeId);
     refreshFromKernel();

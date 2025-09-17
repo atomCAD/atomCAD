@@ -213,6 +213,24 @@ enum APIEditAtomTool {
   ;
 }
 
+class APIExportXYZData {
+  final String fileName;
+
+  const APIExportXYZData({
+    required this.fileName,
+  });
+
+  @override
+  int get hashCode => fileName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIExportXYZData &&
+          runtimeType == other.runtimeType &&
+          fileName == other.fileName;
+}
+
 class APIExprData {
   final List<APIExprParameter> parameters;
   final String expression;

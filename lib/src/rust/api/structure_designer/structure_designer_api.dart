@@ -138,6 +138,11 @@ APIImportXYZData? getImportXyzData({required BigInt nodeId}) => RustLib
     .crateApiStructureDesignerStructureDesignerApiGetImportXyzData(
         nodeId: nodeId);
 
+APIExportXYZData? getExportXyzData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetExportXyzData(
+        nodeId: nodeId);
+
 APISphereData? getSphereData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetSphereData(nodeId: nodeId);
 
@@ -277,6 +282,12 @@ void setImportXyzData(
         {required BigInt nodeId, required APIImportXYZData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImportXyzData(
+            nodeId: nodeId, data: data);
+
+void setExportXyzData(
+        {required BigInt nodeId, required APIExportXYZData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
             nodeId: nodeId, data: data);
 
 void setParameterData(

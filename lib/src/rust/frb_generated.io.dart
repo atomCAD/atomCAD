@@ -74,6 +74,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool dco_decode_api_edit_atom_tool(dynamic raw);
 
   @protected
+  APIExportXYZData dco_decode_api_export_xyz_data(dynamic raw);
+
+  @protected
   APIExprData dco_decode_api_expr_data(dynamic raw);
 
   @protected
@@ -199,6 +202,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIEditAtomTool dco_decode_box_autoadd_api_edit_atom_tool(dynamic raw);
+
+  @protected
+  APIExportXYZData dco_decode_box_autoadd_api_export_xyz_data(dynamic raw);
 
   @protected
   APIExprData dco_decode_box_autoadd_api_expr_data(dynamic raw);
@@ -409,6 +415,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool? dco_decode_opt_box_autoadd_api_edit_atom_tool(dynamic raw);
 
   @protected
+  APIExportXYZData? dco_decode_opt_box_autoadd_api_export_xyz_data(dynamic raw);
+
+  @protected
   APIExprData? dco_decode_opt_box_autoadd_api_expr_data(dynamic raw);
 
   @protected
@@ -587,6 +596,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool sse_decode_api_edit_atom_tool(SseDeserializer deserializer);
 
   @protected
+  APIExportXYZData sse_decode_api_export_xyz_data(SseDeserializer deserializer);
+
+  @protected
   APIExprData sse_decode_api_expr_data(SseDeserializer deserializer);
 
   @protected
@@ -723,6 +735,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIEditAtomTool sse_decode_box_autoadd_api_edit_atom_tool(
+      SseDeserializer deserializer);
+
+  @protected
+  APIExportXYZData sse_decode_box_autoadd_api_export_xyz_data(
       SseDeserializer deserializer);
 
   @protected
@@ -977,6 +993,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIExportXYZData? sse_decode_opt_box_autoadd_api_export_xyz_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIExprData? sse_decode_opt_box_autoadd_api_expr_data(
       SseDeserializer deserializer);
 
@@ -1182,6 +1202,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIEditAtomTool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_export_xyz_data(
+      APIExportXYZData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_expr_data(APIExprData self, SseSerializer serializer);
 
   @protected
@@ -1328,6 +1352,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_edit_atom_tool(
       APIEditAtomTool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_export_xyz_data(
+      APIExportXYZData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_expr_data(
@@ -1584,6 +1612,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_edit_atom_tool(
       APIEditAtomTool? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_export_xyz_data(
+      APIExportXYZData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_expr_data(
