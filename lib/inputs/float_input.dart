@@ -19,11 +19,19 @@ class FloatInput extends StatefulWidget {
 
 class _FloatInputState extends State<FloatInput> {
   late TextEditingController _controller;
+  late FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value.toString());
+    _focusNode = FocusNode();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        // When focus is lost, update the value
+        _updateValueFromText(_controller.text);
+      }
+    });
   }
 
   @override
@@ -36,9 +44,20 @@ class _FloatInputState extends State<FloatInput> {
     }
   }
 
+  void _updateValueFromText(String text) {
+    final newValue = double.tryParse(text);
+    if (newValue != null) {
+      widget.onChanged(newValue);
+    } else {
+      // If parsing fails, restore the previous valid value
+      _controller.text = widget.value.toString();
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -53,12 +72,10 @@ class _FloatInputState extends State<FloatInput> {
             border: OutlineInputBorder(),
           ),
           controller: _controller,
+          focusNode: _focusNode,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (text) {
-            final newValue = double.tryParse(text);
-            if (newValue != null) {
-              widget.onChanged(newValue);
-            }
+          onSubmitted: (text) {
+            _updateValueFromText(text);
           },
         ),
       ],
