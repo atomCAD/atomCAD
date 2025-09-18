@@ -29,6 +29,7 @@ use super::nodes::rect::RectData;
 use super::nodes::half_plane::HalfPlaneData;
 use super::nodes::half_space::HalfSpaceData;
 use super::nodes::geo_trans::GeoTransData;
+use super::nodes::atom_cut::AtomCutData;
 use super::nodes::atom_trans::AtomTransData;
 use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
@@ -646,6 +647,26 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(ExportXYZData::new()),
       node_data_saver: export_xyz_data_saver,
       node_data_loader: export_xyz_data_loader,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "atom_cut".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: APIDataType::Atomic,
+              multi: false,
+          },
+          Parameter {
+            name: "cutters".to_string(),
+            data_type: APIDataType::Geometry,
+            multi: true,
+        },
+      ],
+      output_type: APIDataType::Atomic,
+      node_data_creator: || Box::new(AtomCutData::new()),
+      node_data_saver: generic_node_data_saver::<AtomCutData>,
+      node_data_loader: generic_node_data_loader::<AtomCutData>,
     });
 
     ret.add_node_type(NodeType {

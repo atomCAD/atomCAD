@@ -42,6 +42,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIAtomTransDa
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIAnchorData;
+use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::sphere::SphereData;
@@ -51,6 +52,7 @@ use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::nodes::anchor::AnchorData;
+use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::structure_designer::nodes::export_xyz::ExportXYZData;
 use crate::api::api_common::to_api_vec2;
@@ -675,6 +677,29 @@ pub fn get_anchor_data(node_id: u64) -> Option<APIAnchorData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_atom_cut_data(node_id: u64) -> Option<APIAtomCutData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let atom_cut_data = match node_data.as_any_ref().downcast_ref::<AtomCutData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIAtomCutData {
+          cut_sdf_value: atom_cut_data.cut_sdf_value,
+          unit_cell_size: atom_cut_data.unit_cell_size,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_import_xyz_data(node_id: u64) -> Option<APIImportXYZData> {
   unsafe {
     with_cad_instance_or(
@@ -1218,6 +1243,20 @@ pub fn set_atom_trans_data(node_id: u64, data: APIAtomTransData) {
         rotation: from_api_vec3(&data.rotation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, atom_trans_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_atom_cut_data(node_id: u64, data: APIAtomCutData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let atom_cut_data = Box::new(AtomCutData {
+        cut_sdf_value: data.cut_sdf_value,
+        unit_cell_size: data.unit_cell_size,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, atom_cut_data);
       refresh_renderer(cad_instance, false);
     });
   }

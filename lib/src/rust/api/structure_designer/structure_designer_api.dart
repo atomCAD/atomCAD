@@ -133,6 +133,10 @@ APICuboidData? getCuboidData({required BigInt nodeId}) => RustLib.instance.api
 APIAnchorData? getAnchorData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetAnchorData(nodeId: nodeId);
 
+APIAtomCutData? getAtomCutData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetAtomCutData(
+        nodeId: nodeId);
+
 APIImportXYZData? getImportXyzData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetImportXyzData(
@@ -276,6 +280,11 @@ void setAtomTransData(
         {required BigInt nodeId, required APIAtomTransData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetAtomTransData(
+            nodeId: nodeId, data: data);
+
+void setAtomCutData({required BigInt nodeId, required APIAtomCutData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetAtomCutData(
             nodeId: nodeId, data: data);
 
 void setImportXyzData(

@@ -233,3 +233,8 @@ pub struct APIImportXYZData {
 pub struct APIExportXYZData {
   pub file_name: String,
 }
+
+pub struct APIAtomCutData {
+  pub cut_sdf_value: f64,
+  pub unit_cell_size: f64,
+}

@@ -27,6 +27,27 @@ class APIAnchorData {
           position == other.position;
 }
 
+class APIAtomCutData {
+  final double cutSdfValue;
+  final double unitCellSize;
+
+  const APIAtomCutData({
+    required this.cutSdfValue,
+    required this.unitCellSize,
+  });
+
+  @override
+  int get hashCode => cutSdfValue.hashCode ^ unitCellSize.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomCutData &&
+          runtimeType == other.runtimeType &&
+          cutSdfValue == other.cutSdfValue &&
+          unitCellSize == other.unitCellSize;
+}
+
 class APIAtomTransData {
   final APIVec3 translation;
   final APIVec3 rotation;

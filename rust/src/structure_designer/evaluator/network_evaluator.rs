@@ -35,6 +35,7 @@ use crate::structure_designer::nodes::extrude::eval_extrude;
 use crate::structure_designer::nodes::half_space::eval_half_space;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::nodes::anchor::eval_anchor;
+use crate::structure_designer::nodes::atom_cut::eval_atom_cut;
 use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
 use crate::structure_designer::nodes::edit_atom::edit_atom::eval_edit_atom;
 use crate::structure_designer::nodes::stamp::eval_stamp;
@@ -425,6 +426,8 @@ impl NetworkEvaluator {
       vec![eval_atom_trans(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "anchor" {
       vec![eval_anchor(&self, network_stack, node_id, registry, context)]
+    } else if node.node_type_name == "atom_cut" {
+      vec![eval_atom_cut(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "import_xyz" {
       vec![eval_import_xyz(&self, network_stack, node_id, registry, context)]
     } else if node.node_type_name == "export_xyz" {
