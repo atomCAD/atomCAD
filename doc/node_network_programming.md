@@ -1,5 +1,9 @@
 # Node network programming in atomCAD
 
+This desigo document is created to make changes to the atomCAD design in the beginning of Sepetember 2025. The document is not meant to be maintained indefinitely.  
+
+Some aspects are already superseeded, and are discussed in the new_type_system.md document.
+
 ## Generalizing the programmability of a node network
 
 atomCAD's node network evaluation is functional: a node is evaluated by first recursively evaluating its input nodes and then evaluating the node itself. There is no explicit control flow, no global state or side effects.
