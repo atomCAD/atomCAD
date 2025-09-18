@@ -31,6 +31,7 @@ import 'package:flutter_cad/structure_designer/node_data/vec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/expr_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -375,6 +376,17 @@ class NodeDataWidget extends StatelessWidget {
         return ExportXyzEditor(
           nodeId: selectedNode.id,
           data: exportXyzData,
+          model: model,
+        );
+      case 'atom_cut':
+        // Fetch the atom_cut data here in the parent widget
+        final atomCutData = getAtomCutData(
+          nodeId: selectedNode.id,
+        );
+
+        return AtomCutEditor(
+          nodeId: selectedNode.id,
+          data: atomCutData,
           model: model,
         );
       default:

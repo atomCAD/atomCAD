@@ -516,6 +516,11 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  void setAtomCutData(BigInt nodeId, APIAtomCutData data) {
+    structure_designer_api.setAtomCutData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames =
