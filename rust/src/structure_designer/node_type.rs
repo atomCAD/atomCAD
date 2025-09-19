@@ -5,45 +5,10 @@ use std::io;
 use serde::{Serialize, Deserialize};
 use crate::util::as_any::AsAny;
 
-pub fn data_type_to_str(data_type: &APIDataType) -> String {
-  match data_type {
-    APIDataType::None => "None".to_string(),
-    APIDataType::Bool => "Bool".to_string(),
-    APIDataType::String => "String".to_string(),
-    APIDataType::Int => "Int".to_string(),
-    APIDataType::Float => "Float".to_string(),
-    APIDataType::Vec2 => "Vec2".to_string(),
-    APIDataType::Vec3 => "Vec3".to_string(),
-    APIDataType::IVec2 => "IVec2".to_string(),
-    APIDataType::IVec3 => "IVec3".to_string(),
-    APIDataType::Geometry2D => "Geometry2D".to_string(),
-    APIDataType::Geometry => "Geometry".to_string(),
-    APIDataType::Atomic => "Atomic".to_string(),
-  }
-}
-
-pub fn str_to_data_type(s: &str) -> Option<APIDataType> {
-  match s {
-    "None" => Some(APIDataType::None),
-    "Bool" => Some(APIDataType::Bool),
-    "String" => Some(APIDataType::String),
-    "Int" => Some(APIDataType::Int),
-    "Float" => Some(APIDataType::Float),
-    "Vec2" => Some(APIDataType::Vec2),
-    "Vec3" => Some(APIDataType::Vec3),
-    "IVec2" => Some(APIDataType::IVec2),
-    "IVec3" => Some(APIDataType::IVec3),
-    "Geometry2D" => Some(APIDataType::Geometry2D),
-    "Geometry" => Some(APIDataType::Geometry),
-    "Atomic" => Some(APIDataType::Atomic),
-    _ => None
-  }
-}
-
 #[derive(Clone)]
 pub struct Parameter {
   pub name: String,
-  pub data_type: APIDataType,
+  pub data_type: DataType,
   pub multi: bool, // whether this parameter accepts multiple inputs. If yes, they are treated as a set of values (with no order).
 }
 
@@ -52,7 +17,7 @@ pub struct Parameter {
 pub struct NodeType {
   pub name: String, // name of the node type
   pub parameters: Vec<Parameter>,
-  pub output_type: APIDataType,
+  pub output_type: DataType,
   pub node_data_creator: fn() -> Box<dyn NodeData>,
   pub node_data_saver: fn(&mut dyn NodeData, Option<&str>) -> io::Result<Value>,
   pub node_data_loader: fn(&Value, Option<&str>) -> io::Result<Box<dyn NodeData>>,
