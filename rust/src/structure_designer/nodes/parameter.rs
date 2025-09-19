@@ -2,20 +2,19 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::data_type::DataType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParameterData {
   pub param_index: usize,
   pub param_name: String,
-  pub data_type: APIDataType,
-  pub multi: bool,
+  pub data_type: DataType,
   pub sort_order: i32,
 }
 
@@ -47,7 +46,7 @@ fn eval_default<'a>(
         false,
         context
       );
-      if let NetworkResult::Error(_error) = &result[0] {
+      if let NetworkResult::Error(_error) = &result {
         Err(())
       } else {
         Ok(result)

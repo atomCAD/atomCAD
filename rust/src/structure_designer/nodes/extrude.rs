@@ -49,7 +49,7 @@ pub fn eval_extrude<'a>(
     registry,
     false,
     context
-  )[0].clone();
+  );
 
   if let NetworkResult::Error(_error) = shape_val {
     return error_in_input(&shape_input_name);

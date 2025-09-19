@@ -13,7 +13,6 @@ use super::nodes::vec2::Vec2Data;
 use super::nodes::vec3::Vec3Data;
 use super::nodes::expr::ExprData;
 use super::nodes::expr::ExprParameter;
-use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use crate::structure_designer::node_network::Node;
@@ -65,7 +64,6 @@ impl NodeTypeRegistry {
           Parameter {
               name: "default".to_string(),
               data_type: DataType::Geometry, // will change based on  ParameterData::data_type.
-              multi: false,
           },
       ],
       output_type: DataType::Geometry, // will change based on ParameterData::data_type.
@@ -73,7 +71,6 @@ impl NodeTypeRegistry {
         param_index: 0,
         param_name: "param".to_string(),
         data_type: DataType::Geometry,
-        multi: false,
         sort_order: 0,
       }),
       node_data_saver: generic_node_data_saver::<ParameterData>,
@@ -150,12 +147,10 @@ impl NodeTypeRegistry {
         Parameter {
             name: "x".to_string(),
             data_type: DataType::Int,
-            multi: false,
         },
         Parameter {
             name: "y".to_string(),
             data_type: DataType::Int,
-            multi: false,
         },        
       ],
       output_type: DataType::IVec2,
@@ -172,17 +167,14 @@ impl NodeTypeRegistry {
         Parameter {
             name: "x".to_string(),
             data_type: DataType::Int,
-            multi: false,
         },
         Parameter {
             name: "y".to_string(),
             data_type: DataType::Int,
-            multi: false,
         },
         Parameter {
             name: "z".to_string(),
             data_type: DataType::Int,
-            multi: false,
         },        
       ],
       output_type: DataType::IVec3,
@@ -199,12 +191,10 @@ impl NodeTypeRegistry {
         Parameter {
             name: "x".to_string(),
             data_type: DataType::Float,
-            multi: false,
         },
         Parameter {
             name: "y".to_string(),
             data_type: DataType::Float,
-            multi: false,
         },        
       ],
       output_type: DataType::Vec2,
@@ -221,17 +211,14 @@ impl NodeTypeRegistry {
         Parameter {
             name: "x".to_string(),
             data_type: DataType::Float,
-            multi: false,
         },
         Parameter {
             name: "y".to_string(),
             data_type: DataType::Float,
-            multi: false,
         },
         Parameter {
             name: "z".to_string(),
             data_type: DataType::Float,
-            multi: false,
         },        
       ],
       output_type: DataType::Vec3,
@@ -248,12 +235,10 @@ impl NodeTypeRegistry {
         Parameter {
             name: "min_corner".to_string(),
             data_type: DataType::IVec2,
-            multi: false,
         },
         Parameter {
           name: "extent".to_string(),
           data_type: DataType::IVec2,
-          multi: false,
         },
       ],
       output_type: DataType::Geometry2D,
@@ -271,12 +256,10 @@ impl NodeTypeRegistry {
         Parameter {
             name: "center".to_string(),
             data_type: DataType::IVec2,
-            multi: false,
         },
         Parameter {
           name: "radius".to_string(),
           data_type: DataType::Int,
-          multi: false,
         },
       ],
       output_type: DataType::Geometry2D,
@@ -320,8 +303,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Geometry2D,
-              multi: true,
+              data_type: DataType::Array(DataType::Geometry2D),
           },
       ],
       output_type: DataType::Geometry2D,
@@ -335,8 +317,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Geometry2D,
-              multi: true,
+              data_type: DataType::Array(DataType::Geometry2D),
           },
       ],
       output_type: DataType::Geometry2D,
@@ -350,13 +331,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "base".to_string(),
-              data_type: DataType::Geometry2D,
-              multi: true, // If multiple shapes are given, they are unioned.
+              data_type: DataType::Array(DataType::Geometry2D), // A set of shapes to subtract from
           },
           Parameter {
               name: "sub".to_string(),
-              data_type: DataType::Geometry2D,
-              multi: true, // A set of shapes to subtract from base
+              data_type: DataType::Array(DataType::Geometry2D), // A set of shapes to subtract from base
           },
       ],
       output_type: DataType::Geometry2D,
@@ -383,7 +362,6 @@ impl NodeTypeRegistry {
           Parameter {
               name: "shape".to_string(),
               data_type: DataType::Geometry2D,
-              multi: false,
           },
       ],
       output_type: DataType::Geometry,
@@ -400,12 +378,10 @@ impl NodeTypeRegistry {
         Parameter {
             name: "min_corner".to_string(),
             data_type: DataType::IVec3,
-            multi: false,
         },
         Parameter {
           name: "extent".to_string(),
           data_type: DataType::IVec3,
-          multi: false,
         },
       ],
       output_type: DataType::Geometry,
@@ -423,12 +399,10 @@ impl NodeTypeRegistry {
         Parameter {
             name: "center".to_string(),
             data_type: DataType::IVec3,
-            multi: false,
         },
         Parameter {
           name: "radius".to_string(),
           data_type: DataType::Int,
-          multi: false,
         },
       ],
       output_type: DataType::Geometry,
@@ -468,8 +442,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Geometry,
-              multi: true,
+              data_type: DataType::Array(DataType::Geometry),
           },
       ],
       output_type: DataType::Geometry,
@@ -483,8 +456,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Geometry,
-              multi: true,
+              data_type: DataType::Array(DataType::Geometry),
           },
       ],
       output_type: DataType::Geometry,
@@ -498,13 +470,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "base".to_string(),
-              data_type: DataType::Geometry,
-              multi: true, // If multiple shapes are given, they are unioned.
+              data_type: DataType::Array(DataType::Geometry), // If multiple shapes are given, they are unioned.
           },
           Parameter {
               name: "sub".to_string(),
-              data_type: DataType::Geometry,
-              multi: true, // A set of shapes to subtract from base
+              data_type: DataType::Array(DataType::Geometry), // A set of shapes to subtract from base
           },
       ],
       output_type: DataType::Geometry,
@@ -519,17 +489,14 @@ impl NodeTypeRegistry {
           Parameter {
               name: "shape".to_string(),
               data_type: DataType::Geometry,
-              multi: false,
           },
           Parameter {
             name: "translation".to_string(),
             data_type: DataType::IVec3,
-            multi: false,
           },
           Parameter {
             name: "rotation".to_string(),
             data_type: DataType::IVec3,
-            multi: false,
           },
       ],
       output_type: DataType::Geometry,
@@ -548,7 +515,6 @@ impl NodeTypeRegistry {
           Parameter {
               name: "shape".to_string(),
               data_type: DataType::Geometry,
-              multi: false,
           },
       ],
       output_type: DataType::Atomic,
@@ -567,7 +533,6 @@ impl NodeTypeRegistry {
           Parameter {
               name: "molecule".to_string(),
               data_type: DataType::Atomic,
-              multi: false,
           },
       ],
       output_type: DataType::Atomic,
@@ -593,17 +558,14 @@ impl NodeTypeRegistry {
           Parameter {
               name: "molecule".to_string(),
               data_type: DataType::Atomic,
-              multi: false,
           },
           Parameter {
             name: "translation".to_string(),
             data_type: DataType::Vec3,
-            multi: false,
           },
           Parameter {
             name: "rotation".to_string(),
             data_type: DataType::Vec3,
-            multi: false,
           },
       ],
       output_type: DataType::Atomic,
@@ -621,7 +583,6 @@ impl NodeTypeRegistry {
         Parameter {
           name: "file_name".to_string(),
           data_type: DataType::String,
-          multi: false,
         },
       ],
       output_type: DataType::Atomic,
@@ -636,12 +597,10 @@ impl NodeTypeRegistry {
         Parameter {
           name: "molecule".to_string(),
           data_type: DataType::Atomic,
-          multi: false,
         },
         Parameter {
           name: "file_name".to_string(),
           data_type: DataType::String,
-          multi: false,
         },
       ],
       output_type: DataType::Atomic,
@@ -656,12 +615,10 @@ impl NodeTypeRegistry {
           Parameter {
               name: "molecule".to_string(),
               data_type: DataType::Atomic,
-              multi: false,
           },
           Parameter {
             name: "cutters".to_string(),
-            data_type: DataType::Geometry,
-            multi: true,
+            data_type: DataType::Array(DataType::Geometry),
         },
       ],
       output_type: DataType::Atomic,
@@ -828,8 +785,8 @@ impl NodeTypeRegistry {
           if let Some(base_node_type) = built_in_types.get("expr") {
             let mut custom_node_type = base_node_type.clone();
             
-            // Update the output type - use APIDataType::None if expr_data.output_type is None
-            custom_node_type.output_type = expr_data.output_type.unwrap_or(APIDataType::None);
+            // Update the output type - use DataType::None if expr_data.output_type is None
+            custom_node_type.output_type = expr_data.output_type.unwrap_or(DataType::None);
             
             // Convert ExprParameter to Parameter
             custom_node_type.parameters = expr_data.parameters.iter()
@@ -853,7 +810,7 @@ impl NodeTypeRegistry {
     Self::populate_custom_node_type_cache_with_types(&self.built_in_node_types, node);
   }
 
-  pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> APIDataType {
+  pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> DataType {
     let node_type = self.get_node_type_for_node(node).unwrap();
     node_type.parameters[parameter_index].data_type
   }
@@ -908,9 +865,7 @@ mod tests {
     use crate::structure_designer::nodes::parameter::ParameterData;
     use crate::structure_designer::nodes::import_xyz::{ImportXYZData, import_xyz_data_loader};
     use crate::structure_designer::nodes::expr::{ExprData, ExprParameter};
-    use crate::api::structure_designer::structure_designer_api_types::APIDataType;
-
-
+    use crate::structure_designer::data_type::DataType;    
 
     #[test]
     fn test_regular_node_type() {
@@ -918,7 +873,7 @@ mod tests {
         
         // Test that regular nodes still work correctly
         let node_type = registry.get_node_type("int").unwrap();
-        assert_eq!(node_type.output_type, APIDataType::Int);
+        assert_eq!(node_type.output_type, DataType::Int);
         assert_eq!(node_type.parameters.len(), 0);
     }
 }

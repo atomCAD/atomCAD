@@ -368,3 +368,4 @@ impl DataTypeLexer {
       Some(other) => Err(format!("Unexpected character: {}", other)),
     }
   }
+}

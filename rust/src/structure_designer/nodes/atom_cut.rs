@@ -14,7 +14,6 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AtomCutData {
   pub cut_sdf_value: f64,
@@ -70,7 +69,7 @@ pub fn eval_atom_cut<'a>(
         registry, 
         false,
         context
-      )[0].clone();
+      );
       if let NetworkResult::Error(_error) = shape_val {
         return error_in_input(&cutters_input_name);
       }

@@ -1,6 +1,5 @@
 use rust_lib_flutter_cad::structure_designer::expr::expr::*;
 use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_implementations};
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIDataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use std::collections::HashMap;
 

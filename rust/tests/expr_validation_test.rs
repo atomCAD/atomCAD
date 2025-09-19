@@ -1,8 +1,8 @@
 use rust_lib_flutter_cad::structure_designer::expr::expr::*;
 use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_signatures};
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIDataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use std::collections::HashMap;
+use crate::structure_designer::data_type::DataType;
 
 #[cfg(test)]
 mod validation_tests {
@@ -14,7 +14,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -23,17 +23,17 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Bool));
+        assert_eq!(result, Ok(DataType::Bool));
     }
 
     #[test]
     fn test_variable_validation_success() {
         let expr = Expr::Var("x".to_string());
         let mut variables = HashMap::new();
-        variables.insert("x".to_string(), APIDataType::Float);
+        variables.insert("x".to_string(), DataType::Float);
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -56,7 +56,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -69,7 +69,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -82,7 +82,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Bool));
+        assert_eq!(result, Ok(DataType::Bool));
     }
 
     #[test]
@@ -95,7 +95,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Bool));
+        assert_eq!(result, Ok(DataType::Bool));
     }
 
     #[test]
@@ -107,7 +107,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -119,7 +119,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Bool));
+        assert_eq!(result, Ok(DataType::Bool));
     }
 
     #[test]
@@ -131,7 +131,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -170,7 +170,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -183,7 +183,7 @@ mod validation_tests {
         let variables = HashMap::new();
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -219,8 +219,8 @@ mod validation_tests {
     fn test_complex_expression_validation() {
         // (x + 2.0) * sin(y) > 0.0
         let mut variables = HashMap::new();
-        variables.insert("x".to_string(), APIDataType::Float);
-        variables.insert("y".to_string(), APIDataType::Float);
+        variables.insert("x".to_string(), DataType::Float);
+        variables.insert("y".to_string(), DataType::Float);
         
         let expr = Expr::Binary(
             Box::new(Expr::Binary(
@@ -240,6 +240,6 @@ mod validation_tests {
         );
         
         let result = expr.validate(&variables, get_function_signatures());
-        assert_eq!(result, Ok(APIDataType::Bool));
+        assert_eq!(result, Ok(DataType::Bool));
     }
 }

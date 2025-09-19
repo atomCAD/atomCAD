@@ -3,6 +3,7 @@ use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::node_type::Parameter;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use std::collections::{HashMap, HashSet};
+use crate::structure_designer::data_type::DataType;   
 
 #[derive(Debug, Clone)]
 pub struct NetworkValidationResult {
@@ -301,11 +302,11 @@ fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &No
             node_type_registry.get_node_type_for_node(return_node).unwrap().output_type
         } else {
             // Return node doesn't exist, set to None
-            crate::api::structure_designer::structure_designer_api_types::APIDataType::None
+            crate::api::structure_designer::structure_designer_api_types::DataType::None
         }
     } else {
         // No return node, output type is None
-        crate::api::structure_designer::structure_designer_api_types::APIDataType::None
+        crate::api::structure_designer::structure_designer_api_types::DataType::None
     };
     
     // Update the network's output type

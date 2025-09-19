@@ -34,7 +34,7 @@ pub fn eval_intersect_2d<'a>(
       registry, 
       false,
       context
-    )[0].clone();
+    );
     if let NetworkResult::Error(_error) = shape_val {
       return error_in_input(&shapes_input_name);
     }

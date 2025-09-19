@@ -84,7 +84,7 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
       registry, 
       false,
       context
-    )[0].clone();
+    );
     if let NetworkResult::Error(_error) = shape_val {
       return (None, DVec3::ZERO);
     }

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::any::Any;
 
 use crate::structure_designer::node_network::NodeDisplayType;
-use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::half_plane::eval_half_plane;
 use crate::structure_designer::nodes::polygon::eval_polygon;
@@ -141,7 +140,7 @@ impl NetworkEvaluator {
     let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context).into_iter().next().unwrap();
 
     let mut scene = 
-    if registry.get_node_type_for_node(node).unwrap().output_type == APIDataType::Geometry2D {
+    if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
@@ -157,7 +156,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if registry.get_node_type_for_node(node).unwrap().output_type == APIDataType::Geometry {
+    else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         if let NetworkResult::Geometry(geometry_summary) = result {
           let mut ret = generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences);
@@ -180,7 +179,7 @@ impl NetworkEvaluator {
         StructureDesignerScene::new()
       }
     }
-    else if registry.get_node_type_for_node(node).unwrap().output_type == APIDataType::Atomic {
+    else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Atomic {
       //let atomic_structure = self.generate_atomic_structure(network, node, registry);
 
       let mut scene = StructureDesignerScene::new();
@@ -338,7 +337,7 @@ impl NetworkEvaluator {
         registry, 
         false,
         context
-      )[0].clone();
+      );
       if let NetworkResult::Error(_error) = result {
         return Some(error_in_input(&input_name));
       }
@@ -355,123 +354,107 @@ impl NetworkEvaluator {
     }
   }
 
+  // Evaluates the specified node (calculates the NetworkResult on its output pin).
   pub fn evaluate<'a>(
     &self,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node_id: u64, registry: &NodeTypeRegistry,
     decorate: bool,
-    context: &mut NetworkEvaluationContext) -> Vec<NetworkResult> {
+    context: &mut NetworkEvaluationContext) -> NetworkResult {
 
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
-    let results = if node.node_type_name == "parameter" {
+    let result = if node.node_type_name == "parameter" {
       eval_parameter(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "expr" {
-      vec![eval_expr(&self, network_stack, node_id, registry, context)]
+      eval_expr(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "string" {
-      vec![eval_string(network_stack, node_id, registry, context)]
+      eval_string(network_stack, node_id, registry, context)
     } else if node.node_type_name == "bool" {
-      vec![eval_bool(network_stack, node_id, registry, context)]
+      eval_bool(network_stack, node_id, registry, context)
     } else if node.node_type_name == "int" {
-      vec![eval_int(network_stack, node_id, registry, context)]
+      eval_int(network_stack, node_id, registry, context)
     } else if node.node_type_name == "float" {
-      vec![eval_float(network_stack, node_id, registry, context)]
+      eval_float(network_stack, node_id, registry, context)
     } else if node.node_type_name == "ivec2" {
-      vec![eval_ivec2(&self, network_stack, node_id, registry, context)]
+      eval_ivec2(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "ivec3" {
-      vec![eval_ivec3(&self, network_stack, node_id, registry, context)]
+      eval_ivec3(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "vec2" {
-      vec![eval_vec2(&self, network_stack, node_id, registry, context)]
+      eval_vec2(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "vec3" {
-      vec![eval_vec3(&self, network_stack, node_id, registry, context)]
+      eval_vec3(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "circle" {
-      vec![eval_circle(&self, network_stack, node_id, registry, context)]
+      eval_circle(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "rect" {
-      vec![eval_rect(&self, network_stack, node_id, registry, context)]
+      eval_rect(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "reg_poly" {
-      vec![eval_reg_poly(network_stack, node_id, registry)]
+      eval_reg_poly(network_stack, node_id, registry)
     } else if node.node_type_name == "polygon" {
-      vec![eval_polygon(network_stack, node_id, registry)]
+      eval_polygon(network_stack, node_id, registry)
     } else if node.node_type_name == "half_plane" {
-      vec![eval_half_plane(network_stack, node_id, registry, context)]
+      eval_half_plane(network_stack, node_id, registry, context)
     } else if node.node_type_name == "intersect_2d" {
-      vec![eval_intersect_2d(&self, network_stack, node_id, registry, context)]
+      eval_intersect_2d(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "union_2d" {
-      vec![eval_union_2d(&self, network_stack, node_id, registry, context)]
+      eval_union_2d(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "diff_2d" {
-      vec![eval_diff_2d(&self, network_stack, node_id, registry, context)]
+      eval_diff_2d(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "extrude" {
-      vec![eval_extrude(&self, network_stack, node_id, registry, context)]
+      eval_extrude(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "sphere" {
-      vec![eval_sphere(&self, network_stack, node_id, registry, context)]
+      eval_sphere(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "cuboid" {
-      vec![eval_cuboid(&self, network_stack, node_id, registry, context)]
+      eval_cuboid(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "half_space" {
-      vec![eval_half_space(network_stack, node_id, registry, context)]
+      eval_half_space(network_stack, node_id, registry, context)
     } else if node.node_type_name == "facet_shell" {
-      vec![eval_facet_shell(network_stack, node_id, registry, context)]
+      eval_facet_shell(network_stack, node_id, registry, context)
     } else if node.node_type_name == "intersect" {
-      vec![eval_intersect(&self, network_stack, node_id, registry, context)]
+      eval_intersect(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "union" {
-      vec![eval_union(&self, network_stack, node_id, registry, context)]
+      eval_union(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "diff" {
-      vec![eval_diff(&self, network_stack, node_id, registry, context)]
+      eval_diff(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "geo_trans" {
-      vec![eval_geo_trans(&self, network_stack, node_id, registry, context)]
+      eval_geo_trans(&self, network_stack, node_id, registry, context)
     }else if node.node_type_name == "geo_to_atom" {
-      vec![eval_geo_to_atom(&self, network_stack, node_id, registry, context)]
+      eval_geo_to_atom(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "edit_atom" {
-      vec![eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)]
+      eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)
     } else if node.node_type_name == "atom_trans" {
-      vec![eval_atom_trans(&self, network_stack, node_id, registry, context)]
+      eval_atom_trans(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "anchor" {
-      vec![eval_anchor(&self, network_stack, node_id, registry, context)]
+      eval_anchor(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "atom_cut" {
-      vec![eval_atom_cut(&self, network_stack, node_id, registry, context)]
+      eval_atom_cut(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "import_xyz" {
-      vec![eval_import_xyz(&self, network_stack, node_id, registry, context)]
+      eval_import_xyz(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "export_xyz" {
-      vec![eval_export_xyz(&self, network_stack, node_id, registry, context)]
+      eval_export_xyz(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "stamp" {
-      vec![eval_stamp(&self, network_stack, node_id, registry, decorate, context)]
+      eval_stamp(&self, network_stack, node_id, registry, decorate, context)
     } else if node.node_type_name == "relax" {
-      vec![eval_relax(&self, network_stack, node_id, registry, context)]
+      eval_relax(&self, network_stack, node_id, registry, context)
     } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) { // custom node
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
       let result = self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry, false, context);
-      if let NetworkResult::Error(_error) = &result[0] {
+      if let NetworkResult::Error(_error) = &result {
         vec![NetworkResult::Error(format!("Error in {}", node.node_type_name))]
       } else { result }
     } else {
-      vec![NetworkResult::None]
+      NetworkResult::None
     };
 
-    // Check for errors and store them in the context
-    for result in &results {
-      if let NetworkResult::Error(error_message) = result {
-        context.node_errors.insert(node_id, error_message.clone());
-      }
+    // Check for error and store it the context
+    if let NetworkResult::Error(error_message) = &result {
+      context.node_errors.insert(node_id, error_message.clone());
     }
     
-    // Process results for display strings
-    let display_strings: Vec<String> = results
-      .iter()
-      .filter_map(|result| result.to_display_string())
-      .collect();
+    context.node_output_strings.insert(node_id, result.to_display_string());   
     
-    if !display_strings.is_empty() {
-      let output_string = if display_strings.len() == 1 {
-        display_strings[0].clone()
-      } else {
-        format!("[{}]", display_strings.join(", "))
-      };
-      context.node_output_strings.insert(node_id, output_string);
-    }
-    
-
-    
-    results
+    result
   }
 
 }

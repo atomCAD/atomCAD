@@ -2,7 +2,6 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::{NetworkResult, error_in_input, input_missing_error};
@@ -13,11 +12,12 @@ use std::collections::HashMap;
 use crate::structure_designer::expr::parser::parse;
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::expr::expr::Expr;
+use crate::structure_designer::data_type::DataType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExprParameter {
   pub name: String,
-  pub data_type: APIDataType,
+  pub data_type: DataType,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,7 +29,7 @@ pub struct ExprData {
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
-  pub output_type: Option<APIDataType>,
+  pub output_type: Option<DataType>,
 }
 
 impl ExprData {

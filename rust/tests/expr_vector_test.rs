@@ -1,10 +1,10 @@
 use rust_lib_flutter_cad::structure_designer::expr::expr::*;
 use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_signatures, get_function_implementations};
 use std::collections::HashMap;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIDataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use glam::f64::{DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};
+use crate::structure_designer::data_type::DataType;
 
 #[cfg(test)]
 mod vector_tests {
@@ -23,7 +23,7 @@ mod vector_tests {
         
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::IVec2));
+        assert_eq!(result, Ok(DataType::IVec2));
     }
 
     #[test]
@@ -55,7 +55,7 @@ mod vector_tests {
         let functions = get_function_signatures();
         
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::Vec3));
+        assert_eq!(result, Ok(DataType::Vec3));
     }
 
     #[test]
@@ -89,7 +89,7 @@ mod vector_tests {
         
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::IVec2));
+        assert_eq!(result, Ok(DataType::IVec2));
     }
 
     #[test]
@@ -122,7 +122,7 @@ mod vector_tests {
         let functions = get_function_signatures();
         
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::IVec3));
+        assert_eq!(result, Ok(DataType::IVec3));
     }
 
     #[test]
@@ -150,14 +150,14 @@ mod vector_tests {
     #[test]
     fn test_vec2_member_access_validation() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::Vec2);
+        variables.insert("v".to_string(), DataType::Vec2);
         
         let expr_x = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "x".to_string());
         let expr_y = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "y".to_string());
         
         let functions = get_function_signatures();
-        assert_eq!(expr_x.validate(&variables, functions), Ok(APIDataType::Float));
-        assert_eq!(expr_y.validate(&variables, functions), Ok(APIDataType::Float));
+        assert_eq!(expr_x.validate(&variables, functions), Ok(DataType::Float));
+        assert_eq!(expr_y.validate(&variables, functions), Ok(DataType::Float));
     }
 
     #[test]
@@ -183,16 +183,16 @@ mod vector_tests {
     #[test]
     fn test_vec3_member_access_validation() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::Vec3);
+        variables.insert("v".to_string(), DataType::Vec3);
         
         let expr_x = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "x".to_string());
         let expr_y = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "y".to_string());
         let expr_z = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "z".to_string());
         
         let functions = get_function_signatures();
-        assert_eq!(expr_x.validate(&variables, functions), Ok(APIDataType::Float));
-        assert_eq!(expr_y.validate(&variables, functions), Ok(APIDataType::Float));
-        assert_eq!(expr_z.validate(&variables, functions), Ok(APIDataType::Float));
+        assert_eq!(expr_x.validate(&variables, functions), Ok(DataType::Float));
+        assert_eq!(expr_y.validate(&variables, functions), Ok(DataType::Float));
+        assert_eq!(expr_z.validate(&variables, functions), Ok(DataType::Float));
     }
 
     #[test]
@@ -224,14 +224,14 @@ mod vector_tests {
     #[test]
     fn test_ivec2_member_access_validation() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::IVec2);
+        variables.insert("v".to_string(), DataType::IVec2);
         
         let expr_x = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "x".to_string());
         let expr_y = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "y".to_string());
         
         let functions = get_function_signatures();
-        assert_eq!(expr_x.validate(&variables, functions), Ok(APIDataType::Int));
-        assert_eq!(expr_y.validate(&variables, functions), Ok(APIDataType::Int));
+        assert_eq!(expr_x.validate(&variables, functions), Ok(DataType::Int));
+        assert_eq!(expr_y.validate(&variables, functions), Ok(DataType::Int));
     }
 
     #[test]
@@ -257,16 +257,16 @@ mod vector_tests {
     #[test]
     fn test_ivec3_member_access_validation() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::IVec3);
+        variables.insert("v".to_string(), DataType::IVec3);
         
         let expr_x = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "x".to_string());
         let expr_y = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "y".to_string());
         let expr_z = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "z".to_string());
         
         let functions = get_function_signatures();
-        assert_eq!(expr_x.validate(&variables, functions), Ok(APIDataType::Int));
-        assert_eq!(expr_y.validate(&variables, functions), Ok(APIDataType::Int));
-        assert_eq!(expr_z.validate(&variables, functions), Ok(APIDataType::Int));
+        assert_eq!(expr_x.validate(&variables, functions), Ok(DataType::Int));
+        assert_eq!(expr_y.validate(&variables, functions), Ok(DataType::Int));
+        assert_eq!(expr_z.validate(&variables, functions), Ok(DataType::Int));
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod vector_tests {
     #[test]
     fn test_invalid_member_access() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::Vec2);
+        variables.insert("v".to_string(), DataType::Vec2);
         
         // Vec2 doesn't have 'z' component
         let expr = Expr::MemberAccess(Box::new(Expr::Var("v".to_string())), "z".to_string());
@@ -314,8 +314,8 @@ mod vector_tests {
     #[test]
     fn test_vec2_addition_validation() {
         let mut variables = HashMap::new();
-        variables.insert("a".to_string(), APIDataType::Vec2);
-        variables.insert("b".to_string(), APIDataType::Vec2);
+        variables.insert("a".to_string(), DataType::Vec2);
+        variables.insert("b".to_string(), DataType::Vec2);
         
         let expr = Expr::Binary(
             Box::new(Expr::Var("a".to_string())),
@@ -325,7 +325,7 @@ mod vector_tests {
         
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::Vec2));
+        assert_eq!(result, Ok(DataType::Vec2));
     }
 
     #[test]
@@ -403,7 +403,7 @@ mod vector_tests {
     #[test]
     fn test_vec2_scalar_multiplication_validation() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::Vec2);
+        variables.insert("v".to_string(), DataType::Vec2);
         
         let expr = Expr::Binary(
             Box::new(Expr::Var("v".to_string())),
@@ -413,7 +413,7 @@ mod vector_tests {
         
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::Vec2));
+        assert_eq!(result, Ok(DataType::Vec2));
     }
 
     #[test]
@@ -534,8 +534,8 @@ mod vector_tests {
     #[test]
     fn test_ivec2_vec2_addition_validation() {
         let mut variables = HashMap::new();
-        variables.insert("a".to_string(), APIDataType::IVec2);
-        variables.insert("b".to_string(), APIDataType::Vec2);
+        variables.insert("a".to_string(), DataType::IVec2);
+        variables.insert("b".to_string(), DataType::Vec2);
         
         let expr = Expr::Binary(
             Box::new(Expr::Var("a".to_string())),
@@ -545,7 +545,7 @@ mod vector_tests {
         
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::Vec2)); // Should promote to Vec2
+        assert_eq!(result, Ok(DataType::Vec2)); // Should promote to Vec2
     }
 
     #[test]
@@ -667,7 +667,7 @@ mod vector_tests {
     #[test]
     fn test_vector_scalar_addition_error() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::Vec2);
+        variables.insert("v".to_string(), DataType::Vec2);
         
         // Vec2 + Float should fail (only Mul/Div allowed for vector-scalar)
         let expr = Expr::Binary(
@@ -687,12 +687,12 @@ mod vector_tests {
     #[test]
     fn test_length2_validation() {
         let mut variables = HashMap::new();
-        variables.insert("v".to_string(), APIDataType::Vec2);
+        variables.insert("v".to_string(), DataType::Vec2);
         
         let expr = Expr::Call("length2".to_string(), vec![Expr::Var("v".to_string())]);
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
-        assert_eq!(result, Ok(APIDataType::Float));
+        assert_eq!(result, Ok(DataType::Float));
     }
 
     #[test]
@@ -900,8 +900,8 @@ mod vector_tests {
     #[test]
     fn test_mismatched_vector_dimensions() {
         let mut variables = HashMap::new();
-        variables.insert("v2".to_string(), APIDataType::Vec2);
-        variables.insert("v3".to_string(), APIDataType::Vec3);
+        variables.insert("v2".to_string(), DataType::Vec2);
+        variables.insert("v3".to_string(), DataType::Vec3);
         
         // Vec2 + Vec3 should fail
         let expr = Expr::Binary(

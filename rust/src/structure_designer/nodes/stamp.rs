@@ -62,7 +62,7 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
   }
 
   let input_node_id = node.arguments[0].get_node_id().unwrap();
-  let crystal_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
+  let crystal_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context);
 
   if let NetworkResult::Error(_error) = crystal_val {
     return error_in_input(&crystal_input_name);
@@ -75,7 +75,7 @@ pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<
   }
 
   let input_node_id = node.arguments[1].get_node_id().unwrap();
-  let stamp_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
+  let stamp_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context);
 
   if let NetworkResult::Error(_error) = stamp_val {
     return error_in_input(&stamp_input_name);

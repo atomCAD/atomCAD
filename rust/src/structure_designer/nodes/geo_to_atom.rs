@@ -105,7 +105,7 @@ pub fn eval_geo_to_atom<'a>(
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();
 
-  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, registry, false, context)[0].clone();
+  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, registry, false, context);
 
   let mesh = match pre_eval_result {
     NetworkResult::Geometry(mesh) => mesh,
