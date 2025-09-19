@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::data_type::DataType;
 
 /// Function signature for validation and type checking
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
-    pub parameter_types: Vec<APIDataType>,
-    pub return_type: APIDataType,
+    pub parameter_types: Vec<DataType>,
+    pub return_type: DataType,
 }
 
 impl FunctionSignature {
-    pub fn new(parameter_types: Vec<APIDataType>, return_type: APIDataType) -> Self {
+    pub fn new(parameter_types: Vec<DataType>, return_type: DataType) -> Self {
         Self {
             parameter_types,
             return_type,
@@ -52,55 +52,55 @@ fn create_standard_function_signatures() -> HashMap<String, FunctionSignature> {
     
     // Add standard math functions
     functions.insert("sin".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     functions.insert("cos".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     functions.insert("tan".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     functions.insert("sqrt".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     functions.insert("abs".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     functions.insert("floor".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     functions.insert("ceil".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     functions.insert("round".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Float], DataType::Float));
     
     // Integer versions
     functions.insert("abs_int".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Int], APIDataType::Int));
+        FunctionSignature::new(vec![DataType::Int], DataType::Int));
     
     // Vector constructor functions
     functions.insert("vec2".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float, APIDataType::Float], APIDataType::Vec2));
+        FunctionSignature::new(vec![DataType::Float, DataType::Float], DataType::Vec2));
     functions.insert("vec3".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Float, APIDataType::Float, APIDataType::Float], APIDataType::Vec3));
+        FunctionSignature::new(vec![DataType::Float, DataType::Float, DataType::Float], DataType::Vec3));
     functions.insert("ivec2".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Int, APIDataType::Int], APIDataType::IVec2));
+        FunctionSignature::new(vec![DataType::Int, DataType::Int], DataType::IVec2));
     functions.insert("ivec3".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Int, APIDataType::Int, APIDataType::Int], APIDataType::IVec3));
+        FunctionSignature::new(vec![DataType::Int, DataType::Int, DataType::Int], DataType::IVec3));
     
     // Vector math functions - using specific names for now to avoid overloading issues
     functions.insert("length2".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec2], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Vec2], DataType::Float));
     functions.insert("length3".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec3], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Vec3], DataType::Float));
     functions.insert("normalize2".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec2], APIDataType::Vec2));
+        FunctionSignature::new(vec![DataType::Vec2], DataType::Vec2));
     functions.insert("normalize3".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec3], APIDataType::Vec3));
+        FunctionSignature::new(vec![DataType::Vec3], DataType::Vec3));
     functions.insert("dot2".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec2, APIDataType::Vec2], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Vec2, DataType::Vec2], DataType::Float));
     functions.insert("dot3".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec3, APIDataType::Vec3], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Vec3, DataType::Vec3], DataType::Float));
     functions.insert("cross".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec3, APIDataType::Vec3], APIDataType::Vec3));
+        FunctionSignature::new(vec![DataType::Vec3, DataType::Vec3], DataType::Vec3));
     functions.insert("distance2".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec2, APIDataType::Vec2], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Vec2, DataType::Vec2], DataType::Float));
     functions.insert("distance3".to_string(), 
-        FunctionSignature::new(vec![APIDataType::Vec3, APIDataType::Vec3], APIDataType::Float));
+        FunctionSignature::new(vec![DataType::Vec3, DataType::Vec3], DataType::Float));
     
     functions
 }

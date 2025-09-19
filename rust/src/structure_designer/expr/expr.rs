@@ -1,7 +1,7 @@
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use crate::structure_designer::expr::validation::{FunctionSignature, EvaluationFunction};
 use std::collections::HashMap;
+use crate::structure_designer::data_type::DataType;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UnOp {
@@ -34,7 +34,7 @@ pub enum Expr {
 
 impl Expr {
     /// Validates the expression and returns its inferred type
-    pub fn validate(&self, variables: &HashMap<String, APIDataType>, functions: &HashMap<String, FunctionSignature>) -> Result<APIDataType, String> {
+    pub fn validate(&self, variables: &HashMap<String, DataType>, functions: &HashMap<String, FunctionSignature>) -> Result<DataType, String> {
         
         match self {
             Expr::Int(_) => Ok(APIDataType::Int),
