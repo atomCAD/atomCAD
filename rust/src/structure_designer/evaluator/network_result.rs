@@ -34,6 +34,8 @@ pub enum NetworkResult {
   Geometry2D(GeometrySummary2D),
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
+  Array(Vec<NetworkResult>),
+  Function(String), // node type name 
   Error(String),
 }
 

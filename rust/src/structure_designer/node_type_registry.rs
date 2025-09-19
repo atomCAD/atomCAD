@@ -41,6 +41,7 @@ use crate::structure_designer::node_data::NoData;
 use super::node_type::{generic_node_data_saver, generic_node_data_loader, no_data_saver, no_data_loader};
 use crate::structure_designer::serialization::edit_atom_data_serialization::{edit_atom_data_to_serializable, serializable_to_edit_atom_data, SerializableEditAtomData};
 use glam::{IVec3, DVec3, IVec2};
+use crate::structure_designer::data_type::DataType;
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,

@@ -1,5 +1,6 @@
 pub mod structure_designer;
 pub mod common_constants;
+pub mod data_type;
 pub mod node_type;
 pub mod node_network;
 pub mod node_type_registry;
@@ -15,5 +16,3 @@ pub mod network_validator;
 pub mod geo_tree;
 pub mod implicit_eval;
 pub mod expr;
-
-

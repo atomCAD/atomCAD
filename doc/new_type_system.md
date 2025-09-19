@@ -81,7 +81,7 @@ We concentrate for the short term.
 We need the following structs on the API:
 
 ```rust
-pub enum APIPrimitiveDataType {
+pub enum APIBuiltInDataType {
  None,
  Bool,
  String,
@@ -97,8 +97,8 @@ pub enum APIPrimitiveDataType {
 }
 
 pub enum APIDataType {
-  Primitive{
-    data_type: PrimitiveDataType,
+  BuiltIn {
+    data_type: BuiltInDataType,
     array: bool,
   },
   Custom(String),
@@ -112,6 +112,12 @@ We will also create a common reusable data type entry widget.
 In Rust the core we will use a different representation, which is named `DataType`.
 
 ```rust
+
+struct FunctionType {
+   parameter_types: Vec<DataType>,
+   output_type: Box<DataType>,  
+}
+
 enum DataType {
  None,
  Bool,
@@ -126,24 +132,23 @@ enum DataType {
  Geometry,
  Atomic,
  Array(Box<DataType>),
- Function {
-   parameter_types: Vec<DataType>,
-   output_type: Box<DataType>,
- }
+ Function(FunctionTzype),
 }
 ```
 
 ## Arrays
 
-TODO
+For any input pin, which has an `Array<T>` type the system allows the user to connect multiple output pins of the `Array<T>` or `T` types. These are appended together into an array. The order is not determined.
 
 ## NetworkResult modification
+
+At runtime the array type is represented as a `Vec<NetworkResult>`. A functions is represented simply as a node type name.
 
 ## Incremental development plan
 
 ### First phase: existing functionality with the new types
 
-In the first phase we introduce DataType, APIDataType and APIPrimitiveDataType. We introduce the widget on the UI to edit a data type.
+In the first phase we introduce `DataType`, `APIDataType` and `APIBuiltInDataType`. We introduce the widget on the UI to edit a data type.
 
 We also introduce the new handling of arrays. This is already quite a big commit, but in this we do not implement any higher order function and fake function data type. The aim is a still working application but with the new data types.
 
