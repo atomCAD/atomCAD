@@ -64,15 +64,15 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "default".to_string(),
-              data_type: APIDataType::Geometry, // will change based on  ParameterData::data_type.
+              data_type: DataType::Geometry, // will change based on  ParameterData::data_type.
               multi: false,
           },
       ],
-      output_type: APIDataType::Geometry, // will change based on ParameterData::data_type.
+      output_type: DataType::Geometry, // will change based on ParameterData::data_type.
       node_data_creator: || Box::new(ParameterData {
         param_index: 0,
         param_name: "param".to_string(),
-        data_type: APIDataType::Geometry,
+        data_type: DataType::Geometry,
         multi: false,
         sort_order: 0,
       }),
@@ -83,18 +83,18 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "expr".to_string(),
       parameters: vec![],
-      output_type: APIDataType::None, // will change based on the expression
+      output_type: DataType::None, // will change based on the expression
       node_data_creator: || Box::new(ExprData {
         parameters: vec![
           ExprParameter {
             name: "x".to_string(),
-            data_type: APIDataType::Float,
+            data_type: DataType::Float,
           },
         ],
         expression: "x".to_string(),
         expr: None,
         error: None,
-        output_type: Some(APIDataType::Float),
+        output_type: Some(DataType::Float),
       }),
       node_data_saver: generic_node_data_saver::<ExprData>,
       node_data_loader: generic_node_data_loader::<ExprData>,
@@ -103,7 +103,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "string".to_string(),
       parameters: vec![],
-      output_type: APIDataType::String,
+      output_type: DataType::String,
       node_data_creator: || Box::new(StringData {
         value: "".to_string(),
       }),
@@ -114,7 +114,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "bool".to_string(),
       parameters: vec![],
-      output_type: APIDataType::Bool,
+      output_type: DataType::Bool,
       node_data_creator: || Box::new(BoolData {
         value: false
       }),
@@ -125,7 +125,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "int".to_string(),
       parameters: vec![],
-      output_type: APIDataType::Int,
+      output_type: DataType::Int,
       node_data_creator: || Box::new(IntData {
         value: 0
       }),
@@ -136,7 +136,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "float".to_string(),
       parameters: vec![],
-      output_type: APIDataType::Float,
+      output_type: DataType::Float,
       node_data_creator: || Box::new(FloatData {
         value: 0.0
       }),
@@ -149,16 +149,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "x".to_string(),
-            data_type: APIDataType::Int,
+            data_type: DataType::Int,
             multi: false,
         },
         Parameter {
             name: "y".to_string(),
-            data_type: APIDataType::Int,
+            data_type: DataType::Int,
             multi: false,
         },        
       ],
-      output_type: APIDataType::IVec2,
+      output_type: DataType::IVec2,
       node_data_creator: || Box::new(IVec2Data {
         value: IVec2::new(0, 0)
       }),
@@ -171,21 +171,21 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "x".to_string(),
-            data_type: APIDataType::Int,
+            data_type: DataType::Int,
             multi: false,
         },
         Parameter {
             name: "y".to_string(),
-            data_type: APIDataType::Int,
+            data_type: DataType::Int,
             multi: false,
         },
         Parameter {
             name: "z".to_string(),
-            data_type: APIDataType::Int,
+            data_type: DataType::Int,
             multi: false,
         },        
       ],
-      output_type: APIDataType::IVec3,
+      output_type: DataType::IVec3,
       node_data_creator: || Box::new(IVec3Data {
         value: IVec3::new(0, 0, 0)
       }),
@@ -198,16 +198,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "x".to_string(),
-            data_type: APIDataType::Float,
+            data_type: DataType::Float,
             multi: false,
         },
         Parameter {
             name: "y".to_string(),
-            data_type: APIDataType::Float,
+            data_type: DataType::Float,
             multi: false,
         },        
       ],
-      output_type: APIDataType::Vec2,
+      output_type: DataType::Vec2,
       node_data_creator: || Box::new(Vec2Data {
         value: DVec2::new(0.0, 0.0)
       }),
@@ -220,21 +220,21 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "x".to_string(),
-            data_type: APIDataType::Float,
+            data_type: DataType::Float,
             multi: false,
         },
         Parameter {
             name: "y".to_string(),
-            data_type: APIDataType::Float,
+            data_type: DataType::Float,
             multi: false,
         },
         Parameter {
             name: "z".to_string(),
-            data_type: APIDataType::Float,
+            data_type: DataType::Float,
             multi: false,
         },        
       ],
-      output_type: APIDataType::Vec3,
+      output_type: DataType::Vec3,
       node_data_creator: || Box::new(Vec3Data {
         value: DVec3::new(0.0, 0.0, 0.0)
       }),
@@ -247,16 +247,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "min_corner".to_string(),
-            data_type: APIDataType::IVec2,
+            data_type: DataType::IVec2,
             multi: false,
         },
         Parameter {
           name: "extent".to_string(),
-          data_type: APIDataType::IVec2,
+          data_type: DataType::IVec2,
           multi: false,
         },
       ],
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(RectData {
         min_corner: IVec2::new(-1, -1),
         extent: IVec2::new(2, 2),
@@ -270,16 +270,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "center".to_string(),
-            data_type: APIDataType::IVec2,
+            data_type: DataType::IVec2,
             multi: false,
         },
         Parameter {
           name: "radius".to_string(),
-          data_type: APIDataType::Int,
+          data_type: DataType::Int,
           multi: false,
         },
       ],
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(CircleData {
         center: IVec2::new(0, 0),
         radius: 1,
@@ -291,7 +291,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "reg_poly".to_string(),
       parameters: Vec::new(),
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(RegPolyData {
         num_sides: 3,
         radius: 3,
@@ -303,7 +303,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "polygon".to_string(),
       parameters: Vec::new(),
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(PolygonData {
         vertices: vec![
           IVec2::new(-1, -1),
@@ -320,11 +320,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: APIDataType::Geometry2D,
+              data_type: DataType::Geometry2D,
               multi: true,
           },
       ],
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(NoData {}),
       node_data_saver: no_data_saver,
       node_data_loader: no_data_loader,
@@ -335,11 +335,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: APIDataType::Geometry2D,
+              data_type: DataType::Geometry2D,
               multi: true,
           },
       ],
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(NoData {}),
       node_data_saver: no_data_saver,
       node_data_loader: no_data_loader,
@@ -350,16 +350,16 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "base".to_string(),
-              data_type: APIDataType::Geometry2D,
+              data_type: DataType::Geometry2D,
               multi: true, // If multiple shapes are given, they are unioned.
           },
           Parameter {
               name: "sub".to_string(),
-              data_type: APIDataType::Geometry2D,
+              data_type: DataType::Geometry2D,
               multi: true, // A set of shapes to subtract from base
           },
       ],
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(NoData {}),
       node_data_saver: no_data_saver,
       node_data_loader: no_data_loader,
@@ -368,7 +368,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "half_plane".to_string(),
       parameters: Vec::new(),
-      output_type: APIDataType::Geometry2D,
+      output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(HalfPlaneData {
         point1: IVec2::new(0, 0),
         point2: IVec2::new(1, 0),
@@ -382,11 +382,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
-              data_type: APIDataType::Geometry2D,
+              data_type: DataType::Geometry2D,
               multi: false,
           },
       ],
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(ExtrudeData {
         height: 1,
       }),
@@ -399,16 +399,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "min_corner".to_string(),
-            data_type: APIDataType::IVec3,
+            data_type: DataType::IVec3,
             multi: false,
         },
         Parameter {
           name: "extent".to_string(),
-          data_type: APIDataType::IVec3,
+          data_type: DataType::IVec3,
           multi: false,
         },
       ],
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(CuboidData {
         min_corner: IVec3::new(-1, -1, -1),
         extent: IVec3::new(2, 2, 2),
@@ -422,16 +422,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
             name: "center".to_string(),
-            data_type: APIDataType::IVec3,
+            data_type: DataType::IVec3,
             multi: false,
         },
         Parameter {
           name: "radius".to_string(),
-          data_type: APIDataType::Int,
+          data_type: DataType::Int,
           multi: false,
         },
       ],
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(SphereData {
         center: IVec3::new(0, 0, 0),
         radius: 1,
@@ -443,7 +443,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "half_space".to_string(),
       parameters: Vec::new(),
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(HalfSpaceData {
         max_miller_index: 2,
         miller_index: IVec3::new(0, 1, 0), // Default normal along y-axis
@@ -457,7 +457,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(NodeType {
       name: "facet_shell".to_string(),
       parameters: Vec::new(),
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(FacetShellData::default()),
       node_data_saver: generic_node_data_saver::<FacetShellData>,
       node_data_loader: generic_node_data_loader::<FacetShellData>,
@@ -468,11 +468,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: APIDataType::Geometry,
+              data_type: DataType::Geometry,
               multi: true,
           },
       ],
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
       node_data_saver: no_data_saver,
       node_data_loader: no_data_loader,
@@ -483,11 +483,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: APIDataType::Geometry,
+              data_type: DataType::Geometry,
               multi: true,
           },
       ],
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
       node_data_saver: no_data_saver,
       node_data_loader: no_data_loader,
@@ -498,16 +498,16 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "base".to_string(),
-              data_type: APIDataType::Geometry,
+              data_type: DataType::Geometry,
               multi: true, // If multiple shapes are given, they are unioned.
           },
           Parameter {
               name: "sub".to_string(),
-              data_type: APIDataType::Geometry,
+              data_type: DataType::Geometry,
               multi: true, // A set of shapes to subtract from base
           },
       ],
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(NoData {}),
       node_data_saver: no_data_saver,
       node_data_loader: no_data_loader,
@@ -518,21 +518,21 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
-              data_type: APIDataType::Geometry,
+              data_type: DataType::Geometry,
               multi: false,
           },
           Parameter {
             name: "translation".to_string(),
-            data_type: APIDataType::IVec3,
+            data_type: DataType::IVec3,
             multi: false,
           },
           Parameter {
             name: "rotation".to_string(),
-            data_type: APIDataType::IVec3,
+            data_type: DataType::IVec3,
             multi: false,
           },
       ],
-      output_type: APIDataType::Geometry,
+      output_type: DataType::Geometry,
       node_data_creator: || Box::new(GeoTransData {
         translation: IVec3::new(0, 0, 0),
         rotation: IVec3::new(0, 0, 0),
@@ -547,11 +547,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
-              data_type: APIDataType::Geometry,
+              data_type: DataType::Geometry,
               multi: false,
           },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(GeoToAtomData {
         primary_atomic_number: 6,
         secondary_atomic_number: 6,
@@ -566,11 +566,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
-              data_type: APIDataType::Atomic,
+              data_type: DataType::Atomic,
               multi: false,
           },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(EditAtomData::new()),
       node_data_saver: |node_data, _design_dir| {
         if let Some(data) = node_data.as_any_mut().downcast_ref::<EditAtomData>() {
@@ -592,21 +592,21 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
-              data_type: APIDataType::Atomic,
+              data_type: DataType::Atomic,
               multi: false,
           },
           Parameter {
             name: "translation".to_string(),
-            data_type: APIDataType::Vec3,
+            data_type: DataType::Vec3,
             multi: false,
           },
           Parameter {
             name: "rotation".to_string(),
-            data_type: APIDataType::Vec3,
+            data_type: DataType::Vec3,
             multi: false,
           },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(AtomTransData {
         translation: DVec3::new(0.0, 0.0, 0.0),
         rotation: DVec3::new(0.0, 0.0, 0.0),
@@ -620,11 +620,11 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
           name: "file_name".to_string(),
-          data_type: APIDataType::String,
+          data_type: DataType::String,
           multi: false,
         },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(ImportXYZData::new()),
       node_data_saver: import_xyz_data_saver,
       node_data_loader: import_xyz_data_loader,
@@ -635,16 +635,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
           name: "molecule".to_string(),
-          data_type: APIDataType::Atomic,
+          data_type: DataType::Atomic,
           multi: false,
         },
         Parameter {
           name: "file_name".to_string(),
-          data_type: APIDataType::String,
+          data_type: DataType::String,
           multi: false,
         },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(ExportXYZData::new()),
       node_data_saver: export_xyz_data_saver,
       node_data_loader: export_xyz_data_loader,
@@ -655,16 +655,16 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
-              data_type: APIDataType::Atomic,
+              data_type: DataType::Atomic,
               multi: false,
           },
           Parameter {
             name: "cutters".to_string(),
-            data_type: APIDataType::Geometry,
+            data_type: DataType::Geometry,
             multi: true,
         },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(AtomCutData::new()),
       node_data_saver: generic_node_data_saver::<AtomCutData>,
       node_data_loader: generic_node_data_loader::<AtomCutData>,
@@ -675,11 +675,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
-              data_type: APIDataType::Atomic,
+              data_type: DataType::Atomic,
               multi: false,
           },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(AnchorData::new()),
       node_data_saver: generic_node_data_saver::<AnchorData>,
       node_data_loader: generic_node_data_loader::<AnchorData>,
@@ -690,16 +690,16 @@ impl NodeTypeRegistry {
       parameters: vec![
         Parameter {
           name: "crystal".to_string(),
-          data_type: APIDataType::Atomic,
+          data_type: DataType::Atomic,
           multi: false,
         },
         Parameter {
           name: "stamp".to_string(),
-          data_type: APIDataType::Atomic,
+          data_type: DataType::Atomic,
           multi: false,
         },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(StampData::new()),
       node_data_saver: generic_node_data_saver::<StampData>,
       node_data_loader: generic_node_data_loader::<StampData>,
@@ -710,11 +710,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
-              data_type: APIDataType::Atomic,
+              data_type: DataType::Atomic,
               multi: false,
           },
       ],
-      output_type: APIDataType::Atomic,
+      output_type: DataType::Atomic,
       node_data_creator: || Box::new(NoData {}),
       node_data_saver: no_data_saver,
       node_data_loader: no_data_loader,
@@ -869,39 +869,6 @@ impl NodeTypeRegistry {
 
   fn add_node_type(&mut self, node_type: NodeType) {
     self.built_in_node_types.insert(node_type.name.clone(), node_type);
-  }
-  
-  /// Checks if a source data type can be converted to a destination data type
-  /// 
-  /// # Parameters
-  /// * `source_type` - The source data type
-  /// * `dest_type` - The destination data type
-  /// 
-  /// # Returns
-  /// True if the source type can be converted to the destination type
-  pub fn can_be_converted_to(&self, source_type: APIDataType, dest_type: APIDataType) -> bool {
-    // Same types are always compatible
-    if source_type == dest_type {
-      return true;
-    }
-    
-    // Define conversion rules
-    match (source_type, dest_type) {
-      // Int <-> Float conversions
-      (APIDataType::Int, APIDataType::Float) => true,
-      (APIDataType::Float, APIDataType::Int) => true,
-      
-      // IVec2 <-> Vec2 conversions
-      (APIDataType::IVec2, APIDataType::Vec2) => true,
-      (APIDataType::Vec2, APIDataType::IVec2) => true,
-      
-      // IVec3 <-> Vec3 conversions
-      (APIDataType::IVec3, APIDataType::Vec3) => true,
-      (APIDataType::Vec3, APIDataType::IVec3) => true,
-      
-      // All other combinations are not compatible
-      _ => false,
-    }
   }
 
   /// Finds all networks that use the specified network as a node

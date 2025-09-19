@@ -2,7 +2,6 @@ pub struct FunctionType {
   parameter_types: Vec<DataType>,
   output_type: Box<DataType>,  
 }
-
 pub enum DataType {
   None,
   Bool,
@@ -57,6 +56,48 @@ impl DataType {
       }
     }
   }
+
+  /// Checks if a source data type can be converted to a destination data type
+  /// 
+  /// # Parameters
+  /// * `source_type` - The source data type
+  /// * `dest_type` - The destination data type
+  /// 
+  /// # Returns
+  /// True if the source type can be converted to the destination type
+  pub fn can_be_converted_to(source_type: &DataType, dest_type: &DataType) -> bool {
+    // Same types are always compatible
+    if source_type == dest_type {
+      return true;
+    }
+    
+    // Check if we can convert T to [T] (single element to array)
+    if let DataType::Array(target_element_type) = dest_type {
+      if DataType::can_be_converted_to(source_type, target_element_type) {
+        return true;
+      }
+    }
+    
+    // Define conversion rules
+    match (source_type, dest_type) {
+      // Int <-> Float conversions
+      (DataType::Int, DataType::Float) => true,
+      (DataType::Float, DataType::Int) => true,
+      
+      // IVec2 <-> Vec2 conversions
+      (DataType::IVec2, DataType::Vec2) => true,
+      (DataType::Vec2, DataType::IVec2) => true,
+      
+      // IVec3 <-> Vec3 conversions
+      (DataType::IVec3, DataType::Vec3) => true,
+      (DataType::Vec3, DataType::IVec3) => true,
+      
+      // All other combinations are not compatible
+      _ => false,
+    }
+  }
+
+
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -215,6 +256,7 @@ impl DataTypeParser {
       Ok(first_type)
     }
   }
+
 }
 
 impl DataTypeLexer {

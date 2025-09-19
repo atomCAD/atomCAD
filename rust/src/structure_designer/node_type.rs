@@ -1,5 +1,4 @@
 use crate::structure_designer::node_data::NodeData;
-use crate::api::structure_designer::structure_designer_api_types::APIDataType;
 use serde_json::Value;
 use std::io;
 use serde::{Serialize, Deserialize};
