@@ -96,13 +96,12 @@ pub enum APIBuiltInDataType {
  Atomic
 }
 
-pub enum APIDataType {
-  BuiltIn {
-    data_type: BuiltInDataType,
-    array: bool,
-  },
-  Custom(String),
-} 
+pub struct APIDataType {
+  // either built_in_data_type or custom_data_type is Some.
+  built_in_data_type: Option<BuiltInDataType>,
+  custom_data_type: Option<String>,
+  array: bool, // combined with built_in_data_type, but only redundant with custom_data_type as the outermost array is within the string in that case.
+}
 ```
 
 We will also create a common reusable data type entry widget.

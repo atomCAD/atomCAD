@@ -5,29 +5,11 @@ use serde::{Serialize, Deserialize};
 use serde_json;
 use glam::f64::DVec2;
 use crate::common::serialization_utils::dvec2_serializer;
-use super::super::node_type::{NodeType, Parameter, data_type_to_str, str_to_data_type};
+use super::super::node_type::{NodeType, Parameter};
 use super::super::node_network::{NodeNetwork, Node, Argument};
 use super::super::node_type_registry::NodeTypeRegistry;
 use super::super::node_data::NodeData;
 use super::super::node_data::NoData;
-use super::super::nodes::sphere::SphereData;
-use super::super::nodes::cuboid::CuboidData;
-use super::super::nodes::half_space::HalfSpaceData;
-use super::super::nodes::geo_trans::GeoTransData;
-use super::super::nodes::atom_trans::AtomTransData;
-use super::super::nodes::parameter::ParameterData;
-use super::super::nodes::rect::RectData;
-use super::super::nodes::circle::CircleData;
-use super::super::nodes::reg_poly::RegPolyData;
-use super::super::nodes::polygon::PolygonData;
-use super::super::nodes::half_plane::HalfPlaneData;
-use super::super::nodes::extrude::ExtrudeData;
-use super::super::nodes::facet_shell::FacetShellData;
-use super::super::nodes::geo_to_atom::GeoToAtomData;
-use super::super::nodes::anchor::AnchorData;
-use super::super::nodes::stamp::StampData;
-use super::super::nodes::import_xyz::ImportXYZData;
-use super::super::nodes::expr::ExprData;
 use super::super::node_network::NodeDisplayType;
 
 // The current version of the serialization format
@@ -38,7 +20,6 @@ const SERIALIZATION_VERSION: u32 = 1;
 pub struct SerializableParameter {
     pub name: String,
     pub data_type: String,
-    pub multi: bool,
 }
 
 /// Serializable version of NodeType struct for JSON serialization
@@ -85,15 +66,14 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
         .iter()
         .map(|param| SerializableParameter {
             name: param.name.clone(),
-            data_type: data_type_to_str(&param.data_type),
-            multi: param.multi,
+            data_type: param.data_type.to_string(),
         })
         .collect();
     
     SerializableNodeType {
         name: node_type.name.clone(),
         parameters: serializable_parameters,
-        output_type: data_type_to_str(&node_type.output_type),
+        output_type: node_type.output_type.to_string(),
     }
 }
 
@@ -103,7 +83,7 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
 /// * `io::Result<NodeType>` - The converted NodeType or an error if conversion fails
 pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Result<NodeType> {
     // Parse the output type using the helper function
-    let output_type = str_to_data_type(&serializable.output_type)
+    let output_type = DataType::from_string(&serializable.output_type)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid output type"))?;
     
     // Create parameters from the serializable parameters
@@ -111,13 +91,12 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         .iter()
         .map(|serializable_param| {
             // Parse the data type using the helper function
-            let data_type = str_to_data_type(&serializable_param.data_type)
+            let data_type = DataType::from_string(&serializable_param.data_type)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid parameter data type"))?;
             
             Ok(Parameter {
                 name: serializable_param.name.clone(),
                 data_type,
-                multi: serializable_param.multi,
             })
         })
         .collect::<io::Result<Vec<Parameter>>>()?;

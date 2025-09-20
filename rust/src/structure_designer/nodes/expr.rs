@@ -66,7 +66,7 @@ impl ExprData {
         
         // Add parameters as variables
         for param in &self.parameters {
-            variables.insert(param.name.clone(), param.data_type);
+            variables.insert(param.name.clone(), param.data_type.clone());
         }
         
         // Validate the parsed expression using global function registry

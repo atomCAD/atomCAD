@@ -67,8 +67,7 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     network.node_type.parameters = parameter_nodes.iter().map(|(_, param_data)| {
         Parameter {
             name: param_data.param_name.clone(),
-            data_type: param_data.data_type,
-            multi: param_data.multi,
+            data_type: param_data.data_type.clone(),
         }
     }).collect();
     
@@ -112,8 +111,7 @@ fn check_interface_changed(network: &NodeNetwork) -> bool {
     current_params.iter().enumerate().any(|(index, param_data)| {
         if let Some(existing_param) = network.node_type.parameters.get(index) {
             existing_param.name != param_data.param_name ||
-            existing_param.data_type != param_data.data_type ||
-            existing_param.multi != param_data.multi
+            existing_param.data_type != param_data.data_type
         } else {
             true
         }
@@ -186,7 +184,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
             let parameter = &dest_node_type.parameters[arg_index];
             
             // Validate non-multi input pins have at most one connection
-            if !parameter.multi && argument.argument_node_ids.len() > 1 {
+            if !parameter.data_type.is_array() && argument.argument_node_ids.len() > 1 {
                 network.validation_errors.push(ValidationError::new(
                         format!("Non-multi parameter '{}' has {} connections, but only 1 is allowed", 
                         parameter.name, argument.argument_node_ids.len()),
@@ -292,25 +290,25 @@ pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &NodeType
 }
 
 fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> bool {
-    let old_output_type = network.node_type.output_type;
+    let old_output_type = network.node_type.output_type.clone();
     
     // Determine the new output type based on return_node_id
     let new_output_type = if let Some(return_node_id) = network.return_node_id {
         // Get the return node
         if let Some(return_node) = network.nodes.get(&return_node_id) {
             // Get the node type to find its output type
-            node_type_registry.get_node_type_for_node(return_node).unwrap().output_type
+            node_type_registry.get_node_type_for_node(return_node).unwrap().output_type.clone()
         } else {
             // Return node doesn't exist, set to None
-            crate::api::structure_designer::structure_designer_api_types::DataType::None
+            DataType::None
         }
     } else {
         // No return node, output type is None
-        crate::api::structure_designer::structure_designer_api_types::DataType::None
+        DataType::None
     };
     
     // Update the network's output type
-    network.node_type.output_type = new_output_type;
+    network.node_type.output_type = new_output_type.clone();
     
     // Return true if the output type changed
     old_output_type != new_output_type

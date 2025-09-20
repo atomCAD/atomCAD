@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`
 
 class APIAnchorData {
   final APIIVec3? position;
@@ -87,6 +87,22 @@ class APIBoolData {
           value == other.value;
 }
 
+enum APIBuiltInDataType {
+  none,
+  bool,
+  string,
+  int,
+  float,
+  vec2,
+  vec3,
+  iVec2,
+  iVec3,
+  geometry2D,
+  geometry,
+  atomic,
+  ;
+}
+
 class APICircleData {
   final APIIVec2 center;
   final int radius;
@@ -160,20 +176,29 @@ class APICuboidData {
           extent == other.extent;
 }
 
-enum APIDataType {
-  none,
-  bool,
-  string,
-  int,
-  float,
-  vec2,
-  vec3,
-  iVec2,
-  iVec3,
-  geometry2D,
-  geometry,
-  atomic,
-  ;
+class APIDataType {
+  final APIBuiltInDataType? builtInDataType;
+  final String? customDataType;
+  final bool array;
+
+  const APIDataType({
+    this.builtInDataType,
+    this.customDataType,
+    required this.array,
+  });
+
+  @override
+  int get hashCode =>
+      builtInDataType.hashCode ^ customDataType.hashCode ^ array.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDataType &&
+          runtimeType == other.runtimeType &&
+          builtInDataType == other.builtInDataType &&
+          customDataType == other.customDataType &&
+          array == other.array;
 }
 
 class APIEditAtomData {
@@ -567,14 +592,12 @@ class APIParameterData {
   final BigInt paramIndex;
   final String paramName;
   final APIDataType dataType;
-  final bool multi;
   final int sortOrder;
 
   const APIParameterData({
     required this.paramIndex,
     required this.paramName,
     required this.dataType,
-    required this.multi,
     required this.sortOrder,
   });
 
@@ -583,7 +606,6 @@ class APIParameterData {
       paramIndex.hashCode ^
       paramName.hashCode ^
       dataType.hashCode ^
-      multi.hashCode ^
       sortOrder.hashCode;
 
   @override
@@ -594,7 +616,6 @@ class APIParameterData {
           paramIndex == other.paramIndex &&
           paramName == other.paramName &&
           dataType == other.dataType &&
-          multi == other.multi &&
           sortOrder == other.sortOrder;
 }
 

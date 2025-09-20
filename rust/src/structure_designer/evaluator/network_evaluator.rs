@@ -52,6 +52,7 @@ use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::data_type::DataType;
 
 use super::network_result::input_missing_error;
 

@@ -303,7 +303,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Array(DataType::Geometry2D),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)),
           },
       ],
       output_type: DataType::Geometry2D,
@@ -317,7 +317,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Array(DataType::Geometry2D),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)),
           },
       ],
       output_type: DataType::Geometry2D,
@@ -331,11 +331,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "base".to_string(),
-              data_type: DataType::Array(DataType::Geometry2D), // A set of shapes to subtract from
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from
           },
           Parameter {
               name: "sub".to_string(),
-              data_type: DataType::Array(DataType::Geometry2D), // A set of shapes to subtract from base
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from base
           },
       ],
       output_type: DataType::Geometry2D,
@@ -442,7 +442,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Array(DataType::Geometry),
+              data_type: DataType::Array(Box::new(DataType::Geometry)),
           },
       ],
       output_type: DataType::Geometry,
@@ -456,7 +456,7 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
-              data_type: DataType::Array(DataType::Geometry),
+              data_type: DataType::Array(Box::new(DataType::Geometry)),
           },
       ],
       output_type: DataType::Geometry,
@@ -470,11 +470,11 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "base".to_string(),
-              data_type: DataType::Array(DataType::Geometry), // If multiple shapes are given, they are unioned.
+              data_type: DataType::Array(Box::new(DataType::Geometry)), // If multiple shapes are given, they are unioned.
           },
           Parameter {
               name: "sub".to_string(),
-              data_type: DataType::Array(DataType::Geometry), // A set of shapes to subtract from base
+              data_type: DataType::Array(Box::new(DataType::Geometry)), // A set of shapes to subtract from base
           },
       ],
       output_type: DataType::Geometry,
@@ -618,7 +618,7 @@ impl NodeTypeRegistry {
           },
           Parameter {
             name: "cutters".to_string(),
-            data_type: DataType::Array(DataType::Geometry),
+            data_type: DataType::Array(Box::new(DataType::Geometry)),
         },
       ],
       output_type: DataType::Atomic,
@@ -633,7 +633,6 @@ impl NodeTypeRegistry {
           Parameter {
               name: "molecule".to_string(),
               data_type: DataType::Atomic,
-              multi: false,
           },
       ],
       output_type: DataType::Atomic,
@@ -648,12 +647,10 @@ impl NodeTypeRegistry {
         Parameter {
           name: "crystal".to_string(),
           data_type: DataType::Atomic,
-          multi: false,
         },
         Parameter {
           name: "stamp".to_string(),
           data_type: DataType::Atomic,
-          multi: false,
         },
       ],
       output_type: DataType::Atomic,
@@ -668,7 +665,6 @@ impl NodeTypeRegistry {
           Parameter {
               name: "molecule".to_string(),
               data_type: DataType::Atomic,
-              multi: false,
           },
       ],
       output_type: DataType::Atomic,
@@ -771,10 +767,8 @@ impl NodeTypeRegistry {
           if let Some(base_node_type) = built_in_types.get("parameter") {
             let mut custom_node_type = base_node_type.clone();
 
-            custom_node_type.parameters[0].data_type = param_data.data_type;
-            custom_node_type.parameters[0].multi = param_data.multi;
-
-            custom_node_type.output_type = param_data.data_type;
+            custom_node_type.parameters[0].data_type = param_data.data_type.clone();
+            custom_node_type.output_type = param_data.data_type.clone();
             
             node.set_custom_node_type(Some(custom_node_type));
           }
@@ -786,14 +780,13 @@ impl NodeTypeRegistry {
             let mut custom_node_type = base_node_type.clone();
             
             // Update the output type - use DataType::None if expr_data.output_type is None
-            custom_node_type.output_type = expr_data.output_type.unwrap_or(DataType::None);
+            custom_node_type.output_type = expr_data.output_type.unwrap_or(DataType::None).clone();
             
             // Convert ExprParameter to Parameter
             custom_node_type.parameters = expr_data.parameters.iter()
               .map(|expr_param| Parameter {
                 name: expr_param.name.clone(),
-                data_type: expr_param.data_type,
-                multi: false, // Expression parameters are single-valued
+                data_type: expr_param.data_type.clone(),
               })
               .collect();
 
@@ -812,7 +805,7 @@ impl NodeTypeRegistry {
 
   pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> DataType {
     let node_type = self.get_node_type_for_node(node).unwrap();
-    node_type.parameters[parameter_index].data_type
+    node_type.parameters[parameter_index].data_type.clone()
   }
 
   pub fn get_parameter_name(&self, node: &Node, parameter_index: usize) -> String {

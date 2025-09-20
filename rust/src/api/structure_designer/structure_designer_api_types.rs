@@ -14,8 +14,7 @@ pub enum APIEditAtomTool {
   AddBond,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
-pub enum APIDataType {
+pub enum APIBuiltInDataType {
   None,
   Bool,
   String,
@@ -28,13 +27,20 @@ pub enum APIDataType {
   Geometry2D,
   Geometry,
   Atomic
-}
+ }
+ 
+ pub struct APIDataType {
+   // either built_in_data_type or custom_data_type is Some.
+   built_in_data_type: Option<APIBuiltInDataType>,
+   custom_data_type: Option<String>,
+   array: bool, // combined with built_in_data_type, but only redundant with custom_data_type as the outermost array is within the string in that case.
+ }
 
 pub struct InputPinView {
     pub name: String,
     pub data_type: String,
     pub multi: bool, 
-  }
+}
   
   #[frb]
   pub struct NodeView {
@@ -205,7 +211,6 @@ pub struct InputPinView {
     pub param_index: usize,
     pub param_name: String,
     pub data_type: APIDataType,
-    pub multi: bool,
     pub sort_order: i32,
   }
 

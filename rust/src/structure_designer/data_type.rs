@@ -1,7 +1,12 @@
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct FunctionType {
   parameter_types: Vec<DataType>,
   output_type: Box<DataType>,  
 }
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum DataType {
   None,
   Bool,
@@ -20,6 +25,12 @@ pub enum DataType {
 }
 
 impl DataType {
+
+
+  pub fn is_array(&self) -> bool {
+    matches!(self, DataType::Array(_))
+  }
+
   /// Converts the DataType to its textual representation
   pub fn to_string(&self) -> String {
     match self {

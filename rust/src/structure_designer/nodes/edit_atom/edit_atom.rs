@@ -180,7 +180,7 @@ pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &
   }
 
   let input_node_id = node.arguments[0].get_node_id().unwrap();
-  let input_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context)[0].clone();
+  let input_val = network_evaluator.evaluate(network_stack, input_node_id, registry, false, context);
 
   if let NetworkResult::Error(_error) = input_val {
     return error_in_input("molecule");

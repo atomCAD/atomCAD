@@ -1298,7 +1298,6 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
         param_index: data.param_index,
         param_name: data.param_name,
         data_type: data.data_type,
-        multi: data.multi,
         sort_order: data.sort_order,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);

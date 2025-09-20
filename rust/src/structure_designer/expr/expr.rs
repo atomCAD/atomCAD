@@ -37,12 +37,12 @@ impl Expr {
     pub fn validate(&self, variables: &HashMap<String, DataType>, functions: &HashMap<String, FunctionSignature>) -> Result<DataType, String> {
         
         match self {
-            Expr::Int(_) => Ok(APIDataType::Int),
-            Expr::Float(_) => Ok(APIDataType::Float),
-            Expr::Bool(_) => Ok(APIDataType::Bool),
+            Expr::Int(_) => Ok(DataType::Int),
+            Expr::Float(_) => Ok(DataType::Float),
+            Expr::Bool(_) => Ok(DataType::Bool),
             Expr::Var(name) => {
                 variables.get(name)
-                    .copied()
+                    .cloned()
                     .ok_or_else(|| format!("Unknown variable: {}", name))
             }
             Expr::Unary(op, expr) => {
@@ -50,81 +50,81 @@ impl Expr {
                 match op {
                     UnOp::Neg | UnOp::Pos => {
                         match expr_type {
-                            APIDataType::Int | APIDataType::Float => Ok(expr_type),
+                            DataType::Int | DataType::Float => Ok(expr_type),
                             _ => Err(format!("Unary {:?} operator requires numeric type, got {:?}", op, expr_type))
                         }
                     }
                     UnOp::Not => {
                         match expr_type {
-                            APIDataType::Bool => Ok(APIDataType::Bool),
-                            APIDataType::Int => Ok(APIDataType::Bool), // Allow int as bool
+                            DataType::Bool => Ok(DataType::Bool),
+                            DataType::Int => Ok(DataType::Bool), // Allow int as bool
                             _ => Err(format!("Logical NOT requires boolean or int type, got {:?}", expr_type))
                         }
                     }
                 }
             }
             Expr::Binary(left, op, right) => {
-                let left_type = left.validate(variables, functions)?;
-                let right_type = right.validate(variables, functions)?;
+                let left_type = left.validate(variables, functions)?.clone();
+                let right_type = right.validate(variables, functions)?.clone();
                 
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Pow => {
                         // Arithmetic operations
-                        match (left_type, right_type) {
+                        match (&left_type, &right_type) {
                             // Scalar arithmetic
-                            (APIDataType::Int, APIDataType::Int) => Ok(APIDataType::Int),
-                            (APIDataType::Float, APIDataType::Float) => Ok(APIDataType::Float),
-                            (APIDataType::Int, APIDataType::Float) | (APIDataType::Float, APIDataType::Int) => Ok(APIDataType::Float),
+                            (DataType::Int, DataType::Int) => Ok(DataType::Int),
+                            (DataType::Float, DataType::Float) => Ok(DataType::Float),
+                            (DataType::Int, DataType::Float) | (DataType::Float, DataType::Int) => Ok(DataType::Float),
                             
                             // Vector-vector arithmetic (component-wise)
-                            (APIDataType::Vec2, APIDataType::Vec2) => Ok(APIDataType::Vec2),
-                            (APIDataType::Vec3, APIDataType::Vec3) => Ok(APIDataType::Vec3),
-                            (APIDataType::IVec2, APIDataType::IVec2) => Ok(APIDataType::IVec2),
-                            (APIDataType::IVec3, APIDataType::IVec3) => Ok(APIDataType::IVec3),
+                            (DataType::Vec2, DataType::Vec2) => Ok(DataType::Vec2),
+                            (DataType::Vec3, DataType::Vec3) => Ok(DataType::Vec3),
+                            (DataType::IVec2, DataType::IVec2) => Ok(DataType::IVec2),
+                            (DataType::IVec3, DataType::IVec3) => Ok(DataType::IVec3),
                             
                             // Vector type promotion (ivec + vec → vec)
-                            (APIDataType::IVec2, APIDataType::Vec2) | (APIDataType::Vec2, APIDataType::IVec2) => Ok(APIDataType::Vec2),
-                            (APIDataType::IVec3, APIDataType::Vec3) | (APIDataType::Vec3, APIDataType::IVec3) => Ok(APIDataType::Vec3),
+                            (DataType::IVec2, DataType::Vec2) | (DataType::Vec2, DataType::IVec2) => Ok(DataType::Vec2),
+                            (DataType::IVec3, DataType::Vec3) | (DataType::Vec3, DataType::IVec3) => Ok(DataType::Vec3),
                             
                             // Vector-scalar operations (only for Mul and Div)
-                            (APIDataType::Vec2, APIDataType::Float) | (APIDataType::Float, APIDataType::Vec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec2),
-                            (APIDataType::Vec3, APIDataType::Float) | (APIDataType::Float, APIDataType::Vec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec3),
-                            (APIDataType::IVec2, APIDataType::Int) | (APIDataType::Int, APIDataType::IVec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::IVec2),
-                            (APIDataType::IVec3, APIDataType::Int) | (APIDataType::Int, APIDataType::IVec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::IVec3),
+                            (DataType::Vec2, DataType::Float) | (DataType::Float, DataType::Vec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::Vec2),
+                            (DataType::Vec3, DataType::Float) | (DataType::Float, DataType::Vec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::Vec3),
+                            (DataType::IVec2, DataType::Int) | (DataType::Int, DataType::IVec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::IVec2),
+                            (DataType::IVec3, DataType::Int) | (DataType::Int, DataType::IVec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::IVec3),
                             
                             // Mixed vector-scalar with promotion
-                            (APIDataType::Vec2, APIDataType::Int) | (APIDataType::Int, APIDataType::Vec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec2),
-                            (APIDataType::Vec3, APIDataType::Int) | (APIDataType::Int, APIDataType::Vec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec3),
-                            (APIDataType::IVec2, APIDataType::Float) | (APIDataType::Float, APIDataType::IVec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec2),
-                            (APIDataType::IVec3, APIDataType::Float) | (APIDataType::Float, APIDataType::IVec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(APIDataType::Vec3),
+                            (DataType::Vec2, DataType::Int) | (DataType::Int, DataType::Vec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::Vec2),
+                            (DataType::Vec3, DataType::Int) | (DataType::Int, DataType::Vec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::Vec3),
+                            (DataType::IVec2, DataType::Float) | (DataType::Float, DataType::IVec2) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::Vec2),
+                            (DataType::IVec3, DataType::Float) | (DataType::Float, DataType::IVec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::Vec3),
                             
                             _ => Err(format!("Arithmetic operation {:?} not supported for types {:?} and {:?}", op, left_type, right_type))
                         }
                     }
                     BinOp::Eq | BinOp::Ne => {
                         // Equality comparison - can compare any compatible types
-                        if Self::types_compatible(left_type, right_type) {
-                            Ok(APIDataType::Bool)
+                        if Self::types_compatible(&left_type, &right_type) {
+                            Ok(DataType::Bool)
                         } else {
                             Err(format!("Cannot compare incompatible types {:?} and {:?}", left_type, right_type))
                         }
                     }
                     BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
                         // Ordering comparison - requires numeric types
-                        match (left_type, right_type) {
-                            (APIDataType::Int, APIDataType::Int) | 
-                            (APIDataType::Float, APIDataType::Float) |
-                            (APIDataType::Int, APIDataType::Float) | 
-                            (APIDataType::Float, APIDataType::Int) => Ok(APIDataType::Bool),
+                        match (&left_type, &right_type) {
+                            (DataType::Int, DataType::Int) | 
+                            (DataType::Float, DataType::Float) |
+                            (DataType::Int, DataType::Float) | 
+                            (DataType::Float, DataType::Int) => Ok(DataType::Bool),
                             _ => Err(format!("Comparison operation {:?} requires numeric types, got {:?} and {:?}", op, left_type, right_type))
                         }
                     }
                     BinOp::And | BinOp::Or => {
                         // Logical operations
-                        match (left_type, right_type) {
-                            (APIDataType::Bool, APIDataType::Bool) => Ok(APIDataType::Bool),
-                            (APIDataType::Int, APIDataType::Int) => Ok(APIDataType::Bool), // Allow int as bool
-                            (APIDataType::Bool, APIDataType::Int) | (APIDataType::Int, APIDataType::Bool) => Ok(APIDataType::Bool),
+                        match (&left_type, &right_type) {
+                            (DataType::Bool, DataType::Bool) => Ok(DataType::Bool),
+                            (DataType::Int, DataType::Int) => Ok(DataType::Bool), // Allow int as bool
+                            (DataType::Bool, DataType::Int) | (DataType::Int, DataType::Bool) => Ok(DataType::Bool),
                             _ => Err(format!("Logical operation {:?} requires boolean or int types, got {:?} and {:?}", op, left_type, right_type))
                         }
                     }
@@ -144,13 +144,13 @@ impl Expr {
                 // Validate each argument type
                 for (i, (arg, expected_type)) in args.iter().zip(&signature.parameter_types).enumerate() {
                     let arg_type = arg.validate(variables, functions)?;
-                    if !Self::types_compatible(arg_type, *expected_type) {
-                        return Err(format!("Function {} argument {} expects type {:?}, got {:?}", 
-                            name, i + 1, expected_type, arg_type));
+                    if !Self::types_compatible(&arg_type, expected_type) {
+                        return Err(format!("Function {} argument {} expects type {}, got {}", 
+                            name, i + 1, expected_type.to_string(), arg_type.to_string()));
                     }
                 }
                 
-                Ok(signature.return_type)
+                Ok(signature.return_type.clone())
             }
             Expr::Conditional(condition, then_expr, else_expr) => {
                 let condition_type = condition.validate(variables, functions)?;
@@ -159,33 +159,33 @@ impl Expr {
                 
                 // Condition must be boolean or int
                 match condition_type {
-                    APIDataType::Bool | APIDataType::Int => {},
-                    _ => return Err(format!("Conditional condition must be boolean or int, got {:?}", condition_type))
+                    DataType::Bool | DataType::Int => {},
+                    _ => return Err(format!("Conditional condition must be boolean or int, got {}", condition_type.to_string()))
                 }
                 
                 // Then and else branches must have compatible types
-                if Self::types_compatible(then_type, else_type) {
+                if Self::types_compatible(&then_type, &else_type) {
                     // Return the more general type
-                    match (then_type, else_type) {
-                        (APIDataType::Int, APIDataType::Float) | (APIDataType::Float, APIDataType::Int) => Ok(APIDataType::Float),
-                        _ => Ok(then_type) // Same types or other compatible combinations
+                    match (&then_type, &else_type) {
+                        (DataType::Int, DataType::Float) | (DataType::Float, DataType::Int) => Ok(DataType::Float),
+                        _ => Ok(then_type.clone()) // Same types or other compatible combinations
                     }
                 } else {
-                    Err(format!("Conditional branches have incompatible types: {:?} and {:?}", then_type, else_type))
+                    Err(format!("Conditional branches have incompatible types: {} and {}", then_type.to_string(), else_type.to_string()))
                 }
             }
             Expr::MemberAccess(expr, member) => {
-                let expr_type = expr.validate(variables, functions)?;
-                match (expr_type, member.as_str()) {
+                let expr_type = expr.validate(variables, functions)?.clone();
+                match (expr_type.clone(), member.as_str()) {
                     // Vec2 components
-                    (APIDataType::Vec2, "x" | "y") => Ok(APIDataType::Float),
+                    (DataType::Vec2, "x" | "y") => Ok(DataType::Float),
                     // Vec3 components
-                    (APIDataType::Vec3, "x" | "y" | "z") => Ok(APIDataType::Float),
+                    (DataType::Vec3, "x" | "y" | "z") => Ok(DataType::Float),
                     // IVec2 components
-                    (APIDataType::IVec2, "x" | "y") => Ok(APIDataType::Int),
+                    (DataType::IVec2, "x" | "y") => Ok(DataType::Int),
                     // IVec3 components
-                    (APIDataType::IVec3, "x" | "y" | "z") => Ok(APIDataType::Int),
-                    _ => Err(format!("Type {:?} does not have member '{}'", expr_type, member))
+                    (DataType::IVec3, "x" | "y" | "z") => Ok(DataType::Int),
+                    _ => Err(format!("Type {} does not have member '{}'", expr_type.to_string(), member))
                 }
             }
         }
@@ -307,19 +307,19 @@ impl Expr {
             }
         }
     }
-    
+
     /// Helper function to check if two types are compatible for operations
-    fn types_compatible(type1: APIDataType, type2: APIDataType) -> bool {
+    fn types_compatible(type1: &DataType, type2: &DataType) -> bool {
         match (type1, type2) {
             // Same types are always compatible
             (a, b) if a == b => true,
             // Numeric types are compatible with each other
-            (APIDataType::Int, APIDataType::Float) | (APIDataType::Float, APIDataType::Int) => true,
+            (DataType::Int, DataType::Float) | (DataType::Float, DataType::Int) => true,
             // Bool and Int are compatible for logical operations
-            (APIDataType::Bool, APIDataType::Int) | (APIDataType::Int, APIDataType::Bool) => true,
+            (DataType::Bool, DataType::Int) | (DataType::Int, DataType::Bool) => true,
             // Vector type compatibility (for comparisons)
-            (APIDataType::IVec2, APIDataType::Vec2) | (APIDataType::Vec2, APIDataType::IVec2) => true,
-            (APIDataType::IVec3, APIDataType::Vec3) | (APIDataType::Vec3, APIDataType::IVec3) => true,
+            (DataType::IVec2, DataType::Vec2) | (DataType::Vec2, DataType::IVec2) => true,
+            (DataType::IVec3, DataType::Vec3) | (DataType::Vec3, DataType::IVec3) => true,
             _ => false
         }
     }

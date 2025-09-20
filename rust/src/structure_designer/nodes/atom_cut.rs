@@ -50,7 +50,7 @@ pub fn eval_atom_cut<'a>(
     return input_missing_error(&molecule_input_name);
   }
   let molecule_input_node_id = node.arguments[0].get_node_id().unwrap();
-  let molecule_input_val = network_evaluator.evaluate(network_stack, molecule_input_node_id, registry, false, context)[0].clone();
+  let molecule_input_val = network_evaluator.evaluate(network_stack, molecule_input_node_id, registry, false, context)[0];
   if let NetworkResult::Error(_error) = molecule_input_val {
     return error_in_input(&molecule_input_name);
   }

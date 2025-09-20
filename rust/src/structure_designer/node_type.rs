@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::io;
 use serde::{Serialize, Deserialize};
 use crate::util::as_any::AsAny;
+use crate::structure_designer::data_type::DataType;
 
 #[derive(Clone)]
 pub struct Parameter {
