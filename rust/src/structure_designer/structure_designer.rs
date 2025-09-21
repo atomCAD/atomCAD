@@ -21,6 +21,7 @@ use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::common::xyz_saver::save_xyz;
+use crate::structure_designer::data_type::DataType;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -346,7 +347,7 @@ impl StructureDesigner {
           if dest_param_index >= node_type.parameters.len() {
             return;
           }
-          node_type.parameters[dest_param_index].multi
+          node_type.parameters[dest_param_index].data_type.is_array()
         }
         None => return,
       }

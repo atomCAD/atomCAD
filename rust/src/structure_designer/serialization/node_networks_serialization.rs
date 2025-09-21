@@ -5,6 +5,7 @@ use serde::{Serialize, Deserialize};
 use serde_json;
 use glam::f64::DVec2;
 use crate::common::serialization_utils::dvec2_serializer;
+use crate::structure_designer::data_type::DataType;
 use super::super::node_type::{NodeType, Parameter};
 use super::super::node_network::{NodeNetwork, Node, Argument};
 use super::super::node_type_registry::NodeTypeRegistry;
@@ -84,7 +85,7 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
 pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Result<NodeType> {
     // Parse the output type using the helper function
     let output_type = DataType::from_string(&serializable.output_type)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid output type"))?;
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Invalid output type: {}", e)))?;
     
     // Create parameters from the serializable parameters
     let parameters = serializable.parameters
@@ -92,7 +93,7 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         .map(|serializable_param| {
             // Parse the data type using the helper function
             let data_type = DataType::from_string(&serializable_param.data_type)
-                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid parameter data type"))?;
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Invalid parameter data type: {}", e)))?;
             
             Ok(Parameter {
                 name: serializable_param.name.clone(),

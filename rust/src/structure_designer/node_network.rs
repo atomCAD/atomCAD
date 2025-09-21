@@ -7,6 +7,8 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 
+use super::data_type::DataType;
+
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeDisplayType {
   Normal,
@@ -226,13 +228,13 @@ impl NodeNetwork {
     }
     
     // Get the output type of the source node
-    let source_output_type = node_type_registry.get_node_type_for_node(source_node).unwrap().output_type;
+    let source_output_type = &node_type_registry.get_node_type_for_node(source_node).unwrap().output_type;
     
     // Get the expected input type for the destination parameter
     let dest_param_type = node_type_registry.get_node_param_data_type(dest_node, dest_param_index);
     
     // Check if the data types are compatible using conversion rules
-    node_type_registry.can_be_converted_to(source_output_type, dest_param_type)
+    DataType::can_be_converted_to(source_output_type, &dest_param_type)
   }
 
   pub fn connect_nodes(&mut self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize, dest_param_is_multi: bool) {

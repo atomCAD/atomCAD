@@ -43,7 +43,6 @@ use crate::api::structure_designer::structure_designer_api_types::APIEditAtomDat
 use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIAnchorData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
-use crate::structure_designer::node_type::data_type_to_str;
 use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
@@ -68,6 +67,8 @@ use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIDataType;
+use super::structure_designer_api_types::APIBuiltInDataType;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::expr::ExprData;
 use super::structure_designer_api_types::APIExprData;
@@ -75,6 +76,100 @@ use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
+
+// Helper function to convert a DataType to an APIBuiltInDataType if it's a built-in type
+fn to_api_built_in_data_type(data_type: &DataType) -> Option<APIBuiltInDataType> {
+    match data_type {
+        DataType::None => Some(APIBuiltInDataType::None),
+        DataType::Bool => Some(APIBuiltInDataType::Bool),
+        DataType::String => Some(APIBuiltInDataType::String),
+        DataType::Int => Some(APIBuiltInDataType::Int),
+        DataType::Float => Some(APIBuiltInDataType::Float),
+        DataType::Vec2 => Some(APIBuiltInDataType::Vec2),
+        DataType::Vec3 => Some(APIBuiltInDataType::Vec3),
+        DataType::IVec2 => Some(APIBuiltInDataType::IVec2),
+        DataType::IVec3 => Some(APIBuiltInDataType::IVec3),
+        DataType::Geometry2D => Some(APIBuiltInDataType::Geometry2D),
+        DataType::Geometry => Some(APIBuiltInDataType::Geometry),
+        DataType::Atomic => Some(APIBuiltInDataType::Atomic),
+        _ => None,
+    }
+}
+
+fn from_api_built_in_data_type(api_data_type: &APIBuiltInDataType) -> DataType {
+    match api_data_type {
+        APIBuiltInDataType::None => DataType::None,
+        APIBuiltInDataType::Bool => DataType::Bool,
+        APIBuiltInDataType::String => DataType::String,
+        APIBuiltInDataType::Int => DataType::Int,
+        APIBuiltInDataType::Float => DataType::Float,
+        APIBuiltInDataType::Vec2 => DataType::Vec2,
+        APIBuiltInDataType::Vec3 => DataType::Vec3,
+        APIBuiltInDataType::IVec2 => DataType::IVec2,
+        APIBuiltInDataType::IVec3 => DataType::IVec3,
+        APIBuiltInDataType::Geometry2D => DataType::Geometry2D,
+        APIBuiltInDataType::Geometry => DataType::Geometry,
+        APIBuiltInDataType::Atomic => DataType::Atomic,
+    }
+}
+
+fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
+    if let Some(custom_type_str) = &api_data_type.custom_data_type {
+        // If there's a custom string, parse from that.
+        // This handles functions and arrays of complex types.
+        DataType::from_string(custom_type_str)
+    } else if let Some(built_in_type) = &api_data_type.built_in_data_type {
+        // Otherwise, use the built-in type enum.
+        let base_type = from_api_built_in_data_type(built_in_type);
+        if api_data_type.array {
+            Ok(DataType::Array(Box::new(base_type)))
+        } else {
+            Ok(base_type)
+        }
+    } else {
+        // This case should not happen if APIDataType is constructed correctly.
+        Err("Invalid APIDataType: neither built_in_data_type nor custom_data_type is Some".to_string())
+    }
+}
+
+fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
+    match data_type {
+        DataType::Array(element_type) => {
+            if let Some(built_in_element_type) = to_api_built_in_data_type(&element_type) {
+                // It's an array of a built-in type
+                APIDataType {
+                    built_in_data_type: Some(built_in_element_type),
+                    custom_data_type: None,
+                    array: true,
+                }
+            } else {
+                // It's an array of a complex type (e.g., array of functions)
+                APIDataType {
+                    built_in_data_type: None,
+                    custom_data_type: Some(DataType::Array(element_type.clone()).to_string()),
+                    array: false, // Array info is in the string
+                }
+            }
+        },
+        _ => {
+            if let Some(built_in_type) = to_api_built_in_data_type(&data_type) {
+                // It's a single built-in type
+                APIDataType {
+                    built_in_data_type: Some(built_in_type),
+                    custom_data_type: None,
+                    array: false,
+                }
+            } else {
+                // It's a complex type like a function
+                APIDataType {
+                    built_in_data_type: None,
+                    custom_data_type: Some(data_type.to_string()),
+                    array: false,
+                }
+            }
+        }
+    }
+}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
@@ -106,10 +201,11 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
           let num_of_params = node_type.parameters.len();
           for i in 0..num_of_params {
             let param = &node_type.parameters[i];
+            let data_type = &cad_instance.structure_designer.node_type_registry.get_node_param_data_type(node, i);
             input_pins.push(InputPinView {
               name: param.name.clone(),
-              data_type: data_type_to_str(&cad_instance.structure_designer.node_type_registry.get_node_param_data_type(node, i)),
-              multi: param.multi,
+              data_type: data_type.to_string(),
+              multi: data_type.is_array(),
             });
           }
 
@@ -139,14 +235,14 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
           let output_string = cad_instance.structure_designer.last_generated_structure_designer_scene.node_output_strings.get(&node.id).cloned();
 
-          let output_type = cad_instance.structure_designer.node_type_registry.get_node_type_for_node(node).unwrap().output_type;
+          let output_type = &cad_instance.structure_designer.node_type_registry.get_node_type_for_node(node).unwrap().output_type;
 
           node_network_view.nodes.insert(node.id, NodeView {
             id: node.id,
             node_type_name: node.node_type_name.clone(),
             position: to_api_vec2(&node.position),
             input_pins,
-            output_type: data_type_to_str(&output_type),
+            output_type: output_type.to_string(),
             selected: node_network.selected_node_id == Some(node.id),
             displayed: node_network.is_node_displayed(node.id),
             return_node: node_network.return_node_id == Some(node.id),
@@ -961,8 +1057,7 @@ pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
         Some(APIParameterData {
           param_index: parameter_data.param_index,
           param_name: parameter_data.param_name.clone(),
-          data_type: parameter_data.data_type,
-          multi: parameter_data.multi,
+          data_type: data_type_to_api_data_type(&parameter_data.data_type),
           sort_order: parameter_data.sort_order,
         })
       },
@@ -987,11 +1082,11 @@ pub fn get_expr_data(node_id: u64) -> Option<APIExprData> {
         Some(APIExprData {
           parameters: expr_data.parameters.iter().map(|param| APIExprParameter {
             name: param.name.clone(),
-            data_type: param.data_type,
+            data_type: data_type_to_api_data_type(&param.data_type),
           }).collect(),
           expression: expr_data.expression.clone(),
           error: expr_data.error.clone(),
-          output_type: expr_data.output_type,
+          output_type: expr_data.output_type.as_ref().map(data_type_to_api_data_type),
         })
       },
       None
@@ -1297,7 +1392,7 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
       let parameter_data = Box::new(ParameterData {
         param_index: data.param_index,
         param_name: data.param_name,
-        data_type: data.data_type,
+        data_type: api_data_type_to_data_type(&data.data_type).unwrap(), // TODO: Handle this error gracefully
         sort_order: data.sort_order,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);
@@ -1313,7 +1408,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) {
       let expr_data = Box::new(ExprData {
         parameters: data.parameters.into_iter().map(|api_param| crate::structure_designer::nodes::expr::ExprParameter {
           name: api_param.name,
-          data_type: api_param.data_type,
+          data_type: api_data_type_to_data_type(&api_param.data_type).unwrap(), // TODO: Handle error
         }).collect(),
         expression: data.expression,
         expr: None,
@@ -1409,8 +1504,8 @@ pub fn is_node_type_active(node_type: String) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_api_data_type_display_name(data_type: APIDataType) -> String {
-  data_type_to_str(&data_type)
+pub fn get_api_data_type_display_name(api_data_type: APIDataType) -> String {
+  api_data_type_to_data_type(&api_data_type).unwrap().to_string()
 }
 
 #[flutter_rust_bridge::frb(sync)]
