@@ -126,7 +126,6 @@ class _DataTypeInputState extends State<DataTypeInput> {
         // Array checkbox
         CheckboxListTile(
           title: const Text('Array'),
-          subtitle: const Text('Make this an array of the selected type'),
           value: widget.value.array,
           onChanged: (newValue) {
             if (newValue != null) {
