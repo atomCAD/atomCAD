@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
+import 'package:flutter_cad/inputs/data_type_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -53,8 +54,7 @@ class ParameterEditorState extends State<ParameterEditor> {
                 APIParameterData(
                   paramIndex: widget.data?.paramIndex ?? BigInt.zero,
                   paramName: value,
-                  dataType: widget.data?.dataType ?? APIDataType.none,
-                  multi: widget.data?.multi ?? false,
+                  dataType: widget.data?.dataType ?? const APIDataType(builtInDataType: APIBuiltInDataType.none, array: false),
                   sortOrder: widget.data?.sortOrder ?? 0,
                 ),
               );
@@ -62,54 +62,20 @@ class ParameterEditorState extends State<ParameterEditor> {
           ),
           const SizedBox(height: 8),
 
-          // Data Type Dropdown
-          DropdownButtonFormField<APIDataType>(
+          // Data Type Input
+          DataTypeInput(
+            label: 'Data Type',
             value: widget.data!.dataType,
-            decoration: const InputDecoration(
-              labelText: 'Data Type',
-              border: OutlineInputBorder(),
-            ),
-            items: APIDataType.values.map((dataType) {
-              return DropdownMenuItem(
-                value: dataType,
-                child: Text(getApiDataTypeDisplayName(dataType: dataType)),
+            onChanged: (newValue) {
+              widget.model.setParameterData(
+                widget.nodeId,
+                APIParameterData(
+                  paramIndex: widget.data!.paramIndex,
+                  paramName: widget.data!.paramName,
+                  dataType: newValue,
+                  sortOrder: widget.data!.sortOrder,
+                ),
               );
-            }).toList(),
-            onChanged: (newValue) {
-              if (newValue != null) {
-                widget.model.setParameterData(
-                  widget.nodeId,
-                  APIParameterData(
-                    paramIndex: widget.data!.paramIndex,
-                    paramName: widget.data!.paramName,
-                    dataType: newValue,
-                    multi: widget.data!.multi,
-                    sortOrder: widget.data!.sortOrder,
-                  ),
-                );
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-
-          // Multi Checkbox
-          CheckboxListTile(
-            title: const Text('Multi'),
-            subtitle: const Text('Accept multiple inputs'),
-            value: widget.data!.multi,
-            onChanged: (newValue) {
-              if (newValue != null) {
-                widget.model.setParameterData(
-                  widget.nodeId,
-                  APIParameterData(
-                    paramIndex: widget.data!.paramIndex,
-                    paramName: widget.data!.paramName,
-                    dataType: widget.data!.dataType,
-                    multi: newValue,
-                    sortOrder: widget.data!.sortOrder,
-                  ),
-                );
-              }
             },
           ),
           const SizedBox(height: 8),
@@ -125,7 +91,6 @@ class ParameterEditorState extends State<ParameterEditor> {
                   paramIndex: widget.data!.paramIndex,
                   paramName: widget.data!.paramName,
                   dataType: widget.data!.dataType,
-                  multi: widget.data!.multi,
                   sortOrder: newValue,
                 ),
               );

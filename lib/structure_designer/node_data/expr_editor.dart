@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
+import 'package:flutter_cad/inputs/data_type_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -99,7 +100,7 @@ class ExprEditorState extends State<ExprEditor> {
     final newParameters = List<APIExprParameter>.from(currentParameters)
       ..add(APIExprParameter(
         name: _generateParameterName(currentParameters.length),
-        dataType: APIDataType.float,
+        dataType: const APIDataType(builtInDataType: APIBuiltInDataType.float, array: false),
       ));
     _updateExprData(newParameters);
   }
@@ -119,6 +120,47 @@ class ExprEditorState extends State<ExprEditor> {
       final newParameters = List<APIExprParameter>.from(currentParameters);
       newParameters[index] = updatedParameter;
       _updateExprData(newParameters);
+    }
+  }
+
+  String _getApiDataTypeDisplayName(APIDataType dataType) {
+    if (dataType.builtInDataType != null) {
+      final typeName = _getBuiltInDataTypeDisplayName(dataType.builtInDataType!);
+      return dataType.array ? 'Array<$typeName>' : typeName;
+    } else if (dataType.customDataType != null) {
+      final typeName = dataType.customDataType!;
+      return dataType.array ? 'Array<$typeName>' : typeName;
+    } else {
+      return 'Invalid Type';
+    }
+  }
+
+  String _getBuiltInDataTypeDisplayName(APIBuiltInDataType dataType) {
+    switch (dataType) {
+      case APIBuiltInDataType.none:
+        return 'None';
+      case APIBuiltInDataType.bool:
+        return 'Boolean';
+      case APIBuiltInDataType.string:
+        return 'String';
+      case APIBuiltInDataType.int:
+        return 'Integer';
+      case APIBuiltInDataType.float:
+        return 'Float';
+      case APIBuiltInDataType.vec2:
+        return 'Vec2';
+      case APIBuiltInDataType.vec3:
+        return 'Vec3';
+      case APIBuiltInDataType.iVec2:
+        return 'IVec2';
+      case APIBuiltInDataType.iVec3:
+        return 'IVec3';
+      case APIBuiltInDataType.geometry2D:
+        return 'Geometry2D';
+      case APIBuiltInDataType.geometry:
+        return 'Geometry';
+      case APIBuiltInDataType.atomic:
+        return 'Atomic';
     }
   }
 
@@ -243,37 +285,20 @@ class ExprEditorState extends State<ExprEditor> {
                     ),
                     const SizedBox(width: 6),
                     
-                    // Data type dropdown - more constrained
+                    // Data type input
                     Expanded(
                       flex: 3,
-                      child: DropdownButtonFormField<APIDataType>(
+                      child: DataTypeInput(
+                        label: 'Type',
                         value: parameter.dataType,
-                        decoration: const InputDecoration(
-                          labelText: 'Type',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          isDense: true,
-                        ),
-                        isExpanded: true,
-                        items: APIDataType.values.map((dataType) {
-                          return DropdownMenuItem(
-                            value: dataType,
-                            child: Text(
-                              getApiDataTypeDisplayName(dataType: dataType),
-                              overflow: TextOverflow.ellipsis,
+                        onChanged: (newDataType) {
+                          _updateParameter(
+                            index,
+                            APIExprParameter(
+                              name: parameter.name,
+                              dataType: newDataType,
                             ),
                           );
-                        }).toList(),
-                        onChanged: (newDataType) {
-                          if (newDataType != null) {
-                            _updateParameter(
-                              index,
-                              APIExprParameter(
-                                name: parameter.name,
-                                dataType: newDataType,
-                              ),
-                            );
-                          }
                         },
                       ),
                     ),
@@ -320,7 +345,7 @@ class ExprEditorState extends State<ExprEditor> {
                     ),
                     const SizedBox(width: 8.0),
                     Text(
-                      'Output Type: ${getApiDataTypeDisplayName(dataType: widget.data!.outputType!)}',
+                      'Output Type: ${_getApiDataTypeDisplayName(widget.data!.outputType!)}',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onPrimaryContainer,
                         fontSize: 14.0,
