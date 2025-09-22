@@ -2,7 +2,7 @@ use rust_lib_flutter_cad::structure_designer::expr::expr::*;
 use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_signatures};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use std::collections::HashMap;
-use crate::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 
 #[cfg(test)]
 mod validation_tests {

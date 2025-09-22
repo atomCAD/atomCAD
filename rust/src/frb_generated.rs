@@ -946,9 +946,9 @@ fn wire__crate__api__structure_designer__structure_designer_api__get_api_data_ty
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "get_api_data_type_display_name", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
             let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
             let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_data_type = <crate::api::structure_designer::structure_designer_api_types::APIDataType>::sse_decode(&mut deserializer);deserializer.end();
+            let api_api_data_type = <crate::api::structure_designer::structure_designer_api_types::APIDataType>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::get_api_data_type_display_name(api_data_type))?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::get_api_data_type_display_name(api_api_data_type))?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__get_atom_cut_data_impl(

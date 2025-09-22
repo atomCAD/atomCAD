@@ -175,7 +175,7 @@ abstract class RustLibApi extends BaseApi {
       {required BigInt nodeId});
 
   String crateApiStructureDesignerStructureDesignerApiGetApiDataTypeDisplayName(
-      {required APIDataType dataType});
+      {required APIDataType apiDataType});
 
   APIAtomCutData? crateApiStructureDesignerStructureDesignerApiGetAtomCutData(
       {required BigInt nodeId});
@@ -1265,11 +1265,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   String crateApiStructureDesignerStructureDesignerApiGetApiDataTypeDisplayName(
-      {required APIDataType dataType}) {
+      {required APIDataType apiDataType}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_box_autoadd_api_data_type(dataType, serializer);
+        sse_encode_box_autoadd_api_data_type(apiDataType, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
       },
       codec: SseCodec(
@@ -1278,7 +1278,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiGetApiDataTypeDisplayNameConstMeta,
-      argValues: [dataType],
+      argValues: [apiDataType],
       apiImpl: this,
     ));
   }
@@ -1287,7 +1287,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiGetApiDataTypeDisplayNameConstMeta =>
           const TaskConstMeta(
             debugName: "get_api_data_type_display_name",
-            argNames: ["dataType"],
+            argNames: ["apiDataType"],
           );
 
   @override

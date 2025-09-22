@@ -106,9 +106,11 @@ mod tests {
     
     #[test]
     fn test_is_absolute_path() {
-        // Unix-style absolute paths
-        assert!(is_absolute_path("/home/user/file.txt"));
-        assert!(is_absolute_path("/"));
+        // Unix-style absolute paths (only test on Unix-like systems)
+        if cfg!(unix) {
+            assert!(is_absolute_path("/home/user/file.txt"));
+            assert!(is_absolute_path("/"));
+        }
         
         // Windows-style absolute paths
         if cfg!(windows) {

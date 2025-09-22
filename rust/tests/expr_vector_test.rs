@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use glam::f64::{DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};
-use crate::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 
 #[cfg(test)]
 mod vector_tests {
