@@ -30,35 +30,13 @@ fn eval_default<'a>(
   node_id: u64,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> Vec<NetworkResult> {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  
-  if node.arguments[0].is_empty() {
-    return vec![NetworkResult::Error("input is missing".to_string())];
-  }
-  
-  let results: Result<Vec<_>, _> = node.arguments[0].argument_node_ids.iter()
-    .map(|input_node_id| {
-      let result = network_evaluator.evaluate(
-        network_stack,
-        *input_node_id,
-        registry, 
-        false,
-        context
-      );
-      if let NetworkResult::Error(_error) = &result {
-        Err(())
-      } else {
-        Ok(result)
-      }
-    })
-    .collect();
-  
-  if results.is_err() {
-    return vec![error_in_input("default")];
-  }
-  
-  results.unwrap().into_iter().flatten().collect()
+) -> NetworkResult {  
+  return network_evaluator.evaluate_arg_required(
+    network_stack,
+    node_id,
+    registry,
+    context,
+    0);
 }
 
 pub fn eval_parameter<'a>(
@@ -67,7 +45,7 @@ pub fn eval_parameter<'a>(
   node_id: u64,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> Vec<NetworkResult> {
+) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let evaled_in_isolation = network_stack.len() < 2;
 
@@ -86,8 +64,11 @@ pub fn eval_parameter<'a>(
   if argument_node_ids.is_empty() {
     return eval_default(network_evaluator, network_stack, node_id, registry, context);
   }
-  let args : Vec<Vec<NetworkResult>> = argument_node_ids.iter().map(|&arg_node_id| {
-    network_evaluator.evaluate(&parent_network_stack, arg_node_id, registry, false, context)
-  }).collect();
-  args.concat()
+
+  return network_evaluator.evaluate_arg_required(
+    network_stack,
+    parent_node_id,
+    registry,
+    context,
+    param_data.param_index);
 }

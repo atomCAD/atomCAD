@@ -50,7 +50,7 @@ pub fn eval_atom_cut<'a>(
     return input_missing_error(&molecule_input_name);
   }
   let molecule_input_node_id = node.arguments[0].get_node_id().unwrap();
-  let molecule_input_val = network_evaluator.evaluate(network_stack, molecule_input_node_id, registry, false, context)[0];
+  let molecule_input_val = network_evaluator.evaluate(network_stack, molecule_input_node_id, registry, false, context);
   if let NetworkResult::Error(_error) = molecule_input_val {
     return error_in_input(&molecule_input_name);
   }
@@ -61,24 +61,37 @@ pub fn eval_atom_cut<'a>(
     if node.arguments[1].is_empty() {
       return NetworkResult::Atomic(atomic_structure); // no cutters plugged in, just return the input atomic structure unmodified.
     }
-    let mut cutters: Vec<GeoNode> = Vec::new();
-    for cutters_input_node_id in node.arguments[1].argument_node_ids.iter() {
-      let shape_val = network_evaluator.evaluate(
-        network_stack,
-        *cutters_input_node_id,
-        registry, 
-        false,
-        context
-      );
-      if let NetworkResult::Error(_error) = shape_val {
-        return error_in_input(&cutters_input_name);
-      }
-      else if let NetworkResult::Geometry(shape) = shape_val {
-        cutters.push(shape.geo_tree_root);
+
+    let mut shapes: Vec<GeoNode> = Vec::new();
+  
+    let shapes_val = network_evaluator.evaluate_arg_required(
+      network_stack,
+      node_id,
+      registry,
+      context,
+      1,
+    );
+  
+    if let NetworkResult::Error(_) = shapes_val {
+      return shapes_val;
+    }
+  
+    // Extract the array elements from shapes_val
+    let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
+      array_elements
+    } else {
+      return NetworkResult::Error("Invalid shapes input.".to_string());
+    };
+  
+    let shape_count = shape_results.len();
+  
+    for shape_val in shape_results {
+      if let NetworkResult::Geometry(shape) = shape_val {
+        shapes.push(shape.geo_tree_root); 
       }
     }
   
-    let cutter_geo_tree_root = GeoNode::Intersection3D { shapes: cutters };
+    let cutter_geo_tree_root = GeoNode::Intersection3D { shapes: shapes };
 
     let atom_cut_data = &node.data.as_any_ref().downcast_ref::<AtomCutData>().unwrap();
     cut_atomic_structure(&mut atomic_structure, &cutter_geo_tree_root, atom_cut_data.cut_sdf_value, atom_cut_data.unit_cell_size);

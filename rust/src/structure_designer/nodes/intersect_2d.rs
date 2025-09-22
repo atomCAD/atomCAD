@@ -18,33 +18,38 @@ pub fn eval_intersect_2d<'a>(
   context: &mut NetworkEvaluationContext,
 ) -> NetworkResult {
   //let _timer = Timer::new("eval_intersect");
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let shapes_input_name = registry.get_parameter_name(&node, 0);
-
-  if node.arguments[0].is_empty() {
-    return input_missing_error(&shapes_input_name);
-  }
-
   let mut shapes: Vec<GeoNode> = Vec::new();
   let mut frame_translation = DVec2::ZERO;
-  for input_node_id in node.arguments[0].argument_node_ids.iter() {
-    let shape_val = network_evaluator.evaluate(
-      network_stack,
-      *input_node_id,
-      registry, 
-      false,
-      context
-    );
-    if let NetworkResult::Error(_error) = shape_val {
-      return error_in_input(&shapes_input_name);
-    }
-    else if let NetworkResult::Geometry2D(shape) = shape_val {
-      shapes.push(shape.geo_tree_root);
+
+  let shapes_val = network_evaluator.evaluate_arg_required(
+    network_stack,
+    node_id,
+    registry,
+    context,
+    0,
+  );
+
+  if let NetworkResult::Error(_) = shapes_val {
+    return shapes_val;
+  }
+
+  // Extract the array elements from shapes_val
+  let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
+    array_elements
+  } else {
+    return NetworkResult::Error("Expected array of geometry shapes".to_string());
+  };
+
+  let shape_count = shape_results.len();
+
+  for shape_val in shape_results {
+    if let NetworkResult::Geometry2D(shape) = shape_val {
+      shapes.push(shape.geo_tree_root); 
       frame_translation += shape.frame_transform.translation;
     }
   }
 
-  frame_translation /= node.arguments[0].argument_node_ids.len() as f64;
+  frame_translation /= shape_count as f64;
 
   return NetworkResult::Geometry2D(GeometrySummary2D { 
     frame_transform: Transform2D::new(

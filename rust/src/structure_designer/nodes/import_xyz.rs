@@ -45,7 +45,7 @@ pub fn eval_import_xyz<'a>(
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
   let node_data = &node.data.as_any_ref().downcast_ref::<ImportXYZData>().unwrap();
 
-  let atomic_structure = if let Some(result) = network_evaluator.evaluate_single_arg(network_stack, node_id, registry, context, 0) {
+  let atomic_structure = if let Some(result) = network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0) {
     // Check for error first
     if result.is_error() {
       return result;

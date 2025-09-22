@@ -31,7 +31,8 @@ pub fn eval_diff_2d<'a>(
   let (mut geometry, mut frame_translation) = helper_union(
     network_evaluator,
     network_stack,
-    &node.arguments[0].argument_node_ids,
+    node_id,
+    0,
     registry,
     context
   );
@@ -44,7 +45,8 @@ pub fn eval_diff_2d<'a>(
     let (sub_geometry, sub_frame_translation) = helper_union(
       network_evaluator,
       network_stack,
-      &node.arguments[1].argument_node_ids,
+      node_id,
+      1,
       registry,
       context
     );
@@ -70,28 +72,42 @@ pub fn eval_diff_2d<'a>(
 
 fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   network_stack: &Vec<NetworkStackElement<'a>>,
-  argument_node_ids: &HashSet<u64>,
+  node_id: u64,
+  parameter_index: usize,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
 ) -> (Option<GeoNode>, DVec2) {
   let mut shapes: Vec<GeoNode> = Vec::new();
   let mut frame_translation = DVec2::ZERO;
-  for input_node_id in argument_node_ids.iter() {
-    let shape_val = network_evaluator.evaluate(
-      network_stack,
-      *input_node_id,
-      registry, 
-      false,
-      context
-    );
-    if let NetworkResult::Error(_error) = shape_val {
-      return (None, DVec2::ZERO);
-    }
-    else if let NetworkResult::Geometry2D(shape) = shape_val {
-      shapes.push(shape.geo_tree_root);
+
+  let shapes_val = network_evaluator.evaluate_arg_required(
+    network_stack,
+    node_id,
+    registry,
+    context,
+    parameter_index,
+  );
+
+  if let NetworkResult::Error(_) = shapes_val {
+    return (None, DVec2::ZERO);
+  }
+
+  // Extract the array elements from shapes_val
+  let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
+    array_elements
+  } else {
+    return (None, DVec2::ZERO);
+  };
+
+  let shape_count = shape_results.len();
+
+  for shape_val in shape_results {
+    if let NetworkResult::Geometry2D(shape) = shape_val {
+      shapes.push(shape.geo_tree_root); 
       frame_translation += shape.frame_transform.translation;
     }
   }
-  frame_translation /= argument_node_ids.len() as f64;
+
+  frame_translation /= shape_count as f64;
   return (Some(GeoNode::Union2D { shapes }), frame_translation);
 }

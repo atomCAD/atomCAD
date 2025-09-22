@@ -780,7 +780,7 @@ impl NodeTypeRegistry {
             let mut custom_node_type = base_node_type.clone();
             
             // Update the output type - use DataType::None if expr_data.output_type is None
-            custom_node_type.output_type = expr_data.output_type.unwrap_or(DataType::None).clone();
+            custom_node_type.output_type = expr_data.output_type.clone().unwrap_or(DataType::None);
             
             // Convert ExprParameter to Parameter
             custom_node_type.parameters = expr_data.parameters.iter()

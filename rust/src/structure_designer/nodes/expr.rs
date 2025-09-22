@@ -107,7 +107,7 @@ pub fn eval_expr<'a>(
   
   // Go through all parameter indices and evaluate them
   for (param_index, param) in expr_data.parameters.iter().enumerate() {
-    if let Some(result) = network_evaluator.evaluate_single_arg(
+    if let Some(result) = network_evaluator.evaluate_arg(
       network_stack,
       node_id,
       registry,

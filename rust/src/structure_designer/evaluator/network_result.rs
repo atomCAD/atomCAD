@@ -218,31 +218,31 @@ impl NetworkResult {
     }
   }
 
-  /// Returns a user-readable string representation for displayable variants.
-  /// Returns None for Geometry2D, Geometry, Atomic, and Error variants.
-  pub fn to_display_string(&self) -> Option<String> {
+  /// Returns a user-readable string representation for all variants.
+  /// For complex variants like Geometry2D, Geometry, Atomic, and Error, returns the variant name.
+  pub fn to_display_string(&self) -> String {
     match self {
-      NetworkResult::None => None,
-      NetworkResult::Bool(value) => Some(value.to_string()),
-      NetworkResult::String(value) => Some(value.to_string()),
-      NetworkResult::Int(value) => Some(value.to_string()),
-      NetworkResult::Float(value) => Some(format!("{:.6}", value)),
-      NetworkResult::Vec2(vec) => Some(format!("({:.6}, {:.6})", vec.x, vec.y)),
-      NetworkResult::Vec3(vec) => Some(format!("({:.6}, {:.6}, {:.6})", vec.x, vec.y, vec.z)),
-      NetworkResult::IVec2(vec) => Some(format!("({}, {})", vec.x, vec.y)),
-      NetworkResult::IVec3(vec) => Some(format!("({}, {}, {})", vec.x, vec.y, vec.z)),
+      NetworkResult::None => "None".to_string(),
+      NetworkResult::Bool(value) => value.to_string(),
+      NetworkResult::String(value) => value.to_string(),
+      NetworkResult::Int(value) => value.to_string(),
+      NetworkResult::Float(value) => format!("{:.6}", value),
+      NetworkResult::Vec2(vec) => format!("({:.6}, {:.6})", vec.x, vec.y),
+      NetworkResult::Vec3(vec) => format!("({:.6}, {:.6}, {:.6})", vec.x, vec.y, vec.z),
+      NetworkResult::IVec2(vec) => format!("({}, {})", vec.x, vec.y),
+      NetworkResult::IVec3(vec) => format!("({}, {}, {})", vec.x, vec.y, vec.z),
       NetworkResult::Array(elements) => {
         let element_strings: Vec<String> = elements
           .iter()
-          .filter_map(|element| element.to_display_string())
+          .map(|element| element.to_display_string())
           .collect();
-        Some(format!("[{}]", element_strings.join(", ")))
+        format!("[{}]", element_strings.join(", "))
       },
-      NetworkResult::Function(node_type_name) => Some(node_type_name.clone()),
-      NetworkResult::Geometry2D(_) => None,
-      NetworkResult::Geometry(_) => None,
-      NetworkResult::Atomic(_) => None,
-      NetworkResult::Error(_) => None,
+      NetworkResult::Function(node_type_name) => node_type_name.clone(),
+      NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
+      NetworkResult::Geometry(_) => "Geometry".to_string(),
+      NetworkResult::Atomic(_) => "Atomic".to_string(),
+      NetworkResult::Error(_) => "Error".to_string(),
     }
   }
 }
