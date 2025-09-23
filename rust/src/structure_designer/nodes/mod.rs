@@ -34,6 +34,8 @@ pub mod bool;
 pub mod string;
 pub mod export_xyz;
 pub mod atom_cut;
+pub mod range;
+
 
 
 

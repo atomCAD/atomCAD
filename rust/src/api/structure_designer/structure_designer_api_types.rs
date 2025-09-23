@@ -95,6 +95,12 @@ pub struct InputPinView {
     pub value: APIIVec3,
   }
 
+  pub struct APIRangeData {
+    pub start: i32,
+    pub step: i32,
+    pub count: i32,
+  }
+
   pub struct APIVec2Data {
     pub value: APIVec2,
   }

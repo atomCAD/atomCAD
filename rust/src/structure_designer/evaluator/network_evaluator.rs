@@ -17,6 +17,7 @@ use crate::structure_designer::nodes::int::eval_int;
 use crate::structure_designer::nodes::float::eval_float;
 use crate::structure_designer::nodes::ivec2::eval_ivec2;
 use crate::structure_designer::nodes::ivec3::eval_ivec3;
+use crate::structure_designer::nodes::range::eval_range;
 use crate::structure_designer::nodes::vec2::eval_vec2;
 use crate::structure_designer::nodes::vec3::eval_vec3;
 use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
@@ -448,6 +449,8 @@ impl NetworkEvaluator {
       eval_ivec2(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "ivec3" {
       eval_ivec3(&self, network_stack, node_id, registry, context)
+    } else if node.node_type_name == "range" {
+      eval_range(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "vec2" {
       eval_vec2(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "vec3" {

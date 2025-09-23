@@ -624,6 +624,30 @@ class APIParameterData {
           error == other.error;
 }
 
+class APIRangeData {
+  final int start;
+  final int step;
+  final int count;
+
+  const APIRangeData({
+    required this.start,
+    required this.step,
+    required this.count,
+  });
+
+  @override
+  int get hashCode => start.hashCode ^ step.hashCode ^ count.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRangeData &&
+          runtimeType == other.runtimeType &&
+          start == other.start &&
+          step == other.step &&
+          count == other.count;
+}
+
 class APIRectData {
   final APIIVec2 minCorner;
   final APIIVec2 extent;

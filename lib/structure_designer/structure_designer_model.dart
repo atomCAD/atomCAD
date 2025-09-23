@@ -414,6 +414,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setRangeData(BigInt nodeId, APIRangeData data) {
+    structure_designer_api.setRangeData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setVec2Data(BigInt nodeId, APIVec2Data data) {
     structure_designer_api.setVec2Data(nodeId: nodeId, data: data);
     refreshFromKernel();

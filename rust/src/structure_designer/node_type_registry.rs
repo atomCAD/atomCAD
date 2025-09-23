@@ -9,6 +9,7 @@ use super::nodes::int::IntData;
 use super::nodes::float::FloatData;
 use super::nodes::ivec2::IVec2Data;
 use super::nodes::ivec3::IVec3Data;
+use super::nodes::range::RangeData;
 use super::nodes::vec2::Vec2Data;
 use super::nodes::vec3::Vec3Data;
 use super::nodes::expr::ExprData;
@@ -230,6 +231,32 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<Vec3Data>,
       node_data_loader: generic_node_data_loader::<Vec3Data>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "range".to_string(),
+      parameters: vec![
+        Parameter {
+            name: "start".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "step".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "count".to_string(),
+            data_type: DataType::Int,
+        },        
+      ],
+      output_type: DataType::IVec3,
+      node_data_creator: || Box::new(RangeData {
+        start: 0,
+        step: 1,
+        count: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<RangeData>,
+      node_data_loader: generic_node_data_loader::<RangeData>,
     });
 
     ret.add_node_type(NodeType {
