@@ -72,6 +72,8 @@ impl NodeTypeRegistry {
         param_name: "param".to_string(),
         data_type: DataType::Geometry,
         sort_order: 0,
+        data_type_str: None,
+        error: None,
       }),
       node_data_saver: generic_node_data_saver::<ParameterData>,
       node_data_loader: generic_node_data_loader::<ParameterData>,

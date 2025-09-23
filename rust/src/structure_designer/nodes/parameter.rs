@@ -16,6 +16,9 @@ pub struct ParameterData {
   pub param_name: String,
   pub data_type: DataType,
   pub sort_order: i32,
+  pub data_type_str: Option<String>,
+  #[serde(skip)]
+  pub error: Option<String>,
 }
 
 impl NodeData for ParameterData {

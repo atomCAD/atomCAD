@@ -301,7 +301,7 @@ void setExportXyzData(
         .crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
             nodeId: nodeId, data: data);
 
-APIResult setParameterData(
+void setParameterData(
         {required BigInt nodeId, required APIParameterData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetParameterData(

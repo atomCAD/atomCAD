@@ -52,10 +52,16 @@ class ParameterEditorState extends State<ParameterEditor> {
               widget.model.setParameterData(
                 widget.nodeId,
                 APIParameterData(
-                  paramIndex: widget.data?.paramIndex ?? BigInt.zero,
+                  paramIndex:
+                      BigInt.from((widget.data?.paramIndex ?? 0) as num),
                   paramName: value,
-                  dataType: widget.data?.dataType ?? const APIDataType(dataTypeBase: APIDataTypeBase.none, customDataType: null, array: false),
+                  dataType: widget.data?.dataType ??
+                      const APIDataType(
+                          dataTypeBase: APIDataTypeBase.none,
+                          customDataType: null,
+                          array: false),
                   sortOrder: widget.data?.sortOrder ?? 0,
+                  error: widget.data?.error,
                 ),
               );
             },
@@ -74,11 +80,37 @@ class ParameterEditorState extends State<ParameterEditor> {
                   paramName: widget.data!.paramName,
                   dataType: newValue,
                   sortOrder: widget.data!.sortOrder,
+                  error: widget.data!.error,
                 ),
               );
             },
           ),
           const SizedBox(height: 8),
+
+          // Error message display
+          if (widget.data?.error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(4.0),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.error,
+                    width: 1.0,
+                  ),
+                ),
+                child: Text(
+                  widget.data!.error!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    fontSize: 12.0,
+                  ),
+                ),
+              ),
+            ),
 
           // Sort Order
           IntInput(
@@ -92,6 +124,7 @@ class ParameterEditorState extends State<ParameterEditor> {
                   paramName: widget.data!.paramName,
                   dataType: widget.data!.dataType,
                   sortOrder: newValue,
+                  error: widget.data!.error,
                 ),
               );
             },

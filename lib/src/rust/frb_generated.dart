@@ -483,7 +483,7 @@ abstract class RustLibApi extends BaseApi {
 
   void crateApiCommonApiSetOrthographicMode({required bool orthographic});
 
-  APIResult crateApiStructureDesignerStructureDesignerApiSetParameterData(
+  void crateApiStructureDesignerStructureDesignerApiSetParameterData(
       {required BigInt nodeId, required APIParameterData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetRectData(
@@ -4075,7 +4075,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  APIResult crateApiStructureDesignerStructureDesignerApiSetParameterData(
+  void crateApiStructureDesignerStructureDesignerApiSetParameterData(
       {required BigInt nodeId, required APIParameterData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -4085,7 +4085,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 134)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_api_result,
+        decodeSuccessData: sse_decode_unit,
         decodeErrorData: null,
       ),
       constMeta:
@@ -4945,13 +4945,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIParameterData dco_decode_api_parameter_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return APIParameterData(
       paramIndex: dco_decode_usize(arr[0]),
       paramName: dco_decode_String(arr[1]),
       dataType: dco_decode_api_data_type(arr[2]),
       sortOrder: dco_decode_i_32(arr[3]),
+      error: dco_decode_opt_String(arr[4]),
     );
   }
 
@@ -6356,11 +6357,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_paramName = sse_decode_String(deserializer);
     var var_dataType = sse_decode_api_data_type(deserializer);
     var var_sortOrder = sse_decode_i_32(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
     return APIParameterData(
         paramIndex: var_paramIndex,
         paramName: var_paramName,
         dataType: var_dataType,
-        sortOrder: var_sortOrder);
+        sortOrder: var_sortOrder,
+        error: var_error);
   }
 
   @protected
@@ -7975,6 +7978,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.paramName, serializer);
     sse_encode_api_data_type(self.dataType, serializer);
     sse_encode_i_32(self.sortOrder, serializer);
+    sse_encode_opt_String(self.error, serializer);
   }
 
   @protected

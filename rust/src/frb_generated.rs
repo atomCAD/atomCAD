@@ -4107,7 +4107,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__set_parameter_d
             let api_node_id = <u64>::sse_decode(&mut deserializer);
 let api_data = <crate::api::structure_designer::structure_designer_api_types::APIParameterData>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::set_parameter_data(api_node_id, api_data))?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_parameter_data(api_node_id, api_data); })?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(
@@ -4956,11 +4956,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
                 deserializer,
             );
         let mut var_sortOrder = <i32>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIParameterData {
             param_index: var_paramIndex,
             param_name: var_paramName,
             data_type: var_dataType,
             sort_order: var_sortOrder,
+            error: var_error,
         };
     }
 }
@@ -7121,6 +7123,7 @@ impl flutter_rust_bridge::IntoDart
             self.param_name.into_into_dart().into_dart(),
             self.data_type.into_into_dart().into_dart(),
             self.sort_order.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8260,6 +8263,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
             serializer,
         );
         <i32>::sse_encode(self.sort_order, serializer);
+        <Option<String>>::sse_encode(self.error, serializer);
     }
 }
 

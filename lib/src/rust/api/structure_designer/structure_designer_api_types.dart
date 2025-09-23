@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `eq`, `fmt`
 
 class APIAnchorData {
   final APIIVec3? position;
@@ -594,12 +594,14 @@ class APIParameterData {
   final String paramName;
   final APIDataType dataType;
   final int sortOrder;
+  final String? error;
 
   const APIParameterData({
     required this.paramIndex,
     required this.paramName,
     required this.dataType,
     required this.sortOrder,
+    this.error,
   });
 
   @override
@@ -607,7 +609,8 @@ class APIParameterData {
       paramIndex.hashCode ^
       paramName.hashCode ^
       dataType.hashCode ^
-      sortOrder.hashCode;
+      sortOrder.hashCode ^
+      error.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -617,7 +620,8 @@ class APIParameterData {
           paramIndex == other.paramIndex &&
           paramName == other.paramName &&
           dataType == other.dataType &&
-          sortOrder == other.sortOrder;
+          sortOrder == other.sortOrder &&
+          error == other.error;
 }
 
 class APIRectData {

@@ -1014,27 +1014,40 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
-  unsafe {
-    with_cad_instance_or(
-      |cad_instance| {
-        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
-          Some(data) => data,
-          None => return None,
-        };
-        let parameter_data = match node_data.as_any_ref().downcast_ref::<ParameterData>() {
-          Some(data) => data,
-          None => return None,
-        };
-        Some(APIParameterData {
-          param_index: parameter_data.param_index,
-          param_name: parameter_data.param_name.clone(),
-          data_type: data_type_to_api_data_type(&parameter_data.data_type),
-          sort_order: parameter_data.sort_order,
-        })
-      },
-      None
-    )
-  }
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+                let parameter_data = node_data.as_any_ref().downcast_ref::<ParameterData>()?;
+
+                let api_data_type = if parameter_data.data_type == DataType::None {
+                    if let Some(dt_str) = &parameter_data.data_type_str {
+                        // If parsing failed, reconstruct the APIDataType from the stored string
+                        APIDataType {
+                            data_type_base: APIDataTypeBase::Custom,
+                            custom_data_type: Some(dt_str.clone()),
+                            array: false, // This is inferred from the custom string itself
+                        }
+                    } else {
+                        // Fallback for safety
+                        data_type_to_api_data_type(&parameter_data.data_type)
+                    }
+                } else {
+                    // If parsing succeeded, convert as usual
+                    data_type_to_api_data_type(&parameter_data.data_type)
+                };
+
+                Some(APIParameterData {
+                    param_index: parameter_data.param_index,
+                    param_name: parameter_data.param_name.clone(),
+                    data_type: api_data_type,
+                    sort_order: parameter_data.sort_order,
+                    error: parameter_data.error.clone(),
+                })
+            },
+            None,
+        )
+    }
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -1376,33 +1389,30 @@ pub fn set_export_xyz_data(node_id: u64, data: APIExportXYZData) {
 
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_parameter_data(node_id: u64, data: APIParameterData) -> APIResult {
+pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
     unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                match api_data_type_to_data_type(&data.data_type) {
-                    Ok(data_type) => {
-                        let parameter_data = Box::new(ParameterData {
-                            param_index: data.param_index,
-                            param_name: data.param_name,
-                            data_type,
-                            sort_order: data.sort_order,
-                        });
-                        cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);
-                        refresh_renderer(cad_instance, false);
-                        APIResult { success: true, error_message: String::new() }
-                    }
-                    Err(e) => APIResult {
-                        success: false,
-                        error_message: e,
-                    },
-                }
-            },
-            APIResult {
-                success: false,
-                error_message: "CAD instance not available".to_string(),
-            },
-        )
+        with_mut_cad_instance(|cad_instance| {
+            let (data_type, data_type_str, error) = match api_data_type_to_data_type(&data.data_type) {
+                Ok(parsed_data_type) => (parsed_data_type, None, None),
+                Err(e) => (
+                    DataType::None, // Set to None on error
+                    data.data_type.custom_data_type, // Preserve the original string
+                    Some(e),
+                ),
+            };
+
+            let parameter_data = Box::new(ParameterData {
+                param_index: data.param_index,
+                param_name: data.param_name,
+                data_type,
+                sort_order: data.sort_order,
+                data_type_str,
+                error,
+            });
+
+            cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);
+            refresh_renderer(cad_instance, false);
+        });
     }
 }
 

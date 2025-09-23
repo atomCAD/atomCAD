@@ -213,6 +213,7 @@ pub struct InputPinView {
     pub param_name: String,
     pub data_type: APIDataType,
     pub sort_order: i32,
+    pub error: Option<String>,
   }
 
   pub struct APINetworkWithValidationErrors {
