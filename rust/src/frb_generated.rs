@@ -4107,7 +4107,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__set_parameter_d
             let api_node_id = <u64>::sse_decode(&mut deserializer);
 let api_data = <crate::api::structure_designer::structure_designer_api_types::APIParameterData>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_parameter_data(api_node_id, api_data); })?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::set_parameter_data(api_node_id, api_data))?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(
@@ -4595,30 +4595,6 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
-impl SseDecode
-    for crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::None,
-1 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Bool,
-2 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::String,
-3 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Int,
-4 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Float,
-5 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Vec2,
-6 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Vec3,
-7 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::IVec2,
-8 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::IVec3,
-9 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Geometry2D,
-10 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Geometry,
-11 => crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Atomic,
-            _ => unreachable!("Invalid variant for APIBuiltInDataType: {}", inner),
-        };
-    }
-}
-
 impl SseDecode for crate::api::common_api_types::APICamera {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4707,15 +4683,36 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIDataType {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_builtInDataType = <Option<
-            crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType,
-        >>::sse_decode(deserializer);
+        let mut var_dataTypeBase = <crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase>::sse_decode(deserializer);
         let mut var_customDataType = <Option<String>>::sse_decode(deserializer);
         let mut var_array = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIDataType {
-            built_in_data_type: var_builtInDataType,
+            data_type_base: var_dataTypeBase,
             custom_data_type: var_customDataType,
             array: var_array,
+        };
+    }
+}
+
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::None,
+1 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Bool,
+2 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::String,
+3 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Int,
+4 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Float,
+5 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec2,
+6 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec3,
+7 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec2,
+8 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec3,
+9 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D,
+10 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry,
+11 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic,
+12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+            _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
 }
@@ -5590,19 +5587,6 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::structure_designer::structure_designer_api_types::APIBoolData>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
-impl SseDecode
-    for Option<crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -6499,43 +6483,6 @@ impl
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart
-    for crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType
-{
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::None => 0.into_dart(),
-            Self::Bool => 1.into_dart(),
-            Self::String => 2.into_dart(),
-            Self::Int => 3.into_dart(),
-            Self::Float => 4.into_dart(),
-            Self::Vec2 => 5.into_dart(),
-            Self::Vec3 => 6.into_dart(),
-            Self::IVec2 => 7.into_dart(),
-            Self::IVec3 => 8.into_dart(),
-            Self::Geometry2D => 9.into_dart(),
-            Self::Geometry => 10.into_dart(),
-            Self::Atomic => 11.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType
-{
-}
-impl
-    flutter_rust_bridge::IntoIntoDart<
-        crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType,
-    > for crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType
-{
-    fn into_into_dart(
-        self,
-    ) -> crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::APICamera {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6678,7 +6625,7 @@ impl flutter_rust_bridge::IntoDart
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.built_in_data_type.into_into_dart().into_dart(),
+            self.data_type_base.into_into_dart().into_dart(),
             self.custom_data_type.into_into_dart().into_dart(),
             self.array.into_into_dart().into_dart(),
         ]
@@ -6697,6 +6644,44 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIDataType {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::None => 0.into_dart(),
+            Self::Bool => 1.into_dart(),
+            Self::String => 2.into_dart(),
+            Self::Int => 3.into_dart(),
+            Self::Float => 4.into_dart(),
+            Self::Vec2 => 5.into_dart(),
+            Self::Vec3 => 6.into_dart(),
+            Self::IVec2 => 7.into_dart(),
+            Self::IVec3 => 8.into_dart(),
+            Self::Geometry2D => 9.into_dart(),
+            Self::Geometry => 10.into_dart(),
+            Self::Atomic => 11.into_dart(),
+            Self::Custom => 12.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase,
+    > for crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase {
         self
     }
 }
@@ -8013,27 +7998,6 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
-impl SseEncode
-    for crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::None => { 0 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Bool => { 1 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::String => { 2 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Int => { 3 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Float => { 4 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Vec2 => { 5 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Vec3 => { 6 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::IVec2 => { 7 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::IVec3 => { 8 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Geometry2D => { 9 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Geometry => { 10 }
-crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType::Atomic => { 11 }
- _ => { unimplemented!(""); }}, serializer);
-    }
-}
-
 impl SseEncode for crate::api::common_api_types::APICamera {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -8101,9 +8065,32 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIDataType {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Option<crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType>>::sse_encode(self.built_in_data_type, serializer);
+        <crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase>::sse_encode(
+            self.data_type_base,
+            serializer,
+        );
         <Option<String>>::sse_encode(self.custom_data_type, serializer);
         <bool>::sse_encode(self.array, serializer);
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::None => { 0 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Bool => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::String => { 2 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Int => { 3 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Float => { 4 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec2 => { 5 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec3 => { 6 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec2 => { 7 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec3 => { 8 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D => { 9 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry => { 10 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic => { 11 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 12 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 
@@ -8769,18 +8756,6 @@ impl SseEncode
             <crate::api::structure_designer::structure_designer_api_types::APIBoolData>::sse_encode(
                 value, serializer,
             );
-        }
-    }
-}
-
-impl SseEncode
-    for Option<crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::structure_designer::structure_designer_api_types::APIBuiltInDataType>::sse_encode(value, serializer);
         }
     }
 }

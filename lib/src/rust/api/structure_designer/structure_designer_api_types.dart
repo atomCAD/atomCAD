@@ -87,22 +87,6 @@ class APIBoolData {
           value == other.value;
 }
 
-enum APIBuiltInDataType {
-  none,
-  bool,
-  string,
-  int,
-  float,
-  vec2,
-  vec3,
-  iVec2,
-  iVec3,
-  geometry2D,
-  geometry,
-  atomic,
-  ;
-}
-
 class APICircleData {
   final APIIVec2 center;
   final int radius;
@@ -177,28 +161,45 @@ class APICuboidData {
 }
 
 class APIDataType {
-  final APIBuiltInDataType? builtInDataType;
+  final APIDataTypeBase dataTypeBase;
   final String? customDataType;
   final bool array;
 
   const APIDataType({
-    this.builtInDataType,
+    required this.dataTypeBase,
     this.customDataType,
     required this.array,
   });
 
   @override
   int get hashCode =>
-      builtInDataType.hashCode ^ customDataType.hashCode ^ array.hashCode;
+      dataTypeBase.hashCode ^ customDataType.hashCode ^ array.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIDataType &&
           runtimeType == other.runtimeType &&
-          builtInDataType == other.builtInDataType &&
+          dataTypeBase == other.dataTypeBase &&
           customDataType == other.customDataType &&
           array == other.array;
+}
+
+enum APIDataTypeBase {
+  none,
+  bool,
+  string,
+  int,
+  float,
+  vec2,
+  vec3,
+  iVec2,
+  iVec3,
+  geometry2D,
+  geometry,
+  atomic,
+  custom,
+  ;
 }
 
 class APIEditAtomData {

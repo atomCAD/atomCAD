@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `api_data_type_to_data_type`, `data_type_to_api_data_type`, `from_api_built_in_data_type`, `to_api_built_in_data_type`
+// These functions are ignored because they are not marked as `pub`: `api_data_type_to_data_type`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
@@ -301,7 +301,7 @@ void setExportXyzData(
         .crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
             nodeId: nodeId, data: data);
 
-void setParameterData(
+APIResult setParameterData(
         {required BigInt nodeId, required APIParameterData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetParameterData(

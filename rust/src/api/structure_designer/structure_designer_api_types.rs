@@ -14,7 +14,8 @@ pub enum APIEditAtomTool {
   AddBond,
 }
 
-pub enum APIBuiltInDataType {
+#[derive(PartialEq)]
+pub enum APIDataTypeBase {
   None,
   Bool,
   String,
@@ -26,13 +27,13 @@ pub enum APIBuiltInDataType {
   IVec3,
   Geometry2D,
   Geometry,
-  Atomic
+  Atomic,
+  Custom
  }
  
  pub struct APIDataType {
-   // either built_in_data_type or custom_data_type is Some.
-   pub built_in_data_type: Option<APIBuiltInDataType>,
-   pub custom_data_type: Option<String>,
+   pub data_type_base: APIDataTypeBase,
+   pub custom_data_type: Option<String>, // Not None if and only if data_type_base == APIDataTypeBase::Custom
    pub array: bool, // combined with built_in_data_type, but only redundant with custom_data_type as the outermost array is within the string in that case.
  }
 

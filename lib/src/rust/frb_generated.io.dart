@@ -53,9 +53,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBoolData dco_decode_api_bool_data(dynamic raw);
 
   @protected
-  APIBuiltInDataType dco_decode_api_built_in_data_type(dynamic raw);
-
-  @protected
   APICamera dco_decode_api_camera(dynamic raw);
 
   @protected
@@ -72,6 +69,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType dco_decode_api_data_type(dynamic raw);
+
+  @protected
+  APIDataTypeBase dco_decode_api_data_type_base(dynamic raw);
 
   @protected
   APIEditAtomData dco_decode_api_edit_atom_data(dynamic raw);
@@ -193,9 +193,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIBoolData dco_decode_box_autoadd_api_bool_data(dynamic raw);
-
-  @protected
-  APIBuiltInDataType dco_decode_box_autoadd_api_built_in_data_type(dynamic raw);
 
   @protected
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw);
@@ -412,10 +409,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBoolData? dco_decode_opt_box_autoadd_api_bool_data(dynamic raw);
 
   @protected
-  APIBuiltInDataType? dco_decode_opt_box_autoadd_api_built_in_data_type(
-      dynamic raw);
-
-  @protected
   APICamera? dco_decode_opt_box_autoadd_api_camera(dynamic raw);
 
   @protected
@@ -592,10 +585,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBoolData sse_decode_api_bool_data(SseDeserializer deserializer);
 
   @protected
-  APIBuiltInDataType sse_decode_api_built_in_data_type(
-      SseDeserializer deserializer);
-
-  @protected
   APICamera sse_decode_api_camera(SseDeserializer deserializer);
 
   @protected
@@ -614,6 +603,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType sse_decode_api_data_type(SseDeserializer deserializer);
+
+  @protected
+  APIDataTypeBase sse_decode_api_data_type_base(SseDeserializer deserializer);
 
   @protected
   APIEditAtomData sse_decode_api_edit_atom_data(SseDeserializer deserializer);
@@ -742,10 +734,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIBoolData sse_decode_box_autoadd_api_bool_data(
-      SseDeserializer deserializer);
-
-  @protected
-  APIBuiltInDataType sse_decode_box_autoadd_api_built_in_data_type(
       SseDeserializer deserializer);
 
   @protected
@@ -1007,10 +995,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APIBuiltInDataType? sse_decode_opt_box_autoadd_api_built_in_data_type(
-      SseDeserializer deserializer);
-
-  @protected
   APICamera? sse_decode_opt_box_autoadd_api_camera(
       SseDeserializer deserializer);
 
@@ -1220,10 +1204,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_bool_data(APIBoolData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_api_built_in_data_type(
-      APIBuiltInDataType self, SseSerializer serializer);
-
-  @protected
   void sse_encode_api_camera(APICamera self, SseSerializer serializer);
 
   @protected
@@ -1242,6 +1222,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_data_type(APIDataType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_data_type_base(
+      APIDataTypeBase self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_edit_atom_data(
@@ -1382,10 +1366,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_bool_data(
       APIBoolData self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_api_built_in_data_type(
-      APIBuiltInDataType self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_camera(
@@ -1650,10 +1630,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_bool_data(
       APIBoolData? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_api_built_in_data_type(
-      APIBuiltInDataType? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_camera(

@@ -54,7 +54,7 @@ class ParameterEditorState extends State<ParameterEditor> {
                 APIParameterData(
                   paramIndex: widget.data?.paramIndex ?? BigInt.zero,
                   paramName: value,
-                  dataType: widget.data?.dataType ?? const APIDataType(builtInDataType: APIBuiltInDataType.none, array: false),
+                  dataType: widget.data?.dataType ?? const APIDataType(dataTypeBase: APIDataTypeBase.none, customDataType: null, array: false),
                   sortOrder: widget.data?.sortOrder ?? 0,
                 ),
               );

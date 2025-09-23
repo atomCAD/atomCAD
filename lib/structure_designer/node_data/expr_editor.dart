@@ -100,7 +100,7 @@ class ExprEditorState extends State<ExprEditor> {
     final newParameters = List<APIExprParameter>.from(currentParameters)
       ..add(APIExprParameter(
         name: _generateParameterName(currentParameters.length),
-        dataType: const APIDataType(builtInDataType: APIBuiltInDataType.float, array: false),
+        dataType: const APIDataType(dataTypeBase: APIDataTypeBase.float, customDataType: null, array: false),
       ));
     _updateExprData(newParameters);
   }
@@ -123,46 +123,6 @@ class ExprEditorState extends State<ExprEditor> {
     }
   }
 
-  String _getApiDataTypeDisplayName(APIDataType dataType) {
-    if (dataType.builtInDataType != null) {
-      final typeName = _getBuiltInDataTypeDisplayName(dataType.builtInDataType!);
-      return dataType.array ? 'Array<$typeName>' : typeName;
-    } else if (dataType.customDataType != null) {
-      final typeName = dataType.customDataType!;
-      return dataType.array ? 'Array<$typeName>' : typeName;
-    } else {
-      return 'Invalid Type';
-    }
-  }
-
-  String _getBuiltInDataTypeDisplayName(APIBuiltInDataType dataType) {
-    switch (dataType) {
-      case APIBuiltInDataType.none:
-        return 'None';
-      case APIBuiltInDataType.bool:
-        return 'Boolean';
-      case APIBuiltInDataType.string:
-        return 'String';
-      case APIBuiltInDataType.int:
-        return 'Integer';
-      case APIBuiltInDataType.float:
-        return 'Float';
-      case APIBuiltInDataType.vec2:
-        return 'Vec2';
-      case APIBuiltInDataType.vec3:
-        return 'Vec3';
-      case APIBuiltInDataType.iVec2:
-        return 'IVec2';
-      case APIBuiltInDataType.iVec3:
-        return 'IVec3';
-      case APIBuiltInDataType.geometry2D:
-        return 'Geometry2D';
-      case APIBuiltInDataType.geometry:
-        return 'Geometry';
-      case APIBuiltInDataType.atomic:
-        return 'Atomic';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -345,7 +305,7 @@ class ExprEditorState extends State<ExprEditor> {
                     ),
                     const SizedBox(width: 8.0),
                     Text(
-                      'Output Type: ${_getApiDataTypeDisplayName(widget.data!.outputType!)}',
+                      'Output Type: ${getApiDataTypeDisplayName(apiDataType: widget.data!.outputType!)}',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onPrimaryContainer,
                         fontSize: 14.0,

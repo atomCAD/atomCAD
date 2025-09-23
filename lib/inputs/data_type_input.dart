@@ -21,154 +21,103 @@ class DataTypeInput extends StatefulWidget {
 }
 
 class _DataTypeInputState extends State<DataTypeInput> {
-  bool get _isBuiltIn => widget.value.builtInDataType != null;
-  bool get _isCustom => widget.value.customDataType != null;
-
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Label
-        if (widget.label.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text(
-              widget.label,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
+        // Dropdown for the base data type
+        DropdownButtonFormField<APIDataTypeBase>(
+          value: widget.value.dataTypeBase,
+          decoration: AppInputDecorations.standard.copyWith(
+            labelText: widget.label,
           ),
-
-        // Built-in vs Custom selection
-        Row(
-          children: [
-            Expanded(
-              child: RadioListTile<bool>(
-                title: const Text('Built-in'),
-                value: true,
-                groupValue: _isBuiltIn,
-                onChanged: (value) {
-                  if (value == true && !_isBuiltIn) {
-                    // Switch to built-in type, default to 'none'
-                    widget.onChanged(APIDataType(
-                      builtInDataType: APIBuiltInDataType.none,
-                      customDataType: null,
-                      array: widget.value.array,
-                    ));
-                  }
-                },
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<bool>(
-                title: const Text('Custom'),
-                value: false,
-                groupValue: _isBuiltIn,
-                onChanged: (value) {
-                  if (value == false && _isBuiltIn) {
-                    // Switch to custom type, default to empty string
-                    widget.onChanged(APIDataType(
-                      builtInDataType: null,
-                      customDataType: '',
-                      array: widget.value.array,
-                    ));
-                  }
-                },
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 8),
-
-        // Built-in type dropdown or custom type input
-        if (_isBuiltIn)
-          DropdownButtonFormField<APIBuiltInDataType>(
-            value: widget.value.builtInDataType,
-            decoration: AppInputDecorations.standard.copyWith(
-              labelText: 'Built-in Type',
-            ),
-            items: APIBuiltInDataType.values.map((dataType) {
-              return DropdownMenuItem(
-                value: dataType,
-                child: Text(_getBuiltInDataTypeDisplayName(dataType)),
-              );
-            }).toList(),
-            onChanged: (newValue) {
-              if (newValue != null) {
-                widget.onChanged(APIDataType(
-                  builtInDataType: newValue,
-                  customDataType: null,
-                  array: widget.value.array,
-                ));
-              }
-            },
-          )
-        else
-          StringInput(
-            label: 'Custom Type',
-            value: widget.value.customDataType ?? '',
-            onChanged: (newValue) {
-              widget.onChanged(APIDataType(
-                builtInDataType: null,
-                customDataType: newValue,
-                array: widget.value.array,
-              ));
-            },
-          ),
-
-        const SizedBox(height: 8),
-
-        // Array checkbox
-        CheckboxListTile(
-          title: const Text('Array'),
-          value: widget.value.array,
+          items: APIDataTypeBase.values.map((base) {
+            return DropdownMenuItem(
+              value: base,
+              child: Text(_getDataTypeBaseDisplayName(base)),
+            );
+          }).toList(),
           onChanged: (newValue) {
             if (newValue != null) {
               widget.onChanged(APIDataType(
-                builtInDataType: widget.value.builtInDataType,
-                customDataType: widget.value.customDataType,
-                array: newValue,
+                dataTypeBase: newValue,
+                // Reset custom string if not custom, maintain if it is
+                customDataType: newValue == APIDataTypeBase.custom ? widget.value.customDataType ?? '' : null,
+                // Reset array status if switching to custom
+                array: newValue == APIDataTypeBase.custom ? false : widget.value.array,
               ));
             }
           },
-          contentPadding: EdgeInsets.zero,
-          dense: true,
         ),
+
+        // Conditional custom type input
+        if (widget.value.dataTypeBase == APIDataTypeBase.custom)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: StringInput(
+              label: 'Custom Type',
+              value: widget.value.customDataType ?? '',
+              onChanged: (newCustomType) {
+                widget.onChanged(APIDataType(
+                  dataTypeBase: APIDataTypeBase.custom,
+                  customDataType: newCustomType,
+                  array: false, // Custom types handle their own array logic via string parsing
+                ));
+              },
+            ),
+          ),
+
+        // Conditional array checkbox
+        if (widget.value.dataTypeBase != APIDataTypeBase.custom)
+          CheckboxListTile(
+            title: const Text('Array'),
+            value: widget.value.array,
+            onChanged: (newArrayValue) {
+              if (newArrayValue != null) {
+                widget.onChanged(APIDataType(
+                  dataTypeBase: widget.value.dataTypeBase,
+                  customDataType: widget.value.customDataType,
+                  array: newArrayValue,
+                ));
+              }
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
       ],
     );
   }
 
-  String _getBuiltInDataTypeDisplayName(APIBuiltInDataType dataType) {
-    switch (dataType) {
-      case APIBuiltInDataType.none:
+  String _getDataTypeBaseDisplayName(APIDataTypeBase base) {
+    switch (base) {
+      case APIDataTypeBase.none:
         return 'None';
-      case APIBuiltInDataType.bool:
+      case APIDataTypeBase.bool:
         return 'Boolean';
-      case APIBuiltInDataType.string:
+      case APIDataTypeBase.string:
         return 'String';
-      case APIBuiltInDataType.int:
+      case APIDataTypeBase.int:
         return 'Integer';
-      case APIBuiltInDataType.float:
+      case APIDataTypeBase.float:
         return 'Float';
-      case APIBuiltInDataType.vec2:
+      case APIDataTypeBase.vec2:
         return 'Vec2';
-      case APIBuiltInDataType.vec3:
+      case APIDataTypeBase.vec3:
         return 'Vec3';
-      case APIBuiltInDataType.iVec2:
+      case APIDataTypeBase.iVec2:
         return 'IVec2';
-      case APIBuiltInDataType.iVec3:
+      case APIDataTypeBase.iVec3:
         return 'IVec3';
-      case APIBuiltInDataType.geometry2D:
+      case APIDataTypeBase.geometry2D:
         return 'Geometry2D';
-      case APIBuiltInDataType.geometry:
+      case APIDataTypeBase.geometry:
         return 'Geometry';
-      case APIBuiltInDataType.atomic:
+      case APIDataTypeBase.atomic:
         return 'Atomic';
+      case APIDataTypeBase.custom:
+        return 'Custom...';
     }
   }
 }

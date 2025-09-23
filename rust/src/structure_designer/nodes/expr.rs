@@ -40,7 +40,6 @@ impl ExprData {
         
         // Clear previous state
         self.expr = None;
-        self.error = None;
         self.output_type = None;
         
         // Skip validation if expression is empty
