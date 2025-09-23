@@ -307,7 +307,7 @@ void setParameterData(
         .crateApiStructureDesignerStructureDesignerApiSetParameterData(
             nodeId: nodeId, data: data);
 
-void setExprData({required BigInt nodeId, required APIExprData data}) =>
+APIResult setExprData({required BigInt nodeId, required APIExprData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetExprData(
             nodeId: nodeId, data: data);

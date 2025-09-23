@@ -436,7 +436,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
       {required BigInt nodeId, required APIExportXYZData data});
 
-  void crateApiStructureDesignerStructureDesignerApiSetExprData(
+  APIResult crateApiStructureDesignerStructureDesignerApiSetExprData(
       {required BigInt nodeId, required APIExprData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetExtrudeData(
@@ -3636,7 +3636,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  void crateApiStructureDesignerStructureDesignerApiSetExprData(
+  APIResult crateApiStructureDesignerStructureDesignerApiSetExprData(
       {required BigInt nodeId, required APIExprData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -3646,7 +3646,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 118)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
+        decodeSuccessData: sse_decode_api_result,
         decodeErrorData: null,
       ),
       constMeta:

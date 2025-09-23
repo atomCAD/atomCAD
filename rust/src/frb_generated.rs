@@ -3782,7 +3782,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__set_expr_data_i
             let api_node_id = <u64>::sse_decode(&mut deserializer);
 let api_data = <crate::api::structure_designer::structure_designer_api_types::APIExprData>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_expr_data(api_node_id, api_data); })?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::set_expr_data(api_node_id, api_data))?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(

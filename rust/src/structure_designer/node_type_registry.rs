@@ -86,6 +86,7 @@ impl NodeTypeRegistry {
           ExprParameter {
             name: "x".to_string(),
             data_type: DataType::Float,
+            data_type_str: None,
           },
         ],
         expression: "x".to_string(),

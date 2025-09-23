@@ -16,8 +16,9 @@ use crate::structure_designer::data_type::DataType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExprParameter {
-  pub name: String,
-  pub data_type: DataType,
+    pub name: String,
+    pub data_type: DataType,
+    pub data_type_str: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

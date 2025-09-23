@@ -1080,13 +1080,32 @@ pub fn get_expr_data(node_id: u64) -> Option<APIExprData> {
           None => return None,
         };
         Some(APIExprData {
-          parameters: expr_data.parameters.iter().map(|param| APIExprParameter {
-            name: param.name.clone(),
-            data_type: data_type_to_api_data_type(&param.data_type),
-          }).collect(),
-          expression: expr_data.expression.clone(),
-          error: expr_data.error.clone(),
-          output_type: expr_data.output_type.as_ref().map(data_type_to_api_data_type),
+            parameters: expr_data.parameters.iter().map(|param| {
+                let api_data_type = if param.data_type == DataType::None {
+                    if let Some(dt_str) = &param.data_type_str {
+                        // If parsing failed, reconstruct the APIDataType from the stored string
+                        APIDataType {
+                            built_in_data_type: None,
+                            custom_data_type: Some(dt_str.clone()),
+                            array: false, // Assume not an array if we only have the string
+                        }
+                    } else {
+                        // Fallback for safety, though this case should ideally not happen
+                        data_type_to_api_data_type(&param.data_type)
+                    }
+                } else {
+                    // If parsing succeeded, convert as usual
+                    data_type_to_api_data_type(&param.data_type)
+                };
+
+                APIExprParameter {
+                    name: param.name.clone(),
+                    data_type: api_data_type,
+                }
+            }).collect(),
+            expression: expr_data.expression.clone(),
+            error: expr_data.error.clone(),
+            output_type: expr_data.output_type.as_ref().map(data_type_to_api_data_type),
         })
       },
       None
@@ -1402,23 +1421,54 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_expr_data(node_id: u64, data: APIExprData) {
-  unsafe {
-    with_mut_cad_instance(|cad_instance| {
-      let expr_data = Box::new(ExprData {
-        parameters: data.parameters.into_iter().map(|api_param| crate::structure_designer::nodes::expr::ExprParameter {
-          name: api_param.name,
-          data_type: api_data_type_to_data_type(&api_param.data_type).unwrap(), // TODO: Handle error
-        }).collect(),
-        expression: data.expression,
-        expr: None,
-        error: None,
-        output_type: None,
-      });
-      cad_instance.structure_designer.set_node_network_data(node_id, expr_data);
-      refresh_renderer(cad_instance, false);
-    });
-  }
+pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let mut parameters = Vec::new();
+                let mut first_error = None;
+
+                for api_param in data.parameters {
+                    match api_data_type_to_data_type(&api_param.data_type) {
+                        Ok(dt) => {
+                            parameters.push(crate::structure_designer::nodes::expr::ExprParameter {
+                                name: api_param.name,
+                                data_type: dt,
+                                data_type_str: None, // Successfully parsed, no need to store the string
+                            });
+                        }
+                        Err(e) => {
+                            if first_error.is_none() {
+                                first_error = Some(e.clone());
+                            }
+                            parameters.push(crate::structure_designer::nodes::expr::ExprParameter {
+                                name: api_param.name,
+                                data_type: DataType::None, // Set to None on error
+                                data_type_str: api_param.data_type.custom_data_type,
+                            });
+                        }
+                    }
+                }
+
+                let expr_data = Box::new(ExprData {
+                    parameters,
+                    expression: data.expression,
+                    expr: None,
+                    error: first_error,
+                    output_type: None,
+                });
+
+                cad_instance.structure_designer.set_node_network_data(node_id, expr_data);
+                refresh_renderer(cad_instance, false);
+
+                APIResult { success: true, error_message: String::new() }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
 }
 
 #[flutter_rust_bridge::frb(sync)]
