@@ -63,8 +63,7 @@ pub fn eval_parameter<'a>(
   let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
 
   // evaluate all the arguments of the parent node if any
-  let argument_node_ids = &parent_node.arguments[param_data.param_index].argument_node_ids;
-  if argument_node_ids.is_empty() {
+  if parent_node.arguments[param_data.param_index].is_empty() {
     return eval_default(network_evaluator, network_stack, node_id, registry, context);
   }
 

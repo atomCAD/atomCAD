@@ -81,7 +81,9 @@ class PinWidget extends StatelessWidget {
   final String? outputString;
   PinWidget(
       {required this.pinReference, required this.multi, this.outputString})
-      : super(key: ValueKey(pinReference.pinIndex));
+      : super(
+            key: ValueKey(pinReference.pinIndex +
+                ((pinReference.pinType == PinType.output) ? 1000 : 0)));
 
   RenderBox? _findNodeNetworkRenderBox(BuildContext context) {
     RenderBox? result;
@@ -282,14 +284,16 @@ class NodeWidget extends StatelessWidget {
                     .entries
                     .map((entry) => _buildInputPin(
                         entry.value.name,
-                        PinReference(node.id, entry.key, entry.value.dataType),
+                        PinReference(node.id, PinType.input, entry.key,
+                            entry.value.dataType),
                         entry.value.multi))
                     .toList(),
               ),
               const Spacer(),
               // Right Side (Output)
               PinWidget(
-                pinReference: PinReference(node.id, -1, node.outputType),
+                pinReference:
+                    PinReference(node.id, PinType.output, 0, node.outputType),
                 multi: false,
                 outputString: node.outputString,
               ),

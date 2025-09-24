@@ -271,6 +271,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__can_connect_nod
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_source_output_pin_index = <i32>::sse_decode(&mut deserializer);
             let api_dest_node_id = <u64>::sse_decode(&mut deserializer);
             let api_dest_param_index = <usize>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -278,6 +279,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__can_connect_nod
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::can_connect_nodes(
                         api_source_node_id,
+                        api_source_output_pin_index,
                         api_dest_node_id,
                         api_dest_param_index,
                     ),
@@ -372,6 +374,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__connect_nodes_i
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_source_output_pin_index = <i32>::sse_decode(&mut deserializer);
             let api_dest_node_id = <u64>::sse_decode(&mut deserializer);
             let api_dest_param_index = <usize>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -379,6 +382,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__connect_nodes_i
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::structure_designer::structure_designer_api::connect_nodes(
                         api_source_node_id,
+                        api_source_output_pin_index,
                         api_dest_node_id,
                         api_dest_param_index,
                     );
@@ -3457,6 +3461,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__select_wire_imp
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_source_output_pin_index = <i32>::sse_decode(&mut deserializer);
             let api_destination_node_id = <u64>::sse_decode(&mut deserializer);
             let api_destination_argument_index = <usize>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -3464,6 +3469,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__select_wire_imp
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::select_wire(
                         api_source_node_id,
+                        api_source_output_pin_index,
                         api_destination_node_id,
                         api_destination_argument_index,
                     ),
@@ -6261,11 +6267,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_sourceNodeId = <u64>::sse_decode(deserializer);
+        let mut var_sourceOutputPinIndex = <i32>::sse_decode(deserializer);
         let mut var_destNodeId = <u64>::sse_decode(deserializer);
         let mut var_destParamIndex = <usize>::sse_decode(deserializer);
         let mut var_selected = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::WireView {
             source_node_id: var_sourceNodeId,
+            source_output_pin_index: var_sourceOutputPinIndex,
             dest_node_id: var_destNodeId,
             dest_param_index: var_destParamIndex,
             selected: var_selected,
@@ -8031,6 +8039,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.source_node_id.into_into_dart().into_dart(),
+            self.source_output_pin_index.into_into_dart().into_dart(),
             self.dest_node_id.into_into_dart().into_dart(),
             self.dest_param_index.into_into_dart().into_dart(),
             self.selected.into_into_dart().into_dart(),
@@ -9448,6 +9457,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.source_node_id, serializer);
+        <i32>::sse_encode(self.source_output_pin_index, serializer);
         <u64>::sse_encode(self.dest_node_id, serializer);
         <usize>::sse_encode(self.dest_param_index, serializer);
         <bool>::sse_encode(self.selected, serializer);

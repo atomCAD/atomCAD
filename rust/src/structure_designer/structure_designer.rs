@@ -305,7 +305,7 @@ impl StructureDesigner {
     }
   }
 
-  pub fn can_connect_nodes(&self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) -> bool {
+  pub fn can_connect_nodes(&self, source_node_id: u64, source_output_pin_index: i32, dest_node_id: u64, dest_param_index: usize) -> bool {
     // Early return if active_node_network_name is None
     let node_network_name = match &self.active_node_network_name {
       Some(name) => name,
@@ -318,10 +318,10 @@ impl StructureDesigner {
       None => return false,
     };
     
-    network.can_connect_nodes(source_node_id, dest_node_id, dest_param_index, &self.node_type_registry)
+    network.can_connect_nodes(source_node_id, source_output_pin_index, dest_node_id, dest_param_index, &self.node_type_registry)
   }
 
-  pub fn connect_nodes(&mut self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
+  pub fn connect_nodes(&mut self, source_node_id: u64, source_output_pin_index: i32, dest_node_id: u64, dest_param_index: usize) {
     // Early return if active_node_network_name is None
     let node_network_name = match &self.active_node_network_name {
       Some(name) => name,
@@ -357,6 +357,7 @@ impl StructureDesigner {
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.connect_nodes(
         source_node_id,
+        source_output_pin_index,
         dest_node_id,
         dest_param_index,
         dest_param_is_multi,
@@ -542,7 +543,7 @@ impl StructureDesigner {
     }
   }
 
-  pub fn select_wire(&mut self, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  pub fn select_wire(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
     // Early return if active_node_network_name is None
     let network_name = match &self.active_node_network_name {
       Some(name) => name,
@@ -553,7 +554,7 @@ impl StructureDesigner {
       let previously_selected_node_id = network.selected_node_id;
       
       // Update the selection
-      let ret = network.select_wire(source_node_id, destination_node_id, destination_argument_index);
+      let ret = network.select_wire(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
       
       // If the selection was successful and there was a previously selected node
       if ret && previously_selected_node_id.is_some() {

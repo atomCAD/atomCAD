@@ -41,7 +41,7 @@ pub fn eval_diff_2d<'a>(
     return error_in_input(&base_input_name);
   } 
 
-  if !node.arguments[1].argument_node_ids.is_empty() {
+  if !node.arguments[1].is_empty() {
     let (sub_geometry, sub_frame_translation) = helper_union(
       network_evaluator,
       network_stack,

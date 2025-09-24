@@ -46,6 +46,7 @@ pub fn eval_extrude<'a>(
   let shape_val = network_evaluator.evaluate(
     network_stack,
     input_node_id,
+    0,
     registry,
     false,
     context

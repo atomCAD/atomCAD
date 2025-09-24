@@ -945,12 +945,14 @@ class NodeView {
 
 class WireView {
   final BigInt sourceNodeId;
+  final int sourceOutputPinIndex;
   final BigInt destNodeId;
   final BigInt destParamIndex;
   final bool selected;
 
   const WireView({
     required this.sourceNodeId,
+    required this.sourceOutputPinIndex,
     required this.destNodeId,
     required this.destParamIndex,
     required this.selected,
@@ -959,6 +961,7 @@ class WireView {
   @override
   int get hashCode =>
       sourceNodeId.hashCode ^
+      sourceOutputPinIndex.hashCode ^
       destNodeId.hashCode ^
       destParamIndex.hashCode ^
       selected.hashCode;
@@ -969,6 +972,7 @@ class WireView {
       other is WireView &&
           runtimeType == other.runtimeType &&
           sourceNodeId == other.sourceNodeId &&
+          sourceOutputPinIndex == other.sourceOutputPinIndex &&
           destNodeId == other.destNodeId &&
           destParamIndex == other.destParamIndex &&
           selected == other.selected;

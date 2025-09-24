@@ -99,13 +99,13 @@ pub fn eval_geo_to_atom<'a>(
 ) -> NetworkResult {
   let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
-  if node.arguments[0].argument_node_ids.is_empty() {
+  if node.arguments[0].is_empty() {
     return input_missing_error("shape");
   }
 
   let geo_node_id = node.arguments[0].get_node_id().unwrap();
 
-  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, registry, false, context);
+  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, 0, registry, false, context);
 
   let mesh = match pre_eval_result {
     NetworkResult::Geometry(mesh) => mesh,

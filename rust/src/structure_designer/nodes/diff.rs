@@ -25,7 +25,7 @@ pub fn eval_diff<'a>(
   let base_input_name = registry.get_parameter_name(&node, 0);
   let sub_input_name = registry.get_parameter_name(&node, 1);
 
-  if node.arguments[0].argument_node_ids.is_empty() {
+  if node.arguments[0].is_empty() {
     return input_missing_error(&base_input_name);
   }
 

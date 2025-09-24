@@ -24,21 +24,25 @@ BigInt addNode({required String nodeTypeName, required APIVec2 position}) =>
 
 bool canConnectNodes(
         {required BigInt sourceNodeId,
+        required int sourceOutputPinIndex,
         required BigInt destNodeId,
         required BigInt destParamIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiCanConnectNodes(
             sourceNodeId: sourceNodeId,
+            sourceOutputPinIndex: sourceOutputPinIndex,
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
 void connectNodes(
         {required BigInt sourceNodeId,
+        required int sourceOutputPinIndex,
         required BigInt destNodeId,
         required BigInt destParamIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiConnectNodes(
             sourceNodeId: sourceNodeId,
+            sourceOutputPinIndex: sourceOutputPinIndex,
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
@@ -75,11 +79,13 @@ bool selectNode({required BigInt nodeId}) => RustLib.instance.api
 
 bool selectWire(
         {required BigInt sourceNodeId,
+        required int sourceOutputPinIndex,
         required BigInt destinationNodeId,
         required BigInt destinationArgumentIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSelectWire(
             sourceNodeId: sourceNodeId,
+            sourceOutputPinIndex: sourceOutputPinIndex,
             destinationNodeId: destinationNodeId,
             destinationArgumentIndex: destinationArgumentIndex);
 

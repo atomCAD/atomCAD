@@ -28,29 +28,50 @@ impl ValidationError {
       node_id,
     }
   }
-}
+} 
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Argument {
-  // A set of argument values as parameters can have the 'multiple' flag set.
-  pub argument_node_ids: HashSet<u64>, // Set of node ids for which the output is referenced
+  // As parameters can have the 'multiple' flag set we need to represent multiple argument output pins here.
+  // In argument_output_pins the key is node id of the output pin,
+  // and the value is the output pin index.
+  // The output pin index can have the following values:
+  // -1: the 'function pin' of the node
+  // 0: the normal output pin of the node
+  // Later if we will support multiple regular output pins we will be able to use the positive
+  // output pin indices.
+  pub argument_output_pins: HashMap<u64, i32>,
 }
 
 impl Argument {
-  /// Returns Some(node_id) for one of the nodes in argument_node_ids if not empty,
+
+  pub fn new() -> Self {
+    Self {
+      argument_output_pins: HashMap::new(),
+    }
+  }
+
+  /// Returns Some(node_id) for one of the nodes in argument_output_pins if not empty,
   /// otherwise returns None
   pub fn get_node_id(&self) -> Option<u64> {
-    self.argument_node_ids.iter().next().copied()
+    self.argument_output_pins.keys().next().copied()
+  }
+
+  /// Returns Some((node_id, output_pin_index)) for one of the nodes in argument_output_pins if not empty,
+  /// otherwise returns None
+  pub fn get_node_id_and_pin(&self) -> Option<(u64, i32)> {
+    self.argument_output_pins.iter().next().map(|(&node_id, &pin_index)| (node_id, pin_index))
   }
 
   pub fn is_empty(&self) -> bool {
-    self.argument_node_ids.is_empty()
+    self.argument_output_pins.is_empty()
   }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Wire {
     pub source_node_id: u64,
+    pub source_output_pin_index: i32,
     pub destination_node_id: u64,
     pub destination_argument_index: usize,
 }
@@ -85,7 +106,7 @@ impl Node {
         // (no changes to self.arguments)
       } else {
         // Parameters changed, need to rebuild arguments array
-        let mut new_arguments = vec![Argument { argument_node_ids: HashSet::new() }; new_node_type.parameters.len()];
+        let mut new_arguments = vec![Argument::new(); new_node_type.parameters.len()];
         
         // Try to preserve connections for matching parameter names
         if let Some(ref old_node_type) = self.custom_node_type {
@@ -127,8 +148,6 @@ pub struct NodeNetwork {
   pub validation_errors: Vec<ValidationError>, // List of validation errors if any
 }
 
-
-
 impl NodeNetwork {
   /// Returns a HashSet of all node IDs that are directly connected to the given node
   /// This includes both nodes that provide input to this node and nodes that receive output from this node
@@ -144,7 +163,7 @@ impl NodeNetwork {
     if let Some(node) = self.nodes.get(&node_id) {
       for argument in &node.arguments {
         // Add all node IDs that provide input to this node
-        connected_ids.extend(&argument.argument_node_ids);
+        connected_ids.extend(argument.argument_output_pins.keys());
       }
     }
     
@@ -157,7 +176,7 @@ impl NodeNetwork {
       
       // Check if any of this node's arguments reference the given node
       for argument in &other_node.arguments {
-        if argument.argument_node_ids.contains(&node_id) {
+        if argument.argument_output_pins.contains_key(&node_id) {
           connected_ids.insert(*other_id);
           break; // No need to check other arguments of this node
         }
@@ -187,7 +206,7 @@ impl NodeNetwork {
     let node_id = self.next_node_id;
     let mut arguments: Vec<Argument> = Vec::new();
     for _i in 0..num_of_parameters {
-      arguments.push(Argument { argument_node_ids: HashSet::new() });
+      arguments.push(Argument::new());
     }
 
     let node = Node {
@@ -210,7 +229,7 @@ impl NodeNetwork {
     }
   }
 
-  pub fn can_connect_nodes(&self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize, node_type_registry: &crate::structure_designer::node_type_registry::NodeTypeRegistry) -> bool {
+  pub fn can_connect_nodes(&self, source_node_id: u64, source_output_pin_index: i32, dest_node_id: u64, dest_param_index: usize, node_type_registry: &crate::structure_designer::node_type_registry::NodeTypeRegistry) -> bool {
     // Check if both nodes exist
     let source_node = match self.nodes.get(&source_node_id) {
       Some(node) => node,
@@ -227,24 +246,24 @@ impl NodeNetwork {
       return false;
     }
     
-    // Get the output type of the source node
-    let source_output_type = &node_type_registry.get_node_type_for_node(source_node).unwrap().output_type;
-    
     // Get the expected input type for the destination parameter
     let dest_param_type = node_type_registry.get_node_param_data_type(dest_node, dest_param_index);
-    
+
+    // Get the output type of the source node
+    let source_output_type = &node_type_registry.get_node_type_for_node(source_node).unwrap().get_output_pin_type(source_output_pin_index);
+
     // Check if the data types are compatible using conversion rules
     DataType::can_be_converted_to(source_output_type, &dest_param_type)
   }
 
-  pub fn connect_nodes(&mut self, source_node_id: u64, dest_node_id: u64, dest_param_index: usize, dest_param_is_multi: bool) {
+  pub fn connect_nodes(&mut self, source_node_id: u64, source_output_pin_index: i32, dest_node_id: u64, dest_param_index: usize, dest_param_is_multi: bool) {
     if let Some(dest_node) = self.nodes.get_mut(&dest_node_id) {
       let argument = &mut dest_node.arguments[dest_param_index];
       // In case of single parameters we need to disconnect the existing parameter first
-      if (!dest_param_is_multi) && (!argument.argument_node_ids.is_empty()) {
-        argument.argument_node_ids.clear();
+      if (!dest_param_is_multi) && (!argument.is_empty()) {
+        argument.argument_output_pins.clear();
       }
-      argument.argument_node_ids.insert(source_node_id);
+      argument.argument_output_pins.insert(source_node_id, source_output_pin_index);
     }
   }
 
@@ -310,11 +329,12 @@ impl NodeNetwork {
 
   /// Selects a wire and clears any existing node selection.
   /// Returns true if both nodes exist and the wire was selected, false otherwise.
-  pub fn select_wire(&mut self, source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  pub fn select_wire(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
     if self.nodes.contains_key(&source_node_id) && self.nodes.contains_key(&destination_node_id) {
       self.selected_node_id = None;
       self.selected_wire = Some(Wire {
         source_node_id,
+        source_output_pin_index,
         destination_node_id,
         destination_argument_index,
       });
@@ -346,7 +366,7 @@ impl NodeNetwork {
       for other_node_id in nodes_to_process {
         if let Some(node) = self.nodes.get_mut(&other_node_id) {
           for argument in node.arguments.iter_mut() {
-            argument.argument_node_ids.remove(&node_id);
+            argument.argument_output_pins.remove(&node_id);
           }
         }
       }
@@ -367,7 +387,7 @@ impl NodeNetwork {
     else if let Some(wire) = self.selected_wire.take() {
       if let Some(dest_node) = self.nodes.get_mut(&wire.destination_node_id) {
         if let Some(argument) = dest_node.arguments.get_mut(wire.destination_argument_index) {
-          argument.argument_node_ids.remove(&wire.source_node_id);
+          argument.argument_output_pins.remove(&wire.source_node_id);
         }
       }
     }

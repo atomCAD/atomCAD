@@ -2,8 +2,8 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct FunctionType {
-  parameter_types: Vec<DataType>,
-  output_type: Box<DataType>,  
+  pub parameter_types: Vec<DataType>,
+  pub output_type: Box<DataType>,  
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]

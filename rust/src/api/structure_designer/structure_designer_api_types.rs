@@ -60,6 +60,7 @@ pub struct InputPinView {
   
   pub struct WireView {
     pub source_node_id: u64,
+    pub source_output_pin_index: i32,
     pub dest_node_id: u64,
     pub dest_param_index: usize,
     pub selected: bool,

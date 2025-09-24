@@ -114,6 +114,7 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiStructureDesignerStructureDesignerApiCanConnectNodes(
       {required BigInt sourceNodeId,
+      required int sourceOutputPinIndex,
       required BigInt destNodeId,
       required BigInt destParamIndex});
 
@@ -124,6 +125,7 @@ abstract class RustLibApi extends BaseApi {
 
   void crateApiStructureDesignerStructureDesignerApiConnectNodes(
       {required BigInt sourceNodeId,
+      required int sourceOutputPinIndex,
       required BigInt destNodeId,
       required BigInt destParamIndex});
 
@@ -396,6 +398,7 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiStructureDesignerStructureDesignerApiSelectWire(
       {required BigInt sourceNodeId,
+      required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex});
 
@@ -724,12 +727,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   bool crateApiStructureDesignerStructureDesignerApiCanConnectNodes(
       {required BigInt sourceNodeId,
+      required int sourceOutputPinIndex,
       required BigInt destNodeId,
       required BigInt destParamIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_64(sourceNodeId, serializer);
+        sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destNodeId, serializer);
         sse_encode_usize(destParamIndex, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
@@ -740,7 +745,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiCanConnectNodesConstMeta,
-      argValues: [sourceNodeId, destNodeId, destParamIndex],
+      argValues: [
+        sourceNodeId,
+        sourceOutputPinIndex,
+        destNodeId,
+        destParamIndex
+      ],
       apiImpl: this,
     ));
   }
@@ -749,7 +759,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiCanConnectNodesConstMeta =>
           const TaskConstMeta(
             debugName: "can_connect_nodes",
-            argNames: ["sourceNodeId", "destNodeId", "destParamIndex"],
+            argNames: [
+              "sourceNodeId",
+              "sourceOutputPinIndex",
+              "destNodeId",
+              "destParamIndex"
+            ],
           );
 
   @override
@@ -806,12 +821,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   void crateApiStructureDesignerStructureDesignerApiConnectNodes(
       {required BigInt sourceNodeId,
+      required int sourceOutputPinIndex,
       required BigInt destNodeId,
       required BigInt destParamIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_64(sourceNodeId, serializer);
+        sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destNodeId, serializer);
         sse_encode_usize(destParamIndex, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
@@ -822,7 +839,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiConnectNodesConstMeta,
-      argValues: [sourceNodeId, destNodeId, destParamIndex],
+      argValues: [
+        sourceNodeId,
+        sourceOutputPinIndex,
+        destNodeId,
+        destParamIndex
+      ],
       apiImpl: this,
     ));
   }
@@ -831,7 +853,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiConnectNodesConstMeta =>
           const TaskConstMeta(
             debugName: "connect_nodes",
-            argNames: ["sourceNodeId", "destNodeId", "destParamIndex"],
+            argNames: [
+              "sourceNodeId",
+              "sourceOutputPinIndex",
+              "destNodeId",
+              "destParamIndex"
+            ],
           );
 
   @override
@@ -3261,12 +3288,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   bool crateApiStructureDesignerStructureDesignerApiSelectWire(
       {required BigInt sourceNodeId,
+      required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_64(sourceNodeId, serializer);
+        sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
         sse_encode_usize(destinationArgumentIndex, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 104)!;
@@ -3277,7 +3306,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSelectWireConstMeta,
-      argValues: [sourceNodeId, destinationNodeId, destinationArgumentIndex],
+      argValues: [
+        sourceNodeId,
+        sourceOutputPinIndex,
+        destinationNodeId,
+        destinationArgumentIndex
+      ],
       apiImpl: this,
     ));
   }
@@ -3288,6 +3322,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             debugName: "select_wire",
             argNames: [
               "sourceNodeId",
+              "sourceOutputPinIndex",
               "destinationNodeId",
               "destinationArgumentIndex"
             ],
@@ -6108,13 +6143,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   WireView dco_decode_wire_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return WireView(
       sourceNodeId: dco_decode_u_64(arr[0]),
-      destNodeId: dco_decode_u_64(arr[1]),
-      destParamIndex: dco_decode_usize(arr[2]),
-      selected: dco_decode_bool(arr[3]),
+      sourceOutputPinIndex: dco_decode_i_32(arr[1]),
+      destNodeId: dco_decode_u_64(arr[2]),
+      destParamIndex: dco_decode_usize(arr[3]),
+      selected: dco_decode_bool(arr[4]),
     );
   }
 
@@ -7827,11 +7863,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   WireView sse_decode_wire_view(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_sourceNodeId = sse_decode_u_64(deserializer);
+    var var_sourceOutputPinIndex = sse_decode_i_32(deserializer);
     var var_destNodeId = sse_decode_u_64(deserializer);
     var var_destParamIndex = sse_decode_usize(deserializer);
     var var_selected = sse_decode_bool(deserializer);
     return WireView(
         sourceNodeId: var_sourceNodeId,
+        sourceOutputPinIndex: var_sourceOutputPinIndex,
         destNodeId: var_destNodeId,
         destParamIndex: var_destParamIndex,
         selected: var_selected);
@@ -9337,6 +9375,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_wire_view(WireView self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.sourceNodeId, serializer);
+    sse_encode_i_32(self.sourceOutputPinIndex, serializer);
     sse_encode_u_64(self.destNodeId, serializer);
     sse_encode_usize(self.destParamIndex, serializer);
     sse_encode_bool(self.selected, serializer);

@@ -2,8 +2,8 @@ use crate::structure_designer::node_data::NodeData;
 use serde_json::Value;
 use std::io;
 use serde::{Serialize, Deserialize};
-use crate::util::as_any::AsAny;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::FunctionType;
 
 #[derive(Clone)]
 pub struct Parameter {
@@ -20,6 +20,26 @@ pub struct NodeType {
   pub node_data_creator: fn() -> Box<dyn NodeData>,
   pub node_data_saver: fn(&mut dyn NodeData, Option<&str>) -> io::Result<Value>,
   pub node_data_loader: fn(&Value, Option<&str>) -> io::Result<Box<dyn NodeData>>,
+}
+
+impl NodeType {
+    pub fn get_function_type(&self) -> DataType {
+        DataType::Function(FunctionType {
+            parameter_types: self.parameters.iter().map(|p| p.data_type.clone()).collect(),
+            output_type: Box::new(self.output_type.clone()),
+        })
+    }
+
+    pub fn get_output_pin_type(&self, output_pin_index: i32) -> DataType {
+        if output_pin_index == (-1) {
+            self.get_function_type()
+        }
+        else if output_pin_index == 0 {
+            self.output_type.clone()
+        } else {
+            DataType::None
+        }
+    }
 }
 
 /// Generic saver function for node data types that implement Serialize

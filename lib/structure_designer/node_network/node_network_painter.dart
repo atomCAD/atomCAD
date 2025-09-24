@@ -6,10 +6,12 @@ import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 
 class WireHitResult {
   final BigInt sourceNodeId;
+  final BigInt sourcePinIndex;
   final BigInt destNodeId;
   final BigInt destParamIndex;
 
-  WireHitResult(this.sourceNodeId, this.destNodeId, this.destParamIndex);
+  WireHitResult(this.sourceNodeId, this.sourcePinIndex, this.destNodeId,
+      this.destParamIndex);
 }
 
 // Grid appearance constants
@@ -42,9 +44,10 @@ class NodeNetworkPainter extends CustomPainter {
 
     // Draw regular wires first
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final source = _getPinPositionAndDataType(wire.sourceNodeId, -1);
+      final source = _getPinPositionAndDataType(
+          wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
       final dest = _getPinPositionAndDataType(
-          wire.destNodeId, wire.destParamIndex.toInt());
+          wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
       _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected);
     }
 
@@ -52,9 +55,10 @@ class NodeNetworkPainter extends CustomPainter {
     if (graphModel.draggedWire != null) {
       final wireStart = _getPinPositionAndDataType(
           graphModel.draggedWire!.startPin.nodeId,
+          graphModel.draggedWire!.startPin.pinType,
           graphModel.draggedWire!.startPin.pinIndex);
       final wireEndPos = graphModel.draggedWire!.wireEndPosition;
-      if (graphModel.draggedWire!.startPin.pinIndex < 0) {
+      if (graphModel.draggedWire!.startPin.pinType == PinType.output) {
         // start is source
         _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2, false);
       } else {
@@ -64,11 +68,12 @@ class NodeNetworkPainter extends CustomPainter {
     }
   }
 
-  (Offset, String) _getPinPositionAndDataType(BigInt nodeId, int pinIndex) {
+  (Offset, String) _getPinPositionAndDataType(
+      BigInt nodeId, PinType pinType, int pinIndex) {
     // Now this is is a bit of a hacky solution.
     // We should probably use the real positions of the pin widgets instead of this logic to
     // approximate it independently.
-    if (pinIndex < 0) {
+    if (pinType == PinType.output) {
       // output pin (source pin)
       final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId];
       final sourceVertOffset = sourceNode!.inputPins.isEmpty
@@ -179,14 +184,18 @@ class NodeNetworkPainter extends CustomPainter {
     // We don't need to adjust the position here because _getPinPositionAndDataType
     // already adds the panOffset to the returned positions
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final (sourcePos, _) = _getPinPositionAndDataType(wire.sourceNodeId, -1);
+      final (sourcePos, _) = _getPinPositionAndDataType(
+          wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
       final (destPos, _) = _getPinPositionAndDataType(
-          wire.destNodeId, wire.destParamIndex.toInt());
+          wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
 
       final hitTestPath = _getBand(sourcePos, destPos, HIT_TEST_WIRE_WIDTH);
       if (hitTestPath.contains(position)) {
         return WireHitResult(
-            wire.sourceNodeId, wire.destNodeId, wire.destParamIndex);
+            wire.sourceNodeId,
+            BigInt.from(wire.sourceOutputPinIndex),
+            wire.destNodeId,
+            wire.destParamIndex);
       }
     }
     return null;
@@ -196,7 +205,7 @@ class NodeNetworkPainter extends CustomPainter {
   void _drawGrid(Canvas canvas, Size size) {
     // Calculate grid boundaries based on visible area
     final Rect visibleRect = Offset.zero & size;
-    
+
     // Apply clipping to prevent drawing outside the widget area
     canvas.clipRect(visibleRect);
 

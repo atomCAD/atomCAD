@@ -78,7 +78,7 @@ impl NodeDisplayPolicyResolver {
     // Build the reverse connection map
     for (&node_id, node) in &node_network.nodes {
       for arg in &node.arguments {
-        for &target_node_id in &arg.argument_node_ids {
+        for (&target_node_id, &output_pin_index) in &arg.argument_output_pins {
           // Add an entry that node_id connects to target_node_id
           reverse_connections
             .entry(target_node_id)
@@ -129,7 +129,7 @@ impl NodeDisplayPolicyResolver {
           
           // Forward connections: nodes this node connects to (via arguments)
           for arg in &current_node.arguments {
-            for &connected_node_id in &arg.argument_node_ids {
+            for (&connected_node_id, &output_pin_index) in &arg.argument_output_pins {
               if !visited.contains(&connected_node_id) && node_network.nodes.contains_key(&connected_node_id) {
                 queue.push_back(connected_node_id);
                 island.insert(connected_node_id);

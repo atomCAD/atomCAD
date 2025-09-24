@@ -18,16 +18,22 @@ import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
     as import_xyz_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
+enum PinType {
+  input,
+  output,
+}
+
 class PinReference {
   BigInt nodeId;
+  PinType pinType;
   int pinIndex;
   String dataType;
 
-  PinReference(this.nodeId, this.pinIndex, this.dataType);
+  PinReference(this.nodeId, this.pinType, this.pinIndex, this.dataType);
 
   @override
   String toString() {
-    return 'PinReference(nodeId: $nodeId, pinIndex: $pinIndex dataType: $dataType)';
+    return 'PinReference(nodeId: $nodeId, pinType: $pinType, pinIndex: $pinIndex dataType: $dataType)';
   }
 
   @override
@@ -35,12 +41,13 @@ class PinReference {
     if (identical(this, other)) return true;
     if (other is! PinReference) return false;
     return nodeId == other.nodeId &&
+        pinType == other.pinType &&
         pinIndex == other.pinIndex &&
         dataType == other.dataType;
   }
 
   @override
-  int get hashCode => Object.hash(nodeId, pinIndex, dataType);
+  int get hashCode => Object.hash(nodeId, pinType, pinIndex, dataType);
 }
 
 class DraggedWire {
@@ -205,22 +212,24 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   bool canConnectPins(PinReference pin1, PinReference pin2) {
-    final outPin = pin1.pinIndex < 0 ? pin1 : pin2;
-    final inPin = pin1.pinIndex < 0 ? pin2 : pin1;
+    final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
+    final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
 
     return structure_designer_api.canConnectNodes(
       sourceNodeId: outPin.nodeId,
+      sourceOutputPinIndex: outPin.pinIndex,
       destNodeId: inPin.nodeId,
       destParamIndex: BigInt.from(inPin.pinIndex),
     );
   }
 
   void connectPins(PinReference pin1, PinReference pin2) {
-    final outPin = pin1.pinIndex < 0 ? pin1 : pin2;
-    final inPin = pin1.pinIndex < 0 ? pin2 : pin1;
+    final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
+    final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
 
     structure_designer_api.connectNodes(
       sourceNodeId: outPin.nodeId,
+      sourceOutputPinIndex: outPin.pinIndex,
       destNodeId: inPin.nodeId,
       destParamIndex: BigInt.from(inPin.pinIndex),
     );
@@ -278,12 +287,13 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
-  void setSelectedWire(
-      BigInt sourceNodeId, BigInt destNodeId, BigInt destParamIndex) {
+  void setSelectedWire(BigInt sourceNodeId, BigInt sourceOutputPinIndex,
+      BigInt destNodeId, BigInt destParamIndex) {
     if (nodeNetworkView == null) return;
     //TODO: only select a wire if not already selected.
     structure_designer_api.selectWire(
         sourceNodeId: sourceNodeId,
+        sourceOutputPinIndex: sourceOutputPinIndex.toInt(),
         destinationNodeId: destNodeId,
         destinationArgumentIndex: destParamIndex);
     refreshFromKernel();

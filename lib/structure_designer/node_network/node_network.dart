@@ -60,6 +60,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
     if (hit != null) {
       model.setSelectedWire(
         hit.sourceNodeId,
+        hit.sourcePinIndex,
         hit.destNodeId,
         hit.destParamIndex,
       );

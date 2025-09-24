@@ -226,9 +226,10 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
         for (_id, node) in node_network.nodes.iter() {
           for (index, argument) in node.arguments.iter().enumerate() {
-            for argument_node_id in argument.argument_node_ids.iter() {
+            for (argument_node_id, output_pin_index) in argument.argument_output_pins.iter() {
               node_network_view.wires.push(WireView {
                 source_node_id: *argument_node_id,
+                source_output_pin_index: *output_pin_index,
                 dest_node_id: node.id,
                 dest_param_index: index,
                 selected: node_network.selected_wire.as_ref().map_or(false, |wire| 
@@ -272,11 +273,11 @@ pub fn add_node(node_type_name: &str, position: APIVec2) -> u64 {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn can_connect_nodes(source_node_id: u64, dest_node_id: u64, dest_param_index: usize) -> bool {
+pub fn can_connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_node_id: u64, dest_param_index: usize) -> bool {
   unsafe {
     with_cad_instance_or(
       |cad_instance| {
-        cad_instance.structure_designer.can_connect_nodes(source_node_id, dest_node_id, dest_param_index)
+        cad_instance.structure_designer.can_connect_nodes(source_node_id, source_output_pin_index, dest_node_id, dest_param_index)
       },
       false
     )
@@ -284,10 +285,10 @@ pub fn can_connect_nodes(source_node_id: u64, dest_node_id: u64, dest_param_inde
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn connect_nodes(source_node_id: u64, dest_node_id: u64, dest_param_index: usize) {
+pub fn connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_node_id: u64, dest_param_index: usize) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
-      cad_instance.structure_designer.connect_nodes(source_node_id, dest_node_id, dest_param_index);
+      cad_instance.structure_designer.connect_nodes(source_node_id, source_output_pin_index, dest_node_id, dest_param_index);
       refresh_renderer(cad_instance, false);
     });
   }
@@ -387,11 +388,11 @@ pub fn select_node(node_id: u64) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_wire(source_node_id: u64, destination_node_id: u64, destination_argument_index: usize) -> bool {
+pub fn select_wire(source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
   unsafe {
     with_mut_cad_instance_or(
       |instance| {
-        let result = instance.structure_designer.select_wire(source_node_id, destination_node_id, destination_argument_index);
+        let result = instance.structure_designer.select_wire(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
         refresh_renderer(instance, false);
         result
       },

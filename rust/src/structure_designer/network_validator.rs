@@ -162,9 +162,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
         if current_count < expected_count {
             // Add empty arguments when too few
             for _ in current_count..expected_count {
-                dest_node_mut.arguments.push(Argument { 
-                    argument_node_ids: HashSet::new() 
-                });
+                dest_node_mut.arguments.push(Argument::new());
             }
         } else {
             // Remove excess arguments when too many
@@ -184,17 +182,17 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
             let parameter = &dest_node_type.parameters[arg_index];
             
             // Validate non-multi input pins have at most one connection
-            if !parameter.data_type.is_array() && argument.argument_node_ids.len() > 1 {
+            if !parameter.data_type.is_array() && argument.argument_output_pins.len() > 1 {
                 network.validation_errors.push(ValidationError::new(
                         format!("Non-multi parameter '{}' has {} connections, but only 1 is allowed", 
-                        parameter.name, argument.argument_node_ids.len()),
+                        parameter.name, argument.argument_output_pins.len()),
                     Some(*dest_node_id)
                 ));
                 return false;
             }
             
             // Validate data types for each connected source node
-            for source_node_id in &argument.argument_node_ids {
+            for (source_node_id, output_pin_index) in &argument.argument_output_pins {
                 // Get the source node
                 let source_node = match network.nodes.get(source_node_id) {
                     Some(node) => node,
@@ -231,7 +229,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 };
                 
                 // Validate data type compatibility
-                if node_type_registry.get_node_type_for_node(source_node).unwrap().output_type != node_type_registry.get_node_param_data_type(dest_node, arg_index) {
+                if node_type_registry.get_node_type_for_node(source_node).unwrap().get_output_pin_type(*output_pin_index) != node_type_registry.get_node_param_data_type(dest_node, arg_index) {
                     network.validation_errors.push(ValidationError::new(
                         format!("Data type mismatch: input expects {:?}, but source outputs {:?}", 
                             parameter.data_type, node_type_registry.get_node_type_for_node(source_node).unwrap().output_type),

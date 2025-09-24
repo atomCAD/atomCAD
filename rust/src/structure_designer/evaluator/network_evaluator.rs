@@ -139,7 +139,7 @@ impl NetworkEvaluator {
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
 
-    let result = self.evaluate(&network_stack, node_id, registry, from_selected_node, &mut context);
+    let result = self.evaluate(&network_stack, node_id, 0, registry, from_selected_node, &mut context);
 
     let mut scene = 
     if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D {
@@ -358,18 +358,19 @@ impl NetworkEvaluator {
     let expected_type = registry.get_node_param_data_type(node, parameter_index);
 
     if expected_type.is_array() {
-      let input_node_ids = &node.arguments[parameter_index].argument_node_ids;
+      let input_output_pins = &node.arguments[parameter_index].argument_output_pins;
 
-      if input_node_ids.is_empty() {
+      if input_output_pins.is_empty() {
         return None;
       }
 
       let mut merged_items = Vec::new();
 
-      for &input_node_id in input_node_ids {
+      for (&input_node_id, &input_node_output_pin_index) in input_output_pins {
         let result = self.evaluate(
           network_stack,
           input_node_id,
+          input_node_output_pin_index,
           registry,
           false,
           context,
@@ -397,10 +398,11 @@ impl NetworkEvaluator {
       Some(NetworkResult::Array(merged_items))
     }
     else { // single argument evaluation
-      if let Some(input_node_id) = node.arguments[parameter_index].get_node_id() {
+      if let Some((input_node_id, input_node_output_pin_index)) = node.arguments[parameter_index].get_node_id_and_pin() {
         let result = self.evaluate(
           network_stack,
           input_node_id,
+          input_node_output_pin_index,
           registry, 
           false,
           context
@@ -411,7 +413,7 @@ impl NetworkEvaluator {
 
         let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
         let input_node_type = registry.get_node_type_for_node(input_node);
-        let input_node_output_type = input_node_type.unwrap().output_type.clone();
+        let input_node_output_type = input_node_type.unwrap().get_output_pin_type(input_node_output_pin_index);
 
         // Convert the result to the expected type
         let converted_result = result.convert_to(&input_node_output_type, &expected_type);
@@ -427,13 +429,17 @@ impl NetworkEvaluator {
   pub fn evaluate<'a>(
     &self,
     network_stack: &Vec<NetworkStackElement<'a>>,
-    node_id: u64, registry: &NodeTypeRegistry,
+    node_id: u64,
+    output_pin_index: i32,
+    registry: &NodeTypeRegistry,
     decorate: bool,
     context: &mut NetworkEvaluationContext) -> NetworkResult {
 
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
-    let result = if node.node_type_name == "parameter" {
+    let result = if output_pin_index == (-1) {
+      NetworkResult::Function(node.node_type_name.clone())
+    } else if node.node_type_name == "parameter" {
       eval_parameter(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "expr" {
       eval_expr(&self, network_stack, node_id, registry, context)
@@ -510,7 +516,7 @@ impl NetworkEvaluator {
     } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) { // custom node
       let mut child_network_stack = network_stack.clone();
       child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
-      let result = self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), registry, false, context);
+      let result = self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), 0, registry, false, context);
       if let NetworkResult::Error(_error) = &result {
         NetworkResult::Error(format!("Error in {}", node.node_type_name))
       } else { result }
