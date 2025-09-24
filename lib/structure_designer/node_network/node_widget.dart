@@ -245,14 +245,16 @@ class NodeWidget extends StatelessWidget {
                   top: Radius.circular(NODE_BORDER_RADIUS - 2)),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  node.nodeTypeName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                Expanded(
+                  child: Text(
+                    node.nodeTypeName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 GestureDetector(
@@ -266,6 +268,12 @@ class NodeWidget extends StatelessWidget {
                     color: Colors.white,
                     size: 20,
                   ),
+                ),
+                const SizedBox(width: 4),
+                // Function pin
+                PinWidget(
+                  pinReference: PinReference(node.id, PinType.output, -1, node.functionType),
+                  multi: false,
                 ),
               ],
             ),
