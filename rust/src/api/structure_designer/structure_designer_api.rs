@@ -208,14 +208,15 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
           let output_string = cad_instance.structure_designer.last_generated_structure_designer_scene.node_output_strings.get(&node.id).cloned();
 
-          let output_type = &cad_instance.structure_designer.node_type_registry.get_node_type_for_node(node).unwrap().output_type;
-
+          let output_type = node_type.output_type.clone();
+          let function_type = node_type.get_function_type();
           node_network_view.nodes.insert(node.id, NodeView {
             id: node.id,
             node_type_name: node.node_type_name.clone(),
             position: to_api_vec2(&node.position),
             input_pins,
             output_type: output_type.to_string(),
+            function_type: function_type.to_string(),
             selected: node_network.selected_node_id == Some(node.id),
             displayed: node_network.is_node_displayed(node.id),
             return_node: node_network.return_node_id == Some(node.id),

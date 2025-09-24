@@ -5580,6 +5580,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             crate::api::structure_designer::structure_designer_api_types::InputPinView,
         >>::sse_decode(deserializer);
         let mut var_outputType = <String>::sse_decode(deserializer);
+        let mut var_functionType = <String>::sse_decode(deserializer);
         let mut var_selected = <bool>::sse_decode(deserializer);
         let mut var_displayed = <bool>::sse_decode(deserializer);
         let mut var_returnNode = <bool>::sse_decode(deserializer);
@@ -5591,6 +5592,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             position: var_position,
             input_pins: var_inputPins,
             output_type: var_outputType,
+            function_type: var_functionType,
             selected: var_selected,
             displayed: var_displayed,
             return_node: var_returnNode,
@@ -7939,6 +7941,7 @@ impl flutter_rust_bridge::IntoDart
             self.position.into_into_dart().into_dart(),
             self.input_pins.into_into_dart().into_dart(),
             self.output_type.into_into_dart().into_dart(),
+            self.function_type.into_into_dart().into_dart(),
             self.selected.into_into_dart().into_dart(),
             self.displayed.into_into_dart().into_dart(),
             self.return_node.into_into_dart().into_dart(),
@@ -8819,6 +8822,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <crate::api::common_api_types::APIVec2>::sse_encode(self.position, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::InputPinView>>::sse_encode(self.input_pins, serializer);
         <String>::sse_encode(self.output_type, serializer);
+        <String>::sse_encode(self.function_type, serializer);
         <bool>::sse_encode(self.selected, serializer);
         <bool>::sse_encode(self.displayed, serializer);
         <bool>::sse_encode(self.return_node, serializer);

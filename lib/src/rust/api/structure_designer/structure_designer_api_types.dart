@@ -894,6 +894,7 @@ class NodeView {
   APIVec2 position;
   final List<InputPinView> inputPins;
   final String outputType;
+  final String functionType;
   final bool selected;
   final bool displayed;
   final bool returnNode;
@@ -906,6 +907,7 @@ class NodeView {
     required this.position,
     required this.inputPins,
     required this.outputType,
+    required this.functionType,
     required this.selected,
     required this.displayed,
     required this.returnNode,
@@ -920,6 +922,7 @@ class NodeView {
       position.hashCode ^
       inputPins.hashCode ^
       outputType.hashCode ^
+      functionType.hashCode ^
       selected.hashCode ^
       displayed.hashCode ^
       returnNode.hashCode ^
@@ -936,6 +939,7 @@ class NodeView {
           position == other.position &&
           inputPins == other.inputPins &&
           outputType == other.outputType &&
+          functionType == other.functionType &&
           selected == other.selected &&
           displayed == other.displayed &&
           returnNode == other.returnNode &&

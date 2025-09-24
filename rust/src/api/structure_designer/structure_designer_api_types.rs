@@ -51,6 +51,7 @@ pub struct InputPinView {
     pub position: APIVec2,
     pub input_pins: Vec<InputPinView>,
     pub output_type: String,
+    pub function_type: String,
     pub selected: bool,
     pub displayed: bool,
     pub return_node: bool,

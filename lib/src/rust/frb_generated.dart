@@ -5756,19 +5756,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
       position: dco_decode_api_vec_2(arr[2]),
       inputPins: dco_decode_list_input_pin_view(arr[3]),
       outputType: dco_decode_String(arr[4]),
-      selected: dco_decode_bool(arr[5]),
-      displayed: dco_decode_bool(arr[6]),
-      returnNode: dco_decode_bool(arr[7]),
-      error: dco_decode_opt_String(arr[8]),
-      outputString: dco_decode_opt_String(arr[9]),
+      functionType: dco_decode_String(arr[5]),
+      selected: dco_decode_bool(arr[6]),
+      displayed: dco_decode_bool(arr[7]),
+      returnNode: dco_decode_bool(arr[8]),
+      error: dco_decode_opt_String(arr[9]),
+      outputString: dco_decode_opt_String(arr[10]),
     );
   }
 
@@ -7228,6 +7229,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_position = sse_decode_api_vec_2(deserializer);
     var var_inputPins = sse_decode_list_input_pin_view(deserializer);
     var var_outputType = sse_decode_String(deserializer);
+    var var_functionType = sse_decode_String(deserializer);
     var var_selected = sse_decode_bool(deserializer);
     var var_displayed = sse_decode_bool(deserializer);
     var var_returnNode = sse_decode_bool(deserializer);
@@ -7239,6 +7241,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         position: var_position,
         inputPins: var_inputPins,
         outputType: var_outputType,
+        functionType: var_functionType,
         selected: var_selected,
         displayed: var_displayed,
         returnNode: var_returnNode,
@@ -8807,6 +8810,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_vec_2(self.position, serializer);
     sse_encode_list_input_pin_view(self.inputPins, serializer);
     sse_encode_String(self.outputType, serializer);
+    sse_encode_String(self.functionType, serializer);
     sse_encode_bool(self.selected, serializer);
     sse_encode_bool(self.displayed, serializer);
     sse_encode_bool(self.returnNode, serializer);
