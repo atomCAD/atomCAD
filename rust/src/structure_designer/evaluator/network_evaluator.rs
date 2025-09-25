@@ -9,6 +9,7 @@ use crate::structure_designer::nodes::reg_poly::eval_reg_poly;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::nodes::expr::eval_expr;
+use crate::structure_designer::nodes::map::eval_map;
 use crate::structure_designer::nodes::import_xyz::eval_import_xyz;
 use crate::structure_designer::nodes::export_xyz::eval_export_xyz;
 use crate::structure_designer::nodes::string::eval_string;
@@ -443,6 +444,8 @@ impl NetworkEvaluator {
       eval_parameter(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "expr" {
       eval_expr(&self, network_stack, node_id, registry, context)
+    } else if node.node_type_name == "map" {
+      eval_map(&self, network_stack, node_id, registry, context)
     } else if node.node_type_name == "string" {
       eval_string(network_stack, node_id, registry, context)
     } else if node.node_type_name == "bool" {

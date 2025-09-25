@@ -14,6 +14,7 @@ use super::nodes::vec2::Vec2Data;
 use super::nodes::vec3::Vec3Data;
 use super::nodes::expr::ExprData;
 use super::nodes::expr::ExprParameter;
+use super::nodes::map::MapData;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use crate::structure_designer::node_network::Node;
@@ -41,7 +42,8 @@ use crate::structure_designer::node_data::NoData;
 use super::node_type::{generic_node_data_saver, generic_node_data_loader, no_data_saver, no_data_loader};
 use crate::structure_designer::serialization::edit_atom_data_serialization::{edit_atom_data_to_serializable, serializable_to_edit_atom_data, SerializableEditAtomData};
 use glam::{IVec3, DVec3, IVec2};
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, FunctionType};
+
 
 pub struct NodeTypeRegistry {
   pub built_in_node_types: HashMap<String, NodeType>,
@@ -99,6 +101,30 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<ExprData>,
       node_data_loader: generic_node_data_loader::<ExprData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "map".to_string(),
+      parameters: vec![
+        Parameter {
+          name: "xs".to_string(),
+          data_type: DataType::Array(Box::new(DataType::Float)), // will change based on  ParameterData::data_type.
+        },
+        Parameter {
+          name: "f".to_string(),
+          data_type: DataType::Function(FunctionType {
+            parameter_types: vec![DataType::Float],
+            output_type: Box::new(DataType::Float),
+          }), // will change based on  ParameterData::data_type.
+        },
+      ],
+      output_type: DataType::Array(Box::new(DataType::Float)), // will change based on the output type
+      node_data_creator: || Box::new(MapData {
+        input_type: DataType::Float,
+        output_type: DataType::Float,
+      }),
+      node_data_saver: generic_node_data_saver::<MapData>,
+      node_data_loader: generic_node_data_loader::<MapData>,
     });
 
     ret.add_node_type(NodeType {
