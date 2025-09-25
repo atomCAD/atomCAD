@@ -20,6 +20,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::common_constants;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use glam::f64::DQuat;
+use crate::structure_designer::node_type::NodeType;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -442,6 +443,10 @@ impl NodeData for FacetShellData {
         dragged_handle_index: None,
         possible_miller_indices: half_space_utils::generate_possible_miller_indices(self.max_miller_index),
       }));
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
     }
 }
 

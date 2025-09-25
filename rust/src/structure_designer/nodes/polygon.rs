@@ -19,6 +19,7 @@ use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -29,6 +30,10 @@ pub struct PolygonData {
 impl NodeData for PolygonData {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       Some(Box::new(PolygonGadget::new(&self.vertices)))
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
     }
 }
 

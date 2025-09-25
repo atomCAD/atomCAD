@@ -15,6 +15,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::util::transform::Transform;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Clone)]
 pub struct AtomTransEvalCache {
@@ -39,6 +40,10 @@ impl NodeData for AtomTransData {
             self.rotation, 
             atom_trans_cache.input_frame_transform.clone()
         )));
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+      None
     }
 }
 

@@ -20,6 +20,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::diamond_hydrogen_passivation::hydrogen_passivate_diamond;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::node_type::NodeType;
 
 const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
 
@@ -85,6 +86,10 @@ pub struct GeoToAtomData {
 
 impl NodeData for GeoToAtomData {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
 }

@@ -13,6 +13,8 @@ use crate::structure_designer::expr::parser::parse;
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::expr::expr::Expr;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::Parameter;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExprParameter {
@@ -89,6 +91,23 @@ impl ExprData {
 impl NodeData for ExprData {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       None
+    }
+
+    fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
+      let mut custom_node_type = base_node_type.clone();
+            
+      // Update the output type - use DataType::None if self.output_type is None
+      custom_node_type.output_type = self.output_type.clone().unwrap_or(DataType::None);
+      
+      // Convert ExprParameter to Parameter
+      custom_node_type.parameters = self.parameters.iter()
+        .map(|expr_param| Parameter {
+          name: expr_param.name.clone(),
+          data_type: expr_param.data_type.clone(),
+        })
+        .collect();
+      
+      Some(custom_node_type)
     }
 }
 

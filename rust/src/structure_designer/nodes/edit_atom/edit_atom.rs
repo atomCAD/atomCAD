@@ -19,6 +19,7 @@ use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::Add
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
 use crate::common::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
+use crate::structure_designer::node_type::NodeType;
 
 pub struct DefaultToolState {
   pub replacement_atomic_number: i32,
@@ -168,6 +169,10 @@ impl EditAtomData {
 
 impl NodeData for EditAtomData {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
 }

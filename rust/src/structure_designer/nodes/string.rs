@@ -6,6 +6,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StringData {
@@ -14,6 +15,10 @@ pub struct StringData {
 
 impl NodeData for StringData {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
 }

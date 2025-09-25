@@ -9,6 +9,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Vec3Data {
@@ -18,6 +19,10 @@ pub struct Vec3Data {
 
 impl NodeData for Vec3Data {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
 }

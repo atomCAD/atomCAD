@@ -11,7 +11,7 @@ use crate::common::xyz_saver::save_xyz;
 use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
 use std::io;
-
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Serialize, Deserialize)]
 pub struct ExportXYZData {
@@ -20,6 +20,10 @@ pub struct ExportXYZData {
 
 impl NodeData for ExportXYZData {
   fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    None
+  }
+
+  fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
     None
   }
 }

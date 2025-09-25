@@ -20,6 +20,7 @@ use crate::common::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -35,6 +36,9 @@ impl NodeData for HalfPlaneData {
       Some(Box::new(HalfPlaneGadget::new(&self.point1, &self.point2)))
     }
   
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
 }
 
 pub fn eval_half_plane<'a>(

@@ -13,6 +13,7 @@ use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometr
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AtomCutData {
@@ -22,6 +23,10 @@ pub struct AtomCutData {
 
 impl NodeData for AtomCutData {
   fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    None
+  }
+
+  fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
     None
   }
 }

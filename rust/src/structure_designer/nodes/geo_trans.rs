@@ -22,6 +22,7 @@ use crate::common::gadget::Gadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::renderer::mesh::Mesh;
 use crate::structure_designer::common_constants;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Clone)]
 pub struct GeoTransEvalCache {
@@ -48,6 +49,10 @@ impl NodeData for GeoTransData {
             geo_trans_cache.input_frame_transform.clone(),
         );
         Some(Box::new(gadget))
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+      None
     }
 }
 

@@ -20,6 +20,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfSpaceData {
@@ -41,6 +42,9 @@ impl NodeData for HalfSpaceData {
         self.shift)));
     }
   
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
 }
 
 pub fn eval_half_space<'a>(

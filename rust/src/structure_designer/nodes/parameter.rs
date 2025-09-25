@@ -8,6 +8,7 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParameterData {
@@ -23,6 +24,15 @@ pub struct ParameterData {
 impl NodeData for ParameterData {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       None
+    }
+
+    fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
+      let mut custom_node_type = base_node_type.clone();
+
+      custom_node_type.parameters[0].data_type = self.data_type.clone();
+      custom_node_type.output_type = self.data_type.clone();
+
+      Some(custom_node_type)
     }
 }
 

@@ -14,6 +14,7 @@ use crate::common::atomic_structure::HitTestResult;
 use glam::f64::DVec3;
 use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::node_type::NodeType;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,6 +25,10 @@ pub struct AnchorData {
 
 impl NodeData for AnchorData {
   fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    None
+  }
+
+  fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
     None
   }
 }
