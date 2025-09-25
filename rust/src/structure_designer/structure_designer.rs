@@ -22,7 +22,6 @@ use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometr
 use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::common::xyz_saver::save_xyz;
 use crate::structure_designer::data_type::DataType;
-
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
@@ -256,13 +255,13 @@ impl StructureDesigner {
       .unwrap_or(0);
     
     // If we successfully added a node, initialize custom node type if needed
-    if node_id != 0 && (node_type_name == "parameter" || node_type_name == "expr") {
+    if node_id != 0 {
       // Split the borrow to avoid conflicts
       let (built_in_types, node_networks) = (&self.node_type_registry.built_in_node_types, &mut self.node_type_registry.node_networks);
       if let Some(network) = node_networks.get_mut(node_network_name) {
         if let Some(node) = network.nodes.get_mut(&node_id) {
           // Call the populate function with the split borrows
-          crate::structure_designer::node_type_registry::NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node);
+          NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node);
         }
       }
     }
@@ -381,14 +380,14 @@ impl StructureDesigner {
     };
     
     // Check node type before modification
-    let (is_parameter_node, is_expr_node) = if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+    let is_expr_node = if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
       if let Some(node) = network.nodes.get(&node_id) {
-        (node.node_type_name == "parameter", node.node_type_name == "expr")
+        node.node_type_name == "expr"
       } else {
-        (false, false)
+        false
       }
     } else {
-      (false, false)
+      false
     };
     
     // For expr nodes, validate the expression before setting the data
@@ -403,20 +402,21 @@ impl StructureDesigner {
       network.set_node_network_data(node_id, data);
     }
     
-    // Cache custom NodeType for parameter and expr nodes after data is set
-    if is_parameter_node || is_expr_node {
-      // Split the borrow to avoid conflicts
-      let (built_in_types, node_networks) = (&self.node_type_registry.built_in_node_types, &mut self.node_type_registry.node_networks);
-      if let Some(network) = node_networks.get_mut(network_name) {
-        if let Some(node) = network.nodes.get_mut(&node_id) {
-          // Call the populate function with the split borrows
-          crate::structure_designer::node_type_registry::NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node);
-        }
+    // Cache custom NodeType if needed after data is set
+    let (built_in_types, node_networks) = (&self.node_type_registry.built_in_node_types, &mut self.node_type_registry.node_networks);
+    let custom_node_type_populated = if let Some(network) = node_networks.get_mut(network_name) {
+      if let Some(node) = network.nodes.get_mut(&node_id) {
+        // Call the populate function with the split borrows
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node)
+      } else {
+        false
       }
-    }
-    
-    // Validate if this was a parameter or expr node modification
-    if is_parameter_node || is_expr_node {
+    } else {
+      false
+    };
+
+    // Validate if this node has a custom node type
+    if custom_node_type_populated {
       let initial_errors = if expr_validation_errors.is_empty() {
         None
       } else {

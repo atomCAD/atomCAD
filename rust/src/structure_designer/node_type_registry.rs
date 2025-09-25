@@ -816,47 +816,20 @@ impl NodeTypeRegistry {
   }
 
   /// Static helper function to populate custom node type cache without borrowing conflicts
-  pub fn populate_custom_node_type_cache_with_types(built_in_types: &std::collections::HashMap<String, NodeType>, node: &mut Node) {
-    match node.node_type_name.as_str() {
-      "parameter" => {
-        if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<crate::structure_designer::nodes::parameter::ParameterData>() {
-          if let Some(base_node_type) = built_in_types.get("parameter") {
-            let mut custom_node_type = base_node_type.clone();
-
-            custom_node_type.parameters[0].data_type = param_data.data_type.clone();
-            custom_node_type.output_type = param_data.data_type.clone();
-            
-            node.set_custom_node_type(Some(custom_node_type));
-          }
-        }
-      },
-      "expr" => {
-        if let Some(expr_data) = (*node.data).as_any_ref().downcast_ref::<crate::structure_designer::nodes::expr::ExprData>() {
-          if let Some(base_node_type) = built_in_types.get("expr") {
-            let mut custom_node_type = base_node_type.clone();
-            
-            // Update the output type - use DataType::None if expr_data.output_type is None
-            custom_node_type.output_type = expr_data.output_type.clone().unwrap_or(DataType::None);
-            
-            // Convert ExprParameter to Parameter
-            custom_node_type.parameters = expr_data.parameters.iter()
-              .map(|expr_param| Parameter {
-                name: expr_param.name.clone(),
-                data_type: expr_param.data_type.clone(),
-              })
-              .collect();
-
-            node.set_custom_node_type(Some(custom_node_type));
-          }
-        }
-      },
-      _ => {}
+  /// Returns whether a custom node type was populated or not
+  pub fn populate_custom_node_type_cache_with_types(built_in_types: &std::collections::HashMap<String, NodeType>, node: &mut Node) -> bool {
+    if let Some(base_node_type) = built_in_types.get(&node.node_type_name) {
+      let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
+      let has_custom_node_type = custom_node_type.is_some();
+      node.set_custom_node_type(custom_node_type);
+      return has_custom_node_type;
     }
+    return false;
   }
 
-  /// Populates the custom node type cache for parameter and expr nodes
-  pub fn populate_custom_node_type_cache(&self, node: &mut Node) {
-    Self::populate_custom_node_type_cache_with_types(&self.built_in_node_types, node);
+  /// Populates the custom node type cache for nodes with dynamic node types
+  pub fn populate_custom_node_type_cache(&self, node: &mut Node) -> bool {
+    Self::populate_custom_node_type_cache_with_types(&self.built_in_node_types, node)
   }
 
   pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> DataType {
