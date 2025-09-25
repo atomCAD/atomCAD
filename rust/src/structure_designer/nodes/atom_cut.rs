@@ -62,7 +62,6 @@ pub fn eval_atom_cut<'a>(
 
   if let NetworkResult::Atomic(mut atomic_structure) = molecule_input_val {
 
-    let cutters_input_name = registry.get_parameter_name(&node, 1);
     if node.arguments[1].is_empty() {
       return NetworkResult::Atomic(atomic_structure); // no cutters plugged in, just return the input atomic structure unmodified.
     }
@@ -87,8 +86,6 @@ pub fn eval_atom_cut<'a>(
     } else {
       return NetworkResult::Error("Invalid shapes input.".to_string());
     };
-  
-    let shape_count = shape_results.len();
   
     for shape_val in shape_results {
       if let NetworkResult::Geometry(shape) = shape_val {

@@ -154,10 +154,6 @@ impl DataTypeParser {
     self.tokens.get(self.pos).unwrap_or(&DataTypeToken::Eof)
   }
 
-  fn peek_next(&self) -> &DataTypeToken {
-    self.tokens.get(self.pos + 1).unwrap_or(&DataTypeToken::Eof)
-  }
-
   fn bump(&mut self) {
     if self.pos < self.tokens.len() {
       self.pos += 1;

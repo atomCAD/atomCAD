@@ -208,7 +208,7 @@ impl NetworkResult {
       }
       
       // All other conversions are invalid - return an error
-      (original, target) => {
+      (_original, target) => {
         NetworkResult::Error(format!(
           "Cannot convert {:?} to {:?}", 
           source_type, 

@@ -6,8 +6,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::network_result::input_missing_error;
-use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::geo_tree::GeoNode;
 
 pub fn eval_union_2d<'a>(

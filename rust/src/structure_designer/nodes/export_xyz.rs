@@ -4,7 +4,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::common::atomic_structure::AtomicStructure;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::common::xyz_saver::save_xyz;

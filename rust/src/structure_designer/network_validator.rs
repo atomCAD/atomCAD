@@ -2,7 +2,7 @@ use crate::structure_designer::node_network::{NodeNetwork, ValidationError, Argu
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::node_type::Parameter;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use crate::structure_designer::data_type::DataType;   
 
 #[derive(Debug, Clone)]

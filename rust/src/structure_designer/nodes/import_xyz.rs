@@ -99,7 +99,7 @@ pub fn import_xyz_data_loader(value: &Value, design_dir: Option<&str>) -> io::Re
             Ok((resolved_path, _was_relative)) => {
                 // Load the XYZ file using the resolved absolute path
                 match load_xyz(&resolved_path, true) {
-                    Ok(mut atomic_structure) => {
+                    Ok(atomic_structure) => {
                         data.atomic_structure = Some(atomic_structure);
                     }
                     Err(_xyz_error) => {

@@ -1,6 +1,5 @@
 use crate::api::api_common::refresh_renderer;
 use crate::api::api_common::with_mut_cad_instance;
-use crate::common::atomic_structure_utils::auto_create_bonds;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::api::common_api_types::APIResult;
 use crate::common::xyz_loader::load_xyz;

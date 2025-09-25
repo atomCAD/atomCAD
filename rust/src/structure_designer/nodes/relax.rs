@@ -6,7 +6,6 @@ use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::common::simulation::minimize_energy;
-use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug, Clone)]
 pub struct RelaxEvalCache {
