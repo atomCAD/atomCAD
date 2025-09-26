@@ -29,8 +29,15 @@ use super::nodes::circle::CircleData;
 use super::nodes::rect::RectData;
 use super::nodes::half_plane::HalfPlaneData;
 use super::nodes::half_space::HalfSpaceData;
+use super::nodes::union::UnionData;
+use super::nodes::union_2d::Union2DData;
+use super::nodes::intersect::IntersectData;
+use super::nodes::intersect_2d::Intersect2DData;
+use super::nodes::diff::DiffData;
+use super::nodes::diff_2d::Diff2DData;
 use super::nodes::geo_trans::GeoTransData;
 use super::nodes::atom_cut::AtomCutData;
+use super::nodes::relax::RelaxData;
 use super::nodes::atom_trans::AtomTransData;
 use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
@@ -363,9 +370,9 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry2D,
-      node_data_creator: || Box::new(NoData {}),
-      node_data_saver: no_data_saver,
-      node_data_loader: no_data_loader,
+      node_data_creator: || Box::new(Union2DData {}),
+      node_data_saver: generic_node_data_saver::<Union2DData>,
+      node_data_loader: generic_node_data_loader::<Union2DData>,
     });
 
     ret.add_node_type(NodeType {
@@ -377,9 +384,9 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry2D,
-      node_data_creator: || Box::new(NoData {}),
-      node_data_saver: no_data_saver,
-      node_data_loader: no_data_loader,
+      node_data_creator: || Box::new(Intersect2DData {}),
+      node_data_saver: generic_node_data_saver::<Intersect2DData>,
+      node_data_loader: generic_node_data_loader::<Intersect2DData>,
     });
 
     ret.add_node_type(NodeType {
@@ -395,9 +402,9 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry2D,
-      node_data_creator: || Box::new(NoData {}),
-      node_data_saver: no_data_saver,
-      node_data_loader: no_data_loader,
+      node_data_creator: || Box::new(Diff2DData {}),
+      node_data_saver: generic_node_data_saver::<Diff2DData>,
+      node_data_loader: generic_node_data_loader::<Diff2DData>,
     });
 
     ret.add_node_type(NodeType {
@@ -502,9 +509,9 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
-      node_data_creator: || Box::new(NoData {}),
-      node_data_saver: no_data_saver,
-      node_data_loader: no_data_loader,
+      node_data_creator: || Box::new(UnionData {}),
+      node_data_saver: generic_node_data_saver::<UnionData>,
+      node_data_loader: generic_node_data_loader::<UnionData>,
     });
 
     ret.add_node_type(NodeType {
@@ -516,9 +523,9 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
-      node_data_creator: || Box::new(NoData {}),
-      node_data_saver: no_data_saver,
-      node_data_loader: no_data_loader,
+      node_data_creator: || Box::new(IntersectData {}),
+      node_data_saver: generic_node_data_saver::<IntersectData>,
+      node_data_loader: generic_node_data_loader::<IntersectData>,
     });
 
     ret.add_node_type(NodeType {
@@ -534,9 +541,9 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
-      node_data_creator: || Box::new(NoData {}),
-      node_data_saver: no_data_saver,
-      node_data_loader: no_data_loader,
+      node_data_creator: || Box::new(DiffData {}),
+      node_data_saver: generic_node_data_saver::<DiffData>,
+      node_data_loader: generic_node_data_loader::<DiffData>,
     });
 
     ret.add_node_type(NodeType {
@@ -724,9 +731,9 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
-      node_data_creator: || Box::new(NoData {}),
-      node_data_saver: no_data_saver,
-      node_data_loader: no_data_loader,
+      node_data_creator: || Box::new(RelaxData {}),
+      node_data_saver: generic_node_data_saver::<RelaxData>,
+      node_data_loader: generic_node_data_loader::<RelaxData>,
     });
 
     return ret;

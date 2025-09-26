@@ -9,63 +9,85 @@ use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::node_type::NodeType;
+use serde::{Serialize, Deserialize};
 
-pub fn eval_diff_2d<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext,
-) -> NetworkResult {
-  //let _timer = Timer::new("eval_diff");
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let base_input_name = registry.get_parameter_name(&node, 0);
-  let sub_input_name = registry.get_parameter_name(&node, 1);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Diff2DData {
+}
 
-  if node.arguments[0].is_empty() {
-    return input_missing_error(&base_input_name);
+impl NodeData for Diff2DData {
+  fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    None
   }
 
-  let (mut geometry, mut frame_translation) = helper_union(
-    network_evaluator,
-    network_stack,
-    node_id,
-    0,
-    registry,
-    context
-  );
+  fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+    None
+  }
 
-  if geometry.is_none() {
-    return error_in_input(&base_input_name);
-  } 
-
-  if !node.arguments[1].is_empty() {
-    let (sub_geometry, sub_frame_translation) = helper_union(
+  fn eval<'a>(
+    &self,
+    network_evaluator: &NetworkEvaluator,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    _decorate: bool,
+    context: &mut NetworkEvaluationContext,
+  ) -> NetworkResult {
+    //let _timer = Timer::new("eval_diff");
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    let base_input_name = registry.get_parameter_name(&node, 0);
+    let sub_input_name = registry.get_parameter_name(&node, 1);
+  
+    if node.arguments[0].is_empty() {
+      return input_missing_error(&base_input_name);
+    }
+  
+    let (mut geometry, mut frame_translation) = helper_union(
       network_evaluator,
       network_stack,
       node_id,
-      1,
+      0,
       registry,
       context
     );
   
-    if sub_geometry.is_none() {
-      return error_in_input(&sub_input_name);
+    if geometry.is_none() {
+      return error_in_input(&base_input_name);
+    } 
+  
+    if !node.arguments[1].is_empty() {
+      let (sub_geometry, sub_frame_translation) = helper_union(
+        network_evaluator,
+        network_stack,
+        node_id,
+        1,
+        registry,
+        context
+      );
+    
+      if sub_geometry.is_none() {
+        return error_in_input(&sub_input_name);
+      }
+  
+      geometry = Some(GeoNode::Difference2D { base: Box::new(geometry.unwrap()), sub: Box::new(sub_geometry.unwrap()) });
+  
+      frame_translation += sub_frame_translation;
+      frame_translation *= 0.5;
     }
-
-    geometry = Some(GeoNode::Difference2D { base: Box::new(geometry.unwrap()), sub: Box::new(sub_geometry.unwrap()) });
-
-    frame_translation += sub_frame_translation;
-    frame_translation *= 0.5;
+  
+    return NetworkResult::Geometry2D(GeometrySummary2D { 
+      frame_transform: Transform2D::new(
+        frame_translation,
+        0.0,
+      ),
+      geo_tree_root: geometry.unwrap(),
+    });
   }
-
-  return NetworkResult::Geometry2D(GeometrySummary2D { 
-    frame_transform: Transform2D::new(
-      frame_translation,
-      0.0,
-    ),
-    geo_tree_root: geometry.unwrap(),
-  });
+  
 }
 
 fn helper_union<'a>(network_evaluator: &NetworkEvaluator,

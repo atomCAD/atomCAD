@@ -31,48 +31,48 @@ impl NodeData for CuboidData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
-}
 
-pub fn eval_cuboid<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let cuboid_data = &node.data.as_any_ref().downcast_ref::<CuboidData>().unwrap();
-
-  let min_corner = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 0, 
-    cuboid_data.min_corner, 
-    NetworkResult::extract_ivec3
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  let extent = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 1, 
-    cuboid_data.extent, 
-    NetworkResult::extract_ivec3
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  let real_min_corner = min_corner.as_dvec3();
-  let real_extent = extent.as_dvec3();
-  let center = real_min_corner + real_extent / 2.0;
-
-  return NetworkResult::Geometry(GeometrySummary { 
-    frame_transform: Transform::new(
-      center,
-      DQuat::IDENTITY,
-    ),
-    geo_tree_root: GeoNode::Cuboid {
-      min_corner: min_corner,
-      extent: extent 
-    },
-  });
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext
+    ) -> NetworkResult {
+      let min_corner = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0, 
+        self.min_corner, 
+        NetworkResult::extract_ivec3
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      let extent = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 1, 
+        self.extent, 
+        NetworkResult::extract_ivec3
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      let real_min_corner = min_corner.as_dvec3();
+      let real_extent = extent.as_dvec3();
+      let center = real_min_corner + real_extent / 2.0;
+    
+      return NetworkResult::Geometry(GeometrySummary { 
+        frame_transform: Transform::new(
+          center,
+          DQuat::IDENTITY,
+        ),
+        geo_tree_root: GeoNode::Cuboid {
+          min_corner: min_corner,
+          extent: extent 
+        },
+      });
+    }
+    
 }

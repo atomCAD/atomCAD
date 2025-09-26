@@ -21,6 +21,7 @@ use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -39,33 +40,35 @@ impl NodeData for HalfPlaneData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
         None
     }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        _registry: &NodeTypeRegistry,
+        _decorate: bool,
+        _context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+      // Convert point1 to double precision for calculations
+      let point1 = self.point1.as_dvec2();
+    
+      // Calculate direction vector from point1 to point2
+      let dir_vector = self.point2.as_dvec2() - point1;
+      let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
+    
+      // Use point1 as the position and calculate the angle for the transform
+      return NetworkResult::Geometry2D(
+        GeometrySummary2D {
+          frame_transform: Transform2D::new(
+            point1,
+            normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
+          ),
+          geo_tree_root: GeoNode::HalfPlane { point1: self.point1, point2: self.point2 },
+        });
+    }
 }
 
-pub fn eval_half_plane<'a>(
-    network_stack: &Vec<NetworkStackElement<'a>>,
-    node_id: u64, _registry: &NodeTypeRegistry,
-    _context: &mut NetworkEvaluationContext,
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let half_plane_data = &node.data.as_any_ref().downcast_ref::<HalfPlaneData>().unwrap();
-
-  // Convert point1 to double precision for calculations
-  let point1 = half_plane_data.point1.as_dvec2();
-
-  // Calculate direction vector from point1 to point2
-  let dir_vector = half_plane_data.point2.as_dvec2() - point1;
-  let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
-
-  // Use point1 as the position and calculate the angle for the transform
-  return NetworkResult::Geometry2D(
-    GeometrySummary2D {
-      frame_transform: Transform2D::new(
-        point1,
-        normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
-      ),
-      geo_tree_root: GeoNode::HalfPlane { point1: half_plane_data.point1, point2: half_plane_data.point2 },
-    });
-}
 
 #[derive(Clone)]
 pub struct HalfPlaneGadget {

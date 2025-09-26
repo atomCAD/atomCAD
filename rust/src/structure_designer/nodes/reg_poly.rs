@@ -14,6 +14,8 @@ use crate::util::mat_utils::consistent_round;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegPolyData {
@@ -29,36 +31,41 @@ impl NodeData for RegPolyData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
         None
     }
-}
 
-pub fn eval_reg_poly<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let polygon_data = &node.data.as_any_ref().downcast_ref::<RegPolyData>().unwrap();
-
-    let num_sides = max(3, polygon_data.num_sides);
-    let radius = max(1, polygon_data.radius);
-
-    let mut vertices: Vec<IVec2> = Vec::new();
-
-    for i in 0..num_sides {
-        // Calculate the ideal angle for this vertex
-        let angle = kth_angle(i, num_sides);        
-        // Find the lattice point for this angle
-        vertices.push(find_lattice_point(angle, radius));
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        _registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext) -> NetworkResult {    
+        let num_sides = max(3, self.num_sides);
+        let radius = max(1, self.radius);
+    
+        let mut vertices: Vec<IVec2> = Vec::new();
+    
+        for i in 0..num_sides {
+            // Calculate the ideal angle for this vertex
+            let angle = kth_angle(i, num_sides);        
+            // Find the lattice point for this angle
+            vertices.push(find_lattice_point(angle, radius));
+        }
+    
+        // Create a transform at the center of the polygon (origin)
+        // No rotation is needed for this type of shape
+        return NetworkResult::Geometry2D(
+          GeometrySummary2D {
+            frame_transform: Transform2D::new(
+              DVec2::new(0.0, 0.0),  // Center at origin
+              0.0,                   // No rotation
+            ),
+            geo_tree_root: GeoNode::Polygon { vertices },
+          }
+        );
     }
-
-    // Create a transform at the center of the polygon (origin)
-    // No rotation is needed for this type of shape
-    return NetworkResult::Geometry2D(
-      GeometrySummary2D {
-        frame_transform: Transform2D::new(
-          DVec2::new(0.0, 0.0),  // Center at origin
-          0.0,                   // No rotation
-        ),
-        geo_tree_root: GeoNode::Polygon { vertices },
-      }
-    );
 }
+
 
 /// Calculates the closest lattice point to a given floating point position
 fn closest_lattice_point(x: f64, y: f64) -> IVec2 {

@@ -3,47 +3,9 @@ use std::any::Any;
 
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::nodes::half_plane::eval_half_plane;
-use crate::structure_designer::nodes::polygon::eval_polygon;
-use crate::structure_designer::nodes::reg_poly::eval_reg_poly;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::common_constants;
-use crate::structure_designer::nodes::expr::eval_expr;
-use crate::structure_designer::nodes::map::eval_map;
-use crate::structure_designer::nodes::import_xyz::eval_import_xyz;
-use crate::structure_designer::nodes::export_xyz::eval_export_xyz;
-use crate::structure_designer::nodes::string::eval_string;
-use crate::structure_designer::nodes::bool::eval_bool;
-use crate::structure_designer::nodes::int::eval_int;
-use crate::structure_designer::nodes::float::eval_float;
-use crate::structure_designer::nodes::ivec2::eval_ivec2;
-use crate::structure_designer::nodes::ivec3::eval_ivec3;
-use crate::structure_designer::nodes::range::eval_range;
-use crate::structure_designer::nodes::vec2::eval_vec2;
-use crate::structure_designer::nodes::vec3::eval_vec3;
-use crate::structure_designer::nodes::geo_to_atom::eval_geo_to_atom;
-use crate::structure_designer::nodes::geo_trans::eval_geo_trans;
-use crate::structure_designer::nodes::sphere::eval_sphere;
-use crate::structure_designer::nodes::cuboid::eval_cuboid;
-use crate::structure_designer::nodes::intersect::eval_intersect;
-use crate::structure_designer::nodes::union::eval_union;
-use crate::structure_designer::nodes::parameter::eval_parameter;
-use crate::structure_designer::nodes::diff::eval_diff;
-use crate::structure_designer::nodes::intersect_2d::eval_intersect_2d;
-use crate::structure_designer::nodes::union_2d::eval_union_2d;
-use crate::structure_designer::nodes::diff_2d::eval_diff_2d;
-use crate::structure_designer::nodes::extrude::eval_extrude;
-use crate::structure_designer::nodes::half_space::eval_half_space;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
-use crate::structure_designer::nodes::anchor::eval_anchor;
-use crate::structure_designer::nodes::atom_cut::eval_atom_cut;
-use crate::structure_designer::nodes::atom_trans::eval_atom_trans;
-use crate::structure_designer::nodes::edit_atom::edit_atom::eval_edit_atom;
-use crate::structure_designer::nodes::stamp::eval_stamp;
-use crate::structure_designer::nodes::circle::eval_circle;
-use crate::structure_designer::nodes::rect::eval_rect;
-use crate::structure_designer::nodes::facet_shell::eval_facet_shell;
-use crate::structure_designer::nodes::relax::eval_relax;
 use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud_scene;
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud_scene;
 use crate::structure_designer::implicit_eval::dual_contour_3d::generate_dual_contour_3d_scene;
@@ -440,94 +402,23 @@ impl NetworkEvaluator {
 
     let result = if output_pin_index == (-1) {
       NetworkResult::Function(node.node_type_name.clone())
-    } else if node.node_type_name == "parameter" {
-      eval_parameter(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "expr" {
-      eval_expr(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "map" {
-      eval_map(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "string" {
-      eval_string(network_stack, node_id, registry, context)
-    } else if node.node_type_name == "bool" {
-      eval_bool(network_stack, node_id, registry, context)
-    } else if node.node_type_name == "int" {
-      eval_int(network_stack, node_id, registry, context)
-    } else if node.node_type_name == "float" {
-      eval_float(network_stack, node_id, registry, context)
-    } else if node.node_type_name == "ivec2" {
-      eval_ivec2(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "ivec3" {
-      eval_ivec3(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "range" {
-      eval_range(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "vec2" {
-      eval_vec2(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "vec3" {
-      eval_vec3(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "circle" {
-      eval_circle(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "rect" {
-      eval_rect(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "reg_poly" {
-      eval_reg_poly(network_stack, node_id, registry)
-    } else if node.node_type_name == "polygon" {
-      eval_polygon(network_stack, node_id, registry)
-    } else if node.node_type_name == "half_plane" {
-      eval_half_plane(network_stack, node_id, registry, context)
-    } else if node.node_type_name == "intersect_2d" {
-      eval_intersect_2d(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "union_2d" {
-      eval_union_2d(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "diff_2d" {
-      eval_diff_2d(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "extrude" {
-      eval_extrude(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "sphere" {
-      eval_sphere(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "cuboid" {
-      eval_cuboid(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "half_space" {
-      eval_half_space(network_stack, node_id, registry, context)
-    } else if node.node_type_name == "facet_shell" {
-      eval_facet_shell(network_stack, node_id, registry, context)
-    } else if node.node_type_name == "intersect" {
-      eval_intersect(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "union" {
-      eval_union(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "diff" {
-      eval_diff(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "geo_trans" {
-      eval_geo_trans(&self, network_stack, node_id, registry, context)
-    }else if node.node_type_name == "geo_to_atom" {
-      eval_geo_to_atom(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "edit_atom" {
-      eval_edit_atom(&self, network_stack, node_id, registry, decorate, context)
-    } else if node.node_type_name == "atom_trans" {
-      eval_atom_trans(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "anchor" {
-      eval_anchor(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "atom_cut" {
-      eval_atom_cut(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "import_xyz" {
-      eval_import_xyz(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "export_xyz" {
-      eval_export_xyz(&self, network_stack, node_id, registry, context)
-    } else if node.node_type_name == "stamp" {
-      eval_stamp(&self, network_stack, node_id, registry, decorate, context)
-    } else if node.node_type_name == "relax" {
-      eval_relax(&self, network_stack, node_id, registry, context)
-    } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) { // custom node
-      let mut child_network_stack = network_stack.clone();
-      child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
-      let result = self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), 0, registry, false, context);
-      if let NetworkResult::Error(_error) = &result {
-        NetworkResult::Error(format!("Error in {}", node.node_type_name))
-      } else { result }
     } else {
-      NetworkResult::None
+      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+      if registry.built_in_node_types.contains_key(&node.node_type_name) {
+        node.data.eval(&self, network_stack, node_id, registry, decorate, context)
+      } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) { // custom node{
+        let mut child_network_stack = network_stack.clone();
+        child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
+        let result = self.evaluate(&child_network_stack, child_network.return_node_id.unwrap(), 0, registry, false, context);
+        if let NetworkResult::Error(_error) = &result {
+          NetworkResult::Error(format!("Error in {}", node.node_type_name))
+        } else { result }        
+      } else {
+        NetworkResult::Error(format!("Unknown node type: {}", node.node_type_name))
+      }
     };
 
-    // Check for error and store it the context
+    // Check for error and store it in the context
     if let NetworkResult::Error(error_message) = &result {
       context.node_errors.insert(node_id, error_message.clone());
     }

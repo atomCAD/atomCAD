@@ -29,46 +29,46 @@ impl NodeData for CircleData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
+
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+      let center = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0, 
+        self.center, 
+        NetworkResult::extract_ivec2
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      let radius = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 1, 
+        self.radius, 
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      return NetworkResult::Geometry2D(
+        GeometrySummary2D {
+          frame_transform: Transform2D::new(
+            center.as_dvec2(),
+            0.0,
+          ),
+          geo_tree_root: GeoNode::Circle {
+            center: center,
+            radius: radius,
+          },
+      });
+    }
 }
 
-pub fn eval_circle<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext,
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let circle_data = &node.data.as_any_ref().downcast_ref::<CircleData>().unwrap();
-
-  let center = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 0, 
-    circle_data.center, 
-    NetworkResult::extract_ivec2
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  let radius = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 1, 
-    circle_data.radius, 
-    NetworkResult::extract_int
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  return NetworkResult::Geometry2D(
-    GeometrySummary2D {
-      frame_transform: Transform2D::new(
-        center.as_dvec2(),
-        0.0,
-      ),
-      geo_tree_root: GeoNode::Circle {
-        center: center,
-        radius: radius,
-      },
-  });
-}
 

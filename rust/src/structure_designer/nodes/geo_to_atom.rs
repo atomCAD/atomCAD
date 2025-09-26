@@ -92,63 +92,63 @@ impl NodeData for GeoToAtomData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
+
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext
+    ) -> NetworkResult {
+      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    
+      if node.arguments[0].is_empty() {
+        return input_missing_error("shape");
+      }
+    
+      let geo_node_id = node.arguments[0].get_node_id().unwrap();
+    
+      let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, 0, registry, false, context);
+    
+      let mesh = match pre_eval_result {
+        NetworkResult::Geometry(mesh) => mesh,
+        _ => return NetworkResult::Atomic(AtomicStructure::new()),
+      };
+    
+      let mut atomic_structure = AtomicStructure::new();
+      atomic_structure.frame_transform = mesh.frame_transform.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+    
+      // id:0 means there is no atom there
+      let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
+    
+      atomic_structure.crystal_meta_data = CrystalMetaData {
+        primary_atomic_number: self.primary_atomic_number,
+        secondary_atomic_number: self.secondary_atomic_number,
+        unit_cell_size: get_unit_cell_size(self.primary_atomic_number, self.secondary_atomic_number),
+        stamped_by_anchor_atom_type: None,
+      };
+    
+      process_box_for_atomic(
+        &mesh.geo_tree_root,
+        self,
+        &common_constants::IMPLICIT_VOLUME_MIN,
+        &(common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN),
+        &mut atom_pos_to_id,
+        &mut atomic_structure
+      );
+    
+      atomic_structure.remove_lone_atoms();
+    
+      if self.hydrogen_passivation {
+        hydrogen_passivate_diamond(&mut atomic_structure);
+      }
+    
+      return NetworkResult::Atomic(atomic_structure);
+    }
 }
 
-// generates diamond molecule from geometry in an optimized way
-pub fn eval_geo_to_atom<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
-  if node.arguments[0].is_empty() {
-    return input_missing_error("shape");
-  }
-
-  let geo_node_id = node.arguments[0].get_node_id().unwrap();
-
-  let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, 0, registry, false, context);
-
-  let mesh = match pre_eval_result {
-    NetworkResult::Geometry(mesh) => mesh,
-    _ => return NetworkResult::Atomic(AtomicStructure::new()),
-  };
-
-  let mut atomic_structure = AtomicStructure::new();
-  atomic_structure.frame_transform = mesh.frame_transform.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
-
-  // id:0 means there is no atom there
-  let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
-
-  let geo_to_atom_data = node.data.as_any_ref().downcast_ref::<GeoToAtomData>().unwrap();
-
-  atomic_structure.crystal_meta_data = CrystalMetaData {
-    primary_atomic_number: geo_to_atom_data.primary_atomic_number,
-    secondary_atomic_number: geo_to_atom_data.secondary_atomic_number,
-    unit_cell_size: get_unit_cell_size(geo_to_atom_data.primary_atomic_number, geo_to_atom_data.secondary_atomic_number),
-    stamped_by_anchor_atom_type: None,
-  };
-
-  process_box_for_atomic(
-    &mesh.geo_tree_root,
-    geo_to_atom_data,
-    &common_constants::IMPLICIT_VOLUME_MIN,
-    &(common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN),
-    &mut atom_pos_to_id,
-    &mut atomic_structure
-  );
-
-  atomic_structure.remove_lone_atoms();
-
-  if geo_to_atom_data.hydrogen_passivation {
-    hydrogen_passivate_diamond(&mut atomic_structure);
-  }
-
-  return NetworkResult::Atomic(atomic_structure);
-}
 
 fn process_box_for_atomic<'a>(
   geo_tree_root: &GeoNode,

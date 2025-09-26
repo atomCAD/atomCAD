@@ -21,7 +21,7 @@ use crate::structure_designer::common_constants;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use glam::f64::DQuat;
 use crate::structure_designer::node_type::NodeType;
-
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Facet {
@@ -448,37 +448,40 @@ impl NodeData for FacetShellData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
         None
     }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        _registry: &NodeTypeRegistry,
+        _decorate: bool,
+        _context: &mut NetworkEvaluationContext
+      ) -> NetworkResult {
+        let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+        let shapes: Vec<GeoNode> = self.cached_facets.iter().map(|facet| {
+          GeoNode::HalfSpace {
+            miller_index: facet.miller_index,
+            center: self.center,
+            shift: facet.shift,
+          }
+        }).collect();
+      
+        // Calculate transform for the result
+        // Use center position for translation
+        let center_pos = self.center.as_dvec3();
+      
+        return NetworkResult::Geometry(GeometrySummary {
+          frame_transform: Transform::new(
+            center_pos,
+            DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
+          ),
+          geo_tree_root: GeoNode::Intersection3D { shapes }
+        });
+      }
 }
 
-pub fn eval_facet_shell<'a>(
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  _registry: &NodeTypeRegistry,
-  _context: &mut NetworkEvaluationContext
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let facet_shell_data = node.data.as_any_ref().downcast_ref::<FacetShellData>().unwrap();
-
-  let shapes: Vec<GeoNode> = facet_shell_data.cached_facets.iter().map(|facet| {
-    GeoNode::HalfSpace {
-      miller_index: facet.miller_index,
-      center: facet_shell_data.center,
-      shift: facet.shift,
-    }
-  }).collect();
-
-  // Calculate transform for the result
-  // Use center position for translation
-  let center_pos = facet_shell_data.center.as_dvec3();
-
-  return NetworkResult::Geometry(GeometrySummary {
-    frame_transform: Transform::new(
-      center_pos,
-      DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
-    ),
-    geo_tree_root: GeoNode::Intersection3D { shapes }
-  });
-}
 
 #[derive(Clone)]
 pub struct FacetShellGadget {

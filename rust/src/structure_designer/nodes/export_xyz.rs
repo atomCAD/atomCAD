@@ -25,6 +25,60 @@ impl NodeData for ExportXYZData {
   fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
     None
   }
+
+  fn eval<'a>(
+    &self,
+    network_evaluator: &NetworkEvaluator,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    _decorate: bool,
+    context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
+
+    let atomic_structure = match network_evaluator.evaluate_required(
+      network_stack, node_id, registry, context, 0, 
+      NetworkResult::extract_atomic
+    ) {
+      Ok(value) => value,
+      Err(error) => return error,
+    };
+  
+    let file_name = match network_evaluator.evaluate_or_default(
+      network_stack, node_id, registry, context, 1, 
+      self.file_name.clone(), 
+      NetworkResult::extract_string
+    ) {
+      Ok(value) => value,
+      Err(error) => return error,
+    };
+  
+    // Check if file name is empty
+    if file_name.is_empty() {
+      return NetworkResult::Error("Missing export XYZ file name".to_string());
+    }
+  
+    // Get design directory from registry
+    let design_dir = registry.design_file_name
+      .as_ref()
+      .and_then(|design_path| get_parent_directory(design_path));
+    
+    // Resolve the file path (handle relative paths)
+    let resolved_path = match resolve_path(&file_name, design_dir.as_deref()) {
+      Ok((path, _was_relative)) => path,
+      Err(_) => return NetworkResult::Error(format!("Failed to resolve export path: {}", file_name)),
+    };
+  
+    // Save the atomic structure to XYZ file
+    match save_xyz(&atomic_structure, &resolved_path) {
+      Ok(()) => {
+        // Return the atomic structure (pass-through)
+        NetworkResult::Atomic(atomic_structure)
+      }
+      Err(err) => {
+        NetworkResult::Error(format!("Failed to save XYZ file '{}': {}", file_name, err))
+      }
+    }
+  }
 }
 
 impl ExportXYZData {
@@ -32,60 +86,6 @@ impl ExportXYZData {
       Self {
           file_name: String::new(),
       }
-  }
-}
-
-pub fn eval_export_xyz<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let node_data = &node.data.as_any_ref().downcast_ref::<ExportXYZData>().unwrap();
-
-  let atomic_structure = match network_evaluator.evaluate_required(
-    network_stack, node_id, registry, context, 0, 
-    NetworkResult::extract_atomic
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  let file_name = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 1, 
-    node_data.file_name.clone(), 
-    NetworkResult::extract_string
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  // Check if file name is empty
-  if file_name.is_empty() {
-    return NetworkResult::Error("Missing export XYZ file name".to_string());
-  }
-
-  // Get design directory from registry
-  let design_dir = registry.design_file_name
-    .as_ref()
-    .and_then(|design_path| get_parent_directory(design_path));
-  
-  // Resolve the file path (handle relative paths)
-  let resolved_path = match resolve_path(&file_name, design_dir.as_deref()) {
-    Ok((path, _was_relative)) => path,
-    Err(_) => return NetworkResult::Error(format!("Failed to resolve export path: {}", file_name)),
-  };
-
-  // Save the atomic structure to XYZ file
-  match save_xyz(&atomic_structure, &resolved_path) {
-    Ok(()) => {
-      // Return the atomic structure (pass-through)
-      NetworkResult::Atomic(atomic_structure)
-    }
-    Err(err) => {
-      NetworkResult::Error(format!("Failed to save XYZ file '{}': {}", file_name, err))
-    }
   }
 }
 

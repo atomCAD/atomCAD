@@ -25,35 +25,37 @@ impl NodeData for IVec2Data {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
+
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext
+    ) -> NetworkResult {
+      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    
+      let x = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0, 
+        self.value.x, 
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      let y = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 1, 
+        self.value.y, 
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      return NetworkResult::IVec2(IVec2{x, y});
+    }
 }
 
-pub fn eval_ivec2<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let ivec2_data = &node.data.as_any_ref().downcast_ref::<IVec2Data>().unwrap();
-
-  let x = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 0, 
-    ivec2_data.value.x, 
-    NetworkResult::extract_int
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  let y = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 1, 
-    ivec2_data.value.y, 
-    NetworkResult::extract_int
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  return NetworkResult::IVec2(IVec2{x, y});
-}

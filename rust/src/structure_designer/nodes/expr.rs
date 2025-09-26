@@ -109,48 +109,50 @@ impl NodeData for ExprData {
       
       Some(custom_node_type)
     }
-}
 
-pub fn eval_expr<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext,
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let expr_data = &node.data.as_any_ref().downcast_ref::<ExprData>().unwrap();
-
-  // Collect variable values for evaluation
-  let mut variables: HashMap<String, NetworkResult> = HashMap::new();
-  
-  // Go through all parameter indices and evaluate them
-  for (param_index, param) in expr_data.parameters.iter().enumerate() {
-    if let Some(result) = network_evaluator.evaluate_arg(
-      network_stack,
-      node_id,
-      registry,
-      context,
-      param_index,
-    ) {
-      // Check if the result is an error
-      if let NetworkResult::Error(_) = result {
-        return error_in_input(&param.name);
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    
+      // Collect variable values for evaluation
+      let mut variables: HashMap<String, NetworkResult> = HashMap::new();
+      
+      // Go through all parameter indices and evaluate them
+      for (param_index, param) in self.parameters.iter().enumerate() {
+        if let Some(result) = network_evaluator.evaluate_arg(
+          network_stack,
+          node_id,
+          registry,
+          context,
+          param_index,
+        ) {
+          // Check if the result is an error
+          if let NetworkResult::Error(_) = result {
+            return error_in_input(&param.name);
+          }
+          
+          // Add the variable to our collection
+          variables.insert(param.name.clone(), result);
+        } else {
+          // Input pin is not connected
+          return input_missing_error(&param.name);
+        }
       }
       
-      // Add the variable to our collection
-      variables.insert(param.name.clone(), result);
-    } else {
-      // Input pin is not connected
-      return input_missing_error(&param.name);
+      // If we have a parsed expression, evaluate it
+      if let Some(ref expr) = self.expr {
+        let function_implementations = get_function_implementations();
+        expr.evaluate(&variables, function_implementations)
+      } else {
+        NetworkResult::Error("Expression not parsed".to_string())
+      }
     }
-  }
-  
-  // If we have a parsed expression, evaluate it
-  if let Some(ref expr) = expr_data.expr {
-    let function_implementations = get_function_implementations();
-    expr.evaluate(&variables, function_implementations)
-  } else {
-    NetworkResult::Error("Expression not parsed".to_string())
-  }
+    
 }

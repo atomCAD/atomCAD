@@ -24,19 +24,19 @@ impl NodeData for MapData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
+
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext
+    ) -> NetworkResult {      
+      // TODO
+    
+      return NetworkResult::None;
+    }
 }
 
-pub fn eval_map<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let map_data = &node.data.as_any_ref().downcast_ref::<MapData>().unwrap();
-  
-  // TODO
-
-  return NetworkResult::None;
-}

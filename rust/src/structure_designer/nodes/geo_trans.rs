@@ -54,89 +54,90 @@ impl NodeData for GeoTransData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
-}
 
-pub fn eval_geo_trans<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext,
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let shape_input_name = registry.get_parameter_name(&node, 0);
-
-  if node.arguments[0].is_empty() {
-    return input_missing_error(&shape_input_name);
-  }
-
-  let input_node_id = node.arguments[0].get_node_id().unwrap();
-  let shape_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-
-  if let NetworkResult::Error(_error) = shape_val {
-    return error_in_input(&shape_input_name);
-  } else if let NetworkResult::Geometry(shape) = shape_val {
-
-    let geo_trans_data = &node.data.as_any_ref().downcast_ref::<GeoTransData>().unwrap();
-
-    let translation = match network_evaluator.evaluate_or_default(
-      network_stack, node_id, registry, context, 1, 
-      geo_trans_data.translation, 
-      NetworkResult::extract_ivec3
-    ) {
-      Ok(value) => value,
-      Err(error) => return error,
-    };
-  
-    let rotation = match network_evaluator.evaluate_or_default(
-      network_stack, node_id, registry, context, 2, 
-      geo_trans_data.rotation, 
-      NetworkResult::extract_ivec3
-    ) {
-      Ok(value) => value,
-      Err(error) => return error,
-    };
-
-    let real_translation = translation.as_dvec3();
-    let rotation_euler = rotation.as_dvec3() * PI * 0.5;
-    let rotation_quat = DQuat::from_euler(
-      glam::EulerRot::XYZ,
-      rotation_euler.x, 
-      rotation_euler.y, 
-      rotation_euler.z);
-
-    let frame_transform = shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
-
-    // Store evaluation cache for selected node
-    if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
-      let eval_cache = GeoTransEvalCache {
-        input_frame_transform: shape.frame_transform.clone(),
-      };
-      context.selected_node_eval_cache = Some(Box::new(eval_cache));
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+      let shape_input_name = registry.get_parameter_name(&node, 0);
+    
+      if node.arguments[0].is_empty() {
+        return input_missing_error(&shape_input_name);
+      }
+    
+      let input_node_id = node.arguments[0].get_node_id().unwrap();
+      let shape_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
+    
+      if let NetworkResult::Error(_error) = shape_val {
+        return error_in_input(&shape_input_name);
+      } else if let NetworkResult::Geometry(shape) = shape_val {
+    
+        let translation = match network_evaluator.evaluate_or_default(
+          network_stack, node_id, registry, context, 1, 
+          self.translation, 
+          NetworkResult::extract_ivec3
+        ) {
+          Ok(value) => value,
+          Err(error) => return error,
+        };
+      
+        let rotation = match network_evaluator.evaluate_or_default(
+          network_stack, node_id, registry, context, 2, 
+          self.rotation, 
+          NetworkResult::extract_ivec3
+        ) {
+          Ok(value) => value,
+          Err(error) => return error,
+        };
+    
+        let real_translation = translation.as_dvec3();
+        let rotation_euler = rotation.as_dvec3() * PI * 0.5;
+        let rotation_quat = DQuat::from_euler(
+          glam::EulerRot::XYZ,
+          rotation_euler.x, 
+          rotation_euler.y, 
+          rotation_euler.z);
+    
+        let frame_transform = shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
+    
+        // Store evaluation cache for selected node
+        if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+          let eval_cache = GeoTransEvalCache {
+            input_frame_transform: shape.frame_transform.clone(),
+          };
+          context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+    
+        // We need to be a bit tricky here.
+        // The input geometry (shape) is already transformed by the input transform.
+        // So theoretically we need to do the inverse of the input transform (shape transform) so the geometry is first transformed back
+        // to its local position.
+        // And then we apply the whole frame transform.
+        let rot = frame_transform.rotation * shape.frame_transform.rotation.inverse();
+        let tr = Transform::new(
+          rot.mul_vec3(-shape.frame_transform.translation) + frame_transform.translation, 
+          rot
+        );
+    
+        return NetworkResult::Geometry(GeometrySummary { 
+          frame_transform,
+          geo_tree_root: GeoNode::Transform {
+            transform: tr,
+            shape: Box::new(shape.geo_tree_root),
+          },
+        });
+      } else {
+        return error_in_input(&shape_input_name);
+      }
     }
-
-    // We need to be a bit tricky here.
-    // The input geometry (shape) is already transformed by the input transform.
-    // So theoretically we need to do the inverse of the input transform (shape transform) so the geometry is first transformed back
-    // to its local position.
-    // And then we apply the whole frame transform.
-    let rot = frame_transform.rotation * shape.frame_transform.rotation.inverse();
-    let tr = Transform::new(
-      rot.mul_vec3(-shape.frame_transform.translation) + frame_transform.translation, 
-      rot
-    );
-
-    return NetworkResult::Geometry(GeometrySummary { 
-      frame_transform,
-      geo_tree_root: GeoNode::Transform {
-        transform: tr,
-        shape: Box::new(shape.geo_tree_root),
-      },
-    });
-  } else {
-    return error_in_input(&shape_input_name);
-  }
 }
+
 
 #[derive(Clone)]
 pub struct GeoTransGadget {

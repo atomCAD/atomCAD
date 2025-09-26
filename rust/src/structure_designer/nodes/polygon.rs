@@ -20,6 +20,8 @@ use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -35,21 +37,26 @@ impl NodeData for PolygonData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
         None
     }
-}
 
-pub fn eval_polygon<'a>(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, _registry: &NodeTypeRegistry) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let polygon_data = &node.data.as_any_ref().downcast_ref::<PolygonData>().unwrap();
-
-  return NetworkResult::Geometry2D(
-    GeometrySummary2D {
-      frame_transform: Transform2D::new(
-        DVec2::new(0.0, 0.0),
-        0.0,
-      ),
-      geo_tree_root: GeoNode::Polygon { vertices: polygon_data.vertices.clone() },
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        _registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {    
+      return NetworkResult::Geometry2D(
+        GeometrySummary2D {
+          frame_transform: Transform2D::new(
+            DVec2::new(0.0, 0.0),
+            0.0,
+          ),
+          geo_tree_root: GeoNode::Polygon { vertices: self.vertices.clone() },
+        }
+      );
     }
-  );
 }
 
 #[derive(Clone)]

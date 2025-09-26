@@ -25,44 +25,45 @@ impl NodeData for Vec3Data {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
+
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext
+    ) -> NetworkResult {    
+      let x = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0, 
+        self.value.x, 
+        NetworkResult::extract_float
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      let y = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 1, 
+        self.value.y, 
+        NetworkResult::extract_float
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      let z = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2, 
+        self.value.z, 
+        NetworkResult::extract_float
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+    
+      return NetworkResult::Vec3(DVec3{x, y, z});  
+    }
+    
 }
 
-pub fn eval_vec3<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let vec3_data = &node.data.as_any_ref().downcast_ref::<Vec3Data>().unwrap();
-
-  let x = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 0, 
-    vec3_data.value.x, 
-    NetworkResult::extract_float
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  let y = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 1, 
-    vec3_data.value.y, 
-    NetworkResult::extract_float
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  let z = match network_evaluator.evaluate_or_default(
-    network_stack, node_id, registry, context, 2, 
-    vec3_data.value.z, 
-    NetworkResult::extract_float
-  ) {
-    Ok(value) => value,
-    Err(error) => return error,
-  };
-
-  return NetworkResult::Vec3(DVec3{x, y, z});  
-}

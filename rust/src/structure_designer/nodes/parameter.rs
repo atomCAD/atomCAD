@@ -34,6 +34,41 @@ impl NodeData for ParameterData {
 
       Some(custom_node_type)
     }
+
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      _decorate: bool,
+      context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+      let evaled_in_isolation = network_stack.len() < 2;
+    
+      if evaled_in_isolation {
+        return eval_default(network_evaluator, network_stack, node_id, registry, context);
+      }
+    
+      let parent_node_id = network_stack.last().unwrap().node_id;
+      let mut parent_network_stack = network_stack.clone();
+      parent_network_stack.pop();
+      let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
+    
+      // evaluate all the arguments of the parent node if any
+      if parent_node.arguments[self.param_index].is_empty() {
+        return eval_default(network_evaluator, network_stack, node_id, registry, context);
+      }
+    
+      return network_evaluator.evaluate_arg_required(
+        network_stack,
+        parent_node_id,
+        registry,
+        context,
+        self.param_index);
+    }
+    
 }
 
 fn eval_default<'a>(
@@ -49,37 +84,4 @@ fn eval_default<'a>(
     registry,
     context,
     0);
-}
-
-pub fn eval_parameter<'a>(
-  network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  registry: &NodeTypeRegistry,
-  context: &mut NetworkEvaluationContext,
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let evaled_in_isolation = network_stack.len() < 2;
-
-  if evaled_in_isolation {
-    return eval_default(network_evaluator, network_stack, node_id, registry, context);
-  }
-
-  let parent_node_id = network_stack.last().unwrap().node_id;
-  let param_data = &(*node.data).as_any_ref().downcast_ref::<ParameterData>().unwrap();
-  let mut parent_network_stack = network_stack.clone();
-  parent_network_stack.pop();
-  let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
-
-  // evaluate all the arguments of the parent node if any
-  if parent_node.arguments[param_data.param_index].is_empty() {
-    return eval_default(network_evaluator, network_stack, node_id, registry, context);
-  }
-
-  return network_evaluator.evaluate_arg_required(
-    network_stack,
-    parent_node_id,
-    registry,
-    context,
-    param_data.param_index);
 }

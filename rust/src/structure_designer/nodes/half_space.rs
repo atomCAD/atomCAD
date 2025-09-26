@@ -21,6 +21,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HalfSpaceData {
@@ -45,31 +46,32 @@ impl NodeData for HalfSpaceData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
         None
     }
-}
 
-pub fn eval_half_space<'a>(
-    network_stack: &Vec<NetworkStackElement<'a>>,
-    node_id: u64,
-    _registry: &NodeTypeRegistry,
-    _context: &mut NetworkEvaluationContext
-  ) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let half_space_data = &node.data.as_any_ref().downcast_ref::<HalfSpaceData>().unwrap();
-
-  let dir = half_space_data.miller_index.as_dvec3().normalize();
-  let center_pos = half_space_data.center.as_dvec3();
-
-  return NetworkResult::Geometry(GeometrySummary {
-    frame_transform: Transform::new(
-      center_pos,
-      DQuat::from_rotation_arc(DVec3::Y, dir),
-    ),
-    geo_tree_root: GeoNode::HalfSpace {
-        miller_index: half_space_data.miller_index,
-        center: half_space_data.center,
-        shift: half_space_data.shift,
-    },
-  });
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        _registry: &NodeTypeRegistry,
+        _decorate: bool,
+        _context: &mut NetworkEvaluationContext
+      ) -> NetworkResult {
+    
+      let dir = self.miller_index.as_dvec3().normalize();
+      let center_pos = self.center.as_dvec3();
+    
+      return NetworkResult::Geometry(GeometrySummary {
+        frame_transform: Transform::new(
+          center_pos,
+          DQuat::from_rotation_arc(DVec3::Y, dir),
+        ),
+        geo_tree_root: GeoNode::HalfSpace {
+            miller_index: self.miller_index,
+            center: self.center,
+            shift: self.shift,
+        },
+      });
+    }
 }
 
 #[derive(Clone)]

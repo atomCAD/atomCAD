@@ -7,6 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BoolData {
@@ -21,16 +22,16 @@ impl NodeData for BoolData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
-}
 
-pub fn eval_bool<'a>(
-  network_stack: &Vec<NetworkStackElement<'a>>,
-  node_id: u64,
-  _registry: &NodeTypeRegistry,
-  _context: &mut NetworkEvaluationContext
-) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let bool_data = &node.data.as_any_ref().downcast_ref::<BoolData>().unwrap();
-
-  return NetworkResult::Bool(bool_data.value);
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      _registry: &NodeTypeRegistry,
+      _decorate: bool,
+      _context: &mut NetworkEvaluationContext
+    ) -> NetworkResult {    
+      return NetworkResult::Bool(self.value);
+    }
 }

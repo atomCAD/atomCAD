@@ -175,29 +175,35 @@ impl NodeData for EditAtomData {
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
       None
     }
-}
 
-pub fn eval_edit_atom<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
-  if node.arguments[0].is_empty() {
-    return input_missing_error("molecule");
-  }
-
-  let input_node_id = node.arguments[0].get_node_id().unwrap();
-  let input_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-
-  if let NetworkResult::Error(_error) = input_val {
-    return error_in_input("molecule");
-  }
-
-  if let NetworkResult::Atomic(mut atomic_structure) = input_val {
-    let edit_atom_data = &node.data.as_any_ref().downcast_ref::<EditAtomData>().unwrap();
-
-    edit_atom_data.eval(&mut atomic_structure, decorate);
-    return NetworkResult::Atomic(atomic_structure);
-  }
-  return NetworkResult::Atomic(AtomicStructure::new());
+    fn eval<'a>(
+      &self,
+      network_evaluator: &NetworkEvaluator,
+      network_stack: &Vec<NetworkStackElement<'a>>,
+      node_id: u64,
+      registry: &NodeTypeRegistry,
+      decorate: bool,
+      context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext
+    ) -> NetworkResult {
+      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    
+      if node.arguments[0].is_empty() {
+        return input_missing_error("molecule");
+      }
+    
+      let input_node_id = node.arguments[0].get_node_id().unwrap();
+      let input_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
+    
+      if let NetworkResult::Error(_error) = input_val {
+        return error_in_input("molecule");
+      }
+    
+      if let NetworkResult::Atomic(mut atomic_structure) = input_val {
+        self.eval(&mut atomic_structure, decorate);
+        return NetworkResult::Atomic(atomic_structure);
+      }
+      return NetworkResult::Atomic(AtomicStructure::new());
+    }
 }
 
 // Returns whether an atom or a bond was hit or not.

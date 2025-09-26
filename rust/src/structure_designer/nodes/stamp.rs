@@ -47,6 +47,72 @@ impl NodeData for StampData {
   fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
     None
   }
+
+  fn eval<'a>(
+    &self,
+    network_evaluator: &NetworkEvaluator,
+    network_stack: &Vec<NetworkStackElement<'a>>,
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    decorate: bool,
+    context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext
+  ) -> NetworkResult {  
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+    let crystal_input_name = registry.get_parameter_name(&node, 0);
+  
+    if node.arguments[0].is_empty() {
+      return input_missing_error(&crystal_input_name);
+    }
+  
+    let input_node_id = node.arguments[0].get_node_id().unwrap();
+    let crystal_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
+  
+    if let NetworkResult::Error(_error) = crystal_val {
+      return error_in_input(&crystal_input_name);
+    }
+  
+    let stamp_input_name = registry.get_parameter_name(&node, 1);
+  
+    if node.arguments[1].is_empty() {
+      return input_missing_error(&stamp_input_name);
+    }
+  
+    let input_node_id = node.arguments[1].get_node_id().unwrap();
+    let stamp_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
+  
+    if let NetworkResult::Error(_error) = stamp_val {
+      return error_in_input(&stamp_input_name);
+    }
+  
+    if let NetworkResult::Atomic(stamp_structure) = stamp_val {
+  
+      let anchor_position = match stamp_structure.anchor_position {
+        Some(anchor_position) => {
+          anchor_position
+        },
+        None => {return NetworkResult::Error("stamp has no anchor position".to_string()); },
+      };
+      
+      if let NetworkResult::Atomic(mut crystal_structure) = crystal_val {
+  
+        if !(stamp_structure.crystal_meta_data.primary_atomic_number == crystal_structure.crystal_meta_data.primary_atomic_number &&
+        stamp_structure.crystal_meta_data.secondary_atomic_number == crystal_structure.crystal_meta_data.secondary_atomic_number) {
+          return NetworkResult::Error("stamp and crystal have different atomic numbers".to_string());
+        }
+  
+        for (index, stamp_placement) in self.stamp_placements.iter().enumerate() {
+          let is_selected = self.selected_stamp_placement.map_or(false, |selected_index| selected_index == index);
+          place_stamp(&mut crystal_structure, &stamp_structure, stamp_placement, decorate, is_selected);
+        }
+  
+        crystal_structure.crystal_meta_data.stamped_by_anchor_atom_type = Some(get_zinc_blende_atom_type_for_pos(&anchor_position));
+  
+        return NetworkResult::Atomic(crystal_structure);
+      }
+      return crystal_val;
+    }
+    return NetworkResult::Atomic(AtomicStructure::new());
+  }
 }
 
 impl StampData {
@@ -58,65 +124,7 @@ impl StampData {
   }
 }
 
-pub fn eval_stamp<'a>(network_evaluator: &NetworkEvaluator, network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64, registry: &NodeTypeRegistry, decorate: bool, context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
-  let node = NetworkStackElement::get_top_node(network_stack, node_id);
-  let crystal_input_name = registry.get_parameter_name(&node, 0);
 
-  if node.arguments[0].is_empty() {
-    return input_missing_error(&crystal_input_name);
-  }
-
-  let input_node_id = node.arguments[0].get_node_id().unwrap();
-  let crystal_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-
-  if let NetworkResult::Error(_error) = crystal_val {
-    return error_in_input(&crystal_input_name);
-  }
-
-  let stamp_input_name = registry.get_parameter_name(&node, 1);
-
-  if node.arguments[1].is_empty() {
-    return input_missing_error(&stamp_input_name);
-  }
-
-  let input_node_id = node.arguments[1].get_node_id().unwrap();
-  let stamp_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-
-  if let NetworkResult::Error(_error) = stamp_val {
-    return error_in_input(&stamp_input_name);
-  }
-
-  if let NetworkResult::Atomic(stamp_structure) = stamp_val {
-
-    let anchor_position = match stamp_structure.anchor_position {
-      Some(anchor_position) => {
-        anchor_position
-      },
-      None => {return NetworkResult::Error("stamp has no anchor position".to_string()); },
-    };
-
-    let stamp_data = &node.data.as_any_ref().downcast_ref::<StampData>().unwrap();
-    
-    if let NetworkResult::Atomic(mut crystal_structure) = crystal_val {
-
-      if !(stamp_structure.crystal_meta_data.primary_atomic_number == crystal_structure.crystal_meta_data.primary_atomic_number &&
-      stamp_structure.crystal_meta_data.secondary_atomic_number == crystal_structure.crystal_meta_data.secondary_atomic_number) {
-        return NetworkResult::Error("stamp and crystal have different atomic numbers".to_string());
-      }
-
-      for (index, stamp_placement) in stamp_data.stamp_placements.iter().enumerate() {
-        let is_selected = stamp_data.selected_stamp_placement.map_or(false, |selected_index| selected_index == index);
-        place_stamp(&mut crystal_structure, &stamp_structure, stamp_placement, decorate, is_selected);
-      }
-
-      crystal_structure.crystal_meta_data.stamped_by_anchor_atom_type = Some(get_zinc_blende_atom_type_for_pos(&anchor_position));
-
-      return NetworkResult::Atomic(crystal_structure);
-    }
-    return crystal_val;
-  }
-  return NetworkResult::Atomic(AtomicStructure::new());
-}
 
 fn place_stamp(
   crystal_structure: &mut AtomicStructure,
