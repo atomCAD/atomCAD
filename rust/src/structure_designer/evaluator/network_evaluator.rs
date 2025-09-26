@@ -404,7 +404,7 @@ impl NetworkEvaluator {
     let result = if output_pin_index == (-1) {
       let node_type = registry.get_node_type_for_node(node);
       let num_of_params = node_type.unwrap().parameters.len();
-      let captured_argument_values: Vec<NetworkResult> = Vec::new();
+      let mut captured_argument_values: Vec<NetworkResult> = Vec::new();
 
       for i in 0..num_of_params {
         let result = self.evaluate_arg(network_stack, node_id, registry, context, i);
@@ -416,8 +416,8 @@ impl NetworkEvaluator {
       }
 
       NetworkResult::Function(Closure {
-        node_type_name: node.node_type_name.clone(),
-        node_data: Box::new(node.data.clone()), // TODO
+        node_network_name: network_stack.last().unwrap().node_network.node_type.name.clone(),
+        node_id,
         captured_argument_values,
       })
     } else {

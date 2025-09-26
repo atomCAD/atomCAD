@@ -7,7 +7,6 @@ use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::node_data::NodeData;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -23,8 +22,8 @@ pub struct GeometrySummary {
 
 #[derive(Clone)]
 pub struct Closure {
-  pub node_type_name: String,
-  pub node_data: Box<dyn NodeData>,
+  pub node_network_name: String,
+  pub node_id: u64,
   pub captured_argument_values: Vec<NetworkResult>,
 }
 
@@ -252,7 +251,7 @@ impl NetworkResult {
           .collect();
         format!("[{}]", element_strings.join(", "))
       },
-      NetworkResult::Function(closure) => closure.node_type_name.clone(),
+      NetworkResult::Function(closure) => format!("network: {} node: {}", closure.node_network_name, closure.node_id),
       NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
       NetworkResult::Geometry(_) => "Geometry".to_string(),
       NetworkResult::Atomic(_) => "Atomic".to_string(),

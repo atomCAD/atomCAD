@@ -31,7 +31,7 @@ pub struct FunctionEvaluator {
 }
 
 impl FunctionEvaluator {
-  pub fn new(closure: Closure) -> Self {
+  pub fn new(closure: Closure, registry: &NodeTypeRegistry) -> Self {
     let mut ret = Self {
       node_network: NodeNetwork::new(NodeType {
         name: "_tmp_".to_string(),
@@ -45,12 +45,25 @@ impl FunctionEvaluator {
       main_node_id: 0,
     };
     // Add the main node.
-    //TODO: pass custom node type through the closure somehow.
+
+    let network = match registry.node_networks.get(&closure.node_network_name) {
+      Some(network) => network,
+      None => return ret,
+    };
+
+    let node = match network.nodes.get(&closure.node_id) {
+      Some(node) => node,
+      None => return ret,
+    };
+
+    let node_data = network.get_node_network_data(node_id);
+
+    //TODO: pass custom node type too.
     let main_node_id = ret.node_network.add_node(
-      &closure.node_type_name, 
+      &node.node_type_name, 
       DVec2::new(0.0, 0.0), 
       closure.captured_argument_values.len(), 
-      closure.node_data
+      node_data.clone()
     );
 
     // Add value nodes corresponding to parameters.
