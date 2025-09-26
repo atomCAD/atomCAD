@@ -1,0 +1,94 @@
+use crate::structure_designer::{node_network::NodeNetwork, node_type::NodeType};
+use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::node_data::NoData;
+use crate::structure_designer::node_type::no_data_saver;
+use crate::structure_designer::node_type::no_data_loader;
+use crate::structure_designer::evaluator::network_result::Closure;
+use crate::structure_designer::nodes::value::ValueData;
+use glam::f64::DVec2;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+
+/*
+ * FunctionEvaluator is capable of evaluating a function, more precisely evaluating a closure.
+ * The type of the function needs to be known at construction time,
+ * and the constructed FunctionEvaluator instance can be reused for multiple evaluations
+ * where the actual arguments can change.
+ * Construction of the FunctionEvaluator instance is somewhat expensive,
+ * but changing only the argument values is relativey cheap,
+ * so a constructed FunctionEvaluator should be reused as much as possible.
+ * 
+ * Internally the FunctionEvaluator builds a little node network so that nodes
+ * can be evaluated in a node network context.
+ */
+pub struct FunctionEvaluator {
+  node_network: NodeNetwork,
+  main_node_id: u64,
+  value_node_ids: Vec<u64>,
+}
+
+impl FunctionEvaluator {
+  pub fn new(closure: Closure) -> Self {
+    let mut ret = Self {
+      node_network: NodeNetwork::new(NodeType {
+        name: "_tmp_".to_string(),
+        parameters: Vec::new(),
+        output_type: DataType::None,
+        node_data_creator: || Box::new(NoData {}),
+        node_data_saver: no_data_saver,
+        node_data_loader: no_data_loader,
+      }),
+      value_node_ids: Vec::new(),
+      main_node_id: 0,
+    };
+    // Add the main node.
+    //TODO: pass custom node type through the closure somehow.
+    let main_node_id = ret.node_network.add_node(
+      &closure.node_type_name, 
+      DVec2::new(0.0, 0.0), 
+      closure.captured_argument_values.len(), 
+      closure.node_data
+    );
+
+    // Add value nodes corresponding to parameters.
+    for i in 0..closure.captured_argument_values.len() {
+      let value = closure.captured_argument_values[i].clone();
+      let node_id = ret.node_network.add_node(
+        "value", 
+        DVec2::new(0.0, 0.0), 
+        0, 
+        Box::new(ValueData { value }));
+      ret.value_node_ids.push(node_id);
+      ret.node_network.connect_nodes(node_id, 0, main_node_id, i, false);
+    }
+    ret.main_node_id = main_node_id;
+    ret
+  }
+
+  pub fn set_argument_value(&mut self, arg_index: usize, value: NetworkResult) {
+    let node_id = self.value_node_ids[arg_index];
+    self.node_network.set_node_network_data(node_id, Box::new(ValueData { value }));
+  }
+
+  pub fn evaluate(
+    &self,
+    evaluator: &NetworkEvaluator,
+    registry: &NodeTypeRegistry) -> NetworkResult {
+
+      let mut network_stack = Vec::new();
+      // We assign the root node network zero node id. It is not used in the evaluation.
+      network_stack.push(NetworkStackElement { node_network: &self.node_network, node_id: 0 });
+
+      // TODO: think about whether the context is ok this way?
+      evaluator.evaluate(
+        &network_stack,
+        self.main_node_id,
+        0,
+        registry,
+        false,
+        &mut NetworkEvaluationContext::new())
+  }
+}

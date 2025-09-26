@@ -19,6 +19,7 @@ use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::data_type::DataType;
 
 use super::network_result::input_missing_error;
+use super::network_result::Closure;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -401,7 +402,24 @@ impl NetworkEvaluator {
     let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
 
     let result = if output_pin_index == (-1) {
-      NetworkResult::Function(node.node_type_name.clone())
+      let node_type = registry.get_node_type_for_node(node);
+      let num_of_params = node_type.unwrap().parameters.len();
+      let captured_argument_values: Vec<NetworkResult> = Vec::new();
+
+      for i in 0..num_of_params {
+        let result = self.evaluate_arg(network_stack, node_id, registry, context, i);
+        if let Some(result) = result {
+          captured_argument_values.push(result);
+        } else {
+          captured_argument_values.push(NetworkResult::None); // TODO: treat NetworkResult::None as missing value 
+        }
+      }
+
+      NetworkResult::Function(Closure {
+        node_type_name: node.node_type_name.clone(),
+        node_data: Box::new(node.data.clone()), // TODO
+        captured_argument_values,
+      })
     } else {
       let node = NetworkStackElement::get_top_node(network_stack, node_id);
       if registry.built_in_node_types.contains_key(&node.node_type_name) {

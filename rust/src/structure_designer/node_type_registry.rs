@@ -14,8 +14,10 @@ use super::nodes::vec2::Vec2Data;
 use super::nodes::vec3::Vec3Data;
 use super::nodes::expr::ExprData;
 use super::nodes::expr::ExprParameter;
+use super::nodes::value::ValueData;
 use super::nodes::map::MapData;
 use crate::structure_designer::node_network::NodeNetwork;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use crate::structure_designer::node_network::Node;
 use super::nodes::extrude::ExtrudeData;
@@ -108,6 +110,17 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<ExprData>,
       node_data_loader: generic_node_data_loader::<ExprData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "value".to_string(),
+      parameters: vec![],
+      output_type: DataType::None,
+      node_data_creator: || Box::new(ValueData {
+        value: NetworkResult::None,
+      }),
+      node_data_saver: generic_node_data_saver::<ValueData>,
+      node_data_loader: generic_node_data_loader::<ValueData>,
     });
 
     ret.add_node_type(NodeType {

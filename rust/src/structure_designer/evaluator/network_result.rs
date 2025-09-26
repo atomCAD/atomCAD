@@ -7,6 +7,7 @@ use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::node_data::NodeData;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -18,6 +19,13 @@ pub struct GeometrySummary2D {
 pub struct GeometrySummary {
   pub frame_transform: Transform,
   pub geo_tree_root: GeoNode,
+}
+
+#[derive(Clone)]
+pub struct Closure {
+  pub node_type_name: String,
+  pub node_data: Box<dyn NodeData>,
+  pub captured_argument_values: Vec<NetworkResult>,
 }
 
 #[derive(Clone)]
@@ -35,8 +43,14 @@ pub enum NetworkResult {
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
   Array(Vec<NetworkResult>),
-  Function(String), // node type name 
+  Function(Closure), 
   Error(String),
+}
+
+impl Default for NetworkResult {
+  fn default() -> Self {
+    NetworkResult::None
+  }
 }
 
 impl NetworkResult {
@@ -238,7 +252,7 @@ impl NetworkResult {
           .collect();
         format!("[{}]", element_strings.join(", "))
       },
-      NetworkResult::Function(node_type_name) => node_type_name.clone(),
+      NetworkResult::Function(closure) => closure.node_type_name.clone(),
       NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
       NetworkResult::Geometry(_) => "Geometry".to_string(),
       NetworkResult::Atomic(_) => "Atomic".to_string(),

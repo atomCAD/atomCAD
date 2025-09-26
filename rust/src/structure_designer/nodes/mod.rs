@@ -36,7 +36,7 @@ pub mod export_xyz;
 pub mod atom_cut;
 pub mod range;
 pub mod map;
-
+pub mod value;
 
 
 
