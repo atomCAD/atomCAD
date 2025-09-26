@@ -29,7 +29,7 @@ pub struct GeoTransEvalCache {
   pub input_frame_transform: Transform,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeoTransData {
   #[serde(with = "ivec3_serializer")]
   pub translation: IVec3,
@@ -135,6 +135,10 @@ impl NodeData for GeoTransData {
       } else {
         return error_in_input(&shape_input_name);
       }
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

@@ -11,7 +11,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapData {
   pub input_type: DataType,
   pub output_type: DataType,
@@ -47,6 +47,10 @@ impl NodeData for MapData {
       // TODO
     
       return NetworkResult::None;
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

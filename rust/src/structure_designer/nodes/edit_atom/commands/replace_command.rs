@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 /*
  * Replace command: replaces all selected atoms with a specified atomic number
  */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplaceCommand {
     pub atomic_number: i32,
 }
@@ -31,5 +31,9 @@ impl EditAtomCommand for ReplaceCommand {
         for atom_id in selected_atom_ids {
             model.replace_atom(atom_id, self.atomic_number);
         }
+    }
+
+    fn clone_box(&self) -> Box<dyn EditAtomCommand> {
+        Box::new(self.clone())
     }
 }

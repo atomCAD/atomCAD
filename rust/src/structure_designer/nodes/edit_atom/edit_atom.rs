@@ -21,24 +21,29 @@ use crate::common::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
 use crate::structure_designer::node_type::NodeType;
 
+#[derive(Debug)]
 pub struct DefaultToolState {
   pub replacement_atomic_number: i32,
 }
 
+#[derive(Debug)]
 pub struct AddAtomToolState {
   pub atomic_number: i32,
 }
 
+#[derive(Debug)]
 pub struct AddBondToolState {
   pub last_atom_id: Option<u64>,
 }
 
+#[derive(Debug)]
 pub enum EditAtomTool {
   Default(DefaultToolState),
   AddAtom(AddAtomToolState),
   AddBond(AddBondToolState),
 }
 
+#[derive(Debug)]
 pub struct EditAtomData {
     pub history: Vec<Box<dyn EditAtomCommand>>,
     pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
@@ -203,6 +208,31 @@ impl NodeData for EditAtomData {
         return NetworkResult::Atomic(atomic_structure);
       }
       return NetworkResult::Atomic(AtomicStructure::new());
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        // Clone the history by using the clone_box method on each command
+        let cloned_history: Vec<Box<dyn EditAtomCommand>> = self.history
+            .iter()
+            .map(|command| command.clone_box())
+            .collect();
+
+        Box::new(EditAtomData {
+            history: cloned_history,
+            next_history_index: self.next_history_index,
+            active_tool: match &self.active_tool {
+                EditAtomTool::Default(state) => EditAtomTool::Default(DefaultToolState {
+                    replacement_atomic_number: state.replacement_atomic_number,
+                }),
+                EditAtomTool::AddAtom(state) => EditAtomTool::AddAtom(AddAtomToolState {
+                    atomic_number: state.atomic_number,
+                }),
+                EditAtomTool::AddBond(state) => EditAtomTool::AddBond(AddBondToolState {
+                    last_atom_id: state.last_atom_id,
+                }),
+            },
+            selection_transform: self.selection_transform.clone(),
+        })
     }
 }
 

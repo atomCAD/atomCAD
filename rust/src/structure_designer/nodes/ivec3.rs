@@ -11,7 +11,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IVec3Data {
   #[serde(with = "ivec3_serializer")]
   pub value: IVec3,
@@ -65,6 +65,10 @@ impl NodeData for IVec3Data {
       };
     
       return NetworkResult::IVec3(IVec3{x, y, z});
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

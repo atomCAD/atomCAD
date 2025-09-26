@@ -23,7 +23,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolygonData {
   #[serde(with = "vec_ivec2_serializer")]
   pub vertices: Vec<IVec2>,
@@ -56,6 +56,10 @@ impl NodeData for PolygonData {
           geo_tree_root: GeoNode::Polygon { vertices: self.vertices.clone() },
         }
       );
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

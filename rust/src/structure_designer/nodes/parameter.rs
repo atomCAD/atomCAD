@@ -10,7 +10,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParameterData {
   pub param_index: usize,
   pub param_name: String,
@@ -67,6 +67,10 @@ impl NodeData for ParameterData {
         registry,
         context,
         self.param_index);
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
     
 }

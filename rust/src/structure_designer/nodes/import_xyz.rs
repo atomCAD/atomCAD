@@ -14,7 +14,7 @@ use std::io;
 use crate::structure_designer::node_type::NodeType;
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportXYZData {
   pub file_name: Option<String>, // If none, nothing has been imported yet.
 
@@ -74,6 +74,10 @@ impl NodeData for ImportXYZData {
         Some(atomic_structure) => NetworkResult::Atomic(atomic_structure.clone()),
         None => NetworkResult::Error("No atomic structure imported".to_string()),
     };
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeData> {
+      Box::new(self.clone())
   }
 }
 

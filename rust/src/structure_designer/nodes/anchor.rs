@@ -17,7 +17,7 @@ use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::node_type::NodeType;
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnchorData {
   #[serde(with = "option_ivec3_serializer")]
   pub position: Option<IVec3>,
@@ -67,6 +67,10 @@ impl NodeData for AnchorData {
       return NetworkResult::Atomic(atomic_structure);
     }
     return NetworkResult::Atomic(AtomicStructure::new());
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeData> {
+      Box::new(self.clone())
   }
 }
 

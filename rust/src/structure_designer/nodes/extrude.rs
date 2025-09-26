@@ -16,7 +16,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
   pub height: i32,
 }
@@ -79,6 +79,10 @@ impl NodeData for ExtrudeData {
       } else {
         return error_in_input(&shape_input_name);
       }
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

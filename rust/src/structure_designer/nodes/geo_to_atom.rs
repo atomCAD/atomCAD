@@ -77,7 +77,7 @@ const IN_CELL_ZINCBLENDE_TYPES: [ZincBlendeAtomType; 18] = [
   ZincBlendeAtomType::Secondary,
 ];
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeoToAtomData {
   pub primary_atomic_number: i32,
   pub secondary_atomic_number: i32,
@@ -146,6 +146,10 @@ impl NodeData for GeoToAtomData {
       }
     
       return NetworkResult::Atomic(atomic_structure);
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

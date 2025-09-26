@@ -9,7 +9,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FloatData {
   pub value: f64,
 }
@@ -34,6 +34,10 @@ impl NodeData for FloatData {
     ) -> NetworkResult {
     
       return NetworkResult::Float(self.value);
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

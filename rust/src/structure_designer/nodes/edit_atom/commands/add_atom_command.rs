@@ -7,7 +7,7 @@ use crate::common::serialization_utils::dvec3_serializer;
 /*
  * Command to add an atom with the given atomic number and position.
  */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddAtomCommand {
   pub atomic_number: i32,
   #[serde(with = "dvec3_serializer")]
@@ -24,5 +24,9 @@ impl EditAtomCommand for AddAtomCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     let atom_id = model.obtain_next_atom_id();
     model.add_atom_with_id(atom_id, self.atomic_number, self.position, 1);
+  }
+
+  fn clone_box(&self) -> Box<dyn EditAtomCommand> {
+    Box::new(self.clone())
   }
 }

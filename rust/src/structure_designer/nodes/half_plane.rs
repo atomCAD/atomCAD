@@ -23,7 +23,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HalfPlaneData {
   #[serde(with = "ivec2_serializer")]
   pub point1: IVec2,
@@ -66,6 +66,10 @@ impl NodeData for HalfPlaneData {
           ),
           geo_tree_root: GeoNode::HalfPlane { point1: self.point1, point2: self.point2 },
         });
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

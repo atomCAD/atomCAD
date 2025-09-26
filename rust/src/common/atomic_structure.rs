@@ -17,7 +17,7 @@ use crate::common::crystal_utils::ZincBlendeAtomType;
 // or in a neighbouring cell most of the time. This is important for performance reasons.
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CrystalMetaData {
   pub primary_atomic_number: i32,
   pub secondary_atomic_number: i32,
@@ -28,14 +28,14 @@ pub struct CrystalMetaData {
   pub stamped_by_anchor_atom_type: Option<ZincBlendeAtomType>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum AtomDisplayState {
     Normal,
     Marked,
     SecondaryMarked,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AtomicStructureDecorator {
     pub atom_display_states: HashMap<u64, AtomDisplayState>,
 }
@@ -108,7 +108,7 @@ impl Hash for BondReference {
   }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Bond {
   pub id: u64,
   pub atom_id1: u64,
@@ -117,7 +117,7 @@ pub struct Bond {
   pub selected: bool,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Atom {
   pub id: u64,
   pub atomic_number: i32,
@@ -127,7 +127,7 @@ pub struct Atom {
   pub cluster_id: u64,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Cluster {
   pub id: u64,
   pub name: String,
@@ -137,7 +137,7 @@ pub struct Cluster {
   pub frame_locked_to_atoms: bool,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AtomicStructure {
   pub frame_transform: Transform,
   pub next_atom_id: u64,

@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 /*
  * Delete command: deletes the current selection
  */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteCommand {
 }
 
@@ -44,5 +44,9 @@ impl EditAtomCommand for DeleteCommand {
     }
 
     model.selection_transform = calc_selection_transform(model);
+  }
+
+  fn clone_box(&self) -> Box<dyn EditAtomCommand> {
+    Box::new(self.clone())
   }
 }

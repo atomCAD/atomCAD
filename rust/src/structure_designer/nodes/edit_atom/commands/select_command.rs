@@ -8,7 +8,7 @@ use crate::common::atomic_structure_utils::calc_selection_transform;
 /*
  * A selection command.
  */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SelectCommand {
   pub atom_ids: Vec<u64>,
   pub bond_references: Vec<BondReference>,
@@ -29,5 +29,9 @@ impl EditAtomCommand for SelectCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     model.select(&self.atom_ids, &self.bond_references, self.select_modifier.clone());
     model.selection_transform = calc_selection_transform(model);
+  }
+
+  fn clone_box(&self) -> Box<dyn EditAtomCommand> {
+    Box::new(self.clone())
   }
 }

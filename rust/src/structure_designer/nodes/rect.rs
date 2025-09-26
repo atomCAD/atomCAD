@@ -14,7 +14,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RectData {
   #[serde(with = "ivec2_serializer")]
   pub min_corner: IVec2,
@@ -73,6 +73,10 @@ impl NodeData for RectData {
             extent: extent 
           },
         });
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

@@ -25,6 +25,9 @@ pub trait NodeData: Any + AsAny  {
         decorate: bool,
         context: &mut NetworkEvaluationContext
     ) -> NetworkResult;
+
+    // Method to clone the trait object
+    fn clone_box(&self) -> Box<dyn NodeData>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,5 +54,9 @@ impl NodeData for NoData {
     ) -> NetworkResult {
         let node = NetworkStackElement::get_top_node(network_stack, node_id);
         NetworkResult::Error(format!("eval not implemented for node {}", node.node_type_name))
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(NoData {})
     }
 }

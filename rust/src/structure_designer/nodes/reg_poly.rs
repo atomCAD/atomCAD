@@ -17,7 +17,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegPolyData {
     pub num_sides: i32,     // Number of sides for the polygon
     pub radius: i32,        // Approximate radius in lattice units
@@ -64,8 +64,11 @@ impl NodeData for RegPolyData {
           }
         );
     }
-}
 
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+}
 
 /// Calculates the closest lattice point to a given floating point position
 fn closest_lattice_point(x: f64, y: f64) -> IVec2 {

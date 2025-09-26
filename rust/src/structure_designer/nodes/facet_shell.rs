@@ -23,7 +23,7 @@ use glam::f64::DQuat;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Facet {
   #[serde(with = "ivec3_serializer")]
   pub miller_index: IVec3,
@@ -37,7 +37,7 @@ fn default_visible() -> bool {
   true
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FacetShellData {
   pub max_miller_index: i32,
@@ -479,6 +479,10 @@ impl NodeData for FacetShellData {
           ),
           geo_tree_root: GeoNode::Intersection3D { shapes }
         });
+      }
+
+      fn clone_box(&self) -> Box<dyn NodeData> {
+          Box::new(self.clone())
       }
 }
 

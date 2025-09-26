@@ -9,7 +9,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ValueData {
   #[serde(skip)]
   pub value: NetworkResult,
@@ -42,5 +42,9 @@ impl NodeData for ValueData {
       _context: &mut NetworkEvaluationContext
     ) -> NetworkResult {
       return self.value.clone();
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }

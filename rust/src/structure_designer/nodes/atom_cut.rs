@@ -15,7 +15,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomCutData {
   pub cut_sdf_value: f64,
   pub unit_cell_size: f64,
@@ -92,6 +92,10 @@ impl NodeData for AtomCutData {
       return NetworkResult::Atomic(atomic_structure);
     }
     return NetworkResult::Atomic(AtomicStructure::new());
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeData> {
+      Box::new(self.clone())
   }
 }
 

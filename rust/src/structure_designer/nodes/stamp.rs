@@ -26,14 +26,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StampPlacement {
   #[serde(with = "ivec3_serializer")]
   pub position: IVec3,
   pub rotation: i32, // Index into CRYSTAL_ROTATION_MATRICES (0-11)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StampData {
   pub stamp_placements: Vec<StampPlacement>,
   pub selected_stamp_placement: Option<usize>,
@@ -112,6 +112,10 @@ impl NodeData for StampData {
       return crystal_val;
     }
     return NetworkResult::Atomic(AtomicStructure::new());
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeData> {
+      Box::new(self.clone())
   }
 }
 

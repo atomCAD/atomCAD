@@ -11,7 +11,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Vec3Data {
   #[serde(with = "dvec3_serializer")]
   pub value: DVec3,
@@ -63,6 +63,10 @@ impl NodeData for Vec3Data {
       };
     
       return NetworkResult::Vec3(DVec3{x, y, z});  
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
     
 }

@@ -6,7 +6,7 @@ use crate::util::transform::Transform;
 /*
  * A selection command.
  */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformCommand {
   pub relative_transform: Transform,
 }
@@ -35,5 +35,9 @@ impl EditAtomCommand for TransformCommand {
     
     // Update selection transform
     model.selection_transform = model.selection_transform.as_ref().map(|t| t.apply_to_new(&self.relative_transform));
+  }
+
+  fn clone_box(&self) -> Box<dyn EditAtomCommand> {
+    Box::new(self.clone())
   }
 }

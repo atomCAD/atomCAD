@@ -15,7 +15,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diff2DData {
 }
 
@@ -87,7 +87,10 @@ impl NodeData for Diff2DData {
       geo_tree_root: geometry.unwrap(),
     });
   }
-  
+
+  fn clone_box(&self) -> Box<dyn NodeData> {
+      Box::new(self.clone())
+  }
 }
 
 fn helper_union<'a>(network_evaluator: &NetworkEvaluator,

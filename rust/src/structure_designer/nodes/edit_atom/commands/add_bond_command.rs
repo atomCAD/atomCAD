@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 /*
  * Command to add a bond between the given atoms with the given multiplicity (1-3).
  */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddBondCommand {
   pub atom_id1: u64,
   pub atom_id2: u64,
@@ -22,5 +22,9 @@ impl EditAtomCommand for AddBondCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     let bond_id = model.obtain_next_bond_id();
     model.add_bond_with_id(bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
+  }
+
+  fn clone_box(&self) -> Box<dyn EditAtomCommand> {
+    Box::new(self.clone())
   }
 }

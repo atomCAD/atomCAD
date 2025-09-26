@@ -56,14 +56,19 @@ impl FunctionEvaluator {
       None => return ret,
     };
 
-    let node_data = network.get_node_network_data(node_id);
+    let node_data = network.get_node_network_data(closure.node_id);
 
     //TODO: pass custom node type too.
+    let cloned_node_data = match node_data {
+      Some(data) => Some(data.clone_box()),
+      None => None,
+    };
+    
     let main_node_id = ret.node_network.add_node(
       &node.node_type_name, 
       DVec2::new(0.0, 0.0), 
       closure.captured_argument_values.len(), 
-      node_data.clone()
+      cloned_node_data.unwrap_or_else(|| Box::new(crate::structure_designer::node_data::NoData {}))
     );
 
     // Add value nodes corresponding to parameters.

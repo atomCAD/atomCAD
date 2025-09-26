@@ -14,7 +14,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntersectData {
 }
 
@@ -77,5 +77,9 @@ impl NodeData for IntersectData {
       ),
       geo_tree_root: GeoNode::Intersection3D { shapes },
     });
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeData> {
+      Box::new(self.clone())
   }
 }

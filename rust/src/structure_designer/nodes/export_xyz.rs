@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::io;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportXYZData {
   pub file_name: String, // If empty, the file name is not given yet.
 }
@@ -78,6 +78,10 @@ impl NodeData for ExportXYZData {
         NetworkResult::Error(format!("Failed to save XYZ file '{}': {}", file_name, err))
       }
     }
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeData> {
+      Box::new(self.clone())
   }
 }
 

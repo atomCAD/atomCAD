@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 
 use crate::util::imat3::IMat3;
 
-#[derive(PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ZincBlendeAtomType {
     Primary,
     Secondary,

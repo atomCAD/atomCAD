@@ -22,7 +22,7 @@ pub struct AtomTransEvalCache {
   pub input_frame_transform: Transform,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomTransData {
   #[serde(with = "dvec3_serializer")]
   pub translation: DVec3,
@@ -114,6 +114,10 @@ impl NodeData for AtomTransData {
         return NetworkResult::Atomic(result_atomic_structure);
       }
       return NetworkResult::None;
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

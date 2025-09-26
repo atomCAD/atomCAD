@@ -23,7 +23,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HalfSpaceData {
   pub max_miller_index: i32,
   #[serde(with = "ivec3_serializer")]
@@ -71,6 +71,10 @@ impl NodeData for HalfSpaceData {
             shift: self.shift,
         },
       });
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }
 

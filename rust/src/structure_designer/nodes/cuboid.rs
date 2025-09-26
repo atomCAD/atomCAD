@@ -15,7 +15,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CuboidData {
   #[serde(with = "ivec3_serializer")]
   pub min_corner: IVec3,
@@ -73,6 +73,10 @@ impl NodeData for CuboidData {
           extent: extent 
         },
       });
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
     
 }

@@ -9,7 +9,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoolData {
   pub value: bool,
 }
@@ -33,5 +33,9 @@ impl NodeData for BoolData {
       _context: &mut NetworkEvaluationContext
     ) -> NetworkResult {    
       return NetworkResult::Bool(self.value);
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
     }
 }

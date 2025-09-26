@@ -16,14 +16,14 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_type::Parameter;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExprParameter {
     pub name: String,
     pub data_type: DataType,
     pub data_type_str: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExprData {
   pub parameters: Vec<ExprParameter>,
   pub expression: String,
@@ -154,5 +154,8 @@ impl NodeData for ExprData {
         NetworkResult::Error("Expression not parsed".to_string())
       }
     }
-    
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
 }
