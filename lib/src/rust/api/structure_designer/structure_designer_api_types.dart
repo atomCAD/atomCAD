@@ -568,6 +568,27 @@ class APIIntData {
           value == other.value;
 }
 
+class APIMapData {
+  final APIDataType inputType;
+  final APIDataType outputType;
+
+  const APIMapData({
+    required this.inputType,
+    required this.outputType,
+  });
+
+  @override
+  int get hashCode => inputType.hashCode ^ outputType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMapData &&
+          runtimeType == other.runtimeType &&
+          inputType == other.inputType &&
+          outputType == other.outputType;
+}
+
 class APINetworkWithValidationErrors {
   final String name;
   final String? validationErrors;

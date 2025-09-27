@@ -43,6 +43,7 @@ pub enum EditAtomTool {
   AddBond(AddBondToolState),
 }
 
+#[flutter_rust_bridge::frb(ignore)]
 #[derive(Debug)]
 pub struct EditAtomData {
     pub history: Vec<Box<dyn EditAtomCommand>>,
