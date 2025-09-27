@@ -76,14 +76,16 @@ class NodeNetworkPainter extends CustomPainter {
     if (pinType == PinType.output) {
       // output pin (source pin)
       final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId];
-      final sourceVertOffset = sourceNode!.inputPins.isEmpty
-          ? NODE_VERT_WIRE_OFFSET_EMPTY
-          : NODE_VERT_WIRE_OFFSET +
-              sourceNode.inputPins.length *
-                  NODE_VERT_WIRE_OFFSET_PER_PARAM *
-                  0.5;
+      final sourceVertOffset = (pinIndex == -1)
+          ? NODE_VERT_WIRE_OFFSET_FUNCTION_PIN
+          : (sourceNode!.inputPins.isEmpty
+              ? NODE_VERT_WIRE_OFFSET_EMPTY
+              : NODE_VERT_WIRE_OFFSET +
+                  sourceNode.inputPins.length *
+                      NODE_VERT_WIRE_OFFSET_PER_PARAM *
+                      0.5);
       return (
-        APIVec2ToOffset(sourceNode.position) +
+        APIVec2ToOffset(sourceNode!.position) +
             Offset(NODE_WIDTH, sourceVertOffset) +
             panOffset,
         sourceNode.outputType

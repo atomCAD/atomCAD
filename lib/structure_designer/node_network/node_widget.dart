@@ -234,7 +234,8 @@ class NodeWidget extends StatelessWidget {
             });
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            padding:
+                const EdgeInsets.only(top: 4, bottom: 4, left: 8, right: 2),
             decoration: BoxDecoration(
               color: node.selected
                   ? NODE_TITLE_COLOR_SELECTED
@@ -272,7 +273,8 @@ class NodeWidget extends StatelessWidget {
                 const SizedBox(width: 4),
                 // Function pin
                 PinWidget(
-                  pinReference: PinReference(node.id, PinType.output, -1, node.functionType),
+                  pinReference: PinReference(
+                      node.id, PinType.output, -1, node.functionType),
                   multi: false,
                 ),
               ],

@@ -151,6 +151,14 @@ impl NetworkResult {
     if DataType::can_be_converted_to(source_type, target_type) && source_type == target_type {
       return self;
     }
+    
+    // If conversion is possible and both types are functions, return self unmodified
+    // Function values don't need runtime conversion - partial evaluation happens at type level
+    if DataType::can_be_converted_to(source_type, target_type) {
+      if let (DataType::Function(_), DataType::Function(_)) = (source_type, target_type) {
+        return self;
+      }
+    }
 
     // Handle Error and None cases - they cannot be converted
     match &self {
@@ -219,15 +227,21 @@ impl NetworkResult {
       (NetworkResult::Vec3(vec), DataType::IVec3) => {
         NetworkResult::IVec3(IVec3::new(vec.x.round() as i32, vec.y.round() as i32, vec.z.round() as i32))
       }
-      
-      // All other conversions are invalid - return an error
-      (_original, target) => {
+    
+      (original, _target) => {
+        /*
         NetworkResult::Error(format!(
           "Cannot convert {:?} to {:?}", 
           source_type, 
           target
         ))
+        */
+        original
       }
+      /*
+      we could return a runtime error here, but for technical reasons None types are converted
+      to any value in runtime (due to the Value node), so we just return self for now.
+      */
     }
   }
 

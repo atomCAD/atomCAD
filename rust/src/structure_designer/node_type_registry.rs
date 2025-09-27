@@ -295,7 +295,7 @@ impl NodeTypeRegistry {
             data_type: DataType::Int,
         },        
       ],
-      output_type: DataType::IVec3,
+      output_type: DataType::Array(Box::new(DataType::Int)),
       node_data_creator: || Box::new(RangeData {
         start: 0,
         step: 1,
