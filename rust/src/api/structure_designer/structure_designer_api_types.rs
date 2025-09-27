@@ -252,3 +252,8 @@ pub struct APIAtomCutData {
   pub cut_sdf_value: f64,
   pub unit_cell_size: f64,
 }
+
+pub struct APIMapData {
+  pub input_type: APIDataType,
+  pub output_type: APIDataType,
+}

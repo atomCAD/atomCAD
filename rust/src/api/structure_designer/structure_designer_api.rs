@@ -72,7 +72,9 @@ use super::structure_designer_api_types::APIDataType;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::expr::ExprData;
+use crate::structure_designer::nodes::map::MapData;
 use super::structure_designer_api_types::APIExprData;
+use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprParameter;
@@ -1126,6 +1128,24 @@ pub fn get_expr_data(node_id: u64) -> Option<APIExprData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_map_data(node_id: u64) -> Option<APIMapData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+        let map_data = node_data.as_any_ref().downcast_ref::<MapData>()?;
+
+        Some(APIMapData {
+          input_type: data_type_to_api_data_type(&map_data.input_type),
+          output_type: data_type_to_api_data_type(&map_data.output_type),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_int_data(node_id: u64, data: APIIntData) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
@@ -1454,6 +1474,31 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
             });
 
             cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);
+            refresh_renderer(cad_instance, false);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_map_data(node_id: u64, data: APIMapData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let input_type = match api_data_type_to_data_type(&data.input_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None, // Fallback to None on error
+            };
+
+            let output_type = match api_data_type_to_data_type(&data.output_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None, // Fallback to None on error
+            };
+
+            let map_data = Box::new(MapData {
+                input_type,
+                output_type,
+            });
+
+            cad_instance.structure_designer.set_node_network_data(node_id, map_data);
             refresh_renderer(cad_instance, false);
         });
     }
