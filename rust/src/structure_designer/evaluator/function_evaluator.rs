@@ -21,8 +21,13 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
  * but changing only the argument values is relativey cheap,
  * so a constructed FunctionEvaluator should be reused as much as possible.
  * 
- * Internally the FunctionEvaluator builds a little node network so that nodes
+ * Internally the FunctionEvaluator is a bit of a hack now: it builds a little node network so that nodes
  * can be evaluated in a node network context.
+ * In the future this could be refactored only by rethinking the evaluation philosophy of the
+ * whole node network: if the evaluation would work by a framework evaluating the input
+ * pins of a node and the node would only get the input values, nodes could be evaluated
+ * without building a node network first. We need to think thorugh though: is it not too
+ * restricting? Are there nodes which need to decide which input pins they evaluate and how many times?
  */
 pub struct FunctionEvaluator {
   node_network: NodeNetwork,
