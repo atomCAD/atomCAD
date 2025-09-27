@@ -89,6 +89,34 @@ impl DataType {
       }
     }
     
+    // Check function type conversions for partial evaluation
+    // Function F can be converted to function G if:
+    // 1. F and G have the same return type
+    // 2. F contains all parameters of G as its first parameters
+    // 3. F may have additional parameters after G's parameters
+    if let (DataType::Function(source_func), DataType::Function(dest_func)) = (source_type, dest_type) {
+      // Check if return types are compatible
+      if !DataType::can_be_converted_to(&source_func.output_type, &dest_func.output_type) {
+        return false;
+      }
+      
+      // Check if source function has at least as many parameters as destination
+      if source_func.parameter_types.len() < dest_func.parameter_types.len() {
+        return false;
+      }
+      
+      // Check if the first N parameters of source match destination parameters
+      // where N is the number of parameters in destination function
+      for (i, dest_param) in dest_func.parameter_types.iter().enumerate() {
+        if !DataType::can_be_converted_to(&source_func.parameter_types[i], dest_param) {
+          return false;
+        }
+      }
+      
+      // If we get here, F can be converted to G by partial evaluation
+      return true;
+    }
+    
     // Define conversion rules
     match (source_type, dest_type) {
       // Int <-> Float conversions
