@@ -52,8 +52,7 @@ class ParameterEditorState extends State<ParameterEditor> {
               widget.model.setParameterData(
                 widget.nodeId,
                 APIParameterData(
-                  paramIndex:
-                      BigInt.from((widget.data?.paramIndex ?? 0) as num),
+                  paramIndex: widget.data?.paramIndex ?? BigInt.zero,
                   paramName: value,
                   dataType: widget.data?.dataType ??
                       const APIDataType(
