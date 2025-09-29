@@ -44,7 +44,6 @@ impl NodeData for ParameterData {
       _decorate: bool,
       context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
       let evaled_in_isolation = network_stack.len() < 2;
     
       if evaled_in_isolation {
@@ -62,7 +61,7 @@ impl NodeData for ParameterData {
       }
     
       return network_evaluator.evaluate_arg_required(
-        network_stack,
+        &parent_network_stack,
         parent_node_id,
         registry,
         context,
