@@ -790,6 +790,45 @@ class APIStringData {
           value == other.value;
 }
 
+class APIUnitCellData {
+  final double cellLengthA;
+  final double cellLengthB;
+  final double cellLengthC;
+  final double cellAngleAlpha;
+  final double cellAngleBeta;
+  final double cellAngleGamma;
+
+  const APIUnitCellData({
+    required this.cellLengthA,
+    required this.cellLengthB,
+    required this.cellLengthC,
+    required this.cellAngleAlpha,
+    required this.cellAngleBeta,
+    required this.cellAngleGamma,
+  });
+
+  @override
+  int get hashCode =>
+      cellLengthA.hashCode ^
+      cellLengthB.hashCode ^
+      cellLengthC.hashCode ^
+      cellAngleAlpha.hashCode ^
+      cellAngleBeta.hashCode ^
+      cellAngleGamma.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIUnitCellData &&
+          runtimeType == other.runtimeType &&
+          cellLengthA == other.cellLengthA &&
+          cellLengthB == other.cellLengthB &&
+          cellLengthC == other.cellLengthC &&
+          cellAngleAlpha == other.cellAngleAlpha &&
+          cellAngleBeta == other.cellAngleBeta &&
+          cellAngleGamma == other.cellAngleGamma;
+}
+
 class APIVec2Data {
   final APIVec2 value;
 

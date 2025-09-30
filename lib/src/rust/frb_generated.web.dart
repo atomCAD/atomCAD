@@ -161,6 +161,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APITransform dco_decode_api_transform(dynamic raw);
 
   @protected
+  APIUnitCellData dco_decode_api_unit_cell_data(dynamic raw);
+
+  @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw);
 
   @protected
@@ -285,6 +288,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform dco_decode_box_autoadd_api_transform(dynamic raw);
+
+  @protected
+  APIUnitCellData dco_decode_box_autoadd_api_unit_cell_data(dynamic raw);
 
   @protected
   APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
@@ -507,6 +513,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
 
   @protected
+  APIUnitCellData? dco_decode_opt_box_autoadd_api_unit_cell_data(dynamic raw);
+
+  @protected
   APIVec2Data? dco_decode_opt_box_autoadd_api_vec_2_data(dynamic raw);
 
   @protected
@@ -717,6 +726,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APITransform sse_decode_api_transform(SseDeserializer deserializer);
 
   @protected
+  APIUnitCellData sse_decode_api_unit_cell_data(SseDeserializer deserializer);
+
+  @protected
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
 
   @protected
@@ -868,6 +880,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform sse_decode_box_autoadd_api_transform(
+      SseDeserializer deserializer);
+
+  @protected
+  APIUnitCellData sse_decode_box_autoadd_api_unit_cell_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1136,6 +1152,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIUnitCellData? sse_decode_opt_box_autoadd_api_unit_cell_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIVec2Data? sse_decode_opt_box_autoadd_api_vec_2_data(
       SseDeserializer deserializer);
 
@@ -1369,6 +1389,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_transform(APITransform self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_unit_cell_data(
+      APIUnitCellData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
 
   @protected
@@ -1525,6 +1549,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_transform(
       APITransform self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_unit_cell_data(
+      APIUnitCellData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -1793,6 +1821,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_transform(
       APITransform? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_unit_cell_data(
+      APIUnitCellData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_vec_2_data(

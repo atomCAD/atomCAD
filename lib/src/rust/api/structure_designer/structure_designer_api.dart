@@ -372,3 +372,13 @@ APIResult exportVisibleAtomicStructuresAsXyz({required String filePath}) => Rust
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresAsXyz(
         filePath: filePath);
+
+APIUnitCellData? getUnitCellData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetUnitCellData(
+            nodeId: nodeId);
+
+void setUnitCellData({required BigInt nodeId, required APIUnitCellData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetUnitCellData(
+            nodeId: nodeId, data: data);

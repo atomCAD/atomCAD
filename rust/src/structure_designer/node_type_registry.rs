@@ -23,6 +23,7 @@ use crate::structure_designer::node_network::Node;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::facet_shell::FacetShellData;
 use super::nodes::parameter::ParameterData;
+use super::nodes::unit_cell::UnitCellData;
 use super::nodes::cuboid::CuboidData;
 use super::nodes::polygon::PolygonData;
 use super::nodes::reg_poly::RegPolyData;
@@ -51,6 +52,7 @@ use super::node_type::{generic_node_data_saver, generic_node_data_loader};
 use crate::structure_designer::serialization::edit_atom_data_serialization::{edit_atom_data_to_serializable, serializable_to_edit_atom_data, SerializableEditAtomData};
 use glam::{IVec3, DVec3, IVec2};
 use crate::structure_designer::data_type::{DataType, FunctionType};
+use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 
 
 pub struct NodeTypeRegistry {
@@ -302,6 +304,35 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<RangeData>,
       node_data_loader: generic_node_data_loader::<RangeData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "unit_cell".to_string(),
+      parameters: vec![
+        Parameter {
+            name: "a".to_string(),
+            data_type: DataType::Vec3,
+        },
+        Parameter {
+          name: "b".to_string(),
+          data_type: DataType::Vec3,
+        },
+        Parameter {
+          name: "c".to_string(),
+          data_type: DataType::Vec3,
+        },
+      ],
+      output_type: DataType::UnitCell,
+      node_data_creator: || Box::new(UnitCellData {
+        cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+        cell_length_b: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+        cell_length_c: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+        cell_angle_alpha: 90.0,
+        cell_angle_beta: 90.0,
+        cell_angle_gamma: 90.0,
+      }),
+      node_data_saver: generic_node_data_saver::<UnitCellData>,
+      node_data_loader: generic_node_data_loader::<UnitCellData>,
     });
 
     ret.add_node_type(NodeType {

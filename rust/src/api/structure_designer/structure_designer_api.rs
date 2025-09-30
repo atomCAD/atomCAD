@@ -45,7 +45,9 @@ use crate::api::structure_designer::structure_designer_api_types::APIEditAtomDat
 use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIAnchorData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
+use crate::api::structure_designer::structure_designer_api_types::APIUnitCellData;
 use crate::structure_designer::nodes::cuboid::CuboidData;
+use crate::structure_designer::nodes::unit_cell::UnitCellData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
@@ -1692,5 +1694,50 @@ pub fn export_visible_atomic_structures_as_xyz(file_path: String) -> APIResult {
         error_message: "CAD instance not available".to_string(),
       }
     )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let unit_cell_data = match node_data.as_any_ref().downcast_ref::<UnitCellData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIUnitCellData {
+          cell_length_a: unit_cell_data.cell_length_a,
+          cell_length_b: unit_cell_data.cell_length_b,
+          cell_length_c: unit_cell_data.cell_length_c,
+          cell_angle_alpha: unit_cell_data.cell_angle_alpha,
+          cell_angle_beta: unit_cell_data.cell_angle_beta,
+          cell_angle_gamma: unit_cell_data.cell_angle_gamma,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let unit_cell_data = Box::new(UnitCellData {
+        cell_length_a: data.cell_length_a,
+        cell_length_b: data.cell_length_b,
+        cell_length_c: data.cell_length_c,
+        cell_angle_alpha: data.cell_angle_alpha,
+        cell_angle_beta: data.cell_angle_beta,
+        cell_angle_gamma: data.cell_angle_gamma,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, unit_cell_data);
+      refresh_renderer(cad_instance, false);
+    });
   }
 }

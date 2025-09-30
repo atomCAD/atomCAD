@@ -258,3 +258,12 @@ pub struct APIMapData {
   pub input_type: APIDataType,
   pub output_type: APIDataType,
 }
+
+pub struct APIUnitCellData {
+  pub cell_length_a: f64,
+  pub cell_length_b: f64,
+  pub cell_length_c: f64,
+  pub cell_angle_alpha: f64, // in degrees
+  pub cell_angle_beta: f64,  // in degrees
+  pub cell_angle_gamma: f64, // in degrees
+}

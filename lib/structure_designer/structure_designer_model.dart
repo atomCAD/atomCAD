@@ -543,6 +543,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setUnitCellData(BigInt nodeId, APIUnitCellData data) {
+    structure_designer_api.setUnitCellData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void refreshFromKernel() {
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames =

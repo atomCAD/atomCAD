@@ -34,6 +34,7 @@ import 'package:flutter_cad/structure_designer/node_data/expr_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
@@ -411,6 +412,17 @@ class NodeDataWidget extends StatelessWidget {
         return AtomCutEditor(
           nodeId: selectedNode.id,
           data: atomCutData,
+          model: model,
+        );
+      case 'unit_cell':
+        // Fetch the unit_cell data here in the parent widget
+        final unitCellData = getUnitCellData(
+          nodeId: selectedNode.id,
+        );
+
+        return UnitCellEditor(
+          nodeId: selectedNode.id,
+          data: unitCellData,
           model: model,
         );
       default:
