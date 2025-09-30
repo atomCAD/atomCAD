@@ -34,12 +34,12 @@ impl NodeData for RegPolyData {
 
     fn eval<'a>(
         &self,
-        network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
-        node_id: u64,
+        _network_evaluator: &NetworkEvaluator,
+        _network_stack: &Vec<NetworkStackElement<'a>>,
+        _node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,
-        context: &mut NetworkEvaluationContext) -> NetworkResult {    
+        _context: &mut NetworkEvaluationContext) -> NetworkResult {    
         let num_sides = max(3, self.num_sides);
         let radius = max(1, self.radius);
     

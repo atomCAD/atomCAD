@@ -119,8 +119,6 @@ impl NodeData for ExprData {
       _decorate: bool,
       context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    
       // Collect variable values for evaluation
       let mut variables: HashMap<String, NetworkResult> = HashMap::new();
       

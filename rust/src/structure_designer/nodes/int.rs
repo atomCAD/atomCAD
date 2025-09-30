@@ -25,9 +25,9 @@ impl NodeData for IntData {
 
     fn eval<'a>(
       &self,
-      network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
-      node_id: u64,
+      _network_evaluator: &NetworkEvaluator,
+      _network_stack: &Vec<NetworkStackElement<'a>>,
+      _node_id: u64,
       _registry: &NodeTypeRegistry,
       _decorate: bool,
       _context: &mut NetworkEvaluationContext

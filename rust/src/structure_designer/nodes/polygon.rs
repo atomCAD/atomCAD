@@ -40,12 +40,12 @@ impl NodeData for PolygonData {
 
     fn eval<'a>(
         &self,
-        network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
-        node_id: u64,
+        _network_evaluator: &NetworkEvaluator,
+        _network_stack: &Vec<NetworkStackElement<'a>>,
+        _node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,
-        context: &mut NetworkEvaluationContext,
+        _context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {    
       return NetworkResult::Geometry2D(
         GeometrySummary2D {

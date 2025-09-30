@@ -451,15 +451,13 @@ impl NodeData for FacetShellData {
 
     fn eval<'a>(
         &self,
-        network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
-        node_id: u64,
+        _network_evaluator: &NetworkEvaluator,
+        _network_stack: &Vec<NetworkStackElement<'a>>,
+        _node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,
         _context: &mut NetworkEvaluationContext
       ) -> NetworkResult {
-        let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
         let shapes: Vec<GeoNode> = self.cached_facets.iter().map(|facet| {
           GeoNode::HalfSpace {
             miller_index: facet.miller_index,

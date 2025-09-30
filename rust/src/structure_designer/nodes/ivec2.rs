@@ -35,8 +35,6 @@ impl NodeData for IVec2Data {
       _decorate: bool,
       context: &mut NetworkEvaluationContext
     ) -> NetworkResult {
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    
       let x = match network_evaluator.evaluate_or_default(
         network_stack, node_id, registry, context, 0, 
         self.value.x, 
