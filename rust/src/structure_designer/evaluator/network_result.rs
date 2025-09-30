@@ -29,7 +29,7 @@ pub struct Closure {
 
 #[derive(Clone)]
 pub enum NetworkResult {
-  None,
+  None, // Always equivalent with no input pin connected
   Bool(bool),
   String(String),
   Int(i32),

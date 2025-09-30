@@ -241,17 +241,23 @@ impl NetworkEvaluator {
     default_value: T,
     extractor: impl FnOnce(NetworkResult) -> Option<T>,
   ) -> Result<T, NetworkResult> {
-    if let Some(result) = self.evaluate_arg(network_stack, node_id, registry, context, parameter_index) {
-      // Check for error first
-      if result.is_error() {
-        return Err(result);
-      }
-      // Try to extract the value
-      if let Some(value) = extractor(result) {
-        return Ok(value);
-      }
+    let result = self.evaluate_arg(network_stack, node_id, registry, context, parameter_index);
+    
+    if let NetworkResult::None = result {
+      return Ok(default_value);
     }
-    Ok(default_value)
+    
+    // Check for error first
+    if result.is_error() {
+      return Err(result);
+    }
+    
+    // Try to extract the value
+    if let Some(value) = extractor(result) {
+      Ok(value)
+    } else {
+      Ok(default_value)
+    }
   }
 
   /// Helper method for the common pattern: get value from required input pin
@@ -266,19 +272,19 @@ impl NetworkEvaluator {
     parameter_index: usize,
     extractor: impl FnOnce(NetworkResult) -> Option<T>,
   ) -> Result<T, NetworkResult> {
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let input_name = registry.get_parameter_name(&node, parameter_index);
-    if let Some(result) = self.evaluate_arg(network_stack, node_id, registry, context, parameter_index) {
-      // Check for error first
-      if result.is_error() {
-        return Err(result);
-      }
-      // Try to extract the value
-      if let Some(value) = extractor(result) {
-        return Ok(value);
-      }
+    let result = self.evaluate_arg_required(network_stack, node_id, registry, context, parameter_index);
+    
+    // Check for error first
+    if result.is_error() {
+      return Err(result);
     }
-    Err(input_missing_error(&input_name))
+    
+    // Try to extract the value
+    if let Some(value) = extractor(result.clone()) {
+      Ok(value)
+    } else {
+      Err(result)
+    }
   }
 
   // Evaluates an argument of a node.
@@ -296,16 +302,18 @@ impl NetworkEvaluator {
   ) -> NetworkResult {
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
     let input_name = registry.get_parameter_name(&node, parameter_index);
-    if let Some(result) = self.evaluate_arg(network_stack, node_id, registry, context, parameter_index) {
-      return result;
+    let result = self.evaluate_arg(network_stack, node_id, registry, context, parameter_index);
+    if let NetworkResult::None = result {
+      input_missing_error(&input_name)
+    } else {
+      result
     }
-    input_missing_error(&input_name)
   }
 
   // Evaluates an argument of a node.
-  // Returns None if the input was not connected.
-  // Can return an Error NetworkResult, or a valid NetworkResult.
-  // If the return value is not an Error, it is guaranteed to be converted to the
+  // Can return a NetworkResult::None, NetworkResult::Error, or a valid NetworkResult.
+  // Returns NetworkResult::None if the input was not connected.
+  // If the return value is not an Error or None, it is guaranteed to be converted to the
   // type of the parameter.
   pub fn evaluate_arg<'a>(
     &self,
@@ -314,7 +322,7 @@ impl NetworkEvaluator {
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
     parameter_index: usize,
-  ) -> Option<NetworkResult> {
+  ) -> NetworkResult {
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
     let input_name = registry.get_parameter_name(&node, parameter_index);
 
@@ -325,7 +333,7 @@ impl NetworkEvaluator {
       let input_output_pins = &node.arguments[parameter_index].argument_output_pins;
 
       if input_output_pins.is_empty() {
-        return None;
+        return NetworkResult::None; // Nothing is connected
       }
 
       let mut merged_items = Vec::new();
@@ -341,7 +349,7 @@ impl NetworkEvaluator {
         );
 
         if let NetworkResult::Error(_) = result {
-          return Some(error_in_input(&input_name));
+          return error_in_input(&input_name);
         }
 
         let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
@@ -355,11 +363,11 @@ impl NetworkEvaluator {
           merged_items.extend(array_data);
         } else {
           // This should not happen based on the logic of convert_to, but we handle it just in case.
-          return Some(error_in_input(&input_name));
+          return error_in_input(&input_name);
         }
       }
 
-      Some(NetworkResult::Array(merged_items))
+      NetworkResult::Array(merged_items)
     }
     else { // single argument evaluation
       if let Some((input_node_id, input_node_output_pin_index)) = node.arguments[parameter_index].get_node_id_and_pin() {
@@ -372,7 +380,7 @@ impl NetworkEvaluator {
           context
         );
         if let NetworkResult::Error(_error) = result {
-          return Some(error_in_input(&input_name));
+          return error_in_input(&input_name);
         }
 
         let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
@@ -382,9 +390,9 @@ impl NetworkEvaluator {
         // Convert the result to the expected type
         let converted_result = result.convert_to(&input_node_output_type, &expected_type);
 
-        return Some(converted_result);
+        return converted_result;
       } else {
-        return None;
+        return NetworkResult::None; // Nothing is connected
       }      
     }
   }
@@ -408,11 +416,7 @@ impl NetworkEvaluator {
 
       for i in 0..num_of_params {
         let result = self.evaluate_arg(network_stack, node_id, registry, context, i);
-        if let Some(result) = result {
-          captured_argument_values.push(result);
-        } else {
-          captured_argument_values.push(NetworkResult::None); // TODO: treat NetworkResult::None as missing value 
-        }
+        captured_argument_values.push(result);
       }
 
       NetworkResult::Function(Closure {

@@ -126,24 +126,26 @@ impl NodeData for ExprData {
       
       // Go through all parameter indices and evaluate them
       for (param_index, param) in self.parameters.iter().enumerate() {
-        if let Some(result) = network_evaluator.evaluate_arg(
+        let result = network_evaluator.evaluate_arg(
           network_stack,
           node_id,
           registry,
           context,
           param_index,
-        ) {
-          // Check if the result is an error
-          if let NetworkResult::Error(_) = result {
-            return error_in_input(&param.name);
-          }
-          
-          // Add the variable to our collection
-          variables.insert(param.name.clone(), result);
-        } else {
-          // Input pin is not connected
+        );
+        
+        // Check if the result is None (input not connected)
+        if let NetworkResult::None = result {
           return input_missing_error(&param.name);
         }
+        
+        // Check if the result is an error
+        if let NetworkResult::Error(_) = result {
+          return error_in_input(&param.name);
+        }
+        
+        // Add the variable to our collection
+        variables.insert(param.name.clone(), result);
       }
       
       // If we have a parsed expression, evaluate it

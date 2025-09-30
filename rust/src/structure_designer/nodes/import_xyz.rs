@@ -40,7 +40,12 @@ impl NodeData for ImportXYZData {
     _decorate: bool,
     context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
   
-    let atomic_structure = if let Some(result) = network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0) {
+    let result = network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
+    
+    let atomic_structure = if let NetworkResult::None = result {
+      // No parameter provided, use the preloaded atomic structure
+      self.atomic_structure.clone()
+    } else {
       // Check for error first
       if result.is_error() {
         return result;
@@ -65,9 +70,6 @@ impl NodeData for ImportXYZData {
       } else {
         return NetworkResult::Error("Expected string parameter for file name".to_string());
       }
-    } else {
-      // No parameter provided, use the preloaded atomic structure
-      self.atomic_structure.clone()
     };
   
     return match atomic_structure {
