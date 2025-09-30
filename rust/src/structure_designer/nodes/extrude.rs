@@ -8,8 +8,7 @@ use glam::DQuat;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::network_result::input_missing_error;
-use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::evaluator::network_result::runtime_type_error_in_input;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -40,26 +39,18 @@ impl NodeData for ExtrudeData {
       context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
       //let _timer = Timer::new("eval_extrude");
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
-      let shape_input_name = registry.get_parameter_name(&node, 0);
-    
-      if node.arguments[0].is_empty() {
-        return input_missing_error(&shape_input_name);
-      }
-    
-      let input_node_id = node.arguments[0].get_node_id().unwrap();
-      let shape_val = network_evaluator.evaluate(
+      let shape_val = network_evaluator.evaluate_arg_required(
         network_stack,
-        input_node_id,
-        0,
+        node_id,
         registry,
-        false,
-        context
+        context,
+        0,
       );
     
-      if let NetworkResult::Error(_error) = shape_val {
-        return error_in_input(&shape_input_name);
+      if let NetworkResult::Error(_) = shape_val {
+        return shape_val;
       }
+
       if let NetworkResult::Geometry2D(shape) = shape_val {
         let frame_translation_2d = shape.frame_transform.translation;
     
@@ -77,7 +68,7 @@ impl NodeData for ExtrudeData {
           },
         });
       } else {
-        return error_in_input(&shape_input_name);
+        return runtime_type_error_in_input(0);
       }
     }
 

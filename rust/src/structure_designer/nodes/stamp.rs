@@ -20,8 +20,6 @@ use crate::common::crystal_utils::{
   in_crystal_pos_to_id,
   get_zinc_blende_atom_type_for_pos,
 };
-use crate::structure_designer::evaluator::network_result::input_missing_error;
-use crate::structure_designer::evaluator::network_result::error_in_input;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::structure_designer::node_type::NodeType;
@@ -57,31 +55,15 @@ impl NodeData for StampData {
     decorate: bool,
     context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext
   ) -> NetworkResult {  
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let crystal_input_name = registry.get_parameter_name(&node, 0);
-  
-    if node.arguments[0].is_empty() {
-      return input_missing_error(&crystal_input_name);
+    let crystal_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+    if let NetworkResult::Error(_) = crystal_val {
+      return crystal_val;
     }
   
-    let input_node_id = node.arguments[0].get_node_id().unwrap();
-    let crystal_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
+    let stamp_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 1);
   
-    if let NetworkResult::Error(_error) = crystal_val {
-      return error_in_input(&crystal_input_name);
-    }
-  
-    let stamp_input_name = registry.get_parameter_name(&node, 1);
-  
-    if node.arguments[1].is_empty() {
-      return input_missing_error(&stamp_input_name);
-    }
-  
-    let input_node_id = node.arguments[1].get_node_id().unwrap();
-    let stamp_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-  
-    if let NetworkResult::Error(_error) = stamp_val {
-      return error_in_input(&stamp_input_name);
+    if let NetworkResult::Error(_) = stamp_val {
+      return stamp_val;
     }
   
     if let NetworkResult::Atomic(stamp_structure) = stamp_val {

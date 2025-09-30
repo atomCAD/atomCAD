@@ -2,7 +2,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
   NetworkEvaluationContext, NetworkEvaluator
 };
 use crate::structure_designer::evaluator::network_result::{
-  error_in_input, input_missing_error, GeometrySummary, NetworkResult
+  runtime_type_error_in_input, GeometrySummary, NetworkResult
 };
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
@@ -64,19 +64,12 @@ impl NodeData for GeoTransData {
       _decorate: bool,
       context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
-      let shape_input_name = registry.get_parameter_name(&node, 0);
+      let shape_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
     
-      if node.arguments[0].is_empty() {
-        return input_missing_error(&shape_input_name);
+      if let NetworkResult::Error(_) = shape_val {
+        return shape_val;
       }
-    
-      let input_node_id = node.arguments[0].get_node_id().unwrap();
-      let shape_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-    
-      if let NetworkResult::Error(_error) = shape_val {
-        return error_in_input(&shape_input_name);
-      } else if let NetworkResult::Geometry(shape) = shape_val {
+      else if let NetworkResult::Geometry(shape) = shape_val {
     
         let translation = match network_evaluator.evaluate_or_default(
           network_stack, node_id, registry, context, 1, 
@@ -133,7 +126,7 @@ impl NodeData for GeoTransData {
           },
         });
       } else {
-        return error_in_input(&shape_input_name);
+        return runtime_type_error_in_input(0);
       }
     }
 

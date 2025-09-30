@@ -191,17 +191,10 @@ impl NodeData for EditAtomData {
       decorate: bool,
       context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext
     ) -> NetworkResult {
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
+      let input_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
     
-      if node.arguments[0].is_empty() {
-        return input_missing_error("molecule");
-      }
-    
-      let input_node_id = node.arguments[0].get_node_id().unwrap();
-      let input_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-    
-      if let NetworkResult::Error(_error) = input_val {
-        return error_in_input("molecule");
+      if let NetworkResult::Error(_) = input_val {
+        return input_val;
       }
     
       if let NetworkResult::Atomic(mut atomic_structure) = input_val {

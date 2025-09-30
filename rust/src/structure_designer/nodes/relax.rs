@@ -3,8 +3,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::common::atomic_structure::AtomicStructure;
-use crate::structure_designer::evaluator::network_result::input_missing_error;
-use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::common::simulation::minimize_energy;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -38,18 +36,11 @@ impl NodeData for RelaxData {
     registry: &NodeTypeRegistry,
     _decorate: bool,
     context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let molecule_input_name = registry.get_parameter_name(&node, 0);
   
-    if node.arguments[0].is_empty() {
-      return input_missing_error(&molecule_input_name);
-    }
+    let input_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
   
-    let input_node_id = node.arguments[0].get_node_id().unwrap();
-    let input_val = network_evaluator.evaluate(network_stack, input_node_id, 0, registry, false, context);
-  
-    if let NetworkResult::Error(_error) = input_val {
-      return error_in_input(&molecule_input_name);
+    if let NetworkResult::Error(_) = input_val {
+      return input_val;
     }
   
     if let NetworkResult::Atomic(mut atomic_structure) = input_val {

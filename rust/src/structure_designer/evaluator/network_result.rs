@@ -288,3 +288,7 @@ pub fn input_missing_error(input_name: &str) -> NetworkResult {
 pub fn error_in_input(input_name: &str) -> NetworkResult {
   NetworkResult::Error(format!("error in {} input", input_name))
 }
+
+pub fn runtime_type_error_in_input(input_param_index: usize) -> NetworkResult {
+  NetworkResult::Error(format!("runtime type error in the {} indexed input", input_param_index))
+}

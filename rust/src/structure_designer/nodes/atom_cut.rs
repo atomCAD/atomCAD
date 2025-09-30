@@ -1,11 +1,9 @@
 use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::geo_tree::GeoNode;
 use serde::{Serialize, Deserialize};
 use crate::common::atomic_structure::AtomicStructure;
@@ -40,38 +38,39 @@ impl NodeData for AtomCutData {
     context: &mut NetworkEvaluationContext,
   ) -> NetworkResult {
     //let _timer = Timer::new("eval_intersect");
-    let node = NetworkStackElement::get_top_node(network_stack, node_id);
   
-    let molecule_input_name = registry.get_parameter_name(&node, 0);
-    if node.arguments[0].is_empty() {
-      return input_missing_error(&molecule_input_name);
-    }
-    let molecule_input_node_id = node.arguments[0].get_node_id().unwrap();
-    let molecule_input_val = network_evaluator.evaluate(network_stack, molecule_input_node_id, 0, registry, false, context);
-    if let NetworkResult::Error(_error) = molecule_input_val {
-      return error_in_input(&molecule_input_name);
-    }
+    let molecule_input_val = network_evaluator.evaluate_arg_required(
+      network_stack,
+      node_id,
+      registry,
+      context,
+      0,
+    );
   
+    if let NetworkResult::Error(_) = molecule_input_val {
+      return molecule_input_val;
+    }
+
     if let NetworkResult::Atomic(mut atomic_structure) = molecule_input_val {
-  
-      if node.arguments[1].is_empty() {
-        return NetworkResult::Atomic(atomic_structure); // no cutters plugged in, just return the input atomic structure unmodified.
-      }
-  
-      let mut shapes: Vec<GeoNode> = Vec::new();
     
-      let shapes_val = network_evaluator.evaluate_arg_required(
+      let shapes_val = network_evaluator.evaluate_arg(
         network_stack,
         node_id,
         registry,
         context,
         1,
       );
-    
+
+      if let NetworkResult::None = shapes_val {
+        return NetworkResult::Atomic(atomic_structure); // no cutters plugged in, just return the input atomic structure unmodified.
+      }
+
       if let NetworkResult::Error(_) = shapes_val {
         return shapes_val;
       }
-    
+
+      let mut shapes: Vec<GeoNode> = Vec::new();
+
       // Extract the array elements from shapes_val
       let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
         array_elements

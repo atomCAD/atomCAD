@@ -53,16 +53,12 @@ impl NodeData for AtomTransData {
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
-      context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    
-      if node.arguments[0].is_empty() {
-        return NetworkResult::Atomic(AtomicStructure::new());
+      context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {      
+      let input_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+      if let NetworkResult::Error(_) = input_val {
+        return input_val;
       }
-      let input_molecule_node_id = node.arguments[0].get_node_id().unwrap();
-    
-      let result = &network_evaluator.evaluate(network_stack, input_molecule_node_id, 0, registry, false, context);
-      if let NetworkResult::Atomic(atomic_structure) = result {
+      if let NetworkResult::Atomic(atomic_structure) = input_val {
     
         let translation = match network_evaluator.evaluate_or_default(
           network_stack, node_id, registry, context, 1, 

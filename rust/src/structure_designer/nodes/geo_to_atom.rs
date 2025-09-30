@@ -3,7 +3,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{input_missing_error, NetworkResult};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::common::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 use glam::i32::IVec3;
@@ -102,17 +102,13 @@ impl NodeData for GeoToAtomData {
       _decorate: bool,
       context: &mut NetworkEvaluationContext
     ) -> NetworkResult {
-      let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    
-      if node.arguments[0].is_empty() {
-        return input_missing_error("shape");
+      let shape_val = network_evaluator.evaluate_arg_required(&network_stack.clone(), node_id, registry, context, 0);
+
+      if let NetworkResult::Error(_) = shape_val {
+        return shape_val;
       }
-    
-      let geo_node_id = node.arguments[0].get_node_id().unwrap();
-    
-      let pre_eval_result = network_evaluator.evaluate(&network_stack.clone(), geo_node_id, 0, registry, false, context);
-    
-      let mesh = match pre_eval_result {
+
+      let mesh = match shape_val {
         NetworkResult::Geometry(mesh) => mesh,
         _ => return NetworkResult::Atomic(AtomicStructure::new()),
       };
@@ -129,7 +125,7 @@ impl NodeData for GeoToAtomData {
         unit_cell_size: get_unit_cell_size(self.primary_atomic_number, self.secondary_atomic_number),
         stamped_by_anchor_atom_type: None,
       };
-    
+
       process_box_for_atomic(
         &mesh.geo_tree_root,
         self,
