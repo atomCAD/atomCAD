@@ -9,6 +9,13 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 
 #[derive(Clone)]
+pub struct UnitCellStruct {
+  pub a: DVec3,
+  pub b: DVec3,
+  pub c: DVec3,
+}
+
+#[derive(Clone)]
 pub struct GeometrySummary2D {
   pub frame_transform: Transform2D,
   pub geo_tree_root: GeoNode,
@@ -38,6 +45,7 @@ pub enum NetworkResult {
   Vec3(DVec3),
   IVec2(IVec2),
   IVec3(IVec3),
+  UnitCell(UnitCellStruct),
   Geometry2D(GeometrySummary2D),
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
@@ -266,6 +274,12 @@ impl NetworkResult {
         format!("[{}]", element_strings.join(", "))
       },
       NetworkResult::Function(closure) => format!("network: {} node: {}", closure.node_network_name, closure.node_id),
+      NetworkResult::UnitCell(unit_cell) => {
+        format!("UnitCell:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})", 
+          unit_cell.a.x, unit_cell.a.y, unit_cell.a.z,
+          unit_cell.b.x, unit_cell.b.y, unit_cell.b.z,
+          unit_cell.c.x, unit_cell.c.y, unit_cell.c.z)
+      },
       NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
       NetworkResult::Geometry(_) => "Geometry".to_string(),
       NetworkResult::Atomic(_) => "Atomic".to_string(),

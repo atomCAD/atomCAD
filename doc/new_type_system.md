@@ -15,6 +15,7 @@ pub enum APIDataType {
  Vec3,
  IVec2,
  IVec3,
+ UnitCell,
  Geometry2D,
  Geometry,
  Atomic

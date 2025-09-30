@@ -4810,10 +4810,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 6 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec3,
 7 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec2,
 8 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec3,
-9 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D,
-10 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry,
-11 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic,
-12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+9 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::UnitCell,
+10 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D,
+11 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry,
+12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic,
+13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
             _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
@@ -6832,10 +6833,11 @@ impl flutter_rust_bridge::IntoDart
             Self::Vec3 => 6.into_dart(),
             Self::IVec2 => 7.into_dart(),
             Self::IVec3 => 8.into_dart(),
-            Self::Geometry2D => 9.into_dart(),
-            Self::Geometry => 10.into_dart(),
-            Self::Atomic => 11.into_dart(),
-            Self::Custom => 12.into_dart(),
+            Self::UnitCell => 9.into_dart(),
+            Self::Geometry2D => 10.into_dart(),
+            Self::Geometry => 11.into_dart(),
+            Self::Atomic => 12.into_dart(),
+            Self::Custom => 13.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -8314,10 +8316,11 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::V
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec3 => { 6 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec2 => { 7 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec3 => { 8 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D => { 9 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry => { 10 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic => { 11 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 12 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::UnitCell => { 9 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D => { 10 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry => { 11 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic => { 12 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 13 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

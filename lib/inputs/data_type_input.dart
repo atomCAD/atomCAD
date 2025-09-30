@@ -43,9 +43,13 @@ class _DataTypeInputState extends State<DataTypeInput> {
               widget.onChanged(APIDataType(
                 dataTypeBase: newValue,
                 // Reset custom string if not custom, maintain if it is
-                customDataType: newValue == APIDataTypeBase.custom ? widget.value.customDataType ?? '' : null,
+                customDataType: newValue == APIDataTypeBase.custom
+                    ? widget.value.customDataType ?? ''
+                    : null,
                 // Reset array status if switching to custom
-                array: newValue == APIDataTypeBase.custom ? false : widget.value.array,
+                array: newValue == APIDataTypeBase.custom
+                    ? false
+                    : widget.value.array,
               ));
             }
           },
@@ -62,7 +66,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
                 widget.onChanged(APIDataType(
                   dataTypeBase: APIDataTypeBase.custom,
                   customDataType: newCustomType,
-                  array: false, // Custom types handle their own array logic via string parsing
+                  array:
+                      false, // Custom types handle their own array logic via string parsing
                 ));
               },
             ),
@@ -110,6 +115,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'IVec2';
       case APIDataTypeBase.iVec3:
         return 'IVec3';
+      case APIDataTypeBase.unitCell:
+        return 'UnitCell';
       case APIDataTypeBase.geometry2D:
         return 'Geometry2D';
       case APIDataTypeBase.geometry:
