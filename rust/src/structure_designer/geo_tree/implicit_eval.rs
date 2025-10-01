@@ -1,6 +1,5 @@
 use super::GeoNode;
 use glam::f64::{DVec2, DVec3};
-use glam::i32::{IVec2, IVec3};
 use crate::util::transform::Transform;
 use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry2D;
@@ -102,14 +101,12 @@ impl ImplicitGeometry3D for GeoNode {
 }
 
 impl GeoNode {
-  fn half_space_implicit_eval(miller_index: IVec3, center: IVec3, shift: i32, sample_point: &DVec3) -> f64 {
+  fn half_space_implicit_eval(miller_index: DVec3, center: DVec3, shift: f64, sample_point: &DVec3) -> f64 {
     implicit_eval_half_space_calc(&miller_index, &center, shift, sample_point)
   }
 
-  fn half_plane_implicit_eval(point1: IVec2, point2: IVec2, sample_point: &DVec2) -> f64 {
-    // Convert points to double precision for calculations
-    let point1 = point1.as_dvec2();
-    let point2 = point2.as_dvec2();
+  fn half_plane_implicit_eval(point1: DVec2, point2: DVec2, sample_point: &DVec2) -> f64 {
+    // Points are already in double precision
     
     // Calculate line direction and normal
     let dir_vector = point2 - point1;
@@ -120,38 +117,34 @@ impl GeoNode {
     normal.dot(*sample_point - point1)
   }
 
-  fn circle_implicit_eval(center: IVec2, radius: i32, sample_point: &DVec2) -> f64 {
-    let center_f64 = DVec2::new(center.x as f64, center.y as f64);
-    (sample_point - center_f64).length() - (radius as f64)
+  fn circle_implicit_eval(center: DVec2, radius: f64, sample_point: &DVec2) -> f64 {
+    (sample_point - center).length() - radius
   }
 
-  fn sphere_implicit_eval(center: IVec3, radius: i32, sample_point: &DVec3) -> f64 {
-    let center_f64 = DVec3::new(center.x as f64, center.y as f64, center.z as f64);
-    (sample_point - center_f64).length() - (radius as f64)
+  fn sphere_implicit_eval(center: DVec3, radius: f64, sample_point: &DVec3) -> f64 {
+    (sample_point - center).length() - radius
   }
 
-  fn rect_implicit_eval(min_corner: IVec2, extent: IVec2, sample_point: &DVec2) -> f64 {
+  fn rect_implicit_eval(min_corner: DVec2, extent: DVec2, sample_point: &DVec2) -> f64 {
     let max_corner = min_corner + extent;
-    let x_val = f64::max((min_corner.x as f64) - sample_point.x, sample_point.x - (max_corner.x as f64));
-    let y_val = f64::max((min_corner.y as f64) - sample_point.y, sample_point.y - (max_corner.y as f64));
+    let x_val = f64::max(min_corner.x - sample_point.x, sample_point.x - max_corner.x);
+    let y_val = f64::max(min_corner.y - sample_point.y, sample_point.y - max_corner.y);
     
     f64::max(x_val, y_val)
   }
 
-  fn cuboid_implicit_eval(min_corner: IVec3, extent: IVec3, sample_point: &DVec3) -> f64 {
+  fn cuboid_implicit_eval(min_corner: DVec3, extent: DVec3, sample_point: &DVec3) -> f64 {
     let max_corner = min_corner + extent;
-    let x_val = f64::max((min_corner.x as f64) - sample_point.x, sample_point.x - (max_corner.x as f64));
-    let y_val = f64::max((min_corner.y as f64) - sample_point.y, sample_point.y - (max_corner.y as f64));
-    let z_val = f64::max((min_corner.z as f64) - sample_point.z, sample_point.z - (max_corner.z as f64));
+    let x_val = f64::max(min_corner.x - sample_point.x, sample_point.x - max_corner.x);
+    let y_val = f64::max(min_corner.y - sample_point.y, sample_point.y - max_corner.y);
+    let z_val = f64::max(min_corner.z - sample_point.z, sample_point.z - max_corner.z);
     
     f64::max(f64::max(x_val, y_val), z_val)
   }
 
-  fn polygon_implicit_eval(vertices: &Vec<IVec2>, sample_point: &DVec2) -> f64 {
-    // Convert vertices to double precision for calculations
-    let vertices_dvec2: Vec<DVec2> = vertices.iter()
-        .map(|v| v.as_dvec2())
-        .collect();
+  fn polygon_implicit_eval(vertices: &Vec<DVec2>, sample_point: &DVec2) -> f64 {
+    // Vertices are already in double precision
+    let vertices_dvec2 = vertices;
     
     // Handle degenerate case - not enough vertices for a polygon
     if vertices_dvec2.len() < 3 {
@@ -171,7 +164,7 @@ impl GeoNode {
     }
     
     // Determine sign using ray casting
-    let is_inside = Self::is_point_inside_polygon(sample_point, &vertices_dvec2);
+    let is_inside = Self::is_point_inside_polygon(sample_point, vertices_dvec2);
     
     // Apply sign: negative inside, positive outside
     if is_inside {
@@ -258,9 +251,9 @@ impl GeoNode {
     false
   }
 
-  fn extrude_implicit_eval(height: i32, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
+  fn extrude_implicit_eval(height: f64, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
     // Calculate Y bounds constraint (extrusion is along Y axis from 0 to height)
-    let y_val = f64::max(-sample_point.y, sample_point.y - (height as f64));
+    let y_val = f64::max(-sample_point.y, sample_point.y - height);
     
     // Evaluate the 2D shape in the XZ plane
     let sample_point_2d = DVec2::new(sample_point.x, sample_point.z);

@@ -1,5 +1,5 @@
-use glam::i32::IVec3;
-use glam::i32::IVec2;
+use glam::f64::DVec3;
+use glam::f64::DVec2;
 use crate::util::transform::Transform;
 
 /*
@@ -10,35 +10,35 @@ use crate::util::transform::Transform;
 #[derive(Clone)]
  pub enum GeoNode {
   HalfSpace {
-    miller_index: IVec3,
-    center: IVec3,
-    shift: i32,
+    miller_index: DVec3,
+    center: DVec3,
+    shift: f64,
   },
   HalfPlane {
-    point1: IVec2,
-    point2: IVec2,
+    point1: DVec2,
+    point2: DVec2,
   },
   Circle {
-    center: IVec2,
-    radius: i32,  
+    center: DVec2,
+    radius: f64,  
   },
   Sphere {
-    center: IVec3,
-    radius: i32,
+    center: DVec3,
+    radius: f64,
   },
   Rect {
-    min_corner: IVec2,
-    extent: IVec2,
+    min_corner: DVec2,
+    extent: DVec2,
   },
   Cuboid {
-    min_corner: IVec3,
-    extent: IVec3,
+    min_corner: DVec3,
+    extent: DVec3,
   },
   Polygon {
-    vertices: Vec<IVec2>,
+    vertices: Vec<DVec2>,
   },
   Extrude {
-    height: i32,
+    height: f64,
     shape: Box<GeoNode>,
   },
   Transform {

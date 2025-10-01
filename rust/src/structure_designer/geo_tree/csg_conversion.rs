@@ -1,5 +1,4 @@
-use glam::i32::{IVec2, IVec3};
-use glam::f64::DVec2;
+use glam::f64::{DVec2, DVec3};
 use crate::common::csg_types::CSG;
 use super::GeoNode;
 use crate::util::transform::Transform;
@@ -61,7 +60,7 @@ impl GeoNode {
     }
   }
 
-  fn half_space_to_csg(miller_index: IVec3, center: IVec3, shift: i32, is_root: bool) -> CSG {
+  fn half_space_to_csg(miller_index: DVec3, center: DVec3, shift: f64, is_root: bool) -> CSG {
     create_half_space_geo(
           &miller_index,
           &center,
@@ -69,15 +68,13 @@ impl GeoNode {
           if is_root { HalfSpaceVisualization::Plane } else { HalfSpaceVisualization::Cuboid })
   }
 
-  fn half_plane_to_csg(point1: IVec2, point2: IVec2) -> CSG {
-    let real_point1 = point1.as_dvec2();
-
+  fn half_plane_to_csg(point1: DVec2, point2: DVec2) -> CSG {
     // Calculate direction vector from point1 to point2
-    let dir_vector = point2.as_dvec2() - real_point1;
+    let dir_vector = point2 - point1;
     let dir = dir_vector.normalize();
     let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
     
-    let center_pos = real_point1 + dir_vector * 0.5;
+    let center_pos = point1 + dir_vector * 0.5;
   
     let width = 100.0;
     let height = 100.0;
@@ -89,56 +86,47 @@ impl GeoNode {
     .translate(tr.x, tr.y, 0.0)
   }
 
-  fn circle_to_csg(center: IVec2, radius: i32) -> CSG {
-    let real_center = center.as_dvec2();
-  
+  fn circle_to_csg(center: DVec2, radius: f64) -> CSG {
     CSG::circle(
-      radius as f64,
+      radius,
       32,
       None
     )
-    .translate(real_center.x, real_center.y, 0.0)
+    .translate(center.x, center.y, 0.0)
   }
 
-  fn sphere_to_csg(center: IVec3, radius: i32) -> CSG {
-    let real_center = center.as_dvec3();
+  fn sphere_to_csg(center: DVec3, radius: f64) -> CSG {
     CSG::sphere(
-      radius as f64,
+      radius,
       24,
       12,
       None
     )
-      .translate(real_center.x, real_center.y, real_center.z)
+      .translate(center.x, center.y, center.z)
   }
 
-  fn rect_to_csg(min_corner: IVec2, extent: IVec2) -> CSG {
-    let real_min_corner = min_corner.as_dvec2();
-    let real_extent = extent.as_dvec2();
-  
-    CSG::square(real_extent.x, real_extent.y, None)
-      .translate(real_min_corner.x, real_min_corner.y, 0.0)
+  fn rect_to_csg(min_corner: DVec2, extent: DVec2) -> CSG {
+    CSG::square(extent.x, extent.y, None)
+      .translate(min_corner.x, min_corner.y, 0.0)
   }
 
-  fn cuboid_to_csg(min_corner: IVec3, extent: IVec3) -> CSG {
-    let real_min_corner = min_corner.as_dvec3();
-    let real_extent = extent.as_dvec3();
-  
-    CSG::cube(real_extent.x, real_extent.y, real_extent.z, None)
-      .translate(real_min_corner.x, real_min_corner.y, real_min_corner.z)
+  fn cuboid_to_csg(min_corner: DVec3, extent: DVec3) -> CSG {
+    CSG::cube(extent.x, extent.y, extent.z, None)
+      .translate(min_corner.x, min_corner.y, min_corner.z)
   }
 
-  fn polygon_to_csg(vertices: &Vec<IVec2>) -> CSG {
+  fn polygon_to_csg(vertices: &Vec<DVec2>) -> CSG {
     let mut points: Vec<[f64; 2]> = Vec::new();
   
     for i in 0..vertices.len() {
-        points.push([vertices[i].x as f64, vertices[i].y as f64]);
+        points.push([vertices[i].x, vertices[i].y]);
     }
   
     CSG::polygon(&points, None)
   }
 
-  fn extrude_to_csg(height: i32, shape: &Box<GeoNode>) -> CSG {
-      let mut extruded = shape.internal_to_csg(false).extrude(height as f64);
+  fn extrude_to_csg(height: f64, shape: &Box<GeoNode>) -> CSG {
+      let mut extruded = shape.internal_to_csg(false).extrude(height);
 
       // swap y and z coordinates
       for polygon in &mut extruded.polygons {        
