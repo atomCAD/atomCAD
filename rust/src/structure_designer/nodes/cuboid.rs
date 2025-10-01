@@ -60,12 +60,21 @@ impl NodeData for CuboidData {
         Err(error) => return error,
       };
     
+      let unit_cell = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2, 
+        UnitCellStruct::cubic_diamond(), 
+        NetworkResult::extract_unit_cell,
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       let real_min_corner = min_corner.as_dvec3();
       let real_extent = extent.as_dvec3();
       let center = real_min_corner + real_extent / 2.0;
     
       return NetworkResult::Geometry(GeometrySummary {
-        unit_cell: UnitCellStruct::cubic_diamond(),
+        unit_cell,
         frame_transform: Transform::new(
           center,
           DQuat::IDENTITY,

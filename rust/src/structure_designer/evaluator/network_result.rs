@@ -94,6 +94,14 @@ impl NetworkResult {
     }
   }
 
+  /// Extracts an UnitCellStruct value from the NetworkResult, returns None if not a UnitCell
+  pub fn extract_unit_cell(self) -> Option<UnitCellStruct> {
+    match self {
+      NetworkResult::UnitCell(uc) => Some(uc),
+      _ => None,
+    }
+  }
+
   /// Extracts an IVec3 value from the NetworkResult, returns None if not an IVec3
   pub fn extract_ivec3(self) -> Option<IVec3> {
     match self {

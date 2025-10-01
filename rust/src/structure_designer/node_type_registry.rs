@@ -489,6 +489,10 @@ impl NodeTypeRegistry {
           name: "extent".to_string(),
           data_type: DataType::IVec3,
         },
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
       ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(CuboidData {
