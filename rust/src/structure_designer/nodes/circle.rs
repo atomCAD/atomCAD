@@ -13,6 +13,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CircleData {
@@ -59,6 +60,7 @@ impl NodeData for CircleData {
     
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
+          unit_cell: UnitCellStruct::cubic_diamond(),
           frame_transform: Transform2D::new(
             center.as_dvec2(),
             0.0,

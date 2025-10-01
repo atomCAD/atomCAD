@@ -23,6 +23,7 @@ use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::renderer::mesh::Mesh;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone)]
 pub struct GeoTransEvalCache {
@@ -118,7 +119,8 @@ impl NodeData for GeoTransData {
           rot
         );
     
-        return NetworkResult::Geometry(GeometrySummary { 
+        return NetworkResult::Geometry(GeometrySummary {
+          unit_cell: UnitCellStruct::cubic_diamond(),
           frame_transform,
           geo_tree_root: GeoNode::Transform {
             transform: tr,

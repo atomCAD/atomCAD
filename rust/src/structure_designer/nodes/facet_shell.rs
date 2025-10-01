@@ -22,6 +22,7 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use glam::f64::DQuat;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Facet {
@@ -471,6 +472,7 @@ impl NodeData for FacetShellData {
         let center_pos = self.center.as_dvec3();
       
         return NetworkResult::Geometry(GeometrySummary {
+          unit_cell: UnitCellStruct::cubic_diamond(),
           frame_transform: Transform::new(
             center_pos,
             DQuat::IDENTITY, // Use identity quaternion as we don't need rotation

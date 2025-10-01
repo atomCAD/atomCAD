@@ -22,6 +22,7 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HalfSpaceData {
@@ -61,6 +62,7 @@ impl NodeData for HalfSpaceData {
       let center_pos = self.center.as_dvec3();
     
       return NetworkResult::Geometry(GeometrySummary {
+        unit_cell: UnitCellStruct::cubic_diamond(),
         frame_transform: Transform::new(
           center_pos,
           DQuat::from_rotation_arc(DVec3::Y, dir),

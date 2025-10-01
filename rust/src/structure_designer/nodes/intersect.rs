@@ -13,6 +13,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntersectData {
@@ -71,6 +72,7 @@ impl NodeData for IntersectData {
     frame_translation /= shape_count as f64;
   
     return NetworkResult::Geometry(GeometrySummary { 
+      unit_cell: UnitCellStruct::cubic_diamond(),
       frame_transform: Transform::new(
         frame_translation,
         DQuat::IDENTITY,

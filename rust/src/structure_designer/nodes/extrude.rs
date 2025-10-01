@@ -14,6 +14,7 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
@@ -61,6 +62,7 @@ impl NodeData for ExtrudeData {
     
         let s = shape.geo_tree_root;
         return NetworkResult::Geometry(GeometrySummary { 
+          unit_cell: UnitCellStruct::cubic_diamond(),
           frame_transform,
           geo_tree_root: GeoNode::Extrude { 
             height: self.height,

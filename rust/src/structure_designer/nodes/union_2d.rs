@@ -12,6 +12,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Union2DData {
@@ -70,6 +71,7 @@ impl NodeData for Union2DData {
     frame_translation /= shape_count as f64;
   
     return NetworkResult::Geometry2D(GeometrySummary2D { 
+      unit_cell: UnitCellStruct::cubic_diamond(),
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,

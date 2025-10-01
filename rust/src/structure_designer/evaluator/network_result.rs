@@ -7,6 +7,7 @@ use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 
 #[derive(Clone)]
 pub struct UnitCellStruct {
@@ -15,14 +16,31 @@ pub struct UnitCellStruct {
   pub c: DVec3,
 }
 
+impl UnitCellStruct {
+  /// Creates a cubic diamond unit cell using the standard diamond lattice parameter
+  /// 
+  /// Returns a UnitCellStruct with orthogonal basis vectors aligned with the coordinate axes,
+  /// each with length equal to the diamond unit cell size (3.567 Ångströms).
+  pub fn cubic_diamond() -> Self {
+    let size = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+    UnitCellStruct {
+      a: DVec3::new(size, 0.0, 0.0),
+      b: DVec3::new(0.0, size, 0.0),
+      c: DVec3::new(0.0, 0.0, size),
+    }
+  }
+}
+
 #[derive(Clone)]
 pub struct GeometrySummary2D {
+  pub unit_cell: UnitCellStruct,
   pub frame_transform: Transform2D,
   pub geo_tree_root: GeoNode,
 }
 
 #[derive(Clone)]
 pub struct GeometrySummary {
+  pub unit_cell: UnitCellStruct,
   pub frame_transform: Transform,
   pub geo_tree_root: GeoNode,
 }

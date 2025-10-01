@@ -16,6 +16,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegPolyData {
@@ -56,6 +57,7 @@ impl NodeData for RegPolyData {
         // No rotation is needed for this type of shape
         return NetworkResult::Geometry2D(
           GeometrySummary2D {
+            unit_cell: UnitCellStruct::cubic_diamond(),
             frame_transform: Transform2D::new(
               DVec2::new(0.0, 0.0),  // Center at origin
               0.0,                   // No rotation
