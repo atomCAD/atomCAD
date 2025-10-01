@@ -70,8 +70,8 @@ impl NodeData for CuboidData {
         Err(error) => return error,
       };
 
-      let real_min_corner = unit_cell.lattice_to_real_ivec3(&min_corner);
-      let real_extent = unit_cell.lattice_to_real_ivec3(&extent);
+      let real_min_corner = unit_cell.ivec3_lattice_to_real(&min_corner);
+      let real_extent = unit_cell.ivec3_lattice_to_real(&extent);
       let center = real_min_corner + real_extent / 2.0;
 
       let geo_tree_root = create_parallelepiped_from_lattice(

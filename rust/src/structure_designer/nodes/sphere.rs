@@ -59,15 +59,27 @@ impl NodeData for SphereData {
         Err(error) => return error,
       };
     
+      let unit_cell = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2, 
+        UnitCellStruct::cubic_diamond(), 
+        NetworkResult::extract_unit_cell,
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let real_center = unit_cell.ivec3_lattice_to_real(&center);
+      let real_radius = unit_cell.int_lattice_to_real(radius);
+
       return NetworkResult::Geometry(GeometrySummary { 
         unit_cell: UnitCellStruct::cubic_diamond(),
         frame_transform: Transform::new(
-        center.as_dvec3(),
+        real_center,
         DQuat::IDENTITY,
         ),
         geo_tree_root: GeoNode::Sphere {
-          center: center,
-          radius: radius,
+          center: real_center,
+          radius: real_radius,
         },
       });
     }

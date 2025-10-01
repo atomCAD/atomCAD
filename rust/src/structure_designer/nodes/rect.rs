@@ -69,8 +69,8 @@ impl NodeData for RectData {
         Err(error) => return error,
       };
 
-      let real_min_corner = unit_cell.lattice_to_real_ivec2(&min_corner);
-      let real_extent = unit_cell.lattice_to_real_ivec2(&extent);
+      let real_min_corner = unit_cell.ivec2_lattice_to_real(&min_corner);
+      let real_extent = unit_cell.ivec2_lattice_to_real(&extent);
       let center = real_min_corner + real_extent / 2.0;
     
       let geo_tree_root = create_parallelogram_from_lattice(

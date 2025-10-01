@@ -67,8 +67,8 @@ impl NodeData for CircleData {
         Err(error) => return error,
       };
 
-      let real_center = unit_cell.lattice_to_real_ivec2(&center);
-      let real_radius = unit_cell.lattice_to_real_float(radius);
+      let real_center = unit_cell.ivec2_lattice_to_real(&center);
+      let real_radius = unit_cell.int_lattice_to_real(radius);
 
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
