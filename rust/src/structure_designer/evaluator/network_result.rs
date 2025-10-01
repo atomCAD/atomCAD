@@ -29,6 +29,44 @@ impl UnitCellStruct {
       c: DVec3::new(0.0, 0.0, size),
     }
   }
+
+  /// Converts lattice coordinates to real space coordinates using the unit cell basis vectors.
+  /// 
+  /// # Arguments
+  /// * `lattice_pos` - Position in lattice coordinates as DVec3
+  /// 
+  /// # Returns
+  /// Position in real space coordinates as DVec3
+  pub fn lattice_to_real_dvec3(&self, lattice_pos: &DVec3) -> DVec3 {
+    lattice_pos.x * self.a + lattice_pos.y * self.b + lattice_pos.z * self.c
+  }
+
+  /// Converts lattice coordinates to real space coordinates using the unit cell basis vectors.
+  /// 
+  /// # Arguments
+  /// * `lattice_pos` - Position in lattice coordinates as IVec3
+  /// 
+  /// # Returns
+  /// Position in real space coordinates as DVec3
+  pub fn lattice_to_real_ivec3(&self, lattice_pos: &IVec3) -> DVec3 {
+    self.lattice_to_real_dvec3(&lattice_pos.as_dvec3())
+  }
+
+  pub fn lattice_to_real_dvec2(&self, lattice_pos: &DVec2) -> DVec2 {
+    (lattice_pos.x * self.a + lattice_pos.y * self.b).truncate()
+  }
+
+  pub fn lattice_to_real_ivec2(&self, lattice_pos: &IVec2) -> DVec2 {
+    self.lattice_to_real_dvec2(&lattice_pos.as_dvec2())
+  }
+
+  pub fn lattice_to_real_float(&self, lattice_value: f64) -> f64 {
+    lattice_value * self.a.length()
+  }
+
+  pub fn lattice_to_real_int(&self, lattice_value: i32) -> f64 {
+    self.lattice_to_real_float(lattice_value as f64)
+  }
 }
 
 #[derive(Clone)]

@@ -346,6 +346,10 @@ impl NodeTypeRegistry {
           name: "extent".to_string(),
           data_type: DataType::IVec2,
         },
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
       ],
       output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(RectData {
@@ -367,6 +371,10 @@ impl NodeTypeRegistry {
           name: "radius".to_string(),
           data_type: DataType::Int,
         },
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
       ],
       output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(CircleData {
@@ -379,7 +387,12 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "reg_poly".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+      ],
       output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(RegPolyData {
         num_sides: 3,
@@ -391,7 +404,12 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "polygon".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+      ],
       output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(PolygonData {
         vertices: vec![
@@ -452,7 +470,12 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "half_plane".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+      ],
       output_type: DataType::Geometry2D,
       node_data_creator: || Box::new(HalfPlaneData {
         point1: IVec2::new(0, 0),
@@ -514,6 +537,10 @@ impl NodeTypeRegistry {
           name: "radius".to_string(),
           data_type: DataType::Int,
         },
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
       ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(SphereData {
@@ -526,7 +553,12 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "half_space".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+      ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(HalfSpaceData {
         max_miller_index: 2,
@@ -540,7 +572,12 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "facet_shell".to_string(),
-      parameters: Vec::new(),
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+      ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(FacetShellData::default()),
       node_data_saver: generic_node_data_saver::<FacetShellData>,

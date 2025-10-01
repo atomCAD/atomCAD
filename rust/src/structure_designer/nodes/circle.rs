@@ -58,16 +58,28 @@ impl NodeData for CircleData {
         Err(error) => return error,
       };
     
+      let unit_cell = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2, 
+        UnitCellStruct::cubic_diamond(), 
+        NetworkResult::extract_unit_cell,
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let real_center = unit_cell.lattice_to_real_ivec2(&center);
+      let real_radius = unit_cell.lattice_to_real_float(radius);
+
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
           unit_cell: UnitCellStruct::cubic_diamond(),
           frame_transform: Transform2D::new(
-            center.as_dvec2(),
+            real_center,
             0.0,
           ),
           geo_tree_root: GeoNode::Circle {
-            center: center,
-            radius: radius,
+            center: real_center,
+            radius: real_radius,
           },
       });
     }
