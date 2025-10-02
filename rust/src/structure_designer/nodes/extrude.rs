@@ -69,12 +69,15 @@ impl NodeData for ExtrudeData {
           DQuat::from_rotation_y(shape.frame_transform.rotation),
         );
     
+        let direction = unit_cell.b.normalize();
+        let height = unit_cell.b.length() * (self.height as f64);
         let s = shape.geo_tree_root;
         return NetworkResult::Geometry(GeometrySummary { 
-          unit_cell: UnitCellStruct::cubic_diamond(),
+          unit_cell,
           frame_transform,
           geo_tree_root: GeoNode::Extrude { 
-            height: self.height as f64, // TODO
+            height: height,
+            direction: direction,
             shape: Box::new(s),
           },
         });

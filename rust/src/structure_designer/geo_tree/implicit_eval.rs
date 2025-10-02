@@ -78,8 +78,8 @@ impl ImplicitGeometry3D for GeoNode {
       GeoNode::Cuboid { min_corner, extent } => {
         Self::cuboid_implicit_eval(*min_corner, *extent, sample_point)
       }
-      GeoNode::Extrude { height, shape } => {
-        Self::extrude_implicit_eval(*height, shape, sample_point)
+      GeoNode::Extrude { height, direction, shape } => {
+        Self::extrude_implicit_eval(*height, *direction, shape, sample_point)
       }
       GeoNode::Transform { transform, shape } => {
         Self::transform_implicit_eval(transform, shape, sample_point)
@@ -251,12 +251,16 @@ impl GeoNode {
     false
   }
 
-  fn extrude_implicit_eval(height: f64, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
+  fn extrude_implicit_eval(height: f64, direction: DVec3, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
     // Calculate Y bounds constraint (extrusion is along Y axis from 0 to height)
-    let y_val = f64::max(-sample_point.y, sample_point.y - height);
+    let height_y = direction.y * height;
+    let y_val = f64::max(-sample_point.y, sample_point.y - height_y);
     
     // Evaluate the 2D shape in the XZ plane
-    let sample_point_2d = DVec2::new(sample_point.x, sample_point.z);
+
+    let sample_horizontal_displacement = DVec2::new(direction.x, direction.z) * sample_point.y / direction.y;
+
+    let sample_point_2d = DVec2::new(sample_point.x, sample_point.z) + sample_horizontal_displacement;
     let input_val = shape.implicit_eval_2d(&sample_point_2d);
     
     // Return the maximum of Y constraint and 2D shape evaluation

@@ -36,8 +36,8 @@ impl GeoNode {
       GeoNode::Polygon { vertices } => {
         Self::polygon_to_csg(vertices)
       }
-      GeoNode::Extrude { height, shape } => {
-        Self::extrude_to_csg(*height, shape)
+      GeoNode::Extrude { height, direction, shape } => {
+        Self::extrude_to_csg(*height, *direction, shape)
       }
       GeoNode::Transform { transform, shape } => {
         Self::transform_to_csg(transform, shape)
@@ -127,10 +127,14 @@ impl GeoNode {
     CSG::polygon(&points, None)
   }
 
-  fn extrude_to_csg(height: f64, shape: &Box<GeoNode>) -> CSG {
-      let mut extruded = shape.internal_to_csg(false).extrude(height);
+  fn extrude_to_csg(height: f64, direction: DVec3, shape: &Box<GeoNode>) -> CSG {
+      // Calculate the extrusion vector by multiplying height with normalized direction
+      let extrusion_vector = dvec3_to_vector3(direction * height);
+      
+      // Use the new extrude_vector method instead of the old extrude method
+      let mut extruded = shape.internal_to_csg(false).extrude_vector(extrusion_vector);
 
-      // swap y and z coordinates
+      // swap y and z coordinates to match atomCAD coordinate system
       for polygon in &mut extruded.polygons {        
         for vertex in &mut polygon.vertices {
             let tmp = vertex.pos.y;

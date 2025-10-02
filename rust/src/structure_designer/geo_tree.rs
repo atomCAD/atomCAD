@@ -38,6 +38,7 @@ use crate::util::transform::Transform;
   },
   Extrude {
     height: f64,
+    direction: DVec3,
     shape: Box<GeoNode>,
   },
   Transform {
