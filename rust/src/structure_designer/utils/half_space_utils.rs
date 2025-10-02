@@ -17,10 +17,25 @@ use crate::renderer::tessellator::tessellator;
 use std::collections::HashSet;
 use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
+/// Precomputed geometry values for half space operations
+/// This struct contains commonly used calculated values to avoid code duplication
+/// between tessellation and hit testing functions
+pub struct HalfSpaceGeometry {
+    /// The center position in world space
+    pub center_pos: DVec3,
+    /// The normalized plane normal direction in world space
+    pub plane_normal: DVec3,
+    /// The lattice shift vector for the given shift value
+    pub lattice_shift_vector: DVec3,
+    /// The shifted center position (center_pos + shift applied)
+    pub shifted_center: DVec3,
+    /// The handle position (shifted_center + accessibility offset along normal)
+    pub handle_position: DVec3,
+}
+
 pub const CENTER_SPHERE_RADIUS: f64 = 0.25;
 pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
 pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 16;
-
 // Constants for shift drag handle
 pub const SHIFT_HANDLE_ACCESSIBILITY_OFFSET: f64 = 3.0;
 pub const SHIFT_HANDLE_AXIS_RADIUS: f64 = 0.1;
@@ -41,6 +56,30 @@ pub enum HalfSpaceVisualization {
     Plane,
     /// Visualize as a cuboid
     Cuboid,
+}
+
+/// Calculate common geometry values for half space operations
+/// This function precomputes frequently used values to avoid duplication
+/// between tessellation and hit testing functions
+pub fn calculate_half_space_geometry(
+    unit_cell: &UnitCellStruct,
+    center: &IVec3,
+    miller_index: &IVec3,
+    shift: f64,
+) -> HalfSpaceGeometry {
+    let center_pos = unit_cell.ivec3_lattice_to_real(center);
+    let plane_normal = unit_cell.ivec3_lattice_to_real(miller_index).normalize();
+    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), shift);
+    let shifted_center = center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
+    let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+
+    HalfSpaceGeometry {
+        center_pos,
+        plane_normal,
+        lattice_shift_vector,
+        shifted_center,
+        handle_position,
+    }
 }
 
 /// Calculate the vector by which to shift along miller index normal direction,
@@ -116,15 +155,7 @@ pub fn tessellate_shift_drag_handle(
     miller_index: &IVec3,
     dragged_shift: f64,
     unit_cell: &UnitCellStruct) {
-    let center_pos = unit_cell.ivec3_lattice_to_real(center);
-    let plane_normal = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
-
-    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), dragged_shift);
-
-    let shifted_center = center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
-
-    // Calculate the final handle position with the additional offset
-    let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, dragged_shift);
 
     // Define materials
     let axis_material = Material::new(&Vec3::new(0.7, 0.7, 0.7), 1.0, 0.0); // Neutral gray
@@ -133,8 +164,8 @@ pub fn tessellate_shift_drag_handle(
     // Tessellate the axis cylinder (thin connection from center to handle)
     tessellator::tessellate_cylinder(
         output_mesh,
-        &handle_position,
-        &center_pos,
+        &geometry.handle_position,
+        &geometry.center_pos,
         SHIFT_HANDLE_AXIS_RADIUS,
         SHIFT_HANDLE_DIVISIONS,
         &axis_material,
@@ -145,8 +176,8 @@ pub fn tessellate_shift_drag_handle(
 
     // Tessellate the handle cylinder (thicker, draggable part)
     // Place handle centered at the offset position with length along normal direction
-    let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-    let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+    let handle_start = geometry.handle_position - geometry.plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+    let handle_end = geometry.handle_position + geometry.plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
 
     tessellator::tessellate_cylinder(
         output_mesh,
@@ -168,9 +199,8 @@ pub fn tessellate_plane_grid(
     shift: i32,
     unit_cell: &UnitCellStruct,
 ) {
-    let center_pos = unit_cell.ivec3_lattice_to_real(center);
-    let plane_normal = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
-    let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, plane_normal);
+    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, shift as f64);
+    let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, geometry.plane_normal);
 
     let roughness: f32 = 1.0;
     let metallic: f32 = 0.0;
@@ -180,16 +210,10 @@ pub fn tessellate_plane_grid(
 
     let thickness = 0.05;
 
-    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), shift as f64);
-
-    // Calculate the shifted center position (center of the plane)
-    let plane_shifted_center = 
-        center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
-
     // A grid representing the plane
     tessellator::tessellate_grid(
         output_mesh,
-        &(plane_shifted_center),
+        &geometry.shifted_center,
         &plane_rotator,
         thickness,
         40.0,
@@ -303,7 +327,8 @@ pub fn hit_test_center_sphere(
     ray_origin: &DVec3,
     ray_direction: &DVec3
 ) -> Option<f64> {
-    // Calculate center position in world space
+    // We only need center_pos for this function, so calculate it directly
+    // rather than using the full geometry struct
     let center_pos = unit_cell.ivec3_lattice_to_real(center);
     
     // Test central sphere
@@ -325,22 +350,11 @@ pub fn hit_test_shift_handle(
     ray_origin: &DVec3,
     ray_direction: &DVec3
 ) -> Option<f64> {
-    // Calculate center position in world space
-    let center_pos = unit_cell.ivec3_lattice_to_real(center);
-    
-    // For the shift handle, we need to calculate its position
-    let plane_normal = unit_cell.ivec3_lattice_to_real(miller_index).normalize();
-    
-    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), shift);
-
-    let shifted_center = center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
-
-    // Calculate handle position with accessibility offset
-    let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, shift);
     
     // Calculate handle cylinder start and end points
-    let handle_start = handle_position - plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
-    let handle_end = handle_position + plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+    let handle_start = geometry.handle_position - geometry.plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
+    let handle_end = geometry.handle_position + geometry.plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);
     
     // Test shift handle cylinder
     cylinder_hit_test(
