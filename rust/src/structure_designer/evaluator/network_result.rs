@@ -9,7 +9,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct UnitCellStruct {
   pub a: DVec3,
   pub b: DVec3,
@@ -37,7 +37,7 @@ impl UnitCellStruct {
   /// 
   /// # Returns
   /// Position in real space coordinates as DVec3
-  pub fn lattice_to_real_dvec3(&self, lattice_pos: &DVec3) -> DVec3 {
+  pub fn dvec3_lattice_to_real(&self, lattice_pos: &DVec3) -> DVec3 {
     lattice_pos.x * self.a + lattice_pos.y * self.b + lattice_pos.z * self.c
   }
 
@@ -49,7 +49,7 @@ impl UnitCellStruct {
   /// # Returns
   /// Position in real space coordinates as DVec3
   pub fn ivec3_lattice_to_real(&self, lattice_pos: &IVec3) -> DVec3 {
-    self.lattice_to_real_dvec3(&lattice_pos.as_dvec3())
+    self.dvec3_lattice_to_real(&lattice_pos.as_dvec3())
   }
 
   pub fn dvec2_lattice_to_real(&self, lattice_pos: &DVec2) -> DVec2 {

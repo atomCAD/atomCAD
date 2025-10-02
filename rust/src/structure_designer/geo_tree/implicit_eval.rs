@@ -1,7 +1,6 @@
 use super::GeoNode;
 use glam::f64::{DVec2, DVec3};
 use crate::util::transform::Transform;
-use crate::structure_designer::utils::half_space_utils::implicit_eval_half_space_calc;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry2D;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 
@@ -70,8 +69,8 @@ impl ImplicitGeometry3D for GeoNode {
 
   fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64 {
     match self {
-      GeoNode::HalfSpace { miller_index, center, shift } => {
-        Self::half_space_implicit_eval(*miller_index, *center, *shift, sample_point)
+      GeoNode::HalfSpace { normal, center} => {
+        Self::half_space_implicit_eval(*normal, *center, sample_point)
       }
       GeoNode::Sphere { center, radius } => {
         Self::sphere_implicit_eval(*center, *radius, sample_point)
@@ -101,8 +100,9 @@ impl ImplicitGeometry3D for GeoNode {
 }
 
 impl GeoNode {
-  fn half_space_implicit_eval(miller_index: DVec3, center: DVec3, shift: f64, sample_point: &DVec3) -> f64 {
-    implicit_eval_half_space_calc(&miller_index, &center, shift, sample_point)
+  fn half_space_implicit_eval(normal: DVec3, center: DVec3, sample_point: &DVec3) -> f64 {
+    // Calculate the signed distance from the point to the plane defined by the normal and center point
+    return normal.dot(*sample_point - center);
   }
 
   fn half_plane_implicit_eval(point1: DVec2, point2: DVec2, sample_point: &DVec2) -> f64 {

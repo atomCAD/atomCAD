@@ -10,9 +10,8 @@ use crate::util::transform::Transform;
 #[derive(Clone)]
  pub enum GeoNode {
   HalfSpace {
-    miller_index: DVec3,
+    normal: DVec3,
     center: DVec3,
-    shift: f64,
   },
   HalfPlane {
     point1: DVec2,

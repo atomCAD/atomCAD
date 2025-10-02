@@ -1,9 +1,12 @@
-use glam::f64::{DVec2, DVec3};
+use glam::f64::{DVec2, DVec3, DQuat};
 use crate::common::csg_types::CSG;
 use super::GeoNode;
 use crate::util::transform::Transform;
-use crate::structure_designer::utils::half_space_utils::create_half_space_geo;
 use crate::structure_designer::utils::half_space_utils::HalfSpaceVisualization;
+use crate::common::csg_utils::dvec3_to_point3;
+use crate::common::csg_utils::dvec3_to_vector3;
+use csgrs::polygon::Polygon;
+use csgrs::vertex::Vertex;
 
 impl GeoNode {
   pub fn to_csg(&self) -> CSG {
@@ -12,8 +15,8 @@ impl GeoNode {
 
   fn internal_to_csg(&self, is_root: bool) -> CSG {
     match self {
-      GeoNode::HalfSpace { miller_index, center, shift } => {
-        Self::half_space_to_csg(*miller_index, *center, *shift, is_root)
+      GeoNode::HalfSpace { normal, center} => {
+        Self::half_space_to_csg(*normal, *center, is_root)
       }
       GeoNode::HalfPlane { point1, point2 } => {
         Self::half_plane_to_csg(*point1, *point2)
@@ -60,11 +63,10 @@ impl GeoNode {
     }
   }
 
-  fn half_space_to_csg(miller_index: DVec3, center: DVec3, shift: f64, is_root: bool) -> CSG {
+  fn half_space_to_csg(normal: DVec3, center: DVec3, is_root: bool) -> CSG {
     create_half_space_geo(
-          &miller_index,
+          &normal,
           &center,
-          shift,
           if is_root { HalfSpaceVisualization::Plane } else { HalfSpaceVisualization::Cuboid })
   }
 
@@ -215,4 +217,117 @@ impl GeoNode {
     let sub_csg = sub.internal_to_csg(false);
     base_csg.difference(&sub_csg)
   }
+}
+
+
+pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, visualization: HalfSpaceVisualization) -> CSG {
+  let na_normal = dvec3_to_vector3(*normal);
+  let rotation = DQuat::from_rotation_arc(DVec3::Y, *normal);
+
+  let width = 40.0;
+  let height = 40.0;
+  let depth = 40.0; // Depth for cuboid visualization
+
+  let start_x = -width * 0.5;
+  let start_z = -height * 0.5;
+  let end_x = width * 0.5;
+  let end_z = height * 0.5;
+
+  // Front face vertices (at y=0)
+  let v1 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, start_z)));
+  let v2 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, end_z)));
+  let v3 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, end_z)));
+  let v4 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, start_z)));
+
+  // Create polygons based on the visualization type
+  let polygons = match visualization {
+    HalfSpaceVisualization::Plane => {
+      // Single plane representation (original)
+      vec![
+        Polygon::new(
+            vec![
+                Vertex::new(v1, na_normal),
+                Vertex::new(v2, na_normal),
+                Vertex::new(v3, na_normal),
+                Vertex::new(v4, na_normal),
+            ], None
+        ),
+      ]
+    },
+    HalfSpaceVisualization::Cuboid => {
+      // Back face vertices (at y=-depth)
+      let v5 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, -depth, start_z)));
+      let v6 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, -depth, end_z)));
+      let v7 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, -depth, end_z)));
+      let v8 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, -depth, start_z)));
+
+      // Calculate normals for each face
+      let front_normal = na_normal;
+      let back_normal = dvec3_to_vector3(-normal);
+      let left_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(-1.0, 0.0, 0.0)));
+      let right_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(1.0, 0.0, 0.0)));
+      let top_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(0.0, 0.0, 1.0)));
+      let bottom_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(0.0, 0.0, -1.0)));
+
+      vec![
+        // Front face (original plane)
+        Polygon::new(
+            vec![
+                Vertex::new(v1, front_normal),
+                Vertex::new(v2, front_normal),
+                Vertex::new(v3, front_normal),
+                Vertex::new(v4, front_normal),
+            ], None
+        ),
+        // Back face
+        Polygon::new(
+            vec![
+                Vertex::new(v8, back_normal),
+                Vertex::new(v7, back_normal),
+                Vertex::new(v6, back_normal),
+                Vertex::new(v5, back_normal),
+            ], None
+        ),
+        // Left face
+        Polygon::new(
+            vec![
+                Vertex::new(v5, left_normal),
+                Vertex::new(v6, left_normal),
+                Vertex::new(v2, left_normal),
+                Vertex::new(v1, left_normal),
+            ], None
+        ),
+        // Right face
+        Polygon::new(
+            vec![
+                Vertex::new(v4, right_normal),
+                Vertex::new(v3, right_normal),
+                Vertex::new(v7, right_normal),
+                Vertex::new(v8, right_normal),
+            ], None
+        ),
+        // Top face
+        Polygon::new(
+            vec![
+                Vertex::new(v2, top_normal),
+                Vertex::new(v6, top_normal),
+                Vertex::new(v7, top_normal),
+                Vertex::new(v3, top_normal),
+            ], None
+        ),
+        // Bottom face
+        Polygon::new(
+            vec![
+                Vertex::new(v1, bottom_normal),
+                Vertex::new(v4, bottom_normal),
+                Vertex::new(v8, bottom_normal),
+                Vertex::new(v5, bottom_normal),
+            ], None
+        ),
+      ]
+    },
+  };
+
+  return CSG::from_polygons(&polygons)
+    .translate(center_pos.x, center_pos.y, center_pos.z);
 }

@@ -127,14 +127,12 @@ fn create_parallelepiped_from_lattice(
   let max_point_a = min_corner_real + extent_lattice.x * basis_a;
   
   half_spaces.push(GeoNode::HalfSpace {
-    miller_index: normal_a,
+    normal: -normal_a,
     center: min_point_a,
-    shift: 0.0,
   });
   half_spaces.push(GeoNode::HalfSpace {
-    miller_index: -normal_a,
+    normal: normal_a,
     center: max_point_a,
-    shift: 0.0,
   });
   
   // Face pair perpendicular to basis_b
@@ -143,14 +141,12 @@ fn create_parallelepiped_from_lattice(
   let max_point_b = min_corner_real + extent_lattice.y * basis_b;
   
   half_spaces.push(GeoNode::HalfSpace {
-    miller_index: normal_b,
+    normal: -normal_b,
     center: min_point_b,
-    shift: 0.0,
   });
   half_spaces.push(GeoNode::HalfSpace {
-    miller_index: -normal_b,
+    normal: normal_b,
     center: max_point_b,
-    shift: 0.0,
   });
   
   // Face pair perpendicular to basis_c
@@ -159,14 +155,12 @@ fn create_parallelepiped_from_lattice(
   let max_point_c = min_corner_real + extent_lattice.z * basis_c;
   
   half_spaces.push(GeoNode::HalfSpace {
-    miller_index: normal_c,
+    normal: -normal_c,
     center: min_point_c,
-    shift: 0.0,
   });
   half_spaces.push(GeoNode::HalfSpace {
-    miller_index: -normal_c,
+    normal: normal_c,
     center: max_point_c,
-    shift: 0.0,
   });
   
   // Return the intersection of all half-spaces

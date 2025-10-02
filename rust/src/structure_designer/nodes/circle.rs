@@ -72,7 +72,7 @@ impl NodeData for CircleData {
 
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell: UnitCellStruct::cubic_diamond(),
+          unit_cell,
           frame_transform: Transform2D::new(
             real_center,
             0.0,

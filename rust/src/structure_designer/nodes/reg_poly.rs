@@ -35,15 +35,25 @@ impl NodeData for RegPolyData {
 
     fn eval<'a>(
         &self,
-        _network_evaluator: &NetworkEvaluator,
-        _network_stack: &Vec<NetworkStackElement<'a>>,
-        _node_id: u64,
-        _registry: &NodeTypeRegistry,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext) -> NetworkResult {    
+        context: &mut NetworkEvaluationContext) -> NetworkResult {    
         let num_sides = max(3, self.num_sides);
         let radius = max(1, self.radius);
     
+        let unit_cell = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 0, 
+            UnitCellStruct::cubic_diamond(), 
+            NetworkResult::extract_unit_cell,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+
+
         let mut vertices: Vec<IVec2> = Vec::new();
     
         for i in 0..num_sides {
@@ -53,16 +63,20 @@ impl NodeData for RegPolyData {
             vertices.push(find_lattice_point(angle, radius));
         }
     
+        let real_vertices = vertices.iter().map(|v| {
+            unit_cell.ivec2_lattice_to_real(v)
+        }).collect();
+
         // Create a transform at the center of the polygon (origin)
         // No rotation is needed for this type of shape
         return NetworkResult::Geometry2D(
           GeometrySummary2D {
-            unit_cell: UnitCellStruct::cubic_diamond(),
+            unit_cell: unit_cell,
             frame_transform: Transform2D::new(
               DVec2::new(0.0, 0.0),  // Center at origin
               0.0,                   // No rotation
             ),
-            geo_tree_root: GeoNode::Polygon { vertices },
+            geo_tree_root: GeoNode::Polygon { vertices: real_vertices },
           }
         );
     }

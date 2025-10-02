@@ -41,21 +41,35 @@ impl NodeData for PolygonData {
 
     fn eval<'a>(
         &self,
-        _network_evaluator: &NetworkEvaluator,
-        _network_stack: &Vec<NetworkStackElement<'a>>,
-        _node_id: u64,
-        _registry: &NodeTypeRegistry,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {    
+        context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+
+      let unit_cell = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0, 
+        UnitCellStruct::cubic_diamond(), 
+        NetworkResult::extract_unit_cell,
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let real_vertices = self.vertices.iter().map(|v| {
+        unit_cell.ivec2_lattice_to_real(v)
+      }).collect();
+
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell: UnitCellStruct::cubic_diamond(),
+          unit_cell,
           frame_transform: Transform2D::new(
             DVec2::new(0.0, 0.0),
             0.0,
           ),
-          geo_tree_root: GeoNode::Polygon { vertices: self.vertices.clone() },
+          geo_tree_root: GeoNode::Polygon { vertices: real_vertices },
         }
       );
     }

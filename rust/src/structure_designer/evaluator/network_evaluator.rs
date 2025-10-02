@@ -187,12 +187,10 @@ impl NetworkEvaluator {
 
       // Process the CSG if it was found
       if let Some(csg) = csg {
-        let scale_factor = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-        let scaled_csg = csg.scale(scale_factor, scale_factor, scale_factor);
         let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
         let is_half_space = node.node_type_name == "half_space";
         let mut poly_mesh = convert_csg_to_poly_mesh(
-          &scaled_csg, 
+          &csg, 
           !geometry_visualization_preferences.wireframe_geometry,
           is_half_space,
           is_half_space);

@@ -36,12 +36,16 @@ pub struct HalfSpaceData {
 
 impl NodeData for HalfSpaceData {
 
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+      let half_space_cache = eval_cache.downcast_ref::<HalfSpaceEvalCache>()?;
+
       return Some(Box::new(HalfSpaceGadget::new(
         self.max_miller_index,
         &self.miller_index,
         self.center,
-        self.shift)));
+        self.shift,
+        &half_space_cache.unit_cell)));
     }
   
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -50,17 +54,38 @@ impl NodeData for HalfSpaceData {
 
     fn eval<'a>(
         &self,
-        _network_evaluator: &NetworkEvaluator,
-        _network_stack: &Vec<NetworkStackElement<'a>>,
-        _node_id: u64,
-        _registry: &NodeTypeRegistry,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext
+        context: &mut NetworkEvaluationContext
       ) -> NetworkResult {
     
-      let dir = self.miller_index.as_dvec3().normalize();
-      let center_pos = self.center.as_dvec3();
-    
+      let unit_cell = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0, 
+        UnitCellStruct::cubic_diamond(), 
+        NetworkResult::extract_unit_cell,
+        ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      // Store evaluation cache for selected node
+      if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+        let eval_cache = HalfSpaceEvalCache {
+          unit_cell: unit_cell.clone(),
+        };
+        context.selected_node_eval_cache = Some(Box::new(eval_cache));
+      }
+
+      let real_miller_index = unit_cell.ivec3_lattice_to_real(&self.miller_index);
+      let dir = real_miller_index.normalize();
+      let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
+
+      let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index.as_dvec3(), self.shift as f64);
+      let real_shift_vector = unit_cell.dvec3_lattice_to_real(&shift_vector);
+
       return NetworkResult::Geometry(GeometrySummary {
         unit_cell: UnitCellStruct::cubic_diamond(),
         frame_transform: Transform::new(
@@ -68,9 +93,8 @@ impl NodeData for HalfSpaceData {
           DQuat::from_rotation_arc(DVec3::Y, dir),
         ),
         geo_tree_root: GeoNode::HalfSpace {
-            miller_index: self.miller_index,
-            center: self.center,
-            shift: self.shift,
+            normal: real_miller_index.normalize(),
+            center: center_pos + real_shift_vector,
         },
       });
     }
@@ -78,6 +102,11 @@ impl NodeData for HalfSpaceData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HalfSpaceEvalCache {
+  pub unit_cell: UnitCellStruct,
 }
 
 #[derive(Clone)]
@@ -89,19 +118,21 @@ pub struct HalfSpaceGadget {
     pub shift: i32,
     pub dragged_handle_index: Option<i32>,
     pub possible_miller_indices: HashSet<IVec3>,
+    pub unit_cell: UnitCellStruct,
 }
 
 impl Tessellatable for HalfSpaceGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
-        let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
 
-        half_space_utils::tessellate_center_sphere(output_mesh, &self.center);
+        half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);
 
         half_space_utils::tessellate_shift_drag_handle(
             output_mesh,
             &self.center,
             &self.miller_index,
-            self.dragged_shift);
+            self.dragged_shift,
+            &self.unit_cell);
         
         // If we are dragging any handle, show the plane grid for visual reference
         if self.dragged_handle_index.is_some() {
@@ -109,7 +140,8 @@ impl Tessellatable for HalfSpaceGadget {
                 output_mesh,
                 &self.center,
                 &self.miller_index,
-                self.shift);
+                self.shift,
+                &self.unit_cell);
         }
 
         // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
@@ -119,7 +151,8 @@ impl Tessellatable for HalfSpaceGadget {
                 &center_pos,
                 &self.miller_index,
                 &self.possible_miller_indices,
-                self.max_miller_index);
+                self.max_miller_index,
+                &self.unit_cell);
         } 
     }
 
@@ -135,6 +168,7 @@ impl Gadget for HalfSpaceGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         // Test central sphere
         if let Some(_t) = half_space_utils::hit_test_center_sphere(
+            &self.unit_cell,
             &self.center,
             &ray_origin,
             &ray_direction
@@ -144,6 +178,7 @@ impl Gadget for HalfSpaceGadget {
         
         // Test shift handle cylinder
         if let Some(_t) = half_space_utils::hit_test_shift_handle(
+            &self.unit_cell,
             &self.center,
             &self.miller_index,
             self.shift as f64,
@@ -162,13 +197,14 @@ impl Gadget for HalfSpaceGadget {
 
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
         // Calculate center position in world space
-        let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
         
         if handle_index == 0 {
             // Handle index already stored in dragged_handle_index during start_drag
             
             // Check if any miller index disc is hit
             if let Some(new_miller_index) = half_space_utils::hit_test_miller_indices_discs(
+                &self.unit_cell,
                 &center_pos,
                 &self.possible_miller_indices,
                 self.max_miller_index,
@@ -181,6 +217,7 @@ impl Gadget for HalfSpaceGadget {
             // Handle dragging the shift handle
             // We need to determine the new shift value based on where the mouse ray is closest to the normal ray
             self.dragged_shift = get_dragged_shift(
+                &self.unit_cell,
                 &self.miller_index,
                 &self.center,
                 &ray_origin,
@@ -213,7 +250,7 @@ impl NodeNetworkGadget for HalfSpaceGadget {
 
 impl HalfSpaceGadget {
 
-    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32) -> Self {        
+    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32, unit_cell: &UnitCellStruct) -> Self {        
         return Self {
             max_miller_index,
             miller_index: *miller_index,
@@ -222,6 +259,7 @@ impl HalfSpaceGadget {
             shift,
             dragged_handle_index: None,
             possible_miller_indices: half_space_utils::generate_possible_miller_indices(max_miller_index),
+            unit_cell: unit_cell.clone(),
         };
     }
 }

@@ -48,6 +48,15 @@ impl NodeData for ExtrudeData {
         0,
       );
     
+      let unit_cell = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 1, 
+        UnitCellStruct::cubic_diamond(), 
+        NetworkResult::extract_unit_cell,
+        ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       if let NetworkResult::Error(_) = shape_val {
         return shape_val;
       }
@@ -65,7 +74,7 @@ impl NodeData for ExtrudeData {
           unit_cell: UnitCellStruct::cubic_diamond(),
           frame_transform,
           geo_tree_root: GeoNode::Extrude { 
-            height: self.height,
+            height: self.height as f64, // TODO
             shape: Box::new(s),
           },
         });

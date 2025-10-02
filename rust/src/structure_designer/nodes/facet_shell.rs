@@ -362,7 +362,8 @@ impl FacetShellData {
           }
           
           let normal = float_miller / miller_magnitude;
-          let shift_vector = half_space_utils::calculate_shift_vector(&facet.miller_index, facet.shift as f64);
+          // TODO: handle shift and miller index conversion correctly
+          let shift_vector = half_space_utils::calculate_shift_vector(&facet.miller_index.as_dvec3(), facet.shift as f64);
           let plane_point = (self.center.as_dvec3() + shift_vector) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
           // Ray-plane intersection
@@ -425,7 +426,10 @@ impl Default for FacetShellData {
 }
 
 impl NodeData for FacetShellData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+      let facet_shell_cache = eval_cache.downcast_ref::<FacetShellEvalCache>()?;
+  
       if self.selected_facet_index.is_none() {
         return None;
       }
@@ -443,6 +447,7 @@ impl NodeData for FacetShellData {
         dragged_shift: selected_facet.shift as f64,
         dragged_handle_index: None,
         possible_miller_indices: half_space_utils::generate_possible_miller_indices(self.max_miller_index),
+        unit_cell: facet_shell_cache.unit_cell.clone(),
       }));
     }
 
@@ -452,21 +457,45 @@ impl NodeData for FacetShellData {
 
     fn eval<'a>(
         &self,
-        _network_evaluator: &NetworkEvaluator,
-        _network_stack: &Vec<NetworkStackElement<'a>>,
-        _node_id: u64,
-        _registry: &NodeTypeRegistry,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext
+        context: &mut NetworkEvaluationContext
       ) -> NetworkResult {
+
+        let unit_cell = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 0, 
+            UnitCellStruct::cubic_diamond(), 
+            NetworkResult::extract_unit_cell,
+            ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+
+        // Store evaluation cache for selected node
+        if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+          let eval_cache = FacetShellEvalCache {
+            unit_cell: unit_cell.clone(),
+          };
+          context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+
         let shapes: Vec<GeoNode> = self.cached_facets.iter().map(|facet| {
+
+          let real_miller_index = unit_cell.ivec3_lattice_to_real(&facet.miller_index);
+          let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
+
+          let shift_vector = half_space_utils::calculate_shift_vector(&facet.miller_index.as_dvec3(), facet.shift as f64);
+          let real_shift_vector = unit_cell.dvec3_lattice_to_real(&shift_vector);
+
           GeoNode::HalfSpace {
-            miller_index: facet.miller_index,
-            center: self.center,
-            shift: facet.shift,
+            normal: real_miller_index.normalize(),
+            center: center_pos + real_shift_vector,
           }
         }).collect();
-      
+
         // Calculate transform for the result
         // Use center position for translation
         let center_pos = self.center.as_dvec3();
@@ -497,6 +526,12 @@ pub struct FacetShellGadget {
     pub dragged_shift: f64, // this is rounded into 'shift'
     pub dragged_handle_index: Option<i32>, // 0 for the center, from index 1: corresponds to the variant that is dragged
     pub possible_miller_indices: HashSet<IVec3>,
+    pub unit_cell: UnitCellStruct,
+}
+
+#[derive(Debug, Clone)]
+pub struct FacetShellEvalCache {
+  pub unit_cell: UnitCellStruct,
 }
 
 impl Tessellatable for FacetShellGadget {
@@ -504,7 +539,7 @@ impl Tessellatable for FacetShellGadget {
       let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
 
       // Tessellate center sphere
-      half_space_utils::tessellate_center_sphere(output_mesh, &self.center);
+      half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);
 
       // Tessellate shift drag handles for all miller index variants
       for miller_index in &self.miller_index_variants {
@@ -512,7 +547,8 @@ impl Tessellatable for FacetShellGadget {
               output_mesh,
               &self.center,
               miller_index,
-              self.dragged_shift);
+              self.dragged_shift,
+              &self.unit_cell);
       }
 
       // If we are dragging a handle, show the plane grid for visual reference
@@ -521,7 +557,8 @@ impl Tessellatable for FacetShellGadget {
             output_mesh,
             &self.center,
             &self.get_dragged_miller_index(),
-            self.shift);
+            self.shift,
+            &self.unit_cell);
       }
 
       // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
@@ -531,7 +568,8 @@ impl Tessellatable for FacetShellGadget {
             &center_pos,
             &self.miller_index,
             &self.possible_miller_indices,
-            self.max_miller_index);
+            self.max_miller_index,
+            &self.unit_cell);
       } 
   }
 
@@ -547,6 +585,7 @@ impl Gadget for FacetShellGadget {
   fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
       // Test central sphere
       if let Some(_t) = half_space_utils::hit_test_center_sphere(
+          &self.unit_cell,
           &self.center,
           &ray_origin,
           &ray_direction
@@ -557,6 +596,7 @@ impl Gadget for FacetShellGadget {
       // Test shift handle cylinders for all miller index variants
       for (variant_index, miller_index_variant) in self.miller_index_variants.iter().enumerate() {
           if let Some(_t) = half_space_utils::hit_test_shift_handle(
+              &self.unit_cell,
               &self.center,
               miller_index_variant,
               self.shift as f64,
@@ -583,6 +623,7 @@ impl Gadget for FacetShellGadget {
           
           // Check if any miller index disc is hit
           if let Some(new_miller_index) = half_space_utils::hit_test_miller_indices_discs(
+              &self.unit_cell,
               &center_pos,
               &self.possible_miller_indices,
               self.max_miller_index,
@@ -595,6 +636,7 @@ impl Gadget for FacetShellGadget {
           // Handle dragging the shift handle
           // We need to determine the new shift value based on where the mouse ray is closest to the normal ray
           self.dragged_shift = half_space_utils::get_dragged_shift(
+              &self.unit_cell,
               &self.get_dragged_miller_index(),
               &self.center,
               &ray_origin,

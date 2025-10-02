@@ -72,7 +72,7 @@ impl NodeData for SphereData {
       let real_radius = unit_cell.int_lattice_to_real(radius);
 
       return NetworkResult::Geometry(GeometrySummary { 
-        unit_cell: UnitCellStruct::cubic_diamond(),
+        unit_cell,
         frame_transform: Transform::new(
         real_center,
         DQuat::IDENTITY,

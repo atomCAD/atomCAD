@@ -44,29 +44,39 @@ impl NodeData for HalfPlaneData {
 
     fn eval<'a>(
         &self,
-        _network_evaluator: &NetworkEvaluator,
-        _network_stack: &Vec<NetworkStackElement<'a>>,
-        _node_id: u64,
-        _registry: &NodeTypeRegistry,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &Vec<NetworkStackElement<'a>>,
+        node_id: u64,
+        registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext,
+        context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-      // Convert point1 to double precision for calculations
-      let point1 = self.point1.as_dvec2();
+
+      let unit_cell = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0, 
+        UnitCellStruct::cubic_diamond(), 
+        NetworkResult::extract_unit_cell,
+        ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let point1 = unit_cell.ivec2_lattice_to_real(&self.point1);
+      let point2 = unit_cell.ivec2_lattice_to_real(&self.point2);
     
       // Calculate direction vector from point1 to point2
-      let dir_vector = self.point2.as_dvec2() - point1;
+      let dir_vector = point2 - point1;
       let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
     
       // Use point1 as the position and calculate the angle for the transform
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell: UnitCellStruct::cubic_diamond(),
+          unit_cell,
           frame_transform: Transform2D::new(
             point1,
             normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
           ),
-          geo_tree_root: GeoNode::HalfPlane { point1: self.point1, point2: self.point2 },
+          geo_tree_root: GeoNode::HalfPlane { point1, point2 },
         });
     }
 

@@ -15,6 +15,7 @@ use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
 use std::collections::HashSet;
+use crate::structure_designer::evaluator::network_result::UnitCellStruct;
 
 pub const CENTER_SPHERE_RADIUS: f64 = 0.25;
 pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
@@ -44,8 +45,7 @@ pub enum HalfSpaceVisualization {
 
 /// Calculate the vector by which to shift along miller index normal direction,
 /// with magnitude based on the miller index d-spacing
-pub fn calculate_shift_vector(miller_index: &IVec3, shift: f64) -> DVec3 {
-  let float_miller = miller_index.as_dvec3();
+pub fn calculate_shift_vector(float_miller: &DVec3, shift: f64) -> DVec3 {
   let miller_magnitude = float_miller.length();
   
   // Avoid division by zero
@@ -70,175 +70,40 @@ pub fn calculate_shift_vector(miller_index: &IVec3, shift: f64) -> DVec3 {
 // Calculate the continuous shift value of a half space based on its centerm miller index and
 // a mouse ray. The handle offset is the distance from the plane center to the handle.
 // Useful dragging a half plane shift handle.
-pub fn get_dragged_shift(miller_index: &IVec3, center: &IVec3, ray_origin: &DVec3, ray_direction: &DVec3, handle_offset: f64) -> f64 {
-    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, center: &IVec3, ray_origin: &DVec3, ray_direction: &DVec3, handle_offset: f64) -> f64 {
+    let center_pos = unit_cell.ivec3_lattice_to_real(center);
+    let normal_dir = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
+    let scaling_in_direction = unit_cell.dvec3_lattice_to_real(&miller_index.as_dvec3().normalize()).length();
 
     let float_miller = miller_index.as_dvec3();
     let miller_magnitude = float_miller.length();
-            
+
     // Avoid division by zero
     if miller_magnitude <= 0.0 {
         return 0.0;
     }
-   
-    // Calculate the normalized direction vector
-    let normal_dir = float_miller / miller_magnitude;
 
-    // Find where on the 'normal ray' the mouse ray is closest
+    // Find where on the 'normal ray' the mouse ray is closest (in real space)
     let distance_along_normal = get_closest_point_on_first_ray(
         &center_pos,
         &normal_dir,
         &ray_origin,
         &ray_direction
     );
-      
+
+    let real_space_distance = distance_along_normal - handle_offset;
+
     // Convert the world distance to cell-space distance
-    let cell_space_distance = (distance_along_normal - handle_offset) / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let cell_space_distance = real_space_distance / scaling_in_direction;
 
     // (* miller_magnitude) is equivalent to (/ d-spacing)
     return cell_space_distance * miller_magnitude;
 }
 
-pub fn create_half_space_geo(miller_index: &IVec3, center: &IVec3, shift: i32, visualization: HalfSpaceVisualization) -> CSG {
-  let dir = miller_index.as_dvec3().normalize();
-  let center_pos = center.as_dvec3();
-
-  // Apply the shift along the normal direction
-  let shift_vector = calculate_shift_vector(miller_index, shift as f64);
-  let shifted_center = center_pos + shift_vector;
-
-  let normal = dvec3_to_vector3(dir);
-  let rotation = DQuat::from_rotation_arc(DVec3::Y, dir);
-
-  let width = 40.0;
-  let height = 40.0;
-  let depth = 40.0; // Depth for cuboid visualization
-
-  let start_x = -width * 0.5;
-  let start_z = -height * 0.5;
-  let end_x = width * 0.5;
-  let end_z = height * 0.5;
-
-  // Front face vertices (at y=0)
-  let v1 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, start_z)));
-  let v2 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, end_z)));
-  let v3 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, end_z)));
-  let v4 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, start_z)));
-
-  // Create polygons based on the visualization type
-  let polygons = match visualization {
-    HalfSpaceVisualization::Plane => {
-      // Single plane representation (original)
-      vec![
-        Polygon::new(
-            vec![
-                Vertex::new(v1, normal),
-                Vertex::new(v2, normal),
-                Vertex::new(v3, normal),
-                Vertex::new(v4, normal),
-            ], None
-        ),
-      ]
-    },
-    HalfSpaceVisualization::Cuboid => {
-      // Back face vertices (at y=-depth)
-      let v5 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, -depth, start_z)));
-      let v6 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, -depth, end_z)));
-      let v7 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, -depth, end_z)));
-      let v8 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, -depth, start_z)));
-
-      // Calculate normals for each face
-      let front_normal = normal;
-      let back_normal = dvec3_to_vector3(-dir);
-      let left_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(-1.0, 0.0, 0.0)));
-      let right_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(1.0, 0.0, 0.0)));
-      let top_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(0.0, 0.0, 1.0)));
-      let bottom_normal = dvec3_to_vector3(rotation.mul_vec3(DVec3::new(0.0, 0.0, -1.0)));
-
-      vec![
-        // Front face (original plane)
-        Polygon::new(
-            vec![
-                Vertex::new(v1, front_normal),
-                Vertex::new(v2, front_normal),
-                Vertex::new(v3, front_normal),
-                Vertex::new(v4, front_normal),
-            ], None
-        ),
-        // Back face
-        Polygon::new(
-            vec![
-                Vertex::new(v8, back_normal),
-                Vertex::new(v7, back_normal),
-                Vertex::new(v6, back_normal),
-                Vertex::new(v5, back_normal),
-            ], None
-        ),
-        // Left face
-        Polygon::new(
-            vec![
-                Vertex::new(v5, left_normal),
-                Vertex::new(v6, left_normal),
-                Vertex::new(v2, left_normal),
-                Vertex::new(v1, left_normal),
-            ], None
-        ),
-        // Right face
-        Polygon::new(
-            vec![
-                Vertex::new(v4, right_normal),
-                Vertex::new(v3, right_normal),
-                Vertex::new(v7, right_normal),
-                Vertex::new(v8, right_normal),
-            ], None
-        ),
-        // Top face
-        Polygon::new(
-            vec![
-                Vertex::new(v2, top_normal),
-                Vertex::new(v6, top_normal),
-                Vertex::new(v7, top_normal),
-                Vertex::new(v3, top_normal),
-            ], None
-        ),
-        // Bottom face
-        Polygon::new(
-            vec![
-                Vertex::new(v1, bottom_normal),
-                Vertex::new(v4, bottom_normal),
-                Vertex::new(v8, bottom_normal),
-                Vertex::new(v5, bottom_normal),
-            ], None
-        ),
-      ]
-    },
-  };
-
-  return CSG::from_polygons(&polygons)
-    .translate(shifted_center.x, shifted_center.y, shifted_center.z);
-}
-
-pub fn implicit_eval_half_space_calc(
-  miller_index: &IVec3, center: &IVec3, shift: i32,
-  sample_point: &DVec3) -> f64 {
-  let float_miller = miller_index.as_dvec3();
-  let miller_magnitude = float_miller.length();
-  let center_pos = center.as_dvec3();
-  
-  // Apply the shift along the normal direction, using the common function
-  let shift_vector = calculate_shift_vector(miller_index, shift as f64);
-  let shifted_center = center_pos + shift_vector;
-  
-  // Calculate the signed distance from the point to the plane defined by the normal (miller_index) and shifted center point
-  return float_miller.dot(*sample_point - shifted_center) / miller_magnitude;
-}
-
-
-pub fn tessellate_center_sphere(output_mesh: &mut Mesh, center: &IVec3) {
-    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+pub fn tessellate_center_sphere(output_mesh: &mut Mesh, center_pos: &DVec3) {
     tessellator::tessellate_sphere(
         output_mesh,
-        &center_pos,
+        center_pos,
         CENTER_SPHERE_RADIUS,
         CENTER_SPHERE_HORIZONTAL_DIVISIONS, // number sections when dividing by horizontal lines
         CENTER_SPHERE_VERTICAL_DIVISIONS, // number of sections when dividing by vertical lines
@@ -249,14 +114,14 @@ pub fn tessellate_shift_drag_handle(
     output_mesh: &mut Mesh,
     center: &IVec3,
     miller_index: &IVec3,
-    dragged_shift: f64) {
-    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-    let plane_normal = miller_index.as_dvec3().normalize();
+    dragged_shift: f64,
+    unit_cell: &UnitCellStruct) {
+    let center_pos = unit_cell.ivec3_lattice_to_real(center);
+    let plane_normal = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
 
-    let shifted_center =
-    center_pos +
-    calculate_shift_vector(&miller_index, dragged_shift) *
-    (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), dragged_shift);
+
+    let shifted_center = center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
 
     // Calculate the final handle position with the additional offset
     let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
@@ -301,9 +166,10 @@ pub fn tessellate_plane_grid(
     center: &IVec3,
     miller_index: &IVec3,
     shift: i32,
+    unit_cell: &UnitCellStruct,
 ) {
-    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-    let plane_normal = miller_index.as_dvec3().normalize();
+    let center_pos = unit_cell.ivec3_lattice_to_real(center);
+    let plane_normal = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
     let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, plane_normal);
 
     let roughness: f32 = 1.0;
@@ -314,11 +180,11 @@ pub fn tessellate_plane_grid(
 
     let thickness = 0.05;
 
+    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), shift as f64);
+
     // Calculate the shifted center position (center of the plane)
     let plane_shifted_center = 
-        center_pos +
-        calculate_shift_vector(miller_index, shift as f64) *
-        (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+        center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
 
     // A grid representing the plane
     tessellator::tessellate_grid(
@@ -344,6 +210,7 @@ pub fn tessellate_miller_indices_discs(
     miller_index: &IVec3,
     possible_miller_indices: &HashSet<IVec3>,
     max_miller_index: i32,
+    unit_cell: &UnitCellStruct,
 ) {
     // Material for regular discs - blue color
     let disc_material = Material::new(&Vec3::new(0.0, 0.3, 0.9), 0.3, 0.0);
@@ -360,8 +227,8 @@ pub fn tessellate_miller_indices_discs(
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
         // Get the normalized direction for this miller index
-        let direction = miller_index.as_dvec3().normalize();
-            
+        let direction = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
+
         // Calculate the position for the disc
         let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
             
@@ -431,12 +298,13 @@ pub fn get_miller_index_disc_radius(max_miller_index: i32) -> f64 {
 /// Hit test the central sphere handle at the given center position
 /// Returns Some(t) if the ray hits the sphere, None otherwise
 pub fn hit_test_center_sphere(
+    unit_cell: &UnitCellStruct,
     center: &IVec3,
     ray_origin: &DVec3,
     ray_direction: &DVec3
 ) -> Option<f64> {
     // Calculate center position in world space
-    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let center_pos = unit_cell.ivec3_lattice_to_real(center);
     
     // Test central sphere
     sphere_hit_test(
@@ -450,6 +318,7 @@ pub fn hit_test_center_sphere(
 /// Hit test the shift handle cylinder at the given center, miller index and shift
 /// Returns Some(t) if the ray hits the cylinder, None otherwise
 pub fn hit_test_shift_handle(
+    unit_cell: &UnitCellStruct,
     center: &IVec3,
     miller_index: &IVec3,
     shift: f64,
@@ -457,15 +326,14 @@ pub fn hit_test_shift_handle(
     ray_direction: &DVec3
 ) -> Option<f64> {
     // Calculate center position in world space
-    let center_pos = center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let center_pos = unit_cell.ivec3_lattice_to_real(center);
     
     // For the shift handle, we need to calculate its position
-    let plane_normal = miller_index.as_dvec3().normalize();
+    let plane_normal = unit_cell.ivec3_lattice_to_real(miller_index).normalize();
     
-    let shifted_center =
-        center_pos +
-        calculate_shift_vector(miller_index, shift) *
-        (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), shift);
+
+    let shifted_center = center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
 
     // Calculate handle position with accessibility offset
     let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
@@ -487,6 +355,7 @@ pub fn hit_test_shift_handle(
 /// Tests if any miller index disc is hit by the given ray
 /// Returns the miller index of the hit disc (closest to ray origin), or None if no disc was hit
 pub fn hit_test_miller_indices_discs(
+    unit_cell: &UnitCellStruct,
     center_pos: &DVec3,
     possible_miller_indices: &HashSet<IVec3>,
     max_miller_index: i32,
@@ -502,7 +371,7 @@ pub fn hit_test_miller_indices_discs(
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
         // Get the normalized direction for this miller index
-        let direction = miller_index.as_dvec3().normalize();
+        let direction = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
             
         // Calculate the position for the disc
         let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
