@@ -27,12 +27,6 @@ impl GeoNode {
       GeoNode::Sphere { center, radius } => {
         Self::sphere_to_csg(*center, *radius)
       }
-      GeoNode::Rect { min_corner, extent } => {
-        Self::rect_to_csg(*min_corner, *extent)
-      }
-      GeoNode::Cuboid { min_corner, extent } => {
-        Self::cuboid_to_csg(*min_corner, *extent)
-      }
       GeoNode::Polygon { vertices } => {
         Self::polygon_to_csg(vertices)
       }
@@ -105,16 +99,6 @@ impl GeoNode {
       None
     )
       .translate(center.x, center.y, center.z)
-  }
-
-  fn rect_to_csg(min_corner: DVec2, extent: DVec2) -> CSG {
-    CSG::square(extent.x, extent.y, None)
-      .translate(min_corner.x, min_corner.y, 0.0)
-  }
-
-  fn cuboid_to_csg(min_corner: DVec3, extent: DVec3) -> CSG {
-    CSG::cube(extent.x, extent.y, extent.z, None)
-      .translate(min_corner.x, min_corner.y, min_corner.z)
   }
 
   fn polygon_to_csg(vertices: &Vec<DVec2>) -> CSG {

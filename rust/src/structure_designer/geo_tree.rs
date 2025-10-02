@@ -25,14 +25,6 @@ use crate::util::transform::Transform;
     center: DVec3,
     radius: f64,
   },
-  Rect {
-    min_corner: DVec2,
-    extent: DVec2,
-  },
-  Cuboid {
-    min_corner: DVec3,
-    extent: DVec3,
-  },
   Polygon {
     vertices: Vec<DVec2>,
   },

@@ -27,9 +27,6 @@ impl ImplicitGeometry2D for GeoNode {
       GeoNode::Circle { center, radius } => {
         Self::circle_implicit_eval(*center, *radius, sample_point)
       }
-      GeoNode::Rect { min_corner, extent } => {
-        Self::rect_implicit_eval(*min_corner, *extent, sample_point)
-      }
       GeoNode::Polygon { vertices } => {
         Self::polygon_implicit_eval(vertices, sample_point)
       }
@@ -74,9 +71,6 @@ impl ImplicitGeometry3D for GeoNode {
       }
       GeoNode::Sphere { center, radius } => {
         Self::sphere_implicit_eval(*center, *radius, sample_point)
-      }
-      GeoNode::Cuboid { min_corner, extent } => {
-        Self::cuboid_implicit_eval(*min_corner, *extent, sample_point)
       }
       GeoNode::Extrude { height, direction, shape } => {
         Self::extrude_implicit_eval(*height, *direction, shape, sample_point)
@@ -123,23 +117,6 @@ impl GeoNode {
 
   fn sphere_implicit_eval(center: DVec3, radius: f64, sample_point: &DVec3) -> f64 {
     (sample_point - center).length() - radius
-  }
-
-  fn rect_implicit_eval(min_corner: DVec2, extent: DVec2, sample_point: &DVec2) -> f64 {
-    let max_corner = min_corner + extent;
-    let x_val = f64::max(min_corner.x - sample_point.x, sample_point.x - max_corner.x);
-    let y_val = f64::max(min_corner.y - sample_point.y, sample_point.y - max_corner.y);
-    
-    f64::max(x_val, y_val)
-  }
-
-  fn cuboid_implicit_eval(min_corner: DVec3, extent: DVec3, sample_point: &DVec3) -> f64 {
-    let max_corner = min_corner + extent;
-    let x_val = f64::max(min_corner.x - sample_point.x, sample_point.x - max_corner.x);
-    let y_val = f64::max(min_corner.y - sample_point.y, sample_point.y - max_corner.y);
-    let z_val = f64::max(min_corner.z - sample_point.z, sample_point.z - max_corner.z);
-    
-    f64::max(f64::max(x_val, y_val), z_val)
   }
 
   fn polygon_implicit_eval(vertices: &Vec<DVec2>, sample_point: &DVec2) -> f64 {
