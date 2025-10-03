@@ -19,8 +19,6 @@ pub struct HalfSpaceGeometry {
     pub center_pos: DVec3,
     /// The normalized plane normal direction in world space
     pub plane_normal: DVec3,
-    /// The lattice shift vector for the given shift value
-    pub lattice_shift_vector: DVec3,
     /// The shifted center position (center_pos + shift applied)
     pub shifted_center: DVec3,
     /// The handle position (shifted_center + accessibility offset along normal)
@@ -62,42 +60,21 @@ pub fn calculate_half_space_geometry(
     shift: f64,
 ) -> HalfSpaceGeometry {
     let center_pos = unit_cell.ivec3_lattice_to_real(center);
-    let plane_normal = unit_cell.ivec3_lattice_to_real(miller_index).normalize();
-    let lattice_shift_vector = calculate_shift_vector(&miller_index.as_dvec3(), shift);
-    let shifted_center = center_pos + unit_cell.dvec3_lattice_to_real(&lattice_shift_vector);
-    let handle_position = shifted_center + plane_normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
+    
+    // Get crystallographically correct plane properties (normal and d-spacing)
+    let plane_props = unit_cell.ivec3_miller_index_to_plane_props(miller_index);
+    
+    // Calculate shift distance as multiples of d-spacing
+    let shift_distance = shift * plane_props.d_spacing;
+    let shifted_center = center_pos + plane_props.normal * shift_distance;
+    let handle_position = shifted_center + plane_props.normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
 
     HalfSpaceGeometry {
         center_pos,
-        plane_normal,
-        lattice_shift_vector,
+        plane_normal: plane_props.normal,
         shifted_center,
         handle_position,
     }
-}
-
-/// Calculate the vector by which to shift along miller index normal direction,
-/// with magnitude based on the miller index d-spacing
-pub fn calculate_shift_vector(float_miller: &DVec3, shift: f64) -> DVec3 {
-  let miller_magnitude = float_miller.length();
-  
-  // Avoid division by zero
-  if miller_magnitude <= 0.0 {
-    return DVec3::ZERO;
-  }
-  
-  // Calculate the d-spacing (interplanar spacing) based on Miller indices
-  // Formula: d = 1 / √(h² + k² + l²) in normalized space where unit cell = 1
-  let d_spacing = 1.0 / miller_magnitude;
-  
-  // Calculate the normalized direction vector
-  let normalized_dir = float_miller / miller_magnitude;
-  
-  // Calculate shift distance along normal direction
-  let shift_distance = shift * d_spacing;
-  
-  // Return the shift vector
-  normalized_dir * shift_distance
 }
 
 // Calculate the continuous shift value of a half space based on its centerm miller index and
@@ -105,32 +82,22 @@ pub fn calculate_shift_vector(float_miller: &DVec3, shift: f64) -> DVec3 {
 // Useful dragging a half plane shift handle.
 pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, center: &IVec3, ray_origin: &DVec3, ray_direction: &DVec3, handle_offset: f64) -> f64 {
     let center_pos = unit_cell.ivec3_lattice_to_real(center);
-    let normal_dir = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
-    let scaling_in_direction = unit_cell.dvec3_lattice_to_real(&miller_index.as_dvec3().normalize()).length();
-
-    let float_miller = miller_index.as_dvec3();
-    let miller_magnitude = float_miller.length();
-
-    // Avoid division by zero
-    if miller_magnitude <= 0.0 {
-        return 0.0;
-    }
+    
+    // Get crystallographically correct plane properties (normal and d-spacing)
+    let plane_props = unit_cell.ivec3_miller_index_to_plane_props(miller_index);
 
     // Find where on the 'normal ray' the mouse ray is closest (in real space)
     let distance_along_normal = get_closest_point_on_first_ray(
         &center_pos,
-        &normal_dir,
+        &plane_props.normal,
         &ray_origin,
         &ray_direction
     );
 
     let real_space_distance = distance_along_normal - handle_offset;
 
-    // Convert the world distance to cell-space distance
-    let cell_space_distance = real_space_distance / scaling_in_direction;
-
-    // (* miller_magnitude) is equivalent to (/ d-spacing)
-    return cell_space_distance * miller_magnitude;
+    // Convert the real space distance to shift units (multiples of d-spacing)
+    return real_space_distance / plane_props.d_spacing;
 }
 
 pub fn tessellate_center_sphere(output_mesh: &mut Mesh, center_pos: &DVec3) {
@@ -244,8 +211,8 @@ pub fn tessellate_miller_indices_discs(
 
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
-        // Get the normalized direction for this miller index
-        let direction = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
+        // Get the crystallographically correct plane normal for this miller index
+        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index);
 
         // Calculate the position for the disc
         let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
@@ -378,8 +345,8 @@ pub fn hit_test_miller_indices_discs(
         
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
-        // Get the normalized direction for this miller index
-        let direction = unit_cell.ivec3_lattice_to_real(&miller_index).normalize();
+        // Get the crystallographically correct plane normal for this miller index
+        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index);
             
         // Calculate the position for the disc
         let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;

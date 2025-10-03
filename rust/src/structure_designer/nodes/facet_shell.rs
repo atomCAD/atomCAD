@@ -95,12 +95,27 @@ pub fn select_facet_by_ray(
   ray_start: &DVec3,
   ray_dir: &DVec3) -> bool {
   
+  // Get the unit cell first, before taking mutable borrow
+  let unit_cell = {
+    let eval_cache = match structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
+      Some(cache) => cache,
+      None => return false,
+    };
+    
+    let facet_shell_cache = match eval_cache.downcast_ref::<FacetShellEvalCache>() {
+      Some(cache) => cache,
+      None => return false,
+    };
+
+    facet_shell_cache.unit_cell.clone()
+  };
+
   let facet_shell_data = match get_active_facet_shell_data_mut(structure_designer) {
     Some(data) => data,
     None => return false,
   };
   
-  let cached_facet_index = match facet_shell_data.hit_facet_by_ray(ray_start, ray_dir) {
+  let cached_facet_index = match facet_shell_data.hit_facet_by_ray(&unit_cell, ray_start, ray_dir) {
     Some(index) => index,
     None => return false,
   };
@@ -348,33 +363,27 @@ impl FacetShellData {
   /// 
   /// The algorithm finds the furthest intersection among facets hit from outside
   /// (which corresponds to the actual surface of the convex polyhedron)
-  pub fn hit_facet_by_ray(&self, ray_start: &DVec3, ray_dir: &DVec3) -> Option<usize> {
+  pub fn hit_facet_by_ray(&self, unit_cell: &UnitCellStruct, ray_start: &DVec3, ray_dir: &DVec3) -> Option<usize> {
       let mut best_hit: Option<(usize, f64)> = None; // (facet_index, distance)
+      let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
       
       for (cached_index, facet) in self.cached_facets.iter().enumerate() {
-          // Calculate plane normal and position
-          let float_miller = facet.miller_index.as_dvec3();
-          let miller_magnitude = float_miller.length();
+          // Get crystallographically correct plane properties (normal and d-spacing)
+          let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index);
           
-          // Skip degenerate facets
-          if miller_magnitude <= 0.0 {
-              continue;
-          }
-          
-          let normal = float_miller / miller_magnitude;
-          // TODO: handle shift and miller index conversion correctly
-          let shift_vector = half_space_utils::calculate_shift_vector(&facet.miller_index.as_dvec3(), facet.shift as f64);
-          let plane_point = (self.center.as_dvec3() + shift_vector) * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+          // Calculate shift distance as multiples of d-spacing
+          let shift_distance = facet.shift as f64 * plane_props.d_spacing;
+          let plane_point = center_pos + plane_props.normal * shift_distance;
 
           // Ray-plane intersection
-          let denom = normal.dot(*ray_dir);
+          let denom = plane_props.normal.dot(*ray_dir);
           
           // Skip if ray is parallel to plane
           if denom.abs() < 1e-10 {
               continue;
           }
           
-          let t = normal.dot(plane_point - *ray_start) / denom;
+          let t = plane_props.normal.dot(plane_point - *ray_start) / denom;
           
           // Skip if intersection is behind ray start
           if t < 0.0 {
@@ -383,7 +392,7 @@ impl FacetShellData {
           
           // Check if ray hits from outside the half-space
           // Ray hits from outside if ray direction is opposite to plane normal (negative dot product)
-          if normal.dot(*ray_dir) >= 0.0 {
+          if plane_props.normal.dot(*ray_dir) >= 0.0 {
               continue;
           }
           
@@ -482,26 +491,24 @@ impl NodeData for FacetShellData {
           context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
 
+        let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
+        
         let shapes: Vec<GeoNode> = self.cached_facets.iter().map(|facet| {
+          // Get crystallographically correct plane properties (normal and d-spacing)
+          let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index);
 
-          let real_miller_index = unit_cell.ivec3_lattice_to_real(&facet.miller_index);
-          let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
-
-          let shift_vector = half_space_utils::calculate_shift_vector(&facet.miller_index.as_dvec3(), facet.shift as f64);
-          let real_shift_vector = unit_cell.dvec3_lattice_to_real(&shift_vector);
+          // Calculate shift distance as multiples of d-spacing
+          let shift_distance = facet.shift as f64 * plane_props.d_spacing;
+          let shifted_center = center_pos + plane_props.normal * shift_distance;
 
           GeoNode::HalfSpace {
-            normal: real_miller_index.normalize(),
-            center: center_pos + real_shift_vector,
+            normal: plane_props.normal,
+            center: shifted_center,
           }
         }).collect();
 
-        // Calculate transform for the result
-        // Use center position for translation
-        let center_pos = self.center.as_dvec3();
-      
         return NetworkResult::Geometry(GeometrySummary {
-          unit_cell: UnitCellStruct::cubic_diamond(),
+          unit_cell: unit_cell.clone(),
           frame_transform: Transform::new(
             center_pos,
             DQuat::IDENTITY, // Use identity quaternion as we don't need rotation

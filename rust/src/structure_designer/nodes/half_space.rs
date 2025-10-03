@@ -78,22 +78,23 @@ impl NodeData for HalfSpaceData {
         context.selected_node_eval_cache = Some(Box::new(eval_cache));
       }
 
-      let real_miller_index = unit_cell.ivec3_lattice_to_real(&self.miller_index);
-      let dir = real_miller_index.normalize();
+      // Get crystallographically correct plane properties (normal and d-spacing)
+      let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&self.miller_index);
       let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
 
-      let shift_vector = half_space_utils::calculate_shift_vector(&self.miller_index.as_dvec3(), self.shift as f64);
-      let real_shift_vector = unit_cell.dvec3_lattice_to_real(&shift_vector);
+      // Calculate shift distance as multiples of d-spacing
+      let shift_distance = self.shift as f64 * plane_props.d_spacing;
+      let shifted_center = center_pos + plane_props.normal * shift_distance;
 
       return NetworkResult::Geometry(GeometrySummary {
         unit_cell: unit_cell.clone(),
         frame_transform: Transform::new(
           center_pos,
-          DQuat::from_rotation_arc(DVec3::Y, dir),
+          DQuat::from_rotation_arc(DVec3::Y, plane_props.normal),
         ),
         geo_tree_root: GeoNode::HalfSpace {
-            normal: real_miller_index.normalize(),
-            center: center_pos + real_shift_vector,
+            normal: plane_props.normal,
+            center: shifted_center,
         },
       });
     }

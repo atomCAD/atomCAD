@@ -11,6 +11,15 @@ pub struct UnitCellStruct {
   pub c: DVec3,
 }
 
+/// Properties of a crystal plane defined by Miller indices
+#[derive(Debug, Clone)]
+pub struct CrystalPlaneProps {
+  /// Normalized normal vector of the crystal plane in real space coordinates
+  pub normal: DVec3,
+  /// d-spacing (interplanar spacing) for this Miller index in real space units
+  pub d_spacing: f64,
+}
+
 impl UnitCellStruct {
   /// Creates a cubic diamond unit cell using the standard diamond lattice parameter
   /// 
@@ -83,5 +92,113 @@ impl UnitCellStruct {
 
   pub fn int_lattice_to_real(&self, lattice_value: i32) -> f64 {
     self.float_lattice_to_real(lattice_value as f64)
+  }
+
+  /// Converts Miller indices to crystal plane properties (normal and d-spacing).
+  /// 
+  /// For a crystal plane with Miller indices (h, k, l), both the normal vector and
+  /// d-spacing are calculated using the reciprocal lattice. The normal is given by:
+  /// n = h*a* + k*b* + l*c*
+  /// 
+  /// Where a*, b*, c* are the reciprocal lattice basis vectors:
+  /// a* = (b × c) / (a · (b × c))
+  /// b* = (c × a) / (a · (b × c))  
+  /// c* = (a × b) / (a · (b × c))
+  /// 
+  /// This can be computed directly as:
+  /// n = (h(b × c) + k(c × a) + l(a × b)) / V
+  /// where V = a · (b × c) is the unit cell volume.
+  /// 
+  /// The d-spacing is calculated as d = 1 / |G_hkl| where G_hkl is the
+  /// reciprocal lattice vector magnitude.
+  /// 
+  /// # Arguments
+  /// * `miller_indices` - Miller indices (h, k, l) as DVec3
+  /// 
+  /// # Returns
+  /// * CrystalPlaneProps containing normalized normal vector and d-spacing
+  /// 
+  /// # Panics
+  /// * Panics if the unit cell volume is zero (degenerate unit cell)
+  pub fn dvec3_miller_index_to_plane_props(&self, miller_indices: &DVec3) -> CrystalPlaneProps {
+    let h = miller_indices.x;
+    let k = miller_indices.y;
+    let l = miller_indices.z;
+    
+    // Calculate cross products for reciprocal lattice basis vectors
+    let b_cross_c = self.b.cross(self.c);
+    let c_cross_a = self.c.cross(self.a);
+    let a_cross_b = self.a.cross(self.b);
+    
+    // Calculate unit cell volume
+    let volume = self.a.dot(b_cross_c);
+    
+    // Check for degenerate unit cell
+    if volume.abs() < 1e-12 {
+      panic!("Unit cell has zero volume - cannot compute Miller index properties");
+    }
+    
+    // Calculate the reciprocal lattice vector (unnormalized)
+    let reciprocal_vector = (h * b_cross_c + k * c_cross_a + l * a_cross_b) / volume;
+    
+    // Calculate d-spacing as inverse of reciprocal vector magnitude
+    let d_spacing = 1.0 / reciprocal_vector.length();
+    
+    // Calculate normalized normal vector
+    let normal = reciprocal_vector.normalize();
+    
+    CrystalPlaneProps {
+      normal,
+      d_spacing,
+    }
+  }
+
+  /// Converts Miller indices to crystal plane properties (normal and d-spacing).
+  /// 
+  /// This is a convenience wrapper around `dvec3_miller_index_to_plane_props` that accepts
+  /// integer Miller indices and converts them to floating-point before computation.
+  /// 
+  /// # Arguments
+  /// * `miller_indices` - Miller indices (h, k, l) as IVec3
+  /// 
+  /// # Returns
+  /// * CrystalPlaneProps containing normalized normal vector and d-spacing
+  /// 
+  /// # Panics
+  /// * Panics if the unit cell volume is zero (degenerate unit cell)
+  pub fn ivec3_miller_index_to_plane_props(&self, miller_indices: &IVec3) -> CrystalPlaneProps {
+    self.dvec3_miller_index_to_plane_props(&miller_indices.as_dvec3())
+  }
+
+  /// Converts Miller indices to the normal vector of the corresponding crystal plane.
+  /// 
+  /// This is a convenience wrapper that extracts only the normal from the plane properties.
+  /// 
+  /// # Arguments
+  /// * `miller_indices` - Miller indices (h, k, l) as DVec3
+  /// 
+  /// # Returns
+  /// * Normalized normal vector of the crystal plane in real space coordinates
+  /// 
+  /// # Panics
+  /// * Panics if the unit cell volume is zero (degenerate unit cell)
+  pub fn dvec3_miller_index_to_normal(&self, miller_indices: &DVec3) -> DVec3 {
+    self.dvec3_miller_index_to_plane_props(miller_indices).normal
+  }
+
+  /// Converts Miller indices to the normal vector of the corresponding crystal plane.
+  /// 
+  /// This is a convenience wrapper that extracts only the normal from the plane properties.
+  /// 
+  /// # Arguments
+  /// * `miller_indices` - Miller indices (h, k, l) as IVec3
+  /// 
+  /// # Returns
+  /// * Normalized normal vector of the crystal plane in real space coordinates
+  /// 
+  /// # Panics
+  /// * Panics if the unit cell volume is zero (degenerate unit cell)
+  pub fn ivec3_miller_index_to_normal(&self, miller_indices: &IVec3) -> DVec3 {
+    self.ivec3_miller_index_to_plane_props(miller_indices).normal
   }
 }
