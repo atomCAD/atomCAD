@@ -9,7 +9,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::evaluator::network_result::UnitCellStruct;
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnitCellData {
@@ -31,7 +31,7 @@ impl UnitCellData {
     /// - Vector a is aligned with the x-axis
     /// - Vector b lies in the xy-plane
     /// - Vector c is positioned to satisfy the given angles
-    pub fn to_unit_cell_struct(&self) -> crate::structure_designer::evaluator::network_result::UnitCellStruct {
+    pub fn to_unit_cell_struct(&self) -> UnitCellStruct {
         
         // Convert angles from degrees to radians
         let alpha = self.cell_angle_alpha.to_radians();

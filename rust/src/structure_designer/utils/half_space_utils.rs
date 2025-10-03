@@ -1,21 +1,15 @@
-use crate::common::csg_types::CSG;
 use glam::i32::IVec3;
 use glam::f32::Vec3;
 use glam::DQuat;
 use glam::DVec3;
-use crate::common::csg_utils::dvec3_to_point3;
-use crate::common::csg_utils::dvec3_to_vector3;
-use csgrs::polygon::Polygon;
-use csgrs::vertex::Vertex;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 use crate::util::hit_test_utils::sphere_hit_test;
 use crate::util::hit_test_utils::cylinder_hit_test;
-use crate::structure_designer::common_constants;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
 use std::collections::HashSet;
-use crate::structure_designer::evaluator::network_result::UnitCellStruct;
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 /// Precomputed geometry values for half space operations
 /// This struct contains commonly used calculated values to avoid code duplication
