@@ -12,7 +12,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
-use crate::structure_designer::evaluator::network_result::UnitCellStruct;
+use crate::structure_designer::evaluator::network_result::{UnitCellStruct, unit_cell_mismatch_error};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Intersect2DData {
@@ -60,18 +60,37 @@ impl NodeData for Intersect2DData {
     };
   
     let shape_count = shape_results.len();
+    
+    if shape_count == 0 {
+      return NetworkResult::Error("Intersect requires at least one input geometry".to_string());
+    }
   
+    // Extract geometries and check unit cell compatibility
+    let mut geometries: Vec<GeometrySummary2D> = Vec::new();
     for shape_val in shape_results {
       if let NetworkResult::Geometry2D(shape) = shape_val {
-        shapes.push(shape.geo_tree_root); 
-        frame_translation += shape.frame_transform.translation;
+        geometries.push(shape);
+      } else {
+        return NetworkResult::Error("All inputs must be geometry objects".to_string());
       }
+    }
+    
+    // Check unit cell compatibility - compare all to the first geometry
+    if !GeometrySummary2D::all_have_compatible_unit_cells(&geometries) {
+      return unit_cell_mismatch_error();
+    }
+    
+    // All unit cells are compatible, proceed with intersection
+    let first_unit_cell = &geometries[0].unit_cell;
+    for geometry in &geometries {
+      shapes.push(geometry.geo_tree_root.clone()); 
+      frame_translation += geometry.frame_transform.translation;
     }
   
     frame_translation /= shape_count as f64;
   
     return NetworkResult::Geometry2D(GeometrySummary2D { 
-      unit_cell: UnitCellStruct::cubic_diamond(),
+      unit_cell: first_unit_cell.clone(),
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,

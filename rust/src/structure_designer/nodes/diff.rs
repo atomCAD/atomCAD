@@ -15,7 +15,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
-use crate::structure_designer::evaluator::network_result::UnitCellStruct;
+use crate::structure_designer::evaluator::network_result::{UnitCellStruct, unit_cell_mismatch_error};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffData {
@@ -48,7 +48,7 @@ impl NodeData for DiffData {
       return input_missing_error(&base_input_name);
     }
   
-    let (mut geometry, mut frame_translation) = helper_union(
+    let (mut geometry, mut frame_translation, base_unit_cell) = helper_union(
       network_evaluator,
       network_stack,
       node_id,
@@ -59,10 +59,16 @@ impl NodeData for DiffData {
   
     if geometry.is_none() {
       return error_in_input(&base_input_name);
-    } 
+    }
+    
+    if base_unit_cell.is_none() {
+      return unit_cell_mismatch_error();
+    }
+    
+    let mut result_unit_cell = base_unit_cell.unwrap();
   
     if !node.arguments[1].is_empty() {
-      let (sub_geometry, sub_frame_translation) = helper_union(
+      let (sub_geometry, sub_frame_translation, sub_unit_cell) = helper_union(
         network_evaluator,
         network_stack,
         node_id,
@@ -74,6 +80,15 @@ impl NodeData for DiffData {
       if sub_geometry.is_none() {
         return error_in_input(&sub_input_name);
       }
+      
+      if sub_unit_cell.is_none() {
+        return unit_cell_mismatch_error();
+      }
+      
+      // Check unit cell compatibility between base and sub
+      if !result_unit_cell.is_approximately_equal(&sub_unit_cell.unwrap()) {
+        return unit_cell_mismatch_error();
+      }
   
       geometry = Some(GeoNode::Difference3D { base: Box::new(geometry.unwrap()), sub: Box::new(sub_geometry.unwrap()) });
   
@@ -82,7 +97,7 @@ impl NodeData for DiffData {
     }
   
     return NetworkResult::Geometry(GeometrySummary { 
-      unit_cell: UnitCellStruct::cubic_diamond(),
+      unit_cell: result_unit_cell,
       frame_transform: Transform::new(
         frame_translation,
         DQuat::IDENTITY,
@@ -103,7 +118,7 @@ fn helper_union<'a>(
   parameter_index: usize,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> (Option<GeoNode>, DVec3) {
+) -> (Option<GeoNode>, DVec3, Option<UnitCellStruct>) {
 
   let mut shapes: Vec<GeoNode> = Vec::new();
   let mut frame_translation = DVec3::ZERO;
@@ -117,26 +132,45 @@ fn helper_union<'a>(
   );
 
   if let NetworkResult::Error(_) = shapes_val {
-    return (None, DVec3::ZERO);
+    return (None, DVec3::ZERO, None);
   }
 
   // Extract the array elements from shapes_val
   let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
     array_elements
   } else {
-    return (None, DVec3::ZERO);
+    return (None, DVec3::ZERO, None);
   };
 
   let shape_count = shape_results.len();
+  
+  if shape_count == 0 {
+    return (None, DVec3::ZERO, None);
+  }
 
+  // Extract geometries and check unit cell compatibility
+  let mut geometries: Vec<GeometrySummary> = Vec::new();
   for shape_val in shape_results {
     if let NetworkResult::Geometry(shape) = shape_val {
-      shapes.push(shape.geo_tree_root); 
-      frame_translation += shape.frame_transform.translation;
+      geometries.push(shape);
+    } else {
+      return (None, DVec3::ZERO, None);
     }
+  }
+  
+  // Check unit cell compatibility - compare all to the first geometry
+  if !GeometrySummary::all_have_compatible_unit_cells(&geometries) {
+    return (None, DVec3::ZERO, None);
+  }
+  
+  // All unit cells are compatible, proceed with union
+  let first_unit_cell = geometries[0].unit_cell.clone();
+  for geometry in &geometries {
+    shapes.push(geometry.geo_tree_root.clone()); 
+    frame_translation += geometry.frame_transform.translation;
   }
 
   frame_translation /= shape_count as f64;
 
-  return (Some(GeoNode::Union3D { shapes }), frame_translation);
+  return (Some(GeoNode::Union3D { shapes }), frame_translation, Some(first_unit_cell));
 }

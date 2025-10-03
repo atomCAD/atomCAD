@@ -7,67 +7,7 @@ use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-
-#[derive(Debug, Clone)]
-pub struct UnitCellStruct {
-  pub a: DVec3,
-  pub b: DVec3,
-  pub c: DVec3,
-}
-
-impl UnitCellStruct {
-  /// Creates a cubic diamond unit cell using the standard diamond lattice parameter
-  /// 
-  /// Returns a UnitCellStruct with orthogonal basis vectors aligned with the coordinate axes,
-  /// each with length equal to the diamond unit cell size (3.567 Ångströms).
-  pub fn cubic_diamond() -> Self {
-    let size = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-    UnitCellStruct {
-      a: DVec3::new(size, 0.0, 0.0),
-      b: DVec3::new(0.0, size, 0.0),
-      c: DVec3::new(0.0, 0.0, size),
-    }
-  }
-
-  /// Converts lattice coordinates to real space coordinates using the unit cell basis vectors.
-  /// 
-  /// # Arguments
-  /// * `lattice_pos` - Position in lattice coordinates as DVec3
-  /// 
-  /// # Returns
-  /// Position in real space coordinates as DVec3
-  pub fn dvec3_lattice_to_real(&self, lattice_pos: &DVec3) -> DVec3 {
-    lattice_pos.x * self.a + lattice_pos.y * self.b + lattice_pos.z * self.c
-  }
-
-  /// Converts lattice coordinates to real space coordinates using the unit cell basis vectors.
-  /// 
-  /// # Arguments
-  /// * `lattice_pos` - Position in lattice coordinates as IVec3
-  /// 
-  /// # Returns
-  /// Position in real space coordinates as DVec3
-  pub fn ivec3_lattice_to_real(&self, lattice_pos: &IVec3) -> DVec3 {
-    self.dvec3_lattice_to_real(&lattice_pos.as_dvec3())
-  }
-
-  pub fn dvec2_lattice_to_real(&self, lattice_pos: &DVec2) -> DVec2 {
-    (lattice_pos.x * self.a + lattice_pos.y * self.b).truncate()
-  }
-
-  pub fn ivec2_lattice_to_real(&self, lattice_pos: &IVec2) -> DVec2 {
-    self.dvec2_lattice_to_real(&lattice_pos.as_dvec2())
-  }
-
-  pub fn float_lattice_to_real(&self, lattice_value: f64) -> f64 {
-    lattice_value * self.a.length()
-  }
-
-  pub fn int_lattice_to_real(&self, lattice_value: i32) -> f64 {
-    self.float_lattice_to_real(lattice_value as f64)
-  }
-}
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -76,11 +16,89 @@ pub struct GeometrySummary2D {
   pub geo_tree_root: GeoNode,
 }
 
+impl GeometrySummary2D {
+  /// Checks if this geometry's unit cell is compatible with another geometry's unit cell.
+  /// 
+  /// This is useful for CSG operations where geometries must have compatible unit cells.
+  /// Uses approximate equality with tolerance for small calculation errors.
+  /// 
+  /// # Arguments
+  /// * `other` - The other GeometrySummary2D to compare unit cells with
+  /// 
+  /// # Returns
+  /// * `true` if the unit cells are approximately equal within tolerance
+  /// * `false` if they differ significantly
+  pub fn has_compatible_unit_cell(&self, other: &GeometrySummary2D) -> bool {
+    self.unit_cell.is_approximately_equal(&other.unit_cell)
+  }
+
+  /// Checks if all geometries in a vector have approximately the same unit cells.
+  /// 
+  /// Compares each geometry's unit cell to the first geometry's unit cell.
+  /// Returns true if the vector is empty or has only one element.
+  /// 
+  /// # Arguments
+  /// * `geometries` - Vector of GeometrySummary2D objects to check
+  /// 
+  /// # Returns
+  /// * `true` if all unit cells are approximately equal or vector has ≤1 elements
+  /// * `false` if any unit cell differs significantly from the first
+  pub fn all_have_compatible_unit_cells(geometries: &Vec<GeometrySummary2D>) -> bool {
+    if geometries.len() <= 1 {
+      return true;
+    }
+    
+    let first_unit_cell = &geometries[0].unit_cell;
+    geometries.iter().skip(1).all(|geometry| {
+      first_unit_cell.is_approximately_equal(&geometry.unit_cell)
+    })
+  }
+}
+
 #[derive(Clone)]
 pub struct GeometrySummary {
   pub unit_cell: UnitCellStruct,
   pub frame_transform: Transform,
   pub geo_tree_root: GeoNode,
+}
+
+impl GeometrySummary {
+  /// Checks if this geometry's unit cell is compatible with another geometry's unit cell.
+  /// 
+  /// This is useful for CSG operations where geometries must have compatible unit cells.
+  /// Uses approximate equality with tolerance for small calculation errors.
+  /// 
+  /// # Arguments
+  /// * `other` - The other GeometrySummary to compare unit cells with
+  /// 
+  /// # Returns
+  /// * `true` if the unit cells are approximately equal within tolerance
+  /// * `false` if they differ significantly
+  pub fn has_compatible_unit_cell(&self, other: &GeometrySummary) -> bool {
+    self.unit_cell.is_approximately_equal(&other.unit_cell)
+  }
+
+  /// Checks if all geometries in a vector have approximately the same unit cells.
+  /// 
+  /// Compares each geometry's unit cell to the first geometry's unit cell.
+  /// Returns true if the vector is empty or has only one element.
+  /// 
+  /// # Arguments
+  /// * `geometries` - Vector of GeometrySummary objects to check
+  /// 
+  /// # Returns
+  /// * `true` if all unit cells are approximately equal or vector has ≤1 elements
+  /// * `false` if any unit cell differs significantly from the first
+  pub fn all_have_compatible_unit_cells(geometries: &Vec<GeometrySummary>) -> bool {
+    if geometries.len() <= 1 {
+      return true;
+    }
+    
+    let first_unit_cell = &geometries[0].unit_cell;
+    geometries.iter().skip(1).all(|geometry| {
+      first_unit_cell.is_approximately_equal(&geometry.unit_cell)
+    })
+  }
 }
 
 #[derive(Clone)]
@@ -369,4 +387,71 @@ pub fn error_in_input(input_name: &str) -> NetworkResult {
 
 pub fn runtime_type_error_in_input(input_param_index: usize) -> NetworkResult {
   NetworkResult::Error(format!("runtime type error in the {} indexed input", input_param_index))
+}
+
+pub fn unit_cell_mismatch_error() -> NetworkResult {
+  NetworkResult::Error("Unit cell mismatch.".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_unit_cell_exact_equality() {
+    let uc1 = UnitCellStruct {
+      a: DVec3::new(1.0, 0.0, 0.0),
+      b: DVec3::new(0.0, 1.0, 0.0),
+      c: DVec3::new(0.0, 0.0, 1.0),
+    };
+    let uc2 = UnitCellStruct {
+      a: DVec3::new(1.0, 0.0, 0.0),
+      b: DVec3::new(0.0, 1.0, 0.0),
+      c: DVec3::new(0.0, 0.0, 1.0),
+    };
+    
+    assert!(uc1.is_approximately_equal(&uc2));
+  }
+
+  #[test]
+  fn test_unit_cell_approximate_equality() {
+    let uc1 = UnitCellStruct {
+      a: DVec3::new(1.0, 0.0, 0.0),
+      b: DVec3::new(0.0, 1.0, 0.0),
+      c: DVec3::new(0.0, 0.0, 1.0),
+    };
+    let uc2 = UnitCellStruct {
+      a: DVec3::new(1.000001, 0.0, 0.0),
+      b: DVec3::new(0.0, 0.999999, 0.0),
+      c: DVec3::new(0.0, 0.0, 1.000001),
+    };
+    
+    // Small differences (< 1e-5) should be considered equal
+    assert!(uc1.is_approximately_equal(&uc2));
+  }
+
+  #[test]
+  fn test_unit_cell_significant_difference() {
+    let uc1 = UnitCellStruct {
+      a: DVec3::new(1.0, 0.0, 0.0),
+      b: DVec3::new(0.0, 1.0, 0.0),
+      c: DVec3::new(0.0, 0.0, 1.0),
+    };
+    let uc2 = UnitCellStruct {
+      a: DVec3::new(1.0001, 0.0, 0.0),  // Difference > 1e-5
+      b: DVec3::new(0.0, 1.0, 0.0),
+      c: DVec3::new(0.0, 0.0, 1.0),
+    };
+    
+    // Significant differences (> 1e-5) should not be considered equal
+    assert!(!uc1.is_approximately_equal(&uc2));
+  }
+
+  #[test]
+  fn test_cubic_diamond_compatibility() {
+    let uc1 = UnitCellStruct::cubic_diamond();
+    let uc2 = UnitCellStruct::cubic_diamond();
+    
+    assert!(uc1.is_approximately_equal(&uc2));
+  }
 }
