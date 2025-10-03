@@ -543,7 +543,7 @@ pub struct FacetShellEvalCache {
 
 impl Tessellatable for FacetShellGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
-      let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+      let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
 
       // Tessellate center sphere
       half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);
@@ -623,8 +623,8 @@ impl Gadget for FacetShellGadget {
 
   fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
       // Calculate center position in world space
-      let center_pos = self.center.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-      
+      let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
+
       if handle_index == 0 {
           // Handle index already stored in dragged_handle_index during start_drag
           

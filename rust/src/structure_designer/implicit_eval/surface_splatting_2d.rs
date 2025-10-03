@@ -152,7 +152,7 @@ fn process_2d_cell_for_point_cloud(
       };
       point_cloud.points.push(
         SurfacePoint2D {
-          position: (center_point - step) * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+          position: (center_point - step),
           normal: gradient.normalize(),
         }
       );

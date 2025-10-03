@@ -3,7 +3,7 @@ use crate::common::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
 use super::node_type_registry::NodeTypeRegistry;
-use super::node_network::{NodeNetwork, NodeDisplayType};
+use super::node_network::NodeNetwork;
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_data::NoData;
@@ -19,7 +19,6 @@ use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::HashSet;
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
-use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::common::xyz_saver::save_xyz;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
@@ -706,7 +705,7 @@ impl StructureDesigner {
       &geometries, 
       ray_origin, 
       ray_direction, 
-      DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+      1.0
     ) {
       // Update minimum distance if this hit is closer
       min_distance = match min_distance {

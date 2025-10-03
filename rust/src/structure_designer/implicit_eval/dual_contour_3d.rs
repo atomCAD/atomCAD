@@ -57,12 +57,12 @@ const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
 const SDF_ZERO_TOLERANCE: f64 = 1e-9;
 
 pub fn generate_dual_contour_3d_scene(
-  root_geo_node: &dyn ImplicitGeometry3D,
+  geometry: &dyn ImplicitGeometry3D,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) -> StructureDesignerScene {
-  let mut cells = generate_cells(root_geo_node, geometry_visualization_preferences);
+  let mut cells = generate_cells(geometry, geometry_visualization_preferences);
 
-  let mesh = generate_mesh(&mut cells, root_geo_node, geometry_visualization_preferences);
+  let mesh = generate_mesh(&mut cells, geometry, geometry_visualization_preferences);
 
   let mut scene = StructureDesignerScene::new();
   scene.poly_meshes.push(mesh);
@@ -70,11 +70,11 @@ pub fn generate_dual_contour_3d_scene(
   scene
 }
 
-fn generate_cells(root_geo_node: &dyn ImplicitGeometry3D, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> HashMap<(i32, i32, i32), DCCell> {
+fn generate_cells(geometry: &dyn ImplicitGeometry3D, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> HashMap<(i32, i32, i32), DCCell> {
   let mut cells = HashMap::new();
 
   generate_cells_for_box(
-    root_geo_node,
+    geometry,
     &(common_constants::IMPLICIT_VOLUME_MIN * geometry_visualization_preferences.samples_per_unit_cell),
     &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * geometry_visualization_preferences.samples_per_unit_cell),
     &mut cells,
@@ -85,17 +85,15 @@ fn generate_cells(root_geo_node: &dyn ImplicitGeometry3D, geometry_visualization
 
 fn generate_mesh(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
-  root_geo_node: &dyn ImplicitGeometry3D,
+  geometry: &dyn ImplicitGeometry3D,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) -> PolyMesh {
   let mut mesh = PolyMesh::new(false, false); // TODO; fill these 2 boolean properties correctly
   
   // First pass: Generate vertices for cells and process edges
-  process_cell_edges(cells, root_geo_node, &mut mesh, geometry_visualization_preferences);
+  process_cell_edges(cells, geometry, &mut mesh, geometry_visualization_preferences);
   
   // Second pass: Calculate proper vertex positions for each cell
-  optimize_vertex_positions(cells, root_geo_node, &mut mesh, geometry_visualization_preferences);
-
-  mesh.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+  optimize_vertex_positions(cells, geometry, &mut mesh, geometry_visualization_preferences);
 
   mesh.detect_sharp_edges(geometry_visualization_preferences.sharpness_angle_threshold_degree, true);
   
@@ -104,7 +102,7 @@ fn generate_mesh(
 
 fn process_cell_edges(
   cells: &mut HashMap<(i32, i32, i32), DCCell>, 
-  root_geo_node: &dyn ImplicitGeometry3D, 
+  geometry: &dyn ImplicitGeometry3D, 
   mesh: &mut PolyMesh,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) {
@@ -124,8 +122,8 @@ fn process_cell_edges(
       let p1 = get_vertex_world_pos(vertex_key, geometry_visualization_preferences.samples_per_unit_cell); // World position of first vertex
       let p2 = get_vertex_world_pos(adjacent_vertex, geometry_visualization_preferences.samples_per_unit_cell); // World position of second vertex
       
-      let sdf1 = root_geo_node.implicit_eval_3d(&p1);
-      let sdf2 = root_geo_node.implicit_eval_3d(&p2);
+      let sdf1 = geometry.implicit_eval_3d(&p1);
+      let sdf2 = geometry.implicit_eval_3d(&p2);
       
       // Skip if there's no sign change across the edge
       if !sdf_sign_change(sdf1, sdf2) {
@@ -164,10 +162,10 @@ fn process_cell_edges(
       
       // Calculate the intersection point and normal once for all cells
       // Find the precise intersection point on the edge where SDF = 0
-      let intersection = find_edge_intersection(root_geo_node, &p1, &p2);
+      let intersection = find_edge_intersection(geometry, &p1, &p2);
       
       // Get the gradient (normal) at the intersection point using built-in method
-      let (normal, _) = root_geo_node.get_gradient(&intersection);
+      let (normal, _) = geometry.get_gradient(&intersection);
       
       // Create the edge intersection data
       let edge_intersection = EdgeIntersection {
@@ -236,11 +234,11 @@ fn get_cell_center_pos(cell_key: (i32, i32, i32), samples_per_unit_cell: i32) ->
 }
 
 // Function to find the zero-crossing point on an edge using binary search
-fn find_edge_intersection(root_geo_node: &dyn ImplicitGeometry3D, p1: &DVec3, p2: &DVec3) -> DVec3 {
+fn find_edge_intersection(geometry: &dyn ImplicitGeometry3D, p1: &DVec3, p2: &DVec3) -> DVec3 {
   let mut a = *p1;
   let mut b = *p2;
-  let mut sdf_a = root_geo_node.implicit_eval_3d(&a);
-  let mut sdf_b = root_geo_node.implicit_eval_3d(&b);
+  let mut sdf_a = geometry.implicit_eval_3d(&a);
+  let mut sdf_b = geometry.implicit_eval_3d(&b);
   
   // Ensure we have opposite signs
   if !sdf_sign_change(sdf_a, sdf_b) {
@@ -252,7 +250,7 @@ fn find_edge_intersection(root_geo_node: &dyn ImplicitGeometry3D, p1: &DVec3, p2
     // Linear interpolation based on SDF values for faster convergence
     let t = sdf_a / (sdf_a - sdf_b);
     let mid = a + t * (b - a);
-    let sdf_mid = root_geo_node.implicit_eval_3d(&mid);
+    let sdf_mid = geometry.implicit_eval_3d(&mid);
     
     if sdf_sign_change(sdf_mid, sdf_a) {
       b = mid;
@@ -271,7 +269,7 @@ fn find_edge_intersection(root_geo_node: &dyn ImplicitGeometry3D, p1: &DVec3, p2
 // Optimize vertex positions using QEF minimization
 fn optimize_vertex_positions(
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
-  _root_geo_node: &dyn ImplicitGeometry3D,
+  _geometry: &dyn ImplicitGeometry3D,
   mesh: &mut PolyMesh,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) {
   let spu = get_spu(geometry_visualization_preferences.samples_per_unit_cell);
@@ -312,7 +310,7 @@ fn optimize_vertex_positions(
 }
 
 fn generate_cells_for_box(
-  root_geo_node: &dyn ImplicitGeometry3D,
+  geometry: &dyn ImplicitGeometry3D,
   start_pos: &IVec3,
   size: &IVec3,
   cells: &mut HashMap<(i32, i32, i32), DCCell>,
@@ -325,7 +323,7 @@ fn generate_cells_for_box(
   let center_point = (start_pos.as_dvec3() + size.as_dvec3() / 2.0) / spu;
 
   // Evaluate SDF at the center point
-  let sdf_value = root_geo_node.implicit_eval_3d(&center_point);
+  let sdf_value = geometry.implicit_eval_3d(&center_point);
 
   let half_diagonal = size.as_dvec3().length() / spu / 2.0;
 
@@ -375,7 +373,7 @@ fn generate_cells_for_box(
   // Process each subdivision recursively
   for (sub_start, sub_size) in subdivisions {
     generate_cells_for_box(
-      root_geo_node,
+      geometry,
       &sub_start,
       &sub_size,
       cells,

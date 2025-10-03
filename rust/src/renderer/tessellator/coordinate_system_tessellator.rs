@@ -6,7 +6,6 @@ use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 // Constants for coordinate system visualization
 pub const CS_SIZE: i32 = 50;
-pub const GRID_UNIT: f64 = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 pub const GRID_PRIMARY_COLOR: [f32; 3] = [0.52, 0.52, 0.52]; // Light gray for regular grid lines
 pub const GRID_SECONDARY_COLOR: [f32; 3] = [0.35, 0.35, 0.35]; // Darker gray for emphasized grid lines (every 10th)
 pub const X_AXIS_COLOR: [f32; 3] = [1.0, 0.0, 0.0]; // Red for X-axis
