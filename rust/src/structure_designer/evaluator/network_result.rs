@@ -158,6 +158,18 @@ impl NetworkResult {
     }
   }
 
+  /// Returns the UnitCellStruct associated with this NetworkResult.
+  /// For UnitCell, Geometry2D, and Geometry variants, returns their unit cell.
+  /// For all other variants, returns None.
+  pub fn get_unit_cell(&self) -> Option<UnitCellStruct> {
+    match self {
+      NetworkResult::UnitCell(unit_cell) => Some(unit_cell.clone()),
+      NetworkResult::Geometry2D(geometry) => Some(geometry.unit_cell.clone()),
+      NetworkResult::Geometry(geometry) => Some(geometry.unit_cell.clone()),
+      _ => None,
+    }
+  }
+
   /// Extracts an IVec3 value from the NetworkResult, returns None if not an IVec3
   pub fn extract_ivec3(self) -> Option<IVec3> {
     match self {

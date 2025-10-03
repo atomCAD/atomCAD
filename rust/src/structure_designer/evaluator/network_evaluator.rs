@@ -105,6 +105,9 @@ impl NetworkEvaluator {
 
     let result = self.evaluate(&network_stack, node_id, 0, registry, from_selected_node, &mut context);
 
+    // Get the unit cell before the result is potentially moved
+    let unit_cell = result.get_unit_cell();
+
     let mut scene = 
     if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
@@ -164,6 +167,9 @@ impl NetworkEvaluator {
     scene.node_errors = context.node_errors.clone();
     scene.node_output_strings = context.node_output_strings.clone();
     scene.selected_node_eval_cache = context.selected_node_eval_cache.take();
+
+    // Set the unit cell based on the result
+    scene.unit_cell = unit_cell;
 
     return scene;
   }

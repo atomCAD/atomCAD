@@ -80,6 +80,8 @@ impl NodeData for CuboidData {
         extent.as_dvec3()
       );
 
+      //println!("{}", geo_tree_root);
+
       return NetworkResult::Geometry(GeometrySummary {
         unit_cell,
         frame_transform: Transform::new(
@@ -120,9 +122,9 @@ fn create_parallelepiped_from_lattice(
   // Create 6 half-spaces defining the parallelepiped faces
   let mut half_spaces = Vec::new();
   
-  // For each basis direction, create two opposing half-spaces
-  // Face pair perpendicular to basis_a
-  let normal_a = basis_a.normalize();
+  // For a parallelepiped, the normal to each face is the cross product of the other two basis vectors
+  // Face pair perpendicular to the plane containing basis_b and basis_c
+  let normal_a = (basis_b.cross(basis_c)).normalize();
   let min_point_a = min_corner_real;
   let max_point_a = min_corner_real + extent_lattice.x * basis_a;
   
@@ -135,8 +137,8 @@ fn create_parallelepiped_from_lattice(
     center: max_point_a,
   });
   
-  // Face pair perpendicular to basis_b
-  let normal_b = basis_b.normalize();
+  // Face pair perpendicular to the plane containing basis_c and basis_a
+  let normal_b = (basis_c.cross(basis_a)).normalize();
   let min_point_b = min_corner_real;
   let max_point_b = min_corner_real + extent_lattice.y * basis_b;
   
@@ -149,8 +151,8 @@ fn create_parallelepiped_from_lattice(
     center: max_point_b,
   });
   
-  // Face pair perpendicular to basis_c
-  let normal_c = basis_c.normalize();
+  // Face pair perpendicular to the plane containing basis_a and basis_b
+  let normal_c = (basis_a.cross(basis_b)).normalize();
   let min_point_c = min_corner_real;
   let max_point_c = min_corner_real + extent_lattice.z * basis_c;
   

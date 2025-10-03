@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::any::Any;
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::geo_tree::GeoNode;
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 // StructureDesignerScene is a struct that holds the scene to be rendered in the structure designer.
 pub struct StructureDesignerScene {
@@ -21,6 +22,7 @@ pub struct StructureDesignerScene {
     pub node_errors: HashMap<u64, String>,
     pub node_output_strings: HashMap<u64, String>,
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
+    pub unit_cell: Option<UnitCellStruct>,
 }
 
 impl StructureDesignerScene {
@@ -35,6 +37,7 @@ impl StructureDesignerScene {
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
             selected_node_eval_cache: None,
+            unit_cell: None,
         }
     }
 
@@ -49,6 +52,11 @@ impl StructureDesignerScene {
         // Take the eval cache from other if we don't have one
         if self.selected_node_eval_cache.is_none() && other.selected_node_eval_cache.is_some() {
             self.selected_node_eval_cache = other.selected_node_eval_cache;
+        }
+        
+        // Take the unit cell from other if we don't have one or if other has one
+        if self.unit_cell.is_none() && other.unit_cell.is_some() {
+            self.unit_cell = other.unit_cell;
         }
         
         match other.tessellatable {
@@ -87,5 +95,9 @@ impl<'a> Scene<'a> for StructureDesignerScene {
 
     fn tessellatable(&self) -> Option<Box<&dyn Tessellatable>> {
         self.tessellatable.as_deref().map(Box::new)
+    }
+
+    fn get_unit_cell(&self) -> Option<&UnitCellStruct> {
+        self.unit_cell.as_ref()
     }
 }

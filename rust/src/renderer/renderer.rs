@@ -22,6 +22,7 @@ use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::renderer::mesh::Material;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -568,19 +569,23 @@ impl Renderer {
             
             // Apply the current selected clusters transform
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
+            
+            // Refresh the background coordinate system with the scene's unit cell
+            self.refresh_background(scene.get_unit_cell());
         }
 
         //println!("refresh took: {:?}", start_time.elapsed());
     }
 
-    pub fn refresh_background(&mut self) {
+    pub fn refresh_background(&mut self, unit_cell: Option<&UnitCellStruct>) {
         let _lock = self.render_mutex.lock().unwrap();
         
         // Create a new LineMesh for the coordinate system
         let mut line_mesh = LineMesh::new();
         
         // Use the coordinate system tessellator to populate it
-        crate::renderer::tessellator::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh);
+        let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
+        crate::renderer::tessellator::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use);
         
         // Update the background mesh with the line mesh
         self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "Background");

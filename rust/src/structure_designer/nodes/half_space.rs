@@ -86,7 +86,7 @@ impl NodeData for HalfSpaceData {
       let real_shift_vector = unit_cell.dvec3_lattice_to_real(&shift_vector);
 
       return NetworkResult::Geometry(GeometrySummary {
-        unit_cell: UnitCellStruct::cubic_diamond(),
+        unit_cell: unit_cell.clone(),
         frame_transform: Transform::new(
           center_pos,
           DQuat::from_rotation_arc(DVec3::Y, dir),

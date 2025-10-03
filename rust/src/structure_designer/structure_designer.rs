@@ -3,7 +3,7 @@ use crate::common::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
 use super::node_type_registry::NodeTypeRegistry;
-use super::node_network::NodeNetwork;
+use super::node_network::{NodeNetwork, NodeDisplayType};
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_data::NoData;
@@ -22,6 +22,7 @@ use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometr
 use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::common::xyz_saver::save_xyz;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
@@ -138,14 +139,28 @@ impl StructureDesigner {
         None => return,
       };
       self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+      let mut selected_node_unit_cell: Option<Option<UnitCellStruct>> = None;
+      
       for node_entry in &network.displayed_node_ids {
-        self.last_generated_structure_designer_scene.merge(self.network_evaluator.generate_scene(
+        let scene = self.network_evaluator.generate_scene(
           &node_network_name,
           *node_entry.0,
           *node_entry.1,
           &self.node_type_registry,
           &self.preferences.geometry_visualization_preferences,
-        ));
+        );
+        
+        // Capture the selected node's unit cell if this is the selected node
+        if Some(*node_entry.0) == network.selected_node_id {
+          selected_node_unit_cell = Some(scene.unit_cell.clone());
+        }
+        
+        self.last_generated_structure_designer_scene.merge(scene);
+      }
+      
+      // Override unit cell with selected node's unit cell if it exists and is not None
+      if let Some(Some(unit_cell)) = selected_node_unit_cell {
+        self.last_generated_structure_designer_scene.unit_cell = Some(unit_cell);
       }
     }
 

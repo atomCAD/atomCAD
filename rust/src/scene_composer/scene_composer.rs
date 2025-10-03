@@ -23,6 +23,7 @@ use crate::scene_composer::commands::select_cluster_command::SelectClusterComman
 use crate::scene_composer::commands::set_frame_locked_to_atoms_command::SetFrameLockedToAtomsCommand;
 use crate::scene_composer::commands::set_active_tool_command::SetActiveToolCommand;
 use crate::scene_composer::scene_composer_model::SceneComposerTool;
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 pub struct SceneComposer {
   pub model: SceneComposerModel,
@@ -637,4 +638,9 @@ impl<'a> Scene<'a> for SceneComposer {
       // Create a box containing a reference to the frame gadget as a Tessellatable trait object
       Some(Box::new(frame_gadget_ref as &dyn Tessellatable))
   }
+
+  fn get_unit_cell(&self) -> Option<&UnitCellStruct> {
+    None
+  }
 }
+
