@@ -79,7 +79,8 @@ impl UnitCellStruct {
   }
 
   pub fn dvec2_lattice_to_real(&self, lattice_pos: &DVec2) -> DVec2 {
-    (lattice_pos.x * self.a + lattice_pos.y * self.b).truncate()
+    let real = lattice_pos.x * self.a + lattice_pos.y * self.c;
+    return DVec2::new(real.x, real.z);
   }
 
   pub fn ivec2_lattice_to_real(&self, lattice_pos: &IVec2) -> DVec2 {
@@ -92,6 +93,72 @@ impl UnitCellStruct {
 
   pub fn int_lattice_to_real(&self, lattice_value: i32) -> f64 {
     self.float_lattice_to_real(lattice_value as f64)
+  }
+
+  /// Converts a position from real space coordinates to lattice space coordinates.
+  /// 
+  /// This method performs the inverse transformation of `dvec3_lattice_to_real`.
+  /// Given a position in real space, it finds the corresponding lattice coordinates
+  /// (u, v, w) such that: real_pos = u*a + v*b + w*c
+  /// 
+  /// The conversion is performed by solving the linear system using the inverse
+  /// of the unit cell matrix [a, b, c].
+  /// 
+  /// # Arguments
+  /// * `real_pos` - Position in real space coordinates as DVec3
+  /// 
+  /// # Returns
+  /// * Position in lattice space coordinates as DVec3
+  /// 
+  /// # Panics
+  /// * Panics if the unit cell matrix is singular (determinant is zero)
+  pub fn real_to_dvec3_lattice(&self, real_pos: &DVec3) -> DVec3 {
+    // Calculate the determinant of the unit cell matrix [a, b, c]
+    let det = self.a.dot(self.b.cross(self.c));
+    
+    // Check for singular matrix (degenerate unit cell)
+    if det.abs() < 1e-12 {
+      panic!("Unit cell matrix is singular - cannot convert from real to lattice coordinates");
+    }
+    
+    // Calculate the inverse matrix using Cramer's rule
+    // For matrix [a, b, c], the inverse is (1/det) * [b×c, c×a, a×b]^T
+    let inv_det = 1.0 / det;
+    
+    // Calculate the columns of the inverse matrix
+    let inv_a = self.b.cross(self.c) * inv_det;  // First row of inverse
+    let inv_b = self.c.cross(self.a) * inv_det;  // Second row of inverse  
+    let inv_c = self.a.cross(self.b) * inv_det;  // Third row of inverse
+    
+    // Apply the inverse transformation
+    DVec3::new(
+      inv_a.dot(*real_pos),  // u coordinate
+      inv_b.dot(*real_pos),  // v coordinate
+      inv_c.dot(*real_pos)   // w coordinate
+    )
+  }
+
+  /// Converts a position from real space coordinates to integer lattice space coordinates.
+  /// 
+  /// This method is a convenience wrapper around `real_to_dvec3_lattice` that rounds
+  /// the resulting floating-point lattice coordinates to the nearest integers.
+  /// This is useful when you need lattice coordinates as discrete grid positions.
+  /// 
+  /// # Arguments
+  /// * `real_pos` - Position in real space coordinates as DVec3
+  /// 
+  /// # Returns
+  /// * Position in integer lattice space coordinates as IVec3
+  /// 
+  /// # Panics
+  /// * Panics if the unit cell matrix is singular (determinant is zero)
+  pub fn real_to_ivec3_lattice(&self, real_pos: &DVec3) -> IVec3 {
+    let lattice_pos = self.real_to_dvec3_lattice(real_pos);
+    IVec3::new(
+      lattice_pos.x.round() as i32,
+      lattice_pos.y.round() as i32,
+      lattice_pos.z.round() as i32,
+    )
   }
 
   /// Converts Miller indices to crystal plane properties (normal and d-spacing).

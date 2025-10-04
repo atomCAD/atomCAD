@@ -34,8 +34,11 @@ pub struct HalfPlaneData {
 
 impl NodeData for HalfPlaneData {
 
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-      Some(Box::new(HalfPlaneGadget::new(&self.point1, &self.point2)))
+    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+      let half_plane_cache = eval_cache.downcast_ref::<HalfPlaneEvalCache>()?;
+  
+      Some(Box::new(HalfPlaneGadget::new(&self.point1, &self.point2, &half_plane_cache.unit_cell)))
     }
   
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -61,6 +64,14 @@ impl NodeData for HalfPlaneData {
         Err(error) => return error,
       };
 
+      // Store evaluation cache for selected node
+      if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+        let eval_cache = HalfPlaneEvalCache {
+          unit_cell: unit_cell.clone(),
+        };
+        context.selected_node_eval_cache = Some(Box::new(eval_cache));
+      }
+
       let point1 = unit_cell.ivec2_lattice_to_real(&self.point1);
       let point2 = unit_cell.ivec2_lattice_to_real(&self.point2);
     
@@ -85,6 +96,10 @@ impl NodeData for HalfPlaneData {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct HalfPlaneEvalCache {
+  pub unit_cell: UnitCellStruct,
+}
 
 #[derive(Clone)]
 pub struct HalfPlaneGadget {
@@ -92,30 +107,20 @@ pub struct HalfPlaneGadget {
     pub point2: IVec2,
     pub is_dragging: bool,
     pub dragged_handle: Option<i32>, // 0 for point1, 1 for point2
+    pub unit_cell: UnitCellStruct,
 }
 
 impl Tessellatable for HalfPlaneGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
-        // Convert to 3D coordinates and scale by unit cell size
-        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
+        let point1 = self.unit_cell.ivec2_lattice_to_real(&self.point1);
+        let point2 = self.unit_cell.ivec2_lattice_to_real(&self.point2);  
         
         // Convert 2D points to 3D space (on XZ plane)
-        let p1_3d = DVec3::new(
-            self.point1.x as f64 * cell_size, 
-            0.0, 
-            self.point1.y as f64 * cell_size
-        );
-        
-        let p2_3d = DVec3::new(
-            self.point2.x as f64 * cell_size, 
-            0.0, 
-            self.point2.y as f64 * cell_size
-        );
+        let p1_3d = DVec3::new(point1.x, 0.0, point1.y);
+        let p2_3d = DVec3::new(point2.x, 0.0, point2.y);
 
         // Calculate inward normal direction for triangle orientation
-        let p1_dvec2 = self.point1.as_dvec2();
-        let p2_dvec2 = self.point2.as_dvec2();
-        let dir_vec_2d = p2_dvec2 - p1_dvec2;
+        let dir_vec_2d = (point2 - point1).normalize();
         // The normal in implicit_eval_half_plane DVec2::new(-dir_vec_2d.y, dir_vec_2d.x) points OUTWARD.
         // For the gadget to point INWARD, we need the opposite normal.
         let inward_normal_2d = DVec2::new(dir_vec_2d.y, -dir_vec_2d.x);
@@ -146,46 +151,18 @@ impl Tessellatable for HalfPlaneGadget {
         // Calculate the extended line across the entire coordinate system
         use crate::renderer::tessellator::coordinate_system_tessellator::CS_SIZE;
         
-        // Get the direction vector (normalized)
-        let dir_xz = DVec2::new(p2_3d.x - p1_3d.x, p2_3d.z - p1_3d.z).normalize();
+        // Calculate the line direction in 3D space
+        let line_direction = (p2_3d - p1_3d).normalize();
         
-        // If line is nearly vertical or horizontal, handle separately
-        let extended_line_start: DVec3;
-        let extended_line_end: DVec3;
+        // Calculate the center point of the line segment
+        let line_center = (p1_3d + p2_3d) * 0.5;
         
-        let cs_size = CS_SIZE as f64 * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+        // Calculate the desired total line length
+        let half_length = self.unit_cell.float_lattice_to_real(CS_SIZE as f64);
 
-        if dir_xz.x.abs() < 1e-6 {  // Line is parallel to Z axis
-            extended_line_start = DVec3::new(p1_3d.x, 0.0, -cs_size);
-            extended_line_end = DVec3::new(p1_3d.x, 0.0, cs_size);
-        } else if dir_xz.y.abs() < 1e-6 {  // Line is parallel to X axis
-            extended_line_start = DVec3::new(-cs_size, 0.0, p1_3d.z);
-            extended_line_end = DVec3::new(cs_size, 0.0, p1_3d.z);
-        } else {
-            // Calculate t values where line crosses grid boundary
-            // Parametrize line as p1 + t*dir
-            let t_x_min = (-cs_size - p1_3d.x) / dir_xz.x;
-            let t_x_max = (cs_size - p1_3d.x) / dir_xz.x;
-            let t_z_min = (-cs_size - p1_3d.z) / dir_xz.y;
-            let t_z_max = (cs_size - p1_3d.z) / dir_xz.y;
-            
-            // Find min and max t values within grid
-            let t_min = t_x_min.min(t_x_max).max(t_z_min.min(t_z_max));
-            let t_max = t_x_min.max(t_x_max).min(t_z_min.max(t_z_max));
-            
-            // Calculate start and end points
-            extended_line_start = DVec3::new(
-                p1_3d.x + t_min * dir_xz.x,
-                0.0,
-                p1_3d.z + t_min * dir_xz.y
-            );
-            
-            extended_line_end = DVec3::new(
-                p1_3d.x + t_max * dir_xz.x,
-                0.0,
-                p1_3d.z + t_max * dir_xz.y
-            );
-        }
+        // Extend the line symmetrically from the center
+        let extended_line_start = line_center - line_direction * half_length;
+        let extended_line_end = line_center + line_direction * half_length;
         
         // Draw the extended line
         tessellator::tessellate_cylinder(
@@ -229,20 +206,12 @@ impl Tessellatable for HalfPlaneGadget {
 
 impl Gadget for HalfPlaneGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
-        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
+        let point1 = self.unit_cell.ivec2_lattice_to_real(&self.point1);
+        let point2 = self.unit_cell.ivec2_lattice_to_real(&self.point2);  
         
         // Convert 2D points to 3D space (on XZ plane)
-        let p1_3d = DVec3::new(
-            self.point1.x as f64 * cell_size, 
-            0.0, 
-            self.point1.y as f64 * cell_size
-        );
-        
-        let p2_3d = DVec3::new(
-            self.point2.x as f64 * cell_size, 
-            0.0, 
-            self.point2.y as f64 * cell_size
-        );
+        let p1_3d = DVec3::new(point1.x, 0.0, point1.y);
+        let p2_3d = DVec3::new(point2.x, 0.0, point2.y);
         
         // Effective radius for hit testing (distance from centroid to vertex of the triangle)
         let hit_test_radius = common_constants::HANDLE_TRIANGLE_SIDE_LENGTH / 3.0_f64.sqrt();
@@ -289,16 +258,15 @@ impl Gadget for HalfPlaneGadget {
         
         let intersection_point = ray_origin + ray_direction * t;
         
-        // Convert the 3D point to lattice coordinates by dividing by cell size
-        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
-        let x_lattice = (intersection_point.x / cell_size).round() as i32;
-        let z_lattice = (intersection_point.z / cell_size).round() as i32;
+        // Convert the 3D point to lattice coordinates
+        //TODO: create metod in UnitCellStruct to convert from real space to lattice space.
+        let lattice_pos = self.unit_cell.real_to_ivec3_lattice(&intersection_point);
         
         // Update the appropriate point
         if handle_index == 0 {
-            self.point1 = IVec2::new(x_lattice, z_lattice);
+            self.point1 = IVec2::new(lattice_pos.x, lattice_pos.z);
         } else if handle_index == 1 {
-            self.point2 = IVec2::new(x_lattice, z_lattice);
+            self.point2 = IVec2::new(lattice_pos.x, lattice_pos.z);
         }
     }
 
@@ -322,12 +290,13 @@ impl NodeNetworkGadget for HalfPlaneGadget {
 }
 
 impl HalfPlaneGadget {
-    pub fn new(point1: &IVec2, point2: &IVec2) -> Self {
+    pub fn new(point1: &IVec2, point2: &IVec2, unit_cell: &UnitCellStruct) -> Self {
         HalfPlaneGadget {
             point1: *point1,
             point2: *point2,
             is_dragging: false,
             dragged_handle: None,
+            unit_cell: unit_cell.clone(),
         }
     }
 }
