@@ -97,50 +97,40 @@ impl NodeData for RectData {
 
 /// Creates a parallelogram in real space from lattice coordinates and unit cell basis vectors.
 /// The parallelogram is represented as an intersection of 4 half-planes (2 pairs of opposing edges).
+/// Uses the XZ plane for 2D operations (Y=0).
 fn create_parallelogram_from_lattice(
   unit_cell: &UnitCellStruct,
   min_corner_lattice: DVec2,
   extent_lattice: DVec2
 ) -> GeoNode {
-  // Get the 2D unit cell basis vectors (we only use the X and Y components)
-  let basis_a = DVec2::new(unit_cell.a.x, unit_cell.a.y);
-  let basis_b = DVec2::new(unit_cell.b.x, unit_cell.b.y);
-  
-  // Convert lattice coordinates to real space coordinates
-  let min_corner_real = min_corner_lattice.x * basis_a + 
-                       min_corner_lattice.y * basis_b;
+  // Convert lattice coordinates to real space coordinates using the proper UnitCellStruct method
+  let min_corner_real = unit_cell.dvec2_lattice_to_real(&min_corner_lattice);
   
   // Calculate the four corners of the parallelogram in real space
   let corner_00 = min_corner_real; // min_corner
-  let corner_10 = min_corner_real + extent_lattice.x * basis_a; // min_corner + extent_a
-  let corner_01 = min_corner_real + extent_lattice.y * basis_b; // min_corner + extent_b
-  let corner_11 = min_corner_real + extent_lattice.x * basis_a + extent_lattice.y * basis_b; // max_corner
+  let corner_10 = unit_cell.dvec2_lattice_to_real(&(min_corner_lattice + DVec2::new(extent_lattice.x, 0.0)));
+  let corner_01 = unit_cell.dvec2_lattice_to_real(&(min_corner_lattice + DVec2::new(0.0, extent_lattice.y)));
+  let corner_11 = unit_cell.dvec2_lattice_to_real(&(min_corner_lattice + extent_lattice)); // max_corner
   
   // Create 4 half-planes defining the parallelogram edges
   let mut half_planes = Vec::new();
   
-  // Edge pair parallel to basis_a (top and bottom edges)
-  // Bottom edge: from corner_00 to corner_10
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_00,
-    point2: corner_10,
-  });
-  // Top edge: from corner_11 to corner_01 (reversed to get correct orientation)
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_11,
-    point2: corner_01,
-  });
-  
-  // Edge pair parallel to basis_b (left and right edges)
-  // Left edge: from corner_00 to corner_01
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_00,
-    point2: corner_01,
-  });
-  // Right edge: from corner_10 to corner_11
   half_planes.push(GeoNode::HalfPlane {
     point1: corner_10,
+    point2: corner_00,
+  });
+  half_planes.push(GeoNode::HalfPlane {
+    point1: corner_01,
     point2: corner_11,
+  });
+  
+  half_planes.push(GeoNode::HalfPlane {
+    point1: corner_00,
+    point2: corner_01,
+  });
+  half_planes.push(GeoNode::HalfPlane {
+    point1: corner_11,
+    point2: corner_10,
   });
   
   // Return the intersection of all half-planes

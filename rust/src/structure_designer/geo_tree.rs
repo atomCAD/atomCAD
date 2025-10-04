@@ -15,6 +15,7 @@ use std::fmt;
     center: DVec3,
   },
   HalfPlane {
+    // inside is to the left of the line defined by point1 -> point2
     point1: DVec2,
     point2: DVec2,
   },
