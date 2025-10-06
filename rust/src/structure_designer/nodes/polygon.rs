@@ -31,8 +31,10 @@ pub struct PolygonData {
 }
 
 impl NodeData for PolygonData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-      Some(Box::new(PolygonGadget::new(&self.vertices)))
+    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+      let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+      let polygon_cache = eval_cache.downcast_ref::<PolygonEvalCache>()?;
+      Some(Box::new(PolygonGadget::new(&self.vertices, &polygon_cache.unit_cell)))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -58,6 +60,14 @@ impl NodeData for PolygonData {
         Err(error) => return error,
       };
 
+      // Store evaluation cache for selected node
+      if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+        let eval_cache = PolygonEvalCache {
+          unit_cell: unit_cell.clone(),
+        };
+        context.selected_node_eval_cache = Some(Box::new(eval_cache));
+      }
+
       let real_vertices = self.vertices.iter().map(|v| {
         unit_cell.ivec2_lattice_to_real(v)
       }).collect();
@@ -79,19 +89,25 @@ impl NodeData for PolygonData {
     }
 }
 
+pub struct PolygonEvalCache {
+    pub unit_cell: UnitCellStruct,
+}
+
 #[derive(Clone)]
 pub struct PolygonGadget {
     pub vertices: Vec<IVec2>,
     pub is_dragging: bool,
     pub dragged_handle: Option<usize>, // index of the dragged vertex
+    pub unit_cell: UnitCellStruct,
 }
 
 impl PolygonGadget {
-    pub fn new(vertices: &Vec<IVec2>) -> Self {
+    pub fn new(vertices: &Vec<IVec2>, unit_cell: &UnitCellStruct) -> Self {
         PolygonGadget {
             vertices: vertices.clone(),
             is_dragging: false,
             dragged_handle: None,
+            unit_cell: unit_cell.clone(),
         }
     }
     
@@ -147,40 +163,30 @@ impl PolygonGadget {
         
         let intersection_point = *ray_origin + *ray_direction * t;
         
-        // Convert the 3D point to lattice coordinates by dividing by cell size
-        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
-        let x_lattice = (intersection_point.x / cell_size).round() as i32;
-        let z_lattice = (intersection_point.z / cell_size).round() as i32;
-        
-        Some(IVec2::new(x_lattice, z_lattice))
+        // Convert the 3D point to lattice coordinates
+        let lattice_pos = self.unit_cell.real_to_ivec3_lattice(&intersection_point);
+
+        Some(IVec2::new(lattice_pos.x, lattice_pos.z))
     }
 }
 
 impl Tessellatable for PolygonGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
-    // Convert to 3D coordinates and scale by unit cell size
-    let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
-
-    // Convert 2D points to 3D space (on XZ plane)
-    let vertices_3d: Vec<DVec3> = self.vertices.iter().map(|v| {
-      DVec3::new(
-        v.x as f64 * cell_size, 
-        0.0, 
-        v.y as f64 * cell_size
-      )
+    let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
+        let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
+        DVec3::new(real_vertex_2d.x, 0.0, real_vertex_2d.y)
     }).collect();
 
-    // Create materials
     let roughness: f32 = 0.2;
     let metallic: f32 = 0.8;
     let handle_material = Material::new(&common_constants::HANDLE_COLOR, roughness, metallic);
     let selected_handle_material = Material::new(&common_constants::SELECTED_HANDLE_COLOR, roughness, metallic);  
     let line_material = Material::new(&common_constants::LINE_COLOR, roughness, metallic);
     
-    for i in 0..vertices_3d.len() {
+    for i in 0..real_3d_vertices.len() {
         let selected = self.dragged_handle.is_some() && self.dragged_handle.unwrap() == i;
-        let p1_3d = vertices_3d[i];
-        let p2_3d = vertices_3d[(i + 1) % vertices_3d.len()];
+        let p1_3d = real_3d_vertices[i];
+        let p2_3d = real_3d_vertices[(i + 1) % real_3d_vertices.len()];
 
         // handle for the point
         let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
@@ -220,21 +226,15 @@ impl Tessellatable for PolygonGadget {
 
 impl Gadget for PolygonGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
-        // Convert to 3D coordinates and scale by unit cell size
-        let cell_size = common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64;
 
-        // Convert 2D points to 3D space (on XZ plane)
-        let vertices_3d: Vec<DVec3> = self.vertices.iter().map(|v| {
-            DVec3::new(
-                v.x as f64 * cell_size, 
-                0.0, 
-                v.y as f64 * cell_size
-            )
+        let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
+            let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
+            DVec3::new(real_vertex_2d.x, 0.0, real_vertex_2d.y)
         }).collect();
-        
+
         // First, check hits with vertex handles
-        for i in 0..vertices_3d.len() {
-            let p1_3d = vertices_3d[i];
+        for i in 0..real_3d_vertices.len() {
+            let p1_3d = real_3d_vertices[i];
             
             // Handle for the vertex - test cylinder along Y axis
             let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
@@ -247,13 +247,13 @@ impl Gadget for PolygonGadget {
         }
         
         // Next, check hits with line segments
-        for i in 0..vertices_3d.len() {
-            let p1_3d = vertices_3d[i];
-            let p2_3d = vertices_3d[(i + 1) % vertices_3d.len()];
+        for i in 0..real_3d_vertices.len() {
+            let p1_3d = real_3d_vertices[i];
+            let p2_3d = real_3d_vertices[(i + 1) % real_3d_vertices.len()];
             
             if cylinder_hit_test(&p2_3d, &p1_3d, common_constants::LINE_RADIUS, &ray_origin, &ray_direction).is_some() {
                 // Return the number of vertices plus the line segment index if hit
-                return Some(vertices_3d.len() as i32 + i as i32);
+                return Some(real_3d_vertices.len() as i32 + i as i32);
             }
         }
         
