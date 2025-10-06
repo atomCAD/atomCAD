@@ -8,7 +8,7 @@ use crate::common::atomic_structure::AtomicStructure;
 use std::collections::HashMap;
 use glam::i32::IVec3;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::common_constants;
+use crate::structure_designer::common_constants::{self, DIAMOND_UNIT_CELL_SIZE_ANGSTROM};
 use crate::util::box_subdivision::subdivide_box;
 use crate::common::crystal_utils::in_crystal_pos_to_id;
 use crate::common::common_constants::ATOM_INFO;
@@ -114,7 +114,7 @@ impl NodeData for GeoToAtomData {
       };
     
       let mut atomic_structure = AtomicStructure::new();
-      atomic_structure.frame_transform = mesh.frame_transform.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+      //atomic_structure.frame_transform = mesh.frame_transform.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
     
       // id:0 means there is no atom there
       let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
@@ -164,9 +164,9 @@ fn process_box_for_atomic<'a>(
   let center_point = start_pos.as_dvec3() + size.as_dvec3() / 2.0;
 
   // Evaluate SDF at the center point
-  let sdf_value = geo_tree_root.implicit_eval_3d(&center_point);
+  let sdf_value = geo_tree_root.implicit_eval_3d(&(center_point * DIAMOND_UNIT_CELL_SIZE_ANGSTROM));
 
-  let half_diagonal = size.as_dvec3().length() / 2.0;
+  let half_diagonal = size.as_dvec3().length() * DIAMOND_UNIT_CELL_SIZE_ANGSTROM / 2.0;
 
   // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
   if sdf_value > half_diagonal + DIAMOND_SAMPLE_THRESHOLD + epsilon {
@@ -248,7 +248,7 @@ fn process_cell_for_atomic<'a>(
         let crystal_space_pos = absolute_pos.as_dvec3() / 4.0;
         let mut has_atom = filled;
         if !has_atom {
-          let value = geo_tree_root.implicit_eval_3d( &crystal_space_pos);
+          let value = geo_tree_root.implicit_eval_3d( &(crystal_space_pos * common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM));
           has_atom = value < DIAMOND_SAMPLE_THRESHOLD;
         }
 
