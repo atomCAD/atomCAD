@@ -492,6 +492,10 @@ impl NodeTypeRegistry {
               name: "shape".to_string(),
               data_type: DataType::Geometry2D,
           },
+          Parameter {
+            name: "unit_cell".to_string(),
+            data_type: DataType::UnitCell,
+          },  
       ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(ExtrudeData {

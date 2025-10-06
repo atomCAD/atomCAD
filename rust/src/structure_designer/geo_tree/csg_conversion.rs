@@ -113,8 +113,12 @@ impl GeoNode {
 
   fn extrude_to_csg(height: f64, direction: DVec3, shape: &Box<GeoNode>) -> CSG {
       // Calculate the extrusion vector by multiplying height with normalized direction
-      let extrusion_vector = dvec3_to_vector3(direction * height);
-      
+      let mut extrusion_vector = dvec3_to_vector3(direction * height);
+      // swap y and z in the extrusion vector
+      let tmp = extrusion_vector.y;
+      extrusion_vector.y = extrusion_vector.z;
+      extrusion_vector.z = tmp;
+
       // Use the new extrude_vector method instead of the old extrude method
       let mut extruded = shape.internal_to_csg(false).extrude_vector(extrusion_vector);
 
