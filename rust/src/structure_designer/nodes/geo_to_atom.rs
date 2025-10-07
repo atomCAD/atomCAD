@@ -129,8 +129,8 @@ impl NodeData for GeoToAtomData {
       process_box_for_atomic(
         &mesh.geo_tree_root,
         self,
-        &common_constants::IMPLICIT_VOLUME_MIN,
-        &(common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN),
+        &common_constants::IMPLICIT_VOLUME_UNIT_CELLS_MIN,
+        &(common_constants::IMPLICIT_VOLUME_UNIT_CELLS_MAX - common_constants::IMPLICIT_VOLUME_UNIT_CELLS_MIN),
         &mut atom_pos_to_id,
         &mut atomic_structure
       );
