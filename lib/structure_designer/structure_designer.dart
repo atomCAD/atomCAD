@@ -218,12 +218,18 @@ class _StructureDesignerState extends State<StructureDesigner> {
     // Open file picker for saving CNND files
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Save Design As',
-      fileName: 'design.atomcad',
-      allowedExtensions: ['atomcad'],
+      fileName: 'design.cnnd',
+      // Note: allowedExtensions doesn't work properly on Windows, only on Linux/Mac
+      allowedExtensions: ['cnnd'],
     );
 
     if (outputFile != null) {
-      graphModel.saveNodeNetworks(outputFile);
+      // Add .cnnd extension only if user didn't specify any extension
+      String finalPath = outputFile;
+      if (!finalPath.contains('.')) {
+        finalPath = '$outputFile.cnnd';
+      }
+      graphModel.saveNodeNetworks(finalPath);
     }
   }
 
