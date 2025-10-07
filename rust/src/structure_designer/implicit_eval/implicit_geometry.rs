@@ -10,6 +10,8 @@ pub trait ImplicitGeometry3D {
   ) -> (DVec3, f64);
 
   fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64;
+
+  fn is3d(&self) -> bool;
 }
 
 /*
@@ -22,4 +24,6 @@ pub trait ImplicitGeometry2D {
   ) -> (DVec2, f64);
 
   fn implicit_eval_2d(&self, sample_point: &DVec2) -> f64;
+
+  fn is2d(&self) -> bool;
 }

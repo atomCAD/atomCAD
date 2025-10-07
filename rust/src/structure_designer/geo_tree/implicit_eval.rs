@@ -43,6 +43,18 @@ impl ImplicitGeometry2D for GeoNode {
       _ => panic!("3D shapes should be evaluated using implicit_eval_3d")
     }
   }
+
+  fn is2d(&self) -> bool {
+    match self {
+      GeoNode::HalfPlane { .. } => true,
+      GeoNode::Circle { .. } => true,
+      GeoNode::Polygon { .. } => true,
+      GeoNode::Union2D { .. } => true,
+      GeoNode::Intersection2D { .. } => true,
+      GeoNode::Difference2D { .. } => true,
+      _ => false
+    }
+  }
 }
 
 impl ImplicitGeometry3D for GeoNode {
@@ -89,6 +101,19 @@ impl ImplicitGeometry3D for GeoNode {
       }
       // 2D shapes should use implicit_eval_2d instead
       _ => panic!("2D shapes should be evaluated using implicit_eval_2d")
+    }
+  }
+
+  fn is3d(&self) -> bool {
+    match self {
+      GeoNode::HalfSpace { .. } => true,
+      GeoNode::Sphere { .. } => true,
+      GeoNode::Extrude { .. } => true,
+      GeoNode::Transform { .. } => true,
+      GeoNode::Union3D { .. } => true,
+      GeoNode::Intersection3D { .. } => true,
+      GeoNode::Difference3D { .. } => true,
+      _ => false
     }
   }
 }

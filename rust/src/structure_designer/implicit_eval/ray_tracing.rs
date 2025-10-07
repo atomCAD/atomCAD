@@ -21,6 +21,11 @@ pub fn raytrace_geometries(geometries: &[&dyn ImplicitGeometry3D], ray_origin: &
 
 // traces a ray into the given implicit geometry and returns the distance of the intersection if any.
 pub fn raytrace_geometry(geometry: &dyn ImplicitGeometry3D, ray_origin: &DVec3, ray_direction: &DVec3, world_scale: f64) -> Option<f64> {
+  // Early return if the geometry is not 3D
+  if !geometry.is3d() {
+    return None;
+  }
+  
   // Constants for ray marching algorithm
   const MAX_STEPS: usize = 100;
   const MAX_DISTANCE: f64 = 5000.0;
