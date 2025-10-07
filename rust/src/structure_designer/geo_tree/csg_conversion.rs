@@ -61,7 +61,7 @@ impl GeoNode {
     create_half_space_geo(
           &normal,
           &center,
-          if is_root { HalfSpaceVisualization::Plane } else { HalfSpaceVisualization::Cuboid })
+          if is_root || true { HalfSpaceVisualization::Plane } else { HalfSpaceVisualization::Cuboid })
   }
 
   fn half_plane_to_csg(point1: DVec2, point2: DVec2) -> CSG {
@@ -72,8 +72,8 @@ impl GeoNode {
     
     let center_pos = point1 + dir_vector * 0.5;
   
-    let width = 100.0;
-    let height = 100.0;
+    let width = 400.0;
+    let height = 400.0;
   
     let tr = center_pos - dir * width * 0.5 - normal * height;
 
@@ -216,9 +216,9 @@ pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, visualization: 
   let na_normal = dvec3_to_vector3(*normal);
   let rotation = DQuat::from_rotation_arc(DVec3::Y, *normal);
 
-  let width = 40.0;
-  let height = 40.0;
-  let depth = 40.0; // Depth for cuboid visualization
+  let width = 400.0;
+  let height = 400.0;
+  let depth = 400.0; // Depth for cuboid visualization
 
   let start_x = -width * 0.5;
   let start_z = -height * 0.5;

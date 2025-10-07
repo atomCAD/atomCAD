@@ -122,47 +122,61 @@ fn create_parallelepiped_from_lattice(
   // Create 6 half-spaces defining the parallelepiped faces
   let mut half_spaces = Vec::new();
   
+  // Calculate the center of the parallelepiped for reference
+  let parallelepiped_center = min_corner_real + 
+    (extent_lattice.x * basis_a + extent_lattice.y * basis_b + extent_lattice.z * basis_c) / 2.0;
+  
   // For a parallelepiped, the normal to each face is the cross product of the other two basis vectors
-  // Face pair perpendicular to the plane containing basis_b and basis_c
+  // Face pair perpendicular to the plane containing basis_b and basis_c (A-direction faces)
   let normal_a = (basis_b.cross(basis_c)).normalize();
-  let min_point_a = min_corner_real;
-  let max_point_a = min_corner_real + extent_lattice.x * basis_a;
+  
+  // Calculate face centers instead of corner points
+  let min_face_center_a = min_corner_real + 
+    (extent_lattice.y * basis_b + extent_lattice.z * basis_c) / 2.0;
+  let max_face_center_a = min_corner_real + extent_lattice.x * basis_a + 
+    (extent_lattice.y * basis_b + extent_lattice.z * basis_c) / 2.0;
   
   half_spaces.push(GeoNode::HalfSpace {
     normal: -normal_a,
-    center: min_point_a,
+    center: min_face_center_a,
   });
   half_spaces.push(GeoNode::HalfSpace {
     normal: normal_a,
-    center: max_point_a,
+    center: max_face_center_a,
   });
   
-  // Face pair perpendicular to the plane containing basis_c and basis_a
+  // Face pair perpendicular to the plane containing basis_c and basis_a (B-direction faces)
   let normal_b = (basis_c.cross(basis_a)).normalize();
-  let min_point_b = min_corner_real;
-  let max_point_b = min_corner_real + extent_lattice.y * basis_b;
+  
+  let min_face_center_b = min_corner_real + 
+    (extent_lattice.x * basis_a + extent_lattice.z * basis_c) / 2.0;
+  let max_face_center_b = min_corner_real + extent_lattice.y * basis_b + 
+    (extent_lattice.x * basis_a + extent_lattice.z * basis_c) / 2.0;
   
   half_spaces.push(GeoNode::HalfSpace {
     normal: -normal_b,
-    center: min_point_b,
+    center: min_face_center_b,
   });
   half_spaces.push(GeoNode::HalfSpace {
     normal: normal_b,
-    center: max_point_b,
+    center: max_face_center_b,
   });
   
-  // Face pair perpendicular to the plane containing basis_a and basis_b
+  // Face pair perpendicular to the plane containing basis_a and basis_b (C-direction faces)
   let normal_c = (basis_a.cross(basis_b)).normalize();
-  let min_point_c = min_corner_real;
-  let max_point_c = min_corner_real + extent_lattice.z * basis_c;
+  
+  let min_face_center_c = min_corner_real + 
+    (extent_lattice.x * basis_a + extent_lattice.y * basis_b) / 2.0;
+  let max_face_center_c = min_corner_real + extent_lattice.z * basis_c + 
+    (extent_lattice.x * basis_a + extent_lattice.y * basis_b) / 2.0;
   
   half_spaces.push(GeoNode::HalfSpace {
     normal: -normal_c,
-    center: min_point_c,
+    center: min_face_center_c,
   });
   half_spaces.push(GeoNode::HalfSpace {
     normal: normal_c,
-    center: max_point_c,
+    center: max_face_center_c,
   });
   
   // Return the intersection of all half-spaces
