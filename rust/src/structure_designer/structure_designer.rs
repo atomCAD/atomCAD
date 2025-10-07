@@ -834,21 +834,25 @@ impl StructureDesigner {
   }
 
   // Loads node networks from a file
-  // Resets the active_node_network_name to None
+  // Sets the active_node_network_name to the first network if available, otherwise None
   pub fn load_node_networks(&mut self, file_path: &str) -> std::io::Result<()> {
 
-    let result = node_networks_serialization::load_node_networks_from_file(
+    let first_network_name = node_networks_serialization::load_node_networks_from_file(
       &mut self.node_type_registry, 
       file_path
-    );
+    )?;
 
-    // Reset active node network to None
-    self.set_active_node_network_name(None);
+    // Set active node network to the first network if available, otherwise None
+    if first_network_name.is_empty() {
+      self.set_active_node_network_name(None);
+    } else {
+      self.set_active_node_network_name(Some(first_network_name));
+    }
     
     // Apply display policy to all nodes
     self.apply_node_display_policy(None);
 
-    result
+    Ok(())
   }
 
   /// Validates the active node network and propagates validation to dependent networks

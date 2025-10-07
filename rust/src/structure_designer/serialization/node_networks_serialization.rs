@@ -273,8 +273,8 @@ pub fn save_node_networks_to_file(registry: &mut NodeTypeRegistry, file_path: &P
 /// * `file_path` - The file path to load from as a string
 /// 
 /// # Returns
-/// * `io::Result<()>` - Ok if the load operation was successful, Err otherwise
-pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: &str) -> io::Result<()> {
+/// * `io::Result<String>` - Ok with the first network name if successful, or empty string if no networks, Err otherwise
+pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: &str) -> io::Result<String> {
     // Extract design directory early
     let design_dir = std::path::Path::new(file_path).parent().and_then(|p| p.to_str());
     
@@ -297,8 +297,16 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
     
     registry.node_networks.clear();
 
+    // Track the first network name
+    let mut first_network_name = String::new();
+
     // Process each network
     for (name, serializable_network) in serializable_registry.node_networks {
+        // Capture the first network name
+        if first_network_name.is_empty() {
+            first_network_name = name.clone();
+        }
+        
         let mut network = serializable_to_node_network(&serializable_network, &registry.built_in_node_types, design_dir)?;
         registry.initialize_custom_node_types_for_network(&mut network);
         registry.node_networks.insert(name, network);
@@ -307,5 +315,5 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
     // Set the design file name after successful load
     registry.design_file_name = Some(file_path.to_string());
     
-    Ok(())
+    Ok(first_network_name)
 }
