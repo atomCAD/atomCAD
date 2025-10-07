@@ -16,9 +16,12 @@ pub fn generate_2d_point_cloud_scene(
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) -> StructureDesignerScene {
   let mut point_cloud = SurfacePointCloud2D::new();
-  let cache_size = (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
-  (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
-  geometry_visualization_preferences.samples_per_unit_cell * geometry_visualization_preferences.samples_per_unit_cell;
+  let cache_size = i32::min(
+    (common_constants::IMPLICIT_VOLUME_MAX.z - common_constants::IMPLICIT_VOLUME_MIN.z + 1) *
+    (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
+    geometry_visualization_preferences.samples_per_unit_cell * geometry_visualization_preferences.samples_per_unit_cell,
+    common_constants::MAX_EVAL_CACHE_SIZE
+  );
 
   let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 

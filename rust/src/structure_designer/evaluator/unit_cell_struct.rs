@@ -56,6 +56,50 @@ impl UnitCellStruct {
     (self.c - other.c).length() < EPSILON
   }
 
+  /// Determines whether the unit cell is approximately cubic within a small tolerance.
+  /// 
+  /// A unit cell is considered approximately cubic if:
+  /// 1. All three basis vectors have approximately equal lengths
+  /// 2. All three basis vectors are approximately orthogonal to each other
+  /// 
+  /// This method uses the same epsilon tolerance (1e-5) as `is_approximately_equal`
+  /// for consistency in numerical comparisons.
+  /// 
+  /// # Returns
+  /// * `true` if the unit cell is approximately cubic within tolerance
+  /// * `false` if it deviates significantly from cubic symmetry
+  pub fn is_approximately_cubic(&self) -> bool {
+    const EPSILON: f64 = 1e-5;
+    
+    // Get the lengths of the three basis vectors
+    let len_a = self.a.length();
+    let len_b = self.b.length();
+    let len_c = self.c.length();
+    
+    // Check if all lengths are approximately equal
+    let lengths_equal = (len_a - len_b).abs() < EPSILON &&
+                       (len_b - len_c).abs() < EPSILON &&
+                       (len_a - len_c).abs() < EPSILON;
+    
+    if !lengths_equal {
+      return false;
+    }
+    
+    // Check if all basis vectors are approximately orthogonal
+    // For orthogonal vectors, their dot products should be approximately zero
+    let dot_ab = self.a.dot(self.b).abs();
+    let dot_bc = self.b.dot(self.c).abs();
+    let dot_ac = self.a.dot(self.c).abs();
+    
+    // Use a scaled epsilon based on the square of the vector lengths
+    // since dot products scale with the square of the magnitudes
+    let scaled_epsilon = EPSILON * len_a * len_b;
+    
+    dot_ab < scaled_epsilon &&
+    dot_bc < scaled_epsilon &&
+    dot_ac < scaled_epsilon
+  }
+
   /// Converts lattice coordinates to real space coordinates using the unit cell basis vectors.
   /// 
   /// # Arguments

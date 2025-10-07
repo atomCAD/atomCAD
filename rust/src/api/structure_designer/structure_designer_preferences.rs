@@ -67,7 +67,7 @@ impl StructureDesignerPreferences {
       geometry_visualization_preferences: GeometryVisualizationPreferences {
         geometry_visualization: GeometryVisualization::ExplicitMesh,
         wireframe_geometry: false,
-        samples_per_unit_cell: 4,
+        samples_per_unit_cell: 1,
         sharpness_angle_threshold_degree: 29.0,
         mesh_smoothing: MeshSmoothing::SmoothingGroupBased,
         display_camera_target: false,

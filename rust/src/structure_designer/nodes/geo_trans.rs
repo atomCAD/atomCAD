@@ -90,7 +90,14 @@ impl NodeData for GeoTransData {
           Err(error) => return error,
         };
     
-        let real_translation = translation.as_dvec3();
+        let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
+
+        let cubic = shape.unit_cell.is_approximately_cubic();
+
+        if (!cubic) && rotation != IVec3::ZERO {
+          return NetworkResult::Error("Nonzero rotation is only allowed for cubic unit cells for now.".to_string())
+        }
+
         let rotation_euler = rotation.as_dvec3() * PI * 0.5;
         let rotation_quat = DQuat::from_euler(
           glam::EulerRot::XYZ,
@@ -118,9 +125,9 @@ impl NodeData for GeoTransData {
           rot.mul_vec3(-shape.frame_transform.translation) + frame_transform.translation, 
           rot
         );
-    
+
         return NetworkResult::Geometry(GeometrySummary {
-          unit_cell: UnitCellStruct::cubic_diamond(),
+          unit_cell: shape.unit_cell,
           frame_transform,
           geo_tree_root: GeoNode::Transform {
             transform: tr,
