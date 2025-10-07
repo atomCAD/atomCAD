@@ -77,7 +77,7 @@ impl GeoNode {
   
     let tr = center_pos - dir * width * 0.5 - normal * height;
 
-    CSG::square(width, height, None)
+    CSG::rectangle(width, height, None)
     .rotate(0.0, 0.0, dir.y.atan2(dir.x).to_degrees())
     .translate(tr.x, tr.y, 0.0)
   }

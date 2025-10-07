@@ -709,9 +709,9 @@ dependencies = [
 
 [[package]]
 name = "csgrs"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e443292ccb25f481b8f2d00bf42a520cfe5dc9328cd5b4704c920d8a4bd3f06"
+checksum = "d37d871a1435e972d476ab82bc4665eb6d32f1230a04a04a09ed1641f6a862cb"
 dependencies = [
  "chull",
  "contour_tracing",
