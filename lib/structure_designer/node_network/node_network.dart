@@ -297,7 +297,11 @@ class NodeNetworkState extends State<NodeNetwork> {
             focusNode: focusNode,
             autofocus: true,
             onKeyEvent: (node, event) {
-              if (event.logicalKey == LogicalKeyboardKey.delete) {
+              print("node_network.dart event.logicalKey: " + event.logicalKey.toString());
+              if (event.logicalKey == LogicalKeyboardKey.delete
+              || event.logicalKey == LogicalKeyboardKey.backspace
+              || event.logicalKey == LogicalKeyboardKey.keyD
+              || event.physicalKey == PhysicalKeyboardKey.delete) {
                 model.removeSelected();
                 return KeyEventResult.handled;
               }
