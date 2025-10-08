@@ -209,7 +209,12 @@ impl GeoNode {
     
     let mut result = shapes[0].internal_to_csg_mesh(false)?;
     for shape in shapes.iter().skip(1) {
-      result = result.intersection(&shape.internal_to_csg_mesh(false)?);
+      let shape_mesh = shape.internal_to_csg_mesh(false)?;
+      println!("Before CSG mesh intersection");
+      println!("result mesh: {:?}", result);
+      println!("shape_mesh: {:?}", shape_mesh);
+      result = result.intersection(&shape_mesh);
+      println!("After CSG mesh intersection");
     }
     Some(result)
   }
@@ -220,7 +225,6 @@ impl GeoNode {
     Some(base_csg.difference(&sub_csg))
   }
 }
-
 
 pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) -> CSGMesh {
   let na_normal = dvec3_to_vector3(*normal);
@@ -255,4 +259,228 @@ pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) 
 
   return CSGMesh::from_polygons(&polygons, None)
     .translate(center_pos.x, center_pos.y, center_pos.z);
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use csgrs::mesh::Mesh;
+  use csgrs::mesh::vertex::Vertex;
+  use csgrs::mesh::polygon::Polygon;
+  use csgrs::mesh::plane::Plane;
+  use std::sync::OnceLock;
+  use nalgebra::{Point3, Vector3};
+
+  #[test]
+  fn debug_csg_intersection_hang() {
+    // Create the exact mesh data that causes the hang
+    let result_mesh = create_result_mesh();
+    let shape_mesh = create_shape_mesh();
+    
+    println!("Starting CSG intersection test...");
+    println!("Result mesh polygons: {}", result_mesh.polygons.len());
+    println!("Shape mesh polygons: {}", shape_mesh.polygons.len());
+    
+    // This is where the hang occurs - set breakpoint here
+    let intersection_result = result_mesh.intersection(&shape_mesh);
+    
+    println!("CSG intersection completed successfully!");
+    println!("Result polygons: {}", intersection_result.polygons.len());
+  }
+
+  fn create_result_mesh() -> Mesh<()> {
+    let polygons = vec![
+      // Polygon 1 - Left face
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(-7.1339999999999995, 10.700999999999997, 7.134000000000002), normal: Vector3::new(1.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(-7.1339999999999995, 10.700999999999997, -7.1340000000000146), normal: Vector3::new(1.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(-7.134000000000001, 3.567000000000021, -7.1340000000000146), normal: Vector3::new(1.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(-7.134000000000001, 3.567000000000022, 7.1340000000000146), normal: Vector3::new(1.0, -0.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(-7.134000000000001, 3.567000000000022, 7.1340000000000146), 
+          point_b: Point3::new(-7.1339999999999995, 10.700999999999997, -7.1340000000000146), 
+          point_c: Point3::new(-7.134000000000001, 3.567000000000021, -7.1340000000000146) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 2 - Right face
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(7.134000000000001, 3.567000000000021, 7.134000000000002), normal: Vector3::new(-1.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(7.134000000000001, 3.567000000000022, -7.1340000000000146), normal: Vector3::new(-1.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(7.1339999999999995, 10.700999999999997, -7.1340000000000146), normal: Vector3::new(-1.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(7.1339999999999995, 10.700999999999997, 7.1340000000000146), normal: Vector3::new(-1.0, -0.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(7.1339999999999995, 10.700999999999997, 7.1340000000000146), 
+          point_b: Point3::new(7.134000000000001, 3.567000000000022, -7.1340000000000146), 
+          point_c: Point3::new(7.1339999999999995, 10.700999999999997, -7.1340000000000146) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 3 - Bottom face
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(7.134000000000008, 3.567000000000001, -7.1340000000000146), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(7.134000000000008, 3.567000000000001, 7.1340000000000146), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(-7.1340000000000146, 3.5669999999999993, 7.134000000000002), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(-7.1340000000000146, 3.5669999999999993, -7.1340000000000146), normal: Vector3::new(-0.0, -1.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(7.134000000000008, 3.567000000000001, 7.1340000000000146), 
+          point_b: Point3::new(-7.1340000000000146, 3.5669999999999993, -7.1340000000000146), 
+          point_c: Point3::new(7.134000000000008, 3.567000000000001, -7.1340000000000146) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 4 - Top face
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(-7.1340000000000146, 10.701, -7.1340000000000146), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(-7.1340000000000146, 10.701, 7.1340000000000146), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(7.134000000000008, 10.701, 7.134000000000002), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(7.134000000000008, 10.701, -7.1340000000000146), normal: Vector3::new(-0.0, -1.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(-7.1340000000000146, 10.701, 7.1340000000000146), 
+          point_b: Point3::new(7.134000000000008, 10.701, -7.1340000000000146), 
+          point_c: Point3::new(-7.1340000000000146, 10.701, -7.1340000000000146) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 5 - Back face
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(7.13400000000001, 10.700999999999993, -7.1339999999999995), normal: Vector3::new(0.0, 0.0, 1.0) },
+          Vertex { pos: Point3::new(7.134000000000012, 3.5670000000000357, -7.134000000000001), normal: Vector3::new(0.0, 0.0, 1.0) },
+          Vertex { pos: Point3::new(-7.134000000000015, 3.5670000000000073, -7.134000000000001), normal: Vector3::new(0.0, 0.0, 1.0) },
+          Vertex { pos: Point3::new(-7.134000000000014, 10.701, -7.1339999999999995), normal: Vector3::new(0.0, 0.0, 1.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(7.13400000000001, 10.700999999999993, -7.1339999999999995), 
+          point_b: Point3::new(-7.134000000000015, 3.5670000000000073, -7.134000000000001), 
+          point_c: Point3::new(-7.134000000000014, 10.701, -7.1339999999999995) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 6 - Front face
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(7.134000000000005, 3.5670000000000073, 7.134000000000001), normal: Vector3::new(0.0, 0.0, -1.0) },
+          Vertex { pos: Point3::new(7.134000000000003, 10.701, 7.1339999999999995), normal: Vector3::new(0.0, 0.0, -1.0) },
+          Vertex { pos: Point3::new(-7.134000000000028, 10.700999999999993, 7.1339999999999995), normal: Vector3::new(0.0, 0.0, -1.0) },
+          Vertex { pos: Point3::new(-7.13400000000003, 3.5670000000000357, 7.134000000000001), normal: Vector3::new(0.0, 0.0, -1.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(-7.134000000000028, 10.700999999999993, 7.1339999999999995), 
+          point_b: Point3::new(7.134000000000005, 3.5670000000000073, 7.134000000000001), 
+          point_c: Point3::new(7.134000000000003, 10.701, 7.1339999999999995) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      }
+    ];
+
+    Mesh {
+      polygons,
+      bounding_box: OnceLock::new(),
+      metadata: None
+    }
+  }
+
+  fn create_shape_mesh() -> Mesh<()> {
+    let polygons = vec![
+      // Polygon 1 - Triangle face 1
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(0.0, 0.0, 3.567), normal: Vector3::new(0.0, 1.0, 0.0) },
+          Vertex { pos: Point3::new(-3.567, 0.0, -3.567), normal: Vector3::new(0.0, 1.0, 0.0) },
+          Vertex { pos: Point3::new(3.567, 0.0, -3.567), normal: Vector3::new(0.0, 1.0, 0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(-3.567, -3.567, 0.0), 
+          point_b: Point3::new(3.567, -3.567, 0.0), 
+          point_c: Point3::new(0.0, 3.567, 0.0) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 2 - Triangle face 2
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(3.567, 14.268, -3.567), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(-3.567, 14.268, -3.567), normal: Vector3::new(-0.0, -1.0, -0.0) },
+          Vertex { pos: Point3::new(0.0, 14.268, 3.567), normal: Vector3::new(-0.0, -1.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(-3.567, -3.567, 14.268), 
+          point_b: Point3::new(0.0, 3.567, 14.268), 
+          point_c: Point3::new(3.567, -3.567, 14.268) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 3 - Quad face 1
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(-3.567, 14.268, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(3.567, 14.268, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(3.567, 0.0, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(-3.567, 0.0, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(3.567, -3.567, 0.0), 
+          point_b: Point3::new(-3.567, -3.567, 14.268), 
+          point_c: Point3::new(3.567, -3.567, 14.268) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 4 - Quad face 2
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(3.567, 14.268, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(0.0, 14.268, 3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(0.0, 0.0, 3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(3.567, 0.0, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(0.0, 3.567, 0.0), 
+          point_b: Point3::new(3.567, -3.567, 14.268), 
+          point_c: Point3::new(0.0, 3.567, 14.268) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      },
+      // Polygon 5 - Quad face 3
+      Polygon {
+        vertices: vec![
+          Vertex { pos: Point3::new(0.0, 14.268, 3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(-3.567, 14.268, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(-3.567, 0.0, -3.567), normal: Vector3::new(-0.0, -0.0, -0.0) },
+          Vertex { pos: Point3::new(0.0, 0.0, 3.567), normal: Vector3::new(-0.0, -0.0, -0.0) }
+        ],
+        plane: Plane { 
+          point_a: Point3::new(-3.567, -3.567, 0.0), 
+          point_b: Point3::new(0.0, 3.567, 14.268), 
+          point_c: Point3::new(-3.567, -3.567, 14.268) 
+        },
+        bounding_box: OnceLock::new(),
+        metadata: None
+      }
+    ];
+
+    Mesh {
+      polygons,
+      bounding_box: OnceLock::new(),
+      metadata: None
+    }
+  }
 }
