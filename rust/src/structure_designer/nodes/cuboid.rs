@@ -179,6 +179,8 @@ fn create_parallelepiped_from_lattice(
     center: max_face_center_c,
   });
   
+
+  
   // Return the intersection of all half-spaces
   GeoNode::Intersection3D {
     shapes: half_spaces

@@ -259,7 +259,6 @@ impl Gadget for HalfPlaneGadget {
         let intersection_point = ray_origin + ray_direction * t;
         
         // Convert the 3D point to lattice coordinates
-        //TODO: create metod in UnitCellStruct to convert from real space to lattice space.
         let lattice_pos = self.unit_cell.real_to_ivec3_lattice(&intersection_point);
         
         // Update the appropriate point
