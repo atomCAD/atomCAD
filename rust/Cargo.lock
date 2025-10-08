@@ -432,7 +432,7 @@ version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d067ad48b8650848b989a59a86c6c36a995d02d2bf778d45c3c5d57bc2718f02"
 dependencies = [
- "smallvec 1.13.2",
+ "smallvec",
  "target-lexicon",
 ]
 
@@ -709,9 +709,9 @@ dependencies = [
 
 [[package]]
 name = "csgrs"
-version = "0.19.1"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d37d871a1435e972d476ab82bc4665eb6d32f1230a04a04a09ed1641f6a862cb"
+checksum = "b004da954c4987881c668e0051f6c69a23d035b4b406eee539772db4d4944025"
 dependencies = [
  "chull",
  "contour_tracing",
@@ -723,13 +723,15 @@ dependencies = [
  "geo",
  "geo-buf",
  "hashbrown 0.15.2",
+ "hershey",
  "image",
  "nalgebra",
+ "nom",
  "parry3d-f64",
  "rapier3d-f64",
  "robust",
- "small_str",
  "stl_io",
+ "svg",
  "thiserror 2.0.12",
  "ttf-parser",
  "ttf-parser-utils",
@@ -1049,7 +1051,7 @@ dependencies = [
  "lebe",
  "miniz_oxide 0.8.9",
  "rayon-core",
- "smallvec 1.13.2",
+ "smallvec",
  "zune-inflate",
 ]
 
@@ -1621,6 +1623,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 
 [[package]]
+name = "hershey"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d3cafa4047531c5386484c8f03dd90ff59c6dd96f8f011c32e13728692d1bbb"
+dependencies = [
+ "itertools 0.14.0",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1895,6 +1907,15 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -2495,7 +2516,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall",
- "smallvec 1.13.2",
+ "smallvec",
  "windows-targets 0.52.6",
 ]
 
@@ -2939,7 +2960,7 @@ checksum = "421400d13ccfd26dfa5858199c30a5d76f9c54e0dba7575273025b43c5175dbb"
 dependencies = [
  "heapless",
  "num-traits 0.2.19",
- "smallvec 1.13.2",
+ "smallvec",
 ]
 
 [[package]]
@@ -3218,26 +3239,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "small_str"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7630599c133ab7e0f5e3eeabdac3bd35091211aec6a9f962150b3f558ca4444"
-dependencies = [
- "serde",
- "smallvec 2.0.0-alpha.11",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
-
-[[package]]
-name = "smallvec"
-version = "2.0.0-alpha.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87b96efa4bd6bdd2ff0c6615cc36fc4970cbae63cfd46ddff5cee35a1b4df570"
 
 [[package]]
 name = "socket2"
@@ -3258,7 +3263,7 @@ dependencies = [
  "hashbrown 0.15.2",
  "num-traits 0.2.19",
  "robust",
- "smallvec 1.13.2",
+ "smallvec",
 ]
 
 [[package]]
@@ -3316,6 +3321,12 @@ dependencies = [
  "rustversion",
  "syn 2.0.96",
 ]
+
+[[package]]
+name = "svg"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94afda9cd163c04f6bee8b4bf2501c91548deae308373c436f36aeff3cf3c4a3"
 
 [[package]]
 name = "syn"
@@ -3803,7 +3814,7 @@ dependencies = [
  "parking_lot",
  "profiling",
  "raw-window-handle",
- "smallvec 1.13.2",
+ "smallvec",
  "static_assertions",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -3832,7 +3843,7 @@ dependencies = [
  "profiling",
  "raw-window-handle",
  "rustc-hash 1.1.0",
- "smallvec 1.13.2",
+ "smallvec",
  "thiserror 1.0.69",
  "wgpu-hal",
  "wgpu-types",
@@ -3874,7 +3885,7 @@ dependencies = [
  "raw-window-handle",
  "renderdoc-sys",
  "rustc-hash 1.1.0",
- "smallvec 1.13.2",
+ "smallvec",
  "thiserror 1.0.69",
  "wasm-bindgen",
  "web-sys",

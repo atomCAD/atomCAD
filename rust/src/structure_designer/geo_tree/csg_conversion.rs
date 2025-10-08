@@ -1,40 +1,29 @@
+use csgrs::traits::CSG;
 use glam::f64::{DVec2, DVec3, DQuat};
-use crate::common::csg_types::CSG;
+use crate::common::csg_types::CSGMesh;
+use crate::common::csg_types::CSGSketch;
 use super::GeoNode;
 use crate::util::transform::Transform;
-use crate::structure_designer::utils::half_space_utils::HalfSpaceVisualization;
 use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
-use csgrs::polygon::Polygon;
-use csgrs::vertex::Vertex;
+use csgrs::mesh::polygon::Polygon;
+use csgrs::mesh::vertex::Vertex;
 
 impl GeoNode {
-  pub fn to_csg(&self) -> CSG {
-    self.internal_to_csg(true)
+  pub fn to_csg_mesh(&self) -> Option<CSGMesh> {
+    self.internal_to_csg_mesh(true)
   }
 
-  fn internal_to_csg(&self, is_root: bool) -> CSG {
+  pub fn to_csg_sketch(&self) -> Option<CSGSketch> {
     match self {
-      GeoNode::HalfSpace { normal, center} => {
-        Self::half_space_to_csg(*normal, *center, is_root)
-      }
       GeoNode::HalfPlane { point1, point2 } => {
-        Self::half_plane_to_csg(*point1, *point2)
+        Some(Self::half_plane_to_csg(*point1, *point2))
       }
       GeoNode::Circle { center, radius } => {
-        Self::circle_to_csg(*center, *radius)
-      }
-      GeoNode::Sphere { center, radius } => {
-        Self::sphere_to_csg(*center, *radius)
+        Some(Self::circle_to_csg(*center, *radius))
       }
       GeoNode::Polygon { vertices } => {
-        Self::polygon_to_csg(vertices)
-      }
-      GeoNode::Extrude { height, direction, shape } => {
-        Self::extrude_to_csg(*height, *direction, shape)
-      }
-      GeoNode::Transform { transform, shape } => {
-        Self::transform_to_csg(transform, shape)
+        Some(Self::polygon_to_csg(vertices))
       }
       GeoNode::Union2D { shapes } => {
         Self::union_2d_to_csg(shapes)
@@ -45,6 +34,24 @@ impl GeoNode {
       GeoNode::Difference2D { base, sub } => {
         Self::difference_2d_to_csg(base, sub)
       }
+      _ => None
+    }    
+  }
+
+  fn internal_to_csg_mesh(&self, is_root: bool) -> Option<CSGMesh> {
+    match self {
+      GeoNode::HalfSpace { normal, center} => {
+        Some(Self::half_space_to_csg(*normal, *center, is_root))
+      }
+      GeoNode::Sphere { center, radius } => {
+        Some(Self::sphere_to_csg(*center, *radius))
+      }
+      GeoNode::Extrude { height, direction, shape } => {
+        Self::extrude_to_csg(*height, *direction, shape)
+      }
+      GeoNode::Transform { transform, shape } => {
+        Self::transform_to_csg(transform, shape)
+      }
       GeoNode::Union3D { shapes } => {
         Self::union_3d_to_csg(shapes)
       }
@@ -54,17 +61,18 @@ impl GeoNode {
       GeoNode::Difference3D { base, sub } => {
         Self::difference_3d_to_csg(base, sub)
       }
+      _ => None
     }
   }
 
-  fn half_space_to_csg(normal: DVec3, center: DVec3, is_root: bool) -> CSG {
+  fn half_space_to_csg(normal: DVec3, center: DVec3, is_root: bool) -> CSGMesh {
     create_half_space_geo(
           &normal,
           &center,
           is_root)
   }
 
-  fn half_plane_to_csg(point1: DVec2, point2: DVec2) -> CSG {
+  fn half_plane_to_csg(point1: DVec2, point2: DVec2) -> CSGSketch {
     // Calculate direction vector from point1 to point2
     let dir_vector = point2 - point1;
     let dir = dir_vector.normalize();
@@ -77,13 +85,13 @@ impl GeoNode {
   
     let tr = center_pos - dir * width * 0.5 - normal * height;
 
-    CSG::rectangle(width, height, None)
+    CSGSketch::rectangle(width, height, None)
     .rotate(0.0, 0.0, dir.y.atan2(dir.x).to_degrees())
     .translate(tr.x, tr.y, 0.0)
   }
 
-  fn circle_to_csg(center: DVec2, radius: f64) -> CSG {
-    CSG::circle(
+  fn circle_to_csg(center: DVec2, radius: f64) -> CSGSketch {
+    CSGSketch::circle(
       radius,
       32,
       None
@@ -91,8 +99,8 @@ impl GeoNode {
     .translate(center.x, center.y, 0.0)
   }
 
-  fn sphere_to_csg(center: DVec3, radius: f64) -> CSG {
-    CSG::sphere(
+  fn sphere_to_csg(center: DVec3, radius: f64) -> CSGMesh {
+    CSGMesh::sphere(
       radius,
       24,
       12,
@@ -101,17 +109,17 @@ impl GeoNode {
       .translate(center.x, center.y, center.z)
   }
 
-  fn polygon_to_csg(vertices: &Vec<DVec2>) -> CSG {
+  fn polygon_to_csg(vertices: &Vec<DVec2>) -> CSGSketch {
     let mut points: Vec<[f64; 2]> = Vec::new();
   
     for i in 0..vertices.len() {
         points.push([vertices[i].x, vertices[i].y]);
     }
   
-    CSG::polygon(&points, None)
+    CSGSketch::polygon(&points, None)
   }
 
-  fn extrude_to_csg(height: f64, direction: DVec3, shape: &Box<GeoNode>) -> CSG {
+  fn extrude_to_csg(height: f64, direction: DVec3, shape: &Box<GeoNode>) -> Option<CSGMesh> {
       // Calculate the extrusion vector by multiplying height with normalized direction
       let mut extrusion_vector = dvec3_to_vector3(direction * height);
       // swap y and z in the extrusion vector
@@ -120,7 +128,8 @@ impl GeoNode {
       extrusion_vector.z = tmp;
 
       // Use the new extrude_vector method instead of the old extrude method
-      let mut extruded = shape.internal_to_csg(false).extrude_vector(extrusion_vector);
+      let sketch = shape.to_csg_sketch()?;
+      let mut extruded = sketch.extrude_vector(extrusion_vector);
 
       // swap y and z coordinates to match atomCAD coordinate system
       for polygon in &mut extruded.polygons {        
@@ -135,84 +144,85 @@ impl GeoNode {
         }
       }
 
-      extruded.inverse()
+      Some(extruded.inverse())
   }
 
-  fn transform_to_csg(transform: &Transform, shape: &Box<GeoNode>) -> CSG {
+  fn transform_to_csg(transform: &Transform, shape: &Box<GeoNode>) -> Option<CSGMesh> {
     // TODO: Implement transform to CSG conversion
     let euler_extrinsic_zyx = transform.rotation.to_euler(glam::EulerRot::ZYX);
-    shape.internal_to_csg(false)
+    let mesh = shape.internal_to_csg_mesh(false)?;
+    Some(mesh
       .rotate(
         euler_extrinsic_zyx.2.to_degrees(), 
         euler_extrinsic_zyx.1.to_degrees(), 
         euler_extrinsic_zyx.0.to_degrees()
       )
-      .translate(transform.translation.x, transform.translation.y, transform.translation.z)
+      .translate(transform.translation.x, transform.translation.y, transform.translation.z))
   }
 
-  fn union_2d_to_csg(shapes: &Vec<GeoNode>) -> CSG {
+  fn union_2d_to_csg(shapes: &Vec<GeoNode>) -> Option<CSGSketch> {
     if shapes.is_empty() {
-      return CSG::new();
+      return Some(CSGSketch::new());
     }
     
-    let mut result = shapes[0].internal_to_csg(false);
+    let mut result = shapes[0].to_csg_sketch()?;
     for shape in shapes.iter().skip(1) {
-      result = result.union(&shape.internal_to_csg(false));
+      result = result.union(&shape.to_csg_sketch()?);
     }
-    result
+    Some(result)
   }
 
-  fn intersection_2d_to_csg(shapes: &Vec<GeoNode>) -> CSG {
+  fn intersection_2d_to_csg(shapes: &Vec<GeoNode>) -> Option<CSGSketch> {
     if shapes.is_empty() {
-      return CSG::new();
+      return Some(CSGSketch::new());
     }
     
-    let mut result = shapes[0].internal_to_csg(false);
+    let mut result = shapes[0].to_csg_sketch()?;
     for shape in shapes.iter().skip(1) {
-      result = result.intersection(&shape.internal_to_csg(false));
+      result = result.intersection(&shape.to_csg_sketch()?);
     }
-    result
+    Some(result)
   }
 
-  fn difference_2d_to_csg(base: &Box<GeoNode>, sub: &Box<GeoNode>) -> CSG {
-    let base_csg = base.internal_to_csg(false);
-    let sub_csg = sub.internal_to_csg(false);
-    base_csg.difference(&sub_csg)
+  fn difference_2d_to_csg(base: &Box<GeoNode>, sub: &Box<GeoNode>) -> Option<CSGSketch> {
+    let base_csg = base.to_csg_sketch()?;
+    let sub_csg = sub.to_csg_sketch()?;
+    Some(base_csg.difference(&sub_csg))
   }
 
-  fn union_3d_to_csg(shapes: &Vec<GeoNode>) -> CSG {
+  fn union_3d_to_csg(shapes: &Vec<GeoNode>) -> Option<CSGMesh> {
     if shapes.is_empty() {
-      return CSG::new();
+      return Some(CSGMesh::new());
     }
     
-    let mut result = shapes[0].internal_to_csg(false);
+    let mut result = shapes[0].internal_to_csg_mesh(false)?;
     for shape in shapes.iter().skip(1) {
-      result = result.union(&shape.internal_to_csg(false));
+      result = result.union(&shape.internal_to_csg_mesh(false)?);
     }
-    result
+    Some(result)
   }
 
-  fn intersection_3d_to_csg(shapes: &Vec<GeoNode>) -> CSG {
+  fn intersection_3d_to_csg(shapes: &Vec<GeoNode>) -> Option<CSGMesh> {
     if shapes.is_empty() {
-      return CSG::new();
+      return Some(CSGMesh::new());
     }
     
-    let mut result = shapes[0].internal_to_csg(false);
+    let mut result = shapes[0].internal_to_csg_mesh(false)?;
     for shape in shapes.iter().skip(1) {
-      result = result.intersection(&shape.internal_to_csg(false));
+      result = result.intersection(&shape.internal_to_csg_mesh(false)?);
     }
-    result
+    Some(result)
   }
 
-  fn difference_3d_to_csg(base: &Box<GeoNode>, sub: &Box<GeoNode>) -> CSG {
-    let base_csg = base.internal_to_csg(false);
-    let sub_csg = sub.internal_to_csg(false);
-    base_csg.difference(&sub_csg)
+  fn difference_3d_to_csg(base: &Box<GeoNode>, sub: &Box<GeoNode>) -> Option<CSGMesh> {
+    let base_csg = base.internal_to_csg_mesh(false)?;
+    let sub_csg = sub.internal_to_csg_mesh(false)?;
+    Some(base_csg.difference(&sub_csg))
   }
 }
 
 
-pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) -> CSG {
+pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) -> CSGMesh {
   let na_normal = dvec3_to_vector3(*normal);
   let rotation = DQuat::from_rotation_arc(DVec3::Y, *normal);
 
@@ -243,6 +253,6 @@ pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) 
         ),
       ];
 
-  return CSG::from_polygons(&polygons)
+  return CSGMesh::from_polygons(&polygons, None)
     .translate(center_pos.x, center_pos.y, center_pos.z);
 }

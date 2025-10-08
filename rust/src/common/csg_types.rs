@@ -1,6 +1,7 @@
 // csg_types.rs
-// Central definition for CSG (Constructive Solid Geometry) type
+// Central definition for CSG (Constructive Solid Geometry) types
 
-/// Default CSG type with empty metadata.
+/// Default CSG types with empty metadata.
 /// This provides a consistent type alias that can be used throughout the project.
-pub type CSG = csgrs::csg::CSG<()>;
+pub type CSGMesh = csgrs::mesh::Mesh<()>;
+pub type CSGSketch = csgrs::sketch::Sketch<()>;

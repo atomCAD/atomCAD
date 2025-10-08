@@ -1,8 +1,9 @@
-use crate::common::csg_types::CSG;
+use crate::common::csg_types::CSGMesh;
+use crate::common::csg_types::CSGSketch;
 use crate::common::poly_mesh::PolyMesh;
 use crate::common::unique_3d_points::Unique3DPoints;
 use glam::DVec3;
-use csgrs::{float_types::Real, polygon::Polygon, Vertex};
+use csgrs::{float_types::Real, mesh::polygon::Polygon, mesh::vertex::Vertex};
 use nalgebra::{Point3, Vector3};
 use geo::{
     Geometry, Polygon as GeoPolygon, TriangulateEarcut,
@@ -12,43 +13,42 @@ use geo::{
 /// 
 /// This helps avoid issues with floating point precision in the CSG operations, where vertices
 /// that should be identical might have slight differences in their coordinates.
-pub fn convert_csg_to_poly_mesh(csg: &CSG, triangulate_2d: bool, open_3d: bool, hatched: bool) -> PolyMesh {
+pub fn convert_csg_mesh_to_poly_mesh(csg_mesh: &CSGMesh, open_3d: bool, hatched: bool) -> PolyMesh {
+    convert_polygons_to_poly_mesh(&csg_mesh.polygons, open_3d, hatched)
+}
+
+pub fn convert_csg_sketch_to_poly_mesh(csg_sketch: CSGSketch, triangulate_2d: bool) -> PolyMesh {
+ 
+    let mut polys = if triangulate_2d {
+        triangulate_csg_sketch(&csg_sketch)
+    } else {
+        let mesh = CSGMesh::from(csg_sketch);
+        mesh.polygons
+    };
+ 
+    // Transform from XY plane to XZ plane
+    for poly in &mut polys {
+        // Transform each vertex: move Y coordinate to Z, and set y to be just above the grid
+        for vertex in &mut poly.vertices {
+            vertex.pos.z = vertex.pos.y;
+            vertex.pos.y = 0.001;
+        }
+            
+        // Reverse vertex order to maintain correct winding after transformation
+        //poly.vertices.reverse();
+    }
+
+    convert_polygons_to_poly_mesh(&polys, true, false)
+}
+
+fn convert_polygons_to_poly_mesh(polygons: &Vec<Polygon<()>>, open: bool, hatched: bool) -> PolyMesh {
+
     // Use our spatial hashing structure with a small epsilon for vertex precision
     // The epsilon value should be adjusted based on the scale of your models
     let epsilon = 1e-5;
     let mut unique_vertices = Unique3DPoints::new(epsilon);
 
-    let polys_from_2d = if !csg.polygons.is_empty() {
-        Vec::new()
-    } else {
-        let mut polys = if triangulate_2d {
-            triangulate_csg_geometry(csg)
-        } else {
-            csg.to_polygons()
-        };
-        
-        // Transform from XY plane to XZ plane
-        for poly in &mut polys {
-            // Transform each vertex: move Y coordinate to Z, and set y to be just above the grid
-            for vertex in &mut poly.vertices {
-                vertex.pos.z = vertex.pos.y;
-                vertex.pos.y = 0.001;
-            }
-            
-            // Reverse vertex order to maintain correct winding after transformation
-            //poly.vertices.reverse();
-        }
-        
-        polys
-    };
-
-    let polygons = if !csg.polygons.is_empty() {
-        &csg.polygons
-    } else {
-        &polys_from_2d
-    };
-
-    let mut poly_mesh = PolyMesh::new(csg.polygons.is_empty() || open_3d, hatched);
+    let mut poly_mesh = PolyMesh::new(open, hatched);
 
     // Process each polygon in the CSG
     for polygon in polygons {
@@ -102,10 +102,10 @@ fn triangulate_geo_polygon(poly2d: &GeoPolygon<Real>) -> Vec<Polygon<()>> {
     ret
 }
 
-// Triangulate the geometry of a CSG object into 3D CSG polygons
-fn triangulate_csg_geometry(csg: &CSG) -> Vec<Polygon<()>> {
+// Triangulate a CSG sketch object into 3D CSG polygons
+fn triangulate_csg_sketch(csg_sketch: &CSGSketch) -> Vec<Polygon<()>> {
     let mut ret = Vec::new();
-    for geom in csg.geometry.iter() {
+    for geom in csg_sketch.geometry.iter() {
         match geom {
             Geometry::Polygon(poly2d) => {
                 ret.extend(triangulate_geo_polygon(&poly2d));

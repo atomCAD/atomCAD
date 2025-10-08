@@ -4,14 +4,14 @@ use std::any::Any;
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
-use crate::structure_designer::common_constants;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud_scene;
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud_scene;
 use crate::structure_designer::implicit_eval::dual_contour_3d::generate_dual_contour_3d_scene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
-use crate::common::csg_utils::convert_csg_to_poly_mesh;
+use crate::common::csg_utils::convert_csg_mesh_to_poly_mesh;
+use crate::common::csg_utils::convert_csg_sketch_to_poly_mesh;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -184,34 +184,52 @@ impl NetworkEvaluator {
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
       let mut scene = StructureDesignerScene::new();
       
-      // Extract CSG from either geometry type (3D or 2D)
-      let csg = match &result {
-        NetworkResult::Geometry(geometry_summary) => Some(geometry_summary.geo_tree_root.to_csg()),
-        NetworkResult::Geometry2D(geometry_summary_2d) => Some(geometry_summary_2d.geo_tree_root.to_csg()),
+      let poly_mesh = match &result {
+        NetworkResult::Geometry(geometry_summary) => { 
+          if let Some(csg_mesh) = geometry_summary.geo_tree_root.to_csg_mesh() {
+            let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+            let is_half_space = node.node_type_name == "half_space";
+            let mut poly_mesh = convert_csg_mesh_to_poly_mesh(
+              &csg_mesh,
+              is_half_space,
+              is_half_space,
+            );
+            poly_mesh.detect_sharp_edges(
+              geometry_visualization_preferences.sharpness_angle_threshold_degree,
+              true
+            );
+            // Highlight faces if the last node is facet_shell and it's selected
+            if node.node_type_name == "facet_shell" && from_selected_node {
+              // Downcast the node data to FacetShellData
+              if let Some(facet_shell_data) = node.data.as_any_ref().downcast_ref::<FacetShellData>() {
+                // Call the highlight method
+                facet_shell_data.highlight_selected_facets(&mut poly_mesh);
+              }
+            }
+            Some(poly_mesh)
+          } else {
+            None
+          }
+        },
+        NetworkResult::Geometry2D(geometry_summary_2d) => {
+          if let Some(csg_sketch) = geometry_summary_2d.geo_tree_root.to_csg_sketch() {
+            let mut poly_mesh = convert_csg_sketch_to_poly_mesh(
+              csg_sketch, 
+              !geometry_visualization_preferences.wireframe_geometry,
+            );
+            poly_mesh.detect_sharp_edges(
+              geometry_visualization_preferences.sharpness_angle_threshold_degree,
+              true
+            );
+            Some(poly_mesh)
+          } else {
+            None
+          }
+        },
         _ => None,
       };
 
-      // Process the CSG if it was found
-      if let Some(csg) = csg {
-        let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
-        let is_half_space = node.node_type_name == "half_space";
-        let mut poly_mesh = convert_csg_to_poly_mesh(
-          &csg, 
-          !geometry_visualization_preferences.wireframe_geometry,
-          is_half_space,
-          is_half_space);
-        poly_mesh.detect_sharp_edges(
-          geometry_visualization_preferences.sharpness_angle_threshold_degree,
-          true
-        );
-        // Highlight faces if the last node is facet_shell and it's selected
-        if node.node_type_name == "facet_shell" && from_selected_node {
-          // Downcast the node data to FacetShellData
-          if let Some(facet_shell_data) = node.data.as_any_ref().downcast_ref::<FacetShellData>() {
-            // Call the highlight method
-            facet_shell_data.highlight_selected_facets(&mut poly_mesh);
-          }
-        }
+      if let Some(poly_mesh) = poly_mesh {
         scene.poly_meshes.push(poly_mesh);
       }
       
