@@ -17,7 +17,6 @@ use crate::util::transform::Transform;
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::geo_tree::GeoNode;
-use crate::structure_designer::common_constants;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use glam::f64::DQuat;
 use crate::structure_designer::node_type::NodeType;
@@ -549,13 +548,19 @@ impl Tessellatable for FacetShellGadget {
       half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);
 
       // Tessellate shift drag handles for all miller index variants
-      for miller_index in &self.miller_index_variants {
-          half_space_utils::tessellate_shift_drag_handle(
-              output_mesh,
-              &self.center,
-              miller_index,
-              self.dragged_shift,
-              &self.unit_cell);
+      // Add defensive check to prevent crashes from corrupted Vec
+      if self.miller_index_variants.len() <= 1000 { // Reasonable upper bound
+          for miller_index in &self.miller_index_variants {
+              half_space_utils::tessellate_shift_drag_handle(
+                  output_mesh,
+                  &self.center,
+                  miller_index,
+                  self.dragged_shift,
+                  &self.unit_cell);
+          }
+      } else {
+          // Log error and skip tessellation if Vec appears corrupted
+          eprintln!("Warning: FacetShellGadget miller_index_variants appears corrupted (len={}), skipping tessellation", self.miller_index_variants.len());
       }
 
       // If we are dragging a handle, show the plane grid for visual reference
@@ -601,17 +606,22 @@ impl Gadget for FacetShellGadget {
       }
       
       // Test shift handle cylinders for all miller index variants
-      for (variant_index, miller_index_variant) in self.miller_index_variants.iter().enumerate() {
-          if let Some(_t) = half_space_utils::hit_test_shift_handle(
-              &self.unit_cell,
-              &self.center,
-              miller_index_variant,
-              self.shift as f64,
-              &ray_origin,
-              &ray_direction
-          ) {
-              return Some(1 + variant_index as i32); // Shift handle hit for this variant
+      // Add defensive check to prevent crashes from corrupted Vec
+      if self.miller_index_variants.len() <= 1000 { // Reasonable upper bound
+          for (variant_index, miller_index_variant) in self.miller_index_variants.iter().enumerate() {
+              if let Some(_t) = half_space_utils::hit_test_shift_handle(
+                  &self.unit_cell,
+                  &self.center,
+                  miller_index_variant,
+                  self.shift as f64,
+                  &ray_origin,
+                  &ray_direction
+              ) {
+                  return Some(1 + variant_index as i32); // Shift handle hit for this variant
+              }
           }
+      } else {
+          eprintln!("Warning: FacetShellGadget miller_index_variants appears corrupted in hit test (len={}), skipping hit testing", self.miller_index_variants.len());
       }
 
       None // No handle was hit
@@ -679,7 +689,13 @@ impl FacetShellGadget {
     pub fn get_dragged_miller_index(&self) -> IVec3 {
         if self.dragged_handle_index.is_some() && self.dragged_handle_index.unwrap() > 0 && !self.miller_index_variants.is_empty() {
           let dragged_variant_index = (self.dragged_handle_index.unwrap() - 1) as usize;
-          return self.miller_index_variants[dragged_variant_index];
+          // Add bounds checking to prevent crashes from corrupted Vec
+          if dragged_variant_index < self.miller_index_variants.len() && self.miller_index_variants.len() <= 1000 {
+              return self.miller_index_variants[dragged_variant_index];
+          } else {
+              eprintln!("Warning: FacetShellGadget miller_index_variants bounds check failed (index={}, len={})", dragged_variant_index, self.miller_index_variants.len());
+              return self.miller_index;
+          }
         } else {
           return self.miller_index;
         }
