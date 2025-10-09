@@ -1,3 +1,4 @@
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
@@ -10,7 +11,6 @@ use glam::f64::DQuat;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::utils::xyz_gadget_utils;
@@ -130,7 +130,8 @@ pub struct AtomTransGadget {
 impl Tessellatable for AtomTransGadget {
     fn tessellate(&self, output_mesh: &mut Mesh) {
         xyz_gadget_utils::tessellate_xyz_gadget(
-            output_mesh, 
+            output_mesh,
+            &UnitCellStruct::cubic_diamond(),
             self.frame_transform.rotation,
             &self.frame_transform.translation,
             true,
@@ -145,6 +146,7 @@ impl Tessellatable for AtomTransGadget {
 impl Gadget for AtomTransGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         xyz_gadget_utils::xyz_gadget_hit_test(
+            &UnitCellStruct::cubic_diamond(),
             self.frame_transform.rotation,
             &self.frame_transform.translation,
             &ray_origin,
@@ -156,6 +158,7 @@ impl Gadget for AtomTransGadget {
     fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
       self.dragged_handle_index = Some(handle_index);
       self.start_drag_offset = xyz_gadget_utils::get_dragged_axis_offset(
+          &UnitCellStruct::cubic_diamond(),
           self.frame_transform.rotation,
           &self.frame_transform.translation,
           handle_index,
@@ -166,6 +169,7 @@ impl Gadget for AtomTransGadget {
   
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
       let current_offset = xyz_gadget_utils::get_dragged_axis_offset(
+          &UnitCellStruct::cubic_diamond(),
           self.frame_transform.rotation,
           &self.frame_transform.translation,
           handle_index,
@@ -222,7 +226,7 @@ impl AtomTransGadget {
             // Translation handles (0, 1, 2)
             0 | 1 | 2 => {
                 // Get the local axis direction based on the current rotation
-                let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, axis_index) {
+                let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(&UnitCellStruct::cubic_diamond(), self.frame_transform.rotation, axis_index) {
                     Some(dir) => dir,
                     None => return false, // Invalid axis index
                 };    
@@ -239,7 +243,7 @@ impl AtomTransGadget {
                 let rotation_axis_index = axis_index - 3;
                 
                 // Get the local axis direction for rotation
-                let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, rotation_axis_index) {
+                let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(&UnitCellStruct::cubic_diamond(), self.frame_transform.rotation, rotation_axis_index) {
                     Some(dir) => dir,
                     None => return false, // Invalid axis index
                 };

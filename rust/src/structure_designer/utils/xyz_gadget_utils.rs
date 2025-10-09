@@ -4,6 +4,7 @@ use glam::Vec3;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::util::hit_test_utils::{arrow_hit_test, get_closest_point_on_first_ray, cylinder_hit_test};
 
 pub const AXIS_CYLINDER_LENGTH: f64 = 6.0;
@@ -19,10 +20,10 @@ pub const ROTATION_HANDLE_LENGTH: f64 = 1.4;
 pub const ROTATION_HANDLE_OFFSET: f64 = 5.0;
 pub const ROTATION_SENSITIVITY: f64 = 0.2; // radians per unit offset delta
 
-pub fn tessellate_xyz_gadget(output_mesh: &mut Mesh, rotation_quat: DQuat, pos: &DVec3, include_rotation_handles: bool) {        
-  let x_axis_dir = rotation_quat.mul_vec3(DVec3::new(1.0, 0.0, 0.0));
-  let y_axis_dir = rotation_quat.mul_vec3(DVec3::new(0.0, 1.0, 0.0));
-  let z_axis_dir = rotation_quat.mul_vec3(DVec3::new(0.0, 0.0, 1.0));
+pub fn tessellate_xyz_gadget(output_mesh: &mut Mesh, unit_cell: &UnitCellStruct, rotation_quat: DQuat, pos: &DVec3, include_rotation_handles: bool) {
+  let x_axis_dir = rotation_quat.mul_vec3(unit_cell.a.normalize());
+  let y_axis_dir = rotation_quat.mul_vec3(unit_cell.b.normalize());
+  let z_axis_dir = rotation_quat.mul_vec3(unit_cell.c.normalize());
 
   if include_rotation_handles {
     tessellate_rotation_handle(output_mesh, &pos, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0));
@@ -119,15 +120,16 @@ pub fn axis_arrow_hit_test(
 }
 
 pub fn xyz_gadget_hit_test(
+    unit_cell: &UnitCellStruct,
     rotation_quat: DQuat,
     pos: &DVec3,
     ray_origin: &DVec3,
     ray_direction: &DVec3,
     include_rotation_handles: bool
 ) -> Option<i32> {
-    let x_axis_dir = rotation_quat.mul_vec3(DVec3::new(1.0, 0.0, 0.0));
-    let y_axis_dir = rotation_quat.mul_vec3(DVec3::new(0.0, 1.0, 0.0));
-    let z_axis_dir = rotation_quat.mul_vec3(DVec3::new(0.0, 0.0, 1.0));
+    let x_axis_dir = rotation_quat.mul_vec3(unit_cell.a.normalize());
+    let y_axis_dir = rotation_quat.mul_vec3(unit_cell.b.normalize());
+    let z_axis_dir = rotation_quat.mul_vec3(unit_cell.c.normalize());
 
     // Test hit against axis arrows (parameters depend on whether rotation handles are enabled)
     let (axis_start_offset, axis_cylinder_length) = if include_rotation_handles {
@@ -222,6 +224,7 @@ pub fn xyz_gadget_hit_test(
 }
 
 pub fn get_dragged_axis_offset(
+    unit_cell: &UnitCellStruct,
     rotation_quat: DQuat,
     pos: &DVec3,
     dragged_axis_index: i32,
@@ -231,9 +234,9 @@ pub fn get_dragged_axis_offset(
     // Get the axis direction based on the dragged axis index
     // Rotation handles (3, 4, 5) map to the same axes as translation handles (0, 1, 2)
     let axis_dir = match dragged_axis_index {
-        0 | 3 => rotation_quat.mul_vec3(DVec3::new(1.0, 0.0, 0.0)), // X axis
-        1 | 4 => rotation_quat.mul_vec3(DVec3::new(0.0, 1.0, 0.0)), // Y axis
-        2 | 5 => rotation_quat.mul_vec3(DVec3::new(0.0, 0.0, 1.0)), // Z axis
+        0 | 3 => rotation_quat.mul_vec3(unit_cell.a.normalize()), // X axis
+        1 | 4 => rotation_quat.mul_vec3(unit_cell.b.normalize()), // Y axis
+        2 | 5 => rotation_quat.mul_vec3(unit_cell.c.normalize()), // Z axis
         _ => DVec3::new(1.0, 0.0, 0.0), // Default to X axis for invalid input
     };
 
@@ -248,11 +251,11 @@ pub fn get_dragged_axis_offset(
     )
 }
 
-pub fn get_local_axis_direction(rotation_quat: DQuat, axis_index: i32) -> Option<DVec3> {
+pub fn get_local_axis_direction(unit_cell: &UnitCellStruct, rotation_quat: DQuat, axis_index: i32) -> Option<DVec3> {
     match axis_index {
-        0 => Some(rotation_quat.mul_vec3(DVec3::new(1.0, 0.0, 0.0))), // X axis
-        1 => Some(rotation_quat.mul_vec3(DVec3::new(0.0, 1.0, 0.0))), // Y axis
-        2 => Some(rotation_quat.mul_vec3(DVec3::new(0.0, 0.0, 1.0))), // Z axis
+        0 => Some(rotation_quat.mul_vec3(unit_cell.a.normalize())), // X axis
+        1 => Some(rotation_quat.mul_vec3(unit_cell.b.normalize())), // Y axis
+        2 => Some(rotation_quat.mul_vec3(unit_cell.c.normalize())), // Z axis
         _ => None, // Invalid axis index
     }
 }

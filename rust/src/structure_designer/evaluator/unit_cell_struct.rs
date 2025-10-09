@@ -312,4 +312,23 @@ impl UnitCellStruct {
   pub fn ivec3_miller_index_to_normal(&self, miller_indices: &IVec3) -> DVec3 {
     self.ivec3_miller_index_to_plane_props(miller_indices).normal
   }
+
+  /// Returns a basis vector by its index.
+  /// 
+  /// # Arguments
+  /// * `index` - Index of the basis vector (0 = a, 1 = b, 2 = c)
+  /// 
+  /// # Returns
+  /// * The corresponding basis vector as DVec3
+  /// 
+  /// # Panics
+  /// * Panics if index is not 0, 1, or 2
+  pub fn get_basis_vector(&self, index: i32) -> DVec3 {
+    match index {
+      0 => self.a,
+      1 => self.b,
+      2 => self.c,
+      _ => panic!("Basis vector index must be 0, 1, or 2, got {}", index),
+    }
+  }
 }

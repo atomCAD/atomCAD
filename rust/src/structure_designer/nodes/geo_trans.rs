@@ -28,6 +28,7 @@ use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 #[derive(Debug, Clone)]
 pub struct GeoTransEvalCache {
   pub input_frame_transform: Transform,
+  pub unit_cell: UnitCellStruct,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +49,7 @@ impl NodeData for GeoTransData {
             self.translation,
             self.rotation,
             geo_trans_cache.input_frame_transform.clone(),
+            &geo_trans_cache.unit_cell,
         );
         Some(Box::new(gadget))
     }
@@ -111,6 +113,7 @@ impl NodeData for GeoTransData {
         if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
           let eval_cache = GeoTransEvalCache {
             input_frame_transform: shape.frame_transform.clone(),
+            unit_cell: shape.unit_cell.clone(),
           };
           context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
@@ -153,12 +156,14 @@ pub struct GeoTransGadget {
     pub frame_transform: Transform,
     pub dragged_handle_index: Option<i32>,
     pub start_drag_offset: f64,
+    pub unit_cell: UnitCellStruct,
 }
 
 impl Tessellatable for GeoTransGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
     xyz_gadget_utils::tessellate_xyz_gadget(
-      output_mesh, 
+      output_mesh,
+      &self.unit_cell,
       self.frame_transform.rotation,
       &self.frame_transform.translation,
       false // Don't include rotation handles for now
@@ -173,6 +178,7 @@ impl Tessellatable for GeoTransGadget {
 impl Gadget for GeoTransGadget {
   fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
       xyz_gadget_utils::xyz_gadget_hit_test(
+          &self.unit_cell,
           self.frame_transform.rotation,
           &self.frame_transform.translation,
           &ray_origin,
@@ -184,6 +190,7 @@ impl Gadget for GeoTransGadget {
   fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
     self.dragged_handle_index = Some(handle_index);
     self.start_drag_offset = xyz_gadget_utils::get_dragged_axis_offset(
+        &self.unit_cell,
         self.frame_transform.rotation,
         &self.frame_transform.translation,
         handle_index,
@@ -194,6 +201,7 @@ impl Gadget for GeoTransGadget {
 
   fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
     let current_offset = xyz_gadget_utils::get_dragged_axis_offset(
+        &self.unit_cell,
         self.frame_transform.rotation,
         &self.frame_transform.translation,
         handle_index,
@@ -214,8 +222,8 @@ impl Gadget for GeoTransGadget {
 impl NodeNetworkGadget for GeoTransGadget {
   fn sync_data(&self, data: &mut dyn NodeData) {
       if let Some(geo_trans_data) = data.as_any_mut().downcast_mut::<GeoTransData>() {
-        let delta_translation = (self.frame_transform.translation - self.input_frame_transform.translation) / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
-        geo_trans_data.translation = delta_translation.round().as_ivec3();
+        let real_delta_translation = self.frame_transform.translation - self.input_frame_transform.translation;
+        geo_trans_data.translation = self.unit_cell.real_to_ivec3_lattice(&real_delta_translation);
         geo_trans_data.rotation = self.rotation;
       }
   }
@@ -226,14 +234,15 @@ impl NodeNetworkGadget for GeoTransGadget {
 }
 
 impl GeoTransGadget {
-  pub fn new(translation: IVec3, rotation: IVec3, input_frame_transform: Transform) -> Self {
+  pub fn new(translation: IVec3, rotation: IVec3, input_frame_transform: Transform, unit_cell: &UnitCellStruct) -> Self {
       let mut ret = Self {
           translation,
           rotation,
-          input_frame_transform: Transform::new(input_frame_transform.translation * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64), input_frame_transform.rotation),
+          input_frame_transform: Transform::new(input_frame_transform.translation, input_frame_transform.rotation),
           frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
           dragged_handle_index: None,
           start_drag_offset: 0.0,
+          unit_cell: unit_cell.clone(),
       };
       ret.refresh_frame_transform();
       return ret;
@@ -241,21 +250,22 @@ impl GeoTransGadget {
 
   // Returns whether the application of the drag offset was successful and the drag start should be reset
   fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
-    let rounded_delta = (offset_delta / (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64)).round();
-    
+    let axis_basis_vector = self.unit_cell.get_basis_vector(axis_index);
+    let rounded_delta = (offset_delta / axis_basis_vector.length()).round();
+
     // Early return if no movement
     if rounded_delta == 0.0 {
       return false;
     }
     
     // Get the local axis direction based on the current rotation
-    let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(self.frame_transform.rotation, axis_index) {
+    let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(&self.unit_cell, self.frame_transform.rotation, axis_index) {
       Some(dir) => dir,
       None => return false, // Invalid axis index
     };
-    
+
     // Calculate the movement vector
-    let movement_distance = rounded_delta * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let movement_distance = rounded_delta * axis_basis_vector.length();
     let movement_vector = local_axis_dir * movement_distance;
     
     // Apply the movement to the frame transform
@@ -265,7 +275,7 @@ impl GeoTransGadget {
   }
 
   fn refresh_frame_transform(&mut self) {
-    let translation = self.translation.as_dvec3() * (common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f64);
+    let real_translation = self.unit_cell.ivec3_lattice_to_real(&self.translation);
     let rotation_euler = self.rotation.as_dvec3() * PI * 0.5;
     let rotation_quat = DQuat::from_euler(
       glam::EulerRot::XYZ,
@@ -273,6 +283,6 @@ impl GeoTransGadget {
       rotation_euler.y, 
       rotation_euler.z);
 
-    self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
+    self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
   }
 }
