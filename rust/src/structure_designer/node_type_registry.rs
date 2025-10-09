@@ -562,6 +562,18 @@ impl NodeTypeRegistry {
           name: "unit_cell".to_string(),
           data_type: DataType::UnitCell,
         },
+        Parameter {
+          name: "m_index".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "shift".to_string(),
+          data_type: DataType::Int,
+        },
       ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(HalfSpaceData {

@@ -70,6 +70,33 @@ impl NodeData for HalfSpaceData {
         Err(error) => return error,
       };
 
+      let miller_index = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 1, 
+        self.miller_index, 
+        NetworkResult::extract_ivec3
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let center = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2, 
+        self.center,
+        NetworkResult::extract_ivec3
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let shift = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 3, 
+        self.shift,
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       // Store evaluation cache for selected node
       if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
         let eval_cache = HalfSpaceEvalCache {
@@ -79,11 +106,11 @@ impl NodeData for HalfSpaceData {
       }
 
       // Get crystallographically correct plane properties (normal and d-spacing)
-      let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&self.miller_index);
-      let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
+      let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index);
+      let center_pos = unit_cell.ivec3_lattice_to_real(&center);
 
       // Calculate shift distance as multiples of d-spacing
-      let shift_distance = self.shift as f64 * plane_props.d_spacing;
+      let shift_distance = shift as f64 * plane_props.d_spacing;
       let shifted_center = center_pos + plane_props.normal * shift_distance;
 
       return NetworkResult::Geometry(GeometrySummary {
