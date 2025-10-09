@@ -219,11 +219,7 @@ impl GeoNode {
     let mut result = shapes[0].internal_to_csg_mesh(false)?;
     for shape in shapes.iter().skip(1) {
       let shape_mesh = shape.internal_to_csg_mesh(false)?;
-      println!("Before CSG mesh intersection");
-      println!("result mesh: {:?}", result);
-      println!("shape_mesh: {:?}", shape_mesh);
       result = result.intersection(&shape_mesh);
-      println!("After CSG mesh intersection");
     }
     Some(result)
   }
