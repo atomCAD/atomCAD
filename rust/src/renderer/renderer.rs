@@ -118,6 +118,7 @@ impl Renderer {
           zfar: 600.0,
           orthographic: false, // Default to perspective mode
           ortho_half_height: 10.0, // Default orthographic half height
+          pivot_point: DVec3::new(0.0, 0.0, 0.0),
         };
 
         // Initialize GPU

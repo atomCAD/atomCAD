@@ -4757,6 +4757,7 @@ impl SseDecode for crate::api::common_api_types::APICamera {
         let mut var_zfar = <f64>::sse_decode(deserializer);
         let mut var_orthographic = <bool>::sse_decode(deserializer);
         let mut var_orthoHalfHeight = <f64>::sse_decode(deserializer);
+        let mut var_pivotPoint = <crate::api::common_api_types::APIVec3>::sse_decode(deserializer);
         return crate::api::common_api_types::APICamera {
             eye: var_eye,
             target: var_target,
@@ -4767,6 +4768,7 @@ impl SseDecode for crate::api::common_api_types::APICamera {
             zfar: var_zfar,
             orthographic: var_orthographic,
             ortho_half_height: var_orthoHalfHeight,
+            pivot_point: var_pivotPoint,
         };
     }
 }
@@ -6749,6 +6751,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::APICamera {
             self.zfar.into_into_dart().into_dart(),
             self.orthographic.into_into_dart().into_dart(),
             self.ortho_half_height.into_into_dart().into_dart(),
+            self.pivot_point.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8354,6 +8357,7 @@ impl SseEncode for crate::api::common_api_types::APICamera {
         <f64>::sse_encode(self.zfar, serializer);
         <bool>::sse_encode(self.orthographic, serializer);
         <f64>::sse_encode(self.ortho_half_height, serializer);
+        <crate::api::common_api_types::APIVec3>::sse_encode(self.pivot_point, serializer);
     }
 }
 

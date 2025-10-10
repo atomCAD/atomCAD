@@ -38,6 +38,7 @@ pub struct APICamera {
   pub zfar: f64,
   pub orthographic: bool, // Whether to use orthographic projection
   pub ortho_half_height: f64, // Half height for orthographic projection (controls zoom level)
+  pub pivot_point: APIVec3,
 }
 
 pub struct APITransform {

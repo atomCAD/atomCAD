@@ -63,21 +63,16 @@ bool syncGadgetData() => RustLib.instance.api.crateApiCommonApiSyncGadgetData();
 APITransform getCameraTransform() =>
     RustLib.instance.api.crateApiCommonApiGetCameraTransform();
 
-/// Adjusts the camera target based on a raycast into the scene
+/// Adjusts the pivot point of the camera based on a raycast into the scene
 ///
 /// This function performs the following steps:
 /// 1. Traces a ray into the scene based on the active editor
-/// 2. If the ray hits something, calculates the camera target depth
-/// 3. Adjusts the camera target point while maintaining its direction from the eye
+/// 2. If the ray hits something that point will be the new pivot point
 ///
 /// # Arguments
 ///
 /// * `ray_origin` - The origin point of the ray in world space
 /// * `ray_direction` - The direction vector of the ray (does not need to be normalized)
-///
-/// # Returns
-///
-/// `true` if the camera target was adjusted, `false` otherwise
 Future<void> adjustCameraTarget(
         {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
     RustLib.instance.api.crateApiCommonApiAdjustCameraTarget(

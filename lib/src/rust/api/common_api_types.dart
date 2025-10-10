@@ -18,6 +18,7 @@ class APICamera {
   final double zfar;
   final bool orthographic;
   final double orthoHalfHeight;
+  final APIVec3 pivotPoint;
 
   const APICamera({
     required this.eye,
@@ -29,6 +30,7 @@ class APICamera {
     required this.zfar,
     required this.orthographic,
     required this.orthoHalfHeight,
+    required this.pivotPoint,
   });
 
   @override
@@ -41,7 +43,8 @@ class APICamera {
       znear.hashCode ^
       zfar.hashCode ^
       orthographic.hashCode ^
-      orthoHalfHeight.hashCode;
+      orthoHalfHeight.hashCode ^
+      pivotPoint.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -56,7 +59,8 @@ class APICamera {
           znear == other.znear &&
           zfar == other.zfar &&
           orthographic == other.orthographic &&
-          orthoHalfHeight == other.orthoHalfHeight;
+          orthoHalfHeight == other.orthoHalfHeight &&
+          pivotPoint == other.pivotPoint;
 }
 
 enum APICameraCanonicalView {
