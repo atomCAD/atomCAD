@@ -275,7 +275,7 @@ impl StructureDesigner {
       if let Some(network) = node_networks.get_mut(node_network_name) {
         if let Some(node) = network.nodes.get_mut(&node_id) {
           // Call the populate function with the split borrows
-          NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node);
+          NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node, true);
         }
       }
     }
@@ -421,7 +421,7 @@ impl StructureDesigner {
     let custom_node_type_populated = if let Some(network) = node_networks.get_mut(network_name) {
       if let Some(node) = network.nodes.get_mut(&node_id) {
         // Call the populate function with the split borrows
-        NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node)
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node, true)
       } else {
         false
       }

@@ -88,7 +88,7 @@ pub struct Node {
 impl Node {
   /// Sets the custom node type and intelligently preserves existing argument connections
   /// when parameter names match between old and new node types
-  pub fn set_custom_node_type(&mut self, custom_node_type: Option<NodeType>) {
+  pub fn set_custom_node_type(&mut self, custom_node_type: Option<NodeType>, refresh_args: bool) {
     if let Some(ref new_node_type) = custom_node_type {
       // Check if we can preserve existing arguments
       let can_preserve = if let Some(ref old_node_type) = self.custom_node_type {
@@ -101,7 +101,7 @@ impl Node {
         false
       };
 
-      if can_preserve {
+      if (!refresh_args) || can_preserve {
         // Parameters match exactly, keep existing arguments
         // (no changes to self.arguments)
       } else {

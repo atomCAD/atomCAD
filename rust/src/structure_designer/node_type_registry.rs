@@ -12,7 +12,7 @@ use super::nodes::ivec3::IVec3Data;
 use super::nodes::range::RangeData;
 use super::nodes::vec2::Vec2Data;
 use super::nodes::vec3::Vec3Data;
-use super::nodes::expr::ExprData;
+use super::nodes::expr::{ExprData, expr_data_loader};
 use super::nodes::expr::ExprParameter;
 use super::nodes::value::ValueData;
 use super::nodes::map::MapData;
@@ -111,7 +111,7 @@ impl NodeTypeRegistry {
         output_type: Some(DataType::Float),
       }),
       node_data_saver: generic_node_data_saver::<ExprData>,
-      node_data_loader: generic_node_data_loader::<ExprData>,
+      node_data_loader: expr_data_loader,
     });
 
     ret.add_node_type(NodeType {
@@ -919,25 +919,25 @@ impl NodeTypeRegistry {
   /// Initializes custom node type cache for all parameter and expr nodes in a network
   pub fn initialize_custom_node_types_for_network(&self, network: &mut NodeNetwork) {
     for node in network.nodes.values_mut() {
-      self.populate_custom_node_type_cache(node);
+      self.populate_custom_node_type_cache(node, false);
     }
   }
 
   /// Static helper function to populate custom node type cache without borrowing conflicts
   /// Returns whether a custom node type was populated or not
-  pub fn populate_custom_node_type_cache_with_types(built_in_types: &std::collections::HashMap<String, NodeType>, node: &mut Node) -> bool {
+  pub fn populate_custom_node_type_cache_with_types(built_in_types: &std::collections::HashMap<String, NodeType>, node: &mut Node, refresh_args: bool) -> bool {
     if let Some(base_node_type) = built_in_types.get(&node.node_type_name) {
       let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
       let has_custom_node_type = custom_node_type.is_some();
-      node.set_custom_node_type(custom_node_type);
+      node.set_custom_node_type(custom_node_type, refresh_args);
       return has_custom_node_type;
     }
     return false;
   }
 
   /// Populates the custom node type cache for nodes with dynamic node types
-  pub fn populate_custom_node_type_cache(&self, node: &mut Node) -> bool {
-    Self::populate_custom_node_type_cache_with_types(&self.built_in_node_types, node)
+  pub fn populate_custom_node_type_cache(&self, node: &mut Node, refresh_args: bool) -> bool {
+    Self::populate_custom_node_type_cache_with_types(&self.built_in_node_types, node, refresh_args)
   }
 
   pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> DataType {
@@ -1000,7 +1000,7 @@ impl NodeTypeRegistry {
       if let Some(node_type) = self.get_node_type_for_node(node) {
         let required_params = node_type.parameters.len();
         let current_args = node.arguments.len();
-        
+
         // If the node has fewer arguments than required parameters, add empty arguments
         if current_args < required_params {
           let missing_args = required_params - current_args;

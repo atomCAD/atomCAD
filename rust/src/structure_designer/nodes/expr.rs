@@ -15,6 +15,8 @@ use crate::structure_designer::expr::expr::Expr;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_type::Parameter;
+use serde_json::Value;
+use std::io;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExprParameter {
@@ -158,4 +160,17 @@ impl NodeData for ExprData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+}
+
+/// Special loader for ExprData that parses and validates the expression after deserializing
+pub fn expr_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result<Box<dyn NodeData>> {
+    // First deserialize the basic data
+    let mut data: ExprData = serde_json::from_value(value.clone())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    
+    // Use the existing parse_and_validate method to handle expression parsing and validation
+    // We pass a dummy node_id (0) since validation errors aren't used in the loader context
+    let _validation_errors = data.parse_and_validate(0);
+    
+    Ok(Box::new(data))
 }
