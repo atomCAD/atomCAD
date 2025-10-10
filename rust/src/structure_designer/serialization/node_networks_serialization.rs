@@ -309,6 +309,9 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
         
         let mut network = serializable_to_node_network(&serializable_network, &registry.built_in_node_types, design_dir)?;
         registry.initialize_custom_node_types_for_network(&mut network);
+
+        registry.repair_node_network(&mut network);
+        
         registry.node_networks.insert(name, network);
     }
     
