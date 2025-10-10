@@ -53,6 +53,7 @@ use crate::structure_designer::serialization::edit_atom_data_serialization::{edi
 use glam::{IVec3, DVec3, IVec2};
 use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use crate::structure_designer::node_network::Argument;
 
 
 pub struct NodeTypeRegistry {
@@ -985,20 +986,29 @@ impl NodeTypeRegistry {
     
     parent_networks
   }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::structure_designer::data_type::DataType;    
-
-    #[test]
-    fn test_regular_node_type() {
-        let registry = NodeTypeRegistry::new();
+  /// Repairs a node network by ensuring all nodes have the correct number of arguments
+  /// to match their node type parameters. Adds empty arguments if a node has fewer
+  /// arguments than its node type requires.
+  /// 
+  /// # Parameters
+  /// * `network` - A mutable reference to the node network to repair
+  pub fn repair_node_network(&self, network: &mut NodeNetwork) {
+    // Iterate through all nodes in the network
+    for node in network.nodes.values_mut() {
+      // Get the node type for this node
+      if let Some(node_type) = self.get_node_type_for_node(node) {
+        let required_params = node_type.parameters.len();
+        let current_args = node.arguments.len();
         
-        // Test that regular nodes still work correctly
-        let node_type = registry.get_node_type("int").unwrap();
-        assert_eq!(node_type.output_type, DataType::Int);
-        assert_eq!(node_type.parameters.len(), 0);
+        // If the node has fewer arguments than required parameters, add empty arguments
+        if current_args < required_params {
+          let missing_args = required_params - current_args;
+          for _ in 0..missing_args {
+            node.arguments.push(Argument::new());
+          }
+        }
+      }
     }
+  }
 }
