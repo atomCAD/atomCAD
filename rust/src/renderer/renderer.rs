@@ -470,7 +470,7 @@ impl Renderer {
             tessellatable.tessellate(&mut lightweight_mesh);
         }
         
-        // Tessellate camera target sphere if enabled
+        // Tessellate camera pivot point cube if enabled
         if geometry_visualization_preferences.display_camera_target {
             let red_material = Material::new(
                 &Vec3::new(1.0, 0.0, 0.0), // Red color
@@ -479,7 +479,7 @@ impl Renderer {
             );
             tessellate_cuboid(
                 &mut lightweight_mesh,
-                &self.camera.target,
+                &self.camera.pivot_point,
                 &DVec3::new(0.4, 0.4, 0.4),
                 &DQuat::IDENTITY,
                 &red_material,
