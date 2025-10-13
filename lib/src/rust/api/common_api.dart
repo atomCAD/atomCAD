@@ -12,7 +12,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
 /// Set the viewport size for rendering
-Future<void> setViewportSize({required int width, required int height}) =>
+void setViewportSize({required int width, required int height}) =>
     RustLib.instance.api
         .crateApiCommonApiSetViewportSize(width: width, height: height);
 
@@ -63,22 +63,17 @@ bool syncGadgetData() => RustLib.instance.api.crateApiCommonApiSyncGadgetData();
 APITransform getCameraTransform() =>
     RustLib.instance.api.crateApiCommonApiGetCameraTransform();
 
-/// Adjusts the camera target based on a raycast into the scene
+/// Adjusts the pivot point of the camera based on a raycast into the scene
 ///
 /// This function performs the following steps:
 /// 1. Traces a ray into the scene based on the active editor
-/// 2. If the ray hits something, calculates the camera target depth
-/// 3. Adjusts the camera target point while maintaining its direction from the eye
+/// 2. If the ray hits something that point will be the new pivot point
 ///
 /// # Arguments
 ///
 /// * `ray_origin` - The origin point of the ray in world space
 /// * `ray_direction` - The direction vector of the ray (does not need to be normalized)
-///
-/// # Returns
-///
-/// `true` if the camera target was adjusted, `false` otherwise
-Future<void> adjustCameraTarget(
+void adjustCameraTarget(
         {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
     RustLib.instance.api.crateApiCommonApiAdjustCameraTarget(
         rayOrigin: rayOrigin, rayDirection: rayDirection);

@@ -30,7 +30,7 @@ const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
 
 /// Set the viewport size for rendering
-#[unsafe(no_mangle)]
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_viewport_size(width: u32, height: u32) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
@@ -168,6 +168,7 @@ pub fn get_camera() -> Option<APICamera> {
         zfar: camera.zfar,
         orthographic: camera.orthographic,
         ortho_half_height: camera.ortho_half_height,
+        pivot_point: to_api_vec3(&camera.pivot_point),
       }
     })
     }
@@ -327,22 +328,17 @@ pub fn get_camera_transform() -> APITransform {
   }
 }
 
-/// Adjusts the camera target based on a raycast into the scene
+/// Adjusts the pivot point of the camera based on a raycast into the scene
 /// 
 /// This function performs the following steps:
 /// 1. Traces a ray into the scene based on the active editor
-/// 2. If the ray hits something, calculates the camera target depth
-/// 3. Adjusts the camera target point while maintaining its direction from the eye
+/// 2. If the ray hits something that point will be the new pivot point
 /// 
 /// # Arguments
 /// 
 /// * `ray_origin` - The origin point of the ray in world space
 /// * `ray_direction` - The direction vector of the ray (does not need to be normalized)
-/// 
-/// # Returns
-/// 
-/// `true` if the camera target was adjusted, `false` otherwise
-#[unsafe(no_mangle)]
+#[flutter_rust_bridge::frb(sync)]
 pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
   let ray_origin = from_api_vec3(&ray_origin);
   let ray_direction = from_api_vec3(&ray_direction);
@@ -353,7 +349,7 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
       let eye = cad_instance.renderer.camera.eye;
       
       // Perform raytracing based on the active editor
-      let hit_distance = match cad_instance.active_editor {
+      let mut hit_distance = match cad_instance.active_editor {
         Editor::StructureDesigner => {
           cad_instance.structure_designer.raytrace(&ray_origin, &ray_direction)
         },
@@ -363,59 +359,28 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
         Editor::None => None,
       };
 
-      // Get the camera forward vector (normalized)
-      let camera_forward = (cad_instance.renderer.camera.target - eye).normalize();
+      // Fallback: Calculate where input ray intersects XZ plane
+      if hit_distance.is_none() {
+        let ray_can_hit_xz = ray_direction.y.abs() > 1e-6; // Avoid division by zero
+        let xz_dist_from_ray = if ray_can_hit_xz { -ray_origin.y / ray_direction.y } else { 0.0 };
+        // Check that the intersection is in front of the ray origin
+        if ray_can_hit_xz && xz_dist_from_ray > 0.0 {
+          hit_distance = Some(xz_dist_from_ray);
+        }        
+      }
 
-      // If we hit something, adjust the camera target
+      // If we hit something, adjust the pivot point
       if let Some(distance) = hit_distance {
         // Calculate the hit point
-        let hit_point = ray_origin + ray_direction * distance;
+        let hit_point = ray_origin + ray_direction * distance;        
         
-        // Calculate the vector from eye to hit point
-        let eye_to_hit = hit_point - eye;
-        
-        // Calculate the target depth (projection of eye_to_hit onto camera_forward)
-        let target_depth = eye_to_hit.dot(camera_forward);
-        
-        // Adjust the camera target by setting it at the new depth along the same direction
-        cad_instance.renderer.camera.target = eye + camera_forward * target_depth;
+        cad_instance.renderer.camera.pivot_point = hit_point;
         
         // Update the camera buffer
         cad_instance.renderer.update_camera_buffer();
 
         refresh_renderer(cad_instance, true);    
         return;
-      } else {
-        // Fallback: Check if both the camera forward vector and input ray hit the XZ plane
-        
-        // Calculate where camera forward vector intersects XZ plane
-        let camera_can_hit_xz = camera_forward.y.abs() > 1e-6; // Avoid division by zero
-        let xz_dist_from_camera = if camera_can_hit_xz { -eye.y / camera_forward.y } else { 0.0 };
-        let camera_hits_xz = camera_can_hit_xz && 
-                           // Check that the intersection is in front of the camera
-                           xz_dist_from_camera > 0.0;
-
-        // Calculate where input ray intersects XZ plane
-        let ray_can_hit_xz = ray_direction.y.abs() > 1e-6; // Avoid division by zero
-        let xz_dist_from_ray = if ray_can_hit_xz { -ray_origin.y / ray_direction.y } else { 0.0 };
-        let ray_hits_xz = ray_can_hit_xz && 
-                       // Check that the intersection is in front of the ray origin
-                       xz_dist_from_ray > 0.0;
-        
-        // If both hit the XZ plane, use the camera forward intersection as new target
-        if camera_hits_xz && ray_hits_xz {
-          // Calculate the point where camera forward vector intersects XZ plane
-          let xz_intersection = eye + camera_forward * xz_dist_from_camera;
-          
-          // Set the new target
-          cad_instance.renderer.camera.target = xz_intersection;
-          
-          // Update the camera buffer
-          cad_instance.renderer.update_camera_buffer();
-          
-          refresh_renderer(cad_instance, true);
-          return;
-        }
       }
     });
   }

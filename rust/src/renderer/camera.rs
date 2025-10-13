@@ -13,6 +13,7 @@ pub struct Camera {
   pub zfar: f64,
   pub orthographic: bool,
   pub ortho_half_height: f64,
+  pub pivot_point: DVec3,
 }
 
 impl Camera {

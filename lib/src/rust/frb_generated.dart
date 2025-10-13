@@ -109,7 +109,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStampApiAddOrSelectStampPlacementByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  Future<void> crateApiCommonApiAdjustCameraTarget(
+  void crateApiCommonApiAdjustCameraTarget(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection});
 
   bool crateApiStructureDesignerStructureDesignerApiCanConnectNodes(
@@ -538,7 +538,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStructureDesignerApiSetVec3Data(
       {required BigInt nodeId, required APIVec3Data data});
 
-  Future<void> crateApiCommonApiSetViewportSize(
+  void crateApiCommonApiSetViewportSize(
       {required int width, required int height});
 
   bool crateApiStructureDesignerFacetShellApiSplitSymmetryMembers(
@@ -710,15 +710,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Future<void> crateApiCommonApiAdjustCameraTarget(
+  void crateApiCommonApiAdjustCameraTarget(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_vec_3(rayOrigin, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDirection, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 6, port: port_);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -4598,15 +4597,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Future<void> crateApiCommonApiSetViewportSize(
+  void crateApiCommonApiSetViewportSize(
       {required int width, required int height}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(width, serializer);
         sse_encode_u_32(height, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 151, port: port_);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 151)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -4882,8 +4880,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICamera dco_decode_api_camera(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return APICamera(
       eye: dco_decode_api_vec_3(arr[0]),
       target: dco_decode_api_vec_3(arr[1]),
@@ -4894,6 +4892,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       zfar: dco_decode_f_64(arr[6]),
       orthographic: dco_decode_bool(arr[7]),
       orthoHalfHeight: dco_decode_f_64(arr[8]),
+      pivotPoint: dco_decode_api_vec_3(arr[9]),
     );
   }
 
@@ -6396,6 +6395,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_zfar = sse_decode_f_64(deserializer);
     var var_orthographic = sse_decode_bool(deserializer);
     var var_orthoHalfHeight = sse_decode_f_64(deserializer);
+    var var_pivotPoint = sse_decode_api_vec_3(deserializer);
     return APICamera(
         eye: var_eye,
         target: var_target,
@@ -6405,7 +6405,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         znear: var_znear,
         zfar: var_zfar,
         orthographic: var_orthographic,
-        orthoHalfHeight: var_orthoHalfHeight);
+        orthoHalfHeight: var_orthoHalfHeight,
+        pivotPoint: var_pivotPoint);
   }
 
   @protected
@@ -8176,6 +8177,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.zfar, serializer);
     sse_encode_bool(self.orthographic, serializer);
     sse_encode_f_64(self.orthoHalfHeight, serializer);
+    sse_encode_api_vec_3(self.pivotPoint, serializer);
   }
 
   @protected

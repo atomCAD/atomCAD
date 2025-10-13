@@ -22,6 +22,7 @@ class CameraTransform {
   vector_math.Vector3 forward;
   vector_math.Vector3 up;
   vector_math.Vector3 right;
+  vector_math.Vector3 pivotPoint;
 
   CameraTransform({
     required this.eye,
@@ -29,6 +30,7 @@ class CameraTransform {
     required this.forward,
     required this.up,
     required this.right,
+    required this.pivotPoint,
   });
 }
 
@@ -54,6 +56,7 @@ CameraTransform? getCameraTransform(APICamera? camera) {
     forward: forward,
     up: up,
     right: right,
+    pivotPoint: APIVec3ToVector3(camera.pivotPoint),
   );
 }
 
@@ -242,9 +245,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       _cameraMovePerPixel = 2.0 * camera.orthoHalfHeight / viewportHeight;
     } else {
       // Original perspective mode calculation
-      var movePlaneDistance =
-          (_dragStartCameraTransform!.target - _dragStartCameraTransform!.eye)
-              .dot(_dragStartCameraTransform!.forward);
+      var movePlaneDistance = (_dragStartCameraTransform!.pivotPoint -
+              _dragStartCameraTransform!.eye)
+          .dot(_dragStartCameraTransform!.forward);
       _cameraMovePerPixel =
           2.0 * movePlaneDistance * tan(camera.fovy * 0.5) / viewportHeight;
     }
@@ -281,32 +284,69 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     _dragStartPointerPos = pointerPos;
   }
 
+  /// Calculates the rotation angle between two vectors around a specified axis.
+  /// Projects both vectors onto the plane perpendicular to the axis and calculates
+  /// the signed angle between them.
+  ///
+  /// [fromVector] - The starting vector
+  /// [toVector] - The ending vector
+  /// [axisVector] - The axis around which to measure rotation
+  ///
+  /// Returns the rotation angle in radians
+  double calculateRotationAngleAroundAxis(vector_math.Vector3 fromVector,
+      vector_math.Vector3 toVector, vector_math.Vector3 axisVector) {
+    // Create two orthogonal vectors perpendicular to the axis
+    vector_math.Vector3 perpendicular1;
+    vector_math.Vector3 perpendicular2;
+
+    // Find a vector that's not parallel to the axis
+    if (axisVector.x.abs() < 0.9) {
+      perpendicular1 =
+          vector_math.Vector3(1.0, 0.0, 0.0).cross(axisVector).normalized();
+    } else {
+      perpendicular1 =
+          vector_math.Vector3(0.0, 1.0, 0.0).cross(axisVector).normalized();
+    }
+    perpendicular2 = axisVector.cross(perpendicular1).normalized();
+
+    // Project both vectors onto the plane perpendicular to the axis
+    final fromProj = vector_math.Vector2(
+            fromVector.dot(perpendicular1), fromVector.dot(perpendicular2))
+        .normalized();
+
+    final toProj = vector_math.Vector2(
+            toVector.dot(perpendicular1), toVector.dot(perpendicular2))
+        .normalized();
+
+    // Calculate the rotation angle using atan2
+    final fromAngle = atan2(fromProj.y, fromProj.x);
+    final toAngle = atan2(toProj.y, toProj.x);
+    return toAngle - fromAngle;
+  }
+
   void rotateCamera(Offset pointerPos) {
     var relPointerPos = pointerPos - _dragStartPointerPos;
 
-    final cameraTransform = getCameraTransform(getCamera());
+    final camera = getCamera();
+    final cameraTransform = getCameraTransform(camera);
 
-    // Horizontal component
-    // Rotate around global up vector
-
+    // Horizontal component - rotate around global up vector
     final horizAngle = relPointerPos.dx * ROT_PER_PIXEL;
     final vertAxis = vector_math.Vector3(0.0, 1.0, 0.0);
     var newEye = rotatePointAroundAxis(
-        cameraTransform!.target, vertAxis, horizAngle, cameraTransform.eye);
+        cameraTransform!.pivotPoint, vertAxis, horizAngle, cameraTransform.eye);
 
-    final newForward = (cameraTransform.target - newEye).normalized();
+    final newForward = rotatePointAroundAxis(vector_math.Vector3.zero(),
+        vertAxis, horizAngle, cameraTransform.forward);
     final newRight = newForward.cross(cameraTransform.up).normalized();
 
-    // Vertical component
-    // Rotate around our right vector
+    // Vertical component - rotate around right vector
     final vertAngle = relPointerPos.dy * ROT_PER_PIXEL;
-    final horizAxis = newRight;
-
     newEye = rotatePointAroundAxis(
-        cameraTransform.target, horizAxis, vertAngle, newEye);
+        cameraTransform.pivotPoint, newRight, vertAngle, newEye);
 
-    // Calculate the new forward vector after both rotations
-    final newForward2 = (cameraTransform.target - newEye).normalized();
+    final newForward2 = rotatePointAroundAxis(
+        vector_math.Vector3.zero(), newRight, vertAngle, newForward);
 
     // Global up vector
     final globalUp = vector_math.Vector3(0.0, 1.0, 0.0);
@@ -327,7 +367,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
     _moveCameraAndRender(
         eye: Vector3ToAPIVec3(newEye),
-        target: Vector3ToAPIVec3(cameraTransform.target),
+        target: Vector3ToAPIVec3(newEye + newForward2),
         up: Vector3ToAPIVec3(newUp));
 
     _dragStartPointerPos = pointerPos;
@@ -469,18 +509,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       // Original perspective zooming code
       final cameraTransform = getCameraTransform(camera);
 
-      final zoomTargetPlaneDistance =
-          (cameraTransform!.target - cameraTransform.eye)
-              .dot(cameraTransform.forward);
-
-      final moveVec = cameraTransform.forward *
-          (ZOOM_PER_ZOOM_DELTA * (-scrollDeltaY) * zoomTargetPlaneDistance);
-
-      final newEye = cameraTransform.eye + moveVec;
+      final moveVec = (cameraTransform!.pivotPoint - cameraTransform.eye) *
+          (ZOOM_PER_ZOOM_DELTA * (-scrollDeltaY));
 
       _moveCameraAndRender(
-          eye: Vector3ToAPIVec3(newEye),
-          target: Vector3ToAPIVec3(cameraTransform.target),
+          eye: Vector3ToAPIVec3(cameraTransform.eye + moveVec),
+          target: Vector3ToAPIVec3(cameraTransform.target + moveVec),
           up: Vector3ToAPIVec3(cameraTransform.up));
     }
   }
