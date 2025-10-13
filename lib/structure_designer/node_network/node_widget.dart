@@ -287,19 +287,20 @@ class NodeWidget extends StatelessWidget {
           child: Row(
             children: [
               // Left Side (Inputs)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: node.inputPins
-                    .asMap()
-                    .entries
-                    .map((entry) => _buildInputPin(
-                        entry.value.name,
-                        PinReference(node.id, PinType.input, entry.key,
-                            entry.value.dataType),
-                        entry.value.multi))
-                    .toList(),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: node.inputPins
+                      .asMap()
+                      .entries
+                      .map((entry) => _buildInputPin(
+                          entry.value.name,
+                          PinReference(node.id, PinType.input, entry.key,
+                              entry.value.dataType),
+                          entry.value.multi))
+                      .toList(),
+                ),
               ),
-              const Spacer(),
               // Right Side (Output)
               PinWidget(
                 pinReference:
@@ -381,9 +382,12 @@ class NodeWidget extends StatelessWidget {
       children: [
         PinWidget(pinReference: pinReference, multi: multi),
         SizedBox(width: 2),
-        Text(
-          label,
-          style: TextStyle(color: Colors.white, fontSize: 14),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(color: Colors.white, fontSize: 14),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
