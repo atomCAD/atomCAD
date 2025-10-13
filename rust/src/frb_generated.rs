@@ -209,16 +209,15 @@ fn wire__crate__api__structure_designer__stamp_api__add_or_select_stamp_placemen
     )
 }
 fn wire__crate__api__common_api__adjust_camera_target_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "adjust_camera_target",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -235,17 +234,12 @@ fn wire__crate__api__common_api__adjust_camera_target_impl(
             let api_ray_direction =
                 <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok({
-                        crate::api::common_api::adjust_camera_target(
-                            api_ray_origin,
-                            api_ray_direction,
-                        );
-                    })?;
-                    Ok(output_ok)
-                })())
-            }
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::common_api::adjust_camera_target(api_ray_origin, api_ray_direction);
+                })?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -4461,16 +4455,15 @@ let api_data = <crate::api::structure_designer::structure_designer_api_types::AP
                 })()) })
 }
 fn wire__crate__api__common_api__set_viewport_size_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "set_viewport_size",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -4485,14 +4478,12 @@ fn wire__crate__api__common_api__set_viewport_size_impl(
             let api_width = <u32>::sse_decode(&mut deserializer);
             let api_height = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok({
-                        crate::api::common_api::set_viewport_size(api_width, api_height);
-                    })?;
-                    Ok(output_ok)
-                })())
-            }
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::common_api::set_viewport_size(api_width, api_height);
+                })?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -6455,16 +6446,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        6 => wire__crate__api__common_api__adjust_camera_target_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         78 => wire__crate__api__common_api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        151 => {
-            wire__crate__api__common_api__set_viewport_size_impl(port, ptr, rust_vec_len, data_len)
-        }
         _ => unreachable!(),
     }
 }
@@ -6482,6 +6464,7 @@ fn pde_ffi_dispatcher_sync_impl(
 3 => wire__crate__api__structure_designer__structure_designer_api__add_new_node_network_impl(ptr, rust_vec_len, data_len),
 4 => wire__crate__api__structure_designer__structure_designer_api__add_node_impl(ptr, rust_vec_len, data_len),
 5 => wire__crate__api__structure_designer__stamp_api__add_or_select_stamp_placement_by_ray_impl(ptr, rust_vec_len, data_len),
+6 => wire__crate__api__common_api__adjust_camera_target_impl(ptr, rust_vec_len, data_len),
 7 => wire__crate__api__structure_designer__structure_designer_api__can_connect_nodes_impl(ptr, rust_vec_len, data_len),
 8 => wire__crate__api__structure_designer__facet_shell_api__clear_facets_impl(ptr, rust_vec_len, data_len),
 9 => wire__crate__api__structure_designer__structure_designer_api__clear_selection_impl(ptr, rust_vec_len, data_len),
@@ -6625,6 +6608,7 @@ fn pde_ffi_dispatcher_sync_impl(
 148 => wire__crate__api__structure_designer__structure_designer_api__set_unit_cell_data_impl(ptr, rust_vec_len, data_len),
 149 => wire__crate__api__structure_designer__structure_designer_api__set_vec2_data_impl(ptr, rust_vec_len, data_len),
 150 => wire__crate__api__structure_designer__structure_designer_api__set_vec3_data_impl(ptr, rust_vec_len, data_len),
+151 => wire__crate__api__common_api__set_viewport_size_impl(ptr, rust_vec_len, data_len),
 152 => wire__crate__api__structure_designer__facet_shell_api__split_symmetry_members_impl(ptr, rust_vec_len, data_len),
 153 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_clone_self_impl(ptr, rust_vec_len, data_len),
 154 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_new_impl(ptr, rust_vec_len, data_len),

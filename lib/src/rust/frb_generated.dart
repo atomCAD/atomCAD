@@ -109,7 +109,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStampApiAddOrSelectStampPlacementByRay(
       {required APIVec3 rayStart, required APIVec3 rayDir});
 
-  Future<void> crateApiCommonApiAdjustCameraTarget(
+  void crateApiCommonApiAdjustCameraTarget(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection});
 
   bool crateApiStructureDesignerStructureDesignerApiCanConnectNodes(
@@ -538,7 +538,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStructureDesignerApiSetVec3Data(
       {required BigInt nodeId, required APIVec3Data data});
 
-  Future<void> crateApiCommonApiSetViewportSize(
+  void crateApiCommonApiSetViewportSize(
       {required int width, required int height});
 
   bool crateApiStructureDesignerFacetShellApiSplitSymmetryMembers(
@@ -710,15 +710,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Future<void> crateApiCommonApiAdjustCameraTarget(
+  void crateApiCommonApiAdjustCameraTarget(
       {required APIVec3 rayOrigin, required APIVec3 rayDirection}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_vec_3(rayOrigin, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDirection, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 6, port: port_);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -4598,15 +4597,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Future<void> crateApiCommonApiSetViewportSize(
+  void crateApiCommonApiSetViewportSize(
       {required int width, required int height}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(width, serializer);
         sse_encode_u_32(height, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 151, port: port_);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 151)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,

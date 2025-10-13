@@ -12,7 +12,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
 /// Set the viewport size for rendering
-Future<void> setViewportSize({required int width, required int height}) =>
+void setViewportSize({required int width, required int height}) =>
     RustLib.instance.api
         .crateApiCommonApiSetViewportSize(width: width, height: height);
 
@@ -73,7 +73,7 @@ APITransform getCameraTransform() =>
 ///
 /// * `ray_origin` - The origin point of the ray in world space
 /// * `ray_direction` - The direction vector of the ray (does not need to be normalized)
-Future<void> adjustCameraTarget(
+void adjustCameraTarget(
         {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
     RustLib.instance.api.crateApiCommonApiAdjustCameraTarget(
         rayOrigin: rayOrigin, rayDirection: rayDirection);

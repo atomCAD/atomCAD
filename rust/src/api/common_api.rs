@@ -30,7 +30,7 @@ const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
 
 /// Set the viewport size for rendering
-#[unsafe(no_mangle)]
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_viewport_size(width: u32, height: u32) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
@@ -338,7 +338,7 @@ pub fn get_camera_transform() -> APITransform {
 /// 
 /// * `ray_origin` - The origin point of the ray in world space
 /// * `ray_direction` - The direction vector of the ray (does not need to be normalized)
-#[unsafe(no_mangle)]
+#[flutter_rust_bridge::frb(sync)]
 pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
   let ray_origin = from_api_vec3(&ray_origin);
   let ray_direction = from_api_vec3(&ray_direction);

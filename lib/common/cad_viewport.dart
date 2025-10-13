@@ -245,9 +245,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       _cameraMovePerPixel = 2.0 * camera.orthoHalfHeight / viewportHeight;
     } else {
       // Original perspective mode calculation
-      var movePlaneDistance =
-          (_dragStartCameraTransform!.target - _dragStartCameraTransform!.eye)
-              .dot(_dragStartCameraTransform!.forward);
+      var movePlaneDistance = (_dragStartCameraTransform!.pivotPoint -
+              _dragStartCameraTransform!.eye)
+          .dot(_dragStartCameraTransform!.forward);
       _cameraMovePerPixel =
           2.0 * movePlaneDistance * tan(camera.fovy * 0.5) / viewportHeight;
     }
@@ -509,18 +509,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       // Original perspective zooming code
       final cameraTransform = getCameraTransform(camera);
 
-      final zoomTargetPlaneDistance =
-          (cameraTransform!.target - cameraTransform.eye)
-              .dot(cameraTransform.forward);
-
-      final moveVec = cameraTransform.forward *
-          (ZOOM_PER_ZOOM_DELTA * (-scrollDeltaY) * zoomTargetPlaneDistance);
-
-      final newEye = cameraTransform.eye + moveVec;
+      final moveVec = (cameraTransform!.pivotPoint - cameraTransform.eye) *
+          (ZOOM_PER_ZOOM_DELTA * (-scrollDeltaY));
 
       _moveCameraAndRender(
-          eye: Vector3ToAPIVec3(newEye),
-          target: Vector3ToAPIVec3(cameraTransform.target),
+          eye: Vector3ToAPIVec3(cameraTransform.eye + moveVec),
+          target: Vector3ToAPIVec3(cameraTransform.target + moveVec),
           up: Vector3ToAPIVec3(cameraTransform.up));
     }
   }

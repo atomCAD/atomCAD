@@ -48,27 +48,32 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
         case 0: // Surface splatting
           _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.surfaceSplatting;
-          _preferences.geometryVisualizationPreferences.wireframeGeometry = false;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry =
+              false;
           break;
         case 1: // Solid (Explicit Mesh)
           _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.explicitMesh;
-          _preferences.geometryVisualizationPreferences.wireframeGeometry = false;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry =
+              false;
           break;
         case 2: // Wireframe (Explicit Mesh)
           _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.explicitMesh;
-          _preferences.geometryVisualizationPreferences.wireframeGeometry = true;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry =
+              true;
           break;
         case 3: // Solid (Dual Contouring)
           _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.dualContouring;
-          _preferences.geometryVisualizationPreferences.wireframeGeometry = false;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry =
+              false;
           break;
         case 4: // Wireframe (Dual Contouring)
           _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.dualContouring;
-          _preferences.geometryVisualizationPreferences.wireframeGeometry = true;
+          _preferences.geometryVisualizationPreferences.wireframeGeometry =
+              true;
           break;
       }
     });
@@ -80,12 +85,18 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
     if (_preferences.geometryVisualizationPreferences.geometryVisualization ==
         GeometryVisualization.surfaceSplatting) {
       return 0;
-    } else if (_preferences.geometryVisualizationPreferences.geometryVisualization ==
+    } else if (_preferences
+            .geometryVisualizationPreferences.geometryVisualization ==
         GeometryVisualization.explicitMesh) {
-      return _preferences.geometryVisualizationPreferences.wireframeGeometry ? 2 : 1;
-    } else if (_preferences.geometryVisualizationPreferences.geometryVisualization ==
+      return _preferences.geometryVisualizationPreferences.wireframeGeometry
+          ? 2
+          : 1;
+    } else if (_preferences
+            .geometryVisualizationPreferences.geometryVisualization ==
         GeometryVisualization.dualContouring) {
-      return _preferences.geometryVisualizationPreferences.wireframeGeometry ? 4 : 3;
+      return _preferences.geometryVisualizationPreferences.wireframeGeometry
+          ? 4
+          : 3;
     }
     return 0; // Default
   }
@@ -206,10 +217,12 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           // Samples per unit cell
                           IntInput(
                             label: 'Samples per unit cell',
-                            value: _preferences.geometryVisualizationPreferences.samplesPerUnitCell,
+                            value: _preferences.geometryVisualizationPreferences
+                                .samplesPerUnitCell,
                             onChanged: (value) {
                               setState(() {
-                                _preferences.geometryVisualizationPreferences.samplesPerUnitCell = value;
+                                _preferences.geometryVisualizationPreferences
+                                    .samplesPerUnitCell = value;
                               });
                               _applyPreferences();
                             },
@@ -243,7 +256,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                   contentPadding:
                                       AppSpacing.fieldContentPadding,
                                 ),
-                                value: _preferences.geometryVisualizationPreferences
+                                value: _preferences
+                                    .geometryVisualizationPreferences
                                     .meshSmoothing,
                                 items: const [
                                   DropdownMenuItem(
@@ -262,7 +276,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() {
-                                      _preferences.geometryVisualizationPreferences
+                                      _preferences
+                                          .geometryVisualizationPreferences
                                           .meshSmoothing = value;
                                     });
                                     _applyPreferences();
@@ -277,18 +292,22 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           Row(
                             children: [
                               Checkbox(
-                                value: _preferences.geometryVisualizationPreferences.displayCameraTarget,
+                                value: _preferences
+                                    .geometryVisualizationPreferences
+                                    .displayCameraTarget,
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() {
-                                      _preferences.geometryVisualizationPreferences.displayCameraTarget = value;
+                                      _preferences
+                                          .geometryVisualizationPreferences
+                                          .displayCameraTarget = value;
                                     });
                                     _applyPreferences();
                                   }
                                 },
                               ),
                               const SizedBox(width: 8),
-                              const Text('Display camera target'),
+                              const Text('Display camera pivot point'),
                             ],
                           ),
                         ],
