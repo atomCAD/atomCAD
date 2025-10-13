@@ -912,7 +912,7 @@ impl NodeTypeRegistry {
     if let Some(node_network) = self.node_networks.get(&node.node_type_name) {
       return Some(&node_network.node_type);
     }
-    
+
     None
   }
 

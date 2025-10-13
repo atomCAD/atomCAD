@@ -232,6 +232,16 @@ impl StructureDesigner {
       }
     }
 
+    // Update all nodes in all node networks that reference the old node type name
+    // This is necessary because node networks can be used as custom nodes in other networks
+    for (_network_name, network) in self.node_type_registry.node_networks.iter_mut() {
+      for (_node_id, node) in network.nodes.iter_mut() {
+        if node.node_type_name == old_name {
+          node.node_type_name = new_name.to_string();
+        }
+      }
+    }
+
     true
   }
 
