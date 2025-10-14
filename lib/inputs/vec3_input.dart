@@ -89,21 +89,15 @@ class _Vec3InputState extends State<Vec3Input> {
 
     // Only update controllers if NOT currently editing this specific axis
     if (_currentlyEditingAxis != 'x' && oldWidget.value.x != widget.value.x) {
-      final selection = _xController.selection;
-      _xController.text = widget.value.x.toStringAsFixed(6);
-      _xController.selection = selection;
+      updateTextControllerWithSelection(_xController, widget.value.x.toStringAsFixed(6));
     }
 
     if (_currentlyEditingAxis != 'y' && oldWidget.value.y != widget.value.y) {
-      final selection = _yController.selection;
-      _yController.text = widget.value.y.toStringAsFixed(6);
-      _yController.selection = selection;
+      updateTextControllerWithSelection(_yController, widget.value.y.toStringAsFixed(6));
     }
 
     if (_currentlyEditingAxis != 'z' && oldWidget.value.z != widget.value.z) {
-      final selection = _zController.selection;
-      _zController.text = widget.value.z.toStringAsFixed(6);
-      _zController.selection = selection;
+      updateTextControllerWithSelection(_zController, widget.value.z.toStringAsFixed(6));
     }
   }
 

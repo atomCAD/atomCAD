@@ -124,3 +124,20 @@ SelectModifier getSelectModifierFromKeyboard() {
           ? SelectModifier.expand
           : SelectModifier.replace;
 }
+
+/// Safely updates a TextEditingController's text while preserving selection
+/// if possible, or positioning cursor at the end if the selection is invalid.
+void updateTextControllerWithSelection(TextEditingController controller, String newText) {
+  final selection = controller.selection;
+  controller.text = newText;
+  
+  // Ensure selection offset doesn't exceed new text length
+  final maxOffset = controller.text.length;
+  if (selection.baseOffset <= maxOffset && selection.extentOffset <= maxOffset) {
+    controller.selection = selection;
+  } else {
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: maxOffset),
+    );
+  }
+}

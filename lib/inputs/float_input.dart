@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/ui_common.dart';
 
 /// A reusable widget for editing floating-point values
 class FloatInput extends StatefulWidget {
@@ -38,9 +39,7 @@ class _FloatInputState extends State<FloatInput> {
   void didUpdateWidget(FloatInput oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
-      final selection = _controller.selection;
-      _controller.text = widget.value.toString();
-      _controller.selection = selection;
+      updateTextControllerWithSelection(_controller, widget.value.toString());
     }
   }
 

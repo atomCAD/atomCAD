@@ -77,14 +77,10 @@ class _IVec2InputState extends State<IVec2Input> {
   void didUpdateWidget(IVec2Input oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value.x != widget.value.x) {
-      final selection = _xController.selection;
-      _xController.text = widget.value.x.toString();
-      _xController.selection = selection;
+      updateTextControllerWithSelection(_xController, widget.value.x.toString());
     }
     if (oldWidget.value.y != widget.value.y) {
-      final selection = _yController.selection;
-      _yController.text = widget.value.y.toString();
-      _yController.selection = selection;
+      updateTextControllerWithSelection(_yController, widget.value.y.toString());
     }
   }
 

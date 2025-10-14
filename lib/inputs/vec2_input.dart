@@ -75,15 +75,11 @@ class _Vec2InputState extends State<Vec2Input> {
 
     // Only update controllers if NOT currently editing this specific axis
     if (_currentlyEditingAxis != 'x' && oldWidget.value.x != widget.value.x) {
-      final selection = _xController.selection;
-      _xController.text = widget.value.x.toStringAsFixed(6);
-      _xController.selection = selection;
+      updateTextControllerWithSelection(_xController, widget.value.x.toStringAsFixed(6));
     }
 
     if (_currentlyEditingAxis != 'y' && oldWidget.value.y != widget.value.y) {
-      final selection = _yController.selection;
-      _yController.text = widget.value.y.toStringAsFixed(6);
-      _yController.selection = selection;
+      updateTextControllerWithSelection(_yController, widget.value.y.toStringAsFixed(6));
     }
   }
 
