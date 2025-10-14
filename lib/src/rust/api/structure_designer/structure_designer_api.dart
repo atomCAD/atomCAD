@@ -69,6 +69,11 @@ bool renameNodeNetwork({required String oldName, required String newName}) =>
         .crateApiStructureDesignerStructureDesignerApiRenameNodeNetwork(
             oldName: oldName, newName: newName);
 
+APIResult deleteNodeNetwork({required String networkName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiDeleteNodeNetwork(
+            networkName: networkName);
+
 void setNodeDisplay({required BigInt nodeId, required bool isDisplayed}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetNodeDisplay(

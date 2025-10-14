@@ -246,6 +246,46 @@ impl StructureDesigner {
     true
   }
 
+  pub fn delete_node_network(&mut self, network_name: &str) -> Result<(), String> {
+    // Check if the network exists
+    if !self.node_type_registry.node_networks.contains_key(network_name) {
+      return Err(format!("Node network '{}' does not exist", network_name));
+    }
+
+    // Check if any nodes in any network reference this network
+    // Collect the names of networks that contain nodes referencing this network
+    let mut referencing_networks = Vec::new();
+    for (current_network_name, network) in self.node_type_registry.node_networks.iter() {
+      for (_node_id, node) in network.nodes.iter() {
+        if node.node_type_name == network_name {
+          referencing_networks.push(current_network_name.clone());
+          break; // No need to check more nodes in this network
+        }
+      }
+    }
+
+    // If there are references, return an error with the referencing network names
+    if !referencing_networks.is_empty() {
+      return Err(format!(
+        "Cannot delete node network '{}' because it is referenced by nodes in the following networks: {}",
+        network_name,
+        referencing_networks.join(", ")
+      ));
+    }
+
+    // Remove the network from the registry
+    self.node_type_registry.node_networks.remove(network_name);
+
+    // Update the active_node_network_name if it was the deleted network
+    if let Some(active_name) = &self.active_node_network_name {
+      if active_name == network_name {
+        self.active_node_network_name = None;
+      }
+    }
+
+    Ok(())
+  }
+
   pub fn add_node(&mut self, node_type_name: &str, position: DVec2) -> u64 {
     // Early return if active_node_network_name is None
     let node_network_name = match &self.active_node_network_name {
