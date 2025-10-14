@@ -228,6 +228,10 @@ impl NodeData for EditAtomData {
             selection_transform: self.selection_transform.clone(),
         })
     }
+
+    fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        Some(format!("ops: {}", self.history.len()))
+    }
 }
 
 // Returns whether an atom or a bond was hit or not.

@@ -79,5 +79,20 @@ impl NodeData for RangeData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let start_connected = connected_input_pins.contains("start");
+        let step_connected = connected_input_pins.contains("step");
+        let count_connected = connected_input_pins.contains("count");
+        
+        if start_connected && step_connected && count_connected {
+            None
+        } else {
+            let start_display = if start_connected { "*" } else { &self.start.to_string() };
+            let step_display = if step_connected { "*" } else { &self.step.to_string() };
+            let count_display = if count_connected { "*" } else { &self.count.to_string() };
+            Some(format!("[{}:{}:{}]", start_display, step_display, count_display))
+        }
+    }
 }
 

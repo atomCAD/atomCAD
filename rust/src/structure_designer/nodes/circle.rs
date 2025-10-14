@@ -87,6 +87,20 @@ impl NodeData for CircleData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let show_center = !connected_input_pins.contains("center");
+        let show_radius = !connected_input_pins.contains("radius");
+        
+        match (show_center, show_radius) {
+            (true, true) => Some(format!("c: ({},{}) r: {}", 
+                self.center.x, self.center.y, self.radius)),
+            (true, false) => Some(format!("c: ({},{})", 
+                self.center.x, self.center.y)),
+            (false, true) => Some(format!("r: {}", self.radius)),
+            (false, false) => None,
+        }
+    }
 }
 
 

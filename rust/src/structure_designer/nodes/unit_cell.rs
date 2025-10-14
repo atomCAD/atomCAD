@@ -122,5 +122,19 @@ impl NodeData for UnitCellData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let a_connected = connected_input_pins.contains("a");
+        let b_connected = connected_input_pins.contains("b");
+        let c_connected = connected_input_pins.contains("c");
+        
+        if a_connected && b_connected && c_connected {
+            None
+        } else {
+            Some(format!("l: ({:.2},{:.2},{:.2}) a: ({:.1},{:.1},{:.1})", 
+                self.cell_length_a, self.cell_length_b, self.cell_length_c,
+                self.cell_angle_alpha, self.cell_angle_beta, self.cell_angle_gamma))
+        }
+    }
 }
 

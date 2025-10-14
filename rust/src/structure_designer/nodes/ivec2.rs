@@ -59,5 +59,18 @@ impl NodeData for IVec2Data {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let x_connected = connected_input_pins.contains("x");
+        let y_connected = connected_input_pins.contains("y");
+        
+        if x_connected && y_connected {
+            None
+        } else {
+            let x_display = if x_connected { "*" } else { &self.value.x.to_string() };
+            let y_display = if y_connected { "*" } else { &self.value.y.to_string() };
+            Some(format!("({},{})", x_display, y_display))
+        }
+    }
 }
 

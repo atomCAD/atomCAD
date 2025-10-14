@@ -129,6 +129,38 @@ impl NodeData for HalfSpaceData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let center_connected = connected_input_pins.contains("center");
+        let m_index_connected = connected_input_pins.contains("m_index");
+        let shift_connected = connected_input_pins.contains("shift");
+        
+        if center_connected && m_index_connected && shift_connected {
+            None
+        } else {
+            let mut parts = Vec::new();
+            
+            if !center_connected {
+                parts.push(format!("c: ({},{},{})", 
+                    self.center.x, self.center.y, self.center.z));
+            }
+            
+            if !m_index_connected {
+                parts.push(format!("m: ({},{},{})", 
+                    self.miller_index.x, self.miller_index.y, self.miller_index.z));
+            }
+            
+            if !shift_connected {
+                parts.push(format!("s: {}", self.shift));
+            }
+            
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts.join(" "))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

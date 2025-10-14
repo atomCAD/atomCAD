@@ -1,5 +1,6 @@
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use std::any::Any;
+use std::collections::HashSet;
 use crate::util::as_any::AsAny;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -28,6 +29,10 @@ pub trait NodeData: Any + AsAny  {
 
     // Method to clone the trait object
     fn clone_box(&self) -> Box<dyn NodeData>;
+
+    // Method to provide an optional subtitle for the node
+    // connected_input_pins contains the names of input pins that are connected
+    fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,5 +63,9 @@ impl NodeData for NoData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(NoData {})
+    }
+
+    fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
+        None
     }
 }

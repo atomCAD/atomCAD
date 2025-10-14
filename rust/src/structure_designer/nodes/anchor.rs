@@ -71,6 +71,10 @@ impl NodeData for AnchorData {
   fn clone_box(&self) -> Box<dyn NodeData> {
       Box::new(self.clone())
   }
+
+  fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+      self.position.map(|pos| format!("({},{},{})", pos.x, pos.y, pos.z))
+  }
 }
 
 impl AnchorData {

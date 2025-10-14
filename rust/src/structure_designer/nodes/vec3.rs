@@ -68,6 +68,21 @@ impl NodeData for Vec3Data {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let x_connected = connected_input_pins.contains("x");
+        let y_connected = connected_input_pins.contains("y");
+        let z_connected = connected_input_pins.contains("z");
+        
+        if x_connected && y_connected && z_connected {
+            None
+        } else {
+            let x_display = if x_connected { "*".to_string() } else { format!("{:.2}", self.value.x) };
+            let y_display = if y_connected { "*".to_string() } else { format!("{:.2}", self.value.y) };
+            let z_display = if z_connected { "*".to_string() } else { format!("{:.2}", self.value.z) };
+            Some(format!("({},{},{})", x_display, y_display, z_display))
+        }
+    }
     
 }
 

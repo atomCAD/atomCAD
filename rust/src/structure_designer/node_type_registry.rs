@@ -594,6 +594,10 @@ impl NodeTypeRegistry {
           name: "unit_cell".to_string(),
           data_type: DataType::UnitCell,
         },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec3,
+        },
       ],
       output_type: DataType::Geometry,
       node_data_creator: || Box::new(FacetShellData::default()),

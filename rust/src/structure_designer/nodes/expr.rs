@@ -160,6 +160,14 @@ impl NodeData for ExprData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        if self.expression.is_empty() {
+            None
+        } else {
+            Some(self.expression.clone())
+        }
+    }
 }
 
 /// Special loader for ExprData that parses and validates the expression after deserializing

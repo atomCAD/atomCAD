@@ -482,6 +482,15 @@ impl NodeData for FacetShellData {
             Err(error) => return error,
         };
 
+        let center = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 1, 
+            self.center,
+            NetworkResult::extract_ivec3
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+
         // Store evaluation cache for selected node
         if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
           let eval_cache = FacetShellEvalCache {
@@ -490,8 +499,8 @@ impl NodeData for FacetShellData {
           context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
 
-        let center_pos = unit_cell.ivec3_lattice_to_real(&self.center);
-        
+        let center_pos = unit_cell.ivec3_lattice_to_real(&center);
+
         let shapes: Vec<GeoNode> = self.cached_facets.iter().map(|facet| {
           // Get crystallographically correct plane properties (normal and d-spacing)
           let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index);
@@ -518,6 +527,18 @@ impl NodeData for FacetShellData {
 
       fn clone_box(&self) -> Box<dyn NodeData> {
           Box::new(self.clone())
+      }
+
+      fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+          let show_center = !connected_input_pins.contains("center");
+          let num_facets = self.facets.len();
+          
+          if show_center {
+              Some(format!("c: ({},{},{}) f: {}", 
+                  self.center.x, self.center.y, self.center.z, num_facets))
+          } else {
+              Some(format!("f: {}", num_facets))
+          }
       }
 }
 

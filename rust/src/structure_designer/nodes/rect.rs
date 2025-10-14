@@ -93,6 +93,22 @@ impl NodeData for RectData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let show_min_corner = !connected_input_pins.contains("min_corner");
+        let show_extent = !connected_input_pins.contains("extent");
+        
+        match (show_min_corner, show_extent) {
+            (true, true) => Some(format!("mc: ({},{}) e: ({},{})", 
+                self.min_corner.x, self.min_corner.y,
+                self.extent.x, self.extent.y)),
+            (true, false) => Some(format!("mc: ({},{})", 
+                self.min_corner.x, self.min_corner.y)),
+            (false, true) => Some(format!("e: ({},{})", 
+                self.extent.x, self.extent.y)),
+            (false, false) => None,
+        }
+    }
 }
 
 /// Creates a parallelogram in real space from lattice coordinates and unit cell basis vectors.

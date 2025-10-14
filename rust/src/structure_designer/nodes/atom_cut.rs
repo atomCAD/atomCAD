@@ -96,6 +96,10 @@ impl NodeData for AtomCutData {
   fn clone_box(&self) -> Box<dyn NodeData> {
       Box::new(self.clone())
   }
+
+  fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+      None
+  }
 }
 
 impl AtomCutData {

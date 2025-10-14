@@ -145,6 +145,22 @@ impl NodeData for GeoTransData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let show_rotation = !connected_input_pins.contains("rotation");
+        let show_translation = !connected_input_pins.contains("translation");
+        
+        match (show_rotation, show_translation) {
+            (true, true) => Some(format!("r: ({},{},{}) t: ({},{},{})", 
+                self.rotation.x, self.rotation.y, self.rotation.z,
+                self.translation.x, self.translation.y, self.translation.z)),
+            (true, false) => Some(format!("r: ({},{},{})", 
+                self.rotation.x, self.rotation.y, self.rotation.z)),
+            (false, true) => Some(format!("t: ({},{},{})", 
+                self.translation.x, self.translation.y, self.translation.z)),
+            (false, false) => None,
+        }
+    }
 }
 
 

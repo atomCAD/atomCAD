@@ -81,6 +81,14 @@ impl NodeData for ImportXYZData {
   fn clone_box(&self) -> Box<dyn NodeData> {
       Box::new(self.clone())
   }
+
+  fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+      if connected_input_pins.contains("file_name") {
+          None
+      } else {
+          self.file_name.clone()
+      }
+  }
 }
 
 impl ImportXYZData {
