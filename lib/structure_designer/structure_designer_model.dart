@@ -267,6 +267,25 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  String? deleteNodeNetwork(String networkName) {
+    final result = structure_designer_api.deleteNodeNetwork(
+      networkName: networkName,
+    );
+
+    if (result.success) {
+      // Clear the active network view if it was the deleted network
+      if (nodeNetworkView != null && nodeNetworkView!.name == networkName) {
+        nodeNetworkView = null;
+      }
+      nodeNetworkNames =
+          structure_designer_api.getNodeNetworksWithValidation() ?? [];
+      notifyListeners();
+      return null; // Success
+    } else {
+      return result.errorMessage; // Return error message
+    }
+  }
+
   void setReturnNodeId(BigInt? nodeId) {
     structure_designer_api.setReturnNodeId(nodeId: nodeId);
     refreshFromKernel();
