@@ -110,6 +110,7 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         node_data_creator: || Box::new(NoData {}), // Default, will be replaced with actual data
         node_data_saver: crate::structure_designer::node_type::no_data_saver,
         node_data_loader: crate::structure_designer::node_type::no_data_loader,
+        public: true, // TODO: we should save this info (with proper backward compatibility), but we do not save it yet
     })
 }
 

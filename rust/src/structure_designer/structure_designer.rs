@@ -200,6 +200,7 @@ impl StructureDesigner {
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,
         node_data_loader: no_data_loader,
+        public: true,
       }
     ));
   }

@@ -81,6 +81,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry, // will change based on ParameterData::data_type.
+      public: true,
       node_data_creator: || Box::new(ParameterData {
         param_index: 0,
         param_name: "param".to_string(),
@@ -97,6 +98,7 @@ impl NodeTypeRegistry {
       name: "expr".to_string(),
       parameters: vec![],
       output_type: DataType::None, // will change based on the expression
+      public: true,
       node_data_creator: || Box::new(ExprData {
         parameters: vec![
           ExprParameter {
@@ -118,6 +120,7 @@ impl NodeTypeRegistry {
       name: "value".to_string(),
       parameters: vec![],
       output_type: DataType::None,
+      public: false,
       node_data_creator: || Box::new(ValueData {
         value: NetworkResult::None,
       }),
@@ -141,6 +144,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Array(Box::new(DataType::Float)), // will change based on the output type
+      public: true,
       node_data_creator: || Box::new(MapData {
         input_type: DataType::Float,
         output_type: DataType::Float,
@@ -153,6 +157,7 @@ impl NodeTypeRegistry {
       name: "string".to_string(),
       parameters: vec![],
       output_type: DataType::String,
+      public: true,
       node_data_creator: || Box::new(StringData {
         value: "".to_string(),
       }),
@@ -164,6 +169,7 @@ impl NodeTypeRegistry {
       name: "bool".to_string(),
       parameters: vec![],
       output_type: DataType::Bool,
+      public: true,
       node_data_creator: || Box::new(BoolData {
         value: false
       }),
@@ -175,6 +181,7 @@ impl NodeTypeRegistry {
       name: "int".to_string(),
       parameters: vec![],
       output_type: DataType::Int,
+      public: true,
       node_data_creator: || Box::new(IntData {
         value: 0
       }),
@@ -186,6 +193,7 @@ impl NodeTypeRegistry {
       name: "float".to_string(),
       parameters: vec![],
       output_type: DataType::Float,
+      public: true,
       node_data_creator: || Box::new(FloatData {
         value: 0.0
       }),
@@ -206,6 +214,7 @@ impl NodeTypeRegistry {
         },        
       ],
       output_type: DataType::IVec2,
+      public: true,
       node_data_creator: || Box::new(IVec2Data {
         value: IVec2::new(0, 0)
       }),
@@ -230,6 +239,7 @@ impl NodeTypeRegistry {
         },        
       ],
       output_type: DataType::IVec3,
+      public: true,
       node_data_creator: || Box::new(IVec3Data {
         value: IVec3::new(0, 0, 0)
       }),
@@ -250,6 +260,7 @@ impl NodeTypeRegistry {
         },        
       ],
       output_type: DataType::Vec2,
+      public: true,
       node_data_creator: || Box::new(Vec2Data {
         value: DVec2::new(0.0, 0.0)
       }),
@@ -274,6 +285,7 @@ impl NodeTypeRegistry {
         },        
       ],
       output_type: DataType::Vec3,
+      public: true,
       node_data_creator: || Box::new(Vec3Data {
         value: DVec3::new(0.0, 0.0, 0.0)
       }),
@@ -298,6 +310,7 @@ impl NodeTypeRegistry {
         },        
       ],
       output_type: DataType::Array(Box::new(DataType::Int)),
+      public: true,
       node_data_creator: || Box::new(RangeData {
         start: 0,
         step: 1,
@@ -324,6 +337,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::UnitCell,
+      public: true,
       node_data_creator: || Box::new(UnitCellData {
         cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
         cell_length_b: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
@@ -353,6 +367,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(RectData {
         min_corner: IVec2::new(-1, -1),
         extent: IVec2::new(2, 2),
@@ -378,6 +393,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(CircleData {
         center: IVec2::new(0, 0),
         radius: 1,
@@ -395,6 +411,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(RegPolyData {
         num_sides: 3,
         radius: 3,
@@ -412,6 +429,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(PolygonData {
         vertices: vec![
           IVec2::new(-1, -1),
@@ -432,6 +450,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(Union2DData {}),
       node_data_saver: generic_node_data_saver::<Union2DData>,
       node_data_loader: generic_node_data_loader::<Union2DData>,
@@ -446,6 +465,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(Intersect2DData {}),
       node_data_saver: generic_node_data_saver::<Intersect2DData>,
       node_data_loader: generic_node_data_loader::<Intersect2DData>,
@@ -464,6 +484,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(Diff2DData {}),
       node_data_saver: generic_node_data_saver::<Diff2DData>,
       node_data_loader: generic_node_data_loader::<Diff2DData>,
@@ -478,6 +499,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry2D,
+      public: true,
       node_data_creator: || Box::new(HalfPlaneData {
         point1: IVec2::new(0, 0),
         point2: IVec2::new(1, 0),
@@ -499,6 +521,7 @@ impl NodeTypeRegistry {
           },  
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(ExtrudeData {
         height: 1,
       }),
@@ -523,6 +546,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(CuboidData {
         min_corner: IVec3::new(-1, -1, -1),
         extent: IVec3::new(2, 2, 2),
@@ -548,6 +572,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(SphereData {
         center: IVec3::new(0, 0, 0),
         radius: 1,
@@ -577,6 +602,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(HalfSpaceData {
         max_miller_index: 2,
         miller_index: IVec3::new(0, 1, 0), // Default normal along y-axis
@@ -600,6 +626,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(FacetShellData::default()),
       node_data_saver: generic_node_data_saver::<FacetShellData>,
       node_data_loader: generic_node_data_loader::<FacetShellData>,
@@ -614,6 +641,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(UnionData {}),
       node_data_saver: generic_node_data_saver::<UnionData>,
       node_data_loader: generic_node_data_loader::<UnionData>,
@@ -628,6 +656,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(IntersectData {}),
       node_data_saver: generic_node_data_saver::<IntersectData>,
       node_data_loader: generic_node_data_loader::<IntersectData>,
@@ -646,6 +675,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(DiffData {}),
       node_data_saver: generic_node_data_saver::<DiffData>,
       node_data_loader: generic_node_data_loader::<DiffData>,
@@ -668,6 +698,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
+      public: true,
       node_data_creator: || Box::new(GeoTransData {
         translation: IVec3::new(0, 0, 0),
         rotation: IVec3::new(0, 0, 0),
@@ -686,6 +717,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(GeoToAtomData {
         primary_atomic_number: 6,
         secondary_atomic_number: 6,
@@ -704,6 +736,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(EditAtomData::new()),
       node_data_saver: |node_data, _design_dir| {
         if let Some(data) = node_data.as_any_mut().downcast_ref::<EditAtomData>() {
@@ -737,6 +770,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(AtomTransData {
         translation: DVec3::new(0.0, 0.0, 0.0),
         rotation: DVec3::new(0.0, 0.0, 0.0),
@@ -754,6 +788,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(ImportXYZData::new()),
       node_data_saver: import_xyz_data_saver,
       node_data_loader: import_xyz_data_loader,
@@ -772,6 +807,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(ExportXYZData::new()),
       node_data_saver: export_xyz_data_saver,
       node_data_loader: export_xyz_data_loader,
@@ -790,6 +826,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(AtomCutData::new()),
       node_data_saver: generic_node_data_saver::<AtomCutData>,
       node_data_loader: generic_node_data_loader::<AtomCutData>,
@@ -804,6 +841,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(AnchorData::new()),
       node_data_saver: generic_node_data_saver::<AnchorData>,
       node_data_loader: generic_node_data_loader::<AnchorData>,
@@ -822,6 +860,7 @@ impl NodeTypeRegistry {
         },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(StampData::new()),
       node_data_saver: generic_node_data_saver::<StampData>,
       node_data_loader: generic_node_data_loader::<StampData>,
@@ -836,6 +875,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
+      public: true,
       node_data_creator: || Box::new(RelaxData {}),
       node_data_saver: generic_node_data_saver::<RelaxData>,
       node_data_loader: generic_node_data_loader::<RelaxData>,
@@ -844,10 +884,13 @@ impl NodeTypeRegistry {
     return ret;
   }
 
+  /// Retrieves the names of all public node types available to users.
+  /// Only built-in node types can be non-public; all node networks are considered public.
   pub fn get_node_type_names(&self) -> Vec<String> {
     let mut names: Vec<String> = self
         .built_in_node_types
         .values()
+        .filter(|node| node.public)
         .map(|node| node.name.clone())
         .collect();
 
