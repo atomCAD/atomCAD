@@ -64,7 +64,7 @@ impl DataType {
             .map(|t| t.to_string())
             .collect::<Vec<_>>()
             .join(",");
-          format!("({}) => {}", params, func_type.output_type.to_string())
+          format!("({}) -> {}", params, func_type.output_type.to_string())
         }
       }
     }

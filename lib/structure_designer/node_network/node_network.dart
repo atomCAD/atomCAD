@@ -43,8 +43,36 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 
   // Physical types (green family - real-world matter)
   'Atomic': Color(0xFF66BB6A), // Light green
+
+  // Crystal structure types (teal family - crystalline matter)
+  'UnitCell': Color(0xFF26A69A), // Teal
+
+  // Function types (amber family - computational operations)
+  '->': Color(0xFFFFA726), // Amber
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
+
+/// Gets the appropriate color for a data type based on its name.
+///
+/// If the type name contains '->' it's treated as a function type.
+/// Otherwise, it looks for any of the base type names in DATA_TYPE_COLORS.
+/// For array types like [T], this will return the color of the base type T.
+Color getDataTypeColor(String typeName) {
+  // Check for function types first
+  if (typeName.contains('->')) {
+    return DATA_TYPE_COLORS['->']!;
+  }
+
+  // Check for exact matches and partial matches in the type name
+  for (final entry in DATA_TYPE_COLORS.entries) {
+    if (typeName.contains(entry.key)) {
+      return entry.value;
+    }
+  }
+
+  // Return default color if no match found
+  return DEFAULT_DATA_TYPE_COLOR;
+}
 
 /// Wraps the NodeNetworkPainter to add interaction capabilities
 class NodeNetworkInteractionLayer extends StatelessWidget {
@@ -297,10 +325,10 @@ class NodeNetworkState extends State<NodeNetwork> {
             focusNode: focusNode,
             autofocus: true,
             onKeyEvent: (node, event) {
-              print("node_network.dart event.logicalKey: " +
-                  event.logicalKey.toString() +
-                  " event.physicalKey: " +
-                  event.physicalKey.toString());
+              //print("node_network.dart event.logicalKey: " +
+              //    event.logicalKey.toString() +
+              //    " event.physicalKey: " +
+              //    event.physicalKey.toString());
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
                   event.logicalKey == LogicalKeyboardKey.keyD ||

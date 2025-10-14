@@ -26,10 +26,6 @@ const Color NODE_TITLE_COLOR_RETURN = Color(0xFF0D47A1); // Dark blue
 const double WIRE_GLOW_BLUR_RADIUS = 8.0;
 const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
 
-Color getDataTypeColor(String dataType) {
-  return DATA_TYPE_COLORS[dataType] ?? DEFAULT_DATA_TYPE_COLOR;
-}
-
 class PinViewWidget extends StatelessWidget {
   final String dataType;
   final bool multi;
