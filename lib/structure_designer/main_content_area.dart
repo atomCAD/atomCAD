@@ -51,14 +51,20 @@ class MainContentArea extends StatelessWidget {
     );
   }
 
+  /// Builds the NodeNetwork widget with the global key
+  Widget _buildNodeNetwork() {
+    return NodeNetwork(key: nodeNetworkKey, graphModel: graphModel);
+  }
+
   /// Builds the network panel for vertical layout (side-by-side network and data)
   Widget _buildVerticalNetworkPanel() {
     return Row(
+      key: const ValueKey('vertical_layout'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           flex: 4,
-          child: NodeNetwork(key: nodeNetworkKey, graphModel: graphModel),
+          child: _buildNodeNetwork(),
         ),
         _buildNodeDataPanel(isVertical: true),
       ],
@@ -68,11 +74,12 @@ class MainContentArea extends StatelessWidget {
   /// Builds the network panel for horizontal layout (stacked network and data)
   Widget _buildHorizontalNetworkPanel() {
     return Column(
+      key: const ValueKey('horizontal_layout'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           flex: 4,
-          child: NodeNetwork(key: nodeNetworkKey, graphModel: graphModel),
+          child: _buildNodeNetwork(),
         ),
         _buildNodeDataPanel(isVertical: false),
       ],
