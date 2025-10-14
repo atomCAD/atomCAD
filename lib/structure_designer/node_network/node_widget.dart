@@ -311,6 +311,26 @@ class NodeWidget extends StatelessWidget {
             ],
           ),
         ),
+        // Subtitle (if present)
+        if (node.subtitle != null && node.subtitle!.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(left: 8, right: 8, bottom: 4),
+            child: Tooltip(
+              message: node.subtitle!,
+              preferBelow: true,
+              child: Text(
+                node.subtitle!,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
       ],
     );
 

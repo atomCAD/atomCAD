@@ -9,7 +9,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_painter
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 // Node dimensions and layout constants
-const double NODE_WIDTH = 150.0;
+const double NODE_WIDTH = 160.0;
 const double NODE_VERT_WIRE_OFFSET = 33.0;
 const double NODE_VERT_WIRE_OFFSET_EMPTY = 42.0;
 const double NODE_VERT_WIRE_OFFSET_FUNCTION_PIN = 16.0;
@@ -297,11 +297,14 @@ class NodeNetworkState extends State<NodeNetwork> {
             focusNode: focusNode,
             autofocus: true,
             onKeyEvent: (node, event) {
-              print("node_network.dart event.logicalKey: " + event.logicalKey.toString() + " event.physicalKey: " + event.physicalKey.toString());
-              if (event.logicalKey == LogicalKeyboardKey.delete
-              || event.logicalKey == LogicalKeyboardKey.backspace
-              || event.logicalKey == LogicalKeyboardKey.keyD
-              || event.physicalKey == PhysicalKeyboardKey.delete) {
+              print("node_network.dart event.logicalKey: " +
+                  event.logicalKey.toString() +
+                  " event.physicalKey: " +
+                  event.physicalKey.toString());
+              if (event.logicalKey == LogicalKeyboardKey.delete ||
+                  event.logicalKey == LogicalKeyboardKey.backspace ||
+                  event.logicalKey == LogicalKeyboardKey.keyD ||
+                  event.physicalKey == PhysicalKeyboardKey.delete) {
                 model.removeSelected();
                 return KeyEventResult.handled;
               }
