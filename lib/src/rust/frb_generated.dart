@@ -5917,8 +5917,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -5931,6 +5931,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       returnNode: dco_decode_bool(arr[8]),
       error: dco_decode_opt_String(arr[9]),
       outputString: dco_decode_opt_String(arr[10]),
+      subtitle: dco_decode_opt_String(arr[11]),
     );
   }
 
@@ -7449,6 +7450,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_returnNode = sse_decode_bool(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
     var var_outputString = sse_decode_opt_String(deserializer);
+    var var_subtitle = sse_decode_opt_String(deserializer);
     return NodeView(
         id: var_id,
         nodeTypeName: var_nodeTypeName,
@@ -7460,7 +7462,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         displayed: var_displayed,
         returnNode: var_returnNode,
         error: var_error,
-        outputString: var_outputString);
+        outputString: var_outputString,
+        subtitle: var_subtitle);
   }
 
   @protected
@@ -9088,6 +9091,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.returnNode, serializer);
     sse_encode_opt_String(self.error, serializer);
     sse_encode_opt_String(self.outputString, serializer);
+    sse_encode_opt_String(self.subtitle, serializer);
   }
 
   @protected

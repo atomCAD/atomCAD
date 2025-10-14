@@ -214,6 +214,19 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
           let output_string = cad_instance.structure_designer.last_generated_structure_designer_scene.node_output_strings.get(&node.id).cloned();
 
+          // Collect connected input pin names for subtitle generation
+          let mut connected_input_pins = std::collections::HashSet::new();
+          for (param_index, argument) in node.arguments.iter().enumerate() {
+            if !argument.is_empty() {
+              if param_index < node_type.parameters.len() {
+                connected_input_pins.insert(node_type.parameters[param_index].name.clone());
+              }
+            }
+          }
+
+          // Generate subtitle using the node's get_subtitle method
+          let subtitle = node.data.get_subtitle(&connected_input_pins);
+
           let output_type = node_type.output_type.clone();
           let function_type = node_type.get_function_type();
           node_network_view.nodes.insert(node.id, NodeView {
@@ -228,6 +241,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             return_node: node_network.return_node_id == Some(node.id),
             error,
             output_string,
+            subtitle,
           });
         }
 
