@@ -75,8 +75,10 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::expr::ExprData;
 use crate::structure_designer::nodes::map::MapData;
+use crate::structure_designer::nodes::motif::MotifData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIMapData;
+use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprParameter;
@@ -1207,6 +1209,25 @@ pub fn get_map_data(node_id: u64) -> Option<APIMapData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_motif_data(node_id: u64) -> Option<APIMotifData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+        let motif_data = node_data.as_any_ref().downcast_ref::<MotifData>()?;
+
+        Some(APIMotifData {
+          definition: motif_data.definition.clone(),
+          name: motif_data.name.clone(),
+          error: motif_data.error.clone(),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_int_data(node_id: u64, data: APIIntData) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
@@ -1608,6 +1629,31 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
                 });
 
                 cad_instance.structure_designer.set_node_network_data(node_id, expr_data);
+                refresh_renderer(cad_instance, false);
+
+                APIResult { success: true, error_message: String::new() }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_motif_data(node_id: u64, data: APIMotifData) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let motif_data = Box::new(MotifData {
+                    definition: data.definition,
+                    name: data.name,
+                    motif: None,
+                    error: None,
+                });
+
+                cad_instance.structure_designer.set_node_network_data(node_id, motif_data);
                 refresh_renderer(cad_instance, false);
 
                 APIResult { success: true, error_message: String::new() }

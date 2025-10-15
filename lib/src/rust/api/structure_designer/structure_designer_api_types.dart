@@ -7,7 +7,6 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `APIMotifData`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `eq`, `fmt`
 
 class APIAnchorData {
@@ -590,6 +589,30 @@ class APIMapData {
           runtimeType == other.runtimeType &&
           inputType == other.inputType &&
           outputType == other.outputType;
+}
+
+class APIMotifData {
+  final String definition;
+  final String? name;
+  final String? error;
+
+  const APIMotifData({
+    required this.definition,
+    this.name,
+    this.error,
+  });
+
+  @override
+  int get hashCode => definition.hashCode ^ name.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMotifData &&
+          runtimeType == other.runtimeType &&
+          definition == other.definition &&
+          name == other.name &&
+          error == other.error;
 }
 
 class APINetworkWithValidationErrors {

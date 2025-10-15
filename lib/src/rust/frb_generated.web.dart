@@ -124,6 +124,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData dco_decode_api_map_data(dynamic raw);
 
   @protected
+  APIMotifData dco_decode_api_motif_data(dynamic raw);
+
+  @protected
   APINetworkWithValidationErrors dco_decode_api_network_with_validation_errors(
       dynamic raw);
 
@@ -261,6 +264,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData dco_decode_box_autoadd_api_map_data(dynamic raw);
+
+  @protected
+  APIMotifData dco_decode_box_autoadd_api_motif_data(dynamic raw);
 
   @protected
   APIParameterData dco_decode_box_autoadd_api_parameter_data(dynamic raw);
@@ -485,6 +491,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData? dco_decode_opt_box_autoadd_api_map_data(dynamic raw);
 
   @protected
+  APIMotifData? dco_decode_opt_box_autoadd_api_motif_data(dynamic raw);
+
+  @protected
   APIParameterData? dco_decode_opt_box_autoadd_api_parameter_data(dynamic raw);
 
   @protected
@@ -687,6 +696,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData sse_decode_api_map_data(SseDeserializer deserializer);
 
   @protected
+  APIMotifData sse_decode_api_motif_data(SseDeserializer deserializer);
+
+  @protected
   APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
       SseDeserializer deserializer);
 
@@ -845,6 +857,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData sse_decode_box_autoadd_api_map_data(SseDeserializer deserializer);
+
+  @protected
+  APIMotifData sse_decode_box_autoadd_api_motif_data(
+      SseDeserializer deserializer);
 
   @protected
   APIParameterData sse_decode_box_autoadd_api_parameter_data(
@@ -1116,6 +1132,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMotifData? sse_decode_opt_box_autoadd_api_motif_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIParameterData? sse_decode_opt_box_autoadd_api_parameter_data(
       SseDeserializer deserializer);
 
@@ -1348,6 +1368,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_map_data(APIMapData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_motif_data(APIMotifData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_network_with_validation_errors(
       APINetworkWithValidationErrors self, SseSerializer serializer);
 
@@ -1513,6 +1536,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_map_data(
       APIMapData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_motif_data(
+      APIMotifData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_parameter_data(
@@ -1785,6 +1812,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_map_data(
       APIMapData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_motif_data(
+      APIMotifData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_parameter_data(

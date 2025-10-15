@@ -38,6 +38,7 @@ pub mod range;
 pub mod map;
 pub mod value;
 pub mod unit_cell;
+pub mod motif;
 
 
 

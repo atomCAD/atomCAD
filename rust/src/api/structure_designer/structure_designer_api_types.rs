@@ -272,4 +272,6 @@ pub struct APIUnitCellData {
 
 pub struct APIMotifData {
   pub definition: String, // The motif definition text
+  pub name: Option<String>, // Optional name for the motif
+  pub error: Option<String>, // Optional error message from parsing
 }

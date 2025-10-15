@@ -16,6 +16,7 @@ use super::nodes::expr::{ExprData, expr_data_loader};
 use super::nodes::expr::ExprParameter;
 use super::nodes::value::ValueData;
 use super::nodes::map::MapData;
+use super::nodes::motif::{MotifData, motif_data_loader};
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
@@ -706,6 +707,21 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<GeoTransData>,
       node_data_loader: generic_node_data_loader::<GeoTransData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "motif".to_string(),
+      parameters: vec![],
+      output_type: DataType::Motif,
+      public: true,
+      node_data_creator: || Box::new(MotifData {
+        definition: "".to_string(),
+        name: None,
+        motif: None,
+        error: None,
+      }),
+      node_data_saver: generic_node_data_saver::<MotifData>,
+      node_data_loader: motif_data_loader,
     });
 
     ret.add_node_type(NodeType {

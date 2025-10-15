@@ -211,6 +211,9 @@ APIExprData? getExprData({required BigInt nodeId}) => RustLib.instance.api
 APIMapData? getMapData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetMapData(nodeId: nodeId);
 
+APIMotifData? getMotifData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetMotifData(nodeId: nodeId);
+
 void setIntData({required BigInt nodeId, required APIIntData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetIntData(
@@ -340,6 +343,11 @@ void setMapData({required BigInt nodeId, required APIMapData data}) =>
 APIResult setExprData({required BigInt nodeId, required APIExprData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetExprData(
+            nodeId: nodeId, data: data);
+
+APIResult setMotifData({required BigInt nodeId, required APIMotifData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetMotifData(
             nodeId: nodeId, data: data);
 
 void deleteSelected() => RustLib.instance.api
