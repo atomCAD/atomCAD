@@ -214,6 +214,10 @@ class NodeWidget extends StatelessWidget {
                       ? 'Unset as return node'
                       : 'Set as return node'),
                 ),
+                PopupMenuItem(
+                  value: 'duplicate',
+                  child: Text('Duplicate node'),
+                ),
               ],
             ).then((value) {
               if (value == 'return') {
@@ -226,6 +230,10 @@ class NodeWidget extends StatelessWidget {
                   // Set as return node (pass the node ID)
                   model.setReturnNodeId(node.id);
                 }
+              } else if (value == 'duplicate') {
+                final model =
+                    Provider.of<StructureDesignerModel>(context, listen: false);
+                model.duplicateNode(node.id);
               }
             });
           },

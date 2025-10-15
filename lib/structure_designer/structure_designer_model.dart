@@ -413,6 +413,13 @@ class StructureDesignerModel extends ChangeNotifier {
     return nodeId;
   }
 
+  BigInt duplicateNode(BigInt nodeId) {
+    if (nodeNetworkView == null) return BigInt.zero;
+    final newNodeId = structure_designer_api.duplicateNode(nodeId: nodeId);
+    refreshFromKernel();
+    return newNodeId;
+  }
+
   void setIntData(BigInt nodeId, APIIntData data) {
     structure_designer_api.setIntData(nodeId: nodeId, data: data);
     refreshFromKernel();
