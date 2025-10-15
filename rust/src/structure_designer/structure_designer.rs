@@ -357,6 +357,32 @@ impl StructureDesigner {
     node_id
   }
 
+  pub fn duplicate_node(&mut self, node_id: u64) -> u64 {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return 0,
+    };
+
+    // Early return if the node network doesn't exist
+    let new_node_id = self.node_type_registry.node_networks.get_mut(node_network_name)
+      .and_then(|node_network| node_network.duplicate_node(node_id))
+      .unwrap_or(0);
+    
+    // If we successfully duplicated a node, apply the display policy with this node as dirty
+    if new_node_id != 0 {
+      
+      // Create a HashSet with just the new node ID
+      let mut dirty_nodes = HashSet::new();
+      dirty_nodes.insert(new_node_id);
+      
+      // Apply display policy considering only this node as dirty
+      self.apply_node_display_policy(Some(&dirty_nodes));
+    }
+    
+    new_node_id
+  }
+
 
   pub fn move_node(&mut self, node_id: u64, position: DVec2) {
     // Early return if active_node_network_name is None

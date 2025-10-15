@@ -22,6 +22,9 @@ BigInt addNode({required String nodeTypeName, required APIVec2 position}) =>
     RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiAddNode(
         nodeTypeName: nodeTypeName, position: position);
 
+BigInt duplicateNode({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiDuplicateNode(nodeId: nodeId);
+
 bool canConnectNodes(
         {required BigInt sourceNodeId,
         required int sourceOutputPinIndex,

@@ -294,6 +294,20 @@ pub fn add_node(node_type_name: &str, position: APIVec2) -> u64 {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn duplicate_node(node_id: u64) -> u64 {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let ret = cad_instance.structure_designer.duplicate_node(node_id);
+        refresh_renderer(cad_instance, false);
+        ret
+      },
+      0 // Default value if CAD_INSTANCE is None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn can_connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_node_id: u64, dest_param_index: usize) -> bool {
   unsafe {
     with_cad_instance_or(

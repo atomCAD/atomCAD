@@ -410,4 +410,44 @@ impl NodeNetwork {
       false
     }
   }
+
+  /// Duplicates a node with all its data and arguments
+  /// 
+  /// # Parameters
+  /// * `node_id` - The ID of the node to duplicate
+  /// 
+  /// # Returns
+  /// Returns Some(new_node_id) if the node was successfully duplicated, None if the node doesn't exist.
+  pub fn duplicate_node(&mut self, node_id: u64) -> Option<u64> {
+    // Check if the node exists
+    let original_node = self.nodes.get(&node_id)?;
+    
+    // Generate new node ID
+    let new_node_id = self.next_node_id;
+    self.next_node_id += 1;
+    
+    // Clone the node data using the clone_box method
+    let cloned_data = original_node.data.clone_box();
+    
+    // Clone the arguments (connections)
+    let cloned_arguments = original_node.arguments.clone();
+    
+    // Calculate new position (180 units to the right)
+    let new_position = DVec2::new(original_node.position.x + 180.0, original_node.position.y);
+    
+    // Create the duplicated node
+    let duplicated_node = Node {
+      id: new_node_id,
+      node_type_name: original_node.node_type_name.clone(),
+      position: new_position,
+      arguments: cloned_arguments,
+      data: cloned_data,
+      custom_node_type: original_node.custom_node_type.clone(),
+    };
+    
+    // Insert the duplicated node into the network
+    self.nodes.insert(new_node_id, duplicated_node);
+    
+    Some(new_node_id)
+  }
 }
