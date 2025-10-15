@@ -46,6 +46,7 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 
   // Crystal structure types (teal family - crystalline matter)
   'UnitCell': Color(0xFF26A69A), // Teal
+  'Motif': Color(0xFF00ACC1), // Light blue-green (cyan)
 
   // Function types (amber family - computational operations)
   '->': Color(0xFFFFA726), // Amber

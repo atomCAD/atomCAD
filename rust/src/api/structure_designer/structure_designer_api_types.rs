@@ -28,6 +28,7 @@ pub enum APIDataTypeBase {
   Geometry2D,
   Geometry,
   Atomic,
+  Motif,
   Custom
  }
  
@@ -267,4 +268,8 @@ pub struct APIUnitCellData {
   pub cell_angle_alpha: f64, // in degrees
   pub cell_angle_beta: f64,  // in degrees
   pub cell_angle_gamma: f64, // in degrees
+}
+
+pub struct APIMotifData {
+  pub definition: String, // The motif definition text
 }

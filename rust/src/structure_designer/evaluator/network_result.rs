@@ -8,6 +8,7 @@ use crate::util::transform::Transform2D;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::structure_designer::evaluator::motif::Motif;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -123,6 +124,7 @@ pub enum NetworkResult {
   Geometry2D(GeometrySummary2D),
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
+  Motif(Motif),
   Array(Vec<NetworkResult>),
   Function(Closure), 
   Error(String),
@@ -234,10 +236,18 @@ impl NetworkResult {
     }
   }
 
-  /// Extracts a String value from the NetworkResult, returns None if not a String
+  /// Extracts an AtomicStructure value from the NetworkResult, returns None if not an Atomic
   pub fn extract_atomic(self) -> Option<AtomicStructure> {
     match self {
       NetworkResult::Atomic(value) => Some(value),
+      _ => None,
+    }
+  }
+
+  /// Extracts a Motif value from the NetworkResult, returns None if not a Motif
+  pub fn extract_motif(self) -> Option<Motif> {
+    match self {
+      NetworkResult::Motif(value) => Some(value),
       _ => None,
     }
   }
@@ -377,6 +387,7 @@ impl NetworkResult {
       NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
       NetworkResult::Geometry(_) => "Geometry".to_string(),
       NetworkResult::Atomic(_) => "Atomic".to_string(),
+      NetworkResult::Motif(_) => "Motif".to_string(),
       NetworkResult::Error(_) => "Error".to_string(),
     }
   }

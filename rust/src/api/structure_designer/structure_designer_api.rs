@@ -97,6 +97,7 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
         APIDataTypeBase::Geometry2D => DataType::Geometry2D,
         APIDataTypeBase::Geometry => DataType::Geometry,
         APIDataTypeBase::Atomic => DataType::Atomic,
+        APIDataTypeBase::Motif => DataType::Motif,
         APIDataTypeBase::Custom => {
             if let Some(custom_str) = &api_data_type.custom_data_type {
                 return DataType::from_string(custom_str);
@@ -134,6 +135,7 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::Geometry2D => APIDataTypeBase::Geometry2D,
         DataType::Geometry => APIDataTypeBase::Geometry,
         DataType::Atomic => APIDataTypeBase::Atomic,
+        DataType::Motif => APIDataTypeBase::Motif,
         _ => APIDataTypeBase::Custom, // All other types are considered custom
     };
 

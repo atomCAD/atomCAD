@@ -123,6 +123,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'Geometry';
       case APIDataTypeBase.atomic:
         return 'Atomic';
+      case APIDataTypeBase.motif:
+        return 'Motif';
       case APIDataTypeBase.custom:
         return 'Custom...';
     }

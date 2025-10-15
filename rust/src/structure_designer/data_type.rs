@@ -21,6 +21,7 @@ pub enum DataType {
   Geometry2D,
   Geometry,
   Atomic,
+  Motif,
   Array(Box<DataType>),
   Function(FunctionType),
 }
@@ -48,6 +49,7 @@ impl DataType {
       DataType::Geometry2D => "Geometry2D".to_string(),
       DataType::Geometry => "Geometry".to_string(),
       DataType::Atomic => "Atomic".to_string(),
+      DataType::Motif => "Motif".to_string(),
       DataType::Array(element_type) => {
         format!("[{}]", element_type.to_string())
       },
@@ -242,6 +244,7 @@ impl DataTypeParser {
           "Geometry2D" => Ok(DataType::Geometry2D),
           "Geometry" => Ok(DataType::Geometry),
           "Atomic" => Ok(DataType::Atomic),
+          "Motif" => Ok(DataType::Motif),
           _ => Err(format!("Unknown data type: {}", name)),
         }
       },

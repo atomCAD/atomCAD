@@ -4923,7 +4923,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 10 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D,
 11 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry,
 12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic,
-13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif,
+14 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
             _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
@@ -6979,7 +6980,8 @@ impl flutter_rust_bridge::IntoDart
             Self::Geometry2D => 10.into_dart(),
             Self::Geometry => 11.into_dart(),
             Self::Atomic => 12.into_dart(),
-            Self::Custom => 13.into_dart(),
+            Self::Motif => 13.into_dart(),
+            Self::Custom => 14.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -8495,7 +8497,8 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::U
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D => { 10 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry => { 11 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic => { 12 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 13 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif => { 13 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 14 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }
