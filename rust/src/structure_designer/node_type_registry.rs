@@ -904,14 +904,16 @@ impl NodeTypeRegistry {
   }
 
   pub fn get_node_network_names(&self) -> Vec<String> {
-    self.node_networks
+    let mut names: Vec<String> = self.node_networks
             .values()
             .map(|network| network.node_type.name.clone())
-            .collect()
+            .collect();
+    names.sort();
+    names
   }
 
   pub fn get_node_networks_with_validation(&self) -> Vec<APINetworkWithValidationErrors> {
-    self.node_networks
+    let mut networks: Vec<APINetworkWithValidationErrors> = self.node_networks
       .values()
       .map(|network| {
         let validation_errors = if network.validation_errors.is_empty() {
@@ -931,7 +933,9 @@ impl NodeTypeRegistry {
           validation_errors,
         }
       })
-      .collect()
+      .collect();
+    networks.sort_by(|a, b| a.name.cmp(&b.name));
+    networks
   }
 
   pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {
