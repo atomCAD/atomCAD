@@ -112,13 +112,13 @@ impl NodeData for GeoToAtomData {
         NetworkResult::Geometry(mesh) => mesh,
         _ => return NetworkResult::Atomic(AtomicStructure::new()),
       };
-    
+
       let mut atomic_structure = AtomicStructure::new();
       //atomic_structure.frame_transform = mesh.frame_transform.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
-    
+
       // id:0 means there is no atom there
       let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
-    
+
       atomic_structure.crystal_meta_data = CrystalMetaData {
         primary_atomic_number: self.primary_atomic_number,
         secondary_atomic_number: self.secondary_atomic_number,

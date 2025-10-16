@@ -1,5 +1,6 @@
 use glam::i32::IVec2;
 use glam::i32::IVec3;
+use glam::f64::DVec3;
 
 pub fn subdivide_box(
   start_pos: &IVec3,
@@ -102,5 +103,54 @@ pub fn subdivide_rect(
         }
     }
 
+    result
+}
+
+pub fn subdivide_box_float(
+    start_pos: &DVec3,
+    size: &DVec3,
+    should_subdivide_x: bool,
+    should_subdivide_y: bool,
+    should_subdivide_z: bool
+) -> Vec<(DVec3, DVec3)> {
+    let mut result = Vec::new();
+    
+    // Calculate subdivision sizes (simply half the parent size)
+    let sub_size_x = if should_subdivide_x { size.x / 2.0 } else { size.x };
+    let sub_size_y = if should_subdivide_y { size.y / 2.0 } else { size.y };
+    let sub_size_z = if should_subdivide_z { size.z / 2.0 } else { size.z };
+    
+    // Calculate the number of subdivisions in each direction
+    let subdivisions_x = if should_subdivide_x { 2 } else { 1 };
+    let subdivisions_y = if should_subdivide_y { 2 } else { 1 };
+    let subdivisions_z = if should_subdivide_z { 2 } else { 1 };
+    
+    // Generate all subdivision boxes
+    for dx in 0..subdivisions_x {
+        let offset_x = if dx == 0 { 0.0 } else { sub_size_x };
+        
+        for dy in 0..subdivisions_y {
+            let offset_y = if dy == 0 { 0.0 } else { sub_size_y };
+            
+            for dz in 0..subdivisions_z {
+                let offset_z = if dz == 0 { 0.0 } else { sub_size_z };
+                
+                let sub_start = DVec3::new(
+                    start_pos.x + offset_x,
+                    start_pos.y + offset_y,
+                    start_pos.z + offset_z
+                );
+                
+                let sub_size = DVec3::new(
+                    sub_size_x,
+                    sub_size_y,
+                    sub_size_z
+                );
+                
+                result.push((sub_start, sub_size));
+            }
+        }
+    }
+    
     result
 }

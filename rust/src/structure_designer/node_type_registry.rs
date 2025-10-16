@@ -45,6 +45,7 @@ use super::nodes::relax::RelaxData;
 use super::nodes::atom_trans::AtomTransData;
 use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
+use super::nodes::atom_fill::AtomFillData;
 use super::nodes::anchor::AnchorData;
 use super::nodes::import_xyz::{ImportXYZData, import_xyz_data_loader, import_xyz_data_saver};
 use super::nodes::export_xyz::{ExportXYZData, export_xyz_data_loader, export_xyz_data_saver};
@@ -741,6 +742,27 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<GeoToAtomData>,
       node_data_loader: generic_node_data_loader::<GeoToAtomData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "atom_fill".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+              name: "motif".to_string(),
+              data_type: DataType::Motif,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: false,
+      node_data_creator: || Box::new(AtomFillData {
+        parameter_element_values: HashMap::new(),
+      }),
+      node_data_saver: generic_node_data_saver::<AtomFillData>,
+      node_data_loader: generic_node_data_loader::<AtomFillData>,
     });
 
     ret.add_node_type(NodeType {
