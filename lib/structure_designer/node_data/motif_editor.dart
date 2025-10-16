@@ -29,7 +29,8 @@ class _MotifEditorState extends State<MotifEditor> {
   @override
   void initState() {
     super.initState();
-    _definitionController = TextEditingController(text: widget.data?.definition ?? '');
+    _definitionController =
+        TextEditingController(text: widget.data?.definition ?? '');
     _nameController = TextEditingController(text: widget.data?.name ?? '');
     _definitionFocusNode = FocusNode();
     _nameFocusNode = FocusNode();
@@ -81,7 +82,7 @@ class _MotifEditorState extends State<MotifEditor> {
           Text('Motif Properties',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          
+
           // Name input
           StringInput(
             label: 'Name (optional)',
@@ -91,11 +92,16 @@ class _MotifEditorState extends State<MotifEditor> {
             },
           ),
           const SizedBox(height: 8),
-          
+
           // Definition text area
           TextFormField(
             controller: _definitionController,
             focusNode: _definitionFocusNode,
+            style: const TextStyle(
+              fontFamily: 'Courier New',
+              fontFamilyFallback: ['Consolas', 'Monaco', 'Menlo', 'monospace'],
+              fontSize: 14.0,
+            ),
             decoration: const InputDecoration(
               labelText: 'Motif Definition',
               border: OutlineInputBorder(),
@@ -107,9 +113,9 @@ class _MotifEditorState extends State<MotifEditor> {
             keyboardType: TextInputType.multiline,
             textInputAction: TextInputAction.newline,
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Apply button
           SizedBox(
             width: double.infinity,
@@ -118,7 +124,7 @@ class _MotifEditorState extends State<MotifEditor> {
               child: const Text('Apply'),
             ),
           ),
-          
+
           // Error message display
           if (widget.data?.error != null)
             Padding(
