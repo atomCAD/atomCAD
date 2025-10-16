@@ -6,8 +6,8 @@ use glam::f64::DVec3;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
-pub const REAL_IMPLICIT_VOLUME_MIN: DVec3 = DVec3::new(-400.0, -400.0, -400.0);
-pub const REAL_IMPLICIT_VOLUME_MAX: DVec3 = DVec3::new(400.0, 400.0, 400.0);
+pub const REAL_IMPLICIT_VOLUME_MIN: DVec3 = DVec3::new(-200.0, -200.0, -200.0);
+pub const REAL_IMPLICIT_VOLUME_MAX: DVec3 = DVec3::new(200.0, 200.0, 200.0);
 
 pub const IMPLICIT_VOLUME_MIN: IVec3 = IVec3::new(-200, -200, -200);
 pub const IMPLICIT_VOLUME_MAX: IVec3 = IVec3::new(200, 200, 200);
