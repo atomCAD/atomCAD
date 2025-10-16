@@ -8,6 +8,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::common_constants::CONNECTED_PIN_SYMBOL;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RangeData {
@@ -88,9 +89,9 @@ impl NodeData for RangeData {
         if start_connected && step_connected && count_connected {
             None
         } else {
-            let start_display = if start_connected { "*" } else { &self.start.to_string() };
-            let step_display = if step_connected { "*" } else { &self.step.to_string() };
-            let count_display = if count_connected { "*" } else { &self.count.to_string() };
+            let start_display = if start_connected { CONNECTED_PIN_SYMBOL } else { &self.start.to_string() };
+            let step_display = if step_connected { CONNECTED_PIN_SYMBOL } else { &self.step.to_string() };
+            let count_display = if count_connected { CONNECTED_PIN_SYMBOL } else { &self.count.to_string() };
             Some(format!("[{}:{}:{}]", start_display, step_display, count_display))
         }
     }

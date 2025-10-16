@@ -25,6 +25,9 @@ pub const LINE_COLOR: Vec3 = Vec3::new(0.0, 0.0, 0.6);
 pub const LINE_DIVISIONS: u32 = 16;
 pub const LINE_RADIUS: f64 = 0.15;
 
+
+pub const CONNECTED_PIN_SYMBOL: &str = "⎆";
+
 #[derive(Clone, Debug)]
 pub struct CrystalTypeInfo {
     pub primary_atomic_number: i32,

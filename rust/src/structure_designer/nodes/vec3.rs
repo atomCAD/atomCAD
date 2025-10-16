@@ -10,6 +10,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::common_constants::CONNECTED_PIN_SYMBOL;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Vec3Data {
@@ -77,9 +78,9 @@ impl NodeData for Vec3Data {
         if x_connected && y_connected && z_connected {
             None
         } else {
-            let x_display = if x_connected { "*".to_string() } else { format!("{:.2}", self.value.x) };
-            let y_display = if y_connected { "*".to_string() } else { format!("{:.2}", self.value.y) };
-            let z_display = if z_connected { "*".to_string() } else { format!("{:.2}", self.value.z) };
+            let x_display = if x_connected { CONNECTED_PIN_SYMBOL.to_string() } else { format!("{:.2}", self.value.x) };
+            let y_display = if y_connected { CONNECTED_PIN_SYMBOL.to_string() } else { format!("{:.2}", self.value.y) };
+            let z_display = if z_connected { CONNECTED_PIN_SYMBOL.to_string() } else { format!("{:.2}", self.value.z) };
             Some(format!("({},{},{})", x_display, y_display, z_display))
         }
     }
