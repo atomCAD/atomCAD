@@ -43,6 +43,7 @@ dependencies:
   provider: ^6.1.2
   window_manager: ^0.3.7
   flutter_resizable_container: ^4.2.0
+  code_text_field: ^1.1.0
 
 dev_dependencies:
   flutter_test:

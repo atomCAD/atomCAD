@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:code_text_field/code_text_field.dart';
+import 'package:flutter_highlight/themes/github.dart';
 
 /// Editor widget for motif nodes
 class MotifEditor extends StatefulWidget {
@@ -21,7 +23,7 @@ class MotifEditor extends StatefulWidget {
 }
 
 class _MotifEditorState extends State<MotifEditor> {
-  late TextEditingController _definitionController;
+  late CodeController _definitionController;
   late TextEditingController _nameController;
   late FocusNode _definitionFocusNode;
   late FocusNode _nameFocusNode;
@@ -29,8 +31,10 @@ class _MotifEditorState extends State<MotifEditor> {
   @override
   void initState() {
     super.initState();
-    _definitionController =
-        TextEditingController(text: widget.data?.definition ?? '');
+    _definitionController = CodeController(
+      text: widget.data?.definition ?? '',
+      // No language specified - will use plain text by default
+    );
     _nameController = TextEditingController(text: widget.data?.name ?? '');
     _definitionFocusNode = FocusNode();
     _nameFocusNode = FocusNode();
@@ -93,25 +97,55 @@ class _MotifEditorState extends State<MotifEditor> {
           ),
           const SizedBox(height: 8),
 
-          // Definition text area
-          TextFormField(
-            controller: _definitionController,
-            focusNode: _definitionFocusNode,
-            style: const TextStyle(
-              fontFamily: 'Courier New',
-              fontFamilyFallback: ['Consolas', 'Monaco', 'Menlo', 'monospace'],
-              fontSize: 14.0,
+          // Definition text area with line numbers
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+              borderRadius: BorderRadius.circular(4.0),
             ),
-            decoration: const InputDecoration(
-              labelText: 'Motif Definition',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              hintText: 'Enter motif definition...',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Label
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(4.0),
+                      topRight: Radius.circular(4.0),
+                    ),
+                  ),
+                  child: Text(
+                    'Motif Definition',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                // Code field
+                SizedBox(
+                  height: 200,
+                  child: CodeTheme(
+                    data: CodeThemeData(styles: githubTheme),
+                    child: SingleChildScrollView(
+                      child: CodeField(
+                        controller: _definitionController,
+                        focusNode: _definitionFocusNode,
+                        textStyle: const TextStyle(
+                          fontFamily: 'Courier New',
+                          fontFamilyFallback: ['Consolas', 'Monaco', 'Menlo', 'monospace'],
+                          fontSize: 14.0,
+                        ),
+                        expands: false,
+                        wrap: false,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            maxLines: 10,
-            minLines: 5,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
           ),
 
           const SizedBox(height: 8),
