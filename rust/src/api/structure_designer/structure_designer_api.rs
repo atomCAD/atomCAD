@@ -1646,13 +1646,13 @@ pub fn set_motif_data(node_id: u64, data: APIMotifData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let motif_data = Box::new(MotifData {
+                let mut motif_data = Box::new(MotifData {
                     definition: data.definition,
                     name: data.name,
                     motif: None,
                     error: None,
                 });
-
+                motif_data.parse_and_validate(node_id);
                 cad_instance.structure_designer.set_node_network_data(node_id, motif_data);
                 refresh_renderer(cad_instance, false);
 

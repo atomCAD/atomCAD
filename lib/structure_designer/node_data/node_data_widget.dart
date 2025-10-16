@@ -31,6 +31,7 @@ import 'package:flutter_cad/structure_designer/node_data/bool_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/float_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/vec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/expr_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/motif_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
@@ -381,6 +382,15 @@ class NodeDataWidget extends StatelessWidget {
         return ExprEditor(
           nodeId: selectedNode.id,
           data: exprData,
+          model: model,
+        );
+      case 'motif':
+        // Fetch the motif data here in the parent widget
+        final motifData = model.getMotifData(selectedNode.id);
+
+        return MotifEditor(
+          nodeId: selectedNode.id,
+          data: motifData,
           model: model,
         );
       case 'import_xyz':
