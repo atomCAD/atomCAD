@@ -285,7 +285,7 @@ impl AtomFillData {
     parameter_element_values: &HashMap<String, i32>
   ) {
     // Go through all sites in the motif
-    for (_site_id, site) in &motif.sites {
+    for site in &motif.sites {
       // Determine the effective atomic number
       let effective_atomic_number = if site.atomic_number > 0 {
         // Positive atomic number - use directly

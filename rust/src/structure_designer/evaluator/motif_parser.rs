@@ -46,8 +46,12 @@ fn cell_char_to_int(c: char) -> i32 {
 }
 
 /// Parses a site specifier (e.g., "+..1", "2", "-.+site1")
-/// Returns (site_id, relative_cell)
-pub fn parse_site_specifier(specifier: &str, line_number: usize) -> Result<SiteSpecifier, ParseError> {
+/// Returns SiteSpecifier with site_index and relative_cell
+pub fn parse_site_specifier(
+    specifier: &str, 
+    line_number: usize, 
+    site_id_to_index: &HashMap<String, usize>
+) -> Result<SiteSpecifier, ParseError> {
     if specifier.len() < 1 {
         return Err(ParseError {
             line_number,
@@ -75,8 +79,19 @@ pub fn parse_site_specifier(specifier: &str, line_number: usize) -> Result<SiteS
                 });
             }
             
+            // Look up the site index
+            let site_index = match site_id_to_index.get(site_id) {
+                Some(&index) => index,
+                None => {
+                    return Err(ParseError {
+                        line_number,
+                        message: format!("Unknown site ID '{}' in site specifier '{}'", site_id, specifier),
+                    });
+                }
+            };
+            
             return Ok(SiteSpecifier {
-                id: site_id.to_string(),
+                site_index,
                 relative_cell,
             });
         }
@@ -90,8 +105,19 @@ pub fn parse_site_specifier(specifier: &str, line_number: usize) -> Result<SiteS
         });
     }
     
+    // Look up the site index
+    let site_index = match site_id_to_index.get(specifier) {
+        Some(&index) => index,
+        None => {
+            return Err(ParseError {
+                line_number,
+                message: format!("Unknown site ID '{}'", specifier),
+            });
+        }
+    };
+    
     Ok(SiteSpecifier {
-        id: specifier.to_string(),
+        site_index,
         relative_cell: IVec3::ZERO,
     })
 }
@@ -222,7 +248,11 @@ pub fn parse_site_command(tokens: &[String], line_number: usize, parameters: &[P
 
 /// Parses a bond command line
 /// Format: bond SITE_SPECIFIER1 SITE_SPECIFIER2 [multiplicity]
-pub fn parse_bond_command(tokens: &[String], line_number: usize) -> Result<MotifBond, ParseError> {
+pub fn parse_bond_command(
+    tokens: &[String], 
+    line_number: usize, 
+    site_id_to_index: &HashMap<String, usize>
+) -> Result<MotifBond, ParseError> {
     if tokens.len() < 3 {
         return Err(ParseError {
             line_number,
@@ -238,8 +268,8 @@ pub fn parse_bond_command(tokens: &[String], line_number: usize) -> Result<Motif
     }
 
     // Parse the two site specifiers
-    let site_1 = parse_site_specifier(&tokens[1], line_number)?;
-    let site_2 = parse_site_specifier(&tokens[2], line_number)?;
+    let site_1 = parse_site_specifier(&tokens[1], line_number, site_id_to_index)?;
+    let site_2 = parse_site_specifier(&tokens[2], line_number, site_id_to_index)?;
 
     // Parse multiplicity (default to 1 if not provided)
     let multiplicity = if tokens.len() == 4 {
@@ -269,8 +299,9 @@ pub fn parse_bond_command(tokens: &[String], line_number: usize) -> Result<Motif
 /// Parses the complete motif definition text
 pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
     let mut parameters = Vec::new();
-    let mut sites = HashMap::new();
+    let mut sites = Vec::new();
     let mut bonds = Vec::new();
+    let mut site_id_to_index = HashMap::new(); // Map string site IDs to indices
 
     for (line_index, line) in motif_text.lines().enumerate() {
         let line_number = line_index + 1;
@@ -301,10 +332,12 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
             }
             "site" => {
                 let (site_id, site) = parse_site_command(&tokens, line_number, &parameters)?;
-                sites.insert(site_id, site);
+                let site_index = sites.len();
+                site_id_to_index.insert(site_id, site_index);
+                sites.push(site);
             }
             "bond" => {
-                let bond = parse_bond_command(&tokens, line_number)?;
+                let bond = parse_bond_command(&tokens, line_number, &site_id_to_index)?;
                 bonds.push(bond);
             }
             _ => {

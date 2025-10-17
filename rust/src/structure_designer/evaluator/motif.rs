@@ -18,7 +18,7 @@ pub struct Site {
 
 #[derive(Debug, Clone)]
 pub struct SiteSpecifier {
-  pub id: String,
+  pub site_index: usize,
   pub relative_cell: IVec3,
 }
 
@@ -32,7 +32,7 @@ pub struct MotifBond {
 #[derive(Debug, Clone)]
 pub struct Motif {
   pub parameters: Vec<ParameterElement>,
-  pub sites: HashMap<String, Site>,
+  pub sites: Vec<Site>,
   pub bonds: Vec<MotifBond>,  
 }
 
