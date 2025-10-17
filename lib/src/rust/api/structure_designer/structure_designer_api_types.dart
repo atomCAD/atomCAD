@@ -48,6 +48,28 @@ class APIAtomCutData {
           unitCellSize == other.unitCellSize;
 }
 
+class APIAtomFillData {
+  final String parameterElementValueDefinition;
+  final String? error;
+
+  const APIAtomFillData({
+    required this.parameterElementValueDefinition,
+    this.error,
+  });
+
+  @override
+  int get hashCode => parameterElementValueDefinition.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomFillData &&
+          runtimeType == other.runtimeType &&
+          parameterElementValueDefinition ==
+              other.parameterElementValueDefinition &&
+          error == other.error;
+}
+
 class APIAtomTransData {
   final APIVec3 translation;
   final APIVec3 rotation;

@@ -47,6 +47,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAtomCutData dco_decode_api_atom_cut_data(dynamic raw);
 
   @protected
+  APIAtomFillData dco_decode_api_atom_fill_data(dynamic raw);
+
+  @protected
   APIAtomTransData dco_decode_api_atom_trans_data(dynamic raw);
 
   @protected
@@ -199,6 +202,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomCutData dco_decode_box_autoadd_api_atom_cut_data(dynamic raw);
+
+  @protected
+  APIAtomFillData dco_decode_box_autoadd_api_atom_fill_data(dynamic raw);
 
   @protected
   APIAtomTransData dco_decode_box_autoadd_api_atom_trans_data(dynamic raw);
@@ -427,6 +433,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAtomCutData? dco_decode_opt_box_autoadd_api_atom_cut_data(dynamic raw);
 
   @protected
+  APIAtomFillData? dco_decode_opt_box_autoadd_api_atom_fill_data(dynamic raw);
+
+  @protected
   APIAtomTransData? dco_decode_opt_box_autoadd_api_atom_trans_data(dynamic raw);
 
   @protected
@@ -615,6 +624,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAtomCutData sse_decode_api_atom_cut_data(SseDeserializer deserializer);
 
   @protected
+  APIAtomFillData sse_decode_api_atom_fill_data(SseDeserializer deserializer);
+
+  @protected
   APIAtomTransData sse_decode_api_atom_trans_data(SseDeserializer deserializer);
 
   @protected
@@ -774,6 +786,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomCutData sse_decode_box_autoadd_api_atom_cut_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAtomFillData sse_decode_box_autoadd_api_atom_fill_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1050,6 +1066,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIAtomFillData? sse_decode_opt_box_autoadd_api_atom_fill_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIAtomTransData? sse_decode_opt_box_autoadd_api_atom_trans_data(
       SseDeserializer deserializer);
 
@@ -1276,6 +1296,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIAtomCutData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_atom_fill_data(
+      APIAtomFillData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_atom_trans_data(
       APIAtomTransData self, SseSerializer serializer);
 
@@ -1450,6 +1474,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_atom_cut_data(
       APIAtomCutData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_atom_fill_data(
+      APIAtomFillData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_atom_trans_data(
@@ -1730,6 +1758,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_atom_cut_data(
       APIAtomCutData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_atom_fill_data(
+      APIAtomFillData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_atom_trans_data(

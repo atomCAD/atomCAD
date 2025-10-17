@@ -19,6 +19,8 @@ use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::evaluator::motif::Motif;
 use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL_IMPLICIT_VOLUME_MAX};
 use crate::structure_designer::common_constants::DEFAULT_ZINCBLENDE_MOTIF;
+use crate::structure_designer::evaluator::motif_parser::parse_parameter_element_values;
+use crate::structure_designer::node_network::ValidationError;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -107,7 +109,41 @@ impl PlacedAtomTracker {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomFillData {
+  pub parameter_element_value_definition: String,
+  #[serde(skip)]
+  pub error: Option<String>,
+  #[serde(skip)]
   pub parameter_element_values: HashMap<String, i32>,
+}
+
+impl AtomFillData {
+  /// Parses and validates the parameter element definition and returns any validation errors
+  pub fn parse_and_validate(&mut self, node_id: u64) -> Vec<ValidationError> {
+    let mut errors = Vec::new();
+    
+    // Clear previous state
+    self.parameter_element_values.clear();
+    self.error = None;
+    
+    // Skip validation if definition is empty
+    if self.parameter_element_value_definition.trim().is_empty() {
+      return errors;
+    }
+    
+    // Parse the parameter element value definition
+    match parse_parameter_element_values(&self.parameter_element_value_definition) {
+      Ok(values) => {
+        self.parameter_element_values = values;
+      },
+      Err(parse_error) => {
+        let error_msg = format!("Parameter element parse error: {}", parse_error);
+        self.error = Some(error_msg.clone());
+        errors.push(ValidationError::new(error_msg, Some(node_id)));
+      }
+    }
+    
+    errors
+  }
 }
 
 impl NodeData for AtomFillData {

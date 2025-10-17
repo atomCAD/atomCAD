@@ -350,6 +350,17 @@ APIResult setMotifData({required BigInt nodeId, required APIMotifData data}) =>
         .crateApiStructureDesignerStructureDesignerApiSetMotifData(
             nodeId: nodeId, data: data);
 
+APIAtomFillData? getAtomFillData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetAtomFillData(
+            nodeId: nodeId);
+
+APIResult setAtomFillData(
+        {required BigInt nodeId, required APIAtomFillData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetAtomFillData(
+            nodeId: nodeId, data: data);
+
 void deleteSelected() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDeleteSelected();
 

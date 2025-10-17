@@ -275,3 +275,9 @@ pub struct APIMotifData {
   pub name: Option<String>, // Optional name for the motif
   pub error: Option<String>, // Optional error message from parsing
 }
+
+#[flutter_rust_bridge::frb]
+pub struct APIAtomFillData {
+  pub parameter_element_value_definition: String, // The parameter element value definition text
+  pub error: Option<String>, // Optional error message from parsing
+}

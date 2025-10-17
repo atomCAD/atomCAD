@@ -367,3 +367,60 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
     })
 }
 
+/// Parses parameter element values from text format
+/// Format: PARAMETER_NAME ELEMENT_NAME
+/// Example:
+/// PRIMARY C
+/// SECONDARY Si
+/// # This is a comment
+/// 
+/// Returns HashMap<String, i32> mapping parameter names to atomic numbers
+pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i32>, ParseError> {
+    let mut parameter_values = HashMap::new();
+    
+    for (line_number, line) in text.lines().enumerate() {
+        let line_number = line_number + 1; // 1-indexed for user-friendly error messages
+        let line = line.trim();
+        
+        // Skip empty lines and comments
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        
+        // Split line into tokens
+        let tokens: Vec<String> = line.split_whitespace().map(|s| s.to_string()).collect();
+        
+        // Validate token count
+        if tokens.len() != 2 {
+            return Err(ParseError {
+                line_number,
+                message: format!("Expected format: PARAMETER_NAME ELEMENT_NAME, got {} tokens", tokens.len()),
+            });
+        }
+        
+        let parameter_name = &tokens[0];
+        let element_name = &tokens[1];
+        
+        // Look up atomic number for the element
+        let atomic_number = CHEMICAL_ELEMENTS.get(element_name)
+            .copied()
+            .ok_or_else(|| ParseError {
+                line_number,
+                message: format!("Unknown chemical element: '{}'", element_name),
+            })?;
+        
+        // Check for duplicate parameter names
+        if parameter_values.contains_key(parameter_name) {
+            return Err(ParseError {
+                line_number,
+                message: format!("Duplicate parameter name: '{}'", parameter_name),
+            });
+        }
+        
+        // Store the parameter assignment
+        parameter_values.insert(parameter_name.clone(), atomic_number);
+    }
+    
+    Ok(parameter_values)
+}
+
