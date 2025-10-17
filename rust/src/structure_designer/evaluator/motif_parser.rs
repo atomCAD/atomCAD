@@ -293,8 +293,8 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
             continue;
         }
 
-        // Parse based on command type
-        match tokens[0].as_str() {
+        // Parse based on command type (case insensitive)
+        match tokens[0].to_lowercase().as_str() {
             "param" => {
                 let param = parse_param_command(&tokens, line_number)?;
                 parameters.push(param);
@@ -307,10 +307,10 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
                 let bond = parse_bond_command(&tokens, line_number)?;
                 bonds.push(bond);
             }
-            unknown_command => {
+            _ => {
                 return Err(ParseError {
                     line_number,
-                    message: format!("Unknown command: '{}'", unknown_command),
+                    message: format!("Unknown command: '{}'", tokens[0]),
                 });
             }
         }

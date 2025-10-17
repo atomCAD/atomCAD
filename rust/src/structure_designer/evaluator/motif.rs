@@ -35,3 +35,25 @@ pub struct Motif {
   pub sites: HashMap<String, Site>,
   pub bonds: Vec<MotifBond>,  
 }
+
+impl Motif {
+  /// Returns a complete HashMap of parameter element values, filling in default values
+  /// for any parameter elements that are not specified in the input map.
+  pub fn get_effective_parameter_element_values(
+    &self,
+    parameter_element_values: &HashMap<String, i32>
+  ) -> HashMap<String, i32> {
+    let mut effective_values = HashMap::new();
+    
+    // Iterate through all parameter elements defined in the motif
+    for parameter in &self.parameters {
+      let effective_value = match parameter_element_values.get(&parameter.name) {
+        Some(&value) => value, // Use provided value if available
+        None => parameter.default_atomic_number, // Use default value if not provided
+      };
+      effective_values.insert(parameter.name.clone(), effective_value);
+    }
+    
+    effective_values
+  }
+}

@@ -23,9 +23,10 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::structure_designer::evaluator::motif::Motif;
 use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL_IMPLICIT_VOLUME_MAX};
 
-const DIAMOND_SAMPLE_THRESHOLD: f64 = 0.01;
+const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
 const CONSERVATIVE_EPSILON: f64 = 0.001;
 
@@ -35,6 +36,7 @@ pub struct AtomFillStatistics {
   pub do_fill_box_calls: i32,
   pub do_fill_box_total_size: DVec3,
   pub lattice_cells_processed: i32,
+  pub atoms: i32,
 }
 
 impl AtomFillStatistics {
@@ -44,6 +46,7 @@ impl AtomFillStatistics {
       do_fill_box_calls: 0,
       do_fill_box_total_size: DVec3::ZERO,
       lattice_cells_processed: 0,
+      atoms: 0,
     }
   }
 
@@ -62,6 +65,7 @@ impl AtomFillStatistics {
     let avg_size = self.get_average_do_fill_box_size();
     println!("  average do_fill_box size: ({:.3}, {:.3}, {:.3})", avg_size.x, avg_size.y, avg_size.z);
     println!("  lattice cells processed: {}", self.lattice_cells_processed);
+    println!("  atoms added: {}", self.atoms);
   }
 }
 
@@ -88,8 +92,7 @@ impl NodeData for AtomFillData {
       _decorate: bool,
       context: &mut NetworkEvaluationContext
     ) -> NetworkResult {
-      let shape_val = network_evaluator.evaluate_arg_required(&network_stack.clone(), node_id, registry, context, 0);
-
+      let shape_val = network_evaluator.evaluate_arg_required(&network_stack, node_id, registry, context, 0);
       if let NetworkResult::Error(_) = shape_val {
         return shape_val;
       }
@@ -99,16 +102,31 @@ impl NodeData for AtomFillData {
         _ => return NetworkResult::Atomic(AtomicStructure::new()),
       };
     
+      let motif_val = network_evaluator.evaluate_arg_required(&network_stack, node_id, registry, context, 1);
+      if let NetworkResult::Error(_) = motif_val {
+        return motif_val;
+      }
+
+      let motif = match motif_val {
+        NetworkResult::Motif(motif) => motif,
+        _ => return NetworkResult::Atomic(AtomicStructure::new()),
+      };
+
       let mut atomic_structure = AtomicStructure::new();
       let mut statistics = AtomFillStatistics::new();
+
+      // Calculate effective parameter element values (fill in defaults for missing values)
+      let effective_parameter_values = motif.get_effective_parameter_element_values(&self.parameter_element_values);
 
       self.fill_box(
         &mesh.unit_cell,
         &mesh.geo_tree_root,
+        &motif,
         &REAL_IMPLICIT_VOLUME_MIN,
         &(REAL_IMPLICIT_VOLUME_MAX - REAL_IMPLICIT_VOLUME_MIN),
         &mut atomic_structure,
-        &mut statistics);
+        &mut statistics,
+        &effective_parameter_values);
 
       // TODO: Log or use statistics for debugging/optimization
       statistics.log_statistics();
@@ -132,10 +150,12 @@ impl AtomFillData {
     &self,
     unit_cell: &UnitCellStruct,
     geo_tree_root: &GeoNode,
+    motif: &Motif,
     start_pos: &DVec3,
     size: &DVec3,
     atomic_structure: &mut AtomicStructure,
-    statistics: &mut AtomFillStatistics) {
+    statistics: &mut AtomFillStatistics,
+    parameter_element_values: &HashMap<String, i32>) {
     
     statistics.fill_box_calls += 1;
     let box_center = start_pos + size / 2.0;
@@ -146,7 +166,7 @@ impl AtomFillData {
     let half_diagonal = size.length() / 2.0;
 
     // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
-    if sdf_value > half_diagonal + DIAMOND_SAMPLE_THRESHOLD + CONSERVATIVE_EPSILON {
+    if sdf_value > half_diagonal + CRYSTAL_SAMPLE_THRESHOLD + CONSERVATIVE_EPSILON {
       return;
     }
 
@@ -164,10 +184,12 @@ impl AtomFillData {
       self.do_fill_box(
         unit_cell,
         geo_tree_root,
+        motif,
         start_pos,
         size,
         atomic_structure,
-        statistics
+        statistics,
+        parameter_element_values
       );
       return;
     }
@@ -186,10 +208,12 @@ impl AtomFillData {
       self.fill_box(
         unit_cell,
         geo_tree_root,
+        motif,
         &sub_start,
         &sub_size,
         atomic_structure,
-        statistics
+        statistics,
+        parameter_element_values
       );
     }
   }
@@ -201,10 +225,12 @@ impl AtomFillData {
     &self,
     unit_cell: &UnitCellStruct,
     geo_tree_root: &GeoNode,
+    motif: &Motif,
     start_pos: &DVec3,
     size: &DVec3,
     atomic_structure: &mut AtomicStructure,
-    statistics: &mut AtomFillStatistics) {
+    statistics: &mut AtomFillStatistics,
+    parameter_element_values: &HashMap<String, i32>) {
     
     statistics.do_fill_box_calls += 1;
     statistics.do_fill_box_total_size += *size;
@@ -225,11 +251,78 @@ impl AtomFillData {
           if self.cell_overlaps_with_box(&cell_real_pos, unit_cell, start_pos, size) {
             statistics.lattice_cells_processed += 1;
             
-            // Fake filling: add a carbon atom at the center of the unit cell
-            let cell_center = cell_real_pos + (unit_cell.a + unit_cell.b + unit_cell.c) / 2.0;
-            atomic_structure.add_atom(6, cell_center, 0);
+            // Fill this lattice cell with atoms from the motif
+            self.fill_cell(
+              unit_cell,
+              geo_tree_root,
+              motif,
+              &lattice_pos,
+              &cell_real_pos,
+              atomic_structure,
+              statistics,
+              parameter_element_values
+            );
+            
+            // Commented out for testing - can be uncommented anytime
+            // let cell_center = cell_real_pos + (unit_cell.a + unit_cell.b + unit_cell.c) / 2.0;
+            // atomic_structure.add_atom(6, cell_center, 0);
           }
         }
+      }
+    }
+  }
+
+  // Fills a single lattice cell with atoms from the motif
+  fn fill_cell(
+    &self,
+    unit_cell: &UnitCellStruct,
+    geo_tree_root: &GeoNode,
+    motif: &Motif,
+    lattice_pos: &IVec3,
+    cell_real_pos: &DVec3,
+    atomic_structure: &mut AtomicStructure,
+    statistics: &mut AtomFillStatistics,
+    parameter_element_values: &HashMap<String, i32>
+  ) {
+    // Go through all sites in the motif
+    for (_site_id, site) in &motif.sites {
+      // Determine the effective atomic number
+      let effective_atomic_number = if site.atomic_number > 0 {
+        // Positive atomic number - use directly
+        site.atomic_number
+      } else {
+        // Negative atomic number - this is a parameter element
+        // Find the parameter element by index (first parameter is -1, second is -2, etc.)
+        let param_index = (-site.atomic_number - 1) as usize;
+        if param_index < motif.parameters.len() {
+          let param_name = &motif.parameters[param_index].name;
+          match parameter_element_values.get(param_name) {
+            Some(&atomic_number) => atomic_number,
+            None => {
+              // This should not happen if get_effective_parameter_element_values worked correctly
+              // but use the default as fallback
+              motif.parameters[param_index].default_atomic_number
+            }
+          }
+        } else {
+          // Invalid parameter index - skip this site
+          continue;
+        }
+      };
+      
+      // Convert fractional lattice position to real coordinates
+      // The site position is relative to the unit cell, so we need to add the cell offset
+      let fractional_pos_in_cell = site.position;
+      let real_pos_in_unit_cell = unit_cell.dvec3_lattice_to_real(&fractional_pos_in_cell);
+      let absolute_real_pos = cell_real_pos + real_pos_in_unit_cell;
+      
+      // Do implicit evaluation at this position
+      let sdf_value = geo_tree_root.implicit_eval_3d(&absolute_real_pos);
+      
+      // Add atom if we are within the geometry
+      if sdf_value <= CRYSTAL_SAMPLE_THRESHOLD {
+        atomic_structure.add_atom(effective_atomic_number, absolute_real_pos, 0);
+        statistics.atoms += 1;
       }
     }
   }

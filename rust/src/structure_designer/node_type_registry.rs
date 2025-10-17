@@ -757,7 +757,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
-      public: false,
+      public: true,
       node_data_creator: || Box::new(AtomFillData {
         parameter_element_values: HashMap::new(),
       }),
