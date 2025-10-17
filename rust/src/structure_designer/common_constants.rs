@@ -116,3 +116,51 @@ lazy_static! {
         map
     };
 }
+
+lazy_static! {
+    /// Default cubic zincblende motif used when no motif is connected to atom_fill node
+    pub static ref DEFAULT_ZINCBLENDE_MOTIF: crate::structure_designer::evaluator::motif::Motif = {
+        use crate::structure_designer::evaluator::motif_parser::parse_motif;
+        
+        let motif_text = r#"
+# cubic zincblende motif
+
+PARAM PRIMARY C
+PARAM SECONDARY C
+
+SITE CORNER PRIMARY 0 0 0
+
+SITE FACE_Z PRIMARY 0.5 0.5 0
+SITE FACE_Y PRIMARY 0.5 0 0.5
+SITE FACE_X PRIMARY 0 0.5 0.5
+
+SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+SITE INTERIOR2 SECONDARY 0.25 0.75 0.75
+SITE INTERIOR3 SECONDARY 0.75 0.25 0.75
+SITE INTERIOR4 SECONDARY 0.75 0.75 0.25
+
+BOND INTERIOR1 ...CORNER
+BOND INTERIOR1 ...FACE_Z
+BOND INTERIOR1 ...FACE_Y
+BOND INTERIOR1 ...FACE_X
+
+BOND INTERIOR2 .++CORNER
+BOND INTERIOR2 ..+FACE_Z
+BOND INTERIOR2 .+.FACE_Y
+BOND INTERIOR2 ...FACE_X
+
+BOND INTERIOR3 +.+CORNER
+BOND INTERIOR3 ..+FACE_Z
+BOND INTERIOR3 ...FACE_Y
+BOND INTERIOR3 +..FACE_X
+
+BOND INTERIOR4 ++.CORNER
+BOND INTERIOR4 ...FACE_Z
+BOND INTERIOR4 .+.FACE_Y
+BOND INTERIOR4 +..FACE_X
+
+"#;
+        
+        parse_motif(motif_text).expect("Failed to parse default zincblende motif")
+    };
+}

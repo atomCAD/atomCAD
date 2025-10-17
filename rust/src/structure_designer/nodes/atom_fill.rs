@@ -18,6 +18,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::evaluator::motif::Motif;
 use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL_IMPLICIT_VOLUME_MAX};
+use crate::structure_designer::common_constants::DEFAULT_ZINCBLENDE_MOTIF;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -30,6 +31,7 @@ pub struct AtomFillStatistics {
   pub do_fill_box_total_size: DVec3,
   pub lattice_cells_processed: i32,
   pub atoms: i32,
+  pub bonds: i32,
 }
 
 impl AtomFillStatistics {
@@ -40,6 +42,7 @@ impl AtomFillStatistics {
       do_fill_box_total_size: DVec3::ZERO,
       lattice_cells_processed: 0,
       atoms: 0,
+      bonds: 0,
     }
   }
 
@@ -59,6 +62,7 @@ impl AtomFillStatistics {
     println!("  average do_fill_box size: ({:.3}, {:.3}, {:.3})", avg_size.x, avg_size.y, avg_size.z);
     println!("  lattice cells processed: {}", self.lattice_cells_processed);
     println!("  atoms added: {}", self.atoms);
+    println!("  bonds created: {}", self.bonds);
   }
 }
 
@@ -133,15 +137,14 @@ impl NodeData for AtomFillData {
         NetworkResult::Geometry(mesh) => mesh,
         _ => return NetworkResult::Atomic(AtomicStructure::new()),
       };
-    
-      let motif_val = network_evaluator.evaluate_arg_required(&network_stack, node_id, registry, context, 1);
-      if let NetworkResult::Error(_) = motif_val {
-        return motif_val;
-      }
-
-      let motif = match motif_val {
-        NetworkResult::Motif(motif) => motif,
-        _ => return NetworkResult::Atomic(AtomicStructure::new()),
+      
+      let motif = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 1,
+        DEFAULT_ZINCBLENDE_MOTIF.clone(),
+        NetworkResult::extract_motif
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
       };
 
       let mut atomic_structure = AtomicStructure::new();
@@ -163,7 +166,7 @@ impl NodeData for AtomFillData {
         &mut atom_tracker);
 
       // Create bonds after all atoms have been placed
-      self.create_bonds(&motif, &atom_tracker, &mut atomic_structure);
+      self.create_bonds(&motif, &atom_tracker, &mut atomic_structure, &mut statistics);
 
       // TODO: Log or use statistics for debugging/optimization
       statistics.log_statistics();
@@ -379,7 +382,8 @@ impl AtomFillData {
     &self,
     motif: &Motif,
     atom_tracker: &PlacedAtomTracker,
-    atomic_structure: &mut AtomicStructure
+    atomic_structure: &mut AtomicStructure,
+    statistics: &mut AtomFillStatistics
   ) {
     // Iterate through all placed atoms
     for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
@@ -394,6 +398,7 @@ impl AtomFillData {
           if let Some(id2) = atom_id_2 {
             // Both atoms exist, create the bond
             atomic_structure.add_bond(atom_id, id2, bond.multiplicity);
+            statistics.bonds += 1;
           }
           // If second atom doesn't exist, skip the bond (edge of crystal or not placed due to geometry)
         }

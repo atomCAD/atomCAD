@@ -271,6 +271,17 @@ pub fn parse_bond_command(
     let site_1 = parse_site_specifier(&tokens[1], line_number, site_id_to_index)?;
     let site_2 = parse_site_specifier(&tokens[2], line_number, site_id_to_index)?;
 
+    // Validate that the first site has relative cell coordinates (0,0,0)
+    if site_1.relative_cell != IVec3::ZERO {
+        return Err(ParseError {
+            line_number,
+            message: format!(
+                "First site in bond must have relative cell coordinates (0,0,0), got ({},{},{}). Site specifier: '{}'",
+                site_1.relative_cell.x, site_1.relative_cell.y, site_1.relative_cell.z, tokens[1]
+            ),
+        });
+    }
+
     // Parse multiplicity (default to 1 if not provided)
     let multiplicity = if tokens.len() == 4 {
         tokens[3].parse::<i32>().map_err(|_| ParseError {
