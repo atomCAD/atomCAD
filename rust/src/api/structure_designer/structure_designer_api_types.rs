@@ -279,5 +279,6 @@ pub struct APIMotifData {
 #[flutter_rust_bridge::frb]
 pub struct APIAtomFillData {
   pub parameter_element_value_definition: String, // The parameter element value definition text
+  pub motif_offset: APIVec3, // Offset in fractional lattice coordinates
   pub error: Option<String>, // Optional error message from parsing
 }

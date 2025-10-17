@@ -1,6 +1,8 @@
 use crate::api::api_common::from_api_ivec2;
+use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::refresh_renderer;
 use crate::api::api_common::to_api_ivec2;
+use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
@@ -62,8 +64,6 @@ use crate::api::api_common::to_api_vec2;
 use crate::api::api_common::from_api_vec2;
 use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::from_api_ivec3;
-use crate::api::api_common::to_api_vec3;
-use crate::api::api_common::from_api_vec3;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
@@ -1678,6 +1678,7 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
 
         Some(APIAtomFillData {
           parameter_element_value_definition: atom_fill_data.parameter_element_value_definition.clone(),
+          motif_offset: to_api_vec3(&atom_fill_data.motif_offset),
           error: atom_fill_data.error.clone(),
         })
       },
@@ -1693,6 +1694,7 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
             |cad_instance| {
                 let mut atom_fill_data = Box::new(AtomFillData {
                     parameter_element_value_definition: data.parameter_element_value_definition,
+                    motif_offset: from_api_vec3(&data.motif_offset),
                     error: None,
                     parameter_element_values: HashMap::new(),
                 });

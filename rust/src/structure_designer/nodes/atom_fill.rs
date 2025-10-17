@@ -21,6 +21,7 @@ use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL
 use crate::structure_designer::common_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use crate::structure_designer::evaluator::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::node_network::ValidationError;
+use crate::common::serialization_utils::dvec3_serializer;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -31,7 +32,7 @@ pub struct AtomFillStatistics {
   pub fill_box_calls: i32,
   pub do_fill_box_calls: i32,
   pub do_fill_box_total_size: DVec3,
-  pub lattice_cells_processed: i32,
+  pub motif_cells_processed: i32,
   pub atoms: i32,
   pub bonds: i32,
 }
@@ -42,7 +43,7 @@ impl AtomFillStatistics {
       fill_box_calls: 0,
       do_fill_box_calls: 0,
       do_fill_box_total_size: DVec3::ZERO,
-      lattice_cells_processed: 0,
+      motif_cells_processed: 0,
       atoms: 0,
       bonds: 0,
     }
@@ -62,7 +63,7 @@ impl AtomFillStatistics {
     println!("  do_fill_box calls: {}", self.do_fill_box_calls);
     let avg_size = self.get_average_do_fill_box_size();
     println!("  average do_fill_box size: ({:.3}, {:.3}, {:.3})", avg_size.x, avg_size.y, avg_size.z);
-    println!("  lattice cells processed: {}", self.lattice_cells_processed);
+    println!("  motif cells processed: {}", self.motif_cells_processed);
     println!("  atoms added: {}", self.atoms);
     println!("  bonds created: {}", self.bonds);
   }
@@ -70,7 +71,7 @@ impl AtomFillStatistics {
 
 #[derive(Debug, Clone)]
 pub struct PlacedAtomTracker {
-  // Primary storage: maps (lattice_pos, site_index) -> atom_id
+  // Primary storage: maps (motif_space_pos, site_index) -> atom_id
   atom_map: HashMap<(IVec3, usize), u64>,
 }
 
@@ -81,35 +82,37 @@ impl PlacedAtomTracker {
     }
   }
   
-  /// Records that an atom was placed at the given lattice position and site index
-  pub fn record_atom(&mut self, lattice_pos: IVec3, site_index: usize, atom_id: u64) {
-    self.atom_map.insert((lattice_pos, site_index), atom_id);
+  /// Records that an atom was placed at the given motif space position and site index
+  pub fn record_atom(&mut self, motif_space_pos: IVec3, site_index: usize, atom_id: u64) {
+    self.atom_map.insert((motif_space_pos, site_index), atom_id);
   }
   
-  /// Looks up the atom ID for a given lattice position and site index
-  pub fn get_atom_id(&self, lattice_pos: IVec3, site_index: usize) -> Option<u64> {
-    self.atom_map.get(&(lattice_pos, site_index)).copied()
+  /// Looks up the atom ID for a given motif space position and site index
+  pub fn get_atom_id(&self, motif_space_pos: IVec3, site_index: usize) -> Option<u64> {
+    self.atom_map.get(&(motif_space_pos, site_index)).copied()
   }
   
   /// Gets atom ID for a site specifier (handles relative cell offsets)
   pub fn get_atom_id_for_specifier(
     &self, 
-    base_lattice_pos: IVec3, 
+    base_motif_space_pos: IVec3, 
     site_specifier: &crate::structure_designer::evaluator::motif::SiteSpecifier
   ) -> Option<u64> {
-    let target_lattice_pos = base_lattice_pos + site_specifier.relative_cell;
-    self.get_atom_id(target_lattice_pos, site_specifier.site_index)
+    let target_motif_space_pos = base_motif_space_pos + site_specifier.relative_cell;
+    self.get_atom_id(target_motif_space_pos, site_specifier.site_index)
   }
   
   /// Returns an iterator over all placed atoms: (lattice_pos, site_index, atom_id)
   pub fn iter_atoms(&self) -> impl Iterator<Item = (IVec3, usize, u64)> + '_ {
-    self.atom_map.iter().map(|((lattice_pos, site_index), &atom_id)| (*lattice_pos, *site_index, atom_id))
+    self.atom_map.iter().map(|((motif_space_pos, site_index), &atom_id)| (*motif_space_pos, *site_index, atom_id))
   }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomFillData {
   pub parameter_element_value_definition: String,
+  #[serde(with = "dvec3_serializer")]
+  pub motif_offset: DVec3,
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
@@ -117,6 +120,24 @@ pub struct AtomFillData {
 }
 
 impl AtomFillData {
+  /// Converts from motif space coordinates to real space coordinates
+  /// Motif space is fractional lattice space offset by motif_offset
+  fn motif_to_real(&self, unit_cell: &UnitCellStruct, motif_coords: &DVec3) -> DVec3 {
+    // Convert from motif space to canonical lattice space
+    let lattice_coords = motif_coords + self.motif_offset;
+    // Convert from lattice space to real space
+    unit_cell.dvec3_lattice_to_real(&lattice_coords)
+  }
+  
+  /// Converts from real space coordinates to motif space coordinates
+  /// Motif space is fractional lattice space offset by motif_offset
+  fn real_to_motif(&self, unit_cell: &UnitCellStruct, real_coords: &DVec3) -> DVec3 {
+    // Convert from real space to canonical lattice space
+    let lattice_coords = unit_cell.real_to_dvec3_lattice(real_coords);
+    // Convert from canonical lattice space to motif space
+    lattice_coords - self.motif_offset
+  }
+
   /// Parses and validates the parameter element definition and returns any validation errors
   pub fn parse_and_validate(&mut self, node_id: u64) -> Vec<ValidationError> {
     let mut errors = Vec::new();
@@ -317,28 +338,30 @@ impl AtomFillData {
     statistics.do_fill_box_calls += 1;
     statistics.do_fill_box_total_size += *size;
     
-    // Calculate the lattice-space box that completely covers the real-space box
-    let (lattice_min, lattice_size) = self.calculate_lattice_space_box(unit_cell, start_pos, size);
+    // Calculate the motif-space box that completely covers the real-space box
+    let (motif_min, motif_size) = self.calculate_motif_space_box(unit_cell, start_pos, size);
     
-    // Iterate through all lattice cells in the calculated box
-    for i in 0..lattice_size.x {
-      for j in 0..lattice_size.y {
-        for k in 0..lattice_size.z {
-          let lattice_pos = lattice_min + IVec3::new(i, j, k);
+    // Iterate through all motif cells in the calculated box
+    for i in 0..motif_size.x {
+      for j in 0..motif_size.y {
+        for k in 0..motif_size.z {
+          let motif_pos = motif_min + IVec3::new(i, j, k);
           
-          // Convert lattice position to real space to check if this cell overlaps with our box
-          let cell_real_pos = unit_cell.ivec3_lattice_to_real(&lattice_pos);
+          // Convert motif position to real space to check if this cell overlaps with our box
+          // First convert IVec3 to DVec3, then use motif space conversion
+          let motif_pos_dvec3 = DVec3::new(motif_pos.x as f64, motif_pos.y as f64, motif_pos.z as f64);
+          let cell_real_pos = self.motif_to_real(unit_cell, &motif_pos_dvec3);
           
-          // Check if this lattice cell has any overlap with the real-space box
+          // Check if this motif cell has any overlap with the real-space box
           if self.cell_overlaps_with_box(&cell_real_pos, unit_cell, start_pos, size) {
-            statistics.lattice_cells_processed += 1;
+            statistics.motif_cells_processed += 1;
             
-            // Fill this lattice cell with atoms from the motif
+            // Fill this motif cell with atoms from the motif
             self.fill_cell(
               unit_cell,
               geo_tree_root,
               motif,
-              &lattice_pos,
+              &motif_pos,
               &cell_real_pos,
               atomic_structure,
               statistics,
@@ -355,13 +378,13 @@ impl AtomFillData {
     }
   }
 
-  // Fills a single lattice cell with atoms from the motif
+  // Fills a single motif cell with atoms from the motif
   fn fill_cell(
     &self,
     unit_cell: &UnitCellStruct,
     geo_tree_root: &GeoNode,
     motif: &Motif,
-    lattice_pos: &IVec3,
+    motif_pos: &IVec3,
     cell_real_pos: &DVec3,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
@@ -394,11 +417,11 @@ impl AtomFillData {
         }
       };
       
-      // Convert fractional lattice position to real coordinates
-      // The site position is relative to the unit cell, so we need to add the cell offset
-      let fractional_pos_in_cell = site.position;
-      let real_pos_in_unit_cell = unit_cell.dvec3_lattice_to_real(&fractional_pos_in_cell);
-      let absolute_real_pos = cell_real_pos + real_pos_in_unit_cell;
+      // Convert motif space position to real coordinates
+      // The site position is in motif space relative to the motif cell
+      let motif_pos_dvec3 = DVec3::new(motif_pos.x as f64, motif_pos.y as f64, motif_pos.z as f64);
+      let site_motif_pos = motif_pos_dvec3 + site.position;
+      let absolute_real_pos = self.motif_to_real(unit_cell, &site_motif_pos);
       
       // Do implicit evaluation at this position
       let sdf_value = geo_tree_root.implicit_eval_3d(&absolute_real_pos);
@@ -406,7 +429,7 @@ impl AtomFillData {
       // Add atom if we are within the geometry
       if sdf_value <= CRYSTAL_SAMPLE_THRESHOLD {
         let atom_id = atomic_structure.add_atom(effective_atomic_number, absolute_real_pos, 0);
-        atom_tracker.record_atom(*lattice_pos, site_index, atom_id);
+        atom_tracker.record_atom(*motif_pos, site_index, atom_id);
         statistics.atoms += 1;
       }
     }
@@ -442,8 +465,8 @@ impl AtomFillData {
     }
   }
 
-  // Helper method to calculate the lattice-space box that covers the real-space box
-  fn calculate_lattice_space_box(
+  // Helper method to calculate the motif-space box that covers the real-space box
+  fn calculate_motif_space_box(
     &self,
     unit_cell: &UnitCellStruct,
     start_pos: &DVec3,
@@ -451,30 +474,30 @@ impl AtomFillData {
   ) -> (IVec3, IVec3) {
     let end_pos = start_pos + size;
     
-    // Convert the corners of the real-space box to lattice coordinates
-    let start_lattice = unit_cell.real_to_dvec3_lattice(start_pos);
-    let end_lattice = unit_cell.real_to_dvec3_lattice(&end_pos);
+    // Convert the corners of the real-space box to motif coordinates
+    let start_motif = self.real_to_motif(unit_cell, start_pos);
+    let end_motif = self.real_to_motif(unit_cell, &end_pos);
     
-    // Find the minimum and maximum lattice coordinates in each dimension
+    // Find the minimum and maximum motif coordinates in each dimension
     // Be conservative by expanding the range slightly to account for numerical errors
-    let min_x = (start_lattice.x.min(end_lattice.x) - CONSERVATIVE_EPSILON).floor() as i32;
-    let max_x = (start_lattice.x.max(end_lattice.x) + CONSERVATIVE_EPSILON).ceil() as i32;
-    let min_y = (start_lattice.y.min(end_lattice.y) - CONSERVATIVE_EPSILON).floor() as i32;
-    let max_y = (start_lattice.y.max(end_lattice.y) + CONSERVATIVE_EPSILON).ceil() as i32;
-    let min_z = (start_lattice.z.min(end_lattice.z) - CONSERVATIVE_EPSILON).floor() as i32;
-    let max_z = (start_lattice.z.max(end_lattice.z) + CONSERVATIVE_EPSILON).ceil() as i32;
+    let min_x = (start_motif.x.min(end_motif.x) - CONSERVATIVE_EPSILON).floor() as i32;
+    let max_x = (start_motif.x.max(end_motif.x) + CONSERVATIVE_EPSILON).ceil() as i32;
+    let min_y = (start_motif.y.min(end_motif.y) - CONSERVATIVE_EPSILON).floor() as i32;
+    let max_y = (start_motif.y.max(end_motif.y) + CONSERVATIVE_EPSILON).ceil() as i32;
+    let min_z = (start_motif.z.min(end_motif.z) - CONSERVATIVE_EPSILON).floor() as i32;
+    let max_z = (start_motif.z.max(end_motif.z) + CONSERVATIVE_EPSILON).ceil() as i32;
     
-    let lattice_min = IVec3::new(min_x, min_y, min_z);
-    let lattice_size = IVec3::new(
+    let motif_min = IVec3::new(min_x, min_y, min_z);
+    let motif_size = IVec3::new(
       max_x - min_x + 1,
       max_y - min_y + 1,
       max_z - min_z + 1
     );
     
-    (lattice_min, lattice_size)
+    (motif_min, motif_size)
   }
 
-  // Helper method to check if a lattice cell overlaps with the real-space box
+  // Helper method to check if a motif cell overlaps with the real-space box
   fn cell_overlaps_with_box(
     &self,
     cell_real_pos: &DVec3,
@@ -484,8 +507,8 @@ impl AtomFillData {
   ) -> bool {
     let box_end = box_start + box_size;
     
-    // Calculate the bounds of the unit cell in real space
-    // A unit cell at lattice position (i,j,k) spans from that position to (i+1,j+1,k+1)
+    // Calculate the bounds of the motif unit cell in real space
+    // A unit cell at motif space position (i,j,k) spans from that position to (i+1,j+1,k+1)
     let cell_end = cell_real_pos + &unit_cell.a + &unit_cell.b + &unit_cell.c;
     
     // Check for overlap using axis-aligned bounding box intersection

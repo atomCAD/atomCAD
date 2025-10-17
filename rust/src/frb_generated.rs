@@ -4882,9 +4882,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_parameterElementValueDefinition = <String>::sse_decode(deserializer);
+        let mut var_motifOffset = <crate::api::common_api_types::APIVec3>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIAtomFillData {
             parameter_element_value_definition: var_parameterElementValueDefinition,
+            motif_offset: var_motifOffset,
             error: var_error,
         };
     }
@@ -6906,6 +6908,7 @@ impl flutter_rust_bridge::IntoDart
             self.parameter_element_value_definition
                 .into_into_dart()
                 .into_dart(),
+            self.motif_offset.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -8602,6 +8605,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.parameter_element_value_definition, serializer);
+        <crate::api::common_api_types::APIVec3>::sse_encode(self.motif_offset, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
     }
 }

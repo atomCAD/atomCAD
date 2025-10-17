@@ -50,15 +50,20 @@ class APIAtomCutData {
 
 class APIAtomFillData {
   final String parameterElementValueDefinition;
+  final APIVec3 motifOffset;
   final String? error;
 
   const APIAtomFillData({
     required this.parameterElementValueDefinition,
+    required this.motifOffset,
     this.error,
   });
 
   @override
-  int get hashCode => parameterElementValueDefinition.hashCode ^ error.hashCode;
+  int get hashCode =>
+      parameterElementValueDefinition.hashCode ^
+      motifOffset.hashCode ^
+      error.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -67,6 +72,7 @@ class APIAtomFillData {
           runtimeType == other.runtimeType &&
           parameterElementValueDefinition ==
               other.parameterElementValueDefinition &&
+          motifOffset == other.motifOffset &&
           error == other.error;
 }
 
