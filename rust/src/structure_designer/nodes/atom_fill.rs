@@ -9,16 +9,9 @@ use std::collections::HashMap;
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::util::box_subdivision::subdivide_box_float;
-use crate::common::crystal_utils::in_crystal_pos_to_id;
-use crate::common::common_constants::ATOM_INFO;
-use crate::structure_designer::common_constants::CrystalTypeInfo;
-use crate::common::atomic_structure::CrystalMetaData;
-use crate::common::crystal_utils::ZincBlendeAtomType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::common::diamond_hydrogen_passivation::hydrogen_passivate_diamond;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type::NodeType;
@@ -69,6 +62,45 @@ impl AtomFillStatistics {
   }
 }
 
+#[derive(Debug, Clone)]
+pub struct PlacedAtomTracker {
+  // Primary storage: maps (lattice_pos, site_index) -> atom_id
+  atom_map: HashMap<(IVec3, usize), u64>,
+}
+
+impl PlacedAtomTracker {
+  pub fn new() -> Self {
+    PlacedAtomTracker {
+      atom_map: HashMap::new(),
+    }
+  }
+  
+  /// Records that an atom was placed at the given lattice position and site index
+  pub fn record_atom(&mut self, lattice_pos: IVec3, site_index: usize, atom_id: u64) {
+    self.atom_map.insert((lattice_pos, site_index), atom_id);
+  }
+  
+  /// Looks up the atom ID for a given lattice position and site index
+  pub fn get_atom_id(&self, lattice_pos: IVec3, site_index: usize) -> Option<u64> {
+    self.atom_map.get(&(lattice_pos, site_index)).copied()
+  }
+  
+  /// Gets atom ID for a site specifier (handles relative cell offsets)
+  pub fn get_atom_id_for_specifier(
+    &self, 
+    base_lattice_pos: IVec3, 
+    site_specifier: &crate::structure_designer::evaluator::motif::SiteSpecifier
+  ) -> Option<u64> {
+    let target_lattice_pos = base_lattice_pos + site_specifier.relative_cell;
+    self.get_atom_id(target_lattice_pos, site_specifier.site_index)
+  }
+  
+  /// Returns an iterator over all placed atoms: (lattice_pos, site_index, atom_id)
+  pub fn iter_atoms(&self) -> impl Iterator<Item = (IVec3, usize, u64)> + '_ {
+    self.atom_map.iter().map(|((lattice_pos, site_index), &atom_id)| (*lattice_pos, *site_index, atom_id))
+  }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomFillData {
   pub parameter_element_values: HashMap<String, i32>,
@@ -114,6 +146,7 @@ impl NodeData for AtomFillData {
 
       let mut atomic_structure = AtomicStructure::new();
       let mut statistics = AtomFillStatistics::new();
+      let mut atom_tracker = PlacedAtomTracker::new();
 
       // Calculate effective parameter element values (fill in defaults for missing values)
       let effective_parameter_values = motif.get_effective_parameter_element_values(&self.parameter_element_values);
@@ -126,10 +159,16 @@ impl NodeData for AtomFillData {
         &(REAL_IMPLICIT_VOLUME_MAX - REAL_IMPLICIT_VOLUME_MIN),
         &mut atomic_structure,
         &mut statistics,
-        &effective_parameter_values);
+        &effective_parameter_values,
+        &mut atom_tracker);
+
+      // Create bonds after all atoms have been placed
+      self.create_bonds(&motif, &atom_tracker, &mut atomic_structure);
 
       // TODO: Log or use statistics for debugging/optimization
       statistics.log_statistics();
+
+      atomic_structure.remove_lone_atoms();
 
       NetworkResult::Atomic(atomic_structure)
     }
@@ -155,7 +194,8 @@ impl AtomFillData {
     size: &DVec3,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>) {
+    parameter_element_values: &HashMap<String, i32>,
+    atom_tracker: &mut PlacedAtomTracker) {
     
     statistics.fill_box_calls += 1;
     let box_center = start_pos + size / 2.0;
@@ -189,7 +229,8 @@ impl AtomFillData {
         size,
         atomic_structure,
         statistics,
-        parameter_element_values
+        parameter_element_values,
+        atom_tracker
       );
       return;
     }
@@ -213,7 +254,8 @@ impl AtomFillData {
         &sub_size,
         atomic_structure,
         statistics,
-        parameter_element_values
+        parameter_element_values,
+        atom_tracker
       );
     }
   }
@@ -230,7 +272,8 @@ impl AtomFillData {
     size: &DVec3,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>) {
+    parameter_element_values: &HashMap<String, i32>,
+    atom_tracker: &mut PlacedAtomTracker) {
     
     statistics.do_fill_box_calls += 1;
     statistics.do_fill_box_total_size += *size;
@@ -260,7 +303,8 @@ impl AtomFillData {
               &cell_real_pos,
               atomic_structure,
               statistics,
-              parameter_element_values
+              parameter_element_values,
+              atom_tracker
             );
             
             // Commented out for testing - can be uncommented anytime
@@ -282,10 +326,11 @@ impl AtomFillData {
     cell_real_pos: &DVec3,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>
+    parameter_element_values: &HashMap<String, i32>,
+    atom_tracker: &mut PlacedAtomTracker
   ) {
-    // Go through all sites in the motif
-    for site in &motif.sites {
+    // Step 1: Place all atoms in this cell and record them in the tracker
+    for (site_index, site) in motif.sites.iter().enumerate() {
       // Determine the effective atomic number
       let effective_atomic_number = if site.atomic_number > 0 {
         // Positive atomic number - use directly
@@ -321,8 +366,37 @@ impl AtomFillData {
       
       // Add atom if we are within the geometry
       if sdf_value <= CRYSTAL_SAMPLE_THRESHOLD {
-        atomic_structure.add_atom(effective_atomic_number, absolute_real_pos, 0);
+        let atom_id = atomic_structure.add_atom(effective_atomic_number, absolute_real_pos, 0);
+        atom_tracker.record_atom(*lattice_pos, site_index, atom_id);
         statistics.atoms += 1;
+      }
+    }
+  }
+
+  // Creates bonds between atoms based on motif bond definitions
+  // This is called after all atoms have been placed
+  fn create_bonds(
+    &self,
+    motif: &Motif,
+    atom_tracker: &PlacedAtomTracker,
+    atomic_structure: &mut AtomicStructure
+  ) {
+    // Iterate through all placed atoms
+    for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
+      // For each atom, check all bonds in the motif to see if this atom is involved
+      for bond in &motif.bonds {
+        // Check if this atom matches the first site of the bond
+        // (assuming first site is always in relative cell (0,0,0))
+        if bond.site_1.site_index == site_index && bond.site_1.relative_cell == IVec3::ZERO {
+          // This atom is the first site of the bond, try to find the second site
+          let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
+          
+          if let Some(id2) = atom_id_2 {
+            // Both atoms exist, create the bond
+            atomic_structure.add_bond(atom_id, id2, bond.multiplicity);
+          }
+          // If second atom doesn't exist, skip the bond (edge of crystal or not placed due to geometry)
+        }
       }
     }
   }
