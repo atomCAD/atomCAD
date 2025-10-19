@@ -27,6 +27,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   late CodeController _definitionController;
   late FocusNode _definitionFocusNode;
   late APIVec3 _motifOffset;
+  late bool _hydrogenPassivation;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     );
     _definitionFocusNode = FocusNode();
     _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
+    _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
   }
 
   @override
@@ -47,6 +49,9 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     }
     if (oldWidget.data?.motifOffset != widget.data?.motifOffset) {
       _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
+    }
+    if (oldWidget.data?.hydrogenPassivation != widget.data?.hydrogenPassivation) {
+      _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
     }
   }
 
@@ -63,6 +68,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       APIAtomFillData(
         parameterElementValueDefinition: _definitionController.text,
         motifOffset: _motifOffset,
+        hydrogenPassivation: _hydrogenPassivation,
         error: null, // This will be set by the backend after parsing
       ),
     );
@@ -145,6 +151,21 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                 _motifOffset = value;
               });
             },
+          ),
+
+          const SizedBox(height: 8),
+
+          // Hydrogen Passivation checkbox
+          CheckboxListTile(
+            title: const Text('Hydrogen Passivation'),
+            subtitle: const Text('Add hydrogen atoms to passivate dangling bonds'),
+            value: _hydrogenPassivation,
+            onChanged: (value) {
+              setState(() {
+                _hydrogenPassivation = value ?? true;
+              });
+            },
+            controlAffinity: ListTileControlAffinity.leading,
           ),
 
           const SizedBox(height: 8),

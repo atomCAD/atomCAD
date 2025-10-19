@@ -761,6 +761,7 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(AtomFillData {
         parameter_element_value_definition: String::new(),
         motif_offset: DVec3::ZERO,
+        hydrogen_passivation: true,
         error: None,
         parameter_element_values: HashMap::new(),
       }),

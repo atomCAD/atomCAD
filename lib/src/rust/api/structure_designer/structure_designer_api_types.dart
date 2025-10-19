@@ -51,11 +51,13 @@ class APIAtomCutData {
 class APIAtomFillData {
   final String parameterElementValueDefinition;
   final APIVec3 motifOffset;
+  final bool hydrogenPassivation;
   final String? error;
 
   const APIAtomFillData({
     required this.parameterElementValueDefinition,
     required this.motifOffset,
+    required this.hydrogenPassivation,
     this.error,
   });
 
@@ -63,6 +65,7 @@ class APIAtomFillData {
   int get hashCode =>
       parameterElementValueDefinition.hashCode ^
       motifOffset.hashCode ^
+      hydrogenPassivation.hashCode ^
       error.hashCode;
 
   @override
@@ -73,6 +76,7 @@ class APIAtomFillData {
           parameterElementValueDefinition ==
               other.parameterElementValueDefinition &&
           motifOffset == other.motifOffset &&
+          hydrogenPassivation == other.hydrogenPassivation &&
           error == other.error;
 }
 
