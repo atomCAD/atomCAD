@@ -216,28 +216,32 @@ site 3 N 0.5 0.5 0.5
     
     // Check sites
     assert_eq!(motif.sites.len(), 3);
-    assert_eq!(motif.sites["1"].atomic_number, -1); // PRIMARY (first parameter)
-    assert_eq!(motif.sites["2"].atomic_number, -2); // SECONDARY (second parameter)
-    assert_eq!(motif.sites["3"].atomic_number, 7);  // Nitrogen
+    assert_eq!(motif.sites[0].atomic_number, -1); // PRIMARY (first parameter)
+    assert_eq!(motif.sites[1].atomic_number, -2); // SECONDARY (second parameter)
+    assert_eq!(motif.sites[2].atomic_number, 7);  // Nitrogen
 }
 
 #[test]
 fn test_parse_site_specifier_simple() {
-    let result = parse_site_specifier("1", 1);
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("1".to_string(), 0);
+    
+    let result = parse_site_specifier("1", 1, &site_id_to_index);
     assert!(result.is_ok());
     let spec = result.unwrap();
-    assert_eq!(spec.id, "1");
-    assert_eq!(spec.relative_cell.x, 0);
-    assert_eq!(spec.relative_cell.y, 0);
-    assert_eq!(spec.relative_cell.z, 0);
+    assert_eq!(spec.site_index, 0);
+    assert_eq!(spec.relative_cell, glam::IVec3::ZERO);
 }
 
 #[test]
 fn test_parse_site_specifier_with_cell() {
-    let result = parse_site_specifier("+..1", 1);
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("1".to_string(), 0);
+    
+    let result = parse_site_specifier("+..1", 1, &site_id_to_index);
     assert!(result.is_ok());
     let spec = result.unwrap();
-    assert_eq!(spec.id, "1");
+    assert_eq!(spec.site_index, 0);
     assert_eq!(spec.relative_cell.x, 1);
     assert_eq!(spec.relative_cell.y, 0);
     assert_eq!(spec.relative_cell.z, 0);
@@ -245,10 +249,13 @@ fn test_parse_site_specifier_with_cell() {
 
 #[test]
 fn test_parse_site_specifier_complex() {
-    let result = parse_site_specifier("+-+site_2", 1);
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("site_2".to_string(), 1);
+    
+    let result = parse_site_specifier("+-+site_2", 1, &site_id_to_index);
     assert!(result.is_ok());
     let spec = result.unwrap();
-    assert_eq!(spec.id, "site_2");
+    assert_eq!(spec.site_index, 1);
     assert_eq!(spec.relative_cell.x, 1);
     assert_eq!(spec.relative_cell.y, -1);
     assert_eq!(spec.relative_cell.z, 1);
@@ -256,10 +263,13 @@ fn test_parse_site_specifier_complex() {
 
 #[test]
 fn test_parse_site_specifier_all_directions() {
-    let result = parse_site_specifier("---atom1", 1);
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("atom1".to_string(), 2);
+    
+    let result = parse_site_specifier("---atom1", 1, &site_id_to_index);
     assert!(result.is_ok());
     let spec = result.unwrap();
-    assert_eq!(spec.id, "atom1");
+    assert_eq!(spec.site_index, 2);
     assert_eq!(spec.relative_cell.x, -1);
     assert_eq!(spec.relative_cell.y, -1);
     assert_eq!(spec.relative_cell.z, -1);
@@ -267,27 +277,34 @@ fn test_parse_site_specifier_all_directions() {
 
 #[test]
 fn test_parse_site_specifier_errors() {
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("valid_id".to_string(), 0);
+    
     // Empty specifier
-    let result = parse_site_specifier("", 1);
+    let result = parse_site_specifier("", 1, &site_id_to_index);
     assert!(result.is_err());
     
-    // Invalid site ID
-    let result = parse_site_specifier("invalid-id", 1);
+    // Invalid site ID (contains hyphen)
+    let result = parse_site_specifier("invalid-id", 1, &site_id_to_index);
     assert!(result.is_err());
     
-    // Invalid site ID with cell specifier
-    let result = parse_site_specifier("+..invalid-id", 1);
+    // Invalid site ID with cell specifier (contains hyphen)
+    let result = parse_site_specifier("+..invalid-id", 1, &site_id_to_index);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_parse_bond_command_basic() {
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("1".to_string(), 0);
+    site_id_to_index.insert("2".to_string(), 1);
+    
     let tokens = vec!["bond".to_string(), "1".to_string(), "2".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_ok());
     let bond = result.unwrap();
-    assert_eq!(bond.site_1.id, "1");
-    assert_eq!(bond.site_2.id, "2");
+    assert_eq!(bond.site_1.site_index, 0);
+    assert_eq!(bond.site_2.site_index, 1);
     assert_eq!(bond.multiplicity, 1);
     assert_eq!(bond.site_1.relative_cell, glam::IVec3::ZERO);
     assert_eq!(bond.site_2.relative_cell, glam::IVec3::ZERO);
@@ -295,58 +312,70 @@ fn test_parse_bond_command_basic() {
 
 #[test]
 fn test_parse_bond_command_with_cell_specifiers() {
-    let tokens = vec!["bond".to_string(), "+..1".to_string(), "2".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("1".to_string(), 0);
+    site_id_to_index.insert("2".to_string(), 1);
+    
+    let tokens = vec!["bond".to_string(), "2".to_string(), "+..1".to_string()];
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_ok());
     let bond = result.unwrap();
-    assert_eq!(bond.site_1.id, "1");
-    assert_eq!(bond.site_2.id, "2");
-    assert_eq!(bond.site_1.relative_cell.x, 1);
-    assert_eq!(bond.site_1.relative_cell.y, 0);
-    assert_eq!(bond.site_1.relative_cell.z, 0);
-    assert_eq!(bond.site_2.relative_cell, glam::IVec3::ZERO);
+    assert_eq!(bond.site_1.site_index, 1);  // site 2 (index 1)
+    assert_eq!(bond.site_2.site_index, 0);  // site 1 (index 0) with +..1 relative cell
+    assert_eq!(bond.site_1.relative_cell, glam::IVec3::ZERO);  // site 2 has (0,0,0)
+    assert_eq!(bond.site_2.relative_cell.x, 1);  // +..1 means (1,0,0)
+    assert_eq!(bond.site_2.relative_cell.y, 0);
+    assert_eq!(bond.site_2.relative_cell.z, 0);
 }
 
 #[test]
 fn test_parse_bond_command_with_multiplicity() {
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("site1".to_string(), 0);
+    site_id_to_index.insert("site2".to_string(), 1);
+    
     let tokens = vec!["bond".to_string(), "site1".to_string(), "site2".to_string(), "2".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_ok());
     let bond = result.unwrap();
-    assert_eq!(bond.site_1.id, "site1");
-    assert_eq!(bond.site_2.id, "site2");
+    assert_eq!(bond.site_1.site_index, 0);
+    assert_eq!(bond.site_2.site_index, 1);
     assert_eq!(bond.multiplicity, 2);
 }
 
 #[test]
 fn test_parse_bond_command_errors() {
+    let mut site_id_to_index = std::collections::HashMap::new();
+    site_id_to_index.insert("1".to_string(), 0);
+    site_id_to_index.insert("2".to_string(), 1);
+    
     // Too few arguments
     let tokens = vec!["bond".to_string(), "1".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_err());
     assert!(result.unwrap_err().message.contains("requires at least 2 site specifiers"));
     
     // Too many arguments
     let tokens = vec!["bond".to_string(), "1".to_string(), "2".to_string(), "1".to_string(), "extra".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_err());
     assert!(result.unwrap_err().message.contains("at most 3 arguments"));
     
     // Invalid multiplicity
     let tokens = vec!["bond".to_string(), "1".to_string(), "2".to_string(), "not_a_number".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_err());
     assert!(result.unwrap_err().message.contains("Invalid multiplicity"));
     
     // Zero multiplicity
     let tokens = vec!["bond".to_string(), "1".to_string(), "2".to_string(), "0".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_err());
     assert!(result.unwrap_err().message.contains("must be positive"));
     
     // Negative multiplicity
     let tokens = vec!["bond".to_string(), "1".to_string(), "2".to_string(), "-1".to_string()];
-    let result = parse_bond_command(&tokens, 1);
+    let result = parse_bond_command(&tokens, 1, &site_id_to_index);
     assert!(result.is_err());
     assert!(result.unwrap_err().message.contains("must be positive"));
 }
@@ -362,8 +391,8 @@ site 1 PRIMARY 0.0 0.0 0.0
 site 2 SECONDARY 0.25 0.25 0.25
 
 bond 1 2
-bond +..1 2 2
-bond .+.1 2
+bond 2 +..1 2
+bond 2 .+.1
 ";
     let result = parse_motif(motif_text);
     assert!(result.is_ok());
@@ -376,31 +405,33 @@ bond .+.1 2
     
     // Check sites
     assert_eq!(motif.sites.len(), 2);
-    assert_eq!(motif.sites["1"].atomic_number, -1); // PRIMARY
-    assert_eq!(motif.sites["2"].atomic_number, -2); // SECONDARY
+    assert_eq!(motif.sites[0].atomic_number, -1); // PRIMARY (first parameter)
+    assert_eq!(motif.sites[1].atomic_number, -2); // SECONDARY (second parameter)
     
     // Check bonds
     assert_eq!(motif.bonds.len(), 3);
     
     // First bond: 1 2
-    assert_eq!(motif.bonds[0].site_1.id, "1");
-    assert_eq!(motif.bonds[0].site_2.id, "2");
+    assert_eq!(motif.bonds[0].site_1.site_index, 0);
+    assert_eq!(motif.bonds[0].site_2.site_index, 1);
     assert_eq!(motif.bonds[0].multiplicity, 1);
     assert_eq!(motif.bonds[0].site_1.relative_cell, glam::IVec3::ZERO);
     
-    // Second bond: +..1 2 2
-    assert_eq!(motif.bonds[1].site_1.id, "1");
-    assert_eq!(motif.bonds[1].site_2.id, "2");
+    // Second bond: 2 +..1 2
+    assert_eq!(motif.bonds[1].site_1.site_index, 1);  // site 2 (index 1)
+    assert_eq!(motif.bonds[1].site_2.site_index, 0);  // site 1 (index 0) with +..1 relative cell
     assert_eq!(motif.bonds[1].multiplicity, 2);
-    assert_eq!(motif.bonds[1].site_1.relative_cell.x, 1);
-    assert_eq!(motif.bonds[1].site_1.relative_cell.y, 0);
-    assert_eq!(motif.bonds[1].site_1.relative_cell.z, 0);
+    assert_eq!(motif.bonds[1].site_1.relative_cell, glam::IVec3::ZERO);  // site 2 has (0,0,0)
+    assert_eq!(motif.bonds[1].site_2.relative_cell.x, 1);  // +..1 means (1,0,0)
+    assert_eq!(motif.bonds[1].site_2.relative_cell.y, 0);
+    assert_eq!(motif.bonds[1].site_2.relative_cell.z, 0);
     
-    // Third bond: .+.1 2
-    assert_eq!(motif.bonds[2].site_1.id, "1");
-    assert_eq!(motif.bonds[2].site_2.id, "2");
+    // Third bond: 2 .+.1
+    assert_eq!(motif.bonds[2].site_1.site_index, 1);  // site 2 (index 1)
+    assert_eq!(motif.bonds[2].site_2.site_index, 0);  // site 1 (index 0) with .+.1 relative cell
     assert_eq!(motif.bonds[2].multiplicity, 1);
-    assert_eq!(motif.bonds[2].site_1.relative_cell.x, 0);
-    assert_eq!(motif.bonds[2].site_1.relative_cell.y, 1);
-    assert_eq!(motif.bonds[2].site_1.relative_cell.z, 0);
+    assert_eq!(motif.bonds[2].site_1.relative_cell, glam::IVec3::ZERO);  // site 2 has (0,0,0)
+    assert_eq!(motif.bonds[2].site_2.relative_cell.x, 0);  // .+.1 means (0,1,0)
+    assert_eq!(motif.bonds[2].site_2.relative_cell.y, 1);
+    assert_eq!(motif.bonds[2].site_2.relative_cell.z, 0);
 }

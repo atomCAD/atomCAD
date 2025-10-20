@@ -426,11 +426,23 @@ mod tests {
       a: DVec3::new(1.0, 0.0, 0.0),
       b: DVec3::new(0.0, 1.0, 0.0),
       c: DVec3::new(0.0, 0.0, 1.0),
+      cell_length_a: 1.0,
+      cell_length_b: 1.0,
+      cell_length_c: 1.0,
+      cell_angle_alpha: 90.0,
+      cell_angle_beta: 90.0,
+      cell_angle_gamma: 90.0,
     };
     let uc2 = UnitCellStruct {
       a: DVec3::new(1.0, 0.0, 0.0),
       b: DVec3::new(0.0, 1.0, 0.0),
       c: DVec3::new(0.0, 0.0, 1.0),
+      cell_length_a: 1.0,
+      cell_length_b: 1.0,
+      cell_length_c: 1.0,
+      cell_angle_alpha: 90.0,
+      cell_angle_beta: 90.0,
+      cell_angle_gamma: 90.0,
     };
     
     assert!(uc1.is_approximately_equal(&uc2));
@@ -442,11 +454,23 @@ mod tests {
       a: DVec3::new(1.0, 0.0, 0.0),
       b: DVec3::new(0.0, 1.0, 0.0),
       c: DVec3::new(0.0, 0.0, 1.0),
+      cell_length_a: 1.0,
+      cell_length_b: 1.0,
+      cell_length_c: 1.0,
+      cell_angle_alpha: 90.0,
+      cell_angle_beta: 90.0,
+      cell_angle_gamma: 90.0,
     };
     let uc2 = UnitCellStruct {
       a: DVec3::new(1.000001, 0.0, 0.0),
       b: DVec3::new(0.0, 0.999999, 0.0),
       c: DVec3::new(0.0, 0.0, 1.000001),
+      cell_length_a: 1.000001,
+      cell_length_b: 0.999999,
+      cell_length_c: 1.000001,
+      cell_angle_alpha: 90.0,
+      cell_angle_beta: 90.0,
+      cell_angle_gamma: 90.0,
     };
     
     // Small differences (< 1e-5) should be considered equal
@@ -459,11 +483,23 @@ mod tests {
       a: DVec3::new(1.0, 0.0, 0.0),
       b: DVec3::new(0.0, 1.0, 0.0),
       c: DVec3::new(0.0, 0.0, 1.0),
+      cell_length_a: 1.0,
+      cell_length_b: 1.0,
+      cell_length_c: 1.0,
+      cell_angle_alpha: 90.0,
+      cell_angle_beta: 90.0,
+      cell_angle_gamma: 90.0,
     };
     let uc2 = UnitCellStruct {
       a: DVec3::new(1.0001, 0.0, 0.0),  // Difference > 1e-5
       b: DVec3::new(0.0, 1.0, 0.0),
       c: DVec3::new(0.0, 0.0, 1.0),
+      cell_length_a: 1.0001,
+      cell_length_b: 1.0,
+      cell_length_c: 1.0,
+      cell_angle_alpha: 90.0,
+      cell_angle_beta: 90.0,
+      cell_angle_gamma: 90.0,
     };
     
     // Significant differences (> 1e-5) should not be considered equal

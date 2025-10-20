@@ -45,6 +45,12 @@ fn test_lattice_real_round_trip_hexagonal() {
         a: DVec3::new(a, 0.0, 0.0),
         b: DVec3::new(-a * 0.5, a * (3.0_f64.sqrt() / 2.0), 0.0), // 120° rotation
         c: DVec3::new(0.0, 0.0, c),
+        cell_length_a: a,
+        cell_length_b: a,
+        cell_length_c: c,
+        cell_angle_alpha: 90.0,
+        cell_angle_beta: 90.0,
+        cell_angle_gamma: 120.0,
     };
     
     let test_positions = vec![
@@ -75,6 +81,12 @@ fn test_lattice_real_round_trip_triclinic() {
         a: DVec3::new(3.0, 0.0, 0.0),
         b: DVec3::new(1.0, 4.0, 0.0),
         c: DVec3::new(0.5, 1.5, 5.0),
+        cell_length_a: 3.0,
+        cell_length_b: 4.123, // sqrt(1^2 + 4^2) = sqrt(17)
+        cell_length_c: 5.220, // sqrt(0.5^2 + 1.5^2 + 5^2) = sqrt(27.5)
+        cell_angle_alpha: 75.0,
+        cell_angle_beta: 85.0,
+        cell_angle_gamma: 95.0,
     };
     
     let test_positions = vec![
@@ -239,6 +251,12 @@ fn test_singular_matrix_panic() {
         a: DVec3::new(1.0, 0.0, 0.0),
         b: DVec3::new(2.0, 0.0, 0.0),  // Parallel to a
         c: DVec3::new(3.0, 0.0, 0.0),  // Also parallel to a
+        cell_length_a: 1.0,
+        cell_length_b: 2.0,
+        cell_length_c: 3.0,
+        cell_angle_alpha: 90.0,
+        cell_angle_beta: 90.0,
+        cell_angle_gamma: 90.0,
     };
     
     let real_pos = DVec3::new(1.0, 1.0, 1.0);

@@ -64,7 +64,17 @@ impl UnitCellData {
         
         let c = DVec3::new(c_x, c_y, c_z);
         
-        UnitCellStruct { a, b, c }
+        UnitCellStruct { 
+            a, 
+            b, 
+            c,
+            cell_length_a: self.cell_length_a,
+            cell_length_b: self.cell_length_b,
+            cell_length_c: self.cell_length_c,
+            cell_angle_alpha: self.cell_angle_alpha,
+            cell_angle_beta: self.cell_angle_beta,
+            cell_angle_gamma: self.cell_angle_gamma,
+        }
     }
 }
 
@@ -116,7 +126,17 @@ impl NodeData for UnitCellData {
         Err(error) => return error,
       };
 
-      NetworkResult::UnitCell(UnitCellStruct {a, b, c})
+      NetworkResult::UnitCell(UnitCellStruct {
+        a, 
+        b, 
+        c,
+        cell_length_a: self.cell_length_a,
+        cell_length_b: self.cell_length_b,
+        cell_length_c: self.cell_length_c,
+        cell_angle_alpha: self.cell_angle_alpha,
+        cell_angle_beta: self.cell_angle_beta,
+        cell_angle_gamma: self.cell_angle_gamma,
+      })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

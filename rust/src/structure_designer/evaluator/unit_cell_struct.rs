@@ -9,6 +9,13 @@ pub struct UnitCellStruct {
   pub a: DVec3,
   pub b: DVec3,
   pub c: DVec3,
+  // Crystallographic parameters using the same naming as UnitCellData
+  pub cell_length_a: f64,
+  pub cell_length_b: f64,
+  pub cell_length_c: f64,
+  pub cell_angle_alpha: f64, // in degrees
+  pub cell_angle_beta: f64,  // in degrees
+  pub cell_angle_gamma: f64, // in degrees
 }
 
 /// Properties of a crystal plane defined by Miller indices
@@ -31,6 +38,12 @@ impl UnitCellStruct {
       a: DVec3::new(size, 0.0, 0.0),
       b: DVec3::new(0.0, size, 0.0),
       c: DVec3::new(0.0, 0.0, size),
+      cell_length_a: size,
+      cell_length_b: size,
+      cell_length_c: size,
+      cell_angle_alpha: 90.0,
+      cell_angle_beta: 90.0,
+      cell_angle_gamma: 90.0,
     }
   }
 
