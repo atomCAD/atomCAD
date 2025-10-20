@@ -169,6 +169,20 @@ pub struct InputPinView {
     pub transform_only_frame: bool,
   }
   
+
+  pub struct APIRotationalSymmetry {
+    pub axis: APIVec3,
+    pub n_fold: u32,
+  }
+
+  pub struct APILatticeSymopData {
+    pub translation: APIIVec3,
+    pub rotation_axis: Option<APIVec3>,
+    pub rotation_angle_degrees: f64,
+    pub transform_only_frame: bool,
+    pub rotational_symmetries: Vec<APIRotationalSymmetry>,
+  }
+
   pub struct APIGeoToAtomData {
     pub primary_atomic_number: i32,
     pub secondary_atomic_number: i32,

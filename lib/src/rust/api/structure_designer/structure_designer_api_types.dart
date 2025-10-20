@@ -602,6 +602,41 @@ class APIIntData {
           value == other.value;
 }
 
+class APILatticeSymopData {
+  final APIIVec3 translation;
+  final APIVec3? rotationAxis;
+  final double rotationAngleDegrees;
+  final bool transformOnlyFrame;
+  final List<APIRotationalSymmetry> rotationalSymmetries;
+
+  const APILatticeSymopData({
+    required this.translation,
+    this.rotationAxis,
+    required this.rotationAngleDegrees,
+    required this.transformOnlyFrame,
+    required this.rotationalSymmetries,
+  });
+
+  @override
+  int get hashCode =>
+      translation.hashCode ^
+      rotationAxis.hashCode ^
+      rotationAngleDegrees.hashCode ^
+      transformOnlyFrame.hashCode ^
+      rotationalSymmetries.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APILatticeSymopData &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation &&
+          rotationAxis == other.rotationAxis &&
+          rotationAngleDegrees == other.rotationAngleDegrees &&
+          transformOnlyFrame == other.transformOnlyFrame &&
+          rotationalSymmetries == other.rotationalSymmetries;
+}
+
 class APIMapData {
   final APIDataType inputType;
   final APIDataType outputType;
@@ -767,6 +802,27 @@ class APIRegPolyData {
           runtimeType == other.runtimeType &&
           numSides == other.numSides &&
           radius == other.radius;
+}
+
+class APIRotationalSymmetry {
+  final APIVec3 axis;
+  final int nFold;
+
+  const APIRotationalSymmetry({
+    required this.axis,
+    required this.nFold,
+  });
+
+  @override
+  int get hashCode => axis.hashCode ^ nFold.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRotationalSymmetry &&
+          runtimeType == other.runtimeType &&
+          axis == other.axis &&
+          nFold == other.nFold;
 }
 
 class APISphereData {

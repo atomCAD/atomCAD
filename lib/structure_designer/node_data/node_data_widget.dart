@@ -11,6 +11,7 @@ import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_plane_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/lattice_symop_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
@@ -129,6 +130,15 @@ class NodeDataWidget extends StatelessWidget {
         return GeoTransEditor(
           nodeId: selectedNode.id,
           data: geoTransData,
+          model: model,
+        );
+      case 'lattice_symop':
+        // Fetch the lattice symmetry operation data here in the parent widget
+        final latticeSymopData = model.getLatticeSymopData(selectedNode.id);
+
+        return LatticeSymopEditor(
+          nodeId: selectedNode.id,
+          data: latticeSymopData,
           model: model,
         );
       case 'atom_trans':

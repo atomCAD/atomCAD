@@ -510,6 +510,15 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  APILatticeSymopData? getLatticeSymopData(BigInt nodeId) {
+    return structure_designer_api.getLatticeSymopData(nodeId: nodeId);
+  }
+
+  void setLatticeSymopData(BigInt nodeId, APILatticeSymopData data) {
+    structure_designer_api.setLatticeSymopData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setAtomTransData(BigInt nodeId, APIAtomTransData data) {
     structure_designer_api.setAtomTransData(nodeId: nodeId, data: data);
     refreshFromKernel();

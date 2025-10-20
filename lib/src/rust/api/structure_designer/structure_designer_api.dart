@@ -179,6 +179,11 @@ APIGeoTransData? getGeoTransData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetGeoTransData(
             nodeId: nodeId);
 
+APILatticeSymopData? getLatticeSymopData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetLatticeSymopData(
+            nodeId: nodeId);
+
 APIGeoToAtomData? getGeoToAtomData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetGeoToAtomData(
@@ -304,6 +309,12 @@ void setHalfSpaceData(
 void setGeoTransData({required BigInt nodeId, required APIGeoTransData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetGeoTransData(
+            nodeId: nodeId, data: data);
+
+void setLatticeSymopData(
+        {required BigInt nodeId, required APILatticeSymopData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetLatticeSymopData(
             nodeId: nodeId, data: data);
 
 void setAtomTransData(

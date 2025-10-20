@@ -236,6 +236,18 @@ impl NetworkResult {
     }
   }
 
+  /// Extracts an optional Vec3 value from the NetworkResult
+  /// Returns Some(None) if NetworkResult::None (no input connected)
+  /// Returns Some(Some(vec)) if NetworkResult::Vec3(vec) 
+  /// Returns None if not a Vec3 or None variant
+  pub fn extract_optional_dvec3(self) -> Option<Option<DVec3>> {
+    match self {
+      NetworkResult::None => Some(None),
+      NetworkResult::Vec3(vec) => Some(Some(vec)),
+      _ => None,
+    }
+  }
+
   /// Extracts an AtomicStructure value from the NetworkResult, returns None if not an Atomic
   pub fn extract_atomic(self) -> Option<AtomicStructure> {
     match self {

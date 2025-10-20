@@ -124,6 +124,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData dco_decode_api_int_data(dynamic raw);
 
   @protected
+  APILatticeSymopData dco_decode_api_lattice_symop_data(dynamic raw);
+
+  @protected
   APIMapData dco_decode_api_map_data(dynamic raw);
 
   @protected
@@ -147,6 +150,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIResult dco_decode_api_result(dynamic raw);
+
+  @protected
+  APIRotationalSymmetry dco_decode_api_rotational_symmetry(dynamic raw);
 
   @protected
   APISceneComposerTool dco_decode_api_scene_composer_tool(dynamic raw);
@@ -269,6 +275,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData dco_decode_box_autoadd_api_int_data(dynamic raw);
 
   @protected
+  APILatticeSymopData dco_decode_box_autoadd_api_lattice_symop_data(
+      dynamic raw);
+
+  @protected
   APIMapData dco_decode_box_autoadd_api_map_data(dynamic raw);
 
   @protected
@@ -389,6 +399,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_list_api_network_with_validation_errors(dynamic raw);
 
   @protected
+  List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
+      dynamic raw);
+
+  @protected
   List<APISceneComposerTool> dco_decode_list_api_scene_composer_tool(
       dynamic raw);
 
@@ -497,6 +511,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData? dco_decode_opt_box_autoadd_api_int_data(dynamic raw);
 
   @protected
+  APILatticeSymopData? dco_decode_opt_box_autoadd_api_lattice_symop_data(
+      dynamic raw);
+
+  @protected
   APIMapData? dco_decode_opt_box_autoadd_api_map_data(dynamic raw);
 
   @protected
@@ -535,6 +553,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec2Data? dco_decode_opt_box_autoadd_api_vec_2_data(dynamic raw);
+
+  @protected
+  APIVec3? dco_decode_opt_box_autoadd_api_vec_3(dynamic raw);
 
   @protected
   APIVec3Data? dco_decode_opt_box_autoadd_api_vec_3_data(dynamic raw);
@@ -705,6 +726,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData sse_decode_api_int_data(SseDeserializer deserializer);
 
   @protected
+  APILatticeSymopData sse_decode_api_lattice_symop_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMapData sse_decode_api_map_data(SseDeserializer deserializer);
 
   @protected
@@ -728,6 +753,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIResult sse_decode_api_result(SseDeserializer deserializer);
+
+  @protected
+  APIRotationalSymmetry sse_decode_api_rotational_symmetry(
+      SseDeserializer deserializer);
 
   @protected
   APISceneComposerTool sse_decode_api_scene_composer_tool(
@@ -870,6 +899,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIntData sse_decode_box_autoadd_api_int_data(SseDeserializer deserializer);
+
+  @protected
+  APILatticeSymopData sse_decode_box_autoadd_api_lattice_symop_data(
+      SseDeserializer deserializer);
 
   @protected
   APIMapData sse_decode_box_autoadd_api_map_data(SseDeserializer deserializer);
@@ -1015,6 +1048,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  List<APIRotationalSymmetry> sse_decode_list_api_rotational_symmetry(
+      SseDeserializer deserializer);
+
+  @protected
   List<APISceneComposerTool> sse_decode_list_api_scene_composer_tool(
       SseDeserializer deserializer);
 
@@ -1148,6 +1185,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APILatticeSymopData? sse_decode_opt_box_autoadd_api_lattice_symop_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMapData? sse_decode_opt_box_autoadd_api_map_data(
       SseDeserializer deserializer);
 
@@ -1198,6 +1239,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIVec2Data? sse_decode_opt_box_autoadd_api_vec_2_data(
       SseDeserializer deserializer);
+
+  @protected
+  APIVec3? sse_decode_opt_box_autoadd_api_vec_3(SseDeserializer deserializer);
 
   @protected
   APIVec3Data? sse_decode_opt_box_autoadd_api_vec_3_data(
@@ -1389,6 +1433,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_int_data(APIIntData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_lattice_symop_data(
+      APILatticeSymopData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_map_data(APIMapData self, SseSerializer serializer);
 
   @protected
@@ -1414,6 +1462,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_result(APIResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_rotational_symmetry(
+      APIRotationalSymmetry self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_scene_composer_tool(
@@ -1562,6 +1614,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIIntData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_lattice_symop_data(
+      APILatticeSymopData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_map_data(
       APIMapData self, SseSerializer serializer);
 
@@ -1706,6 +1762,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINetworkWithValidationErrors> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_rotational_symmetry(
+      List<APIRotationalSymmetry> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_scene_composer_tool(
       List<APISceneComposerTool> self, SseSerializer serializer);
 
@@ -1842,6 +1902,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIIntData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_lattice_symop_data(
+      APILatticeSymopData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_map_data(
       APIMapData? self, SseSerializer serializer);
 
@@ -1892,6 +1956,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_vec_2_data(
       APIVec2Data? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_vec_3(
+      APIVec3? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_vec_3_data(

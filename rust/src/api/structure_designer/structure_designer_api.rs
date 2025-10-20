@@ -48,11 +48,14 @@ use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomDa
 use crate::api::structure_designer::structure_designer_api_types::APIAnchorData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIUnitCellData;
+use crate::api::structure_designer::structure_designer_api_types::{APILatticeSymopData, APIRotationalSymmetry};
 use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::unit_cell::UnitCellData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
+use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
+use crate::structure_designer::evaluator::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -978,6 +981,53 @@ pub fn get_geo_trans_data(node_id: u64) -> Option<APIGeoTransData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let lattice_symop_data = match node_data.as_any_ref().downcast_ref::<LatticeSymopData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        
+        // Try to get the evaluation cache to access unit cell and compute symmetries
+        let api_symmetries = if let Some(eval_cache) = cad_instance.structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
+          if let Some(lattice_symop_cache) = eval_cache.downcast_ref::<LatticeSymopEvalCache>() {
+            // Analyze unit cell symmetries
+            let symmetries = analyze_unit_cell_symmetries(&lattice_symop_cache.unit_cell);
+            
+            // Convert to API format
+            symmetries.into_iter().map(|sym| APIRotationalSymmetry {
+              axis: to_api_vec3(&sym.axis),
+              n_fold: sym.n_fold,
+            }).collect()
+          } else {
+            // No lattice symop cache available - return empty symmetries
+            Vec::new()
+          }
+        } else {
+          // No evaluation cache available - return empty symmetries
+          Vec::new()
+        };
+        
+        Some(APILatticeSymopData {
+          translation: to_api_ivec3(&lattice_symop_data.translation),
+          rotation_axis: lattice_symop_data.rotation_axis.map(|axis| to_api_vec3(&axis)),
+          rotation_angle_degrees: lattice_symop_data.rotation_angle_degrees,
+          transform_only_frame: lattice_symop_data.transform_only_frame,
+          rotational_symmetries: api_symmetries,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_geo_to_atom_data(node_id: u64) -> Option<APIGeoToAtomData> {
   unsafe {
     with_cad_instance_or(
@@ -1474,6 +1524,22 @@ pub fn set_geo_trans_data(node_id: u64, data: APIGeoTransData) {
         rotation: from_api_ivec3(&data.rotation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, geo_trans_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let lattice_symop_data = Box::new(LatticeSymopData {
+        translation: from_api_ivec3(&data.translation),
+        rotation_axis: data.rotation_axis.map(|axis| from_api_vec3(&axis)),
+        rotation_angle_degrees: data.rotation_angle_degrees,
+        transform_only_frame: data.transform_only_frame,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, lattice_symop_data);
       refresh_renderer(cad_instance, false);
     });
   }

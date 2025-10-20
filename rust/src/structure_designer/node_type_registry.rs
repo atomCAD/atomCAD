@@ -40,6 +40,7 @@ use super::nodes::intersect_2d::Intersect2DData;
 use super::nodes::diff::DiffData;
 use super::nodes::diff_2d::Diff2DData;
 use super::nodes::geo_trans::GeoTransData;
+use super::nodes::lattice_symop::LatticeSymopData;
 use super::nodes::atom_cut::AtomCutData;
 use super::nodes::relax::RelaxData;
 use super::nodes::atom_trans::AtomTransData;
@@ -708,6 +709,42 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<GeoTransData>,
       node_data_loader: generic_node_data_loader::<GeoTransData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "lattice_symop".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: DataType::IVec3,
+          },
+          Parameter {
+            name: "rot_axis".to_string(),
+            data_type: DataType::Vec3,
+          },
+          Parameter {
+            name: "rot_angle".to_string(),
+            data_type: DataType::Float,
+          },
+          Parameter {
+            name: "keep_geo".to_string(),
+            data_type: DataType::Float,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(LatticeSymopData {
+        translation: IVec3::new(0, 0, 0),
+        rotation_axis: None,
+        rotation_angle_degrees: 0.0,
+        transform_only_frame: false,
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeSymopData>,
+      node_data_loader: generic_node_data_loader::<LatticeSymopData>,
     });
 
     ret.add_node_type(NodeType {

@@ -173,3 +173,38 @@ pub mod option_ivec3_serializer {
         }
     }
 }
+
+/// Module to handle serialization of Option<DVec3> type
+pub mod option_dvec3_serializer {
+    use super::*;
+    
+    pub fn serialize<S>(option_vec: &Option<DVec3>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match option_vec {
+            Some(vec) => dvec3_serializer::serialize(vec, serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+    
+    // Helper enum to handle multiple deserialization cases
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum DVec3OrNull {
+        Vec(#[serde(with = "dvec3_serializer")] DVec3),
+        Null(Option<()>),
+    }
+    
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DVec3>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Use serde's untagged enum to handle both cases without moving the deserializer
+        match DVec3OrNull::deserialize(deserializer)? {
+            DVec3OrNull::Vec(vec) => Ok(Some(vec)),
+            DVec3OrNull::Null(None) => Ok(None),
+            _ => Err(serde::de::Error::custom("Expected DVec3 or null")),
+        }
+    }
+}
