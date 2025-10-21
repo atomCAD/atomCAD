@@ -47,6 +47,7 @@ impl NodeData for LatticeSymopData {
         
         let gadget = LatticeSymopGadget::new(
             self.translation,
+            self.rotation_axis,
             geo_trans_cache.input_frame_transform.clone(),
             &geo_trans_cache.unit_cell,
         );
@@ -260,6 +261,7 @@ impl NodeData for LatticeSymopData {
 #[derive(Clone)]
 pub struct LatticeSymopGadget {
     pub translation: IVec3,
+    pub rotation_axis: Option<DVec3>,
     pub input_frame_transform: Transform,
     pub frame_transform: Transform,
     pub dragged_handle_index: Option<i32>,
@@ -276,6 +278,39 @@ impl Tessellatable for LatticeSymopGadget {
       &self.frame_transform.translation,
       false // Don't include rotation handles for now
     );
+    
+    // Visualize rotation axis if present
+    if let Some(axis) = self.rotation_axis {
+      if axis.length() > 1e-12 {
+        let normalized_axis = axis.normalize();
+        let cylinder_length = 30.0;
+        let cylinder_radius = 0.1;
+        
+        // Create cylinder endpoints along the rotation axis
+        let half_length = cylinder_length * 0.5;
+        let top_center = self.frame_transform.translation + normalized_axis * half_length;
+        let bottom_center = self.frame_transform.translation - normalized_axis * half_length;
+        
+        // Use yellow color for the rotation axis
+        let yellow_material = crate::renderer::mesh::Material::new(
+          &glam::f32::Vec3::new(1.0, 1.0, 0.0), // Yellow color
+          0.4,
+          0.8
+        );
+        
+        crate::renderer::tessellator::tessellator::tessellate_cylinder(
+          output_mesh,
+          &top_center,
+          &bottom_center,
+          cylinder_radius,
+          16, // divisions
+          &yellow_material,
+          true, // include top and bottom caps
+          Some(&yellow_material),
+          Some(&yellow_material)
+        );
+      }
+    }
   }
 
   fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
@@ -341,9 +376,10 @@ impl NodeNetworkGadget for LatticeSymopGadget {
 }
 
 impl LatticeSymopGadget {
-  pub fn new(translation: IVec3, input_frame_transform: Transform, unit_cell: &UnitCellStruct) -> Self {
+  pub fn new(translation: IVec3, rotation_axis: Option<DVec3>, input_frame_transform: Transform, unit_cell: &UnitCellStruct) -> Self {
       let mut ret = Self {
           translation,
+          rotation_axis,
           input_frame_transform: Transform::new(input_frame_transform.translation, input_frame_transform.rotation),
           frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
           dragged_handle_index: None,

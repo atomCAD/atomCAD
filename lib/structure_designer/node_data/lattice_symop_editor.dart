@@ -50,9 +50,8 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
           (sym) => _vectorsAreClose(sym.axis, currentAxis),
           orElse: () => widget.data!.rotationalSymmetries.first,
         );
-      } else if (widget.data!.rotationalSymmetries.isNotEmpty) {
-        _selectedSymmetry = widget.data!.rotationalSymmetries.first;
       } else {
+        // If rotation_axis is None, set _selectedSymmetry to null (represents "No Rotation")
         _selectedSymmetry = null;
       }
 
@@ -138,35 +137,39 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
           const SizedBox(height: 16),
           
           // Rotational symmetry dropdown
-          if (widget.data!.rotationalSymmetries.isNotEmpty) ...[
-            Text('Rotational Symmetry Axis',
-                style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<APIRotationalSymmetry>(
-              value: _selectedSymmetry,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          Text('Rotational Symmetry Axis',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<APIRotationalSymmetry?>(
+            value: _selectedSymmetry,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            items: [
+              // Add "No Rotation" option
+              const DropdownMenuItem<APIRotationalSymmetry?>(
+                value: null,
+                child: Text('No Rotation'),
               ),
-              items: widget.data!.rotationalSymmetries.map((symmetry) {
-                return DropdownMenuItem<APIRotationalSymmetry>(
+              // Add all available symmetries
+              ...widget.data!.rotationalSymmetries.map((symmetry) {
+                return DropdownMenuItem<APIRotationalSymmetry?>(
                   value: symmetry,
                   child: Text(_formatSymmetryOption(symmetry)),
                 );
-              }).toList(),
-              onChanged: (APIRotationalSymmetry? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    _selectedSymmetry = newValue;
-                    // Reset angle to 0 when symmetry changes
-                    _selectedAngle = 0.0;
-                  });
-                  _updateData();
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
+              }),
+            ],
+            onChanged: (APIRotationalSymmetry? newValue) {
+              setState(() {
+                _selectedSymmetry = newValue;
+                // Reset angle to 0 when symmetry changes
+                _selectedAngle = 0.0;
+              });
+              _updateData();
+            },
+          ),
+          const SizedBox(height: 16),
           
           // Rotation angle dropdown
           Text('Rotation Angle (degrees)',
