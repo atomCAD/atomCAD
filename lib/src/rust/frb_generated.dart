@@ -5408,14 +5408,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APILatticeSymopData dco_decode_api_lattice_symop_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return APILatticeSymopData(
       translation: dco_decode_apii_vec_3(arr[0]),
       rotationAxis: dco_decode_opt_box_autoadd_api_vec_3(arr[1]),
       rotationAngleDegrees: dco_decode_f_64(arr[2]),
       transformOnlyFrame: dco_decode_bool(arr[3]),
       rotationalSymmetries: dco_decode_list_api_rotational_symmetry(arr[4]),
+      crystalSystem: dco_decode_String(arr[5]),
     );
   }
 
@@ -7017,12 +7018,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_transformOnlyFrame = sse_decode_bool(deserializer);
     var var_rotationalSymmetries =
         sse_decode_list_api_rotational_symmetry(deserializer);
+    var var_crystalSystem = sse_decode_String(deserializer);
     return APILatticeSymopData(
         translation: var_translation,
         rotationAxis: var_rotationAxis,
         rotationAngleDegrees: var_rotationAngleDegrees,
         transformOnlyFrame: var_transformOnlyFrame,
-        rotationalSymmetries: var_rotationalSymmetries);
+        rotationalSymmetries: var_rotationalSymmetries,
+        crystalSystem: var_crystalSystem);
   }
 
   @protected
@@ -8865,6 +8868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.transformOnlyFrame, serializer);
     sse_encode_list_api_rotational_symmetry(
         self.rotationalSymmetries, serializer);
+    sse_encode_String(self.crystalSystem, serializer);
   }
 
   @protected

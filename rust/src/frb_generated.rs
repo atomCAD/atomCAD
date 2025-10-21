@@ -5322,12 +5322,14 @@ impl SseDecode
         let mut var_rotationalSymmetries = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIRotationalSymmetry,
         >>::sse_decode(deserializer);
+        let mut var_crystalSystem = <String>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APILatticeSymopData {
             translation: var_translation,
             rotation_axis: var_rotationAxis,
             rotation_angle_degrees: var_rotationAngleDegrees,
             transform_only_frame: var_transformOnlyFrame,
             rotational_symmetries: var_rotationalSymmetries,
+            crystal_system: var_crystalSystem,
         };
     }
 }
@@ -7729,6 +7731,7 @@ impl flutter_rust_bridge::IntoDart
             self.rotation_angle_degrees.into_into_dart().into_dart(),
             self.transform_only_frame.into_into_dart().into_dart(),
             self.rotational_symmetries.into_into_dart().into_dart(),
+            self.crystal_system.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -9066,6 +9069,7 @@ impl SseEncode
         <f64>::sse_encode(self.rotation_angle_degrees, serializer);
         <bool>::sse_encode(self.transform_only_frame, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIRotationalSymmetry>>::sse_encode(self.rotational_symmetries, serializer);
+        <String>::sse_encode(self.crystal_system, serializer);
     }
 }
 

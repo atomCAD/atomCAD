@@ -55,7 +55,7 @@ use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
-use crate::structure_designer::evaluator::unit_cell_symmetries::analyze_unit_cell_symmetries;
+use crate::structure_designer::evaluator::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem};
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -980,6 +980,19 @@ pub fn get_geo_trans_data(node_id: u64) -> Option<APIGeoTransData> {
   }
 }
 
+/// Helper function to convert CrystalSystem enum to string
+fn crystal_system_to_string(crystal_system: CrystalSystem) -> String {
+  match crystal_system {
+    CrystalSystem::Cubic => "Cubic".to_string(),
+    CrystalSystem::Tetragonal => "Tetragonal".to_string(),
+    CrystalSystem::Orthorhombic => "Orthorhombic".to_string(),
+    CrystalSystem::Hexagonal => "Hexagonal".to_string(),
+    CrystalSystem::Trigonal => "Trigonal".to_string(),
+    CrystalSystem::Monoclinic => "Monoclinic".to_string(),
+    CrystalSystem::Triclinic => "Triclinic".to_string(),
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
   unsafe {
@@ -994,24 +1007,26 @@ pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
           None => return None,
         };
         
-        // Try to get the evaluation cache to access unit cell and compute symmetries
-        let api_symmetries = if let Some(eval_cache) = cad_instance.structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
+        // Try to get the evaluation cache to access unit cell and compute symmetries and crystal system
+        let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance.structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
           if let Some(lattice_symop_cache) = eval_cache.downcast_ref::<LatticeSymopEvalCache>() {
-            // Analyze unit cell symmetries
-            let symmetries = analyze_unit_cell_symmetries(&lattice_symop_cache.unit_cell);
+            // Analyze unit cell symmetries and crystal system
+            let (crystal_system, symmetries) = analyze_unit_cell_complete(&lattice_symop_cache.unit_cell);
             
-            // Convert to API format
-            symmetries.into_iter().map(|sym| APIRotationalSymmetry {
+            // Convert symmetries to API format
+            let api_symmetries = symmetries.into_iter().map(|sym| APIRotationalSymmetry {
               axis: to_api_vec3(&sym.axis),
               n_fold: sym.n_fold,
-            }).collect()
+            }).collect();
+            
+            (api_symmetries, crystal_system_to_string(crystal_system))
           } else {
-            // No lattice symop cache available - return empty symmetries
-            Vec::new()
+            // No lattice symop cache available - return empty symmetries and unknown crystal system
+            (Vec::new(), "Unknown".to_string())
           }
         } else {
-          // No evaluation cache available - return empty symmetries
-          Vec::new()
+          // No evaluation cache available - return empty symmetries and unknown crystal system
+          (Vec::new(), "Unknown".to_string())
         };
         
         Some(APILatticeSymopData {
@@ -1020,6 +1035,7 @@ pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
           rotation_angle_degrees: lattice_symop_data.rotation_angle_degrees,
           transform_only_frame: lattice_symop_data.transform_only_frame,
           rotational_symmetries: api_symmetries,
+          crystal_system: crystal_system_str,
         })
       },
       None

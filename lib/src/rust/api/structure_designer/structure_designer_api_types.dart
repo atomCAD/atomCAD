@@ -608,6 +608,7 @@ class APILatticeSymopData {
   final double rotationAngleDegrees;
   final bool transformOnlyFrame;
   final List<APIRotationalSymmetry> rotationalSymmetries;
+  final String crystalSystem;
 
   const APILatticeSymopData({
     required this.translation,
@@ -615,6 +616,7 @@ class APILatticeSymopData {
     required this.rotationAngleDegrees,
     required this.transformOnlyFrame,
     required this.rotationalSymmetries,
+    required this.crystalSystem,
   });
 
   @override
@@ -623,7 +625,8 @@ class APILatticeSymopData {
       rotationAxis.hashCode ^
       rotationAngleDegrees.hashCode ^
       transformOnlyFrame.hashCode ^
-      rotationalSymmetries.hashCode;
+      rotationalSymmetries.hashCode ^
+      crystalSystem.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -634,7 +637,8 @@ class APILatticeSymopData {
           rotationAxis == other.rotationAxis &&
           rotationAngleDegrees == other.rotationAngleDegrees &&
           transformOnlyFrame == other.transformOnlyFrame &&
-          rotationalSymmetries == other.rotationalSymmetries;
+          rotationalSymmetries == other.rotationalSymmetries &&
+          crystalSystem == other.crystalSystem;
 }
 
 class APIMapData {

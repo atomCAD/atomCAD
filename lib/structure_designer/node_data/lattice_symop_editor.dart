@@ -93,6 +93,7 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
         rotationAngleDegrees: _selectedAngle,
         transformOnlyFrame: widget.data!.transformOnlyFrame,
         rotationalSymmetries: widget.data!.rotationalSymmetries, // This will be ignored by the setter
+        crystalSystem: widget.data!.crystalSystem, // Preserve existing crystal system
       ),
     );
   }
@@ -117,6 +118,37 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 16),
           
+          // Crystal system display
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              border: Border.all(color: Colors.blue.shade200),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.grain, color: Colors.blue.shade700, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Crystal System: ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+                Text(
+                  widget.data!.crystalSystem,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          
           // Translation input
           IVec3Input(
             label: 'Translation',
@@ -130,6 +162,7 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
                   rotationAngleDegrees: _selectedAngle,
                   transformOnlyFrame: widget.data!.transformOnlyFrame,
                   rotationalSymmetries: widget.data!.rotationalSymmetries,
+                  crystalSystem: widget.data!.crystalSystem,
                 ),
               );
             },
@@ -215,6 +248,7 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
                     rotationAngleDegrees: _selectedAngle,
                     transformOnlyFrame: value,
                     rotationalSymmetries: widget.data!.rotationalSymmetries,
+                    crystalSystem: widget.data!.crystalSystem,
                   ),
                 );
               }

@@ -181,6 +181,7 @@ pub struct InputPinView {
     pub rotation_angle_degrees: f64,
     pub transform_only_frame: bool,
     pub rotational_symmetries: Vec<APIRotationalSymmetry>,
+    pub crystal_system: String,
   }
 
   pub struct APIGeoToAtomData {
