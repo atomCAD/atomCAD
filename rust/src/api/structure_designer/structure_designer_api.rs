@@ -984,11 +984,11 @@ pub fn get_geo_trans_data(node_id: u64) -> Option<APIGeoTransData> {
 fn crystal_system_to_string(crystal_system: CrystalSystem) -> String {
   match crystal_system {
     CrystalSystem::Cubic => "Cubic".to_string(),
-    CrystalSystem::Tetragonal => "Tetragonal".to_string(),
+    CrystalSystem::Tetragonal(_) => "Tetragonal".to_string(),
     CrystalSystem::Orthorhombic => "Orthorhombic".to_string(),
-    CrystalSystem::Hexagonal => "Hexagonal".to_string(),
+    CrystalSystem::Hexagonal(_) => "Hexagonal".to_string(),
     CrystalSystem::Trigonal => "Trigonal".to_string(),
-    CrystalSystem::Monoclinic => "Monoclinic".to_string(),
+    CrystalSystem::Monoclinic(_) => "Monoclinic".to_string(),
     CrystalSystem::Triclinic => "Triclinic".to_string(),
   }
 }

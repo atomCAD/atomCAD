@@ -64,16 +64,16 @@ impl RotationalSymmetry {
 pub enum CrystalSystem {
     /// a=b=c, α=β=γ=90°
     Cubic,
-    /// a=b≠c, α=β=γ=90°
-    Tetragonal,
+    /// Two equal axes, one unique. The usize indicates which axis (0=a, 1=b, 2=c) is unique
+    Tetragonal(usize),
     /// a≠b≠c, α=β=γ=90°
     Orthorhombic,
-    /// a=b≠c, α=β=90°, γ=120°
-    Hexagonal,
+    /// Two equal axes, one unique with 120° angle. The usize indicates which axis (0=a, 1=b, 2=c) is unique
+    Hexagonal(usize),
     /// a=b=c, α=β=γ≠90° (and equal)
     Trigonal,
-    /// a≠b≠c, α=γ=90°≠β
-    Monoclinic,
+    /// One unique axis with non-90° angle. The usize indicates which axis (0=a, 1=b, 2=c) is unique
+    Monoclinic(usize),
     /// a≠b≠c, α≠β≠γ≠90°
     Triclinic,
 }
@@ -83,11 +83,11 @@ impl CrystalSystem {
     pub fn name(&self) -> &'static str {
         match self {
             CrystalSystem::Cubic => "Cubic",
-            CrystalSystem::Tetragonal => "Tetragonal",
+            CrystalSystem::Tetragonal(_) => "Tetragonal",
             CrystalSystem::Orthorhombic => "Orthorhombic",
-            CrystalSystem::Hexagonal => "Hexagonal",
+            CrystalSystem::Hexagonal(_) => "Hexagonal",
             CrystalSystem::Trigonal => "Trigonal",
-            CrystalSystem::Monoclinic => "Monoclinic",
+            CrystalSystem::Monoclinic(_) => "Monoclinic",
             CrystalSystem::Triclinic => "Triclinic",
         }
     }
@@ -118,69 +118,116 @@ mod classification {
     }
 }
 
-/// Classifies the crystal system based on unit cell parameters
-/// 
-/// # Arguments
-/// * `unit_cell` - The unit cell structure containing both basis vectors and crystallographic parameters
-/// 
-/// # Returns
-/// * The corresponding crystal system
+use classification::{lengths_equal, angle_equals, is_right_angle, is_120_degrees};
+
+/// All permutations of (0,1,2) for axis permutation testing
+const ALL_PERMUTATIONS: [[usize; 3]; 6] = [
+    [0, 1, 2],
+    [0, 2, 1],
+    [1, 0, 2],
+    [1, 2, 0],
+    [2, 0, 1],
+    [2, 1, 0],
+];
+
+// --------------------------------
+// Permutation-aware classifier for the seven crystal systems.
+//
+// Optimization: some properties are invariant under relabeling of axes
+// (e.g. "how many angles are ≈90°" or "are all three angles ≈90°"). We check
+// those properties once (no permutations needed). When a test requires the
+// association of particular angles with particular edges (for example the
+// conventional hexagonal pattern where α≈β≈90°, γ≈120° and a≈b) we test
+// permutations.
 pub fn classify_crystal_system(unit_cell: &UnitCellStruct) -> CrystalSystem {
-    use classification::*;
-    
+    // lengths and angles
     let a = unit_cell.cell_length_a;
     let b = unit_cell.cell_length_b;
     let c = unit_cell.cell_length_c;
     let alpha = unit_cell.cell_angle_alpha;
     let beta = unit_cell.cell_angle_beta;
     let gamma = unit_cell.cell_angle_gamma;
-    
-    // Check length relationships
-    let a_eq_b = lengths_equal(a, b);
-    let b_eq_c = lengths_equal(b, c);
-    let a_eq_c = lengths_equal(a, c);
-    let all_lengths_equal = a_eq_b && b_eq_c;
-    
-    // Check angle relationships
-    let alpha_90 = is_right_angle(alpha);
-    let beta_90 = is_right_angle(beta);
-    let gamma_90 = is_right_angle(gamma);
-    let all_angles_90 = alpha_90 && beta_90 && gamma_90;
-    let gamma_120 = is_120_degrees(gamma);
-    
-    // Check if all angles are equal (for trigonal)
-    let alpha_eq_beta = angle_equals(alpha, beta);
-    let beta_eq_gamma = angle_equals(beta, gamma);
-    let all_angles_equal = alpha_eq_beta && beta_eq_gamma;
-    
-    // Classification logic following crystallographic conventions
-    if all_lengths_equal && all_angles_90 {
-        // a=b=c, α=β=γ=90°
-        CrystalSystem::Cubic
-    } else if a_eq_b && !a_eq_c && all_angles_90 {
-        // a=b≠c, α=β=γ=90°
-        CrystalSystem::Tetragonal
-    } else if !a_eq_b && !b_eq_c && !a_eq_c && all_angles_90 {
-        // a≠b≠c, α=β=γ=90°
-        CrystalSystem::Orthorhombic
-    } else if a_eq_b && !a_eq_c && alpha_90 && beta_90 && gamma_120 {
-        // a=b≠c, α=β=90°, γ=120°
-        CrystalSystem::Hexagonal
-    } else if all_lengths_equal && all_angles_equal && !all_angles_90 {
-        // a=b=c, α=β=γ≠90° (and equal)
-        CrystalSystem::Trigonal
-    } else if !a_eq_b && !b_eq_c && !a_eq_c && alpha_90 && !beta_90 && gamma_90 {
-        // a≠b≠c, α=γ=90°≠β
-        CrystalSystem::Monoclinic
-    } else {
-        // Everything else: a≠b≠c, α≠β≠γ≠90°
-        CrystalSystem::Triclinic
+
+    let lengths = [a, b, c];
+    let angles = [alpha, beta, gamma];
+
+    // --- INVARIANT QUICK CHECKS (no permutations needed) ---
+    // Count how many angles are ≈90° (this is invariant under relabeling)
+    let mut global_right_count = 0u8;
+    if is_right_angle(alpha) { global_right_count += 1; }
+    if is_right_angle(beta) { global_right_count += 1; }
+    if is_right_angle(gamma) { global_right_count += 1; }
+
+    // If all three angles are right we can classify cubic/tetragonal/orthorhombic
+    // without permuting, because those tests depend only on length-equality
+    // relationships that can be checked in an order-insensitive way.
+    if global_right_count == 3 {
+        // cubic: a ≈ b ≈ c
+        if lengths_equal(a, b) && lengths_equal(b, c) {
+            return CrystalSystem::Cubic;
+        }
+
+        // tetragonal: exactly two lengths equal, third different
+        let ab = lengths_equal(a, b);
+        let ac = lengths_equal(a, c);
+        let bc = lengths_equal(b, c);
+        if ab && !ac && !bc {
+            return CrystalSystem::Tetragonal(2); // c is unique
+        } else if ac && !ab && !bc {
+            return CrystalSystem::Tetragonal(1); // b is unique
+        } else if bc && !ab && !ac {
+            return CrystalSystem::Tetragonal(0); // a is unique
+        }
+
+        // otherwise, all angles 90° but no equalities for higher symmetry -> orthorhombic
+        return CrystalSystem::Orthorhombic;
     }
+
+    // Trigonal (rhombohedral): a≈b≈c and α≈β≈γ≠90° (completely symmetric, no permutations needed)
+    if lengths_equal(a, b) && lengths_equal(b, c) 
+       && angle_equals(alpha, beta) && angle_equals(beta, gamma) 
+       && !is_right_angle(alpha) {
+        return CrystalSystem::Trigonal;
+    }
+
+    // --- PERMUTATION-NEEDED CHECKS ---
+    // Hexagonal: exists permutation where alpha'≈beta'≈90°, gamma'≈120°, and a'≈b'
+    // The unique axis is the one corresponding to the 120° angle
+    for &p in &ALL_PERMUTATIONS {
+        let la = lengths[p[0]];
+        let lb = lengths[p[1]];
+        let a_alpha = angles[p[0]];
+        let a_beta = angles[p[1]];
+        let a_gamma = angles[p[2]];
+
+        if is_right_angle(a_alpha) && is_right_angle(a_beta) && is_120_degrees(a_gamma) && lengths_equal(la, lb) {
+            return CrystalSystem::Hexagonal(p[2]); // The axis corresponding to the 120° angle is unique
+        }
+    }
+
+
+    // Monoclinic: exactly two right angles, identify which axis is unique (non-90°)
+    // We must ensure hexagonal (which also has two right angles) was already tested above
+    if global_right_count == 2 {
+        if !is_right_angle(alpha) {
+            return CrystalSystem::Monoclinic(0); // a-axis is unique (α ≠ 90°)
+        } else if !is_right_angle(beta) {
+            return CrystalSystem::Monoclinic(1); // b-axis is unique (β ≠ 90°)
+        } else if !is_right_angle(gamma) {
+            return CrystalSystem::Monoclinic(2); // c-axis is unique (γ ≠ 90°)
+        }
+        // This shouldn't happen if global_right_count == 2, but fallback to conventional b-axis
+        return CrystalSystem::Monoclinic(1);
+    }
+
+    // Otherwise triclinic (no special metric relations detected)
+    CrystalSystem::Triclinic
 }
 
 /// Symmetry analysis functions for each crystal system
 mod symmetry_analysis {
     use super::{RotationalSymmetry, UnitCellStruct};
+    use super::classification::lengths_equal;
     use glam::f64::DVec3;
     
     /// Analyzes rotational symmetries for cubic crystal system
@@ -231,30 +278,45 @@ mod symmetry_analysis {
         symmetries
     }
     
+    /// Helper function to build tetragonal symmetries given the unique and equal axes
+    fn build_tetragonal_symmetries(unique_axis: DVec3, equal_axis1: DVec3, equal_axis2: DVec3) -> Vec<RotationalSymmetry> {
+        let mut symmetries = Vec::new();
+        
+        // 4-fold rotation along unique axis
+        symmetries.push(RotationalSymmetry::new(unique_axis, 4));
+        
+        // 2-fold rotations along equal axes
+        symmetries.push(RotationalSymmetry::new(equal_axis1, 2));
+        symmetries.push(RotationalSymmetry::new(equal_axis2, 2));
+        
+        // 2-fold rotations along face diagonals in the plane of equal axes
+        symmetries.push(RotationalSymmetry::new(equal_axis1 + equal_axis2, 2));
+        symmetries.push(RotationalSymmetry::new(equal_axis1 - equal_axis2, 2));
+        
+        symmetries
+    }
+
     /// Analyzes rotational symmetries for tetragonal crystal system
     /// 
     /// Tetragonal system has:
-    /// - 4-fold rotation along c-axis
-    /// - 2-fold rotations along a and b axes
-    /// - 2-fold rotations along face diagonals in ab-plane
-    pub fn analyze_tetragonal_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
+    /// - 4-fold rotation along unique axis (the one with different length)
+    /// - 2-fold rotations along the two equal axes
+    /// - 2-fold rotations along face diagonals in the plane of equal axes
+    /// 
+    /// # Arguments
+    /// * `unit_cell` - The unit cell structure
+    /// * `unique_axis_index` - Index of the unique axis (0=a, 1=b, 2=c)
+    pub fn analyze_tetragonal_symmetries(unit_cell: &UnitCellStruct, unique_axis_index: usize) -> Vec<RotationalSymmetry> {
+        let axes = [unit_cell.a, unit_cell.b, unit_cell.c];
         
-        // 4-fold rotation along c-axis (unique axis)
-        symmetries.push(RotationalSymmetry::new(unit_cell.c, 4));
+        // Get the unique axis and the two equal axes
+        let unique_axis = axes[unique_axis_index];
+        let equal_axes: Vec<DVec3> = axes.iter().enumerate()
+            .filter(|(i, _)| *i != unique_axis_index)
+            .map(|(_, &axis)| axis)
+            .collect();
         
-        // 2-fold rotations along a and b axes
-        symmetries.push(RotationalSymmetry::new(unit_cell.a, 2));
-        symmetries.push(RotationalSymmetry::new(unit_cell.b, 2));
-        
-        // 2-fold rotations along face diagonals in ab-plane
-        let face_diagonal_1 = unit_cell.a + unit_cell.b;  // [110]
-        let face_diagonal_2 = unit_cell.a - unit_cell.b;  // [11̄0]
-        
-        symmetries.push(RotationalSymmetry::new(face_diagonal_1, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_2, 2));
-        
-        symmetries
+        build_tetragonal_symmetries(unique_axis, equal_axes[0], equal_axes[1])
     }
     
     /// Analyzes rotational symmetries for orthorhombic crystal system
@@ -272,47 +334,70 @@ mod symmetry_analysis {
         symmetries
     }
     
+    /// Helper function to build hexagonal symmetries given the unique and equal axes
+    fn build_hexagonal_symmetries(unique_axis: DVec3, equal_axis1: DVec3, equal_axis2: DVec3) -> Vec<RotationalSymmetry> {
+        let mut symmetries = Vec::new();
+        
+        // 6-fold rotation along unique axis (c-axis)
+        symmetries.push(RotationalSymmetry::new(unique_axis, 6));
+        
+        // 2-fold rotations perpendicular to unique axis
+        // Along the two equal axes
+        symmetries.push(RotationalSymmetry::new(equal_axis1, 2));
+        symmetries.push(RotationalSymmetry::new(equal_axis2, 2));
+        
+        // Along face diagonals in the plane of equal axes
+        symmetries.push(RotationalSymmetry::new(equal_axis1 + equal_axis2, 2));     // [110]
+        symmetries.push(RotationalSymmetry::new(equal_axis1 - equal_axis2, 2));     // [11̄0]
+        symmetries.push(RotationalSymmetry::new(2.0 * equal_axis1 + equal_axis2, 2)); // [210]
+        symmetries.push(RotationalSymmetry::new(equal_axis1 + 2.0 * equal_axis2, 2)); // [120]
+        
+        symmetries
+    }
+
     /// Analyzes rotational symmetries for hexagonal crystal system
     /// 
     /// Hexagonal system has:
-    /// - 6-fold rotation along c-axis
-    /// - 2-fold rotations perpendicular to c-axis (along a, b, and face diagonals)
-    pub fn analyze_hexagonal_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
+    /// - 6-fold rotation along unique axis (the one with 120° angle)
+    /// - 2-fold rotations perpendicular to unique axis (along equal axes and face diagonals)
+    /// 
+    /// # Arguments
+    /// * `unit_cell` - The unit cell structure
+    /// * `unique_axis_index` - Index of the unique axis (0=a, 1=b, 2=c)
+    pub fn analyze_hexagonal_symmetries(unit_cell: &UnitCellStruct, unique_axis_index: usize) -> Vec<RotationalSymmetry> {
+        let axes = [unit_cell.a, unit_cell.b, unit_cell.c];
         
-        // 6-fold rotation along c-axis (unique axis)
-        symmetries.push(RotationalSymmetry::new(unit_cell.c, 6));
+        // Get the unique axis and the two equal axes
+        let unique_axis = axes[unique_axis_index];
+        let equal_axes: Vec<DVec3> = axes.iter().enumerate()
+            .filter(|(i, _)| *i != unique_axis_index)
+            .map(|(_, &axis)| axis)
+            .collect();
         
-        // 2-fold rotations perpendicular to c-axis
-        // Along a and b axes
-        symmetries.push(RotationalSymmetry::new(unit_cell.a, 2));
-        symmetries.push(RotationalSymmetry::new(unit_cell.b, 2));
-        
-        // Along face diagonals in ab-plane
-        let face_diagonal_1 = unit_cell.a + unit_cell.b;     // [110]
-        let face_diagonal_2 = unit_cell.a - unit_cell.b;     // [11̄0]
-        let face_diagonal_3 = 2.0 * unit_cell.a + unit_cell.b; // [210]
-        let face_diagonal_4 = unit_cell.a + 2.0 * unit_cell.b; // [120]
-        
-        symmetries.push(RotationalSymmetry::new(face_diagonal_1, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_2, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_3, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_4, 2));
-        
-        symmetries
+        build_hexagonal_symmetries(unique_axis, equal_axes[0], equal_axes[1])
     }
     
     /// Analyzes rotational symmetries for trigonal crystal system
     /// 
-    /// Trigonal system has:
-    /// - 3-fold rotation along the body diagonal (principal axis)
+    /// Trigonal (rhombohedral) system has:
+    /// - 3-fold rotations along all four body diagonals
+    /// 
+    /// Since a=b=c and α=β=γ, all four body diagonals are equivalent
+    /// and each has 3-fold rotational symmetry.
     pub fn analyze_trigonal_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
         let mut symmetries = Vec::new();
         
-        // 3-fold rotation along body diagonal [111]
-        // This is the principal axis for trigonal/rhombohedral systems
-        let body_diagonal = unit_cell.a + unit_cell.b + unit_cell.c;
-        symmetries.push(RotationalSymmetry::new(body_diagonal, 3));
+        // All four 3-fold rotations along body diagonals
+        // In a rhombohedral system, all four are equivalent due to the complete symmetry
+        let body_diagonal_1 = unit_cell.a + unit_cell.b + unit_cell.c;   // [111]
+        let body_diagonal_2 = -unit_cell.a + unit_cell.b + unit_cell.c;  // [1̄11]
+        let body_diagonal_3 = unit_cell.a - unit_cell.b + unit_cell.c;   // [11̄1]
+        let body_diagonal_4 = unit_cell.a + unit_cell.b - unit_cell.c;   // [111̄]
+        
+        symmetries.push(RotationalSymmetry::new(body_diagonal_1, 3));
+        symmetries.push(RotationalSymmetry::new(body_diagonal_2, 3));
+        symmetries.push(RotationalSymmetry::new(body_diagonal_3, 3));
+        symmetries.push(RotationalSymmetry::new(body_diagonal_4, 3));
         
         symmetries
     }
@@ -320,14 +405,17 @@ mod symmetry_analysis {
     /// Analyzes rotational symmetries for monoclinic crystal system
     /// 
     /// Monoclinic system has:
-    /// - 2-fold rotation along b-axis (conventional choice)
-    pub fn analyze_monoclinic_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
+    /// - 2-fold rotation along the unique axis (the one with non-90° angle)
+    /// 
+    /// # Arguments
+    /// * `unit_cell` - The unit cell structure
+    /// * `unique_axis_index` - Index of the unique axis (0=a, 1=b, 2=c)
+    pub fn analyze_monoclinic_symmetries(unit_cell: &UnitCellStruct, unique_axis_index: usize) -> Vec<RotationalSymmetry> {
+        let axes = [unit_cell.a, unit_cell.b, unit_cell.c];
+        let unique_axis = axes[unique_axis_index];
         
-        // 2-fold rotation along b-axis (conventional unique axis for monoclinic)
-        symmetries.push(RotationalSymmetry::new(unit_cell.b, 2));
-        
-        symmetries
+        // 2-fold rotation along the unique axis (the one with non-90° angle)
+        vec![RotationalSymmetry::new(unique_axis, 2)]
     }
     
     /// Analyzes rotational symmetries for triclinic crystal system
@@ -369,11 +457,11 @@ pub fn analyze_unit_cell_symmetries(unit_cell: &UnitCellStruct) -> Vec<Rotationa
     
     match crystal_system {
         CrystalSystem::Cubic => analyze_cubic_symmetries(unit_cell),
-        CrystalSystem::Tetragonal => analyze_tetragonal_symmetries(unit_cell),
+        CrystalSystem::Tetragonal(unique_axis_index) => analyze_tetragonal_symmetries(unit_cell, unique_axis_index),
         CrystalSystem::Orthorhombic => analyze_orthorhombic_symmetries(unit_cell),
-        CrystalSystem::Hexagonal => analyze_hexagonal_symmetries(unit_cell),
+        CrystalSystem::Hexagonal(unique_axis_index) => analyze_hexagonal_symmetries(unit_cell, unique_axis_index),
         CrystalSystem::Trigonal => analyze_trigonal_symmetries(unit_cell),
-        CrystalSystem::Monoclinic => analyze_monoclinic_symmetries(unit_cell),
+        CrystalSystem::Monoclinic(unique_axis_index) => analyze_monoclinic_symmetries(unit_cell, unique_axis_index),
         CrystalSystem::Triclinic => analyze_triclinic_symmetries(unit_cell),
     }
 }

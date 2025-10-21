@@ -51,7 +51,7 @@ fn test_cubic_classification() {
 fn test_tetragonal_classification() {
     let tetragonal_cell = create_test_unit_cell(4.0, 4.0, 6.0, 90.0, 90.0, 90.0);
     let system = classify_crystal_system(&tetragonal_cell);
-    assert_eq!(system, CrystalSystem::Tetragonal);
+    assert_eq!(system, CrystalSystem::Tetragonal(2)); // c-axis is unique (a=b≠c)
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn test_orthorhombic_classification() {
 fn test_hexagonal_classification() {
     let hexagonal_cell = create_test_unit_cell(4.0, 4.0, 6.0, 90.0, 90.0, 120.0);
     let system = classify_crystal_system(&hexagonal_cell);
-    assert_eq!(system, CrystalSystem::Hexagonal);
+    assert_eq!(system, CrystalSystem::Hexagonal(2)); // c-axis is unique (γ=120°)
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn test_trigonal_classification() {
 fn test_monoclinic_classification() {
     let monoclinic_cell = create_test_unit_cell(3.0, 4.0, 5.0, 90.0, 110.0, 90.0);
     let system = classify_crystal_system(&monoclinic_cell);
-    assert_eq!(system, CrystalSystem::Monoclinic);
+    assert_eq!(system, CrystalSystem::Monoclinic(1)); // b-axis is unique (β=110°≠90°)
 }
 
 #[test]
@@ -166,4 +166,93 @@ fn test_analyze_unit_cell_complete() {
     
     assert_eq!(system, CrystalSystem::Cubic);
     assert_eq!(symmetries.len(), 13);
+}
+
+// ================================
+// PERMUTATION TESTS
+// Test different axis permutations for systems where it matters
+// ================================
+
+#[test]
+fn test_tetragonal_a_unique() {
+    // a≠b=c case: a-axis is unique
+    let tetragonal_cell = create_test_unit_cell(6.0, 4.0, 4.0, 90.0, 90.0, 90.0);
+    let system = classify_crystal_system(&tetragonal_cell);
+    assert_eq!(system, CrystalSystem::Tetragonal(0)); // a-axis is unique
+    
+    // Test symmetries still work correctly
+    let symmetries = analyze_unit_cell_symmetries(&tetragonal_cell);
+    assert_eq!(symmetries.len(), 5);
+    let four_fold_count = symmetries.iter().filter(|s| s.n_fold == 4).count();
+    assert_eq!(four_fold_count, 1); // Along a-axis (unique)
+}
+
+#[test]
+fn test_tetragonal_b_unique() {
+    // a=c≠b case: b-axis is unique
+    let tetragonal_cell = create_test_unit_cell(4.0, 6.0, 4.0, 90.0, 90.0, 90.0);
+    let system = classify_crystal_system(&tetragonal_cell);
+    assert_eq!(system, CrystalSystem::Tetragonal(1)); // b-axis is unique
+    
+    // Test symmetries still work correctly
+    let symmetries = analyze_unit_cell_symmetries(&tetragonal_cell);
+    assert_eq!(symmetries.len(), 5);
+    let four_fold_count = symmetries.iter().filter(|s| s.n_fold == 4).count();
+    assert_eq!(four_fold_count, 1); // Along b-axis (unique)
+}
+
+#[test]
+fn test_hexagonal_a_unique() {
+    // b=c≠a, β=γ=90°, α=120° case: a-axis is unique
+    let hexagonal_cell = create_test_unit_cell(6.0, 4.0, 4.0, 120.0, 90.0, 90.0);
+    let system = classify_crystal_system(&hexagonal_cell);
+    assert_eq!(system, CrystalSystem::Hexagonal(0)); // a-axis is unique (α=120°)
+    
+    // Test symmetries still work correctly
+    let symmetries = analyze_unit_cell_symmetries(&hexagonal_cell);
+    assert_eq!(symmetries.len(), 7); // 1 six-fold + 6 two-fold
+    let six_fold_count = symmetries.iter().filter(|s| s.n_fold == 6).count();
+    assert_eq!(six_fold_count, 1); // Along a-axis (unique)
+}
+
+#[test]
+fn test_hexagonal_b_unique() {
+    // a=c≠b, α=γ=90°, β=120° case: b-axis is unique
+    let hexagonal_cell = create_test_unit_cell(4.0, 6.0, 4.0, 90.0, 120.0, 90.0);
+    let system = classify_crystal_system(&hexagonal_cell);
+    assert_eq!(system, CrystalSystem::Hexagonal(1)); // b-axis is unique (β=120°)
+    
+    // Test symmetries still work correctly
+    let symmetries = analyze_unit_cell_symmetries(&hexagonal_cell);
+    assert_eq!(symmetries.len(), 7); // 1 six-fold + 6 two-fold
+    let six_fold_count = symmetries.iter().filter(|s| s.n_fold == 6).count();
+    assert_eq!(six_fold_count, 1); // Along b-axis (unique)
+}
+
+#[test]
+fn test_monoclinic_a_unique() {
+    // β=γ=90°≠α case: a-axis is unique
+    let monoclinic_cell = create_test_unit_cell(3.0, 4.0, 5.0, 110.0, 90.0, 90.0);
+    let system = classify_crystal_system(&monoclinic_cell);
+    assert_eq!(system, CrystalSystem::Monoclinic(0)); // a-axis is unique (α≠90°)
+    
+    // Test symmetries still work correctly
+    let symmetries = analyze_unit_cell_symmetries(&monoclinic_cell);
+    assert_eq!(symmetries.len(), 1); // 1 two-fold along unique axis
+    let two_fold_count = symmetries.iter().filter(|s| s.n_fold == 2).count();
+    assert_eq!(two_fold_count, 1); // Along a-axis (unique)
+}
+
+#[test]
+fn test_monoclinic_c_unique() {
+    // α=β=90°≠γ case: c-axis is unique
+    let monoclinic_cell = create_test_unit_cell(3.0, 4.0, 5.0, 90.0, 90.0, 110.0);
+    let system = classify_crystal_system(&monoclinic_cell);
+    assert_eq!(system, CrystalSystem::Monoclinic(2)); // c-axis is unique (γ≠90°)
+    
+    // Test symmetries still work correctly
+    let symmetries = analyze_unit_cell_symmetries(&monoclinic_cell);
+    assert_eq!(symmetries.len(), 1); // 1 two-fold along unique axis
+    let two_fold_count = symmetries.iter().filter(|s| s.n_fold == 2).count();
+    assert_eq!(two_fold_count, 1); // Along c-axis (unique)
 }
