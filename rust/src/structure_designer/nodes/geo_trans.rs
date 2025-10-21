@@ -21,7 +21,6 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::common::gadget::Gadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::renderer::mesh::Mesh;
-use crate::structure_designer::common_constants;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 

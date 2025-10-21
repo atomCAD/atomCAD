@@ -1,3 +1,4 @@
+use crate::common::gadget::Gadget;
 use crate::structure_designer::evaluator::network_evaluator::{
   NetworkEvaluationContext, NetworkEvaluator
 };
@@ -7,6 +8,7 @@ use crate::structure_designer::evaluator::network_result::{
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::utils::xyz_gadget_utils;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::common::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
@@ -19,6 +21,8 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::renderer::mesh::Mesh;
+use crate::renderer::tessellator::tessellator::Tessellatable;
 
 #[derive(Debug, Clone)]
 pub struct LatticeSymopEvalCache {
@@ -37,8 +41,16 @@ pub struct LatticeSymopData {
 }
 
 impl NodeData for LatticeSymopData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-      None
+    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+        let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+        let geo_trans_cache = eval_cache.downcast_ref::<LatticeSymopEvalCache>()?;
+        
+        let gadget = LatticeSymopGadget::new(
+            self.translation,
+            geo_trans_cache.input_frame_transform.clone(),
+            &geo_trans_cache.unit_cell,
+        );
+        Some(Box::new(gadget))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -242,4 +254,136 @@ impl NodeData for LatticeSymopData {
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
+}
+
+
+#[derive(Clone)]
+pub struct LatticeSymopGadget {
+    pub translation: IVec3,
+    pub input_frame_transform: Transform,
+    pub frame_transform: Transform,
+    pub dragged_handle_index: Option<i32>,
+    pub start_drag_offset: f64,
+    pub unit_cell: UnitCellStruct,
+}
+
+impl Tessellatable for LatticeSymopGadget {
+  fn tessellate(&self, output_mesh: &mut Mesh) {
+    xyz_gadget_utils::tessellate_xyz_gadget(
+      output_mesh,
+      &self.unit_cell,
+      DQuat::IDENTITY,
+      &self.frame_transform.translation,
+      false // Don't include rotation handles for now
+    );
+  }
+
+  fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
+      Box::new(self.clone())
+  }
+}
+
+impl Gadget for LatticeSymopGadget {
+  fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+      xyz_gadget_utils::xyz_gadget_hit_test(
+          &self.unit_cell,
+          DQuat::IDENTITY,
+          &self.frame_transform.translation,
+          &ray_origin,
+          &ray_direction,
+          false // Don't include rotation handles for now
+      )
+  }
+
+  fn start_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    self.dragged_handle_index = Some(handle_index);
+    self.start_drag_offset = xyz_gadget_utils::get_dragged_axis_offset(
+        &self.unit_cell,
+        DQuat::IDENTITY,
+        &self.frame_transform.translation,
+        handle_index,
+        &ray_origin,
+        &ray_direction
+    );
+  }
+
+  fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
+    let current_offset = xyz_gadget_utils::get_dragged_axis_offset(
+        &self.unit_cell,
+        DQuat::IDENTITY,
+        &self.frame_transform.translation,
+        handle_index,
+        &ray_origin,
+        &ray_direction
+    );
+    let offset_delta = current_offset - self.start_drag_offset;
+    if self.apply_drag_offset(handle_index, offset_delta) {
+      self.start_drag(handle_index, ray_origin, ray_direction);
+    }
+  }
+
+  fn end_drag(&mut self) {
+    self.dragged_handle_index = None;
+  }
+}
+
+impl NodeNetworkGadget for LatticeSymopGadget {
+  fn sync_data(&self, data: &mut dyn NodeData) {
+      if let Some(lattice_symop_data) = data.as_any_mut().downcast_mut::<LatticeSymopData>() {
+        let real_delta_translation = self.frame_transform.translation - self.input_frame_transform.translation;
+        lattice_symop_data.translation = self.unit_cell.real_to_ivec3_lattice(&real_delta_translation);
+      }
+  }
+
+  fn clone_box(&self) -> Box<dyn NodeNetworkGadget> {
+      Box::new(self.clone())
+  }
+}
+
+impl LatticeSymopGadget {
+  pub fn new(translation: IVec3, input_frame_transform: Transform, unit_cell: &UnitCellStruct) -> Self {
+      let mut ret = Self {
+          translation,
+          input_frame_transform: Transform::new(input_frame_transform.translation, input_frame_transform.rotation),
+          frame_transform: Transform::new(DVec3::ZERO, DQuat::IDENTITY),
+          dragged_handle_index: None,
+          start_drag_offset: 0.0,
+          unit_cell: unit_cell.clone(),
+      };
+      ret.refresh_frame_transform();
+      return ret;
+  }
+
+  // Returns whether the application of the drag offset was successful and the drag start should be reset
+  fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
+    let axis_basis_vector = self.unit_cell.get_basis_vector(axis_index);
+    let rounded_delta = (offset_delta / axis_basis_vector.length()).round();
+
+    // Early return if no movement
+    if rounded_delta == 0.0 {
+      return false;
+    }
+    
+    // Get the local axis direction based on the current rotation
+    let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(&self.unit_cell, DQuat::IDENTITY, axis_index) {
+      Some(dir) => dir,
+      None => return false, // Invalid axis index
+    };
+
+    // Calculate the movement vector
+    let movement_distance = rounded_delta * axis_basis_vector.length();
+    let movement_vector = local_axis_dir * movement_distance;
+    
+    // Apply the movement to the frame transform
+    self.frame_transform.translation += movement_vector;
+    
+    return true;
+  }
+
+  fn refresh_frame_transform(&mut self) {
+    let real_translation = self.unit_cell.ivec3_lattice_to_real(&self.translation);
+    let rotation_quat = DQuat::IDENTITY;
+
+    self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
+  }
 }
