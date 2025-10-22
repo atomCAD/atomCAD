@@ -5603,8 +5603,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIUnitCellData dco_decode_api_unit_cell_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return APIUnitCellData(
       cellLengthA: dco_decode_f_64(arr[0]),
       cellLengthB: dco_decode_f_64(arr[1]),
@@ -5612,6 +5612,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       cellAngleAlpha: dco_decode_f_64(arr[3]),
       cellAngleBeta: dco_decode_f_64(arr[4]),
       cellAngleGamma: dco_decode_f_64(arr[5]),
+      crystalSystem: dco_decode_String(arr[6]),
     );
   }
 
@@ -7171,13 +7172,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_cellAngleAlpha = sse_decode_f_64(deserializer);
     var var_cellAngleBeta = sse_decode_f_64(deserializer);
     var var_cellAngleGamma = sse_decode_f_64(deserializer);
+    var var_crystalSystem = sse_decode_String(deserializer);
     return APIUnitCellData(
         cellLengthA: var_cellLengthA,
         cellLengthB: var_cellLengthB,
         cellLengthC: var_cellLengthC,
         cellAngleAlpha: var_cellAngleAlpha,
         cellAngleBeta: var_cellAngleBeta,
-        cellAngleGamma: var_cellAngleGamma);
+        cellAngleGamma: var_cellAngleGamma,
+        crystalSystem: var_crystalSystem);
   }
 
   @protected
@@ -8997,6 +9000,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.cellAngleAlpha, serializer);
     sse_encode_f_64(self.cellAngleBeta, serializer);
     sse_encode_f_64(self.cellAngleGamma, serializer);
+    sse_encode_String(self.crystalSystem, serializer);
   }
 
   @protected

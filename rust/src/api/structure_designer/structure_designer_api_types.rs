@@ -283,6 +283,7 @@ pub struct APIUnitCellData {
   pub cell_angle_alpha: f64, // in degrees
   pub cell_angle_beta: f64,  // in degrees
   pub cell_angle_gamma: f64, // in degrees
+  pub crystal_system: String,
 }
 
 pub struct APIMotifData {

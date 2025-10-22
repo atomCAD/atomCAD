@@ -5540,6 +5540,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_cellAngleAlpha = <f64>::sse_decode(deserializer);
         let mut var_cellAngleBeta = <f64>::sse_decode(deserializer);
         let mut var_cellAngleGamma = <f64>::sse_decode(deserializer);
+        let mut var_crystalSystem = <String>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIUnitCellData {
             cell_length_a: var_cellLengthA,
             cell_length_b: var_cellLengthB,
@@ -5547,6 +5548,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             cell_angle_alpha: var_cellAngleAlpha,
             cell_angle_beta: var_cellAngleBeta,
             cell_angle_gamma: var_cellAngleGamma,
+            crystal_system: var_crystalSystem,
         };
     }
 }
@@ -8143,6 +8145,7 @@ impl flutter_rust_bridge::IntoDart
             self.cell_angle_alpha.into_into_dart().into_dart(),
             self.cell_angle_beta.into_into_dart().into_dart(),
             self.cell_angle_gamma.into_into_dart().into_dart(),
+            self.crystal_system.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -9228,6 +9231,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <f64>::sse_encode(self.cell_angle_alpha, serializer);
         <f64>::sse_encode(self.cell_angle_beta, serializer);
         <f64>::sse_encode(self.cell_angle_gamma, serializer);
+        <String>::sse_encode(self.crystal_system, serializer);
     }
 }
 

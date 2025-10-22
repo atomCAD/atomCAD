@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/common/crystal_system_display.dart';
 
 /// Editor widget for lattice_symop nodes
 class LatticeSymopEditor extends StatefulWidget {
@@ -119,33 +120,8 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
           const SizedBox(height: 16),
           
           // Crystal system display
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              border: Border.all(color: Colors.blue.shade200),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.grain, color: Colors.blue.shade700, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Crystal System: ',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: Colors.blue.shade700,
-                  ),
-                ),
-                Text(
-                  widget.data!.crystalSystem,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
-                  ),
-                ),
-              ],
-            ),
+          CrystalSystemDisplay(
+            crystalSystem: widget.data!.crystalSystem,
           ),
           const SizedBox(height: 16),
           

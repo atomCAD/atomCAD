@@ -55,7 +55,8 @@ use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
-use crate::structure_designer::evaluator::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem};
+use crate::structure_designer::evaluator::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem, classify_crystal_system};
+use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -1943,6 +1944,11 @@ pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
           Some(data) => data,
           None => return None,
         };
+        // Convert to UnitCellStruct and detect crystal system
+        let unit_cell_struct = unit_cell_data.to_unit_cell_struct();
+        let crystal_system = classify_crystal_system(&unit_cell_struct);
+        let crystal_system_str = crystal_system_to_string(crystal_system);
+        
         Some(APIUnitCellData {
           cell_length_a: unit_cell_data.cell_length_a,
           cell_length_b: unit_cell_data.cell_length_b,
@@ -1950,6 +1956,7 @@ pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
           cell_angle_alpha: unit_cell_data.cell_angle_alpha,
           cell_angle_beta: unit_cell_data.cell_angle_beta,
           cell_angle_gamma: unit_cell_data.cell_angle_gamma,
+          crystal_system: crystal_system_str,
         })
       },
       None

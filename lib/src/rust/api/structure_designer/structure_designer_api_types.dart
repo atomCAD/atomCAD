@@ -914,6 +914,7 @@ class APIUnitCellData {
   final double cellAngleAlpha;
   final double cellAngleBeta;
   final double cellAngleGamma;
+  final String crystalSystem;
 
   const APIUnitCellData({
     required this.cellLengthA,
@@ -922,6 +923,7 @@ class APIUnitCellData {
     required this.cellAngleAlpha,
     required this.cellAngleBeta,
     required this.cellAngleGamma,
+    required this.crystalSystem,
   });
 
   @override
@@ -931,7 +933,8 @@ class APIUnitCellData {
       cellLengthC.hashCode ^
       cellAngleAlpha.hashCode ^
       cellAngleBeta.hashCode ^
-      cellAngleGamma.hashCode;
+      cellAngleGamma.hashCode ^
+      crystalSystem.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -943,7 +946,8 @@ class APIUnitCellData {
           cellLengthC == other.cellLengthC &&
           cellAngleAlpha == other.cellAngleAlpha &&
           cellAngleBeta == other.cellAngleBeta &&
-          cellAngleGamma == other.cellAngleGamma;
+          cellAngleGamma == other.cellAngleGamma &&
+          crystalSystem == other.crystalSystem;
 }
 
 class APIVec2Data {

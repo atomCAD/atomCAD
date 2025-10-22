@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/common/crystal_system_display.dart';
 
 /// Editor widget for unit_cell nodes
 class UnitCellEditor extends StatefulWidget {
@@ -28,12 +29,13 @@ class UnitCellEditorState extends State<UnitCellEditor> {
   /// Crystallography: α,β,γ → atomCAD: β,γ,α
   APIUnitCellData _crystallographicToAtomCAD(APIUnitCellData crystData) {
     return APIUnitCellData(
-      cellLengthA: crystData.cellLengthB,    // a_atomcad = b_cryst
-      cellLengthB: crystData.cellLengthC,    // b_atomcad = c_cryst
-      cellLengthC: crystData.cellLengthA,    // c_atomcad = a_cryst
-      cellAngleAlpha: crystData.cellAngleBeta,   // α_atomcad = β_cryst
-      cellAngleBeta: crystData.cellAngleGamma,   // β_atomcad = γ_cryst
-      cellAngleGamma: crystData.cellAngleAlpha,  // γ_atomcad = α_cryst
+      cellLengthA: crystData.cellLengthB, // a_atomcad = b_cryst
+      cellLengthB: crystData.cellLengthC, // b_atomcad = c_cryst
+      cellLengthC: crystData.cellLengthA, // c_atomcad = a_cryst
+      cellAngleAlpha: crystData.cellAngleBeta, // α_atomcad = β_cryst
+      cellAngleBeta: crystData.cellAngleGamma, // β_atomcad = γ_cryst
+      cellAngleGamma: crystData.cellAngleAlpha, // γ_atomcad = α_cryst
+      crystalSystem: crystData.crystalSystem, // Preserve crystal system
     );
   }
 
@@ -42,12 +44,13 @@ class UnitCellEditorState extends State<UnitCellEditor> {
   /// atomCAD: α,β,γ → Crystallography: γ,α,β
   APIUnitCellData _atomCADToCrystallographic(APIUnitCellData atomcadData) {
     return APIUnitCellData(
-      cellLengthA: atomcadData.cellLengthC,    // a_cryst = c_atomcad
-      cellLengthB: atomcadData.cellLengthA,    // b_cryst = a_atomcad
-      cellLengthC: atomcadData.cellLengthB,    // c_cryst = b_atomcad
-      cellAngleAlpha: atomcadData.cellAngleGamma,   // α_cryst = γ_atomcad
-      cellAngleBeta: atomcadData.cellAngleAlpha,    // β_cryst = α_atomcad
-      cellAngleGamma: atomcadData.cellAngleBeta,    // γ_cryst = β_atomcad
+      cellLengthA: atomcadData.cellLengthC, // a_cryst = c_atomcad
+      cellLengthB: atomcadData.cellLengthA, // b_cryst = a_atomcad
+      cellLengthC: atomcadData.cellLengthB, // c_cryst = b_atomcad
+      cellAngleAlpha: atomcadData.cellAngleGamma, // α_cryst = γ_atomcad
+      cellAngleBeta: atomcadData.cellAngleAlpha, // β_cryst = α_atomcad
+      cellAngleGamma: atomcadData.cellAngleBeta, // γ_cryst = β_atomcad
+      crystalSystem: atomcadData.crystalSystem, // Preserve crystal system
     );
   }
 
@@ -85,7 +88,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
             Text('Unit Cell Properties',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            
+
             // Coordinate system convention checkbox
             Row(
               children: [
@@ -108,9 +111,13 @@ class UnitCellEditorState extends State<UnitCellEditor> {
                       Text(
                         'The canonical crystallography cs. is Y right, Z up, vs. atomCAD X right, Y up (both right handed). atomCAD(a,b,c) = crystallography(b,c,a), atomCAD(alpha,beta,gamma)=crystallography(beta,gamma,alpha). See user\'s guide',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 10,
-                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
-                        ),
+                              fontSize: 10,
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color
+                                  ?.withOpacity(0.7),
+                            ),
                       ),
                     ],
                   ),
@@ -118,7 +125,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Cell Lengths Section
             Text('Cell Lengths (Å)',
                 style: Theme.of(context).textTheme.titleSmall),
@@ -135,6 +142,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
                   cellAngleAlpha: displayData.cellAngleAlpha,
                   cellAngleBeta: displayData.cellAngleBeta,
                   cellAngleGamma: displayData.cellAngleGamma,
+                  crystalSystem: displayData.crystalSystem,
                 ));
               },
             ),
@@ -151,6 +159,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
                   cellAngleAlpha: displayData.cellAngleAlpha,
                   cellAngleBeta: displayData.cellAngleBeta,
                   cellAngleGamma: displayData.cellAngleGamma,
+                  crystalSystem: displayData.crystalSystem,
                 ));
               },
             ),
@@ -167,11 +176,12 @@ class UnitCellEditorState extends State<UnitCellEditor> {
                   cellAngleAlpha: displayData.cellAngleAlpha,
                   cellAngleBeta: displayData.cellAngleBeta,
                   cellAngleGamma: displayData.cellAngleGamma,
+                  crystalSystem: displayData.crystalSystem,
                 ));
               },
             ),
             const SizedBox(height: 16),
-            
+
             // Cell Angles Section
             Text('Cell Angles (°)',
                 style: Theme.of(context).textTheme.titleSmall),
@@ -188,6 +198,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
                   cellAngleAlpha: newValue,
                   cellAngleBeta: displayData.cellAngleBeta,
                   cellAngleGamma: displayData.cellAngleGamma,
+                  crystalSystem: displayData.crystalSystem,
                 ));
               },
             ),
@@ -204,6 +215,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
                   cellAngleAlpha: displayData.cellAngleAlpha,
                   cellAngleBeta: newValue,
                   cellAngleGamma: displayData.cellAngleGamma,
+                  crystalSystem: displayData.crystalSystem,
                 ));
               },
             ),
@@ -220,8 +232,16 @@ class UnitCellEditorState extends State<UnitCellEditor> {
                   cellAngleAlpha: displayData.cellAngleAlpha,
                   cellAngleBeta: displayData.cellAngleBeta,
                   cellAngleGamma: newValue,
+                  crystalSystem: displayData.crystalSystem,
                 ));
               },
+            ),
+            const SizedBox(height: 16),
+            
+            // Crystal system display
+            CrystalSystemDisplay(
+              crystalSystem: widget.data!.crystalSystem,
+              label: 'Detected Crystal System: ',
             ),
           ],
         ),
