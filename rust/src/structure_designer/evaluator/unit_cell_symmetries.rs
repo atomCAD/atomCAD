@@ -380,24 +380,20 @@ mod symmetry_analysis {
     /// Analyzes rotational symmetries for trigonal crystal system
     /// 
     /// Trigonal (rhombohedral) system has:
-    /// - 3-fold rotations along all four body diagonals
+    /// - ONE 3-fold rotation along the main body diagonal [111]
     /// 
-    /// Since a=b=c and α=β=γ, all four body diagonals are equivalent
-    /// and each has 3-fold rotational symmetry.
+    /// While a=b=c and α=β=γ, the non-90° angles break the cubic symmetry.
+    /// Only the main body diagonal [111] retains 3-fold rotational symmetry.
+    /// The other body diagonals lose their 3-fold symmetry due to the rhombohedral distortion.
     pub fn analyze_trigonal_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
         let mut symmetries = Vec::new();
         
-        // All four 3-fold rotations along body diagonals
-        // In a rhombohedral system, all four are equivalent due to the complete symmetry
-        let body_diagonal_1 = unit_cell.a + unit_cell.b + unit_cell.c;   // [111]
-        let body_diagonal_2 = -unit_cell.a + unit_cell.b + unit_cell.c;  // [1̄11]
-        let body_diagonal_3 = unit_cell.a - unit_cell.b + unit_cell.c;   // [11̄1]
-        let body_diagonal_4 = unit_cell.a + unit_cell.b - unit_cell.c;   // [111̄]
+        // Only ONE 3-fold rotation along the main body diagonal
+        // In a rhombohedral system, the non-90° angles break the equivalence of all body diagonals
+        // Only [111] remains a true 3-fold symmetry axis
+        let main_body_diagonal = unit_cell.a + unit_cell.b + unit_cell.c;   // [111]
         
-        symmetries.push(RotationalSymmetry::new(body_diagonal_1, 3));
-        symmetries.push(RotationalSymmetry::new(body_diagonal_2, 3));
-        symmetries.push(RotationalSymmetry::new(body_diagonal_3, 3));
-        symmetries.push(RotationalSymmetry::new(body_diagonal_4, 3));
+        symmetries.push(RotationalSymmetry::new(main_body_diagonal, 3));
         
         symmetries
     }
