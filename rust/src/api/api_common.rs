@@ -5,9 +5,7 @@ use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::DQuat;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::scene_composer::scene_composer::SceneComposer;
 use crate::renderer::renderer::Renderer;
-use crate::api::common_api_types::Editor;
 use crate::util::transform::Transform;
 
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
@@ -101,9 +99,7 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
 
   pub struct CADInstance {
     pub structure_designer: StructureDesigner,
-    pub scene_composer: SceneComposer,
     pub renderer: Renderer,
-    pub active_editor: Editor, // This one refreshes itself into the Renderer when the refresh_renderer function is called.
   }
 
   pub static mut CAD_INSTANCE: Option<CADInstance> = None;
@@ -254,17 +250,5 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
   }
 
   pub fn refresh_renderer(cad_instance: &mut CADInstance, lightweight: bool) {
-    match cad_instance.active_editor {
-      Editor::StructureDesigner => {
-        refresh_structure_designer(cad_instance, lightweight);
-      },
-      Editor::SceneComposer => {
-        cad_instance.renderer.refresh(
-          &cad_instance.scene_composer,
-          lightweight,
-          &cad_instance.structure_designer.preferences.geometry_visualization_preferences
-        );
-      },
-      Editor::None => {}
-    }
+      refresh_structure_designer(cad_instance, lightweight);
   }

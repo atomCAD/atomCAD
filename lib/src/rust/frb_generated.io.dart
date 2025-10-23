@@ -5,8 +5,6 @@
 
 import 'api/common_api.dart';
 import 'api/common_api_types.dart';
-import 'api/scene_composer_api.dart';
-import 'api/scene_composer_api_types.dart';
 import 'api/structure_designer/anchor_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
@@ -153,9 +151,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRotationalSymmetry dco_decode_api_rotational_symmetry(dynamic raw);
 
   @protected
-  APISceneComposerTool dco_decode_api_scene_composer_tool(dynamic raw);
-
-  @protected
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
@@ -196,9 +191,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIVec3Data dco_decode_apii_vec_3_data(dynamic raw);
-
-  @protected
-  AtomView dco_decode_atom_view(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
@@ -334,16 +326,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIVec3Data dco_decode_box_autoadd_apii_vec_3_data(dynamic raw);
 
   @protected
-  AtomView dco_decode_box_autoadd_atom_view(dynamic raw);
-
-  @protected
   int dco_decode_box_autoadd_i_32(dynamic raw);
 
   @protected
   NodeNetworkView dco_decode_box_autoadd_node_network_view(dynamic raw);
-
-  @protected
-  SceneComposerView dco_decode_box_autoadd_scene_composer_view(dynamic raw);
 
   @protected
   StructureDesignerPreferences
@@ -354,12 +340,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_box_autoadd_usize(dynamic raw);
-
-  @protected
-  ClusterView dco_decode_cluster_view(dynamic raw);
-
-  @protected
-  Editor dco_decode_editor(dynamic raw);
 
   @protected
   ElementSummary dco_decode_element_summary(dynamic raw);
@@ -399,13 +379,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
       dynamic raw);
-
-  @protected
-  List<APISceneComposerTool> dco_decode_list_api_scene_composer_tool(
-      dynamic raw);
-
-  @protected
-  List<ClusterView> dco_decode_list_cluster_view(dynamic raw);
 
   @protected
   List<ElementSummary> dco_decode_list_element_summary(dynamic raw);
@@ -568,17 +541,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIVec3Data? dco_decode_opt_box_autoadd_apii_vec_3_data(dynamic raw);
 
   @protected
-  AtomView? dco_decode_opt_box_autoadd_atom_view(dynamic raw);
-
-  @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
   @protected
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
-
-  @protected
-  SceneComposerView? dco_decode_opt_box_autoadd_scene_composer_view(
-      dynamic raw);
 
   @protected
   StructureDesignerPreferences?
@@ -599,9 +565,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
-
-  @protected
-  SceneComposerView dco_decode_scene_composer_view(dynamic raw);
 
   @protected
   SelectModifier dco_decode_select_modifier(dynamic raw);
@@ -757,10 +720,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APISceneComposerTool sse_decode_api_scene_composer_tool(
-      SseDeserializer deserializer);
-
-  @protected
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
@@ -802,9 +761,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIVec3Data sse_decode_apii_vec_3_data(SseDeserializer deserializer);
-
-  @protected
-  AtomView sse_decode_atom_view(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -975,17 +931,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  AtomView sse_decode_box_autoadd_atom_view(SseDeserializer deserializer);
-
-  @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
   NodeNetworkView sse_decode_box_autoadd_node_network_view(
-      SseDeserializer deserializer);
-
-  @protected
-  SceneComposerView sse_decode_box_autoadd_scene_composer_view(
       SseDeserializer deserializer);
 
   @protected
@@ -998,12 +947,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
-
-  @protected
-  ClusterView sse_decode_cluster_view(SseDeserializer deserializer);
-
-  @protected
-  Editor sse_decode_editor(SseDeserializer deserializer);
 
   @protected
   ElementSummary sse_decode_element_summary(SseDeserializer deserializer);
@@ -1048,13 +991,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APIRotationalSymmetry> sse_decode_list_api_rotational_symmetry(
       SseDeserializer deserializer);
-
-  @protected
-  List<APISceneComposerTool> sse_decode_list_api_scene_composer_tool(
-      SseDeserializer deserializer);
-
-  @protected
-  List<ClusterView> sse_decode_list_cluster_view(SseDeserializer deserializer);
 
   @protected
   List<ElementSummary> sse_decode_list_element_summary(
@@ -1257,17 +1193,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  AtomView? sse_decode_opt_box_autoadd_atom_view(SseDeserializer deserializer);
-
-  @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
   NodeNetworkView? sse_decode_opt_box_autoadd_node_network_view(
-      SseDeserializer deserializer);
-
-  @protected
-  SceneComposerView? sse_decode_opt_box_autoadd_scene_composer_view(
       SseDeserializer deserializer);
 
   @protected
@@ -1291,10 +1220,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
-      SseDeserializer deserializer);
-
-  @protected
-  SceneComposerView sse_decode_scene_composer_view(
       SseDeserializer deserializer);
 
   @protected
@@ -1466,10 +1391,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRotationalSymmetry self, SseSerializer serializer);
 
   @protected
-  void sse_encode_api_scene_composer_tool(
-      APISceneComposerTool self, SseSerializer serializer);
-
-  @protected
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
@@ -1512,9 +1433,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_apii_vec_3_data(APIIVec3Data self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_atom_view(AtomView self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -1690,19 +1608,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIIVec3Data self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_atom_view(
-      AtomView self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_node_network_view(
       NodeNetworkView self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_scene_composer_view(
-      SceneComposerView self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_structure_designer_preferences(
@@ -1713,12 +1623,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_cluster_view(ClusterView self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_editor(Editor self, SseSerializer serializer);
 
   @protected
   void sse_encode_element_summary(
@@ -1762,14 +1666,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_rotational_symmetry(
       List<APIRotationalSymmetry> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_api_scene_composer_tool(
-      List<APISceneComposerTool> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_cluster_view(
-      List<ClusterView> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_element_summary(
@@ -1976,19 +1872,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIIVec3Data? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_atom_view(
-      AtomView? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_node_network_view(
       NodeNetworkView? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_scene_composer_view(
-      SceneComposerView? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_structure_designer_preferences(
@@ -2010,10 +1898,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_64_node_view(
       (BigInt, NodeView) self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_scene_composer_view(
-      SceneComposerView self, SseSerializer serializer);
 
   @protected
   void sse_encode_select_modifier(

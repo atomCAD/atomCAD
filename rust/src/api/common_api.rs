@@ -3,10 +3,8 @@ use dlopen::{symbor::{Library, Symbol}, Error as LibError};
 use std::time::Instant;
 use crate::renderer::renderer::Renderer;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::scene_composer::scene_composer::SceneComposer;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::APICamera;
-use crate::api::common_api_types::Editor;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::util::transform::Transform;
 use crate::api::api_common::CAD_INSTANCE;
@@ -81,9 +79,7 @@ async fn initialize_cad_instance_async() {
     CAD_INSTANCE = Some(
       CADInstance {
         structure_designer: StructureDesigner::new(),
-        scene_composer: SceneComposer::new(),
         renderer: Renderer::new(INITIAL_VIEWPORT_WIDTH, INITIAL_VIEWPORT_HEIGHT).await,
-        active_editor: Editor::None,
       }
     );
 
@@ -119,15 +115,6 @@ fn send_texture(texture_ptr: u64, width: u32, height: u32, v : Vec<u8>) {
     Err(err) => {
       println!("Failed to load render function: {}", err);
     }
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn set_active_editor(editor: Editor) {
-  unsafe {
-    with_mut_cad_instance(|cad_instance| {
-      cad_instance.active_editor = editor;
-    });
   }
 }
 
@@ -185,39 +172,13 @@ pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn find_pivot_point(ray_start: APIVec3, ray_dir: APIVec3) -> APIVec3 {
-  unsafe {
-    with_cad_instance_or(
-      |cad_instance| {
-        let model = &cad_instance.scene_composer.model.model;
-        to_api_vec3(&model.find_pivot_point(&from_api_vec3(&ray_start), &from_api_vec3(&ray_dir)))
-      },
-      // Default value when CAD_INSTANCE is None
-      APIVec3 {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0
-      }
-    )
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
 pub fn gadget_hit_test(ray_origin: APIVec3, ray_direction: APIVec3) -> Option<i32> {
   unsafe {
     with_cad_instance(|instance| {
       let origin_vec = from_api_vec3(&ray_origin);
       let direction_vec = from_api_vec3(&ray_direction);
       
-      match instance.active_editor {
-        Editor::StructureDesigner => {
-          instance.structure_designer.gadget_hit_test(origin_vec, direction_vec)
-        },
-        Editor::SceneComposer => {
-          instance.scene_composer.gadget_hit_test(origin_vec, direction_vec)
-        },
-        Editor::None => None
-      }
+      instance.structure_designer.gadget_hit_test(origin_vec, direction_vec)
     })?  // Use ? operator here to extract the inner Option
   }
 }
@@ -229,15 +190,7 @@ pub fn gadget_start_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: 
       let origin_vec = from_api_vec3(&ray_origin);
       let direction_vec = from_api_vec3(&ray_direction);
       
-      match cad_instance.active_editor {
-        Editor::StructureDesigner => {
-          cad_instance.structure_designer.gadget_start_drag(handle_index, origin_vec, direction_vec);
-        },
-        Editor::SceneComposer => {
-          cad_instance.scene_composer.gadget_start_drag(handle_index, origin_vec, direction_vec);
-        },
-        Editor::None => {}
-      }
+      cad_instance.structure_designer.gadget_start_drag(handle_index, origin_vec, direction_vec);
       
       // Call refresh_renderer inside the closure to access cad_instance
       refresh_renderer(cad_instance, true);
@@ -250,26 +203,10 @@ pub fn gadget_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec
   unsafe {
     with_mut_cad_instance(|instance| {
       let origin_vec = from_api_vec3(&ray_origin);
-      let direction_vec = from_api_vec3(&ray_direction);
-      
-      match instance.active_editor {
-        Editor::StructureDesigner => {
-          instance.structure_designer.gadget_drag(handle_index, origin_vec, direction_vec);
-          // Important: Preserve the lightweight rendering flag (true) as per your memory
-          refresh_renderer(instance, true);
-        },
-        Editor::SceneComposer => {
-          instance.scene_composer.gadget_drag(handle_index, origin_vec, direction_vec);
-
-          if instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().frame_locked_to_atoms {
-            let selected_clusters_transform = instance.scene_composer.model.selected_frame_gadget.as_ref().unwrap().get_selected_clusters_transform();
-            instance.renderer.set_selected_clusters_transform(&selected_clusters_transform);
-          }
-          // Important: Preserve the lightweight rendering flag (true) as per your memory
-          refresh_renderer(instance, true);
-        },
-        Editor::None => {}
-      }
+      let direction_vec = from_api_vec3(&ray_direction);      
+      instance.structure_designer.gadget_drag(handle_index, origin_vec, direction_vec);
+      // Important: Preserve the lightweight rendering flag (true) as per your memory
+      refresh_renderer(instance, true);
     });
   }
 }
@@ -278,16 +215,7 @@ pub fn gadget_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec
 pub fn gadget_end_drag() {
   unsafe {
     with_mut_cad_instance(|instance| {
-      match instance.active_editor {
-        Editor::StructureDesigner => {
-          instance.structure_designer.gadget_end_drag();
-        },
-        Editor::SceneComposer => {
-          instance.renderer.set_selected_clusters_transform(&Transform::default());
-          instance.scene_composer.gadget_end_drag();
-        },
-        Editor::None => {}
-      }
+      instance.structure_designer.gadget_end_drag();
       refresh_renderer(instance, false);
     });
   }
@@ -298,16 +226,7 @@ pub fn sync_gadget_data() -> bool {
   unsafe {
     with_mut_cad_instance_or(
       |instance| {
-        match instance.active_editor {
-          Editor::StructureDesigner => {
-            instance.structure_designer.sync_gadget_data()
-          },
-          Editor::SceneComposer => {
-            instance.scene_composer.model.sync_gadget_to_model();
-            true
-          },
-          Editor::None => false
-        }
+          instance.structure_designer.sync_gadget_data()
       },
       false // Default return value if CAD_INSTANCE is None
     )
@@ -349,15 +268,7 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
       let eye = cad_instance.renderer.camera.eye;
       
       // Perform raytracing based on the active editor
-      let mut hit_distance = match cad_instance.active_editor {
-        Editor::StructureDesigner => {
-          cad_instance.structure_designer.raytrace(&ray_origin, &ray_direction)
-        },
-        Editor::SceneComposer => {
-          cad_instance.scene_composer.raytrace(&ray_origin, &ray_direction)
-        },
-        Editor::None => None,
-      };
+      let mut hit_distance = cad_instance.structure_designer.raytrace(&ray_origin, &ray_direction);
 
       // Fallback: Calculate where input ray intersects XZ plane
       if hit_distance.is_none() {

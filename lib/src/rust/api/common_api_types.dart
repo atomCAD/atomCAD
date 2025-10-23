@@ -206,13 +206,6 @@ class APIIVec3 {
           z == other.z;
 }
 
-enum Editor {
-  none,
-  structureDesigner,
-  sceneComposer,
-  ;
-}
-
 class ElementSummary {
   final int atomicNumber;
   final String elementName;

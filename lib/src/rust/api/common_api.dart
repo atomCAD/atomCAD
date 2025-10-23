@@ -16,9 +16,6 @@ void setViewportSize({required int width, required int height}) =>
     RustLib.instance.api
         .crateApiCommonApiSetViewportSize(width: width, height: height);
 
-void setActiveEditor({required Editor editor}) =>
-    RustLib.instance.api.crateApiCommonApiSetActiveEditor(editor: editor);
-
 double provideTexture({required int texturePtr}) => RustLib.instance.api
     .crateApiCommonApiProvideTexture(texturePtr: texturePtr);
 
@@ -28,10 +25,6 @@ void moveCamera(
         {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) =>
     RustLib.instance.api
         .crateApiCommonApiMoveCamera(eye: eye, target: target, up: up);
-
-APIVec3 findPivotPoint({required APIVec3 rayStart, required APIVec3 rayDir}) =>
-    RustLib.instance.api
-        .crateApiCommonApiFindPivotPoint(rayStart: rayStart, rayDir: rayDir);
 
 int? gadgetHitTest(
         {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>

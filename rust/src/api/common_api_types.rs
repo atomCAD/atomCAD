@@ -1,11 +1,5 @@
 use serde::{Serialize, Deserialize};
 
-pub enum Editor {
-  None,
-  StructureDesigner,
-  SceneComposer
-}
-
 pub struct APIVec2 {
   pub x: f64,
   pub y: f64,
