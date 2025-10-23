@@ -11,6 +11,7 @@ pub enum Token {
     LParen,
     RParen,
     Comma,
+    Dot,
     // Comparison operators
     EqEq,
     Ne,
@@ -108,6 +109,12 @@ impl<'a> Lexer<'a> {
             Some('(') => { self.i += 1; Token::LParen }
             Some(')') => { self.i += 1; Token::RParen }
             Some(',') => { self.i += 1; Token::Comma }
+            Some('.') => {
+                // Check if this is part of a number (should have been handled above)
+                // If we get here, it's a standalone dot for member access
+                self.i += 1; 
+                Token::Dot 
+            }
             Some('=') => {
                 self.i += 1;
                 if let Some('=') = self.peek() {

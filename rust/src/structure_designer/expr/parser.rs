@@ -35,6 +35,7 @@ impl Parser {
   // binding powers: (left_bp, right_bp)
   fn infix_binding_power(op: &Token) -> Option<(u8, u8)> {
       match op {
+          Token::Dot => Some((110, 111)), // highest precedence, higher than unary (100)
           Token::Caret => Some((70, 69)), // right-assoc: use lower rbp
           Token::Star | Token::Slash => Some((60, 61)),
           Token::Plus | Token::Minus => Some((50, 51)),
@@ -130,25 +131,39 @@ impl Parser {
               if lbp < min_bp { break; }
               // consume op
               self.bump();
-              let rhs = self.parse_bp(rbp)?;
-              let binop = match op {
-                  Token::Plus => BinOp::Add,
-                  Token::Minus => BinOp::Sub,
-                  Token::Star => BinOp::Mul,
-                  Token::Slash => BinOp::Div,
-                  Token::Caret => BinOp::Pow,
-                  Token::EqEq => BinOp::Eq,
-                  Token::Ne => BinOp::Ne,
-                  Token::Lt => BinOp::Lt,
-                  Token::Le => BinOp::Le,
-                  Token::Gt => BinOp::Gt,
-                  Token::Ge => BinOp::Ge,
-                  Token::And => BinOp::And,
-                  Token::Or => BinOp::Or,
-                  _ => unreachable!(),
-              };
-              lhs = Expr::Binary(Box::new(lhs), binop, Box::new(rhs));
-              continue;
+              
+              // Handle dot operator specially for member access
+              if let Token::Dot = op {
+                  // For member access, the RHS must be an identifier
+                  match self.bump() {
+                      Token::Ident(member_name) => {
+                          lhs = Expr::MemberAccess(Box::new(lhs), member_name);
+                          continue;
+                      }
+                      other => return Err(format!("Expected identifier after '.', got {:?}", other)),
+                  }
+              } else {
+                  // Handle normal binary operators
+                  let rhs = self.parse_bp(rbp)?;
+                  let binop = match op {
+                      Token::Plus => BinOp::Add,
+                      Token::Minus => BinOp::Sub,
+                      Token::Star => BinOp::Mul,
+                      Token::Slash => BinOp::Div,
+                      Token::Caret => BinOp::Pow,
+                      Token::EqEq => BinOp::Eq,
+                      Token::Ne => BinOp::Ne,
+                      Token::Lt => BinOp::Lt,
+                      Token::Le => BinOp::Le,
+                      Token::Gt => BinOp::Gt,
+                      Token::Ge => BinOp::Ge,
+                      Token::And => BinOp::And,
+                      Token::Or => BinOp::Or,
+                      _ => unreachable!(),
+                  };
+                  lhs = Expr::Binary(Box::new(lhs), binop, Box::new(rhs));
+                  continue;
+              }
           } else {
               break;
           }

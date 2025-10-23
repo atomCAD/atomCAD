@@ -915,4 +915,386 @@ mod vector_tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not supported for types"));
     }
+
+    // ========== Bug Reproduction Test ==========
+
+    #[test]
+    fn test_vector_member_access_type_bug_with_parsing() {
+        // BUG: expressions such as "x.y" where x is a vector have an output type 
+        // the same as the vector x rather than the component of the vector x
+        // This test uses string parsing to test the full pipeline
+        
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let mut variables = HashMap::new();
+        variables.insert("vec2_var".to_string(), DataType::Vec2);
+        variables.insert("vec3_var".to_string(), DataType::Vec3);
+        variables.insert("ivec2_var".to_string(), DataType::IVec2);
+        variables.insert("ivec3_var".to_string(), DataType::IVec3);
+        
+        let functions = get_function_signatures();
+        
+        // Test Vec2 member access - should return Float, not Vec2
+        let vec2_x = parse("vec2_var.x").expect("Failed to parse vec2_var.x");
+        let vec2_y = parse("vec2_var.y").expect("Failed to parse vec2_var.y");
+        
+        // These should pass (return Float), but will fail if bug exists (returns Vec2)
+        assert_eq!(vec2_x.validate(&variables, functions), Ok(DataType::Float), 
+                   "Vec2.x should return Float, not Vec2");
+        assert_eq!(vec2_y.validate(&variables, functions), Ok(DataType::Float), 
+                   "Vec2.y should return Float, not Vec2");
+        
+        // Test Vec3 member access - should return Float, not Vec3
+        let vec3_x = parse("vec3_var.x").expect("Failed to parse vec3_var.x");
+        let vec3_y = parse("vec3_var.y").expect("Failed to parse vec3_var.y");
+        let vec3_z = parse("vec3_var.z").expect("Failed to parse vec3_var.z");
+        
+        assert_eq!(vec3_x.validate(&variables, functions), Ok(DataType::Float), 
+                   "Vec3.x should return Float, not Vec3");
+        assert_eq!(vec3_y.validate(&variables, functions), Ok(DataType::Float), 
+                   "Vec3.y should return Float, not Vec3");
+        assert_eq!(vec3_z.validate(&variables, functions), Ok(DataType::Float), 
+                   "Vec3.z should return Float, not Vec3");
+        
+        // Test IVec2 member access - should return Int, not IVec2
+        let ivec2_x = parse("ivec2_var.x").expect("Failed to parse ivec2_var.x");
+        let ivec2_y = parse("ivec2_var.y").expect("Failed to parse ivec2_var.y");
+        
+        assert_eq!(ivec2_x.validate(&variables, functions), Ok(DataType::Int), 
+                   "IVec2.x should return Int, not IVec2");
+        assert_eq!(ivec2_y.validate(&variables, functions), Ok(DataType::Int), 
+                   "IVec2.y should return Int, not IVec2");
+        
+        // Test IVec3 member access - should return Int, not IVec3
+        let ivec3_x = parse("ivec3_var.x").expect("Failed to parse ivec3_var.x");
+        let ivec3_y = parse("ivec3_var.y").expect("Failed to parse ivec3_var.y");
+        let ivec3_z = parse("ivec3_var.z").expect("Failed to parse ivec3_var.z");
+        
+        assert_eq!(ivec3_x.validate(&variables, functions), Ok(DataType::Int), 
+                   "IVec3.x should return Int, not IVec3");
+        assert_eq!(ivec3_y.validate(&variables, functions), Ok(DataType::Int), 
+                   "IVec3.y should return Int, not IVec3");
+        assert_eq!(ivec3_z.validate(&variables, functions), Ok(DataType::Int), 
+                   "IVec3.z should return Int, not IVec3");
+    }
+
+    // ========== Vector Member Access Parsing Tests ==========
+
+    #[test]
+    fn test_tokenize_member_access() {
+        use rust_lib_flutter_cad::structure_designer::expr::lexer::{tokenize, Token};
+        
+        // Test basic member access tokenization
+        let tokens = tokenize("vec.x");
+        assert_eq!(tokens, vec![
+            Token::Ident("vec".to_string()),
+            Token::Dot,
+            Token::Ident("x".to_string()),
+            Token::Eof
+        ]);
+        
+        // Test with spaces
+        let tokens = tokenize("vector . y");
+        assert_eq!(tokens, vec![
+            Token::Ident("vector".to_string()),
+            Token::Dot,
+            Token::Ident("y".to_string()),
+            Token::Eof
+        ]);
+        
+        // Test chained member access
+        let tokens = tokenize("obj.vec.z");
+        assert_eq!(tokens, vec![
+            Token::Ident("obj".to_string()),
+            Token::Dot,
+            Token::Ident("vec".to_string()),
+            Token::Dot,
+            Token::Ident("z".to_string()),
+            Token::Eof
+        ]);
+    }
+
+    #[test]
+    fn test_parse_member_access() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        // Test basic member access parsing
+        let expr = parse("vec.x").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. vec x)");
+        
+        let expr = parse("position.y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. position y)");
+        
+        let expr = parse("vertex.z").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. vertex z)");
+    }
+
+    #[test]
+    fn test_parse_member_access_precedence() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        // Member access should have higher precedence than arithmetic
+        let expr = parse("vec.x + vec.y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(+ (. vec x) (. vec y))");
+        
+        let expr = parse("a.x * b.y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(* (. a x) (. b y))");
+        
+        // Member access should bind tighter than unary operators
+        let expr = parse("-vec.x").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(neg (. vec x))");
+        
+        // Test with exponentiation
+        let expr = parse("vec.x ^ 2").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(^ (. vec x) 2)");
+    }
+
+    #[test]
+    fn test_parse_member_access_with_parentheses() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        // Parentheses should work correctly with member access
+        let expr = parse("(vec1 + vec2).x").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. (+ vec1 vec2) x)");
+        
+        let expr = parse("(a * b).y + (c / d).z").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(+ (. (* a b) y) (. (/ c d) z))");
+        
+        // Complex nested expression
+        let expr = parse("((vec1.x + vec2.x) * scale).y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. (* (+ (. vec1 x) (. vec2 x)) scale) y)");
+    }
+
+    #[test]
+    fn test_parse_member_access_with_function_calls() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        // Member access on function call results
+        let expr = parse("vec2(1.0, 2.0).x").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. (call vec2 1 2) x)");
+        
+        let expr = parse("normalize3(position).y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. (call normalize3 position) y)");
+        
+        // Function calls with member access arguments
+        let expr = parse("dot2(vec.x, vec.y)").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(call dot2 (. vec x) (. vec y))");
+        
+        // Complex combination
+        let expr = parse("dot2(vec1.x + offset.x, vec2.y * scale.z)").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(call dot2 (+ (. vec1 x) (. offset x)) (* (. vec2 y) (. scale z)))");
+    }
+
+    #[test]
+    fn test_parse_chained_member_access() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        // Note: This would be invalid semantically (can't access .y on a Float), 
+        // but should parse correctly
+        let expr = parse("obj.vec.x").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. (. obj vec) x)");
+        
+        let expr = parse("a.b.c.d").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(. (. (. a b) c) d)");
+    }
+
+    // ========== Vector Member Access Evaluation Tests ==========
+
+    #[test]
+    fn test_evaluate_member_access_with_parsing() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let mut variables = HashMap::new();
+        variables.insert("vec2_var".to_string(), NetworkResult::Vec2(DVec2::new(3.5, 7.2)));
+        variables.insert("vec3_var".to_string(), NetworkResult::Vec3(DVec3::new(1.1, 2.2, 3.3)));
+        variables.insert("ivec2_var".to_string(), NetworkResult::IVec2(IVec2::new(10, 20)));
+        variables.insert("ivec3_var".to_string(), NetworkResult::IVec3(IVec3::new(100, 200, 300)));
+        
+        let functions = get_function_implementations();
+        
+        // Test Vec2 member access
+        let expr = parse("vec2_var.x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 3.5),
+            _ => panic!("Expected Float result"),
+        }
+        
+        let expr = parse("vec2_var.y").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 7.2),
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Test Vec3 member access
+        let expr = parse("vec3_var.z").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 3.3),
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Test IVec2 member access
+        let expr = parse("ivec2_var.x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(val) => assert_eq!(val, 10),
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test IVec3 member access
+        let expr = parse("ivec3_var.y").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(val) => assert_eq!(val, 200),
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_evaluate_complex_member_access_expressions() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let mut variables = HashMap::new();
+        variables.insert("pos".to_string(), NetworkResult::Vec2(DVec2::new(3.0, 4.0)));
+        variables.insert("vel".to_string(), NetworkResult::Vec2(DVec2::new(1.0, 2.0)));
+        variables.insert("scale".to_string(), NetworkResult::Float(2.0));
+        
+        let functions = get_function_implementations();
+        
+        // Test arithmetic with member access
+        let expr = parse("pos.x + vel.x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 4.0), // 3.0 + 1.0
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Test multiplication with member access
+        let expr = parse("pos.x * scale").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 6.0), // 3.0 * 2.0
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Test complex expression with parentheses
+        let expr = parse("(pos.x + vel.x) * scale").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 8.0), // (3.0 + 1.0) * 2.0
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Test member access in function calls
+        let expr = parse("length2(pos)").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 5.0), // sqrt(3² + 4²) = 5
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_evaluate_member_access_on_function_results() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+        
+        // Test member access on vec2 constructor result
+        let expr = parse("vec2(5.0, 10.0).x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 5.0),
+            _ => panic!("Expected Float result"),
+        }
+        
+        let expr = parse("vec2(5.0, 10.0).y").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 10.0),
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Test member access on vec3 constructor result
+        let expr = parse("vec3(1.0, 2.0, 3.0).z").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => assert_eq!(val, 3.0),
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Test member access on ivec2 constructor result
+        let expr = parse("ivec2(7.0, 8.0).x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(val) => assert_eq!(val, 7), // 7.0 rounds to 7
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_evaluate_very_complex_member_access_expressions() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), NetworkResult::Vec2(DVec2::new(1.0, 2.0)));
+        variables.insert("b".to_string(), NetworkResult::Vec2(DVec2::new(3.0, 4.0)));
+        variables.insert("c".to_string(), NetworkResult::Vec3(DVec3::new(5.0, 6.0, 7.0)));
+        
+        let functions = get_function_implementations();
+        
+        // Very complex expression with nested parentheses and member access
+        let expr = parse("((a.x + b.x) * (a.y + b.y)) + c.z").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => {
+                // ((1.0 + 3.0) * (2.0 + 4.0)) + 7.0 = (4.0 * 6.0) + 7.0 = 24.0 + 7.0 = 31.0
+                assert_eq!(val, 31.0);
+            },
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Expression with function calls and member access
+        let expr = parse("length2(vec2(normalize2(a).x, normalize2(b).y))").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => {
+                // normalize2(a) = (1/√5, 2/√5) ≈ (0.447, 0.894)
+                // normalize2(b) = (3/5, 4/5) = (0.6, 0.8)
+                // length2(vec2(0.447, 0.8)) ≈ √(0.447² + 0.8²) ≈ √(0.2 + 0.64) ≈ √0.84 ≈ 0.917
+                assert!((val - 0.917).abs() < 0.01);
+            },
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Expression mixing vector constructors and member access
+        let expr = parse("vec2(a.x + c.x, b.y + c.y).x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(val) => {
+                // vec2(1.0 + 5.0, 4.0 + 6.0).x = vec2(6.0, 10.0).x = 6.0
+                assert_eq!(val, 6.0);
+            },
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_member_access_error_cases() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let mut variables = HashMap::new();
+        variables.insert("float_var".to_string(), NetworkResult::Float(42.0));
+        variables.insert("vec2_var".to_string(), NetworkResult::Vec2(DVec2::new(1.0, 2.0)));
+        
+        let functions = get_function_implementations();
+        
+        // Test accessing invalid member on float
+        let expr = parse("float_var.x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Error(msg) => assert!(msg.contains("Cannot access member 'x' on value")),
+            _ => panic!("Expected Error result"),
+        }
+        
+        // Test accessing invalid member on vec2 (z component)
+        let expr = parse("vec2_var.z").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Error(msg) => assert!(msg.contains("Cannot access member 'z' on value")),
+            _ => panic!("Expected Error result"),
+        }
+        
+        // Test accessing unknown variable
+        let expr = parse("unknown_var.x").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Error(msg) => assert!(msg.contains("Unknown variable: unknown_var")),
+            _ => panic!("Expected Error result"),
+        }
+    }
 }

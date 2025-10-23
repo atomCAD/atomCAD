@@ -545,7 +545,7 @@ impl Expr {
                     else_expr.to_prefix_string())
             }
             Expr::MemberAccess(expr, member) => {
-                format!("({}.{})", expr.to_prefix_string(), member)
+                format!("(. {} {})", expr.to_prefix_string(), member)
             }
         }
     }
