@@ -283,6 +283,11 @@ Integers and integer vectors automatically promote to floats and float vectors w
 - `distance2(vec2, vec2)` - Distance between 2D points
 - `distance3(vec3, vec3)` - Distance between 3D points
 
+**Integer Vector Math Functions:**
+- `idot2(ivec2, ivec2)` - 2D integer dot product (returns int)
+- `idot3(ivec3, ivec3)` - 3D integer dot product (returns int)
+- `icross(ivec3, ivec3)` - 3D integer cross product (returns ivec3)
+
 **Mathematical Functions:**
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
 - `sqrt(x)` - Square root
