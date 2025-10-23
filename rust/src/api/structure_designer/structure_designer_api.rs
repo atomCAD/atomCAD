@@ -45,7 +45,6 @@ use crate::api::structure_designer::structure_designer_api_types::APIGeoTransDat
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
-use crate::api::structure_designer::structure_designer_api_types::APIAnchorData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIUnitCellData;
 use crate::api::structure_designer::structure_designer_api_types::{APILatticeSymopData, APIRotationalSymmetry};
@@ -60,7 +59,6 @@ use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
-use crate::structure_designer::nodes::anchor::AnchorData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::structure_designer::nodes::export_xyz::ExportXYZData;
@@ -813,28 +811,6 @@ pub fn get_cuboid_data(node_id: u64) -> Option<APICuboidData> {
         Some(APICuboidData {
           min_corner: to_api_ivec3(&cuboid_data.min_corner),
           extent: to_api_ivec3(&cuboid_data.extent),
-        })
-      },
-      None
-    )
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_anchor_data(node_id: u64) -> Option<APIAnchorData> {
-  unsafe {
-    with_cad_instance_or(
-      |cad_instance| {
-        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
-          Some(data) => data,
-          None => return None,
-        };
-        let anchor_data = match node_data.as_any_ref().downcast_ref::<AnchorData>() {
-          Some(data) => data,
-          None => return None,
-        };
-        Some(APIAnchorData {
-          position: anchor_data.position.map(|pos| to_api_ivec3(&pos)),
         })
       },
       None

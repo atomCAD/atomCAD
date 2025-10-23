@@ -3,7 +3,6 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/blocking_aware_single_child_scroll_view.dart';
-import 'package:flutter_cad/structure_designer/node_data/anchor_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/circle_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/cuboid_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/extrude_editor.dart';
@@ -17,7 +16,6 @@ import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/stamp_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
@@ -39,7 +37,6 @@ import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart';
 
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.
@@ -172,27 +169,6 @@ class NodeDataWidget extends StatelessWidget {
         return EditAtomEditor(
           nodeId: selectedNode.id,
           data: editAtomData,
-          model: model,
-        );
-      case 'anchor':
-        // Fetch the anchor data here in the parent widget
-        final anchorData = getAnchorData(
-          nodeId: selectedNode.id,
-        );
-
-        return AnchorEditor(
-          nodeId: selectedNode.id,
-          data: anchorData,
-        );
-      case 'stamp':
-        // Fetch the stamp data here in the parent widget
-        final stampView = getStampView(
-          nodeId: selectedNode.id,
-        );
-
-        return StampEditor(
-          nodeId: selectedNode.id,
-          data: stampView,
           model: model,
         );
       case 'rect':

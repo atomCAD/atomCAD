@@ -9,24 +9,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `eq`, `fmt`
 
-class APIAnchorData {
-  final APIIVec3? position;
-
-  const APIAnchorData({
-    this.position,
-  });
-
-  @override
-  int get hashCode => position.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIAnchorData &&
-          runtimeType == other.runtimeType &&
-          position == other.position;
-}
-
 class APIAtomCutData {
   final double cutSdfValue;
   final double unitCellSize;
@@ -848,45 +830,6 @@ class APISphereData {
           runtimeType == other.runtimeType &&
           center == other.center &&
           radius == other.radius;
-}
-
-class APIStampPlacement {
-  final APIIVec3 position;
-  final int rotation;
-
-  const APIStampPlacement({
-    required this.position,
-    required this.rotation,
-  });
-
-  @override
-  int get hashCode => position.hashCode ^ rotation.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIStampPlacement &&
-          runtimeType == other.runtimeType &&
-          position == other.position &&
-          rotation == other.rotation;
-}
-
-class APIStampView {
-  final APIStampPlacement? selectedStampPlacement;
-
-  const APIStampView({
-    this.selectedStampPlacement,
-  });
-
-  @override
-  int get hashCode => selectedStampPlacement.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIStampView &&
-          runtimeType == other.runtimeType &&
-          selectedStampPlacement == other.selectedStampPlacement;
 }
 
 class APIStringData {

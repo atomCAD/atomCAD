@@ -149,9 +149,6 @@ APIHalfPlaneData? getHalfPlaneData({required BigInt nodeId}) => RustLib
 APICuboidData? getCuboidData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCuboidData(nodeId: nodeId);
 
-APIAnchorData? getAnchorData({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiGetAnchorData(nodeId: nodeId);
-
 APIAtomCutData? getAtomCutData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetAtomCutData(
         nodeId: nodeId);

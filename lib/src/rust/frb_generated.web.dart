@@ -8,13 +8,11 @@
 
 import 'api/common_api.dart';
 import 'api/common_api_types.dart';
-import 'api/structure_designer/anchor_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/geo_to_atom_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/relax_api.dart';
-import 'api/structure_designer/stamp_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
 import 'api/structure_designer/structure_designer_api_types.dart';
 import 'api/structure_designer/structure_designer_preferences.dart';
@@ -39,9 +37,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String dco_decode_String(dynamic raw);
-
-  @protected
-  APIAnchorData dco_decode_api_anchor_data(dynamic raw);
 
   @protected
   APIAtomCutData dco_decode_api_atom_cut_data(dynamic raw);
@@ -156,12 +151,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
-  APIStampPlacement dco_decode_api_stamp_placement(dynamic raw);
-
-  @protected
-  APIStampView dco_decode_api_stamp_view(dynamic raw);
-
-  @protected
   APIStringData dco_decode_api_string_data(dynamic raw);
 
   @protected
@@ -196,9 +185,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_bool(dynamic raw);
-
-  @protected
-  APIAnchorData dco_decode_box_autoadd_api_anchor_data(dynamic raw);
 
   @protected
   APIAtomCutData dco_decode_box_autoadd_api_atom_cut_data(dynamic raw);
@@ -290,12 +276,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw);
-
-  @protected
-  APIStampPlacement dco_decode_box_autoadd_api_stamp_placement(dynamic raw);
-
-  @protected
-  APIStampView dco_decode_box_autoadd_api_stamp_view(dynamic raw);
 
   @protected
   APIStringData dco_decode_box_autoadd_api_string_data(dynamic raw);
@@ -416,9 +396,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
-  APIAnchorData? dco_decode_opt_box_autoadd_api_anchor_data(dynamic raw);
-
-  @protected
   APIAtomCutData? dco_decode_opt_box_autoadd_api_atom_cut_data(dynamic raw);
 
   @protected
@@ -509,13 +486,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw);
 
   @protected
-  APIStampPlacement? dco_decode_opt_box_autoadd_api_stamp_placement(
-      dynamic raw);
-
-  @protected
-  APIStampView? dco_decode_opt_box_autoadd_api_stamp_view(dynamic raw);
-
-  @protected
   APIStringData? dco_decode_opt_box_autoadd_api_string_data(dynamic raw);
 
   @protected
@@ -535,9 +505,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIVec2Data? dco_decode_opt_box_autoadd_apii_vec_2_data(dynamic raw);
-
-  @protected
-  APIIVec3? dco_decode_opt_box_autoadd_apii_vec_3(dynamic raw);
 
   @protected
   APIIVec3Data? dco_decode_opt_box_autoadd_apii_vec_3_data(dynamic raw);
@@ -602,9 +569,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
-
-  @protected
-  APIAnchorData sse_decode_api_anchor_data(SseDeserializer deserializer);
 
   @protected
   APIAtomCutData sse_decode_api_atom_cut_data(SseDeserializer deserializer);
@@ -725,13 +689,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
-  APIStampPlacement sse_decode_api_stamp_placement(
-      SseDeserializer deserializer);
-
-  @protected
-  APIStampView sse_decode_api_stamp_view(SseDeserializer deserializer);
-
-  @protected
   APIStringData sse_decode_api_string_data(SseDeserializer deserializer);
 
   @protected
@@ -766,10 +723,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
-
-  @protected
-  APIAnchorData sse_decode_box_autoadd_api_anchor_data(
-      SseDeserializer deserializer);
 
   @protected
   APIAtomCutData sse_decode_box_autoadd_api_atom_cut_data(
@@ -885,14 +838,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISphereData sse_decode_box_autoadd_api_sphere_data(
-      SseDeserializer deserializer);
-
-  @protected
-  APIStampPlacement sse_decode_box_autoadd_api_stamp_placement(
-      SseDeserializer deserializer);
-
-  @protected
-  APIStampView sse_decode_box_autoadd_api_stamp_view(
       SseDeserializer deserializer);
 
   @protected
@@ -1033,10 +978,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
-  APIAnchorData? sse_decode_opt_box_autoadd_api_anchor_data(
-      SseDeserializer deserializer);
-
-  @protected
   APIAtomCutData? sse_decode_opt_box_autoadd_api_atom_cut_data(
       SseDeserializer deserializer);
 
@@ -1153,14 +1094,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APIStampPlacement? sse_decode_opt_box_autoadd_api_stamp_placement(
-      SseDeserializer deserializer);
-
-  @protected
-  APIStampView? sse_decode_opt_box_autoadd_api_stamp_view(
-      SseDeserializer deserializer);
-
-  @protected
   APIStringData? sse_decode_opt_box_autoadd_api_string_data(
       SseDeserializer deserializer);
 
@@ -1186,9 +1119,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIIVec2Data? sse_decode_opt_box_autoadd_apii_vec_2_data(
       SseDeserializer deserializer);
-
-  @protected
-  APIIVec3? sse_decode_opt_box_autoadd_apii_vec_3(SseDeserializer deserializer);
 
   @protected
   APIIVec3Data? sse_decode_opt_box_autoadd_apii_vec_3_data(
@@ -1258,9 +1188,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_api_anchor_data(APIAnchorData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_atom_cut_data(
@@ -1396,13 +1323,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_api_stamp_placement(
-      APIStampPlacement self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_api_stamp_view(APIStampView self, SseSerializer serializer);
-
-  @protected
   void sse_encode_api_string_data(APIStringData self, SseSerializer serializer);
 
   @protected
@@ -1438,10 +1358,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_api_anchor_data(
-      APIAnchorData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_atom_cut_data(
@@ -1562,14 +1478,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_sphere_data(
       APISphereData self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_api_stamp_placement(
-      APIStampPlacement self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_api_stamp_view(
-      APIStampView self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_string_data(
@@ -1710,10 +1618,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_api_anchor_data(
-      APIAnchorData? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_api_atom_cut_data(
       APIAtomCutData? self, SseSerializer serializer);
 
@@ -1830,14 +1734,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APISphereData? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_api_stamp_placement(
-      APIStampPlacement? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_api_stamp_view(
-      APIStampView? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_api_string_data(
       APIStringData? self, SseSerializer serializer);
 
@@ -1864,10 +1760,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_apii_vec_2_data(
       APIIVec2Data? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_apii_vec_3(
-      APIIVec3? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_apii_vec_3_data(

@@ -207,10 +207,6 @@ pub struct InputPinView {
     pub selection_transform: Option<APITransform>,
   }
 
-  pub struct APIAnchorData {
-    pub position: Option<APIIVec3>,
-  }
-
   pub struct APIRegPolyData {
     pub num_sides: i32,
     pub radius: i32,
@@ -222,15 +218,6 @@ pub struct InputPinView {
     pub secondary_atomic_number: i32,
     pub unit_cell_size: f64,
     pub name: String,
-  }
-
-  pub struct APIStampPlacement {
-    pub position: APIIVec3,
-    pub rotation: i32, // Index into CRYSTAL_ROTATION_MATRICES (0-11)
-  }
-
-  pub struct APIStampView {
-    pub selected_stamp_placement: Option<APIStampPlacement>,
   }
 
   pub struct APIParameterData {

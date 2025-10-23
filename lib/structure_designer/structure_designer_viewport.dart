@@ -30,10 +30,6 @@ class _StructureDesignerViewportState
       onFacetShellClick(pointerPos);
     } else if (widget.graphModel.isNodeTypeActive("edit_atom")) {
       onEditAtomClick(pointerPos);
-    } else if (widget.graphModel.isNodeTypeActive("anchor")) {
-      onAnchorClick(pointerPos);
-    } else if (widget.graphModel.isNodeTypeActive("stamp")) {
-      onStampClick(pointerPos);
     }
   }
 
@@ -88,22 +84,6 @@ class _StructureDesignerViewportState
         selectModifier,
       );
     }
-  }
-
-  void onAnchorClick(Offset pointerPos) {
-    final ray = getRayFromPointerPos(pointerPos);
-    widget.graphModel.selectAnchorAtomByRay(
-      ray.start,
-      ray.direction,
-    );
-  }
-
-  void onStampClick(Offset pointerPos) {
-    final ray = getRayFromPointerPos(pointerPos);
-    widget.graphModel.addOrSelectStampPlacementByRay(
-      ray.start,
-      ray.direction,
-    );
   }
 
   @override

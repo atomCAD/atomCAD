@@ -47,10 +47,8 @@ use super::nodes::atom_trans::AtomTransData;
 use super::nodes::edit_atom::edit_atom::EditAtomData;
 use super::nodes::geo_to_atom::GeoToAtomData;
 use super::nodes::atom_fill::AtomFillData;
-use super::nodes::anchor::AnchorData;
 use super::nodes::import_xyz::{ImportXYZData, import_xyz_data_loader, import_xyz_data_saver};
 use super::nodes::export_xyz::{ExportXYZData, export_xyz_data_loader, export_xyz_data_saver};
-use super::nodes::stamp::StampData;
 use super::node_type::{generic_node_data_saver, generic_node_data_loader};
 use crate::structure_designer::serialization::edit_atom_data_serialization::{edit_atom_data_to_serializable, serializable_to_edit_atom_data, SerializableEditAtomData};
 use glam::{IVec3, DVec3, IVec2};
@@ -909,40 +907,6 @@ impl NodeTypeRegistry {
       node_data_creator: || Box::new(AtomCutData::new()),
       node_data_saver: generic_node_data_saver::<AtomCutData>,
       node_data_loader: generic_node_data_loader::<AtomCutData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "anchor".to_string(),
-      parameters: vec![
-          Parameter {
-              name: "molecule".to_string(),
-              data_type: DataType::Atomic,
-          },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(AnchorData::new()),
-      node_data_saver: generic_node_data_saver::<AnchorData>,
-      node_data_loader: generic_node_data_loader::<AnchorData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "stamp".to_string(),
-      parameters: vec![
-        Parameter {
-          name: "crystal".to_string(),
-          data_type: DataType::Atomic,
-        },
-        Parameter {
-          name: "stamp".to_string(),
-          data_type: DataType::Atomic,
-        },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(StampData::new()),
-      node_data_saver: generic_node_data_saver::<StampData>,
-      node_data_loader: generic_node_data_loader::<StampData>,
     });
 
     ret.add_node_type(NodeType {

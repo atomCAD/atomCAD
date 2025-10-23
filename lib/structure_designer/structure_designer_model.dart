@@ -4,14 +4,10 @@ import 'package:vector_math/vector_math.dart' as vector_math;
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
     as edit_atom_api;
-import 'package:flutter_cad/src/rust/api/structure_designer/anchor_api.dart'
-    as anchor_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/stamp_api.dart'
-    as stamp_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/facet_shell_api.dart'
     as facet_shell_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
@@ -99,39 +95,6 @@ class StructureDesignerModel extends ChangeNotifier {
     facet_shell_api.selectFacetByRay(
       rayStart: Vector3ToAPIVec3(rayStart),
       rayDir: Vector3ToAPIVec3(rayDir),
-    );
-    refreshFromKernel();
-  }
-
-  void selectAnchorAtomByRay(
-      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
-    anchor_api.selectAnchorAtomByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
-    );
-    refreshFromKernel();
-  }
-
-  void addOrSelectStampPlacementByRay(
-      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
-    stamp_api.addOrSelectStampPlacementByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
-    );
-    refreshFromKernel();
-  }
-
-  void setStampRotation(BigInt nodeId, int rotation) {
-    stamp_api.setStampRotation(
-      nodeId: nodeId,
-      rotation: rotation,
-    );
-    refreshFromKernel();
-  }
-
-  void deleteSelectedStampPlacement(BigInt nodeId) {
-    stamp_api.deleteSelectedStampPlacement(
-      nodeId: nodeId,
     );
     refreshFromKernel();
   }
