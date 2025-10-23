@@ -1,3 +1,5 @@
+October 23 2025 TODO: delete this after creating an architecture overview document
+
 In this document we analyze the dataflow in atomCAD structure designer as of September 4, 2025:
 The structure of data coming out from the node network, in what format it is cached for interaction,
 and how the data is used to generate the scene to be rendered.

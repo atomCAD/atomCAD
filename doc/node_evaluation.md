@@ -1,3 +1,5 @@
+Note on 2025-10-23: Delete this after the architecture overview document is created.
+
 As the structure designer evolved node network evaluation also evolved.
 Some complexity had to be introduced to support real-time editing operations
 and different geometry visualizations.

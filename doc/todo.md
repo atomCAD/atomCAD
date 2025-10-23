@@ -1,3 +1,0 @@
-- support selection of existing stamp placements
-- support defect bond placement and deletions
-- support atom_trans correctly for stamping

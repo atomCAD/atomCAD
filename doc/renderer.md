@@ -1,3 +1,6 @@
+Note on 2025-10-23: This document is not up to date. We keep this as it contains
+important ideas for the future development of the renderer in atomCAD.
+
 # Renderer
 
 - Only atoms, bonds and editor 'gizmos' need to be rendered, so the renderer do not need to be general purpose

@@ -1,3 +1,5 @@
+Note on 2025-10-23: This document is very old, needs to be deleted after the architecture overview is created.
+
 # atomCAD System Design 
 
 ## Design philosophy
@@ -30,8 +32,6 @@ https://www.sidefx.com/docs/houdini/basics/intro.html
 
 ## Node networks in atomCAD
 
-I created a separate, little more theoretical document about node networks in atomCAD:  [Node Networks Algebraic Foundations](./nn_foundations.md) 
-
 A **node** can have any number of (including zero) parameters. These can be also called **input pins**. A node has exactly one **output pin**.
 
 Each input and the output pin of the node has a **data type**. You can connect an output pin with an input pin with a directed edge if their type match. We call these directed edges, which always go from an output pin to an input pin a **wire**. The network should be a DAG: should not contain a circle.
@@ -52,8 +52,6 @@ On the User interface some nodes can be marked as currently **displayed nodes**.
 In the above example a plane cut away from a cuboid minus a sphere is displayed. There is also an unused experimental cutter plane on the picture which is currently not connected. In this case the user experiments with different cutter planes while not changing other parts of the node network.
 
 You can select a node by clicking on its title bar. Whether a node is displayed, is simply a toggle on the node. There is also a global toggle to 'display frontier nodes' which means that when the node DAG changes, always the frontier nodes will be displayed. Frontier nodes are nodes that have an unconnected output.
-
-For the description of all the built-in node types refer to the [atomCAD Nodes Reference](./nodes_reference.md)
 
 ## atomCAD Architecture Overview
 
