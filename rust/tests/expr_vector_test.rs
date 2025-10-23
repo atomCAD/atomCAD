@@ -1297,4 +1297,349 @@ mod vector_tests {
             _ => panic!("Expected Error result"),
         }
     }
+
+    // ========== Integer Vector Math Function Tests ==========
+
+    #[test]
+    fn test_idot2_validation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), DataType::IVec2);
+        variables.insert("b".to_string(), DataType::IVec2);
+        variables.insert("vec2_var".to_string(), DataType::Vec2);
+        variables.insert("int_var".to_string(), DataType::Int);
+        
+        let functions = get_function_signatures();
+        
+        // Valid idot2 call
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        assert_eq!(expr.validate(&variables, functions), Ok(DataType::Int));
+        
+        // Invalid argument count
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Var("a".to_string())
+        ]);
+        assert!(expr.validate(&variables, functions).is_err());
+        
+        // Mixed types (Vec2 with IVec2) - should be allowed due to type compatibility
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Var("vec2_var".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        assert_eq!(expr.validate(&variables, functions), Ok(DataType::Int));
+        
+        // Invalid argument types (Int is not compatible with IVec2)
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("int_var".to_string())
+        ]);
+        assert!(expr.validate(&variables, functions).is_err());
+    }
+
+    #[test]
+    fn test_idot3_validation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), DataType::IVec3);
+        variables.insert("b".to_string(), DataType::IVec3);
+        variables.insert("vec3_var".to_string(), DataType::Vec3);
+        
+        let functions = get_function_signatures();
+        
+        // Valid idot3 call
+        let expr = Expr::Call("idot3".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        assert_eq!(expr.validate(&variables, functions), Ok(DataType::Int));
+        
+        // Mixed types (Vec3 with IVec3) - should be allowed due to type compatibility
+        let expr = Expr::Call("idot3".to_string(), vec![
+            Expr::Var("vec3_var".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        assert_eq!(expr.validate(&variables, functions), Ok(DataType::Int));
+    }
+
+    #[test]
+    fn test_icross_validation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), DataType::IVec3);
+        variables.insert("b".to_string(), DataType::IVec3);
+        variables.insert("vec3_var".to_string(), DataType::Vec3);
+        
+        let functions = get_function_signatures();
+        
+        // Valid icross call
+        let expr = Expr::Call("icross".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        assert_eq!(expr.validate(&variables, functions), Ok(DataType::IVec3));
+        
+        // Mixed types (Vec3 with IVec3) - should be allowed due to type compatibility
+        let expr = Expr::Call("icross".to_string(), vec![
+            Expr::Var("vec3_var".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        assert_eq!(expr.validate(&variables, functions), Ok(DataType::IVec3));
+    }
+
+    #[test]
+    fn test_idot2_evaluation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), NetworkResult::IVec2(IVec2::new(3, 4)));
+        variables.insert("b".to_string(), NetworkResult::IVec2(IVec2::new(2, 1)));
+        
+        let functions = get_function_implementations();
+        
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // idot2((3, 4), (2, 1)) = 3*2 + 4*1 = 6 + 4 = 10
+                assert_eq!(result, 10);
+            },
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_idot3_evaluation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), NetworkResult::IVec3(IVec3::new(1, 2, 3)));
+        variables.insert("b".to_string(), NetworkResult::IVec3(IVec3::new(4, 5, 6)));
+        
+        let functions = get_function_implementations();
+        
+        let expr = Expr::Call("idot3".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // idot3((1, 2, 3), (4, 5, 6)) = 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+                assert_eq!(result, 32);
+            },
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_icross_evaluation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), NetworkResult::IVec3(IVec3::new(1, 0, 0)));
+        variables.insert("b".to_string(), NetworkResult::IVec3(IVec3::new(0, 1, 0)));
+        
+        let functions = get_function_implementations();
+        
+        let expr = Expr::Call("icross".to_string(), vec![
+            Expr::Var("a".to_string()),
+            Expr::Var("b".to_string())
+        ]);
+        
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::IVec3(result) => {
+                // icross((1, 0, 0), (0, 1, 0)) = (0*0 - 0*1, 0*0 - 1*0, 1*1 - 0*0) = (0, 0, 1)
+                assert_eq!(result, IVec3::new(0, 0, 1));
+            },
+            _ => panic!("Expected IVec3 result"),
+        }
+    }
+
+    #[test]
+    fn test_integer_vector_functions_with_parsing() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let mut variables = HashMap::new();
+        variables.insert("v1".to_string(), NetworkResult::IVec2(IVec2::new(3, 4)));
+        variables.insert("v2".to_string(), NetworkResult::IVec2(IVec2::new(1, 2)));
+        variables.insert("u1".to_string(), NetworkResult::IVec3(IVec3::new(2, 3, 4)));
+        variables.insert("u2".to_string(), NetworkResult::IVec3(IVec3::new(1, 0, 1)));
+        
+        let functions = get_function_implementations();
+        
+        // Test idot2 with parsing
+        let expr = parse("idot2(v1, v2)").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // idot2((3, 4), (1, 2)) = 3*1 + 4*2 = 3 + 8 = 11
+                assert_eq!(result, 11);
+            },
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test idot3 with parsing
+        let expr = parse("idot3(u1, u2)").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // idot3((2, 3, 4), (1, 0, 1)) = 2*1 + 3*0 + 4*1 = 2 + 0 + 4 = 6
+                assert_eq!(result, 6);
+            },
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test icross with parsing
+        let expr = parse("icross(u1, u2)").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::IVec3(result) => {
+                // icross((2, 3, 4), (1, 0, 1)) = (3*1 - 4*0, 4*1 - 2*1, 2*0 - 3*1) = (3, 2, -3)
+                assert_eq!(result, IVec3::new(3, 2, -3));
+            },
+            _ => panic!("Expected IVec3 result"),
+        }
+    }
+
+    #[test]
+    fn test_integer_vector_functions_with_constructors() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+        
+        // Test idot2 with ivec2 constructors
+        let expr = parse("idot2(ivec2(5, 12), ivec2(3, 4))").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // idot2((5, 12), (3, 4)) = 5*3 + 12*4 = 15 + 48 = 63
+                assert_eq!(result, 63);
+            },
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test icross with ivec3 constructors
+        let expr = parse("icross(ivec3(1, 2, 3), ivec3(4, 5, 6))").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::IVec3(result) => {
+                // icross((1, 2, 3), (4, 5, 6)) = (2*6 - 3*5, 3*4 - 1*6, 1*5 - 2*4) = (12-15, 12-6, 5-8) = (-3, 6, -3)
+                assert_eq!(result, IVec3::new(-3, 6, -3));
+            },
+            _ => panic!("Expected IVec3 result"),
+        }
+    }
+
+    #[test]
+    fn test_integer_vector_functions_complex_expressions() {
+        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), NetworkResult::IVec2(IVec2::new(2, 3)));
+        variables.insert("b".to_string(), NetworkResult::IVec2(IVec2::new(4, 1)));
+        variables.insert("c".to_string(), NetworkResult::IVec3(IVec3::new(1, 0, 0)));
+        variables.insert("d".to_string(), NetworkResult::IVec3(IVec3::new(0, 1, 0)));
+        
+        let functions = get_function_implementations();
+        
+        // Test arithmetic with idot2 result
+        let expr = parse("idot2(a, b) + 5").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // idot2((2, 3), (4, 1)) + 5 = (2*4 + 3*1) + 5 = (8 + 3) + 5 = 11 + 5 = 16
+                assert_eq!(result, 16);
+            },
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test member access on icross result
+        let expr = parse("icross(c, d).z").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // icross((1, 0, 0), (0, 1, 0)).z = (0, 0, 1).z = 1
+                assert_eq!(result, 1);
+            },
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test nested function calls
+        let expr = parse("idot3(icross(ivec3(1, 0, 0), ivec3(0, 1, 0)), ivec3(0, 0, 1))").unwrap();
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // icross((1, 0, 0), (0, 1, 0)) = (0, 0, 1)
+                // idot3((0, 0, 1), (0, 0, 1)) = 0*0 + 0*0 + 1*1 = 1
+                assert_eq!(result, 1);
+            },
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_integer_vector_functions_error_cases() {
+        let functions = get_function_implementations();
+        
+        // Test wrong argument count
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Call("ivec2".to_string(), vec![Expr::Int(1), Expr::Int(2)])
+        ]);
+        match expr.evaluate(&HashMap::new(), functions) {
+            NetworkResult::Error(msg) => assert!(msg.contains("requires exactly 2 arguments")),
+            _ => panic!("Expected Error result"),
+        }
+        
+        // Test wrong argument types
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Int(1),
+            Expr::Int(2)
+        ]);
+        match expr.evaluate(&HashMap::new(), functions) {
+            NetworkResult::Error(msg) => assert!(msg.contains("requires two IVec2 arguments")),
+            _ => panic!("Expected Error result"),
+        }
+        
+        // Test icross with wrong types
+        let expr = Expr::Call("icross".to_string(), vec![
+            Expr::Call("ivec2".to_string(), vec![Expr::Int(1), Expr::Int(2)]),
+            Expr::Call("ivec3".to_string(), vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)])
+        ]);
+        match expr.evaluate(&HashMap::new(), functions) {
+            NetworkResult::Error(msg) => assert!(msg.contains("requires two IVec3 arguments")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_integer_vector_functions_edge_cases() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+        
+        // Test with zero vectors
+        let expr = Expr::Call("idot2".to_string(), vec![
+            Expr::Call("ivec2".to_string(), vec![Expr::Int(0), Expr::Int(0)]),
+            Expr::Call("ivec2".to_string(), vec![Expr::Int(5), Expr::Int(10)])
+        ]);
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => assert_eq!(result, 0),
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test cross product with parallel vectors (should be zero)
+        let expr = Expr::Call("icross".to_string(), vec![
+            Expr::Call("ivec3".to_string(), vec![Expr::Int(2), Expr::Int(4), Expr::Int(6)]),
+            Expr::Call("ivec3".to_string(), vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)])
+        ]);
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::IVec3(result) => {
+                // Cross product of parallel vectors should be zero
+                assert_eq!(result, IVec3::new(0, 0, 0));
+            },
+            _ => panic!("Expected IVec3 result"),
+        }
+        
+        // Test with negative numbers
+        let expr = Expr::Call("idot3".to_string(), vec![
+            Expr::Call("ivec3".to_string(), vec![Expr::Int(-1), Expr::Int(2), Expr::Int(-3)]),
+            Expr::Call("ivec3".to_string(), vec![Expr::Int(4), Expr::Int(-5), Expr::Int(6)])
+        ]);
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(result) => {
+                // idot3((-1, 2, -3), (4, -5, 6)) = (-1)*4 + 2*(-5) + (-3)*6 = -4 - 10 - 18 = -32
+                assert_eq!(result, -32);
+            },
+            _ => panic!("Expected Int result"),
+        }
+    }
 }

@@ -102,6 +102,14 @@ fn create_standard_function_signatures() -> HashMap<String, FunctionSignature> {
     functions.insert("distance3".to_string(), 
         FunctionSignature::new(vec![DataType::Vec3, DataType::Vec3], DataType::Float));
     
+    // Integer vector math functions
+    functions.insert("idot2".to_string(), 
+        FunctionSignature::new(vec![DataType::IVec2, DataType::IVec2], DataType::Int));
+    functions.insert("idot3".to_string(), 
+        FunctionSignature::new(vec![DataType::IVec3, DataType::IVec3], DataType::Int));
+    functions.insert("icross".to_string(), 
+        FunctionSignature::new(vec![DataType::IVec3, DataType::IVec3], DataType::IVec3));
+    
     functions
 }
 
@@ -387,6 +395,54 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
         match (&args[0], &args[1]) {
             (NetworkResult::Vec3(a), NetworkResult::Vec3(b)) => NetworkResult::Float((*a - *b).length()),
             _ => NetworkResult::Error("distance3() requires two Vec3 arguments".to_string()),
+        }
+    }) as EvaluationFunction);
+    
+    // Integer vector math functions
+    functions.insert("idot2".to_string(), Box::new(|args: &[NetworkResult]| {
+        if args.len() != 2 {
+            return NetworkResult::Error("idot2() requires exactly 2 arguments".to_string());
+        }
+        match (&args[0], &args[1]) {
+            (NetworkResult::IVec2(a), NetworkResult::IVec2(b)) => {
+                // Dot product: a.x * b.x + a.y * b.y
+                let result = a.x * b.x + a.y * b.y;
+                NetworkResult::Int(result)
+            },
+            _ => NetworkResult::Error("idot2() requires two IVec2 arguments".to_string()),
+        }
+    }) as EvaluationFunction);
+    
+    functions.insert("idot3".to_string(), Box::new(|args: &[NetworkResult]| {
+        if args.len() != 2 {
+            return NetworkResult::Error("idot3() requires exactly 2 arguments".to_string());
+        }
+        match (&args[0], &args[1]) {
+            (NetworkResult::IVec3(a), NetworkResult::IVec3(b)) => {
+                // Dot product: a.x * b.x + a.y * b.y + a.z * b.z
+                let result = a.x * b.x + a.y * b.y + a.z * b.z;
+                NetworkResult::Int(result)
+            },
+            _ => NetworkResult::Error("idot3() requires two IVec3 arguments".to_string()),
+        }
+    }) as EvaluationFunction);
+    
+    functions.insert("icross".to_string(), Box::new(|args: &[NetworkResult]| {
+        if args.len() != 2 {
+            return NetworkResult::Error("icross() requires exactly 2 arguments".to_string());
+        }
+        match (&args[0], &args[1]) {
+            (NetworkResult::IVec3(a), NetworkResult::IVec3(b)) => {
+                // Cross product: (a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
+                use glam::i32::IVec3;
+                let result = IVec3::new(
+                    a.y * b.z - a.z * b.y,
+                    a.z * b.x - a.x * b.z,
+                    a.x * b.y - a.y * b.x
+                );
+                NetworkResult::IVec3(result)
+            },
+            _ => NetworkResult::Error("icross() requires two IVec3 arguments".to_string()),
         }
     }) as EvaluationFunction);
     
