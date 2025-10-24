@@ -242,4 +242,125 @@ mod validation_tests {
         let result = expr.validate(&variables, get_function_signatures());
         assert_eq!(result, Ok(DataType::Bool));
     }
+
+    #[test]
+    fn test_modulo_validation_success() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Int(7)),
+            BinOp::Mod,
+            Box::new(Expr::Int(3))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.validate(&variables, get_function_signatures());
+        assert_eq!(result, Ok(DataType::Int));
+    }
+
+    #[test]
+    fn test_modulo_validation_with_variables() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Var("x".to_string())),
+            BinOp::Mod,
+            Box::new(Expr::Var("y".to_string()))
+        );
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), DataType::Int);
+        variables.insert("y".to_string(), DataType::Int);
+        
+        let result = expr.validate(&variables, get_function_signatures());
+        assert_eq!(result, Ok(DataType::Int));
+    }
+
+    #[test]
+    fn test_modulo_validation_failure_float() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Float(7.5)),
+            BinOp::Mod,
+            Box::new(Expr::Int(3))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.validate(&variables, get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Modulo operation not supported"));
+    }
+
+    #[test]
+    fn test_modulo_validation_failure_mixed_types() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Int(7)),
+            BinOp::Mod,
+            Box::new(Expr::Float(3.0))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.validate(&variables, get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Modulo operation not supported"));
+    }
+
+    #[test]
+    fn test_modulo_complex_expressions_validation() {
+        // Test the specific complex expressions requested
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), DataType::Int);
+        
+        // if (x%2) > 0 then -1 else 1
+        let expr = Expr::Conditional(
+            Box::new(Expr::Binary(
+                Box::new(Expr::Binary(
+                    Box::new(Expr::Var("x".to_string())),
+                    BinOp::Mod,
+                    Box::new(Expr::Int(2))
+                )),
+                BinOp::Gt,
+                Box::new(Expr::Int(0))
+            )),
+            Box::new(Expr::Int(-1)),
+            Box::new(Expr::Int(1))
+        );
+        
+        let result = expr.validate(&variables, get_function_signatures());
+        assert_eq!(result, Ok(DataType::Int));
+        
+        // if x%2 > 0 then -1 else 1 (without parentheses)
+        let expr = Expr::Conditional(
+            Box::new(Expr::Binary(
+                Box::new(Expr::Binary(
+                    Box::new(Expr::Var("x".to_string())),
+                    BinOp::Mod,
+                    Box::new(Expr::Int(2))
+                )),
+                BinOp::Gt,
+                Box::new(Expr::Int(0))
+            )),
+            Box::new(Expr::Int(-1)),
+            Box::new(Expr::Int(1))
+        );
+        
+        let result = expr.validate(&variables, get_function_signatures());
+        assert_eq!(result, Ok(DataType::Int));
+    }
+
+    #[test]
+    fn test_modulo_precedence_validation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), DataType::Int);
+        variables.insert("b".to_string(), DataType::Int);
+        variables.insert("c".to_string(), DataType::Int);
+        
+        // a + b % c should be parsed as a + (b % c)
+        let expr = Expr::Binary(
+            Box::new(Expr::Var("a".to_string())),
+            BinOp::Add,
+            Box::new(Expr::Binary(
+                Box::new(Expr::Var("b".to_string())),
+                BinOp::Mod,
+                Box::new(Expr::Var("c".to_string()))
+            ))
+        );
+        
+        let result = expr.validate(&variables, get_function_signatures());
+        assert_eq!(result, Ok(DataType::Int));
+    }
 }

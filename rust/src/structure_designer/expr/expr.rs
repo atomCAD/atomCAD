@@ -12,7 +12,7 @@ pub enum UnOp {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinOp {
-    Add, Sub, Mul, Div, Pow,
+    Add, Sub, Mul, Div, Pow, Mod,
     // Comparison operators
     Eq, Ne, Lt, Le, Gt, Ge,
     // Logical operators
@@ -99,6 +99,13 @@ impl Expr {
                             (DataType::IVec3, DataType::Float) | (DataType::Float, DataType::IVec3) if matches!(op, BinOp::Mul | BinOp::Div) => Ok(DataType::Vec3),
                             
                             _ => Err(format!("Arithmetic operation {:?} not supported for types {:?} and {:?}", op, left_type, right_type))
+                        }
+                    }
+                    BinOp::Mod => {
+                        // Modulo operation - only works with integers
+                        match (&left_type, &right_type) {
+                            (DataType::Int, DataType::Int) => Ok(DataType::Int),
+                            _ => Err(format!("Modulo operation not supported for types {:?} and {:?}", left_type, right_type))
                         }
                     }
                     BinOp::Eq | BinOp::Ne => {
@@ -344,6 +351,20 @@ impl Expr {
                 }
                 Self::arithmetic_op(left, right, |a, b| a / b, |a, b| a / b)
             }
+            BinOp::Mod => {
+                // Check for modulo by zero first
+                match &right {
+                    NetworkResult::Int(0) => {
+                        return NetworkResult::Error("Modulo by zero".to_string());
+                    }
+                    _ => {}
+                }
+                // Modulo only works with integers
+                match (left, right) {
+                    (NetworkResult::Int(a), NetworkResult::Int(b)) => NetworkResult::Int(a % b),
+                    _ => NetworkResult::Error("Modulo operation requires integer operands".to_string()),
+                }
+            }
             BinOp::Pow => Self::arithmetic_op(left, right, |a, b| a.pow(b as u32), |a, b| a.powf(b)),
             BinOp::Eq => Self::comparison_op(left, right, |a, b| a == b, |a, b| (a - b).abs() < f64::EPSILON),
             BinOp::Ne => Self::comparison_op(left, right, |a, b| a != b, |a, b| (a - b).abs() >= f64::EPSILON),
@@ -515,6 +536,7 @@ impl Expr {
                     BinOp::Sub => "-",
                     BinOp::Mul => "*",
                     BinOp::Div => "/",
+                    BinOp::Mod => "%",
                     BinOp::Pow => "^",
                     BinOp::Eq => "==",
                     BinOp::Ne => "!=",

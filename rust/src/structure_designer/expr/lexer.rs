@@ -7,6 +7,7 @@ pub enum Token {
     Minus,
     Star,
     Slash,
+    Percent,
     Caret,
     LParen,
     RParen,
@@ -105,6 +106,7 @@ impl<'a> Lexer<'a> {
             Some('-') => { self.i += 1; Token::Minus }
             Some('*') => { self.i += 1; Token::Star }
             Some('/') => { self.i += 1; Token::Slash }
+            Some('%') => { self.i += 1; Token::Percent }
             Some('^') => { self.i += 1; Token::Caret }
             Some('(') => { self.i += 1; Token::LParen }
             Some(')') => { self.i += 1; Token::RParen }

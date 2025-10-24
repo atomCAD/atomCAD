@@ -227,6 +227,7 @@ The expr node supports scalar arithmetic, vector operations, conditional express
 - `-` - Subtraction  
 - `*` - Multiplication
 - `/` - Division
+- `%` - Modulo (integer remainder)
 - `^` - Exponentiation
 - `+x`, `-x` - Unary plus/minus
 
@@ -299,7 +300,7 @@ Integers and integer vectors automatically promote to floats and float vectors w
 1. Function calls, member access, parentheses
 2. Unary operators (`+`, `-`, `!`)
 3. Exponentiation (`^`) - right associative
-4. Multiplication, division (`*`, `/`)
+4. Multiplication, division, modulo (`*`, `/`, `%`)
 5. Addition, subtraction (`+`, `-`)
 6. Comparison operators (`<`, `<=`, `>`, `>=`)
 7. Equality operators (`==`, `!=`)
@@ -310,6 +311,8 @@ Integers and integer vectors automatically promote to floats and float vectors w
 **Example Expressions:**
 ```
 2 * x + 1                           // Simple arithmetic
+x % 2 == 0                          // Check if x is even (modulo)
+if x % 2 > 0 then -1 else 1         // Conditional with modulo
 vec3(1, 2, 3) * 2.0                // Vector scaling  
 length3(vec3(3, 4, 0))              // Vector length (returns 5.0)
 if x > 0 then sqrt(x) else 0       // Conditional with function

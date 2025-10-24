@@ -507,4 +507,225 @@ mod evaluation_tests {
             _ => panic!("Expected Error result"),
         }
     }
+
+    #[test]
+    fn test_modulo_basic() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Int(7)),
+            BinOp::Mod,
+            Box::new(Expr::Int(3))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, 1), // 7 % 3 = 1
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_with_variables() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Var("x".to_string())),
+            BinOp::Mod,
+            Box::new(Expr::Var("y".to_string()))
+        );
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), NetworkResult::Int(10));
+        variables.insert("y".to_string(), NetworkResult::Int(4));
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, 2), // 10 % 4 = 2
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_zero_result() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Int(8)),
+            BinOp::Mod,
+            Box::new(Expr::Int(4))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, 0), // 8 % 4 = 0
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_negative_numbers() {
+        // Test with negative dividend
+        let expr = Expr::Binary(
+            Box::new(Expr::Int(-7)),
+            BinOp::Mod,
+            Box::new(Expr::Int(3))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, -1), // -7 % 3 = -1 (in Rust)
+            _ => panic!("Expected Int result"),
+        }
+
+        // Test with negative divisor
+        let expr = Expr::Binary(
+            Box::new(Expr::Int(7)),
+            BinOp::Mod,
+            Box::new(Expr::Int(-3))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, 1), // 7 % -3 = 1 (in Rust)
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_by_zero_error() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Int(7)),
+            BinOp::Mod,
+            Box::new(Expr::Int(0))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Error(msg) => assert!(msg.contains("Modulo by zero")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_type_error() {
+        let expr = Expr::Binary(
+            Box::new(Expr::Float(7.5)),
+            BinOp::Mod,
+            Box::new(Expr::Int(3))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Error(msg) => assert!(msg.contains("Modulo operation requires integer operands")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_complex_expressions() {
+        // Test the specific complex expressions requested
+        let mut variables = HashMap::new();
+        variables.insert("x".to_string(), NetworkResult::Int(5));
+        
+        // if (x%2) > 0 then -1 else 1
+        let expr = Expr::Conditional(
+            Box::new(Expr::Binary(
+                Box::new(Expr::Binary(
+                    Box::new(Expr::Var("x".to_string())),
+                    BinOp::Mod,
+                    Box::new(Expr::Int(2))
+                )),
+                BinOp::Gt,
+                Box::new(Expr::Int(0))
+            )),
+            Box::new(Expr::Int(-1)),
+            Box::new(Expr::Int(1))
+        );
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, -1), // 5 % 2 = 1, 1 > 0 is true, so -1
+            _ => panic!("Expected Int result"),
+        }
+        
+        // Test with even number
+        variables.insert("x".to_string(), NetworkResult::Int(4));
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, 1), // 4 % 2 = 0, 0 > 0 is false, so 1
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_precedence_evaluation() {
+        let mut variables = HashMap::new();
+        variables.insert("a".to_string(), NetworkResult::Int(10));
+        variables.insert("b".to_string(), NetworkResult::Int(7));
+        variables.insert("c".to_string(), NetworkResult::Int(3));
+        
+        // a + b % c should evaluate as a + (b % c) = 10 + (7 % 3) = 10 + 1 = 11
+        let expr = Expr::Binary(
+            Box::new(Expr::Var("a".to_string())),
+            BinOp::Add,
+            Box::new(Expr::Binary(
+                Box::new(Expr::Var("b".to_string())),
+                BinOp::Mod,
+                Box::new(Expr::Var("c".to_string()))
+            ))
+        );
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, 11),
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_with_arithmetic() {
+        let variables = HashMap::new();
+        
+        // (15 + 5) % (8 - 3) = 20 % 5 = 0
+        let expr = Expr::Binary(
+            Box::new(Expr::Binary(
+                Box::new(Expr::Int(15)),
+                BinOp::Add,
+                Box::new(Expr::Int(5))
+            )),
+            BinOp::Mod,
+            Box::new(Expr::Binary(
+                Box::new(Expr::Int(8)),
+                BinOp::Sub,
+                Box::new(Expr::Int(3))
+            ))
+        );
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Int(val) => assert_eq!(val, 0),
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_modulo_error_propagation() {
+        // Modulo by zero should propagate through complex expressions
+        let expr = Expr::Binary(
+            Box::new(Expr::Binary(
+                Box::new(Expr::Int(10)),
+                BinOp::Mod,
+                Box::new(Expr::Int(0)) // Modulo by zero
+            )),
+            BinOp::Add,
+            Box::new(Expr::Int(5))
+        );
+        let variables = HashMap::new();
+        
+        let result = expr.evaluate(&variables, get_function_implementations());
+        match result {
+            NetworkResult::Error(msg) => assert!(msg.contains("Modulo by zero")),
+            _ => panic!("Expected Error result"),
+        }
+    }
 }

@@ -39,12 +39,13 @@ mod lexer_tests {
 
     #[test]
     fn test_tokenize_operators() {
-        let tokens = tokenize("+ - * / ^");
+        let tokens = tokenize("+ - * / % ^");
         assert_eq!(tokens, vec![
             Token::Plus,
             Token::Minus,
             Token::Star,
             Token::Slash,
+            Token::Percent,
             Token::Caret,
             Token::Eof
         ]);
@@ -512,5 +513,70 @@ mod parser_tests {
         
         // Missing else expression
         assert!(parse("if true then 1 else").is_err());
+    }
+
+    #[test]
+    fn test_tokenize_modulo_operator() {
+        let tokens = tokenize("%");
+        assert_eq!(tokens, vec![Token::Percent, Token::Eof]);
+
+        let tokens = tokenize("7 % 3");
+        assert_eq!(tokens, vec![
+            Token::Number(7.0),
+            Token::Percent,
+            Token::Number(3.0),
+            Token::Eof
+        ]);
+    }
+
+    #[test]
+    fn test_parse_modulo_basic() {
+        let expr = parse("7 % 3").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(% 7 3)");
+
+        let expr = parse("x % y").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(% x y)");
+    }
+
+    #[test]
+    fn test_parse_modulo_precedence() {
+        // Modulo has same precedence as multiplication and division
+        let expr = parse("a + b % c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(+ a (% b c))");
+
+        let expr = parse("a % b + c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(+ (% a b) c)");
+
+        let expr = parse("a * b % c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(% (* a b) c)");
+
+        let expr = parse("a % b * c").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(* (% a b) c)");
+    }
+
+    #[test]
+    fn test_parse_modulo_complex_expressions() {
+        // Test the specific complex expressions requested
+        let expr = parse("if (x%2) > 0 then -1 else 1").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if (> (% x 2) 0) then (neg 1) else 1)");
+
+        let expr = parse("if x%2 > 0 then -1 else 1").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(if (> (% x 2) 0) then (neg 1) else 1)");
+
+        // More complex expressions
+        let expr = parse("(a + b) % (c - d)").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(% (+ a b) (- c d))");
+
+        let expr = parse("x % 2 == 0").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(== (% x 2) 0)");
+    }
+
+    #[test]
+    fn test_parse_modulo_with_functions() {
+        let expr = parse("abs_int(x) % 10").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(% (call abs_int x) 10)");
+
+        let expr = parse("x % abs_int(y)").unwrap();
+        assert_eq!(expr.to_prefix_string(), "(% x (call abs_int y))");
     }
 }

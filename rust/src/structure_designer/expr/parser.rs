@@ -37,7 +37,7 @@ impl Parser {
       match op {
           Token::Dot => Some((110, 111)), // highest precedence, higher than unary (100)
           Token::Caret => Some((70, 69)), // right-assoc: use lower rbp
-          Token::Star | Token::Slash => Some((60, 61)),
+          Token::Star | Token::Slash | Token::Percent => Some((60, 61)),
           Token::Plus | Token::Minus => Some((50, 51)),
           Token::Lt | Token::Le | Token::Gt | Token::Ge => Some((40, 41)),
           Token::EqEq | Token::Ne => Some((30, 31)),
@@ -150,6 +150,7 @@ impl Parser {
                       Token::Minus => BinOp::Sub,
                       Token::Star => BinOp::Mul,
                       Token::Slash => BinOp::Div,
+                      Token::Percent => BinOp::Mod,
                       Token::Caret => BinOp::Pow,
                       Token::EqEq => BinOp::Eq,
                       Token::Ne => BinOp::Ne,
