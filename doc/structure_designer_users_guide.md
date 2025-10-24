@@ -227,7 +227,7 @@ The expr node supports scalar arithmetic, vector operations, conditional express
 - `-` - Subtraction  
 - `*` - Multiplication
 - `/` - Division
-- `%` - Modulo (integer remainder)
+- `%` - Modulo (integer remainder, only works on integers)
 - `^` - Exponentiation
 - `+x`, `-x` - Unary plus/minus
 
