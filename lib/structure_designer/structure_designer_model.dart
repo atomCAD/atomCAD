@@ -651,9 +651,10 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
-  /// Exports all visible atomic structures as a single XYZ file
-  APIResult exportVisibleAtomicStructuresAsXyz(String filePath) {
-    final ret = structure_designer_api.exportVisibleAtomicStructuresAsXyz(
+  /// Exports all visible atomic structures as a single file (XYZ or MOL format)
+  /// File format is determined by the file extension (.xyz or .mol)
+  APIResult exportVisibleAtomicStructures(String filePath) {
+    final ret = structure_designer_api.exportVisibleAtomicStructures(
         filePath: filePath);
     refreshFromKernel();
     return ret;

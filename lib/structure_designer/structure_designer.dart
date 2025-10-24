@@ -67,8 +67,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
                     child: const Text('Save Design As'),
                   ),
                   MenuItemButton(
-                    onPressed: _exportVisibleAsXyz,
-                    child: const Text('Export visible as XYZ'),
+                    onPressed: _exportVisible,
+                    child: const Text('Export visible'),
                   ),
                 ],
               ),
@@ -261,20 +261,20 @@ class _StructureDesignerState extends State<StructureDesigner> {
     });
   }
 
-  /// Export visible atomic structures as XYZ file
-  Future<void> _exportVisibleAsXyz() async {
+  /// Export visible atomic structures as XYZ or MOL file
+  Future<void> _exportVisible() async {
     try {
-      // Open file picker for saving XYZ files
+      // Open file picker for saving structure files
       String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Export visible as XYZ',
+        dialogTitle: 'Export visible structures',
         fileName: 'structure.xyz',
         type: FileType.custom,
-        allowedExtensions: ['xyz'],
+        allowedExtensions: ['xyz', 'mol'],
       );
 
       if (outputFile != null) {
         // Call the export method
-        final result = graphModel.exportVisibleAtomicStructuresAsXyz(outputFile);
+        final result = graphModel.exportVisibleAtomicStructures(outputFile);
         
         // Check if there was an error
         if (!result.success) {

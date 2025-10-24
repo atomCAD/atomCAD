@@ -1883,12 +1883,12 @@ pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferen
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn export_visible_atomic_structures_as_xyz(file_path: String) -> APIResult {
+pub fn export_visible_atomic_structures(file_path: String) -> APIResult {
   unsafe {
     with_cad_instance_or(
       |cad_instance| {
         // Call the method in StructureDesigner
-        match cad_instance.structure_designer.export_visible_atomic_structures_as_xyz(&file_path) {
+        match cad_instance.structure_designer.export_visible_atomic_structures(&file_path) {
           Ok(_) => APIResult {
             success: true,
             error_message: String::new(),

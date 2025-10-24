@@ -77,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -688767007;
+  int get rustContentHash => -285058643;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -140,7 +140,7 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerEditAtomApiEditAtomUndo();
 
   APIResult
-      crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresAsXyz(
+      crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
           {required String filePath});
 
   void crateApiCommonApiGadgetDrag(
@@ -967,7 +967,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   APIResult
-      crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresAsXyz(
+      crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
           {required String filePath}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -980,16 +980,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresAsXyzConstMeta,
+          kCrateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresConstMeta,
       argValues: [filePath],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresAsXyzConstMeta =>
+      get kCrateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresConstMeta =>
           const TaskConstMeta(
-            debugName: "export_visible_atomic_structures_as_xyz",
+            debugName: "export_visible_atomic_structures",
             argNames: ["filePath"],
           );
 

@@ -403,9 +403,9 @@ void setStructureDesignerPreferences(
         .crateApiStructureDesignerStructureDesignerApiSetStructureDesignerPreferences(
             preferences: preferences);
 
-APIResult exportVisibleAtomicStructuresAsXyz({required String filePath}) => RustLib
+APIResult exportVisibleAtomicStructures({required String filePath}) => RustLib
     .instance.api
-    .crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructuresAsXyz(
+    .crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
         filePath: filePath);
 
 APIUnitCellData? getUnitCellData({required BigInt nodeId}) =>

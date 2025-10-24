@@ -20,6 +20,7 @@ use std::collections::HashSet;
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 use crate::common::xyz_saver::save_xyz;
+use crate::common::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 pub struct StructureDesigner {
@@ -1024,9 +1025,10 @@ impl StructureDesigner {
     final_result
   }
 
-  /// Exports all visible atomic structures as a single XYZ file
+  /// Exports all visible atomic structures as a single file (XYZ or MOL format)
   /// Merges all atomic structures from the last generated scene into one structure before saving
-  pub fn export_visible_atomic_structures_as_xyz(&self, file_path: &str) -> Result<(), String> {
+  /// File format is determined by the file extension (.xyz or .mol)
+  pub fn export_visible_atomic_structures(&self, file_path: &str) -> Result<(), String> {
     // Check if we have any atomic structures to export
     if self.last_generated_structure_designer_scene.atomic_structures.is_empty() {
       return Err("No atomic structures available to export".to_string());
@@ -1045,10 +1047,20 @@ impl StructureDesigner {
       return Err("No atoms found in the atomic structures to export".to_string());
     }
 
-    // Save the merged structure as XYZ file
-    match save_xyz(&merged_structure, file_path) {
-      Ok(()) => Ok(()),
-      Err(err) => Err(format!("Failed to save XYZ file '{}': {}", file_path, err)),
+    // Determine file format from extension and save accordingly
+    let file_path_lower = file_path.to_lowercase();
+    if file_path_lower.ends_with(".xyz") {
+      match save_xyz(&merged_structure, file_path) {
+        Ok(()) => Ok(()),
+        Err(err) => Err(format!("Failed to save XYZ file '{}': {}", file_path, err)),
+      }
+    } else if file_path_lower.ends_with(".mol") {
+      match save_mol_v3000(&merged_structure, file_path) {
+        Ok(()) => Ok(()),
+        Err(err) => Err(format!("Failed to save MOL file '{}': {}", file_path, err)),
+      }
+    } else {
+      Err(format!("Unsupported file format. Please use .xyz or .mol extension. Got: {}", file_path))
     }
   }
   
