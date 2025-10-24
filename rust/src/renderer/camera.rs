@@ -59,17 +59,18 @@ impl Camera {
     
     // Check if the view direction is aligned with positive or negative X, Y, or Z axis
     // These direction checks must match the directions set in set_canonical_view
+    // Z-up coordinate system: X=right, Y=forward, Z=up
     if (view_dir - DVec3::new(-1.0, 0.0, 0.0)).length_squared() < EPSILON {
       return APICameraCanonicalView::Right;
     } else if (view_dir - DVec3::new(1.0, 0.0, 0.0)).length_squared() < EPSILON {
       return APICameraCanonicalView::Left;
-    } else if (view_dir - DVec3::new(0.0, -1.0, 0.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Top;
-    } else if (view_dir - DVec3::new(0.0, 1.0, 0.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Bottom;
     } else if (view_dir - DVec3::new(0.0, 0.0, -1.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Back;
+      return APICameraCanonicalView::Top;
     } else if (view_dir - DVec3::new(0.0, 0.0, 1.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Bottom;
+    } else if (view_dir - DVec3::new(0.0, -1.0, 0.0)).length_squared() < EPSILON {
+      return APICameraCanonicalView::Back;
+    } else if (view_dir - DVec3::new(0.0, 1.0, 0.0)).length_squared() < EPSILON {
       return APICameraCanonicalView::Front;
     }
     
@@ -90,35 +91,36 @@ impl Camera {
     self.target = DVec3::new(0.0, 0.0, 0.0);
     
     // Define the viewing direction and up vectors for each canonical view
+    // Z-up coordinate system: X=right, Y=forward, Z=up
     let (view_dir, up) = match view {
       APICameraCanonicalView::Top => (
-        DVec3::new(0.0, -1.0, 0.0),    // Looking down from +Y
-        DVec3::new(0.0, 0.0, -1.0)     // Up is -Z
+        DVec3::new(0.0, 0.0, -1.0),    // Looking down from +Z
+        DVec3::new(0.0, -1.0, 0.0)     // Up is -Y (screen up when looking down)
       ),
       APICameraCanonicalView::Bottom => (
-        DVec3::new(0.0, 1.0, 0.0),     // Looking up from -Y
-        DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
+        DVec3::new(0.0, 0.0, 1.0),     // Looking up from -Z
+        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y (screen up when looking up)
       ),
       APICameraCanonicalView::Front => (
-        DVec3::new(0.0, 0.0, 1.0),     // Looking from -Z
-        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+        DVec3::new(0.0, 1.0, 0.0),     // Looking from -Y (towards +Y)
+        DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
       APICameraCanonicalView::Back => (
-        DVec3::new(0.0, 0.0, -1.0),    // Looking from +Z
-        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+        DVec3::new(0.0, -1.0, 0.0),    // Looking from +Y (towards -Y)
+        DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
       APICameraCanonicalView::Left => (
-        DVec3::new(1.0, 0.0, 0.0),     // Looking from -X
-        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+        DVec3::new(1.0, 0.0, 0.0),     // Looking from -X (towards +X)
+        DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
       APICameraCanonicalView::Right => (
-        DVec3::new(-1.0, 0.0, 0.0),    // Looking from +X
-        DVec3::new(0.0, 1.0, 0.0)      // Up is +Y
+        DVec3::new(-1.0, 0.0, 0.0),    // Looking from +X (towards -X)
+        DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
       APICameraCanonicalView::Custom => {
         // This shouldn't happen because of the check at the beginning
         // But we provide a default value for completeness
-        (DVec3::new(0.0, 0.0, 1.0), DVec3::new(0.0, 1.0, 0.0))
+        (DVec3::new(0.0, 1.0, 0.0), DVec3::new(0.0, 0.0, 1.0))
       }
     };
     

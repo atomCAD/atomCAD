@@ -143,14 +143,14 @@ impl PolygonGadget {
         }
     }
     
-    /// Finds the nearest lattice point by intersecting a ray with the XZ plane
+    /// Finds the nearest lattice point by intersecting a ray with the XY plane
     /// Returns None if the ray doesn't intersect the plane in a forward direction
     fn find_lattice_point_by_ray(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<IVec2> {
-        // Project the ray onto the XZ plane (y = 0)
-        let plane_normal = DVec3::new(0.0, 1.0, 0.0);
+        // Project the ray onto the XY plane (z = 0)
+        let plane_normal = DVec3::new(0.0, 0.0, 1.0);
         let plane_point = DVec3::new(0.0, 0.0, 0.0);
         
-        // Find intersection of ray with XZ plane
+        // Find intersection of ray with XY plane
         let denominator = ray_direction.dot(plane_normal);
         
         // Avoid division by zero (ray parallel to plane)
@@ -170,7 +170,7 @@ impl PolygonGadget {
         // Convert the 3D point to lattice coordinates
         let lattice_pos = self.unit_cell.real_to_ivec3_lattice(&intersection_point);
 
-        Some(IVec2::new(lattice_pos.x, lattice_pos.z))
+        Some(IVec2::new(lattice_pos.x, lattice_pos.y))
     }
 }
 
@@ -178,7 +178,7 @@ impl Tessellatable for PolygonGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
     let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
         let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
-        DVec3::new(real_vertex_2d.x, 0.0, real_vertex_2d.y)
+        DVec3::new(real_vertex_2d.x, real_vertex_2d.y, 0.0)
     }).collect();
 
     let roughness: f32 = 0.2;
@@ -194,8 +194,8 @@ impl Tessellatable for PolygonGadget {
 
         // handle for the point
         let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
-        let handle_start = DVec3::new(p1_3d.x, -handle_half_height, p1_3d.z);
-        let handle_end = DVec3::new(p1_3d.x, handle_half_height, p1_3d.z);
+        let handle_start = DVec3::new(p1_3d.x, p1_3d.y, -handle_half_height);
+        let handle_end = DVec3::new(p1_3d.x, p1_3d.y, handle_half_height);
         tessellator::tessellate_cylinder(
             output_mesh,
             &handle_end,
@@ -233,17 +233,17 @@ impl Gadget for PolygonGadget {
 
         let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
             let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
-            DVec3::new(real_vertex_2d.x, 0.0, real_vertex_2d.y)
+            DVec3::new(real_vertex_2d.x, real_vertex_2d.y, 0.0)
         }).collect();
 
         // First, check hits with vertex handles
         for i in 0..real_3d_vertices.len() {
             let p1_3d = real_3d_vertices[i];
             
-            // Handle for the vertex - test cylinder along Y axis
+            // Handle for the vertex - test cylinder along Z axis
             let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
-            let handle_start = DVec3::new(p1_3d.x, -handle_half_height, p1_3d.z);
-            let handle_end = DVec3::new(p1_3d.x, handle_half_height, p1_3d.z);
+            let handle_start = DVec3::new(p1_3d.x, p1_3d.y, -handle_half_height);
+            let handle_end = DVec3::new(p1_3d.x, p1_3d.y, handle_half_height);
             
             if cylinder_hit_test(&handle_end, &handle_start, common_constants::HANDLE_RADIUS, &ray_origin, &ray_direction).is_some() {
                 return Some(i as i32); // Return the vertex index if hit
@@ -283,7 +283,7 @@ impl Gadget for PolygonGadget {
             // Get the indices of the two vertices that form the line segment
             let start_vertex_index = segment_index;
             
-            // Find the lattice point where the ray intersects the XZ plane
+            // Find the lattice point where the ray intersects the XY plane
             if let Some(new_vertex) = self.find_lattice_point_by_ray(&ray_origin, &ray_direction) {
                 // Insert the new vertex after the start vertex
                 // This works for all cases including the last-to-first segment

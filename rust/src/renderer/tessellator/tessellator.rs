@@ -520,17 +520,17 @@ pub fn tessellate_arrow(
     );
 }
 
-/// Tessellates an equilateral triangle-based prism aligned with the Y-axis.
-/// The triangle bases lie on planes parallel to the XZ plane.
+/// Tessellates an equilateral triangle-based prism aligned with the Z-axis.
+/// The triangle bases lie on planes parallel to the XY plane.
 pub fn tessellate_equilateral_triangle_prism(
     output_mesh: &mut Mesh,
-    bottom_triangle_centroid_in_xz_plane: DVec2, // (x,z) of bottom triangle centroid
-    prism_height: f64, // Total height along Y axis
+    bottom_triangle_centroid_in_xy_plane: DVec2, // (x,y) of bottom triangle centroid
+    prism_height: f64, // Total height along Z axis
     triangle_side_length: f64,
-    // Angle in radians to rotate the triangle in the XZ plane around the Y axis.
-    // A rotation of 0 means one vertex points towards the positive Z-axis in the triangle's local XZ coordinates,
+    // Angle in radians to rotate the triangle in the XY plane around the Z axis.
+    // A rotation of 0 means one vertex points towards the positive Y-axis in the triangle's local XY coordinates,
     // and the opposite side is parallel to the X-axis.
-    triangle_rotation_around_y: f64,
+    triangle_rotation_around_z: f64,
     material: &Material,
 ) {
     // const FRAC_1_SQRT_3: f64 = 1.0 / 1.7320508075688772; // 1.0 / sqrt(3.0)
@@ -539,78 +539,81 @@ pub fn tessellate_equilateral_triangle_prism(
     // Distance from centroid to vertex for an equilateral triangle
     let dist_centroid_to_vertex = triangle_side_length * frac_1_sqrt_3;
 
-    // Canonical vertices for the triangle base on the XZ plane, centered at origin (0,0) in XZ.
-    // Vertex v0 points towards +Z. For CCW order (viewed from +Y axis): v0 -> v1 -> v2.
-    // v1 is to the "right" (positive X) when looking along Y at v0, v2 is to the "left" (negative X).
-    let v0_local_xz = DVec2::new(0.0, dist_centroid_to_vertex);
-    let v1_local_xz = DVec2::new(triangle_side_length / 2.0, -dist_centroid_to_vertex / 2.0); // X component sign flipped for CCW
-    let v2_local_xz = DVec2::new(-triangle_side_length / 2.0, -dist_centroid_to_vertex / 2.0); // X component sign flipped for CCW
+    // Canonical vertices for the triangle base on the XY plane, centered at origin (0,0) in XY.
+    // Vertex v0 points towards +Y. For CCW order (viewed from +Z axis): v0 -> v1 -> v2.
+    // v1 is to the "right" (positive X) when looking along Z at v0, v2 is to the "left" (negative X).
+    let v0_local_xy = DVec2::new(0.0, dist_centroid_to_vertex);
+    let v1_local_xy = DVec2::new(triangle_side_length / 2.0, -dist_centroid_to_vertex / 2.0); // X component sign flipped for CCW
+    let v2_local_xy = DVec2::new(-triangle_side_length / 2.0, -dist_centroid_to_vertex / 2.0); // X component sign flipped for CCW
 
-    // Create a quaternion for the rotation around the Y-axis
-    let rot_quat_y = DQuat::from_axis_angle(DVec3::Y, triangle_rotation_around_y);
+    // Create a quaternion for the rotation around the Z-axis
+    let rot_quat_z = DQuat::from_axis_angle(DVec3::Z, triangle_rotation_around_z);
 
-    // Rotate the local XZ vertices
-    let v0_rot_3d = rot_quat_y.mul_vec3(DVec3::new(v0_local_xz.x, 0.0, v0_local_xz.y));
-    let v1_rot_3d = rot_quat_y.mul_vec3(DVec3::new(v1_local_xz.x, 0.0, v1_local_xz.y));
-    let v2_rot_3d = rot_quat_y.mul_vec3(DVec3::new(v2_local_xz.x, 0.0, v2_local_xz.y));
+    // Rotate the local XY vertices
+    let v0_rot_3d = rot_quat_z.mul_vec3(DVec3::new(v0_local_xy.x, v0_local_xy.y, 0.0));
+    let v1_rot_3d = rot_quat_z.mul_vec3(DVec3::new(v1_local_xy.x, v1_local_xy.y, 0.0));
+    let v2_rot_3d = rot_quat_z.mul_vec3(DVec3::new(v2_local_xy.x, v2_local_xy.y, 0.0));
 
     let half_height = prism_height / 2.0;
-    let prism_base_x = bottom_triangle_centroid_in_xz_plane.x;
-    let prism_base_z = bottom_triangle_centroid_in_xz_plane.y;
+    let prism_base_x = bottom_triangle_centroid_in_xy_plane.x;
+    let prism_base_y = bottom_triangle_centroid_in_xy_plane.y;
 
-    // Bottom face vertices (Y = -half_height)
-    let bv0 = DVec3::new(prism_base_x + v0_rot_3d.x, -half_height, prism_base_z + v0_rot_3d.z);
-    let bv1 = DVec3::new(prism_base_x + v1_rot_3d.x, -half_height, prism_base_z + v1_rot_3d.z);
-    let bv2 = DVec3::new(prism_base_x + v2_rot_3d.x, -half_height, prism_base_z + v2_rot_3d.z);
+    // Bottom face vertices (Z = -half_height)
+    let bv0 = DVec3::new(prism_base_x + v0_rot_3d.x, prism_base_y + v0_rot_3d.y, -half_height);
+    let bv1 = DVec3::new(prism_base_x + v1_rot_3d.x, prism_base_y + v1_rot_3d.y, -half_height);
+    let bv2 = DVec3::new(prism_base_x + v2_rot_3d.x, prism_base_y + v2_rot_3d.y, -half_height);
 
-    // Top face vertices (Y = +half_height)
-    let tv0 = DVec3::new(prism_base_x + v0_rot_3d.x, half_height, prism_base_z + v0_rot_3d.z);
-    let tv1 = DVec3::new(prism_base_x + v1_rot_3d.x, half_height, prism_base_z + v1_rot_3d.z);
-    let tv2 = DVec3::new(prism_base_x + v2_rot_3d.x, half_height, prism_base_z + v2_rot_3d.z);
+    // Top face vertices (Z = +half_height)
+    let tv0 = DVec3::new(prism_base_x + v0_rot_3d.x, prism_base_y + v0_rot_3d.y, half_height);
+    let tv1 = DVec3::new(prism_base_x + v1_rot_3d.x, prism_base_y + v1_rot_3d.y, half_height);
+    let tv2 = DVec3::new(prism_base_x + v2_rot_3d.x, prism_base_y + v2_rot_3d.y, half_height);
 
     // Normals for top and bottom faces
-    let bottom_face_normal = DVec3::new(0.0, -1.0, 0.0);
-    let top_face_normal = DVec3::new(0.0, 1.0, 0.0);
+    let bottom_face_normal = DVec3::new(0.0, 0.0, -1.0);
+    let top_face_normal = DVec3::new(0.0, 0.0, 1.0);
 
-    // Add bottom face (normal pointing outwards, i.e., -Y)
-    // Original vertices bv0, bv1, bv2 are CCW when viewed from +Y (looking down XZ plane).
-    // For a -Y normal (outward from bottom), the winding order should be CW when viewed from +Y.
+    // Add bottom face (normal pointing outwards, i.e., -Z)
+    // Original vertices bv0, bv1, bv2 are CCW when viewed from +Z (looking down XY plane).
+    // For a -Z normal (outward from bottom), the winding order should be CW when viewed from +Z.
     // Thus, use (idx_bv0, idx_bv2, idx_bv1).
     let idx_bv0 = output_mesh.add_vertex(Vertex::new(&bv0.as_vec3(), &bottom_face_normal.as_vec3(), material));
     let idx_bv1 = output_mesh.add_vertex(Vertex::new(&bv1.as_vec3(), &bottom_face_normal.as_vec3(), material));
     let idx_bv2 = output_mesh.add_vertex(Vertex::new(&bv2.as_vec3(), &bottom_face_normal.as_vec3(), material));
-    output_mesh.add_triangle(idx_bv0, idx_bv2, idx_bv1); // Corrected: bv0, bv2, bv1 for -Y normal
+    output_mesh.add_triangle(idx_bv1, idx_bv2, idx_bv0); // Reversed winding order
 
-    // Add top face (vertices in CCW order for a normal pointing outwards, i.e., +Y)
-    // So, tv0, tv1, tv2 for normal +Y
+    // Add top face (vertices in CCW order for a normal pointing outwards, i.e., +Z)
+    // So, tv0, tv1, tv2 for normal +Z
     let idx_tv0 = output_mesh.add_vertex(Vertex::new(&tv0.as_vec3(), &top_face_normal.as_vec3(), material));
     let idx_tv1 = output_mesh.add_vertex(Vertex::new(&tv1.as_vec3(), &top_face_normal.as_vec3(), material));
     let idx_tv2 = output_mesh.add_vertex(Vertex::new(&tv2.as_vec3(), &top_face_normal.as_vec3(), material));
-    output_mesh.add_triangle(idx_tv0, idx_tv1, idx_tv2);
+    output_mesh.add_triangle(idx_tv2, idx_tv1, idx_tv0); // Reversed winding order
 
     // Side faces (quads)
     // Side 0-1 (connecting bv0-bv1 edge to tv0-tv1 edge)
-    let side01_normal = (bv1 - bv0).cross(tv0 - bv0).normalize();
+    // Calculate outward normal: (edge1) x (edge2) where edges go around the face in CCW order
+    let side01_normal = (tv0 - bv0).cross(bv1 - bv0).normalize();
     let s_idx_bv0_01 = output_mesh.add_vertex(Vertex::new(&bv0.as_vec3(), &side01_normal.as_vec3(), material));
     let s_idx_bv1_01 = output_mesh.add_vertex(Vertex::new(&bv1.as_vec3(), &side01_normal.as_vec3(), material));
     let s_idx_tv1_01 = output_mesh.add_vertex(Vertex::new(&tv1.as_vec3(), &side01_normal.as_vec3(), material));
     let s_idx_tv0_01 = output_mesh.add_vertex(Vertex::new(&tv0.as_vec3(), &side01_normal.as_vec3(), material));
-    output_mesh.add_quad(s_idx_bv0_01, s_idx_bv1_01, s_idx_tv1_01, s_idx_tv0_01);
+    output_mesh.add_quad(s_idx_tv0_01, s_idx_tv1_01, s_idx_bv1_01, s_idx_bv0_01);
 
     // Side 1-2 (connecting bv1-bv2 edge to tv1-tv2 edge)
-    let side12_normal = (bv2 - bv1).cross(tv1 - bv1).normalize();
+    // Calculate outward normal: (edge1) x (edge2) where edges go around the face in CCW order
+    let side12_normal = (tv1 - bv1).cross(bv2 - bv1).normalize();
     let s_idx_bv1_12 = output_mesh.add_vertex(Vertex::new(&bv1.as_vec3(), &side12_normal.as_vec3(), material));
     let s_idx_bv2_12 = output_mesh.add_vertex(Vertex::new(&bv2.as_vec3(), &side12_normal.as_vec3(), material));
     let s_idx_tv2_12 = output_mesh.add_vertex(Vertex::new(&tv2.as_vec3(), &side12_normal.as_vec3(), material));
     let s_idx_tv1_12 = output_mesh.add_vertex(Vertex::new(&tv1.as_vec3(), &side12_normal.as_vec3(), material));
-    output_mesh.add_quad(s_idx_bv1_12, s_idx_bv2_12, s_idx_tv2_12, s_idx_tv1_12);
+    output_mesh.add_quad(s_idx_tv1_12, s_idx_tv2_12, s_idx_bv2_12, s_idx_bv1_12);
 
     // Side 2-0 (connecting bv2-bv0 edge to tv2-tv0 edge)
-    let side20_normal = (bv0 - bv2).cross(tv2 - bv2).normalize();
+    // Calculate outward normal: (edge1) x (edge2) where edges go around the face in CCW order
+    let side20_normal = (tv2 - bv2).cross(bv0 - bv2).normalize();
     let s_idx_bv2_20 = output_mesh.add_vertex(Vertex::new(&bv2.as_vec3(), &side20_normal.as_vec3(), material));
     let s_idx_bv0_20 = output_mesh.add_vertex(Vertex::new(&bv0.as_vec3(), &side20_normal.as_vec3(), material));
     let s_idx_tv0_20 = output_mesh.add_vertex(Vertex::new(&tv0.as_vec3(), &side20_normal.as_vec3(), material));
     let s_idx_tv2_20 = output_mesh.add_vertex(Vertex::new(&tv2.as_vec3(), &side20_normal.as_vec3(), material));
-    output_mesh.add_quad(s_idx_bv2_20, s_idx_bv0_20, s_idx_tv0_20, s_idx_tv2_20);
+    output_mesh.add_quad(s_idx_tv2_20, s_idx_tv0_20, s_idx_bv0_20, s_idx_bv2_20);
 }
 

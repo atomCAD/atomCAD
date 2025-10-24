@@ -106,16 +106,17 @@ impl Renderer {
         let camera = Camera {
           // position the camera at new coordinates
           // +z is out of the screen
-          eye: DVec3::new(0.0, 10.0, 30.0),
+          eye: DVec3::new(0.0, -30.0, 10.0),
           // have it look at the origin
           target: DVec3::new(0.0, 0.0, 0.0),
           // calculate up vector perpendicular to (target - eye)
-          // The view direction is (0,-10,-30), so a perpendicular vector with positive y is (0,0.95,-0.32)
-          up: DVec3::new(0.0, 0.95, -0.32),
+          // The view direction is (0,30,-30), so a perpendicular vector 
+          // with positive z is (0.0, 0.32, 0.95) 
+          up: DVec3::new(0.0, 0.32, 0.95),
           aspect: width as f64 / height as f64,
           fovy: std::f64::consts::PI * 0.15,
-          znear: 0.5,
-          zfar: 600.0,
+          znear: 0.6,
+          zfar: 800.0,
           orthographic: false, // Default to perspective mode
           ortho_half_height: 10.0, // Default orthographic half height
           pivot_point: DVec3::new(0.0, 0.0, 0.0),
@@ -825,15 +826,15 @@ impl Renderer {
     /// 
     /// The transform's:
     /// - translation becomes the camera eye position
-    /// - rotation orients from the identity view (looking down -Z with up as +Y)
+    /// - rotation orients from the identity view (looking down -Y with up as +Z)
     ///   to the desired camera orientation
     pub fn set_camera_transform(&mut self, transform: &crate::util::transform::Transform) {
         // Set eye position directly from translation
         self.camera.eye = transform.translation;
 
-        // The identity view looks down -Z with up as +Y
-        let identity_forward = DVec3::new(0.0, 0.0, -1.0);
-        let identity_up = DVec3::new(0.0, 1.0, 0.0);
+        // The identity view looks down -Y with up as +Z (Z-up coordinate system)
+        let identity_forward = DVec3::new(0.0, -1.0, 0.0);
+        let identity_up = DVec3::new(0.0, 0.0, 1.0);
 
         // Apply rotation to get current orientation vectors
         let forward = transform.rotation.mul_vec3(identity_forward);

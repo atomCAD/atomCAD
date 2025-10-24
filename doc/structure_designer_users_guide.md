@@ -61,12 +61,12 @@ When panning the camera panning speed will be determined by the camera target de
 
 When zooming the camera zoom speed will be determined by the camera target depth: the closer the camera target is to the camera the slower the zoom speed will be so that the user can zoom on the focused content.
 
-What happens when the ray trace do not hit any content? In this case we try to rely on the XZ plane. Currently we hit a ray from the eye both through the mouse position and both in the camera forward direction and if both hit the XZ plane we take the intersection through the camera forward direction as the camera target point.
+What happens when the ray trace do not hit any content? In this case we try to rely on the XY plane. Currently we hit a ray from the eye both through the mouse position and both in the camera forward direction and if both hit the XY plane we take the intersection through the camera forward direction as the camera target point.
 
 The 'camera target' is displayed as a red cube in atomCAD if the 'display camera target' option is turned on.
 It can be turned on and off at the end of the Preferences panel (comes up clicking the Edit/Preferences menu item).
 
-TODEV: The XZ plane handling probably needs to be revised.
+TODEV: The XY plane handling probably needs to be revised.
 
 ## Node network composability and Node networks list panel
 
@@ -322,7 +322,7 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 ### 2D Geometry nodes
 
 These nodes output a 2D geometry which can be used later as an input to an extrude node to create 3d geoemtry.
-2D geometry nodes are on the XZ plane.
+2D geometry nodes are on the XY plane.
 Similarly to the 3D geometry nodes, positions and sizes are usually discrete integer numbers meant in crystal lattice coordinates.
 
 #### rect

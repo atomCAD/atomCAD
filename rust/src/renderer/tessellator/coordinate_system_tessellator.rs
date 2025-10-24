@@ -14,7 +14,7 @@ pub const Z_AXIS_COLOR: [f32; 3] = [0.0, 0.0, 1.0]; // Blue for Z-axis
 
 /// Tessellates a coordinate system visualization with:
 /// - RGB colored coordinate axes (X=red, Y=green, Z=blue) aligned with unit cell basis vectors
-/// - A lattice grid following the unit cell's a and c basis vectors
+/// - A lattice grid following the unit cell's a and b basis vectors
 /// - Enhanced grid lines every 10 units
 pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &UnitCellStruct) {
     // Origin point
@@ -45,7 +45,7 @@ fn add_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: 
 }
 
 /// Creates a grid based on the unit cell lattice structure
-/// The grid follows the unit cell's a and c basis vectors (treating them as the "XZ" plane equivalent)
+/// The grid follows the unit cell's a and b basis vectors (treating them as the "XY" plane equivalent)
 fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStruct) {
     let origin = DVec3::new(0.0, 0.0, 0.0);
     
@@ -53,13 +53,13 @@ fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStr
     let line_count = 2 * CS_SIZE + 1;
     let grid_range = CS_SIZE as i32;
     
-    // Create grid lines parallel to the 'a' basis vector (varying along 'c' direction)
+    // Create grid lines parallel to the 'a' basis vector (varying along 'b' direction)
     for i in -grid_range..=grid_range {
         let is_emphasized = i % 10 == 0;
         let color = if is_emphasized { GRID_SECONDARY_COLOR } else { GRID_PRIMARY_COLOR };
         
-        // Line runs from -CS_SIZE*a to +CS_SIZE*a, offset by i*c
-        let offset = unit_cell.c * (i as f64);
+        // Line runs from -CS_SIZE*a to +CS_SIZE*a, offset by i*b
+        let offset = unit_cell.b * (i as f64);
         let start = origin + offset - unit_cell.a * (grid_range as f64);
         let end = origin + offset + unit_cell.a * (grid_range as f64);
         
@@ -73,17 +73,17 @@ fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStr
         }
     }
     
-    // Create grid lines parallel to the 'c' basis vector (varying along 'a' direction)
+    // Create grid lines parallel to the 'b' basis vector (varying along 'a' direction)
     for i in -grid_range..=grid_range {
         let is_emphasized = i % 10 == 0;
         let color = if is_emphasized { GRID_SECONDARY_COLOR } else { GRID_PRIMARY_COLOR };
         
-        // Line runs from -CS_SIZE*c to +CS_SIZE*c, offset by i*a
+        // Line runs from -CS_SIZE*b to +CS_SIZE*b, offset by i*a
         let offset = unit_cell.a * (i as f64);
-        let start = origin + offset - unit_cell.c * (grid_range as f64);
-        let end = origin + offset + unit_cell.c * (grid_range as f64);
+        let start = origin + offset - unit_cell.b * (grid_range as f64);
+        let end = origin + offset + unit_cell.b * (grid_range as f64);
         
-        // Special case: don't draw over the 'c' axis when i=0
+        // Special case: don't draw over the 'b' axis when i=0
         if i == 0 {
             // Only draw the negative part
             let mid = origin + offset;

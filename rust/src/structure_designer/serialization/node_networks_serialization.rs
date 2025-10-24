@@ -14,7 +14,7 @@ use super::super::node_data::NoData;
 use super::super::node_network::NodeDisplayType;
 
 // The current version of the serialization format
-const SERIALIZATION_VERSION: u32 = 1;
+const SERIALIZATION_VERSION: u32 = 2;
 
 /// Serializable version of Parameter struct for JSON serialization
 #[derive(Serialize, Deserialize)]

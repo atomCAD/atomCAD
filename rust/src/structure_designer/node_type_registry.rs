@@ -549,8 +549,8 @@ impl NodeTypeRegistry {
       output_type: DataType::Geometry,
       public: true,
       node_data_creator: || Box::new(CuboidData {
-        min_corner: IVec3::new(-1, -1, -1),
-        extent: IVec3::new(2, 2, 2),
+        min_corner: IVec3::new(0, 0, 0),
+        extent: IVec3::new(1, 1, 1),
       }),
       node_data_saver: generic_node_data_saver::<CuboidData>,
       node_data_loader: generic_node_data_loader::<CuboidData>,
@@ -606,7 +606,7 @@ impl NodeTypeRegistry {
       public: true,
       node_data_creator: || Box::new(HalfSpaceData {
         max_miller_index: 2,
-        miller_index: IVec3::new(0, 1, 0), // Default normal along y-axis
+        miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis
         center: IVec3::new(0, 0, 0),
         shift: 0,
       }),

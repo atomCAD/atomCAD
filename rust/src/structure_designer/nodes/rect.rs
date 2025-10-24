@@ -113,7 +113,7 @@ impl NodeData for RectData {
 
 /// Creates a parallelogram in real space from lattice coordinates and unit cell basis vectors.
 /// The parallelogram is represented as an intersection of 4 half-planes (2 pairs of opposing edges).
-/// Uses the XZ plane for 2D operations (Y=0).
+/// Uses the XY plane for 2D operations (Z=0).
 fn create_parallelogram_from_lattice(
   unit_cell: &UnitCellStruct,
   min_corner_lattice: DVec2,

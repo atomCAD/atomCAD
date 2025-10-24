@@ -65,12 +65,12 @@ impl NodeData for ExtrudeData {
         let frame_translation_2d = shape.frame_transform.translation;
     
         let frame_transform = Transform::new(
-          DVec3::new(frame_translation_2d.x, 0.0, frame_translation_2d.y),
-          DQuat::from_rotation_y(shape.frame_transform.rotation),
+          DVec3::new(frame_translation_2d.x, frame_translation_2d.y, 0.0),
+          DQuat::from_rotation_z(shape.frame_transform.rotation),
         );
     
-        let direction = unit_cell.b.normalize();
-        let height = unit_cell.b.length() * (self.height as f64);
+        let direction = unit_cell.c.normalize();
+        let height = unit_cell.c.length() * (self.height as f64);
         let s = shape.geo_tree_root;
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,

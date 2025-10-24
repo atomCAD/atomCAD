@@ -254,19 +254,19 @@ impl GeoNode {
   }
 
   fn extrude_implicit_eval(height: f64, direction: DVec3, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
-    // Calculate Y bounds constraint (extrusion is along Y axis from 0 to height)
-    let height_y = direction.y * height;
-    let y_val = f64::max(-sample_point.y, sample_point.y - height_y);
+    // Calculate Z bounds constraint (extrusion is along Z axis from 0 to height)
+    let height_z = direction.z * height;
+    let z_val = f64::max(-sample_point.z, sample_point.z - height_z);
     
-    // Evaluate the 2D shape in the XZ plane
+    // Evaluate the 2D shape in the XY plane
 
-    let sample_horizontal_displacement = DVec2::new(direction.x, direction.z) * sample_point.y / direction.y;
+    let sample_horizontal_displacement = DVec2::new(direction.x, direction.y) * sample_point.z / direction.z;
 
-    let sample_point_2d = DVec2::new(sample_point.x, sample_point.z) + sample_horizontal_displacement;
+    let sample_point_2d = DVec2::new(sample_point.x, sample_point.y) - sample_horizontal_displacement;
     let input_val = shape.implicit_eval_2d(&sample_point_2d);
     
-    // Return the maximum of Y constraint and 2D shape evaluation
-    f64::max(y_val, input_val)
+    // Return the maximum of Z constraint and 2D shape evaluation
+    f64::max(z_val, input_val)
   }
 
   fn transform_implicit_eval(transform: &Transform, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {

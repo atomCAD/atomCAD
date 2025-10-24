@@ -120,21 +120,21 @@ impl Tessellatable for HalfPlaneGadget {
         let point1 = self.unit_cell.ivec2_lattice_to_real(&self.point1);
         let point2 = self.unit_cell.ivec2_lattice_to_real(&self.point2);  
         
-        // Convert 2D points to 3D space (on XZ plane)
-        let p1_3d = DVec3::new(point1.x, 0.0, point1.y);
-        let p2_3d = DVec3::new(point2.x, 0.0, point2.y);
+        // Convert 2D points to 3D space (on XY plane)
+        let p1_3d = DVec3::new(point1.x, point1.y, 0.0);
+        let p2_3d = DVec3::new(point2.x, point2.y, 0.0);
 
         // Calculate inward normal direction for triangle orientation
         let dir_vec_2d = (point2 - point1).normalize();
         // The normal in implicit_eval_half_plane DVec2::new(-dir_vec_2d.y, dir_vec_2d.x) points OUTWARD.
         // For the gadget to point INWARD, we need the opposite normal.
         let inward_normal_2d = DVec2::new(dir_vec_2d.y, -dir_vec_2d.x);
-        // Angle for prism rotation. The prism's default pointing vertex (local +Z) is (0,1) in its local XZ plane.
-        // A rotation by angle A around Y transforms this local +Z to (sin A, cos A) in the global XZ plane.
-        // We want this rotated direction to align with inward_normal_2d = (nx, nz).
+        // Angle for prism rotation. The prism's default pointing vertex (local +Y) is (0,1) in its local XY plane.
+        // A rotation by angle A around Z transforms this local +Y to (sin A, cos A) in the global XY plane.
+        // We want this rotated direction to align with inward_normal_2d = (nx, ny).
         // So, (sin A, cos A) = (inward_normal_2d.x, inward_normal_2d.y).
         // Thus, A = atan2(sin A, cos A) = atan2(inward_normal_2d.x, inward_normal_2d.y).
-        let triangle_rotation_angle = inward_normal_2d.x.atan2(inward_normal_2d.y);
+        let triangle_rotation_angle = -inward_normal_2d.x.atan2(inward_normal_2d.y);
         
         // Create materials
         let roughness: f32 = 0.2;
@@ -182,11 +182,11 @@ impl Tessellatable for HalfPlaneGadget {
             None
         );
         
-        // Draw the handles as triangular prisms oriented along Y axis
+        // Draw the handles as triangular prisms oriented along Z axis
         // Handle for point1
         tessellator::tessellate_equilateral_triangle_prism(
             output_mesh,
-            DVec2::new(p1_3d.x, p1_3d.z), // Centroid of bottom triangle in XZ plane
+            DVec2::new(p1_3d.x, p1_3d.y), // Centroid of bottom triangle in XY plane
             common_constants::HANDLE_HEIGHT,
             common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
             triangle_rotation_angle,
@@ -196,7 +196,7 @@ impl Tessellatable for HalfPlaneGadget {
         // Handle for point2
         tessellator::tessellate_equilateral_triangle_prism(
             output_mesh,
-            DVec2::new(p2_3d.x, p2_3d.z), // Centroid of bottom triangle in XZ plane
+            DVec2::new(p2_3d.x, p2_3d.y), // Centroid of bottom triangle in XY plane
             common_constants::HANDLE_HEIGHT,
             common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
             triangle_rotation_angle,
@@ -214,23 +214,23 @@ impl Gadget for HalfPlaneGadget {
         let point1 = self.unit_cell.ivec2_lattice_to_real(&self.point1);
         let point2 = self.unit_cell.ivec2_lattice_to_real(&self.point2);  
         
-        // Convert 2D points to 3D space (on XZ plane)
-        let p1_3d = DVec3::new(point1.x, 0.0, point1.y);
-        let p2_3d = DVec3::new(point2.x, 0.0, point2.y);
+        // Convert 2D points to 3D space (on XY plane)
+        let p1_3d = DVec3::new(point1.x, point1.y, 0.0);
+        let p2_3d = DVec3::new(point2.x, point2.y, 0.0);
         
         // Effective radius for hit testing (distance from centroid to vertex of the triangle)
         let hit_test_radius = common_constants::HANDLE_TRIANGLE_SIDE_LENGTH / 3.0_f64.sqrt();
 
-        // Handle for point1 - test cylinder along Y axis
-        let p1_top = DVec3::new(p1_3d.x, common_constants::HANDLE_HEIGHT / 2.0, p1_3d.z);
-        let p1_bottom = DVec3::new(p1_3d.x, -common_constants::HANDLE_HEIGHT / 2.0, p1_3d.z);
+        // Handle for point1 - test cylinder along Z axis
+        let p1_top = DVec3::new(p1_3d.x, p1_3d.y, common_constants::HANDLE_HEIGHT / 2.0);
+        let p1_bottom = DVec3::new(p1_3d.x, p1_3d.y, -common_constants::HANDLE_HEIGHT / 2.0);
         if cylinder_hit_test(&p1_top, &p1_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(0); // Handle 0 hit
         }
         
-        // Handle for point2 - test cylinder along Y axis
-        let p2_top = DVec3::new(p2_3d.x, common_constants::HANDLE_HEIGHT / 2.0, p2_3d.z);
-        let p2_bottom = DVec3::new(p2_3d.x, -common_constants::HANDLE_HEIGHT / 2.0, p2_3d.z);
+        // Handle for point2 - test cylinder along Z axis
+        let p2_top = DVec3::new(p2_3d.x, p2_3d.y, common_constants::HANDLE_HEIGHT / 2.0);
+        let p2_bottom = DVec3::new(p2_3d.x, p2_3d.y, -common_constants::HANDLE_HEIGHT / 2.0);
         if cylinder_hit_test(&p2_top, &p2_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(1); // Handle 1 hit
         }
@@ -249,11 +249,11 @@ impl Gadget for HalfPlaneGadget {
             return;
         }
         
-        // Project the ray onto the XZ plane (y = 0)
-        let plane_normal = DVec3::new(0.0, 1.0, 0.0);
+        // Project the ray onto the XY plane (z = 0)
+        let plane_normal = DVec3::new(0.0, 0.0, 1.0);
         let plane_point = DVec3::new(0.0, 0.0, 0.0);
         
-        // Find intersection of ray with XZ plane
+        // Find intersection of ray with XY plane
         let t = (plane_point - ray_origin).dot(plane_normal) / ray_direction.dot(plane_normal);
         
         if t <= 0.0 { 
@@ -268,9 +268,9 @@ impl Gadget for HalfPlaneGadget {
         
         // Update the appropriate point
         if handle_index == 0 {
-            self.point1 = IVec2::new(lattice_pos.x, lattice_pos.z);
+            self.point1 = IVec2::new(lattice_pos.x, lattice_pos.y);
         } else if handle_index == 1 {
-            self.point2 = IVec2::new(lattice_pos.x, lattice_pos.z);
+            self.point2 = IVec2::new(lattice_pos.x, lattice_pos.y);
         }
     }
 

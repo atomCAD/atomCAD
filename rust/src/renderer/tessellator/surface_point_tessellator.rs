@@ -25,13 +25,13 @@ pub fn tessellate_surface_point(output_mesh: &mut Mesh, point: &SurfacePoint) {
   let side_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
 
   // Create rotation quaternion from surface normal to align cuboid
-  let rotator = DQuat::from_rotation_arc(DVec3::Y, point.normal);
+  let rotator = DQuat::from_rotation_arc(DVec3::Z, point.normal);
 
-  let size = DVec3::new(0.3, 0.08, 0.3); // x, y, z extents
+  let size = DVec3::new(0.3, 0.3, 0.08); // x, y, z extents
 
   tessellator::tessellate_cuboid(
     output_mesh,
-    &(point.position - point.normal * size.y * 0.5),
+    &(point.position - point.normal * size.z * 0.5),
     &size,
     &rotator,
     &outside_material,
@@ -55,15 +55,15 @@ pub fn tessellate_surface_point_2d(output_mesh: &mut Mesh, point: &SurfacePoint2
   let side_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), roughness, metallic);
 
   // Create rotation quaternion from surface normal to align cuboid
-  let position_3d = DVec3::new(point.position.x, 0.0, point.position.y);
-  let normal_3d = DVec3::new(point.normal.x, 0.0, point.normal.y);
-  let rotator = DQuat::from_rotation_arc(DVec3::Y, normal_3d);
+  let position_3d = DVec3::new(point.position.x, point.position.y, 0.0);
+  let normal_3d = DVec3::new(point.normal.x, point.normal.y, 0.0);
+  let rotator = DQuat::from_rotation_arc(DVec3::Z, normal_3d);
 
   let size = DVec3::new(0.3, 0.2, 0.3); // x, y, z extents
 
   tessellator::tessellate_cuboid(
     output_mesh,
-    &(position_3d - normal_3d * size.y * 0.5),
+    &(position_3d - normal_3d * size.z * 0.5),
     &size,
     &rotator,
     &outside_material,

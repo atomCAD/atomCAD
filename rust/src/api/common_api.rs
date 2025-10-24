@@ -270,13 +270,13 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
       // Perform raytracing based on the active editor
       let mut hit_distance = cad_instance.structure_designer.raytrace(&ray_origin, &ray_direction);
 
-      // Fallback: Calculate where input ray intersects XZ plane
+      // Fallback: Calculate where input ray intersects XY plane
       if hit_distance.is_none() {
-        let ray_can_hit_xz = ray_direction.y.abs() > 1e-6; // Avoid division by zero
-        let xz_dist_from_ray = if ray_can_hit_xz { -ray_origin.y / ray_direction.y } else { 0.0 };
+        let ray_can_hit_xy = ray_direction.z.abs() > 1e-6; // Avoid division by zero
+        let xy_dist_from_ray = if ray_can_hit_xy { -ray_origin.z / ray_direction.z } else { 0.0 };
         // Check that the intersection is in front of the ray origin
-        if ray_can_hit_xz && xz_dist_from_ray > 0.0 {
-          hit_distance = Some(xz_dist_from_ray);
+        if ray_can_hit_xy && xy_dist_from_ray > 0.0 {
+          hit_distance = Some(xy_dist_from_ray);
         }        
       }
 

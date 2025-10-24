@@ -124,36 +124,12 @@ impl GeoNode {
       // Calculate the extrusion vector by multiplying height with normalized direction
       let extrusion_vector = dvec3_to_vector3(direction * height);
       
-      // Convert atomCAD extrusion vector (XZ plane, Y up) to csgrs (XY plane, Z up)
-      // This requires a -90° rotation around X-axis: (x, y, z) -> (x, z, -y)
-      let csgrs_extrusion = Vector3::new(extrusion_vector.x, extrusion_vector.z, -extrusion_vector.y);
-
-      // Use the new extrude_vector method instead of the old extrude method
+      // Since atomCAD now uses Z-up coordinate system (same as csgrs), 
+      // we can directly use the extrusion vector without any coordinate transformations
       let sketch = shape.to_csg_sketch()?;
-      let mut extruded = sketch.extrude_vector(csgrs_extrusion);
+      let extruded = sketch.extrude_vector(extrusion_vector);
 
-      // Convert result back from csgrs coordinate system to atomCAD
-      // This requires a +90° rotation around X-axis: (x, y, z) -> (x, -z, y)
-      for polygon in &mut extruded.polygons {        
-        for vertex in &mut polygon.vertices {
-            let csgrs_pos = vertex.pos;
-            vertex.pos = Point3::new(csgrs_pos.x, -csgrs_pos.z, csgrs_pos.y);
-
-            let csgrs_normal = vertex.normal;
-            vertex.normal = Vector3::new(csgrs_normal.x, -csgrs_normal.z, csgrs_normal.y);
-        }
-        
-        // Also fix the polygon's plane definition with the same rotation
-        let plane_a = polygon.plane.point_a;
-        let plane_b = polygon.plane.point_b; 
-        let plane_c = polygon.plane.point_c;
-        
-        polygon.plane.point_a = Point3::new(plane_a.x, -plane_a.z, plane_a.y);
-        polygon.plane.point_b = Point3::new(plane_b.x, -plane_b.z, plane_b.y);
-        polygon.plane.point_c = Point3::new(plane_c.x, -plane_c.z, plane_c.y);
-      }
-
-      Some(extruded.inverse())
+      Some(extruded)
   }
 
   fn transform_to_csg(transform: &Transform, shape: &Box<GeoNode>) -> Option<CSGMesh> {
@@ -233,21 +209,21 @@ impl GeoNode {
 
 pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) -> CSGMesh {
   let na_normal = dvec3_to_vector3(*normal);
-  let rotation = DQuat::from_rotation_arc(DVec3::Y, *normal);
+  let rotation = DQuat::from_rotation_arc(DVec3::Z, *normal);
 
   let width : f64 = if is_root { 100.0 } else { 400.0 };
   let height : f64 = if is_root { 100.0 } else { 400.0 };
 
   let start_x = -width * 0.5;
-  let start_z = -height * 0.5;
+  let start_y = -height * 0.5;
   let end_x = width * 0.5;
-  let end_z = height * 0.5;
+  let end_y = height * 0.5;
 
-  // Front face vertices (at y=0)
-  let v1 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, start_z)));
-  let v2 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, 0.0, end_z)));
-  let v3 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, end_z)));
-  let v4 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, 0.0, start_z)));
+  // Front face vertices (at z=0) - counter-clockwise order
+  let v1 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, start_y, 0.0)));
+  let v2 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, start_y, 0.0)));
+  let v3 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(end_x, end_y, 0.0)));
+  let v4 = dvec3_to_point3(rotation.mul_vec3(DVec3::new(start_x, end_y, 0.0)));
 
   // Create polygons based on the visualization type
   let polygons = 

@@ -26,16 +26,11 @@ pub fn convert_csg_sketch_to_poly_mesh(csg_sketch: CSGSketch, triangulate_2d: bo
         mesh.polygons
     };
  
-    // Transform from XY plane to XZ plane
+    // Add small Z offset to render 2D sketches slightly above the grid (avoid z-fighting)
     for poly in &mut polys {
-        // Transform each vertex: move Y coordinate to Z, and set y to be just above the grid
         for vertex in &mut poly.vertices {
-            vertex.pos.z = vertex.pos.y;
-            vertex.pos.y = 0.001;
+            vertex.pos.z += 0.001;
         }
-            
-        // Reverse vertex order to maintain correct winding after transformation
-        //poly.vertices.reverse();
     }
 
     convert_polygons_to_poly_mesh(&polys, true, false)
@@ -92,10 +87,13 @@ pub fn dvec3_to_vector3(dvec3: DVec3) -> Vector3<Real> {
 fn triangulate_geo_polygon(poly2d: &GeoPolygon<Real>) -> Vec<Polygon<()>> {
     let mut ret = Vec::new();
     for triangle in poly2d.earcut_triangles() {
+        // Note: geo crate's earcut_triangles() produces clockwise triangles
+        // even from counter-clockwise input polygons. We reverse the vertex 
+        // order to get counter-clockwise triangles for proper Z-up rendering.
         let vertices = [
-            Vertex::new(Point3::new(triangle.0.x, triangle.0.y, 0.0), Vector3::new(0.0, 0.0, 1.0)),
-            Vertex::new(Point3::new(triangle.1.x, triangle.1.y, 0.0), Vector3::new(0.0, 0.0, 1.0)),
             Vertex::new(Point3::new(triangle.2.x, triangle.2.y, 0.0), Vector3::new(0.0, 0.0, 1.0)),
+            Vertex::new(Point3::new(triangle.1.x, triangle.1.y, 0.0), Vector3::new(0.0, 0.0, 1.0)),
+            Vertex::new(Point3::new(triangle.0.x, triangle.0.y, 0.0), Vector3::new(0.0, 0.0, 1.0)),
         ];
         ret.push(Polygon::new(vertices.to_vec(), None));
     }

@@ -305,7 +305,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
           vector_math.Vector3(1.0, 0.0, 0.0).cross(axisVector).normalized();
     } else {
       perpendicular1 =
-          vector_math.Vector3(0.0, 1.0, 0.0).cross(axisVector).normalized();
+          vector_math.Vector3(0.0, 0.0, 1.0).cross(axisVector).normalized();
     }
     perpendicular2 = axisVector.cross(perpendicular1).normalized();
 
@@ -330,9 +330,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final camera = getCamera();
     final cameraTransform = getCameraTransform(camera);
 
-    // Horizontal component - rotate around global up vector
+    // Horizontal component - rotate around global up vector (Z-up)
     final horizAngle = relPointerPos.dx * ROT_PER_PIXEL;
-    final vertAxis = vector_math.Vector3(0.0, 1.0, 0.0);
+    final vertAxis = vector_math.Vector3(0.0, 0.0, 1.0);
     var newEye = rotatePointAroundAxis(
         cameraTransform!.pivotPoint, vertAxis, horizAngle, cameraTransform.eye);
 
@@ -348,8 +348,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final newForward2 = rotatePointAroundAxis(
         vector_math.Vector3.zero(), newRight, vertAngle, newForward);
 
-    // Global up vector
-    final globalUp = vector_math.Vector3(0.0, 1.0, 0.0);
+    // Global up vector (Z-up)
+    final globalUp = vector_math.Vector3(0.0, 0.0, 1.0);
 
     // Calculate right vector as cross product of forward and global up
     final newRight2 = newForward2.cross(globalUp).normalized();
