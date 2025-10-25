@@ -25,7 +25,7 @@ pub struct HalfSpaceGeometry {
     pub handle_position: DVec3,
 }
 
-pub const CENTER_SPHERE_RADIUS: f64 = 0.5;
+pub const CENTER_SPHERE_RADIUS: f64 = 0.7;
 pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
 pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 16;
 // Constants for shift drag handle
@@ -36,8 +36,8 @@ pub const SHIFT_HANDLE_CYLINDER_LENGTH: f64 = 2.0;
 pub const SHIFT_HANDLE_DIVISIONS: u32 = 16;
 
 // Constants for miller index disc visualization
-pub const MILLER_INDEX_DISC_DISTANCE: f64 = 5.0; // Distance from center to place discs
-pub const MILLER_INDEX_DISC_RADIUS: f64 = 0.5;   // Radius of each disc
+pub const MILLER_INDEX_DISC_DISTANCE: f64 = 6.0; // Distance from center to place discs
+pub const MILLER_INDEX_DISC_RADIUS: f64 = 0.6;   // Radius of each disc
 pub const MILLER_INDEX_DISC_THICKNESS: f64 = 0.06; // Thickness of each disc
 pub const MILLER_INDEX_DISC_DIVISIONS: u32 = 16;  // Number of divisions for disc cylinder
 

@@ -79,7 +79,6 @@ pub struct Renderer  {
     device: Device,
     queue: Queue,
     triangle_pipeline: RenderPipeline,
-    gadget_pipeline: RenderPipeline,
     line_pipeline: RenderPipeline,
     background_line_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
@@ -259,14 +258,6 @@ impl Renderer {
             false, // Normal depth testing
         );
 
-        // Gadget pipeline (always on top)
-        let gadget_pipeline = Self::create_triangle_pipeline(
-            &device,
-            &pipeline_layout,
-            &triangle_shader,
-            true, // Always on top
-        );
-
         let line_pipeline = Self::create_line_pipeline(
             &device,
             &pipeline_layout,
@@ -289,7 +280,6 @@ impl Renderer {
           device,
           queue,
           triangle_pipeline,
-          gadget_pipeline,
           line_pipeline,
           background_line_pipeline,
           main_mesh,
@@ -704,11 +694,39 @@ impl Renderer {
             self.background_mesh.set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.background_line_pipeline);
             self.render_mesh(&mut render_pass, &self.background_mesh);
+        }
+
+        // Second render pass for gadgets - clear depth buffer but preserve color
+        {
+            let mut gadget_render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Gadget Render Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &self.texture_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load, // Preserve existing color buffer
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                  view: &self.depth_texture_view,
+                  depth_ops: Some(wgpu::Operations {
+                      load: wgpu::LoadOp::Clear(1.0), // Clear depth buffer for gadgets
+                      store: wgpu::StoreOp::Store,
+                  }),
+                  stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            // Set camera bind group for gadget render pass
+            gadget_render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
-            // Render gadgets (lightweight_mesh) always on top - this must be last!
+            // Render gadgets with normal depth testing (they respect Z-order among themselves)
             self.lightweight_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.gadget_pipeline);
-            self.render_mesh(&mut render_pass, &self.lightweight_mesh);
+            gadget_render_pass.set_pipeline(&self.triangle_pipeline);
+            self.render_mesh(&mut gadget_render_pass, &self.lightweight_mesh);
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
