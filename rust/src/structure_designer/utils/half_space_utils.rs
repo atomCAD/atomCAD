@@ -25,14 +25,14 @@ pub struct HalfSpaceGeometry {
     pub handle_position: DVec3,
 }
 
-pub const CENTER_SPHERE_RADIUS: f64 = 0.25;
+pub const CENTER_SPHERE_RADIUS: f64 = 0.5;
 pub const CENTER_SPHERE_HORIZONTAL_DIVISIONS: u32 = 16;
 pub const CENTER_SPHERE_VERTICAL_DIVISIONS: u32 = 16;
 // Constants for shift drag handle
 pub const SHIFT_HANDLE_ACCESSIBILITY_OFFSET: f64 = 3.0;
-pub const SHIFT_HANDLE_AXIS_RADIUS: f64 = 0.1;
-pub const SHIFT_HANDLE_CYLINDER_RADIUS: f64 = 0.3;
-pub const SHIFT_HANDLE_CYLINDER_LENGTH: f64 = 1.0;
+pub const SHIFT_HANDLE_AXIS_RADIUS: f64 = 0.2;
+pub const SHIFT_HANDLE_CYLINDER_RADIUS: f64 = 0.5;
+pub const SHIFT_HANDLE_CYLINDER_LENGTH: f64 = 2.0;
 pub const SHIFT_HANDLE_DIVISIONS: u32 = 16;
 
 // Constants for miller index disc visualization

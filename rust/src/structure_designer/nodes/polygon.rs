@@ -182,7 +182,7 @@ impl Tessellatable for PolygonGadget {
     }).collect();
 
     let roughness: f32 = 0.2;
-    let metallic: f32 = 0.8;
+    let metallic: f32 = 0.0;
     let handle_material = Material::new(&common_constants::HANDLE_COLOR, roughness, metallic);
     let selected_handle_material = Material::new(&common_constants::SELECTED_HANDLE_COLOR, roughness, metallic);  
     let line_material = Material::new(&common_constants::LINE_COLOR, roughness, metallic);
@@ -245,7 +245,7 @@ impl Gadget for PolygonGadget {
             let handle_start = DVec3::new(p1_3d.x, p1_3d.y, -handle_half_height);
             let handle_end = DVec3::new(p1_3d.x, p1_3d.y, handle_half_height);
             
-            if cylinder_hit_test(&handle_end, &handle_start, common_constants::HANDLE_RADIUS, &ray_origin, &ray_direction).is_some() {
+            if cylinder_hit_test(&handle_end, &handle_start, common_constants::HANDLE_RADIUS * common_constants::HANDLE_RADIUS_HIT_TEST_FACTOR, &ray_origin, &ray_direction).is_some() {
                 return Some(i as i32); // Return the vertex index if hit
             }
         }
@@ -255,7 +255,7 @@ impl Gadget for PolygonGadget {
             let p1_3d = real_3d_vertices[i];
             let p2_3d = real_3d_vertices[(i + 1) % real_3d_vertices.len()];
             
-            if cylinder_hit_test(&p2_3d, &p1_3d, common_constants::LINE_RADIUS, &ray_origin, &ray_direction).is_some() {
+            if cylinder_hit_test(&p2_3d, &p1_3d, common_constants::LINE_RADIUS * common_constants::LINE_RADIUS_HIT_TEST_FACTOR, &ray_origin, &ray_direction).is_some() {
                 // Return the number of vertices plus the line segment index if hit
                 return Some(real_3d_vertices.len() as i32 + i as i32);
             }

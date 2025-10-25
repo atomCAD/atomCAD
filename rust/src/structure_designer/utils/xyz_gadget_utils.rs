@@ -7,15 +7,16 @@ use crate::renderer::mesh::Material;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::util::hit_test_utils::{arrow_hit_test, get_closest_point_on_first_ray, cylinder_hit_test};
 
-pub const AXIS_CYLINDER_LENGTH: f64 = 6.0;
-pub const AXIS_CYLINDER_RADIUS: f64 = 0.12;
-pub const AXIS_CONE_RADIUS: f64 = 0.2;
+pub const AXIS_CYLINDER_LENGTH: f64 = 10.0;
+pub const AXIS_CYLINDER_RADIUS: f64 = 0.2;
+pub const AXIS_CYLINDER_HIT_TEST_RADIUS_FACTOR: f64 = 1.3;
+pub const AXIS_CONE_RADIUS: f64 = 0.3;
 pub const AXIS_DIVISIONS: u32 = 16;
 pub const AXIS_CONE_LENGTH: f64 = 0.5;
 pub const AXIS_CONE_OFFSET: f64 = 0.1;
 
 // Rotation handle constants
-pub const ROTATION_HANDLE_RADIUS: f64 = 0.5;
+pub const ROTATION_HANDLE_RADIUS: f64 = 0.6;
 pub const ROTATION_HANDLE_LENGTH: f64 = 1.4;
 pub const ROTATION_HANDLE_OFFSET: f64 = 5.0;
 pub const ROTATION_SENSITIVITY: f64 = 0.2; // radians per unit offset delta
@@ -55,7 +56,7 @@ pub fn tessellate_axis_arrow(output_mesh: &mut Mesh, start_pos: &DVec3, axis_dir
     cylinder_length,
     AXIS_CONE_LENGTH,
     AXIS_CONE_OFFSET,
-    &Material::new(albedo, 0.4, 0.8),
+    &Material::new(albedo, 0.4, 0.0),
 );
 }
 
@@ -109,7 +110,7 @@ pub fn axis_arrow_hit_test(
     arrow_hit_test(
         &offset_start_pos,
         axis_dir,
-        AXIS_CYLINDER_RADIUS,
+        AXIS_CYLINDER_RADIUS * AXIS_CYLINDER_HIT_TEST_RADIUS_FACTOR,
         AXIS_CONE_RADIUS,
         cylinder_length,
         AXIS_CONE_LENGTH,

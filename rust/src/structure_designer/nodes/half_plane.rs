@@ -138,7 +138,7 @@ impl Tessellatable for HalfPlaneGadget {
         
         // Create materials
         let roughness: f32 = 0.2;
-        let metallic: f32 = 0.8;
+        let metallic: f32 = 0.0;
         let handle1_material = if self.dragged_handle == Some(0) {
             Material::new(&common_constants::SELECTED_HANDLE_COLOR, roughness, metallic)
         } else {
