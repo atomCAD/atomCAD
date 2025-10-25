@@ -110,8 +110,8 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   }
 }
 
-fn to_selected_color(color: &Vec3) -> Vec3 {
-  color * 0.5
+fn to_selected_color(_color: &Vec3) -> Vec3 {
+  Vec3::new(1.0, 0.2, 1.0) // Bright magenta for selected atoms
 }
 
 pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
