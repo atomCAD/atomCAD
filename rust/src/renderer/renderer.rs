@@ -79,6 +79,7 @@ pub struct Renderer  {
     device: Device,
     queue: Queue,
     triangle_pipeline: RenderPipeline,
+    gadget_pipeline: RenderPipeline,
     line_pipeline: RenderPipeline,
     background_line_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
@@ -250,59 +251,21 @@ impl Renderer {
             push_constant_ranges: &[],
         });
 
-        // Triangle pipeline
-        let triangle_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Triangle Render Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &triangle_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[
-                  Vertex::desc(),
-                ],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(FragmentState {
-                module: &triangle_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Bgra8Unorm,
-                    blend: Some(BlendState::REPLACE),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-              topology: wgpu::PrimitiveTopology::TriangleList,
-              strip_index_format: None,
-              front_face: wgpu::FrontFace::Ccw,
-              cull_mode: Some(wgpu::Face::Back),
-              // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-              polygon_mode: wgpu::PolygonMode::Fill,
-              // Requires Features::DEPTH_CLIP_CONTROL
-              unclipped_depth: false,
-              // Requires Features::CONSERVATIVE_RASTERIZATION
-              conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: -8,
-                    slope_scale: -1.0,
-                    clamp: 8.0,
-                },
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        });
+        // Triangle pipeline (normal depth testing)
+        let triangle_pipeline = Self::create_triangle_pipeline(
+            &device,
+            &pipeline_layout,
+            &triangle_shader,
+            false, // Normal depth testing
+        );
+
+        // Gadget pipeline (always on top)
+        let gadget_pipeline = Self::create_triangle_pipeline(
+            &device,
+            &pipeline_layout,
+            &triangle_shader,
+            true, // Always on top
+        );
 
         let line_pipeline = Self::create_line_pipeline(
             &device,
@@ -326,6 +289,7 @@ impl Renderer {
           device,
           queue,
           triangle_pipeline,
+          gadget_pipeline,
           line_pipeline,
           background_line_pipeline,
           main_mesh,
@@ -407,6 +371,86 @@ impl Renderer {
         });
     }
 
+    fn create_triangle_pipeline(
+        device: &Device,
+        pipeline_layout: &wgpu::PipelineLayout,
+        triangle_shader: &wgpu::ShaderModule,
+        always_on_top: bool,
+    ) -> RenderPipeline {
+        let depth_stencil = if always_on_top {
+            // For gadgets: disable depth testing so they're always visible
+            Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: false, // Don't write to depth buffer
+                depth_compare: wgpu::CompareFunction::Always, // Always pass depth test
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            })
+        } else {
+            // Normal depth testing for regular geometry
+            Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: -8,
+                    slope_scale: -1.0,
+                    clamp: 8.0,
+                },
+            })
+        };
+
+        let label = if always_on_top {
+            "Gadget Triangle Render Pipeline"
+        } else {
+            "Triangle Render Pipeline"
+        };
+
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &triangle_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[
+                  Vertex::desc(),
+                ],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &triangle_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::REPLACE),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+              topology: wgpu::PrimitiveTopology::TriangleList,
+              strip_index_format: None,
+              front_face: wgpu::FrontFace::Ccw,
+              cull_mode: Some(wgpu::Face::Back),
+              polygon_mode: wgpu::PolygonMode::Fill,
+              unclipped_depth: false,
+              conservative: false,
+            },
+            depth_stencil,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        })
+    }
 
     pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
       self.camera.eye = *eye;
@@ -655,16 +699,16 @@ impl Renderer {
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
             render_pass.set_pipeline(&self.triangle_pipeline);
             self.render_mesh(&mut render_pass, &self.selected_clusters_mesh);
-            
-            // Set identity transform for lightweight mesh and render it
-            self.lightweight_mesh.set_identity_transform(&self.queue);
-            render_pass.set_pipeline(&self.triangle_pipeline);
-            self.render_mesh(&mut render_pass, &self.lightweight_mesh);
 
             // Set identity transform for background mesh and render it
             self.background_mesh.set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.background_line_pipeline);
             self.render_mesh(&mut render_pass, &self.background_mesh);
+            
+            // Render gadgets (lightweight_mesh) always on top - this must be last!
+            self.lightweight_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.gadget_pipeline);
+            self.render_mesh(&mut render_pass, &self.lightweight_mesh);
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)
@@ -826,14 +870,14 @@ impl Renderer {
     /// 
     /// The transform's:
     /// - translation becomes the camera eye position
-    /// - rotation orients from the identity view (looking down -Y with up as +Z)
+    /// - rotation orients from the identity view (looking down Y with up as +Z)
     ///   to the desired camera orientation
     pub fn set_camera_transform(&mut self, transform: &crate::util::transform::Transform) {
         // Set eye position directly from translation
         self.camera.eye = transform.translation;
 
-        // The identity view looks down -Y with up as +Z (Z-up coordinate system)
-        let identity_forward = DVec3::new(0.0, -1.0, 0.0);
+        // The identity view looks down Y with up as +Z (Z-up coordinate system)
+        let identity_forward = DVec3::new(0.0, 1.0, 0.0);
         let identity_up = DVec3::new(0.0, 0.0, 1.0);
 
         // Apply rotation to get current orientation vectors
