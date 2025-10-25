@@ -15,6 +15,10 @@ pub const AXIS_DIVISIONS: u32 = 16;
 pub const AXIS_CONE_LENGTH: f64 = 0.5;
 pub const AXIS_CONE_OFFSET: f64 = 0.1;
 
+// Center sphere constants
+pub const CENTER_SPHERE_RADIUS: f64 = 0.4;
+pub const CENTER_SPHERE_DIVISIONS: u32 = 12;
+
 // Rotation handle constants
 pub const ROTATION_HANDLE_RADIUS: f64 = 0.6;
 pub const ROTATION_HANDLE_LENGTH: f64 = 1.4;
@@ -42,6 +46,9 @@ pub fn tessellate_xyz_gadget(output_mesh: &mut Mesh, unit_cell: &UnitCellStruct,
     tessellate_axis_arrow(output_mesh, &pos, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0), 0.0, AXIS_CYLINDER_LENGTH);
     tessellate_axis_arrow(output_mesh, &pos, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0), 0.0, AXIS_CYLINDER_LENGTH);
   }
+
+  // Add center sphere to hide Z-fighting at axis intersection and provide visual clarity
+  tessellate_center_sphere(output_mesh, pos);
 }
 
 pub fn tessellate_axis_arrow(output_mesh: &mut Mesh, start_pos: &DVec3, axis_dir: &DVec3, albedo: &Vec3, start_offset: f64, cylinder_length: f64) {
@@ -58,6 +65,19 @@ pub fn tessellate_axis_arrow(output_mesh: &mut Mesh, start_pos: &DVec3, axis_dir
     AXIS_CONE_OFFSET,
     &Material::new(albedo, 0.4, 0.0),
 );
+}
+
+pub fn tessellate_center_sphere(output_mesh: &mut Mesh, center_pos: &DVec3) {
+  let center_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), 0.4, 0.0);
+  
+  tessellator::tessellate_sphere(
+    output_mesh,
+    center_pos,
+    CENTER_SPHERE_RADIUS,
+    CENTER_SPHERE_DIVISIONS,
+    CENTER_SPHERE_DIVISIONS,
+    &center_material
+  );
 }
 
 pub fn tessellate_rotation_handle(output_mesh: &mut Mesh, start_pos: &DVec3, axis_dir: &DVec3, albedo: &Vec3) {
