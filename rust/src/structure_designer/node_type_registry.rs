@@ -699,7 +699,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
-      public: true,
+      public: false,
       node_data_creator: || Box::new(GeoTransData {
         translation: IVec3::new(0, 0, 0),
         rotation: IVec3::new(0, 0, 0),
@@ -769,7 +769,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
-      public: true,
+      public: false,
       node_data_creator: || Box::new(GeoToAtomData {
         primary_atomic_number: 6,
         secondary_atomic_number: 6,
