@@ -1798,17 +1798,58 @@ pub fn set_return_node_id(node_id: Option<u64>) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn save_node_networks(file_path: String) -> bool {
+pub fn save_node_networks_as(file_path: String) -> bool {
   unsafe {
     with_mut_cad_instance_or(
       |cad_instance | {
         // Call the method in StructureDesigner
-        match cad_instance.structure_designer.save_node_networks(&file_path) {
+        match cad_instance.structure_designer.save_node_networks_as(&file_path) {
           Ok(_) => true,
           Err(_) => false
         }
       },
       false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn save_node_networks() -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance | {
+        // Call the method in StructureDesigner
+        match cad_instance.structure_designer.save_node_networks() {
+          Some(Ok(_)) => true,
+          Some(Err(_)) => false,
+          None => false, // No file path available
+        }
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn is_design_dirty() -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.is_dirty()
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_design_file_path() -> Option<String> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.get_file_path().cloned()
+      },
+      None
     )
   }
 }

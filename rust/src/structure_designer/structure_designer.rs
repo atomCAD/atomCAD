@@ -32,6 +32,7 @@ pub struct StructureDesigner {
   pub preferences: StructureDesignerPreferences,
   pub node_display_policy_resolver: NodeDisplayPolicyResolver,
   pub is_dirty: bool,
+  pub file_path: Option<String>,
 }
 
 impl StructureDesigner {
@@ -51,6 +52,7 @@ impl StructureDesigner {
       preferences: StructureDesignerPreferences::new(),
       node_display_policy_resolver,
       is_dirty: false,
+      file_path: None,
     }
   }
 }
@@ -595,6 +597,11 @@ impl StructureDesigner {
   pub fn set_dirty(&mut self, dirty: bool) {
     self.is_dirty = dirty;
   }
+
+  /// Returns the file path where the design was last saved/loaded, or None if never saved/loaded
+  pub fn get_file_path(&self) -> Option<&String> {
+    self.file_path.as_ref()
+  }
 }
 
 impl StructureDesigner {
@@ -944,17 +951,29 @@ impl StructureDesigner {
     }
   }
 
-  // Saves node networks to a file
-  pub fn save_node_networks(&mut self, file_path: &str) -> std::io::Result<()> {
+  // Saves node networks to a file (Save As functionality)
+  pub fn save_node_networks_as(&mut self, file_path: &str) -> std::io::Result<()> {
     use std::path::Path;
     let result = node_networks_serialization::save_node_networks_to_file(&mut self.node_type_registry, Path::new(file_path));
     
-    // Clear dirty flag if save was successful
+    // Clear dirty flag and set file path if save was successful
     if result.is_ok() {
       self.is_dirty = false;
+      self.file_path = Some(file_path.to_string());
     }
     
     result
+  }
+
+  // Saves node networks to the current file (Save functionality)
+  pub fn save_node_networks(&mut self) -> Option<std::io::Result<()>> {
+    match &self.file_path {
+      Some(file_path) => {
+        let file_path = file_path.clone(); // Clone to avoid borrow issues
+        Some(self.save_node_networks_as(&file_path))
+      }
+      None => None, // No file path available
+    }
   }
 
   // Loads node networks from a file
@@ -978,6 +997,9 @@ impl StructureDesigner {
 
     // Clear dirty flag since we just loaded a saved state
     self.is_dirty = false;
+    
+    // Set the file path since we just loaded from this file
+    self.file_path = Some(file_path.to_string());
 
     Ok(())
   }

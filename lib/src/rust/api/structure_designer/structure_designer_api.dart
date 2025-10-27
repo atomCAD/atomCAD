@@ -376,9 +376,18 @@ bool setReturnNodeId({BigInt? nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSetReturnNodeId(
         nodeId: nodeId);
 
-bool saveNodeNetworks({required String filePath}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks(
+bool saveNodeNetworksAs({required String filePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
         filePath: filePath);
+
+bool saveNodeNetworks() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks();
+
+bool isDesignDirty() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiIsDesignDirty();
+
+String? getDesignFilePath() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetDesignFilePath();
 
 APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
