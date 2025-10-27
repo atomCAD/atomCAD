@@ -62,6 +62,8 @@ class StructureDesignerModel extends ChangeNotifier {
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
   StructureDesignerPreferences? preferences;
+  bool isDirty = false;
+  String? filePath;
 
   StructureDesignerModel() {}
 
@@ -123,9 +125,35 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void saveNodeNetworks(String filePath) {
-    structure_designer_api.saveNodeNetworks(filePath: filePath);
+  void saveNodeNetworksAs(String filePath) {
+    structure_designer_api.saveNodeNetworksAs(filePath: filePath);
     refreshFromKernel();
+  }
+
+  bool saveNodeNetworks() {
+    final result = structure_designer_api.saveNodeNetworks();
+    refreshFromKernel();
+    return result;
+  }
+
+  /// Returns true if Save operation is available (design is dirty and has a file path)
+  bool get canSave => isDirty && filePath != null;
+
+  /// Returns true if Save As operation is available (always true)
+  bool get canSaveAs => true;
+
+  /// Returns the current file name for display in title bar
+  String get displayFileName {
+    if (filePath != null) {
+      return filePath!.split('\\').last.split('/').last; // Handle both Windows and Unix paths
+    }
+    return 'Untitled';
+  }
+
+  /// Returns the window title with dirty indicator
+  String get windowTitle {
+    final fileName = displayFileName;
+    return isDirty ? '$fileName*' : fileName;
   }
 
   APIResult loadNodeNetworks(String filePath) {
@@ -572,6 +600,8 @@ class StructureDesignerModel extends ChangeNotifier {
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();
     preferences = structure_designer_api.getStructureDesignerPreferences();
+    isDirty = structure_designer_api.isDesignDirty();
+    filePath = structure_designer_api.getDesignFilePath();
 
     notifyListeners();
   }

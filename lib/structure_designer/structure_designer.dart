@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/main_content_area.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -38,10 +39,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Menu bar
-        Container(
+    return ChangeNotifierProvider.value(
+      value: graphModel,
+      child: Column(
+        children: [
+          // Menu bar
+          Container(
           height: 30,
           decoration: const BoxDecoration(
             color: Colors.grey,
@@ -55,22 +58,30 @@ class _StructureDesignerState extends State<StructureDesigner> {
           child: Row(
             children: [
               // File Menu
-              MenuWidget(
-                label: 'File',
-                menuItems: [
-                  MenuItemButton(
-                    onPressed: _loadDesign,
-                    child: const Text('Load Design'),
-                  ),
-                  MenuItemButton(
-                    onPressed: _saveDesignAs,
-                    child: const Text('Save Design As'),
-                  ),
-                  MenuItemButton(
-                    onPressed: _exportVisible,
-                    child: const Text('Export visible'),
-                  ),
-                ],
+              Consumer<StructureDesignerModel>(
+                builder: (context, model, child) {
+                  return MenuWidget(
+                    label: 'File',
+                    menuItems: [
+                      MenuItemButton(
+                        onPressed: _loadDesign,
+                        child: const Text('Load Design'),
+                      ),
+                      MenuItemButton(
+                        onPressed: model.canSave ? _saveDesign : null,
+                        child: const Text('Save Design'),
+                      ),
+                      MenuItemButton(
+                        onPressed: _saveDesignAs,
+                        child: const Text('Save Design As'),
+                      ),
+                      MenuItemButton(
+                        onPressed: _exportVisible,
+                        child: const Text('Export visible'),
+                      ),
+                    ],
+                  );
+                },
               ),
 
               // View Menu
@@ -103,6 +114,44 @@ class _StructureDesignerState extends State<StructureDesigner> {
             ],
           ),
         ),
+        // Title bar with file name and dirty indicator
+        Consumer<StructureDesignerModel>(
+          builder: (context, model, child) {
+            return Container(
+              height: 25,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF5F5F5),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.black26,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.description,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      model.windowTitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[800],
+                        fontWeight: model.isDirty ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
         // Main content
         Expanded(
           child: Row(
@@ -131,7 +180,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                           children: [
                             // Geometry visualization widget (left aligned)
                             GeometryVisualizationWidget(model: graphModel),
-                            
+
                             // Node display widget (right aligned)
                             NodeDisplayWidget(model: graphModel),
                           ],
@@ -172,7 +221,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
             ],
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -188,7 +238,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       String filePath = result.files.first.path!;
       debugPrint('Design file selected: $filePath');
       final loadResult = graphModel.loadNodeNetworks(filePath);
-      
+
       if (!loadResult.success) {
         // Show error dialog
         if (mounted) {
@@ -229,7 +279,15 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (!finalPath.contains('.')) {
         finalPath = '$outputFile.cnnd';
       }
-      graphModel.saveNodeNetworks(finalPath);
+      graphModel.saveNodeNetworksAs(finalPath);
+    }
+  }
+
+  void _saveDesign() {
+    final success = graphModel.saveNodeNetworks();
+    if (!success) {
+      // This shouldn't happen if canSave is working correctly, but just in case
+      debugPrint('Save failed - no file path available');
     }
   }
 
@@ -275,7 +333,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (outputFile != null) {
         // Call the export method
         final result = graphModel.exportVisibleAtomicStructures(outputFile);
-        
+
         // Check if there was an error
         if (!result.success) {
           // Show error dialog
