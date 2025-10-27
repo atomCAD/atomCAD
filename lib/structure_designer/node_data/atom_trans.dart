@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -22,6 +24,24 @@ class AtomTransEditor extends StatefulWidget {
 
 class AtomTransEditorState extends State<AtomTransEditor> {
   // Direct API calls are made in onChanged handlers
+  
+  /// Convert radians to degrees for display
+  APIVec3 _radiansToDegrees(APIVec3 radians) {
+    return APIVec3(
+      x: radians.x * 180.0 / math.pi,
+      y: radians.y * 180.0 / math.pi,
+      z: radians.z * 180.0 / math.pi,
+    );
+  }
+  
+  /// Convert degrees to radians for API
+  APIVec3 _degreesToRadians(APIVec3 degrees) {
+    return APIVec3(
+      x: degrees.x * math.pi / 180.0,
+      y: degrees.y * math.pi / 180.0,
+      z: degrees.z * math.pi / 180.0,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,14 +72,14 @@ class AtomTransEditorState extends State<AtomTransEditor> {
           ),
           const SizedBox(height: 8),
           Vec3Input(
-            label: 'Rotation',
-            value: widget.data!.rotation,
+            label: 'Rotation (degrees)',
+            value: _radiansToDegrees(widget.data!.rotation),
             onChanged: (newValue) {
               widget.model.setAtomTransData(
                 widget.nodeId,
                 APIAtomTransData(
                   translation: widget.data!.translation,
-                  rotation: newValue,
+                  rotation: _degreesToRadians(newValue),
                 ),
               );
             },
