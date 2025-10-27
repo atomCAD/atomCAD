@@ -31,6 +31,7 @@ pub struct StructureDesigner {
   pub last_generated_structure_designer_scene: StructureDesignerScene,
   pub preferences: StructureDesignerPreferences,
   pub node_display_policy_resolver: NodeDisplayPolicyResolver,
+  pub is_dirty: bool,
 }
 
 impl StructureDesigner {
@@ -49,6 +50,7 @@ impl StructureDesigner {
       last_generated_structure_designer_scene: StructureDesignerScene::new(),
       preferences: StructureDesignerPreferences::new(),
       node_display_policy_resolver,
+      is_dirty: false,
     }
   }
 }
@@ -190,6 +192,8 @@ impl StructureDesigner {
       i += 1;
     }
     self.add_node_network(&name);
+    // Mark design as dirty since we added a new network
+    self.set_dirty(true);
   }
   
   pub fn add_node_network(&mut self, node_network_name: &str) {
@@ -244,6 +248,8 @@ impl StructureDesigner {
       }
     }
 
+    // Mark design as dirty since we renamed a network
+    self.set_dirty(true);
     true
   }
 
@@ -284,6 +290,8 @@ impl StructureDesigner {
       }
     }
 
+    // Mark design as dirty since we deleted a network
+    self.set_dirty(true);
     Ok(())
   }
 
@@ -334,6 +342,8 @@ impl StructureDesigner {
     
     // If we successfully added a node, apply the display policy with this node as dirty
     if node_id != 0 {
+      // Mark design as dirty since we added a node
+      self.set_dirty(true);
       
       // Create a HashSet with just the new node ID
       let mut dirty_nodes = HashSet::new();
@@ -372,6 +382,8 @@ impl StructureDesigner {
     
     // If we successfully duplicated a node, apply the display policy with this node as dirty
     if new_node_id != 0 {
+      // Mark design as dirty since we duplicated a node
+      self.set_dirty(true);
       
       // Create a HashSet with just the new node ID
       let mut dirty_nodes = HashSet::new();
@@ -393,6 +405,8 @@ impl StructureDesigner {
     };
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.move_node(node_id, position);
+      // Mark design as dirty since we moved a node
+      self.set_dirty(true);
     }
   }
 
@@ -454,6 +468,9 @@ impl StructureDesigner {
         dest_param_is_multi,
       );
       
+      // Mark design as dirty since we connected nodes
+      self.set_dirty(true);
+      
       // Create a HashSet with the source and destination nodes marked as dirty
       let mut dirty_nodes = HashSet::new();
       dirty_nodes.insert(source_node_id);
@@ -465,14 +482,14 @@ impl StructureDesigner {
   }
 
   pub fn set_node_network_data(&mut self, node_id: u64, mut data: Box<dyn NodeData>) {
-    // Early return if active_node_network_name is None
+    // Early return if active_node_network_name is None, clone to avoid borrow conflicts
     let network_name = match &self.active_node_network_name {
-      Some(name) => name,
+      Some(name) => name.clone(),
       None => return,
     };
     
     // Check node type before modification
-    let is_expr_node = if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+    let is_expr_node = if let Some(network) = self.node_type_registry.node_networks.get(&network_name) {
       if let Some(node) = network.nodes.get(&node_id) {
         node.node_type_name == "expr"
       } else {
@@ -490,13 +507,15 @@ impl StructureDesigner {
       }
     }
     
-    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
       network.set_node_network_data(node_id, data);
+      // Mark design as dirty since we modified node data
+      self.set_dirty(true);
     }
     
     // Cache custom NodeType if needed after data is set
     let (built_in_types, node_networks) = (&self.node_type_registry.built_in_node_types, &mut self.node_type_registry.node_networks);
-    let custom_node_type_populated = if let Some(network) = node_networks.get_mut(network_name) {
+    let custom_node_type_populated = if let Some(network) = node_networks.get_mut(&network_name) {
       if let Some(node) = network.nodes.get_mut(&node_id) {
         // Call the populate function with the split borrows
         NodeTypeRegistry::populate_custom_node_type_cache_with_types(built_in_types, node, true)
@@ -566,6 +585,16 @@ impl StructureDesigner {
   pub fn set_active_node_network_name(&mut self, node_network_name: Option<String>) {
     self.active_node_network_name = node_network_name;
   }
+
+  /// Returns true if the design has been modified since the last save/load
+  pub fn is_dirty(&self) -> bool {
+    self.is_dirty
+  }
+
+  /// Sets the dirty flag to indicate the design has been modified
+  pub fn set_dirty(&mut self, dirty: bool) {
+    self.is_dirty = dirty;
+  }
 }
 
 impl StructureDesigner {
@@ -592,6 +621,8 @@ impl StructureDesigner {
         if let Some(node_data) = data {
           if let Some(g) = &self.gadget {
             g.sync_data(node_data);
+            // Mark design as dirty since gadget data was synced back to node
+            self.set_dirty(true);
           }
         }
       }
@@ -726,6 +757,8 @@ impl StructureDesigner {
     // Perform the deletion
     if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
       node_network.delete_selected();
+      // Mark design as dirty since we deleted something
+      self.set_dirty(true);
     }
     
     // Only apply display policy if there were dirty nodes
@@ -890,6 +923,8 @@ impl StructureDesigner {
     if node_id.is_none() {
       if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
         network.return_node_id = None;
+        // Mark design as dirty since we changed the return node
+        self.set_dirty(true);
         self.validate_active_network();
         return true;
       }
@@ -898,6 +933,10 @@ impl StructureDesigner {
 
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       let ret = network.set_return_node(node_id.unwrap());
+      if ret {
+        // Mark design as dirty since we set the return node
+        self.set_dirty(true);
+      }
       self.validate_active_network();
       ret
     } else {
@@ -908,7 +947,14 @@ impl StructureDesigner {
   // Saves node networks to a file
   pub fn save_node_networks(&mut self, file_path: &str) -> std::io::Result<()> {
     use std::path::Path;
-    node_networks_serialization::save_node_networks_to_file(&mut self.node_type_registry, Path::new(file_path))
+    let result = node_networks_serialization::save_node_networks_to_file(&mut self.node_type_registry, Path::new(file_path));
+    
+    // Clear dirty flag if save was successful
+    if result.is_ok() {
+      self.is_dirty = false;
+    }
+    
+    result
   }
 
   // Loads node networks from a file
@@ -929,6 +975,9 @@ impl StructureDesigner {
     
     // Apply display policy to all nodes
     self.apply_node_display_policy(None);
+
+    // Clear dirty flag since we just loaded a saved state
+    self.is_dirty = false;
 
     Ok(())
   }
