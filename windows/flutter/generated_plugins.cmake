@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  flutter_window_close
   screen_retriever
   texture_rgba_renderer
   window_manager

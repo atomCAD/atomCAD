@@ -14,7 +14,9 @@ import 'package:flutter_cad/common/menu_widget.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
-  const StructureDesigner({super.key});
+  final StructureDesignerModel model;
+  
+  const StructureDesigner({super.key, required this.model});
 
   @override
   State<StructureDesigner> createState() => _StructureDesignerState();
@@ -33,8 +35,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
   @override
   void initState() {
     super.initState();
-    graphModel = StructureDesignerModel();
-    graphModel.init();
+    graphModel = widget.model;
   }
 
   @override
@@ -113,44 +114,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
               ),
             ],
           ),
-        ),
-        // Title bar with file name and dirty indicator
-        Consumer<StructureDesignerModel>(
-          builder: (context, model, child) {
-            return Container(
-              height: 25,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF5F5F5),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.black26,
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.description,
-                      size: 16,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      model.windowTitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[800],
-                        fontWeight: model.isDirty ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
         ),
         // Main content
         Expanded(
@@ -290,6 +253,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       debugPrint('Save failed - no file path available');
     }
   }
+
 
   void _showPreferences() {
     showDialog(

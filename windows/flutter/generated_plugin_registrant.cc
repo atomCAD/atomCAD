@@ -6,11 +6,14 @@
 
 #include "generated_plugin_registrant.h"
 
+#include <flutter_window_close/flutter_window_close_plugin.h>
 #include <screen_retriever/screen_retriever_plugin.h>
 #include <texture_rgba_renderer/texture_rgba_renderer_plugin_c_api.h>
 #include <window_manager/window_manager_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
+  FlutterWindowClosePluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("FlutterWindowClosePlugin"));
   ScreenRetrieverPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("ScreenRetrieverPlugin"));
   TextureRgbaRendererPluginCApiRegisterWithRegistrar(
