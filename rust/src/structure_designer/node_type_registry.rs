@@ -80,15 +80,15 @@ impl NodeTypeRegistry {
       parameters: vec![
           Parameter {
               name: "default".to_string(),
-              data_type: DataType::Geometry, // will change based on  ParameterData::data_type.
+              data_type: DataType::Int, // will change based on  ParameterData::data_type.
           },
       ],
-      output_type: DataType::Geometry, // will change based on ParameterData::data_type.
+      output_type: DataType::Int, // will change based on ParameterData::data_type.
       public: true,
       node_data_creator: || Box::new(ParameterData {
         param_index: 0,
         param_name: "param".to_string(),
-        data_type: DataType::Geometry,
+        data_type: DataType::Int,
         sort_order: 0,
         data_type_str: None,
         error: None,
@@ -106,14 +106,14 @@ impl NodeTypeRegistry {
         parameters: vec![
           ExprParameter {
             name: "x".to_string(),
-            data_type: DataType::Float,
+            data_type: DataType::Int,
             data_type_str: None,
           },
         ],
         expression: "x".to_string(),
         expr: None,
         error: None,
-        output_type: Some(DataType::Float),
+        output_type: Some(DataType::Int),
       }),
       node_data_saver: generic_node_data_saver::<ExprData>,
       node_data_loader: expr_data_loader,
