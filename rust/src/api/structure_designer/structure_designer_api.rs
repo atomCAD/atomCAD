@@ -47,13 +47,15 @@ use crate::api::structure_designer::structure_designer_api_types::APIEditAtomDat
 use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIUnitCellData;
-use crate::api::structure_designer::structure_designer_api_types::{APILatticeSymopData, APIRotationalSymmetry};
+use crate::api::structure_designer::structure_designer_api_types::{APILatticeSymopData, APILatticeMoveData, APILatticeRotData, APIRotationalSymmetry};
 use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::unit_cell::UnitCellData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
+use crate::structure_designer::nodes::lattice_move::{LatticeMoveData, LatticeMoveEvalCache};
+use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
 use crate::structure_designer::evaluator::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem, classify_crystal_system};
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
@@ -1021,6 +1023,78 @@ pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_lattice_move_data(node_id: u64) -> Option<APILatticeMoveData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let lattice_move_data = match node_data.as_any_ref().downcast_ref::<LatticeMoveData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        
+        Some(APILatticeMoveData {
+          translation: to_api_ivec3(&lattice_move_data.translation),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let lattice_rot_data = match node_data.as_any_ref().downcast_ref::<LatticeRotData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        
+        // Try to get the evaluation cache to access unit cell and compute symmetries and crystal system
+        let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance.structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
+          if let Some(lattice_rot_cache) = eval_cache.downcast_ref::<LatticeRotEvalCache>() {
+            // Analyze unit cell symmetries and crystal system
+            let (crystal_system, symmetries) = analyze_unit_cell_complete(&lattice_rot_cache.unit_cell);
+            
+            // Convert symmetries to API format
+            let api_symmetries = symmetries.into_iter().map(|sym| APIRotationalSymmetry {
+              axis: to_api_vec3(&sym.axis),
+              n_fold: sym.n_fold,
+            }).collect();
+            
+            (api_symmetries, crystal_system_to_string(crystal_system))
+          } else {
+            // No lattice rot cache available - return empty symmetries and unknown crystal system
+            (Vec::new(), "Unknown".to_string())
+          }
+        } else {
+          // No evaluation cache available - return empty symmetries and unknown crystal system
+          (Vec::new(), "Unknown".to_string())
+        };
+        
+        Some(APILatticeRotData {
+          axis_index: lattice_rot_data.axis_index,
+          step: lattice_rot_data.step,
+          pivot_point: to_api_ivec3(&lattice_rot_data.pivot_point),
+          rotational_symmetries: api_symmetries,
+          crystal_system: crystal_system_str,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_geo_to_atom_data(node_id: u64) -> Option<APIGeoToAtomData> {
   unsafe {
     with_cad_instance_or(
@@ -1533,6 +1607,34 @@ pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
         transform_only_frame: data.transform_only_frame,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, lattice_symop_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let lattice_move_data = Box::new(LatticeMoveData {
+        translation: from_api_ivec3(&data.translation),
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, lattice_move_data);
+      refresh_renderer(cad_instance, false);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_lattice_rot_data(node_id: u64, data: APILatticeRotData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let lattice_rot_data = Box::new(LatticeRotData {
+        axis_index: data.axis_index,
+        step: data.step,
+        pivot_point: from_api_ivec3(&data.pivot_point),
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, lattice_rot_data);
       refresh_renderer(cad_instance, false);
     });
   }

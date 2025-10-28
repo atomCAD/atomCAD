@@ -19,6 +19,38 @@ impl Transform {
     Self { translation, rotation }
   }
 
+  /// Creates a new transform that rotates around a specific point
+  /// 
+  /// This is equivalent to: translate to origin, rotate, translate back
+  /// The resulting transform will rotate geometry around the specified pivot point.
+  /// 
+  /// # Arguments
+  /// * `pivot_point` - The point around which to rotate
+  /// * `rotation` - The rotation quaternion to apply
+  /// 
+  /// # Returns
+  /// A new Transform that rotates around the pivot point
+  pub fn new_rotation_around_point(pivot_point: DVec3, rotation: DQuat) -> Self {
+    // To rotate around a point P:
+    // 1. Translate by -P (move pivot to origin)
+    // 2. Apply rotation R
+    // 3. Translate by +P (move back)
+    // 
+    // The combined transformation is:
+    // T(P) * R * T(-P)
+    // 
+    // For a point x, this gives:
+    // result = P + R * (x - P) = P + R*x - R*P = (P - R*P) + R*x
+    // 
+    // So the final translation is: P - R*P = P * (I - R)
+    let final_translation = pivot_point - rotation.mul_vec3(pivot_point);
+    
+    Self {
+      translation: final_translation,
+      rotation,
+    }
+  }
+
   /// Calculates the inverse of this transform
   pub fn inverse(&self) -> Transform {
     let inv_rotation = self.rotation.conjugate(); // For unit quaternions, conjugate is the same as inverse

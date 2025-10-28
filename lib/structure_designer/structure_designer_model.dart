@@ -145,7 +145,11 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Returns the current file name for display in title bar
   String get displayFileName {
     if (filePath != null) {
-      return filePath!.split('\\').last.split('/').last; // Handle both Windows and Unix paths
+      return filePath!
+          .split('\\')
+          .last
+          .split('/')
+          .last; // Handle both Windows and Unix paths
     }
     return 'Untitled';
   }
@@ -507,6 +511,24 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setLatticeSymopData(BigInt nodeId, APILatticeSymopData data) {
     structure_designer_api.setLatticeSymopData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APILatticeMoveData? getLatticeMoveData(BigInt nodeId) {
+    return structure_designer_api.getLatticeMoveData(nodeId: nodeId);
+  }
+
+  void setLatticeMoveData(BigInt nodeId, APILatticeMoveData data) {
+    structure_designer_api.setLatticeMoveData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APILatticeRotData? getLatticeRotData(BigInt nodeId) {
+    return structure_designer_api.getLatticeRotData(nodeId: nodeId);
+  }
+
+  void setLatticeRotData(BigInt nodeId, APILatticeRotData data) {
+    structure_designer_api.setLatticeRotData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

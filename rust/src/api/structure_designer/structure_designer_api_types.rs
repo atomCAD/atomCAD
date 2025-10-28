@@ -184,6 +184,18 @@ pub struct InputPinView {
     pub crystal_system: String,
   }
 
+  pub struct APILatticeMoveData {
+    pub translation: APIIVec3,
+  }
+
+  pub struct APILatticeRotData {
+    pub axis_index: Option<i32>,
+    pub step: i32,
+    pub pivot_point: APIIVec3,
+    pub rotational_symmetries: Vec<APIRotationalSymmetry>,
+    pub crystal_system: String,
+  }
+
   pub struct APIGeoToAtomData {
     pub primary_atomic_number: i32,
     pub secondary_atomic_number: i32,

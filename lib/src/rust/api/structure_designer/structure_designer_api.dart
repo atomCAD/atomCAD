@@ -181,6 +181,16 @@ APILatticeSymopData? getLatticeSymopData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetLatticeSymopData(
             nodeId: nodeId);
 
+APILatticeMoveData? getLatticeMoveData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetLatticeMoveData(
+            nodeId: nodeId);
+
+APILatticeRotData? getLatticeRotData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetLatticeRotData(
+            nodeId: nodeId);
+
 APIGeoToAtomData? getGeoToAtomData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetGeoToAtomData(
@@ -312,6 +322,18 @@ void setLatticeSymopData(
         {required BigInt nodeId, required APILatticeSymopData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetLatticeSymopData(
+            nodeId: nodeId, data: data);
+
+void setLatticeMoveData(
+        {required BigInt nodeId, required APILatticeMoveData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetLatticeMoveData(
+            nodeId: nodeId, data: data);
+
+void setLatticeRotData(
+        {required BigInt nodeId, required APILatticeRotData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetLatticeRotData(
             nodeId: nodeId, data: data);
 
 void setAtomTransData(

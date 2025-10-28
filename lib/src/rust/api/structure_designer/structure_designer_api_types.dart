@@ -584,6 +584,59 @@ class APIIntData {
           value == other.value;
 }
 
+class APILatticeMoveData {
+  final APIIVec3 translation;
+
+  const APILatticeMoveData({
+    required this.translation,
+  });
+
+  @override
+  int get hashCode => translation.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APILatticeMoveData &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation;
+}
+
+class APILatticeRotData {
+  final int? axisIndex;
+  final int step;
+  final APIIVec3 pivotPoint;
+  final List<APIRotationalSymmetry> rotationalSymmetries;
+  final String crystalSystem;
+
+  const APILatticeRotData({
+    this.axisIndex,
+    required this.step,
+    required this.pivotPoint,
+    required this.rotationalSymmetries,
+    required this.crystalSystem,
+  });
+
+  @override
+  int get hashCode =>
+      axisIndex.hashCode ^
+      step.hashCode ^
+      pivotPoint.hashCode ^
+      rotationalSymmetries.hashCode ^
+      crystalSystem.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APILatticeRotData &&
+          runtimeType == other.runtimeType &&
+          axisIndex == other.axisIndex &&
+          step == other.step &&
+          pivotPoint == other.pivotPoint &&
+          rotationalSymmetries == other.rotationalSymmetries &&
+          crystalSystem == other.crystalSystem;
+}
+
 class APILatticeSymopData {
   final APIIVec3 translation;
   final APIVec3? rotationAxis;

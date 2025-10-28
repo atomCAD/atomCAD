@@ -117,6 +117,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData dco_decode_api_int_data(dynamic raw);
 
   @protected
+  APILatticeMoveData dco_decode_api_lattice_move_data(dynamic raw);
+
+  @protected
+  APILatticeRotData dco_decode_api_lattice_rot_data(dynamic raw);
+
+  @protected
   APILatticeSymopData dco_decode_api_lattice_symop_data(dynamic raw);
 
   @protected
@@ -251,6 +257,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIntData dco_decode_box_autoadd_api_int_data(dynamic raw);
+
+  @protected
+  APILatticeMoveData dco_decode_box_autoadd_api_lattice_move_data(dynamic raw);
+
+  @protected
+  APILatticeRotData dco_decode_box_autoadd_api_lattice_rot_data(dynamic raw);
 
   @protected
   APILatticeSymopData dco_decode_box_autoadd_api_lattice_symop_data(
@@ -461,6 +473,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData? dco_decode_opt_box_autoadd_api_int_data(dynamic raw);
 
   @protected
+  APILatticeMoveData? dco_decode_opt_box_autoadd_api_lattice_move_data(
+      dynamic raw);
+
+  @protected
+  APILatticeRotData? dco_decode_opt_box_autoadd_api_lattice_rot_data(
+      dynamic raw);
+
+  @protected
   APILatticeSymopData? dco_decode_opt_box_autoadd_api_lattice_symop_data(
       dynamic raw);
 
@@ -653,6 +673,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData sse_decode_api_int_data(SseDeserializer deserializer);
 
   @protected
+  APILatticeMoveData sse_decode_api_lattice_move_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APILatticeRotData sse_decode_api_lattice_rot_data(
+      SseDeserializer deserializer);
+
+  @protected
   APILatticeSymopData sse_decode_api_lattice_symop_data(
       SseDeserializer deserializer);
 
@@ -808,6 +836,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIntData sse_decode_box_autoadd_api_int_data(SseDeserializer deserializer);
+
+  @protected
+  APILatticeMoveData sse_decode_box_autoadd_api_lattice_move_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APILatticeRotData sse_decode_box_autoadd_api_lattice_rot_data(
+      SseDeserializer deserializer);
 
   @protected
   APILatticeSymopData sse_decode_box_autoadd_api_lattice_symop_data(
@@ -1062,6 +1098,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APILatticeMoveData? sse_decode_opt_box_autoadd_api_lattice_move_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APILatticeRotData? sse_decode_opt_box_autoadd_api_lattice_rot_data(
+      SseDeserializer deserializer);
+
+  @protected
   APILatticeSymopData? sse_decode_opt_box_autoadd_api_lattice_symop_data(
       SseDeserializer deserializer);
 
@@ -1285,6 +1329,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_int_data(APIIntData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_lattice_move_data(
+      APILatticeMoveData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_lattice_rot_data(
+      APILatticeRotData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_lattice_symop_data(
       APILatticeSymopData self, SseSerializer serializer);
 
@@ -1446,6 +1498,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_int_data(
       APIIntData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_lattice_move_data(
+      APILatticeMoveData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_lattice_rot_data(
+      APILatticeRotData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_lattice_symop_data(
@@ -1700,6 +1760,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_int_data(
       APIIntData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_lattice_move_data(
+      APILatticeMoveData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_lattice_rot_data(
+      APILatticeRotData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_lattice_symop_data(

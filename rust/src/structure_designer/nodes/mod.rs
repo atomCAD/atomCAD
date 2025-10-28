@@ -39,5 +39,6 @@ pub mod unit_cell;
 pub mod motif;
 pub mod atom_fill;
 pub mod lattice_symop;
-
+pub mod lattice_move;
+pub mod lattice_rot;
 

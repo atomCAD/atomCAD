@@ -41,6 +41,8 @@ use super::nodes::diff::DiffData;
 use super::nodes::diff_2d::Diff2DData;
 use super::nodes::geo_trans::GeoTransData;
 use super::nodes::lattice_symop::LatticeSymopData;
+use super::nodes::lattice_move::LatticeMoveData;
+use super::nodes::lattice_rot::LatticeRotData;
 use super::nodes::atom_cut::AtomCutData;
 use super::nodes::relax::RelaxData;
 use super::nodes::atom_trans::AtomTransData;
@@ -734,7 +736,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Geometry,
-      public: true,
+      public: false,
       node_data_creator: || Box::new(LatticeSymopData {
         translation: IVec3::new(0, 0, 0),
         rotation_axis: None,
@@ -743,6 +745,58 @@ impl NodeTypeRegistry {
       }),
       node_data_saver: generic_node_data_saver::<LatticeSymopData>,
       node_data_loader: generic_node_data_loader::<LatticeSymopData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "lattice_move".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: DataType::IVec3,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(LatticeMoveData {
+        translation: IVec3::new(0, 0, 0),
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeMoveData>,
+      node_data_loader: generic_node_data_loader::<LatticeMoveData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "lattice_rot".to_string(),
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+            name: "axis_index".to_string(),
+            data_type: DataType::Int,
+          },
+          Parameter {
+            name: "step".to_string(),
+            data_type: DataType::Int,
+          },
+          Parameter {
+            name: "pivot_point".to_string(),
+            data_type: DataType::IVec3,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(LatticeRotData {
+        axis_index: None,
+        step: 0,
+        pivot_point: IVec3::new(0, 0, 0),
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeRotData>,
+      node_data_loader: generic_node_data_loader::<LatticeRotData>,
     });
 
     ret.add_node_type(NodeType {

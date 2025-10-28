@@ -11,6 +11,8 @@ import 'package:flutter_cad/structure_designer/node_data/half_plane_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_symop_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/lattice_move_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/lattice_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
@@ -136,6 +138,24 @@ class NodeDataWidget extends StatelessWidget {
         return LatticeSymopEditor(
           nodeId: selectedNode.id,
           data: latticeSymopData,
+          model: model,
+        );
+      case 'lattice_move':
+        // Fetch the lattice move data here in the parent widget
+        final latticeMoveData = model.getLatticeMoveData(selectedNode.id);
+
+        return LatticeMoveEditor(
+          nodeId: selectedNode.id,
+          data: latticeMoveData,
+          model: model,
+        );
+      case 'lattice_rot':
+        // Fetch the lattice rotation data here in the parent widget
+        final latticeRotData = model.getLatticeRotData(selectedNode.id);
+
+        return LatticeRotEditor(
+          nodeId: selectedNode.id,
+          data: latticeRotData,
           model: model,
         );
       case 'atom_trans':
