@@ -20,3 +20,5 @@ Planned features include:
 - Relaxation and simulation support
 
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
+
+For more details see [atomCAD User Guide & Reference](./doc/atomCAD_user_guide.md).
