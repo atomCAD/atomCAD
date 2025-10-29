@@ -413,11 +413,14 @@ pub fn init_app() {
     .unwrap()
     .block_on(initialize_cad_instance_async());
     
+    /*
+    Simulation is not fully functional yet, it is disabled right now.
     // Initialize simulation environment to pre-load Python runtime and force field
     match crate::common::simulation::initialize_simulation() {
         Ok(message) => println!("Simulation initialization: {}", message),
         Err(error) => println!("Warning: Simulation initialization failed: {}", error),
     }
+    */
     
     // Initialize expression function registries for better performance
     crate::structure_designer::expr::validation::init_function_registries();

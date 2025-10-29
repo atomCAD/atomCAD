@@ -1,5 +1,5 @@
-Note on 2025-10-23: Energy minimization is currently undder development in atomCAD,
-it is not part of the released version, particularly the necessary python dependency
+Note on 2025-10-29: Energy minimization is currently undder development in atomCAD,
+it is disabled currently, particularly the necessary python dependency
 installations for different platforms is not solved yet.
 
 ## How should atomCAD do energy minimization?

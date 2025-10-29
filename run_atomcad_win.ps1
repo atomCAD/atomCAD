@@ -1,6 +1,9 @@
 # Windows-specific script to run atomCAD with OpenFF/OpenMM conda environment
 # This script sets up the Python environment for pyo3 runtime
 
+<# Relax node support and python support are not fully implemented yet,
+so temporarily disabled in atomCAD
+
 param(
     [switch]$Build,
     [switch]$Release
@@ -64,3 +67,5 @@ if ($existingProcess) {
 # Run Flutter application
 Write-Host "Starting atomCAD..."
 flutter run
+
+#>

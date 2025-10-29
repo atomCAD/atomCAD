@@ -1,10 +1,11 @@
 use crate::common::atomic_structure::AtomicStructure;
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+//use pyo3::prelude::*;
+//use pyo3::types::{PyDict, PyList};
 use glam::DVec3;
 use crate::common::atomic_structure_utils::print_atom_info;
 use crate::util::timer::Timer;
 
+/*
 #[pyclass]
 struct LoggingStdout;
 
@@ -18,11 +19,13 @@ impl LoggingStdout {
         // Optional: implement flush for completeness
     }
 }
+*/
 
 /// Initializes the Python simulation environment by pre-loading the force field.
 /// This should be called once at application startup to avoid expensive initialization
 /// during the first energy minimization call.
 pub fn initialize_simulation() -> Result<String, String> {
+    /*
     let _timer = Timer::new("Simulation initialization");
     
     Python::with_gil(|py| {
@@ -68,6 +71,8 @@ pub fn initialize_simulation() -> Result<String, String> {
             Err(message)
         }
     })
+    */
+    Err("Not implemented yet".to_string())
 }
 
 /// Performs energy minimization on an atomic structure using Python-based force fields.
@@ -211,6 +216,7 @@ fn call_python_minimize_energy_with_data(
     atoms_data: Vec<AtomData>, 
     bonds_data: Vec<BondData>
 ) -> Result<MinimizationResult, String> {
+    /*
     let _timer = Timer::new("Python function call (total)");
     Python::with_gil(|py| {
         // Add the python directory to the Python path so we can import our module
@@ -318,4 +324,6 @@ fn call_python_minimize_energy_with_data(
             message,
         })
     })
+    */
+    Err("Not implemented yet".to_string())
 }

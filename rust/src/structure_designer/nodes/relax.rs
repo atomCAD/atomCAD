@@ -9,6 +9,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelaxData {
@@ -35,7 +36,7 @@ impl NodeData for RelaxData {
     node_id: u64,
     registry: &NodeTypeRegistry,
     _decorate: bool,
-    context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext) -> NetworkResult {  
+    context: &mut NetworkEvaluationContext) -> NetworkResult {  
   
     let input_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
   

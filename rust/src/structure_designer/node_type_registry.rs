@@ -972,7 +972,7 @@ impl NodeTypeRegistry {
           },
       ],
       output_type: DataType::Atomic,
-      public: true,
+      public: false,
       node_data_creator: || Box::new(RelaxData {}),
       node_data_saver: generic_node_data_saver::<RelaxData>,
       node_data_loader: generic_node_data_loader::<RelaxData>,
