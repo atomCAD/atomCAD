@@ -7,11 +7,7 @@
 atomCAD is a CAD application for Atomically Precise Manufacturing (APM).
 With atomCAD you can design arbitrary covalently bonded atomic structures that are constrained to a crystal lattice and suitable for physical (and, in the future, manufacturable) workflows.
 
-
-
 ![](./atomCAD_images/nut-bolt-example0-1.png)
-
-
 
 Basic features:
 - **Arbitrary unit cells.** Any unit cell defined by the lattice parameters `(a, b, c, α, β, γ)` is supported. The implied crystal system (*cubic, tetragonal, orthorhombic, hexagonal, trigonal, monoclinic, triclinic*) and its symmetries are automatically determined.
@@ -28,7 +24,6 @@ Planned features include:
 - Relaxation and simulation support
 
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
-
 
 ## Notations in this document
 
