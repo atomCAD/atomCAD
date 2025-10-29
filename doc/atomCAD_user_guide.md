@@ -1,9 +1,34 @@
-# atomCAD Structure Designer User's Guide
+# atomCAD User Guide & Reference
+
+*Comprehensive user guide and a complete reference for built-in nodes.*
 
 ## Introduction
 
-The Structure Designer is a tool for creating diamond crystal structures with defects.
-It supports non-destructive editing through the use of a node network.
+atomCAD is a CAD application for Atomically Precise Manufacturing (APM).
+With atomCAD you can design arbitrary covalently bonded atomic structures that are constrained to a crystal lattice and suitable for physical (and, in the future, manufacturable) workflows.
+
+
+
+![](./atomCAD_images/nut-bolt-example0-1.png)
+
+
+
+Basic features:
+- **Arbitrary unit cells.** Any unit cell defined by the lattice parameters `(a, b, c, α, β, γ)` is supported. The implied crystal system (*cubic, tetragonal, orthorhombic, hexagonal, trigonal, monoclinic, triclinic*) and its symmetries are automatically determined.
+- **Lattice-constrained geometry.** Geometries are created relative to the unit cell lattice, and operations on those geometries preserve lattice constraints. This makes it easier to design atomic crystal structures that are aligned, physically accurate, and manufacturable.
+- **User-definable motifs.** Geometries can be filled with motifs to create atomic structures. Motifs are user-definable: any covalently bonded crystal structure can be specified. The default motif is cubic diamond.
+- **Parametric, composable designs.** atomCAD designs are parametric and composed as visual node networks, enabling non-destructive editing. Custom node types can be created by defining subnetworks. The node network includes functional-programming elements and is Turing-complete.
+
+Planned features include:
+
+- Surface reconstruction support
+- Defect editing and placement tools
+- Atomically Precise Manufacturing (APM) integration
+- A streaming level-of-detail system to support larger structures that currently do not fit in memory
+- Relaxation and simulation support
+
+We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
+
 
 ## Notations in this document
 
@@ -12,16 +37,10 @@ Instead of the usual TODO notation we use TODOC and TODEV notation in this docum
 - TODEV: means that the feature mentioned needs to be developed and documented
 - TODOC: means that something needs to be documented but is already developed in atomCAD
 
-## Basic Tutorial
-
-See [Structure Designer Tutorial](./structure_designer_tutorial.md)
-
-I recommend first reading the tutorial before reading this document which is more of a reference.
-
 ## Parts of the UI
 
 This is how the full window looks like:
-![](./structure_designer_images/full_window.png)
+![](./atomCAD_images/full_window.png)
 
 ---
 
@@ -38,72 +57,64 @@ We will discuss the different parts of the UI in detail. The parts are:
 
 The node network results are displayed here.
 
-![](./structure_designer_images/3d_viewport.png)
+![](./atomCAD_images/3d_viewport.png)
 
-The viewport can be navigated with the mouse the following way:
+You can navigate the viewport with the mouse as follows:
 
-- Move: drag with middle mouse button
-- Rotate: drag with right mouse button
-- Zoom: use mouse scroll wheel
+- **Pan (move camera):** Middle mouse button + drag
+- **Orbit:** Right mouse button + drag
+- **Zoom:** Mouse scroll wheel
 
-Here is the exact camera control algorithm:
+All three operations use a *pivot point*. The pivot is the point where you click when you start dragging: if you click an object, the pivot is the hit point on that object; otherwise the pivot is the point on the XY plane under the cursor. You can visualize the pivot as a small red cube in **Edit → Preferences** (`Display camera pivot point`). For example, orbiting rotates the camera around the pivot point, and zooming moves the camera toward (or away from) the pivot point.
 
-We maintain a point in space which we call the **camera target point**. This point is always a the center of the viewport (determines where the camera looks) but also has a (varying) depth.
+Orbiting is constrained so the camera never rolls (no tilt). This prevents users from getting disoriented. If you need complete freedom, a 6-degree-of-freedom (6DoF) camera mode will be available soon. 
 
-Anytime the user start rotating, moving or zooming the camera target is always adjusted based on the mouse position.
-To avoid sudden camera rotation when we adjust the camera target we always keep it on the camera forward axis, we just adjust its depth. This is done by tracing a ray from the camera eye through the mouse position and see where it intersects geoemtry or atomic structure. This intersection point is then projected on the camera forward axis and this is the new camera target point.
-This way if the user focuses on content far away the camera target will also be far away, while if the user is focusing on
-content close to the camera the camera target will be close to the camera too.
+## Node network composability and Node Networks list panel
 
-When rotating the camera will rotate around the camera target point in a restricted way so that the camera is never tilted. What happens that horizontal mouse movement controls a yaw around the vertical exis going through the camera target points, and the vertical mouse movement controls a pitch around a horizontal axis going through the camera target point. Roll is not allowed.
+A **node network** is a collection of nodes. A node may be either a built-in node or a custom node.
+ You create a custom node by adding a node network whose name matches the custom node’s name — that node network becomes the implementation of the custom node. In other words, node networks act like functions: when node `B` is used inside node network `A`, the network `B` serves as a subnetwork of `A`.
 
-When panning the camera panning speed will be determined by the camera target depth: the closer the camera target is to the camera the slower the panning speed will be.
+Because nodes can have parameters and outputs, subnetworks can expose inputs and outputs that map to the outer node’s parameters — you will see how to set these up in the subnetworks section later in this document.
 
-When zooming the camera zoom speed will be determined by the camera target depth: the closer the camera target is to the camera the slower the zoom speed will be so that the user can zoom on the focused content.
+A structure design consists of node networks. The list of node networks in the current design is shown in the **Node Networks** panel. Select a network in the panel to open it in the node network editor. To create a new network, click the **Add Network** button..
 
-What happens when the ray trace do not hit any content? In this case we try to rely on the XY plane. Currently we hit a ray from the eye both through the mouse position and both in the camera forward direction and if both hit the XY plane we take the intersection through the camera forward direction as the camera target point.
-
-The 'camera target' is displayed as a red cube in atomCAD if the 'display camera target' option is turned on.
-It can be turned on and off at the end of the Preferences panel (comes up clicking the Edit/Preferences menu item).
-
-TODEV: The XY plane handling probably needs to be revised.
-
-## Node network composability and Node networks list panel
-
-A node network consist of nodes. A node can be a built-in node or a custom node.
-You can create a custom node by creating a node network with the same name which will be the implementation of the custom node.
-Node networks are composable this way like functions in a programming language. When you use node B in node network A then node network B acts as a subnetwork of node network A.
-As nodes can have parameters and outputs you will see how these can be set-up in a subnetwork later in thi document.
-
-A structure design consist of node networks. The list of these node networks is displayed in the Node networks list panel. You can select one to edit in the node network editor panel. You can create a new node network in your design by clicking on the 'Add network' button.
-
-![](./structure_designer_images/node_networks_list_panel.png)
+![](./atomCAD_images/node_networks_list_panel.png)
 
 ## Node network editor panel
 
-![](./structure_designer_images/node_network_editor_panel.png)
+![](./atomCAD_images/node_network_editor_panel.png)
 
 ### Anatomy of a node
 
-![](./structure_designer_images/node_anatomy.png)
+![](./atomCAD_images/node_anatomy.png)
 
-Each node can have zero to many named input pins. We also call these the parameters of the node.
-Each node have exactly one output pin.
+### Anatomy of a node
 
-An input pin can have a small dot in it: This singifies that the input pin is a 'multi pin': this means that multiple wires can go to this pin. How these are interpreted are always discussed at the documentation of the specific nodes.
+A **node** may have zero or more *named input pins* (also called the node’s *parameters*). Each node has exactly one *regular output pin*, located at the right-center of the node, and one *function pin*, located at the upper-right corner (the function pin is described in the functional programming section).
 
-Each pin has a data type. It can be read by hovering over the pin with the mouse. The color of the pin also represents its data type. A wire can go only from an output pin to an input pin and they must have the same data type, or the output pin type must be convertible to the input pin type. The following data types are used:
+Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. TODOC: type conversion rules.
 
-- Bool,
-- Int,
-- Float,
-- Vec2, (2D vector)
-- Vec3, (3D vector)
-- IVec2, (2D integer vector)
-- IVec3, (3D integer vector)
-- 2D geometry,
-- 3D geometry,
-- Atomic structure
+Supported basic data types include:
+
+- `Bool`
+- `String`
+- `Int`
+- `Float`
+- `Vec2` — 2D vector
+- `Vec3` — 3D vector
+- `IVec2` — 2D integer vector
+- `IVec3` — 3D integer vector
+- `UnitCell`
+- `Geometry2D`
+- `Geometry` — 3D geometry
+- `Atomic` — atomic structure
+- `Motif`
+
+Array types are supported. The type `[Int]` means an array of `Int` values.
+
+Function types are written `A -> B`: a function that takes a parameter of type `A` and returns a value of type `B` has type `A -> B`.
+
+Input pins can be array-typed. An array input pin is visually indicated with a small dot. Node networks provide a convenience where you can connect multiple wires into an array-typed input pin; the connected values are concatenated into a single array. Also, a value of type `T` is implicitly convertible to an array of `T` (`T` → `[T]`).
 
 ### Navigating in the node network editor panel
 
@@ -112,16 +123,24 @@ If you get lost you can use the 'View/Reset node network view' menu item.
 
 ### Manipulating nodes and wires
 
-A new node can be added to the network by clicking the right mouse button: it will open the Add Node Menu.
-Nodes can be dragged around using mouse left-click and drag. You can connect pins of nodes by left-click dragging a pin to another pin.
-Currently one node or wire can be selected by lef-clicking it. Selecting a node or wire has the following uses:
+**Add nodes**
+Right-click in the node editor to open the **Add Node** menu and add a new node.
 
-- The selected node or wire can be deleted by pressing the del key on the keyboard
-- The properties of the selected node can be edited in the node properties panel
-- When a node is selected you may be able to interact with the model in the viewport: what kind of interations these are depend on the node type and we will discuss them in the nodes reference section. Most of the time this involves one or more interactive *gadgets* appearing in the viewport.
+**Move nodes**
+Left-click a node and drag to move it.
 
-Selecting a node is not the same as making its output visible in the viewport.
-Node visibility is controlled by toggling the eye icon on the upper right corner of the node. There are also node display policies in the geometry visualization preferences panel which influence whether the visibility of some nodes are automatically changed on selection change. (See: Geometry Visualization Preferences Panel)
+**Connect pins**
+Left-click and drag from an output pin to an input pin to create a wire. To disconnect a wire, select it and press `Del` (see Selection below).
+
+**Selection**
+Currently, only one node or one wire may be selected at a time by left-clicking it. Selection is used for:
+
+- Deleting the selected node or wire with the `Del` key.
+- Editing the selected node’s properties in the **Node Properties** panel.
+- Enabling viewport interactions for the selected node: many node types expose interactive *gadgets* in the viewport; the exact interactions depend on the node type (see the Nodes Reference section).
+
+**Visibility vs selection**
+Selecting a node does *not* make its output visible. Node visibility is controlled independently by the eye icon in the node’s upper-right corner. The **Geometry Visualization** preferences panel also contains node display policies that may automatically change node visibility when selections change (see **Geometry Visualization** preferences).
 
 TODEV: being able to select and drag multiple nodes should be possible.
 
@@ -129,7 +148,7 @@ TODEV: being able to select and drag multiple nodes should be possible.
 
 The properties of the active node can be edited here.
 
-![](./structure_designer_images/cuboid_properties_panel.png)
+![](./atomCAD_images/cuboid_properties_panel.png)
 
 This is different for each node, we will discuss this in depth at the specific nodes. There are some general features though:
 
@@ -140,7 +159,7 @@ incremented or decremented using the moue wheel. Shift + mouse wheel works in 10
 
 There are common settings for geometry visualization here.
 
-![](./structure_designer_images/geometry_visualization_preferences_panel.png)
+![](./atomCAD_images/geometry_visualization_preferences_panel.png)
 
 At the left of the panel the **visualization mode** of geometry nodes can be selected. The possible options are:
 
@@ -162,27 +181,28 @@ Even in non Manual modes you can use the eye icon to toggle the visibility of a 
 
 Contains common settings for the camera.
 
-![](./structure_designer_images/camera_control_panel.png)
+![](./atomCAD_images/camera_control_panel.png)
 
 ## Menu Bar
 
 For loading and saving a design and for opening the preferences panel:
 
-![](./structure_designer_images/menu_bar.png)
+![](./atomCAD_images/menu_bar.png)
 
 
 ## Nodes reference
 
 We categorize nodes by their functionality and/or output pin data type. There are the following categories of nodes:
 
-- Math nodes
+- Math nodes and programming nodes
 - 2D Geometry nodes
 - 3D Geometry nodes
 - Atomic structure nodes
+- Other nodes
 
 You create 2D geometry to eventually use the *extrude* node to create 3D geometry from it. You create 3D geometry to eventually use the *geo_to_atom* node to create an atomic structure from it.
 
-### Math nodes
+### Math and programming nodes
 
 #### int
 
@@ -245,6 +265,7 @@ The expr node supports scalar arithmetic, vector operations, conditional express
 - `!` - Logical NOT
 
 **Conditional Expressions:**
+
 ```
 if condition then value1 else value2
 ```
@@ -322,6 +343,14 @@ vec2(x, y).x + vec2(z, w).y        // Member access
 distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 ```
 
+#### range
+
+TODOC
+
+#### map
+
+TODOC
+
 ### 2D Geometry nodes
 
 These nodes output a 2D geometry which can be used later as an input to an extrude node to create 3d geoemtry.
@@ -332,32 +361,32 @@ Similarly to the 3D geometry nodes, positions and sizes are usually discrete int
 
 Outputs a rectangle with integer minimum corner coordinates and integer width and height.
 
-![](./structure_designer_images/rect_node.png)
+![](./atomCAD_images/rect_node.png)
 
-![](./structure_designer_images/rect_props.png)
+![](./atomCAD_images/rect_props.png)
 
-![](./structure_designer_images/rect_viewport.png)
+![](./atomCAD_images/rect_viewport.png)
 
 #### circle
 
 Outputs a circle with integer center coordinates and integer radius.
 
-![](./structure_designer_images/circle_node.png)
+![](./atomCAD_images/circle_node.png)
 
-![](./structure_designer_images/circle_props.png)
+![](./atomCAD_images/circle_props.png)
 
-![](./structure_designer_images/circle_viewport.png)
+![](./atomCAD_images/circle_viewport.png)
 
 #### reg_poly
 
 Outputs a regular polygon with integer radius. The number of sides is a property too.
 Now that we have general polygon node this node is less used.
 
-![](./structure_designer_images/reg_poly_node.png)
+![](./atomCAD_images/reg_poly_node.png)
 
-![](./structure_designer_images/reg_poly_props.png)
+![](./atomCAD_images/reg_poly_props.png)
 
-![](./structure_designer_images/reg_poly_viewport.png)
+![](./atomCAD_images/reg_poly_viewport.png)
 
 #### polygon
 
@@ -366,9 +395,9 @@ The vertices can be freely dragged.
 You can create a new vertex by dragging an edge.
 Delete a vertex by dragging it onto one of its neighbour.
 
-![](./structure_designer_images/polygon_node.png)
+![](./atomCAD_images/polygon_node.png)
 
-![](./structure_designer_images/polygon_viewport.png)
+![](./atomCAD_images/polygon_viewport.png)
 
 #### half_plane
 
@@ -376,35 +405,35 @@ Outputs a half plane.
 You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
 Both vertices are displayed as a ritnalge based prism. The direction of the half plane is indicated by the direction of the triangle.
 
-![](./structure_designer_images/half_plane_node.png)
+![](./atomCAD_images/half_plane_node.png)
 
-![](./structure_designer_images/half_plane_props.png)
+![](./atomCAD_images/half_plane_props.png)
 
-![](./structure_designer_images/half_plane_viewport.png)
+![](./atomCAD_images/half_plane_viewport.png)
 
 #### union_2d
 
 Outputs the boolean union of any number of 2D geometries. The 'shapes' input pin is a multi pin.
 
-![](./structure_designer_images/union_2d_node.png)
+![](./atomCAD_images/union_2d_node.png)
 
-![](./structure_designer_images/union_2d_viewport.png)
+![](./atomCAD_images/union_2d_viewport.png)
 
 #### intersect_2d
 
 Outputs the boolean intersection of two 2D geometries. The 'shapes' input pin is a multi pin.
 
-![](./structure_designer_images/intersect_2d_node.png)
+![](./atomCAD_images/intersect_2d_node.png)
 
-![](./structure_designer_images/intersect_2d_viewport.png)
+![](./atomCAD_images/intersect_2d_viewport.png)
 
 #### diff_2d
 
 Outputs the boolean difference of two 2D geometries.
 
-![](./structure_designer_images/diff_2d_node.png)
+![](./atomCAD_images/diff_2d_node.png)
 
-![](./structure_designer_images/diff_2d_viewport.png)
+![](./atomCAD_images/diff_2d_viewport.png)
 
 We could have designed this node to have two 'single pin' inputs but for convenience reasons (to avoid needing to use too many nodes)
 both of its input pins are multi pins and first a union operation is done on the individual input pins before the diff operation.
@@ -428,42 +457,42 @@ When displaying geometry, crystal lattice coordinates are converted to amstrongs
 
 Extrudes a 2D geometry to a 3D geometry.
 
-![](./structure_designer_images/extrude_node.png)
+![](./atomCAD_images/extrude_node.png)
 
-![](./structure_designer_images/extrude_props.png)
+![](./atomCAD_images/extrude_props.png)
 
-![](./structure_designer_images/extrude_viewport.png)
+![](./atomCAD_images/extrude_viewport.png)
 
 
 #### cuboid
 
 Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates.
 
-![](./structure_designer_images/cuboid_node.png)
+![](./atomCAD_images/cuboid_node.png)
 
-![](./structure_designer_images/cuboid_props.png)
+![](./atomCAD_images/cuboid_props.png)
 
-![](./structure_designer_images/cuboid_viewport.png)
+![](./atomCAD_images/cuboid_viewport.png)
 
 #### sphere
 
 Outputs a sphere with integer center coordinates and integer radius.
 
-![](./structure_designer_images/sphere_node.png)
+![](./atomCAD_images/sphere_node.png)
 
-![](./structure_designer_images/sphere_props.png)
+![](./atomCAD_images/sphere_props.png)
 
-![](./structure_designer_images/sphere_viewport.png)
+![](./atomCAD_images/sphere_viewport.png)
 
 #### half_space
 
 Outputs a half space.
 
-![](./structure_designer_images/half_space_node.png)
+![](./atomCAD_images/half_space_node.png)
 
-![](./structure_designer_images/half_space_props.png)
+![](./atomCAD_images/half_space_props.png)
 
-![](./structure_designer_images/half_space_viewport.png)
+![](./atomCAD_images/half_space_viewport.png)
 
 It is possible to manually edit properties of the half space or use the gadget which appears
 when the node is selected.
@@ -488,7 +517,7 @@ each corresponding to a **miller index**. You can select one of the disks by dra
 hold the mouse left button and release the left button on the appripriate one.
 The amount of circular discs appearing depends on the 'Max Miller Index' property you selected.
 
-![](./structure_designer_images/half_space_viewport_select_miller_index.png)
+![](./atomCAD_images/half_space_viewport_select_miller_index.png)
 
 
 #### facet_shell
@@ -498,11 +527,11 @@ Internally it is implemented as the intersection of a set of half spaces: the re
 built-in node is a set of convenience features.
 Ideal for generating octahedra, dodecahedra, truncated polyhedra, Wulff shapes.
 
-![](./structure_designer_images/facet_shell_node.png)
+![](./atomCAD_images/facet_shell_node.png)
 
-![](./structure_designer_images/facet_shell_props.png)
+![](./atomCAD_images/facet_shell_props.png)
 
-![](./structure_designer_images/facet_shell_viewport.png)
+![](./atomCAD_images/facet_shell_viewport.png)
 
 This node generally offers the same features as the half_space node, but some additional features are also available:
 
@@ -526,25 +555,25 @@ General (hkl) | 48             | All permutations of (±h, ±k, ±l) — the
 Outputs the boolean union of any number of 3D geometries. The 'shapes' input pin is a multi pin.
 
 
-![](./structure_designer_images/union_node.png)
+![](./atomCAD_images/union_node.png)
 
-![](./structure_designer_images/union_viewport.png)
+![](./atomCAD_images/union_viewport.png)
 
 #### intersect
 
 Outputs the boolean intersection of two 3D geometries. The 'shapes' input pin is a multi pin.
 
-![](./structure_designer_images/intersect_node.png)
+![](./atomCAD_images/intersect_node.png)
 
-![](./structure_designer_images/intersect_viewport.png)
+![](./atomCAD_images/intersect_viewport.png)
 
 #### diff
 
 Outputs the boolean difference of two 3D geometries.
 
-![](./structure_designer_images/diff_node.png)
+![](./atomCAD_images/diff_node.png)
 
-![](./structure_designer_images/diff_viewport.png)
+![](./atomCAD_images/diff_viewport.png)
 
 We could have designed this node to have two 'single pin' inputs but for convenience reasons (to avoid needing to use too many nodes)
 both of its input pins are multi pins and first a union operation is done on the individual input pins before the diff operation.
@@ -559,11 +588,11 @@ diff(base, sub) = diff(union(...each base input...), union(...each sub input...)
 Transforms a geometry in the discrete lattice space.
 'Continuous' transformation in the lattice space is not allowed (for continuous transformations use the atom_trans node which is only available for atomic structures).
 
-![](./structure_designer_images/geo_trans_node.png)
+![](./atomCAD_images/geo_trans_node.png)
 
-![](./structure_designer_images/geo_trans_props.png)
+![](./atomCAD_images/geo_trans_props.png)
 
-![](./structure_designer_images/geo_trans_viewport.png)
+![](./atomCAD_images/geo_trans_viewport.png)
 
 The integer coordinates for translation are of course meant in crystal lattice coordinates.
 The integer cooridinates for rotation are meant in multiples of 90 degrees.
@@ -604,22 +633,22 @@ project to another location or machine the XYZ file references will remain valid
 
 Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its input.
 
-![](./structure_designer_images/geo_to_atom_node.png)
+![](./atomCAD_images/geo_to_atom_node.png)
 
-![](./structure_designer_images/geo_to_atom_props.png)
+![](./atomCAD_images/geo_to_atom_props.png)
 
-![](./structure_designer_images/geo_to_atom_viewport.png)
+![](./atomCAD_images/geo_to_atom_viewport.png)
 
 #### atom_trans
 
 The atom_trans node is similar to the geo_trans node but it is available for atomic structures instead of geometry
 and the transformation happens not in integer lattice space but in continuous space where one unit is one angstrom.
 
-![](./structure_designer_images/atom_trans_node.png)
+![](./atomCAD_images/atom_trans_node.png)
 
-![](./structure_designer_images/atom_trans_props.png)
+![](./atomCAD_images/atom_trans_props.png)
 
-![](./structure_designer_images/atom_trans_viewport.png)
+![](./atomCAD_images/atom_trans_viewport.png)
 
 We repeat here the main design decisions which are common with the geo_trans node:
 
@@ -637,7 +666,7 @@ TODEV: The gadget should also support rotations.
 
 This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. There user can freely group atomic editing commands into edit_atom_nodes at their will. 
 
-![](./structure_designer_images/edit_atom_node.png)
+![](./atomCAD_images/edit_atom_node.png)
 
 The edit atom node is probably the most complex node in atomCAD. When you select this node you can feel like you are in a separate sub-application inside atomCAD. The node properties section of this node contains the user interface of this 'atom editor sub-application'. 
 
@@ -648,7 +677,7 @@ atomic structure on the viewport.
 
 ##### Default tool
 
-![](./structure_designer_images/edit_atom_props_default_tool.png)
+![](./atomCAD_images/edit_atom_props_default_tool.png)
 
 Features:
 - Select atoms and bonds using the left mouse button. Simple click replaces the selection, shift click adds to the selection and control click inverts the selection of the clicked object.
@@ -660,59 +689,22 @@ TODEV: gadget for the transformation of the selected atoms
 
 ##### Add atom tool
 
-![](./structure_designer_images/edit_atom_props_add_atom_tool.png)
+![](./atomCAD_images/edit_atom_props_add_atom_tool.png)
 
 - Add a specific atom by left-clicking in the viewport
 
 ##### Add bond tool
 
-![](./structure_designer_images/edit_atom_props_add_bond_tool.png)
+![](./atomCAD_images/edit_atom_props_add_bond_tool.png)
 
 - Add bonds by left-clicking on two atoms in the viewport
 
-#### anchor
+### Other nodes
 
-This node is a helper node for the stamp node: It enables the user to select an atom as the anchor atom
-for the molecule in case if will be used as a 'stamp' input of the stamp node.
+#### unit_cell
 
-![](./structure_designer_images/anchor_node.png)
+TODOC
 
-![](./structure_designer_images/anchor_props.png)
+#### motif
 
-![](./structure_designer_images/anchor_viewport.png)
-
-#### stamp
-
-This node can be used to stamp defects in a crystal structure.
-
-![](./structure_designer_images/stamp_node.png)
-
-The node has two atomic structure inputs:
-
-- 'crystal': The crystal structure in which the defect(s) will be stamped
-- 'stamp': The molecule which will be stamped into the crystal
-
-![](./structure_designer_images/stamp_props.png)
-
-You can stamp multiple so-called **stamp placements** into a crystal using the same stamp node. For example you can stamp multiple
-T-centers into a crystal with one single stamp node.
-
-The stamp placement can be created by clicking on an atom in the crystal. The stamp will be placed so that the anchor atom of the stamp will be at the clicked atom. You can also select the orientation of the placement.
-
-![](./structure_designer_images/stamp_props_orientation.png)
-
-![](./structure_designer_images/stamp_viewport.png)
-
-#### relax
-
-An atomic structure can be energy-minimized using the relax node.
-
-![](./structure_designer_images/relax_node.png)
-
-![](./structure_designer_images/relax_props.png)
-
-Relaxation is done using OpenFF an OpenMM. More details: [./force_fields_integration.md](./force_fields_integration.md)
-
-TODEV: input parameters of the energy minimization and the possibility of locking specific atoms. See: https://kanban.mps.inc/cards/1579948050741200107
-
-TODEV: for convenience also make a 'relax' command available as a command inside the `edit_atom` node.
+TODOC
