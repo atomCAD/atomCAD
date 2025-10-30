@@ -61,6 +61,15 @@ impl NodeData for ExtrudeData {
         return shape_val;
       }
 
+      let height = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2, 
+        self.height, 
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       if let NetworkResult::Geometry2D(shape) = shape_val {
         let frame_translation_2d = shape.frame_transform.translation;
     
@@ -70,7 +79,7 @@ impl NodeData for ExtrudeData {
         );
     
         let direction = unit_cell.c.normalize();
-        let height = unit_cell.c.length() * (self.height as f64);
+        let height = unit_cell.c.length() * (height as f64);
         let s = shape.geo_tree_root;
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,

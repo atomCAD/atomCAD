@@ -521,6 +521,10 @@ impl NodeTypeRegistry {
           Parameter {
             name: "unit_cell".to_string(),
             data_type: DataType::UnitCell,
+          },
+          Parameter {
+            name: "height".to_string(),
+            data_type: DataType::Int,
           },  
       ],
       output_type: DataType::Geometry,
