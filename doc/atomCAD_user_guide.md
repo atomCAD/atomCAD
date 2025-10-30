@@ -139,6 +139,10 @@ Selecting a node does *not* make its output visible. Node visibility is controll
 
 TODEV: being able to select and drag multiple nodes should be possible.
 
+### Node properties vs. input pins
+
+TODOC
+
 ## Node Properties Panel
 
 The properties of the active node can be edited here.
@@ -152,25 +156,31 @@ incremented or decremented using the moue wheel. Shift + mouse wheel works in 10
 
 ## Geometry Visualization Preferences Panel
 
-There are common settings for geometry visualization here.
+.This panel contains common settings for how geometry nodes are visualized.
 
 ![](./atomCAD_images/geometry_visualization_preferences_panel.png)
 
-At the left of the panel the **visualization mode** of geometry nodes can be selected. The possible options are:
+### Visualization mode
 
-- Surface Splatting: Little discs are regularly placed on the surface of the geometry. Internally uses the implicit evaluation of the node network geoemtry to determine where the surfaces are. (For example a sphere is actually a sphere in this representation.)
-- Wireframe (Explicit mesh): The geometry is rendered as a wireframe. Internally uses polygon meshes to evaluate the node network: we call this explicit evaluation. In this case for example a sphere is approximated by a polygon mesh.
-- Solid (Explicit Mesh): The geometry is rendered as a solid. Internally uses the explicit evaluation of the node network geoemtry. This is the default visualization mode.
+Choose how geometry node outputs are rendered:
 
-Both in case of 'surface splatting' and 'solid' visualization modes the outer surface of a geometry is rendered green and the inner surface is rendered red.
+- **Surface Splatting** — The surface is represented by many small discs sampled from the object’s Signed Distance Field (SDF). This mode renders true implicit geometry (no polygonal mesh is produced).
+- **Wireframe (Explicit Mesh)** — The geometry is evaluated to a polygonal mesh and displayed as a wireframe (edges only). Use this mode when you need to inspect mesh topology or see precise polygon edges.
+- **Solid (Explicit Mesh)** — The geometry is evaluated to a polygonal mesh and rendered as a solid. This is the default mode.
 
-At the right side the **node display policy** can be selected. These are the following:
+In **Surface Splatting** and **Solid** modes the outer surface is shown in green and the inner surface in red (inner = surface facing inward).
 
-- Manual (User Selection) In this case whether the output of a node is visible or not should be set manually by the user and it has nothing to do with which node is selected.
-- Prefer Selected Nodes. This is the default policy. In this case in each connected node island if the selected node is in that island the selected node is vmade isible, if there is no selected node in that island the frontier nodes are visible.
-- Prefer Frontier Nodes. In this case the frontier nodes are visible. Frontier nodes are the ones whose output is not connected to any input, so these can be thought of the current 'results' of the network.
+### Node display policy
 
-Even in non Manual modes you can use the eye icon to toggle the visibility of a node, and this will stay intact until you change the current selection.
+Choose how node output visibility is managed:
+
+- **Manual (User Selection)** — Visibility is controlled entirely by the eye icon on each node; selection changes do not affect visibility.
+- **Prefer Selected Nodes** *(default)* — Visibility is resolved per *node island* (a node island is a connected component of the network):
+  - If an island contains the currently selected node, that selected node's output is made visible.
+  - If there is no selected node in the island, the output of the island’s frontier nodes are made visible.
+- **Prefer Frontier Nodes** — In every island, the output of the frontier nodes are made visible. Frontier nodes are nodes whose output is not connected to any other node’s input — i.e., they represent the current “results” or outputs of that island.
+
+Even when a non-Manual policy is active, you can still toggle a node’s visibility manually using the eye icon; that manual visibility will persist until the selection or policy changes it.
 
 ## Camera Control Panel
 
@@ -180,10 +190,13 @@ Contains common settings for the camera.
 
 ## Menu Bar
 
-For loading and saving a design and for opening the preferences panel:
+Used for loading and saving a design, exporting a design to .xyz or .mol, and for opening the preferences panel.
 
 ![](./atomCAD_images/menu_bar.png)
 
+## Subnetworks
+
+TODOC: parameter nodes and output nodes
 
 ## Nodes reference
 
@@ -195,7 +208,7 @@ We categorize nodes by their functionality and/or output pin data type. There ar
 - Atomic structure nodes
 - Other nodes
 
-You create 2D geometry to eventually use the *extrude* node to create 3D geometry from it. You create 3D geometry to eventually use the *geo_to_atom* node to create an atomic structure from it.
+You create 2D geometry to eventually use the **extrude** node to create 3D geometry from it. You create 3D geometry to eventually use the **atom_fill** node to create an atomic structure from it.
 
 ### Math and programming nodes
 
@@ -225,7 +238,7 @@ Outputs a Vec3 value.
 
 #### expr
 
-You can type in a mathematical expression and it will be evaluated on its output node.
+You can type in a mathematical expression and it will be evaluated on its output pin.
 The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
 
 The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
@@ -233,11 +246,13 @@ The expr node supports scalar arithmetic, vector operations, conditional express
 **Expression Language Features:**
 
 **Literals**
+
 - integer literals (e.g., `42`, `-10`)
 - floating point literals (e.g., `3.14`, `1.5e-3`, `.5`)
 - boolean values (`true`, `false`)
 
 **Arithmetic Operators:**
+
 - `+` - Addition
 - `-` - Subtraction  
 - `*` - Multiplication
@@ -269,6 +284,7 @@ Example: `if x > 0 then 1 else -1`
 **Vector Operations:**
 
 *Vector Constructors:*
+
 - `vec2(x, y)` - Create 2D float vector
 - `vec3(x, y, z)` - Create 3D float vector
 - `ivec2(x, y)` - Create 2D integer vector
@@ -301,6 +317,7 @@ Integers and integer vectors automatically promote to floats and float vectors w
 - `distance3(vec3, vec3)` - Distance between 3D points
 
 **Integer Vector Math Functions:**
+
 - `idot2(ivec2, ivec2)` - 2D integer dot product (returns int)
 - `idot3(ivec3, ivec3)` - 3D integer dot product (returns int)
 - `icross(ivec3, ivec3)` - 3D integer cross product (returns ivec3)
@@ -408,7 +425,7 @@ Both vertices are displayed as a ritnalge based prism. The direction of the half
 
 #### union_2d
 
-Outputs the boolean union of any number of 2D geometries. The 'shapes' input pin is a multi pin.
+Computes the Boolean union of any number of 2D geometries. The `shapes` input accepts an array of `Geometry2D` values (array-typed input; you can connect multiple wires and they will be concatenated).
 
 ![](./atomCAD_images/union_2d_node.png)
 
@@ -416,7 +433,7 @@ Outputs the boolean union of any number of 2D geometries. The 'shapes' input pin
 
 #### intersect_2d
 
-Outputs the boolean intersection of two 2D geometries. The 'shapes' input pin is a multi pin.
+Computes the Boolean intersection of any number of 2D geometries. The `shapes` input pin accepts an array of `Geometry2D` values.
 
 ![](./atomCAD_images/intersect_2d_node.png)
 
@@ -424,14 +441,13 @@ Outputs the boolean intersection of two 2D geometries. The 'shapes' input pin is
 
 #### diff_2d
 
-Outputs the boolean difference of two 2D geometries.
+Computes the Boolean difference of two 2D geometries.
 
 ![](./atomCAD_images/diff_2d_node.png)
 
 ![](./atomCAD_images/diff_2d_viewport.png)
 
-We could have designed this node to have two 'single pin' inputs but for convenience reasons (to avoid needing to use too many nodes)
-both of its input pins are multi pins and first a union operation is done on the individual input pins before the diff operation.
+We could have designed this node to have two single geometry inputs but for convenience reasons (to avoid needing to use too many nodes) both of its input pins accept geometry arrays and first a union operation is done on the individual input pins before the diff operation.
 The node expression is the following:
 
 ```
@@ -440,12 +456,8 @@ diff_2d(base, sub) = diff_2d(union_2d(...each base input...), union_2d(...each s
 
 ### 3D Geometry nodes
 
-These nodes output a 3D geometry which can be used later as an input to an atom_to_geo node to create an atomic structure.
+These nodes output a 3D geometry which can be used later as an input to an `atom_fill` node to create an atomic structure.
 Positions and sizes are usually discrete integer numbers meant in crystal lattice coordinates.
-
-#### A note on the scaling of geometry in the viewport
-
-When displaying geometry, crystal lattice coordinates are converted to amstrongs by multiplying them with the diamond crystal structure unit cell size (**3.567 Ångströms**). The grid displayed in the viewport is also scaled by this factor. If you use an geo_to_atom node to convert a geometry to diamond, its size will be the same. But if you convert the geometry to another crystal structure the size will be different: it will be scaled instead by the unit cell size of that crystal structure.
 
 
 #### extrude
@@ -461,7 +473,7 @@ Extrudes a 2D geometry to a 3D geometry.
 
 #### cuboid
 
-Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates.
+Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. Please note that if the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a pralalepiped. 
 
 ![](./atomCAD_images/cuboid_node.png)
 
@@ -481,7 +493,7 @@ Outputs a sphere with integer center coordinates and integer radius.
 
 #### half_space
 
-Outputs a half space.
+Outputs a half-space (the region on one side of an infinite plane).
 
 ![](./atomCAD_images/half_space_node.png)
 
@@ -489,31 +501,24 @@ Outputs a half space.
 
 ![](./atomCAD_images/half_space_viewport.png)
 
-It is possible to manually edit properties of the half space or use the gadget which appears
-when the node is selected.
+**Properties**
 
-- The `Center` property is a 3d integer vector. It is displayed as a red sphere in the gadget.
-- The `Miller Index` property is also a 3d integer vector which determines the normal of the half space. You need not enter it manually: one way to enter it is selecting it on the 'earth-like' map. The amount of points appearing on the map depends on the `Max Miller Index` property which you can also select. 
-- `Shift` is an integer property and it defines the shift from the center in the direction of the Miller Index.
-Its integer number is meant in the smallest possbile increments where at each shift value the plane goes through
-crystal lattice points.
+- `Center` — 3D integer vector; shown as a red sphere in the gadget.
+- `Miller Index` — 3D integer vector that defines the plane normal. Enter it manually or pick it from the *earth-like* map. The number of selectable indices on the map is controlled by `Max Miller Index`.
+- `Shift` — integer offset along the Miller Index direction. Measured in the smallest lattice increments (each step moves the plane through lattice points).
 
-The boundary of a half space is an **infinite plane**. In atomCAD a half space is rendered specially compared to other geometry.
-Even in solid rendering mode it is rendered as a **grid of stripes**.
-The reason is that normal solid rendering would not give enough information about its spatial placement. (We would just see that the whole screen is covered in green, which would not be very helpful.)
-Once a half space participates in boolean operations we no longer render it as a grid of stripes: results of boolean operations are rendered normally as any other geometry.
+**Visualization**
+The half-space boundary is an infinite plane. In the editor it is shown as a striped grid (even in Solid mode) so you can see its placement; otherwise the whole view would be uniformly filled. After any Boolean operation involving a half-space, the result is rendered normally.
 
-##### Manipulating the half space gadget
+**Gadget controls**
 
-The half space can be manipulatedby interacting with the gadget.
-- First, you can **drag the light blue cylinder** to modify the **shift** value of the plane.
-- Second, you can **click on the red sphere** at the center: when you do this circular discs appear on a sphere surface,
-each corresponding to a **miller index**. You can select one of the disks by dragging the mouse to one of them while you
-hold the mouse left button and release the left button on the appripriate one.
-The amount of circular discs appearing depends on the 'Max Miller Index' property you selected.
+- Drag the light-blue cylinder to change `Shift`.
+- Click the red `Center` sphere to show circular discs (one per Miller index) on a selection sphere; drag to a disc and release to choose that Miller index. The number of discs depends on `Max Miller Index`.
 
 ![](./atomCAD_images/half_space_viewport_select_miller_index.png)
 
+**Notes**
+Striped rendering is only a visualization aid; it does not affect Boolean results.
 
 #### facet_shell
 
@@ -547,7 +552,7 @@ General (hkl) | 48             | All permutations of (±h, ±k, ±l) — the
 
 #### union
 
-Outputs the boolean union of any number of 3D geometries. The 'shapes' input pin is a multi pin.
+Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values (array-typed input; you can connect multiple wires and they will be concatenated).
 
 
 ![](./atomCAD_images/union_node.png)
@@ -556,7 +561,7 @@ Outputs the boolean union of any number of 3D geometries. The 'shapes' input pin
 
 #### intersect
 
-Outputs the boolean intersection of two 3D geometries. The 'shapes' input pin is a multi pin.
+Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values.
 
 ![](./atomCAD_images/intersect_node.png)
 
@@ -564,69 +569,47 @@ Outputs the boolean intersection of two 3D geometries. The 'shapes' input pin is
 
 #### diff
 
-Outputs the boolean difference of two 3D geometries.
+Computes the Boolean difference of two 3D geometries.
 
 ![](./atomCAD_images/diff_node.png)
 
 ![](./atomCAD_images/diff_viewport.png)
 
-We could have designed this node to have two 'single pin' inputs but for convenience reasons (to avoid needing to use too many nodes)
-both of its input pins are multi pins and first a union operation is done on the individual input pins before the diff operation.
+We could have designed this node to have two single `Geometry` inputs but for convenience reasons (to avoid needing to use too many nodes) both of its input pins accept an array of `Geometry` values and first a union operation is done on the individual input pins before the diff operation.
 The node expression is the following:
 
 ```
 diff(base, sub) = diff(union(...each base input...), union(...each sub input...))
 ```
 
-#### geo_trans
+#### lattice_move
 
-Transforms a geometry in the discrete lattice space.
+Moves the geometry in the discrete lattice space with a relative vector.
 'Continuous' transformation in the lattice space is not allowed (for continuous transformations use the atom_trans node which is only available for atomic structures).
 
-![](./atomCAD_images/geo_trans_node.png)
+You can directly enter the translation vector or drag the axes of the gadget.
 
-![](./atomCAD_images/geo_trans_props.png)
+TODOC: screenshots
 
-![](./atomCAD_images/geo_trans_viewport.png)
+#### lattice_rot
 
-The integer coordinates for translation are of course meant in crystal lattice coordinates.
-The integer cooridinates for rotation are meant in multiples of 90 degrees.
+Rotates geometry in lattice space. Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
+You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.
 
-The gadget for the node is draggable and allows translations.
-
-##### Nuances of the geometry transformations in atomCAD
-
-When designing the geometry transformation system in atomCAD we had to make some choices. In all cases our aim was to make the system as intuitive as possbile. The choices are the following:
-
-- in an atomCAD node network every geometry output contains not only the geometry itself but also a transformation gizmo orientation and position (6 degree of freedom). We also call this the **local coordinate system** or **local transform** of the geometry output but we often just casually refer to it as the placement of **the transformation gizmo**. 
-- The translation vector of the geo_trans node is meant in world space irrespective of the orientation of the transformation gizmo.
-- The rotation angles are meant as euler angles applied in the order xyx on the local gadget axes. 
-- For geometry we have a simple guiding axiom: **geometry** is always **rigidly attached to the transformation
-gizmo**. (Geometry never moves in the transformation gizmo's local coordinate system.)
-- All non-transformation nodes have a default placement for the transformation gizmo: For example in case of a cuboid or sphere the position is the center of mass, the orientation is the identity rotation. For unions and intersection the position is the average of the positions of the inputs and the rotation is the identity rotation. 
-
-The reason for our choices:
-- rotation is simple to reason about if interpreted as local rotations
-- translation is more easy to reason about as world space translation
-
-Disadvantages:
-- In case of rotated axes when dragging a gizmo axis (e.g. dragging the x axis)
-actually a different axis coordinate is changed in the node data (e.g. y coordinate is changed, as the local x axis is the global y axis)
-
-Ultimately the main question is: what was the user's intent with that node? While it is hard to capture intent we think that
-these choices are the best we can do for most cases.
+TODOC: screenshots 
 
 ### Atomic structure nodes
 
 #### import_xyz
 
 Imports an atomic structure from an xyz file.
-It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole
-project to another location or machine the XYZ file references will remain valid.
+It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.
 
-#### geo_to_atom
+#### atom_fill
 
 Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its input.
+
+TODOC: more details, replace old geo_to_atom images
 
 ![](./atomCAD_images/geo_to_atom_node.png)
 
@@ -636,8 +619,9 @@ Converts a 3D geometry into an atomic structure by carving out a crystal from an
 
 #### atom_trans
 
-The atom_trans node is similar to the geo_trans node but it is available for atomic structures instead of geometry
-and the transformation happens not in integer lattice space but in continuous space where one unit is one angstrom.
+The atom_trans node transforms atomic structures. The transformation happens not in integer lattice space but in continuous space (real-space) where one unit is one angstrom.
+
+By dragging the gadget axes you can move the structure. By dragging the thicker end of the gadget axes you can rotate the structure.  
 
 ![](./atomCAD_images/atom_trans_node.png)
 
@@ -645,19 +629,11 @@ and the transformation happens not in integer lattice space but in continuous sp
 
 ![](./atomCAD_images/atom_trans_viewport.png)
 
-We repeat here the main design decisions which are common with the geo_trans node:
 
-- similarly to geometry output every atomic structure output also contains a transformation gizmo orientation and position. 
-- The translation vector of the atom_trans node is meant in world space irrespective of the orientation of the transformation gizmo.
-- The rotation angles are meant as euler angles in degrees applied in the order xyx on the local gadget axes. 
-- atomic structures are always **rigidly attached to the transformation
-gizmo**. (atomic structures never moves in the transformation gizmo's local coordinate system.)
-
-The gadget for the node is draggable and allows translations.
-
-TODEV: The gadget should also support rotations.
 
 #### edit_atom
+
+Note: The `edit_atom` node will be more more usable when we will support atomic structure relaxations.
 
 This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. There user can freely group atomic editing commands into edit_atom_nodes at their will. 
 
@@ -698,8 +674,142 @@ TODEV: gadget for the transformation of the selected atoms
 
 #### unit_cell
 
-TODOC
+Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.
+
+**Usage**
+
+- `UnitCell` values are carried by `Geometry2D` and `Geometry` objects and determine how geometry nodes interpret coordinates.
+- Primitive geometry nodes (e.g., `polygon`, `cuboid`, `half_space`) expose a `unit_cell` input pin so you can supply a `UnitCell`.
+- Boolean and other topology operations inherit the unit cell from their input geometries. A Boolean operation will error if its input geometries have different unit cells.
+
+**Behavior / examples**
+
+- When a non-orthogonal unit cell is used, primitives adapt accordingly — e.g., `cuboid` produces a parallelepiped rather than an axis-aligned box.
+- If no unit cell is supplied, the default unit cell (cubic diamond) is used.
+
+**Notes**
+
+- The node automatically detects and displays the crystal system (cubic, tetragonal, orthorhombic, hexagonal, trigonal, monoclinic, triclinic) based on the provided parameters.
+
+
+
+![](./atomCAD_images/unit_cell_node.png)
+
+![](./atomCAD_images/unit_cell_props.png)
 
 #### motif
 
-TODOC
+The `motif` node produces a `Motif` value which can be an input to an`atom_fill` node and determines the content which fills the provided geometry.
+
+![](./atomCAD_images/motif_node.png)
+
+![](./atomCAD_images/motif_props.png)
+
+The motif is defined textually using atomCAD's motif definition language.
+
+The features of the language are basically parameterized fractional atom sites, explicit & periodic bond definitions.
+
+There are 3 commands in the language for now: `param`, `site` and `bond`
+
+**param**
+
+The `param` command simply defines a *parameter element*. The name of the parameter element needs to be specified followed optionally by the default element name. (If the default element is not provided, it is carbon.) As an example, these are the parameter elements in the cubic zincblende motif:
+
+```
+PARAM PRIMARY C
+PARAM SECONDARY C
+```
+
+Parameter elements are the ones that are replaced by concrete elements which the user chooses in the `atom_fill` node.
+
+**site**
+
+The `site` command defines an atomic site. You need to specify the site id, an element name, (which can be a regular element name like `C` or a parameter element). Then the 3 fractional lattice coordinates need to be specified. (Fractional coordinates are always 0 to 1. The unit cell basis vectors will be used to convert these to real cartesian coordinates.)
+These are the sites in the cubic zincblende motif:
+
+```
+SITE CORNER PRIMARY 0 0 0
+
+SITE FACE_Z PRIMARY 0.5 0.5 0
+SITE FACE_Y PRIMARY 0.5 0 0.5
+SITE FACE_X PRIMARY 0 0.5 0.5
+
+SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+SITE INTERIOR2 SECONDARY 0.25 0.75 0.75
+SITE INTERIOR3 SECONDARY 0.75 0.25 0.75
+SITE INTERIOR4 SECONDARY 0.75 0.75 0.25
+```
+
+
+
+**bond**
+
+Finally the bond command defines a bond. Its two parameters are *site specifiers*. A site specifier is a site id optionally prefixed by a 3 character relative cell specifier. The relative cell specifier's three characters are for the three lattice directions: '-' means shift backwards in the specific direction, '+' means shift forward, '.' means no shift in the given direction.
+
+It is important that the first site specifier in the bond must always have to have the … (meaning 0,0,0) relative cell specifier (which is the default, so it need not be specified)
+
+These are the bonds in the cubic zincblende motif:
+
+```
+BOND INTERIOR1 ...CORNER
+BOND INTERIOR1 ...FACE_Z
+BOND INTERIOR1 ...FACE_Y
+BOND INTERIOR1 ...FACE_X
+
+BOND INTERIOR2 .++CORNER
+BOND INTERIOR2 ..+FACE_Z
+BOND INTERIOR2 .+.FACE_Y
+BOND INTERIOR2 ...FACE_X
+
+BOND INTERIOR3 +.+CORNER
+BOND INTERIOR3 ..+FACE_Z
+BOND INTERIOR3 ...FACE_Y
+BOND INTERIOR3 +..FACE_X
+
+BOND INTERIOR4 ++.CORNER
+BOND INTERIOR4 ...FACE_Z
+BOND INTERIOR4 .+.FACE_Y
+BOND INTERIOR4 +..FACE_X
+```
+
+Please note that the format allows empty lines and lines started with the `#` character are treated as comment.
+
+Here is the complete cubic zincblende motif:
+
+```
+# cubic zincblende motif
+
+PARAM PRIMARY C
+PARAM SECONDARY C
+
+SITE CORNER PRIMARY 0 0 0
+
+SITE FACE_Z PRIMARY 0.5 0.5 0
+SITE FACE_Y PRIMARY 0.5 0 0.5
+SITE FACE_X PRIMARY 0 0.5 0.5
+
+SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+SITE INTERIOR2 SECONDARY 0.25 0.75 0.75
+SITE INTERIOR3 SECONDARY 0.75 0.25 0.75
+SITE INTERIOR4 SECONDARY 0.75 0.75 0.25
+
+BOND INTERIOR1 ...CORNER
+BOND INTERIOR1 ...FACE_Z
+BOND INTERIOR1 ...FACE_Y
+BOND INTERIOR1 ...FACE_X
+
+BOND INTERIOR2 .++CORNER
+BOND INTERIOR2 ..+FACE_Z
+BOND INTERIOR2 .+.FACE_Y
+BOND INTERIOR2 ...FACE_X
+
+BOND INTERIOR3 +.+CORNER
+BOND INTERIOR3 ..+FACE_Z
+BOND INTERIOR3 ...FACE_Y
+BOND INTERIOR3 +..FACE_X
+
+BOND INTERIOR4 ++.CORNER
+BOND INTERIOR4 ...FACE_Z
+BOND INTERIOR4 .+.FACE_Y
+BOND INTERIOR4 +..FACE_X
+```
