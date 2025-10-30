@@ -141,7 +141,14 @@ TODEV: being able to select and drag multiple nodes should be possible.
 
 ### Node properties vs. input pins
 
-TODOC
+- Most placed node is the node network has associated data. This data consists of properties of the node which are editable in the node properties panel.
+- Often a node has both a property and input pin for the same concept. For example the cuboid node has a Min corner property and also has a min_corner input pin. In these cases you can both manually (property) and programmatically (input pin) control this aspect. The input pin always takes precedence.
+
+As an example see the input pins and the properties of the `cuboid` node:
+
+![](./atomCAD_images/cuboid_node.png)
+
+![](./atomCAD_images/cuboid_props.png)
 
 ## Node Properties Panel
 
@@ -237,6 +244,8 @@ Outputs a Vec2 value.
 Outputs a Vec3 value.
 
 #### expr
+
+![](./atomCAD_images/expr_node_props.png)
 
 You can type in a mathematical expression and it will be evaluated on its output pin.
 The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
@@ -357,11 +366,13 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 
 #### range
 
-TODOC
+![](./atomCAD_images/range_node_props.png)
 
 #### map
 
 TODOC
+
+![](./atomCAD_images/map_node_props_viewport.png)
 
 ### 2D Geometry nodes
 
