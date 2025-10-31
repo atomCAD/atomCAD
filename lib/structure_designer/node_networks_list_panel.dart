@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/ui_common.dart';
@@ -57,7 +58,8 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                             onPressed: () {
                               model.addNewNodeNetwork();
                             },
-                            icon: Icon(Icons.add, size: 16, color: AppColors.textOnDark),
+                            icon: Icon(Icons.add,
+                                size: 16, color: AppColors.textOnDark),
                             label: const Text('Add'),
                             style: AppButtonStyles.primary,
                           ),
@@ -108,7 +110,8 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                               networkName == activeNetworkName;
                           final bool isEditing =
                               _editingNetworkName == networkName;
-                          final bool hasValidationErrors = network.validationErrors != null;
+                          final bool hasValidationErrors =
+                              network.validationErrors != null;
 
                           // Create a context menu for right-click actions
                           return Builder(
@@ -161,7 +164,9 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                   _startRenaming(networkName);
                                 },
                                 child: Tooltip(
-                                  message: hasValidationErrors ? network.validationErrors! : '',
+                                  message: hasValidationErrors
+                                      ? network.validationErrors!
+                                      : '',
                                   child: Container(
                                     decoration: hasValidationErrors
                                         ? BoxDecoration(
@@ -169,59 +174,159 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                               color: Colors.red,
                                               width: 2.0,
                                             ),
-                                            borderRadius: BorderRadius.circular(4.0),
+                                            borderRadius:
+                                                BorderRadius.circular(4.0),
                                           )
-                                        : null,
+                                        : isEditing
+                                            ? BoxDecoration(
+                                                border: Border.all(
+                                                  color: isActive
+                                                      ? Colors.white
+                                                          .withOpacity(0.5)
+                                                      : Colors.blue
+                                                          .withOpacity(0.5),
+                                                  width: 1.5,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(4.0),
+                                                // Add a subtle glow effect when editing
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: (isActive
+                                                            ? Colors.white
+                                                            : Colors.blue)
+                                                        .withOpacity(0.2),
+                                                    blurRadius: 4,
+                                                    spreadRadius: 1,
+                                                  ),
+                                                ],
+                                              )
+                                            : null,
                                     child: ListTile(
                                       dense: true,
                                       visualDensity:
                                           AppSpacing.compactVerticalDensity,
-                                      contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 0),
-                                  title: isEditing
-                                      ? TextField(
-                                          controller: _renameController,
-                                          focusNode: _renameFocusNode,
-                                          autofocus: true,
-                                          // Use appropriate text color based on selection state
-                                          style: isActive
-                                              ? AppTextStyles.regular.copyWith(
-                                                  color: AppColors.textOnDark)
-                                              : AppTextStyles.regular,
-                                          decoration: InputDecoration(
-                                            isDense: true,
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    vertical: 8),
-                                            // Use appropriate border color based on selection state
-                                            border: OutlineInputBorder(
-                                              borderSide: BorderSide(
-                                                color: isActive
-                                                    ? Colors.white70
-                                                    : Colors.grey,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 0),
+                                      title: isEditing
+                                          ? KeyboardListener(
+                                              focusNode: FocusNode(),
+                                              onKeyEvent: (KeyEvent event) {
+                                                // Handle Esc key to cancel rename
+                                                if (event is KeyDownEvent &&
+                                                    event.logicalKey ==
+                                                        LogicalKeyboardKey
+                                                            .escape) {
+                                                  _cancelRename();
+                                                }
+                                              },
+                                              child: Theme(
+                                                // Override theme to get better caret visibility
+                                                data:
+                                                    Theme.of(context).copyWith(
+                                                  textSelectionTheme:
+                                                      TextSelectionThemeData(
+                                                    cursorColor: isActive
+                                                        ? Colors.white
+                                                        : Colors.black,
+                                                    selectionColor: isActive
+                                                        ? Colors.white
+                                                            .withOpacity(0.3)
+                                                        : Colors.blue
+                                                            .withOpacity(0.3),
+                                                    selectionHandleColor:
+                                                        isActive
+                                                            ? Colors.white
+                                                            : Colors.blue,
+                                                  ),
+                                                ),
+                                                child: TextField(
+                                                  controller: _renameController,
+                                                  focusNode: _renameFocusNode,
+                                                  autofocus: true,
+                                                  // Enhanced text style with better contrast
+                                                  style: AppTextStyles.regular
+                                                      .copyWith(
+                                                    color: isActive
+                                                        ? Colors.white
+                                                        : Colors.black,
+                                                    fontWeight: FontWeight
+                                                        .w500, // Slightly bolder when editing
+                                                  ),
+                                                  decoration: InputDecoration(
+                                                    isDense: true,
+                                                    contentPadding:
+                                                        const EdgeInsets
+                                                            .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 8,
+                                                    ),
+                                                    // Enhanced border styling for better visibility
+                                                    enabledBorder:
+                                                        OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                      borderSide: BorderSide(
+                                                        color: isActive
+                                                            ? Colors.white
+                                                            : Colors.blue,
+                                                        width:
+                                                            2.0, // Thicker border when editing
+                                                      ),
+                                                    ),
+                                                    focusedBorder:
+                                                        OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                      borderSide: BorderSide(
+                                                        color: isActive
+                                                            ? Colors.white
+                                                            : Colors.blue,
+                                                        width:
+                                                            2.5, // Even thicker when focused
+                                                      ),
+                                                    ),
+                                                    // Enhanced fill colors with better contrast
+                                                    filled: true,
+                                                    fillColor: isActive
+                                                        ? AppColors
+                                                            .selectionBackground
+                                                            ?.withOpacity(0.9)
+                                                        : Colors.white,
+                                                    // Add a subtle hint with Esc instruction
+                                                    hintText:
+                                                        'Enter network name (Esc to cancel)',
+                                                    hintStyle: TextStyle(
+                                                      color: isActive
+                                                          ? Colors.white
+                                                              .withOpacity(0.7)
+                                                          : Colors.grey
+                                                              .withOpacity(0.7),
+                                                      fontStyle:
+                                                          FontStyle.italic,
+                                                    ),
+                                                  ),
+                                                  onSubmitted: (value) {
+                                                    _commitRename(model);
+                                                  },
+                                                  onEditingComplete: () {
+                                                    _commitRename(model);
+                                                  },
+                                                ),
                                               ),
+                                            )
+                                          : Text(
+                                              networkName,
+                                              style: AppTextStyles.regular,
                                             ),
-                                            // Use appropriate fill color based on selection state
-                                            filled: true,
-                                            fillColor: isActive
-                                                ? AppColors.selectionBackground
-                                                : Colors.white,
-                                          ),
-                                          onSubmitted: (value) {
-                                            _commitRename(model);
-                                          },
-                                          onEditingComplete: () {
-                                            _commitRename(model);
-                                          },
-                                        )
-                                      : Text(
-                                          networkName,
-                                          style: AppTextStyles.regular,
-                                        ),
                                       selected: isActive,
                                       selectedTileColor:
                                           AppColors.selectionBackground,
-                                      selectedColor: AppColors.selectionForeground,
+                                      selectedColor:
+                                          AppColors.selectionForeground,
                                       onTap: () {
                                         if (isEditing) {
                                           return; // Don't change selection when in edit mode
@@ -275,11 +380,24 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
     }
   }
 
+  // Cancel the rename operation and exit edit mode without saving changes
+  void _cancelRename() {
+    if (_editingNetworkName != null) {
+      // Explicitly unfocus before removing the text field
+      _renameFocusNode.unfocus();
+
+      setState(() {
+        _editingNetworkName = null;
+      });
+    }
+  }
+
   // Handle the delete network button press
-  Future<void> _handleDeleteNetwork(BuildContext context, StructureDesignerModel model) async {
+  Future<void> _handleDeleteNetwork(
+      BuildContext context, StructureDesignerModel model) async {
     final networkName = model.nodeNetworkView!.name;
     final confirmed = await _showDeleteConfirmationDialog(context, networkName);
-    
+
     if (confirmed == true) {
       final errorMessage = model.deleteNodeNetwork(networkName);
       if (errorMessage != null && context.mounted) {
@@ -289,7 +407,8 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
   }
 
   // Show confirmation dialog for network deletion
-  Future<bool?> _showDeleteConfirmationDialog(BuildContext context, String networkName) {
+  Future<bool?> _showDeleteConfirmationDialog(
+      BuildContext context, String networkName) {
     return showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -314,7 +433,8 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
   }
 
   // Show error dialog when deletion fails
-  Future<void> _showDeleteErrorDialog(BuildContext context, String errorMessage) {
+  Future<void> _showDeleteErrorDialog(
+      BuildContext context, String errorMessage) {
     return showDialog(
       context: context,
       builder: (BuildContext context) {
