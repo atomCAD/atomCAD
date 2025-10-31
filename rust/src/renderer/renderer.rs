@@ -128,8 +128,25 @@ impl Renderer {
             .request_adapter(&RequestAdapterOptions::default())
             .await
             .expect("Failed to find a suitable adapter");
+        // Configure custom limits to support larger vertex buffers for complex atomic models
+        let mut limits = wgpu::Limits::default();
+        
+        // Increase max buffer size from default 256 MiB to 1 GiB
+        // This allows for much larger atomic crystal models
+        limits.max_buffer_size = 1024 * 1024 * 1024; // 1 GiB
+        
+        // Also increase storage buffer binding size for consistency
+        limits.max_storage_buffer_binding_size = 512 * 1024 * 1024; // 512 MiB
+        
+        let device_descriptor = DeviceDescriptor {
+            label: Some("AtomCAD Renderer Device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: limits,
+            memory_hints: wgpu::MemoryHints::default(),
+        };
+
         let (device, queue) = adapter
-            .request_device(&DeviceDescriptor::default(), None)
+            .request_device(&device_descriptor, None)
             .await
             .expect("Failed to create device");
 
