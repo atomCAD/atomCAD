@@ -210,16 +210,9 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
                                           const EdgeInsets.symmetric(
                                               horizontal: 12, vertical: 0),
                                       title: isEditing
-                                          ? KeyboardListener(
-                                              focusNode: FocusNode(),
-                                              onKeyEvent: (KeyEvent event) {
-                                                // Handle Esc key to cancel rename
-                                                if (event is KeyDownEvent &&
-                                                    event.logicalKey ==
-                                                        LogicalKeyboardKey
-                                                            .escape) {
-                                                  _cancelRename();
-                                                }
+                                          ? CallbackShortcuts(
+                                              bindings: {
+                                                const SingleActivator(LogicalKeyboardKey.escape): _cancelRename,
                                               },
                                               child: Theme(
                                                 // Override theme to get better caret visibility
@@ -361,6 +354,11 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
       baseOffset: 0,
       extentOffset: _renameController.text.length,
     );
+    
+    // Request focus after the widget tree rebuilds
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _renameFocusNode.requestFocus();
+    });
   }
 
   // Apply the rename and exit edit mode
