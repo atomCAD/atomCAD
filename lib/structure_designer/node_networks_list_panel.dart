@@ -24,10 +24,26 @@ class _NodeNetworksListPanelState extends State<NodeNetworksListPanel> {
   final FocusNode _renameFocusNode = FocusNode();
 
   @override
+  void initState() {
+    super.initState();
+    // Listen for focus changes to handle clicking outside the TextField
+    _renameFocusNode.addListener(_onFocusChange);
+  }
+
+  @override
   void dispose() {
+    _renameFocusNode.removeListener(_onFocusChange);
     _renameController.dispose();
     _renameFocusNode.dispose();
     super.dispose();
+  }
+
+  // Handle focus changes - commit rename when focus is lost
+  void _onFocusChange() {
+    if (!_renameFocusNode.hasFocus && _editingNetworkName != null) {
+      // Focus was lost while editing - commit the rename
+      _commitRename(widget.model);
+    }
   }
 
   @override
