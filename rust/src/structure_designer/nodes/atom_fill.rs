@@ -441,6 +441,12 @@ impl AtomFillData {
       // Add atom if we are within the geometry
       if sdf_value <= CRYSTAL_SAMPLE_THRESHOLD {
         let atom_id = atomic_structure.add_atom(effective_atomic_number, absolute_real_pos, 0);
+        
+        // Set the depth value based on SDF (negative SDF means inside the geometry)
+        // Convert to f32 for memory efficiency and negate to make depth positive inside geometry
+        let depth = (-sdf_value) as f32;
+        atomic_structure.set_atom_depth(atom_id, depth);
+        
         atom_tracker.record_atom(*motif_pos, site_index, atom_id);
         statistics.atoms += 1;
       }
@@ -587,7 +593,7 @@ impl AtomFillData {
       let normalized_direction = real_space_direction.normalize();
       let hydrogen_pos = found_atom.position + normalized_direction * bond_length;
 
-      // Add hydrogen atom (atomic number 1)
+      // Add hydrogen atom (atomic number 1) - depth remains 0.0 by default
       let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos, 0);
       
       // Create bond between original atom and hydrogen

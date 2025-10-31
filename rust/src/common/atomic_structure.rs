@@ -125,6 +125,7 @@ pub struct Atom {
   pub bond_ids: Vec<u64>,
   pub selected: bool,
   pub cluster_id: u64,
+  pub in_crystal_depth: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -414,6 +415,7 @@ impl AtomicStructure {
       bond_ids: Vec::new(),
       selected: false,
       cluster_id,
+      in_crystal_depth: 0.0,
     });
 
     self.add_atom_to_grid(id, &position);
@@ -424,6 +426,26 @@ impl AtomicStructure {
     }
     
     self.make_atom_dirty(id);
+  }
+
+  /// Sets the in_crystal_depth value for an atom
+  ///
+  /// # Arguments
+  ///
+  /// * `atom_id` - The ID of the atom to update
+  /// * `depth` - The depth value to set (typically negative SDF values converted to positive)
+  ///
+  /// # Returns
+  ///
+  /// `true` if the atom was found and updated, `false` otherwise
+  pub fn set_atom_depth(&mut self, atom_id: u64, depth: f32) -> bool {
+    if let Some(atom) = self.atoms.get_mut(&atom_id) {
+      atom.in_crystal_depth = depth;
+      self.make_atom_dirty(atom_id);
+      true
+    } else {
+      false
+    }
   }
 
   pub fn delete_atom(&mut self, id: u64, remember_deleted_atom: bool) {
@@ -1048,6 +1070,9 @@ impl AtomicStructure {
         atom.position,
         new_cluster_id
       );
+      
+      // Preserve the depth value
+      self.set_atom_depth(new_atom_id, atom.in_crystal_depth);
       
       // Copy selected state
       if let Some(new_atom) = self.atoms.get_mut(&new_atom_id) {

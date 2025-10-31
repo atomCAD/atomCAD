@@ -7,6 +7,7 @@ use crate::common::atomic_structure::AtomDisplayState;
 use crate::common::common_constants::DEFAULT_ATOM_INFO;
 use crate::common::common_constants::ATOM_INFO;
 use crate::common::scene::Scene;
+use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences;
 use super::tessellator;
 use glam::f32::Vec3;
 use glam::f64::DVec3;
@@ -28,7 +29,7 @@ const MARKER_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
 // color for secondary markers (blue)
 const SECONDARY_MARKER_COLOR: Vec3 = Vec3::new(0.0, 0.5, 1.0);
 
-pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S) {
+pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
   for (id, atom) in atomic_structure.atoms.iter() {
     // Get display state from the decorator and override it to Marked if scene.is_atom_marked is true
     let mut display_state = atomic_structure.decorator.get_atom_display_state(*id);
@@ -36,6 +37,14 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
       display_state = AtomDisplayState::Marked;
     } else if scene.is_atom_secondary_marked(*id) {
       display_state = AtomDisplayState::SecondaryMarked;
+    }
+    
+    // Apply depth culling if enabled
+    if let Some(cull_depth) = atomic_viz_prefs.ball_and_stick_cull_depth {
+      if atom.in_crystal_depth > cull_depth {
+        // Skip tessellating this atom - it's too deep inside and can't be seen
+        continue;
+      }
     }
     
     tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state);

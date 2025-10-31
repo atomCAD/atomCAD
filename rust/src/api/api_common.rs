@@ -245,7 +245,7 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
     cad_instance.renderer.refresh(
       &cad_instance.structure_designer.last_generated_structure_designer_scene,
       lightweight,
-      &cad_instance.structure_designer.preferences.geometry_visualization_preferences
+      &cad_instance.structure_designer.preferences
     );
   }
 

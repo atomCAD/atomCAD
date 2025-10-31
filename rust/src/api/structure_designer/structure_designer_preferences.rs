@@ -54,10 +54,18 @@ pub struct NodeDisplayPreferences {
 }
 
 #[frb]
+#[derive(Clone, PartialEq)]
+pub struct AtomicStructureVisualizationPreferences {
+  #[frb(non_final)]
+  pub ball_and_stick_cull_depth: Option<f32>,
+}
+
+#[frb]
 #[derive(Clone)]
 pub struct StructureDesignerPreferences {
   pub geometry_visualization_preferences: GeometryVisualizationPreferences,
   pub node_display_preferences: NodeDisplayPreferences,
+  pub atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences,
 }
 
 impl StructureDesignerPreferences {
@@ -74,6 +82,9 @@ impl StructureDesignerPreferences {
       },
       node_display_preferences: NodeDisplayPreferences {
         display_policy: NodeDisplayPolicy::PreferSelected,
+      },
+      atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences {
+        ball_and_stick_cull_depth: Some(10.0), // Conservative depth culling at 10.0 Angstroms
       },
     }
   }

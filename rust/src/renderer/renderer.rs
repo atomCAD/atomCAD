@@ -21,7 +21,7 @@ use crate::common::scene::Scene;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::renderer::mesh::Material;
-use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
+use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 #[repr(C)]
@@ -512,7 +512,7 @@ impl Renderer {
         &mut self,
         scene: &S,
         lightweight: bool,
-        geometry_visualization_preferences: &GeometryVisualizationPreferences
+        preferences: &StructureDesignerPreferences
     ) {
         //let start_time = Instant::now();
 
@@ -523,7 +523,7 @@ impl Renderer {
         }
         
         // Tessellate camera pivot point cube if enabled
-        if geometry_visualization_preferences.display_camera_target {
+        if preferences.geometry_visualization_preferences.display_camera_target {
             let red_material = Material::new(
                 &Vec3::new(1.0, 0.0, 0.0), // Red color
                 0.5, // roughness
@@ -562,7 +562,7 @@ impl Renderer {
             };
 
             for atomic_structure in scene.atomic_structures() {
-                atomic_tessellator::tessellate_atomic_structure(&mut mesh, &mut selected_clusters_mesh, atomic_structure, &atomic_tessellation_params, scene);
+                atomic_tessellator::tessellate_atomic_structure(&mut mesh, &mut selected_clusters_mesh, atomic_structure, &atomic_tessellation_params, scene, &preferences.atomic_structure_visualization_preferences);
             }
 
             for surface_point_cloud in scene.surface_point_cloud_2ds() {
@@ -574,11 +574,11 @@ impl Renderer {
             }
 
             for poly_mesh in scene.poly_meshes() {
-                if geometry_visualization_preferences.wireframe_geometry {
+                if preferences.geometry_visualization_preferences.wireframe_geometry {
                     tessellate_poly_mesh_to_line_mesh(
                         &poly_mesh,
                         &mut wireframe_mesh, 
-                        geometry_visualization_preferences.mesh_smoothing.clone(), 
+                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
                         Vec3::new(0.0, 0.0, 0.0).to_array(),
                         // normally normal_edge_color should be Vec3::new(0.4, 0.4, 0.4), but we do not show the difference here
                         // as csgrs sometimes creates non-manifold edges (false sharp edges) where it should not.
@@ -589,7 +589,7 @@ impl Renderer {
                     tessellate_poly_mesh(
                         &poly_mesh,
                         &mut mesh, 
-                        geometry_visualization_preferences.mesh_smoothing.clone(), 
+                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
                         &Material::new(
                             &Vec3::new(0.0, 1.0, 0.0), 
                             1.0, 
