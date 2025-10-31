@@ -556,9 +556,9 @@ impl Renderer {
             let mut selected_clusters_mesh = Mesh::new();
 
             let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
-                sphere_horizontal_divisions: 10,
-                sphere_vertical_divisions: 20,
-                cylinder_divisions: 16,
+                sphere_horizontal_divisions: 12,  // Good balance: not power of 2, divisible by 2,3,4,6
+                sphere_vertical_divisions: 6,     // 2:1 ratio maintains sphere proportions
+                cylinder_divisions: 12,
             };
 
             for atomic_structure in scene.atomic_structures() {

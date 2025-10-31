@@ -145,8 +145,8 @@ pub fn tessellate_sphere(
     output_mesh: &mut Mesh,
     center: &DVec3,
     radius: f64,
-    horizontal_divisions: u32, // number sections when dividing by horizontal lines
-    vertical_divisions: u32, // number of sections when dividing by vertical lines
+    horizontal_divisions: u32, // number sections when dividing the horozontal lines
+    vertical_divisions: u32, // number of sections when dividing the vertical lines
     material: &Material,
 ) {
 
