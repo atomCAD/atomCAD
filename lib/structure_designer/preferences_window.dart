@@ -312,41 +312,27 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           const SizedBox(height: AppSpacing.medium),
 
                           // Ball and stick cull depth setting
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Depth culling threshold (Å)'),
-                              const SizedBox(height: 4),
-                              TextFormField(
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  contentPadding: AppSpacing.fieldContentPadding,
-                                  hintText: 'Enter depth in Angstroms',
-                                ),
-                                initialValue: _preferences
+                          FloatInput(
+                            label: 'Depth culling threshold (Å)',
+                            value: _preferences
+                                .atomicStructureVisualizationPreferences
+                                .ballAndStickCullDepth ?? 0.0,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences
                                     .atomicStructureVisualizationPreferences
-                                    .ballAndStickCullDepth
-                                    ?.toString() ?? '',
-                                keyboardType: TextInputType.number,
-                                onChanged: (value) {
-                                  final depth = double.tryParse(value);
-                                  setState(() {
-                                    _preferences
-                                        .atomicStructureVisualizationPreferences
-                                        .ballAndStickCullDepth = depth;
-                                  });
-                                  _applyPreferences();
-                                },
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Atoms deeper than this threshold will not be rendered (leave empty to disable)',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
+                                    .ballAndStickCullDepth = value > 0.0 ? value : null;
+                              });
+                              _applyPreferences();
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Atoms deeper than this threshold will not be rendered (set to 0 to disable)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
                         ],
                       ),
