@@ -40,6 +40,8 @@ pub struct AtomFillStatistics {
   pub motif_cells_processed: i32,
   pub atoms: i32,
   pub bonds: i32,
+  pub total_depth: f64,
+  pub max_depth: f64,
 }
 
 impl AtomFillStatistics {
@@ -51,6 +53,8 @@ impl AtomFillStatistics {
       motif_cells_processed: 0,
       atoms: 0,
       bonds: 0,
+      total_depth: 0.0,
+      max_depth: f64::NEG_INFINITY,
     }
   }
 
@@ -59,6 +63,14 @@ impl AtomFillStatistics {
       self.do_fill_box_total_size / (self.do_fill_box_calls as f64)
     } else {
       DVec3::ZERO
+    }
+  }
+
+  pub fn get_average_depth(&self) -> f64 {
+    if self.atoms > 0 {
+      self.total_depth / (self.atoms as f64)
+    } else {
+      0.0
     }
   }
 
@@ -71,6 +83,10 @@ impl AtomFillStatistics {
     println!("  motif cells processed: {}", self.motif_cells_processed);
     println!("  atoms added: {}", self.atoms);
     println!("  bonds created: {}", self.bonds);
+    if self.atoms > 0 {
+      println!("  average depth: {:.3} Å", self.get_average_depth());
+      println!("  max depth: {:.3} Å", self.max_depth);
+    }
   }
 }
 
@@ -447,6 +463,13 @@ impl AtomFillData {
         let depth = (-sdf_value) as f32;
         atomic_structure.set_atom_depth(atom_id, depth);
         
+        // Update depth statistics
+        let depth_f64 = depth as f64;
+        statistics.total_depth += depth_f64;
+        if depth_f64 > statistics.max_depth {
+          statistics.max_depth = depth_f64;
+        }
+        
         atom_tracker.record_atom(*motif_pos, site_index, atom_id);
         statistics.atoms += 1;
       }
@@ -595,6 +618,10 @@ impl AtomFillData {
 
       // Add hydrogen atom (atomic number 1) - depth remains 0.0 by default
       let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos, 0);
+      
+      // Update depth statistics for hydrogen (depth = 0.0)
+      statistics.total_depth += 0.0;
+      // Note: max_depth doesn't need updating since hydrogen depth is 0.0
       
       // Create bond between original atom and hydrogen
       atomic_structure.add_bond(found_atom_id, hydrogen_id, 1); // Single bond

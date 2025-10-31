@@ -84,7 +84,7 @@ impl StructureDesignerPreferences {
         display_policy: NodeDisplayPolicy::PreferSelected,
       },
       atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences {
-        ball_and_stick_cull_depth: Some(10.0), // Conservative depth culling at 10.0 Angstroms
+        ball_and_stick_cull_depth: Some(8.0), // Conservative depth culling at 8.0 Angstroms
       },
     }
   }

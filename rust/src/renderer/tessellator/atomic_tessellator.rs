@@ -29,6 +29,15 @@ const MARKER_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
 // color for secondary markers (blue)
 const SECONDARY_MARKER_COLOR: Vec3 = Vec3::new(0.0, 0.5, 1.0);
 
+/// Helper function to determine if an atom should be culled based on depth
+fn should_cull_atom(atom: &Atom, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) -> bool {
+  if let Some(cull_depth) = atomic_viz_prefs.ball_and_stick_cull_depth {
+    atom.in_crystal_depth > cull_depth
+  } else {
+    false
+  }
+}
+
 pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
   for (id, atom) in atomic_structure.atoms.iter() {
     // Get display state from the decorator and override it to Marked if scene.is_atom_marked is true
@@ -40,17 +49,25 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
     }
     
     // Apply depth culling if enabled
-    if let Some(cull_depth) = atomic_viz_prefs.ball_and_stick_cull_depth {
-      if atom.in_crystal_depth > cull_depth {
-        // Skip tessellating this atom - it's too deep inside and can't be seen
-        continue;
-      }
+    if should_cull_atom(atom, atomic_viz_prefs) {
+      // Skip tessellating this atom - it's too deep inside and can't be seen
+      continue;
     }
     
     tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state);
   }
+  
   for (_id, bond) in atomic_structure.bonds.iter() {
-    tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
+    // Check if both atoms of the bond should be rendered
+    let atom1 = atomic_structure.atoms.get(&bond.atom_id1);
+    let atom2 = atomic_structure.atoms.get(&bond.atom_id2);
+    
+    if let (Some(atom1), Some(atom2)) = (atom1, atom2) {
+      // Only tessellate the bond if both atoms are being rendered (not culled)
+      if !should_cull_atom(atom1, atomic_viz_prefs) && !should_cull_atom(atom2, atomic_viz_prefs) {
+        tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
+      }
+    }
   }
 }
 
