@@ -42,38 +42,35 @@ import CoreVideo
     }
 
     private func _markFrameAvaliable(buffer: UnsafePointer<UInt8>, len: Int, width: Int, height: Int, stride_align: Int) -> Bool {
-        // Calculate bytes per row: if stride_align is 0, assume tightly packed RGBA data
-        let bytesPerRow = stride_align > 0 ? stride_align : width * 4
+        // Calculate source bytes per row: if stride_align is 0, assume tightly packed RGBA data
+        let sourceBytesPerRow = stride_align > 0 ? stride_align : width * 4
         
-        // Create a mutable copy of the buffer data for CVPixelBuffer to manage
-        let bufferSize = len
-        let mutableBuffer = UnsafeMutableRawPointer.allocate(byteCount: bufferSize, alignment: MemoryLayout<UInt8>.alignment)
-        mutableBuffer.copyMemory(from: buffer, byteCount: bufferSize)
-        
-        // Release callback to properly deallocate the buffer when CVPixelBuffer is done with it
-        let releaseCallback: CVPixelBufferReleaseBytesCallback = { _, baseAddress in
-            baseAddress?.deallocate()
-        }
-        
+        // Create Metal-compatible CVPixelBuffer using CVPixelBufferCreate
         var pixelBufferCopy: CVPixelBuffer?
-        let result = CVPixelBufferCreateWithBytes(
-            kCFAllocatorDefault,
-            width,
-            height,
-            kCVPixelFormatType_32BGRA,
-            mutableBuffer,
-            bytesPerRow,
-            releaseCallback,
-            nil, // releaseRefCon
-            dict as CFDictionary,
-            &pixelBufferCopy
-        )
-        
+        let result = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, dict as CFDictionary, &pixelBufferCopy)
         guard result == kCVReturnSuccess else {
-            // Clean up on failure
-            mutableBuffer.deallocate()
             return false
         }
+        
+        // Lock the pixel buffer for writing
+        CVPixelBufferLockBaseAddress(pixelBufferCopy!, [])
+        
+        // Get destination buffer info
+        let destPtr = CVPixelBufferGetBaseAddress(pixelBufferCopy!)!
+        let destBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBufferCopy!)
+        
+        // Copy data row by row to handle stride differences properly
+        let sourcePtr = buffer
+        for row in 0..<height {
+            let sourceRowPtr = sourcePtr.advanced(by: row * sourceBytesPerRow)
+            let destRowPtr = destPtr.advanced(by: row * destBytesPerRow)
+            
+            // Copy only the actual pixel data (width * 4 bytes for RGBA)
+            let rowDataSize = width * 4
+            destRowPtr.copyMemory(from: sourceRowPtr, byteCount: rowDataSize)
+        }
+        
+        CVPixelBufferUnlockBaseAddress(pixelBufferCopy!, [])
         
         self.data = pixelBufferCopy
         self.width = width
