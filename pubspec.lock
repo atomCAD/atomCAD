@@ -197,6 +197,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_window_close:
+    dependency: "direct main"
+    description:
+      name: flutter_window_close
+      sha256: "7fecc628c6f6e751d279f2a988a22b5ffcc0d4c5da0bfe9b41a388803025819f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
   fuchsia_remote_debug_protocol:
     dependency: transitive
     description: flutter
@@ -430,10 +438,9 @@ packages:
   texture_rgba_renderer:
     dependency: "direct main"
     description:
-      name: texture_rgba_renderer
-      sha256: cb048abdd800468ca40749ca10d1db9d1e6a055d1cde6234c05191293f0c7d61
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/texture_rgba_renderer"
+      relative: true
+    source: path
     version: "0.0.16"
   vector_math:
     dependency: "direct main"

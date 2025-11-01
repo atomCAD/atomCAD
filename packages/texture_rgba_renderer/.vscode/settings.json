@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "*.cjson": "jsonc",
+        "*.wxss": "css",
+        "*.wxs": "javascript",
+        "unordered_map": "cpp",
+        "compare": "cpp",
+        "*.tcc": "cpp",
+        "functional": "cpp",
+        "map": "cpp",
+        "memory": "cpp"
+    }
+}
