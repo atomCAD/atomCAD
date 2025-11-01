@@ -1,0 +1,52 @@
+PODS:
+  - file_picker (0.0.1):
+    - FlutterMacOS
+  - flutter_window_close (0.0.1):
+    - FlutterMacOS
+  - FlutterMacOS (1.0.0)
+  - rust_lib_flutter_cad (0.0.1):
+    - FlutterMacOS
+  - screen_retriever (0.0.1):
+    - FlutterMacOS
+  - texture_rgba_renderer (0.0.1):
+    - FlutterMacOS
+  - window_manager (0.2.0):
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
+  - flutter_window_close (from `Flutter/ephemeral/.symlinks/plugins/flutter_window_close/macos`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - rust_lib_flutter_cad (from `Flutter/ephemeral/.symlinks/plugins/rust_lib_flutter_cad/macos`)
+  - screen_retriever (from `Flutter/ephemeral/.symlinks/plugins/screen_retriever/macos`)
+  - texture_rgba_renderer (from `Flutter/ephemeral/.symlinks/plugins/texture_rgba_renderer/macos`)
+  - window_manager (from `Flutter/ephemeral/.symlinks/plugins/window_manager/macos`)
+
+EXTERNAL SOURCES:
+  file_picker:
+    :path: Flutter/ephemeral/.symlinks/plugins/file_picker/macos
+  flutter_window_close:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_window_close/macos
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  rust_lib_flutter_cad:
+    :path: Flutter/ephemeral/.symlinks/plugins/rust_lib_flutter_cad/macos
+  screen_retriever:
+    :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever/macos
+  texture_rgba_renderer:
+    :path: Flutter/ephemeral/.symlinks/plugins/texture_rgba_renderer/macos
+  window_manager:
+    :path: Flutter/ephemeral/.symlinks/plugins/window_manager/macos
+
+SPEC CHECKSUMS:
+  file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
+  flutter_window_close: bd408414cbbf0d39f0d3076c4da0cdbf1c527168
+  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  rust_lib_flutter_cad: a4eacb9ef6ca744535e554721b87c2bff43b8673
+  screen_retriever: 4f97c103641aab8ce183fa5af3b87029df167936
+  texture_rgba_renderer: 6661f577ea5d4990e964c7e3840e544ac798e6da
+  window_manager: 1d01fa7ac65a6e6f83b965471b1a7fdd3f06166c
+
+PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
+
+COCOAPODS: 1.16.2
