@@ -42,19 +42,43 @@ import CoreVideo
     }
 
     private func _markFrameAvaliable(buffer: UnsafePointer<UInt8>, len: Int, width: Int, height: Int, stride_align: Int) -> Bool {
+        // Calculate bytes per row: if stride_align is 0, assume tightly packed RGBA data
+        let bytesPerRow = stride_align > 0 ? stride_align : width * 4
+        
+        // Create a mutable copy of the buffer data for CVPixelBuffer to manage
+        let bufferSize = len
+        let mutableBuffer = UnsafeMutableRawPointer.allocate(byteCount: bufferSize, alignment: MemoryLayout<UInt8>.alignment)
+        mutableBuffer.copyMemory(from: buffer, byteCount: bufferSize)
+        
+        // Release callback to properly deallocate the buffer when CVPixelBuffer is done with it
+        let releaseCallback: CVPixelBufferReleaseBytesCallback = { _, baseAddress in
+            baseAddress?.deallocate()
+        }
+        
         var pixelBufferCopy: CVPixelBuffer?
-        let result = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, dict as CFDictionary, &pixelBufferCopy)
+        let result = CVPixelBufferCreateWithBytes(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_32BGRA,
+            mutableBuffer,
+            bytesPerRow,
+            releaseCallback,
+            nil, // releaseRefCon
+            dict as CFDictionary,
+            &pixelBufferCopy
+        )
+        
         guard result == kCVReturnSuccess else {
+            // Clean up on failure
+            mutableBuffer.deallocate()
             return false
         }
-
-        CVPixelBufferLockBaseAddress(pixelBufferCopy!, [])
-        let ptr = CVPixelBufferGetBaseAddress(pixelBufferCopy!)!
-        memcpy(ptr, buffer, len)
-        CVPixelBufferUnlockBaseAddress(pixelBufferCopy!, [])
+        
         self.data = pixelBufferCopy
         self.width = width
         self.height = height
+        
         if textureId != -1 && self.data != nil {
             registry?.textureFrameAvailable(textureId)
             return true
