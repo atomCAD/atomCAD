@@ -22,3 +22,5 @@ Planned features include:
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
 
 For more details see [atomCAD User Guide & Reference](./doc/atomCAD_user_guide.md).
+
+Interested in contributing? See our [developer documentation](./doc/for_developers.md) to get started.
