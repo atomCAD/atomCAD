@@ -1,6 +1,6 @@
-# atomCAD User Guide & Reference
+# atomCAD Reference Guide
 
-*Comprehensive user guide and a complete reference for built-in nodes.*
+*A comprehensive guide to atomCAD, including a complete reference for all built-in nodes.*
 
 ## Introduction
 
