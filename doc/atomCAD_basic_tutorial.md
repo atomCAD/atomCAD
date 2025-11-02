@@ -24,7 +24,7 @@ Besides navigating the viewport another thing that you will do frequently is edi
 
 Why a node network?
 
-- If you have used other CAD software, you know there are two main approaches to CAD modeling: direct modeling and **parametric modeling**. Direct modeling is good for rapid prototyping, while parametric modeling is ideal for products that undergo many iterations and require automated updates. The node network in atomCAD makes it not only fully parametric but also programmable. It has a steeper learning curve than direct modeling, but its power makes it worthwhile.
+- If you have used other CAD software, you know there are two main approaches to CAD modeling: direct modeling and **parametric modeling**. Direct modeling is good for rapid prototyping, while parametric modeling is ideal for products that undergo many iterations and require automated updates. The node network in atomCAD is not only fully parametric but also programmable. It has a steeper learning curve than direct modeling, but its power makes it worthwhile.
 - If you are a programmer, you will likely appreciate the node network in atomCAD, as it contains nodes that make it a functional programming language. Each node is a function, and since functions are **composable**, so are node networks: you can define custom reusable nodes by implementing them as node networks. However, you do not need programming experience to create node networks: using programming-related nodes is optional.
 
 Let's look at our current node network which displays our cube!
@@ -87,13 +87,15 @@ You should see something like this:
 
 ## About node visibility
 
-You may have noticed that when you select a node, it automatically becomes visible and other nodes that provide their inputs become invisible. This is the desired behavior most of the time, but not always. In the upper-left part of the window, there are buttons to set the **node display policy**. The default mode is called 'Prefer Selected Nodes'. Another mode you often want is 'Manual' mode: in this case, regardless of what is selected, a node will be visible or invisible only if you explicitly toggle its eye icon. You can read about the exact behavior of node display policies in the Reference Guide.
+You may have noticed that when you select a node, it automatically becomes visible and other nodes that provide their inputs become invisible. This is the desired behavior most of the time, but not always. In the upper-left part of the window, there are buttons to set the **node display policy**. The default mode is called *Prefer Selected Nodes*. Another mode you often want is *Manual* mode: in this case, regardless of what is selected, a node will be visible or invisible only if you explicitly toggle its eye icon. You can read about the exact behavior of node display policies in the Reference Guide.
 
 ## atom_fill node
 
 Add an `atom_fill` node to your node network. Connect the output of the `diff` node to the `shape` input pin of the `atom_fill` node. When you select the `atom_fill` node, you will see something like this:
 
 ![](./tutorial_images/atom_fill.png)
+
+To see atomCAD's parametric design capabilities in action, select the *Manual* node display policy, then select one of the cuboid nodes and change its extents. Notice how the `atom_fill` node's output updates automatically—this demonstrates non-destructive editing. You can modify any node's properties at any time, and all downstream nodes will update automatically without requiring you to rebuild or redo any work.
 
 ## Saving your design and exporting atomic structures
 
