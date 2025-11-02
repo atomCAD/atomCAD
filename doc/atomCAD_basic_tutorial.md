@@ -6,7 +6,7 @@ This tutorial assumes you have downloaded atomCAD on one of the supported platfo
 
 When you open atomCAD you will see something like this:
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\atomcad_start.png)
+![](./tutorial_images/atomcad_start.png)
 
 The upper part of the screen with the trusty cube in it is called the **viewport**, while the lower part of the screen is called the **node network editor**.
 
@@ -20,20 +20,20 @@ When using the application, you will navigate the viewport frequently. Practice 
 
 ## Working with the node network
 
-Besides navigating the viewport, another essential task is editing the node network.
+Besides navigating the viewport another thing that you will do frequently is editing the node network.
 
 Why a node network?
 
 - If you have used other CAD software, you know there are two main approaches to CAD modeling: direct modeling and **parametric modeling**. Direct modeling is good for rapid prototyping, while parametric modeling is ideal for products that undergo many iterations and require automated updates. The node network in atomCAD makes it not only fully parametric but also programmable. It has a steeper learning curve than direct modeling, but its power makes it worthwhile.
-- If you are a programmer, you will likely appreciate the node network in atomCAD, as it contains nodes that make it a functional programming language. Each node is a function, and since functions are **composable**, so are node networks: you can define custom reusable nodes by implementing them as node networks. However, you do not need programming experience to create node networks—using programming-related nodes is optional.
+- If you are a programmer, you will likely appreciate the node network in atomCAD, as it contains nodes that make it a functional programming language. Each node is a function, and since functions are **composable**, so are node networks: you can define custom reusable nodes by implementing them as node networks. However, you do not need programming experience to create node networks: using programming-related nodes is optional.
 
 Let's look at our current node network which displays our cube!
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\cuboid.png)
+![](./tutorial_images/cuboid.png)
 
 We have a single cuboid node. You can select it by left-clicking on it. The node's properties appear in the bottom-right corner of the application window.
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\cuboid_props.png)
+![](./tutorial_images/cuboid_props.png)
 
 > **TIP:** You can drag a node by dragging it with the left mouse button. You can pan the node network canvas by dragging any empty space with the middle mouse button.
 
@@ -41,11 +41,11 @@ We have a single cuboid node. You can select it by left-clicking on it. The node
 
 Hover the mouse over the x-coordinate of the *Extent* property and use the mouse wheel to increase it. The cuboid size changes in real-time. You can click the field, type an integer number, and the value will be submitted when you click outside the field or press Enter. Try creating something like this:
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\updated_cuboid.png)
+![](./tutorial_images/updated_cuboid.png)
 
 Now experiment with the *Min Corner* property as well—the cuboid will move around. Try positioning it like this:
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\moved_cuboid.png)
+![](./tutorial_images/moved_cuboid.png)
 
 Wait, aren't we supposed to edit crystal structures? And why integer numbers only?
 
@@ -59,20 +59,20 @@ We will fill our geometry with atoms soon, but first let's make our geometry mor
 
 Right-clicking anywhere on the node network canvas opens the **Add Node** dialog.
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\add_node.png)
+![](./tutorial_images/add_node.png)
 
 Start typing `cuboid` in the filter field. Select `cuboid` from the filtered list and a new cuboid will be placed. Select it and adjust its properties so that it overlaps with the other cuboid, but neither fully covers the other.
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\two_cuboids.png)
+![](./tutorial_images/two_cuboids.png)
 
 Since the cuboids are overlapping, you may not clearly see where your individual cuboids are located. There are multiple ways to better understand this situation:
 
 - Left-click the eye icon on individual cuboid nodes. This toggles the visibility of the node's output. When visibility is enabled, the node contributes to the viewport scene; otherwise, it doesn't.
 - Choose the wireframe geometry visualization at the geometry visualization panel at the upper left part of the window.
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\wireframe_button.png)
+![](./tutorial_images/wireframe_button.png)
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\wireframe.png)
+![](./tutorial_images/wireframe.png)
 
 Restore the visibility of the nodes and return to solid geometry visualization.
 Right-click on the node network again and add a `diff` node.
@@ -83,7 +83,7 @@ Connect the output pin of the second `cuboid` to the `sub` input pin of the `dif
 
 You should see something like this:
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\diff.png)
+![](./tutorial_images/diff.png)
 
 ## About node visibility
 
@@ -93,7 +93,7 @@ You may have noticed that when you select a node, it automatically becomes visib
 
 Add an `atom_fill` node to your node network. Connect the output of the `diff` node to the `shape` input pin of the `atom_fill` node. When you select the `atom_fill` node, you will see something like this:
 
-![](C:\machine_phase_systems\flutter_cad\doc\tutorial_images\atom_fill.png)
+![](./tutorial_images/atom_fill.png)
 
 ## Saving your design and exporting atomic structures
 
