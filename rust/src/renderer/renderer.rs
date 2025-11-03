@@ -135,9 +135,6 @@ impl Renderer {
         // This allows for much larger atomic crystal models
         limits.max_buffer_size = 1024 * 1024 * 1024; // 1 GiB
         
-        // Also increase storage buffer binding size for consistency
-        limits.max_storage_buffer_binding_size = 512 * 1024 * 1024; // 512 MiB
-        
         let device_descriptor = DeviceDescriptor {
             label: Some("AtomCAD Renderer Device"),
             required_features: wgpu::Features::empty(),
