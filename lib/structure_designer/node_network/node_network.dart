@@ -325,6 +325,27 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
   }
 
+  /// Handle trackpad/Magic Mouse pan-zoom start
+  void _handlePointerPanZoomStart(PointerPanZoomStartEvent event) {
+    // Initialize pan-zoom gesture if needed
+  }
+
+  /// Handle trackpad/Magic Mouse pan-zoom updates for panning
+  void _handlePointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    // Only handle panning when Shift is pressed
+    if (HardwareKeyboard.instance.isShiftPressed && 
+        (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
+      setState(() {
+        _panOffset += event.panDelta;
+      });
+    }
+  }
+
+  /// Handle trackpad/Magic Mouse pan-zoom end
+  void _handlePointerPanZoomEnd(PointerPanZoomEndEvent event) {
+    // Clean up pan-zoom gesture if needed
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -366,6 +387,9 @@ class NodeNetworkState extends State<NodeNetwork> {
                 onPointerDown: _handlePointerDown,
                 onPointerMove: _handlePointerMove,
                 onPointerUp: _handlePointerUp,
+                onPointerPanZoomStart: _handlePointerPanZoomStart,
+                onPointerPanZoomUpdate: _handlePointerPanZoomUpdate,
+                onPointerPanZoomEnd: _handlePointerPanZoomEnd,
                 child: GestureDetector(
                   onTapDown: _handleTapDown,
                   onSecondaryTapDown: (details) =>
