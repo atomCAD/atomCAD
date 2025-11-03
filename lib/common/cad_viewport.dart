@@ -109,14 +109,11 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
   // Handle trackpad/Magic Mouse pan-zoom start
   void onPointerPanZoomStart(PointerPanZoomStartEvent event) {
-    print('PanZoomStart - localPosition: ${event.localPosition}, pointer: ${event.pointer}');
     // Initialize pan-zoom gesture if needed
   }
 
   // Handle trackpad/Magic Mouse pan-zoom updates (includes zoom)
   void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
-    print('PanZoomUpdate - localPosition: ${event.localPosition}, scale: ${event.scale}, pan: ${event.pan}, panDelta: ${event.panDelta}, rotation: ${event.rotation}');
-    
     // Check if Shift is pressed for panning mode
     bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
     
@@ -127,7 +124,6 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     if (!isShiftPressed && event.scale != 1.0) {
       final scaleDelta = event.scale - 1.0;
       final scrollDelta = -scaleDelta * 100.0; // Further reduced sensitivity (was 250.0)
-      print('  -> Trackpad pinch: scaleDelta: $scaleDelta to scrollDelta: $scrollDelta');
       scroll(event.localPosition, scrollDelta);
       zoomHandled = true;
     }
@@ -135,7 +131,6 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     // 2. Shift + PanZoom for camera panning
     if (isShiftPressed && (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
       // Use pan delta for camera panning when Shift is pressed
-      print('  -> Shift + Pan: panDelta: ${event.panDelta} - starting camera pan');
       // Convert pan delta to camera movement
       panCameraWithDelta(event.localPosition, event.panDelta);
       zoomHandled = true; // Prevent zoom when panning
@@ -145,14 +140,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     if (!zoomHandled && !isShiftPressed && event.panDelta.dy.abs() > 0.1) {
       // Use vertical pan delta for zooming - increased sensitivity
       final scrollDelta = event.panDelta.dy * 4.0; // Increased sensitivity (was 2.0)
-      print('  -> Vertical pan zoom: panDelta.dy: ${event.panDelta.dy} to scrollDelta: $scrollDelta');
       scroll(event.localPosition, scrollDelta);
     }
   }
 
   // Handle trackpad/Magic Mouse pan-zoom end
   void onPointerPanZoomEnd(PointerPanZoomEndEvent event) {
-    print('PanZoomEnd - localPosition: ${event.localPosition}, pointer: ${event.pointer}');
     // Clean up pan-zoom gesture if needed
   }
 
@@ -197,7 +190,6 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
           //print('Right mouse button pressed at ${event.position}');
           // Check for Shift + Right mouse for panning
           if (HardwareKeyboard.instance.isShiftPressed) {
-            print('Shift + Right mouse: starting camera move');
             startMoveCamera(event.localPosition);
           } else {
             startRotateCamera(event.localPosition);
