@@ -133,8 +133,11 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Whether we're currently panning with middle mouse button
   bool _isMiddleMousePanning = false;
 
-  /// Store the last pointer position for middle mouse panning
-  Offset? _lastMiddleMousePosition;
+  /// Whether we're currently panning with Shift + right mouse button
+  bool _isShiftRightMousePanning = false;
+
+  /// Store the last pointer position for panning
+  Offset? _lastPanPosition;
 
   @override
   void initState() {
@@ -246,6 +249,11 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Handles secondary (right-click) tap for context menu
   Future<void> _handleSecondaryTapDown(TapDownDetails details,
       BuildContext context, StructureDesignerModel model) async {
+    // Don't show context menu if Shift is pressed (used for panning)
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      return;
+    }
+    
     // Only show add node popup if clicked on empty space (not on a node)
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
@@ -277,33 +285,42 @@ class NodeNetworkState extends State<NodeNetwork> {
     ];
   }
 
-  /// Handle pointer down event - check for middle mouse button
+  /// Handle pointer down event - check for middle mouse button or Shift + right mouse
   void _handlePointerDown(PointerDownEvent event) {
     // Check if middle mouse button (button 2)
     if (event.buttons == kTertiaryButton) {
       setState(() {
         _isMiddleMousePanning = true;
-        _lastMiddleMousePosition = event.position;
+        _lastPanPosition = event.position;
       });
     }
-  }
-
-  /// Handle pointer move event for middle mouse panning
-  void _handlePointerMove(PointerMoveEvent event) {
-    if (_isMiddleMousePanning && _lastMiddleMousePosition != null) {
+    // Check for Shift + right mouse button
+    else if (event.buttons == kSecondaryMouseButton && 
+             HardwareKeyboard.instance.isShiftPressed) {
       setState(() {
-        _panOffset += event.position - _lastMiddleMousePosition!;
-        _lastMiddleMousePosition = event.position;
+        _isShiftRightMousePanning = true;
+        _lastPanPosition = event.position;
       });
     }
   }
 
-  /// Handle pointer up event to end middle mouse panning
+  /// Handle pointer move event for panning (middle mouse or Shift + right mouse)
+  void _handlePointerMove(PointerMoveEvent event) {
+    if ((_isMiddleMousePanning || _isShiftRightMousePanning) && _lastPanPosition != null) {
+      setState(() {
+        _panOffset += event.position - _lastPanPosition!;
+        _lastPanPosition = event.position;
+      });
+    }
+  }
+
+  /// Handle pointer up event to end panning
   void _handlePointerUp(PointerUpEvent event) {
-    if (_isMiddleMousePanning) {
+    if (_isMiddleMousePanning || _isShiftRightMousePanning) {
       setState(() {
         _isMiddleMousePanning = false;
-        _lastMiddleMousePosition = null;
+        _isShiftRightMousePanning = false;
+        _lastPanPosition = null;
       });
     }
   }
