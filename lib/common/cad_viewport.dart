@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:texture_rgba_renderer/texture_rgba_renderer.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
@@ -116,16 +117,28 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
     print('PanZoomUpdate - localPosition: ${event.localPosition}, scale: ${event.scale}, pan: ${event.pan}, panDelta: ${event.panDelta}, rotation: ${event.rotation}');
     
-    // Use scale for zoom: scale > 1.0 = zoom in, scale < 1.0 = zoom out
-    // Convert scale to scroll delta equivalent for existing scroll method
+    // Handle zoom from multiple sources
+    bool zoomHandled = false;
+    
+    // 1. Trackpad pinch-to-zoom (scale changes)
     if (event.scale != 1.0) {
-      // Convert scale change to scroll delta
-      // Invert the scale logic: scale > 1.0 should zoom in (negative scroll delta)
       final scaleDelta = event.scale - 1.0;
-      final scrollDelta = -scaleDelta * 1000.0; // Adjust multiplier as needed
-      print('  -> Converted scaleDelta: $scaleDelta to scrollDelta: $scrollDelta');
+      final scrollDelta = -scaleDelta * 250.0; // Reduced sensitivity (was 1000.0)
+      print('  -> Trackpad pinch: scaleDelta: $scaleDelta to scrollDelta: $scrollDelta');
+      scroll(event.localPosition, scrollDelta);
+      zoomHandled = true;
+    }
+    
+    // 2. Magic Mouse / Trackpad vertical pan for zoom (when no scale change)
+    if (!zoomHandled && event.panDelta.dy.abs() > 0.1) {
+      // Use vertical pan delta for zooming
+      final scrollDelta = event.panDelta.dy * 2.0; // Adjust sensitivity as needed
+      print('  -> Vertical pan zoom: panDelta.dy: ${event.panDelta.dy} to scrollDelta: $scrollDelta');
       scroll(event.localPosition, scrollDelta);
     }
+    
+    // Note: We don't use panDelta.dx for panning to avoid confusion
+    // All users (including trackpad) should use Shift + Right mouse drag for panning
   }
 
   // Handle trackpad/Magic Mouse pan-zoom end
@@ -143,7 +156,13 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
           break;
         case kSecondaryMouseButton:
           //print('Right mouse button pressed at ${event.position}');
-          startRotateCamera(event.localPosition);
+          // Check for Shift + Right mouse for panning
+          if (HardwareKeyboard.instance.isShiftPressed) {
+            print('Shift + Right mouse: starting camera move');
+            startMoveCamera(event.localPosition);
+          } else {
+            startRotateCamera(event.localPosition);
+          }
           break;
         case kMiddleMouseButton:
           //print('Middle mouse button pressed at ${event.position}');
