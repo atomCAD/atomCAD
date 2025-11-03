@@ -11,7 +11,7 @@ With atomCAD you can design arbitrary covalently bonded atomic structures that a
 
 - **Windows**: [atomCAD-windows-v0.0.1.zip](https://github.com/atomCAD/atomCAD/releases/download/v0.0.1/atomCAD-windows-v0.0.1.zip)
 - **Linux**: Coming soon
-- **macOS**: Coming soon
+- **macOS**: [atomCAD-macos-v0.0.1.zip](https://github.com/atomCAD/atomCAD/releases/download/v0.0.1/atomCAD-macos-v0.0.1.zip)
 
 ### Installation
 1. Download the zip file for your platform
