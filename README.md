@@ -9,17 +9,6 @@ With atomCAD you can design arbitrary covalently bonded atomic structures that a
 
 **Latest Release: [v0.0.1](https://github.com/atomCAD/atomCAD/releases/tag/v0.0.1)**
 
-- **Windows**: [atomCAD-windows-v0.0.1.zip](https://github.com/atomCAD/atomCAD/releases/download/v0.0.1/atomCAD-windows-v0.0.1.zip)
-- **Linux**: [atomCAD-linux-v0.0.1.tar.gz](https://github.com/atomCAD/atomCAD/releases/download/v0.0.1/atomCAD-linux-v0.0.1.tar.gz)
-- **macOS**: [atomCAD-macos-v0.0.1.zip](https://github.com/atomCAD/atomCAD/releases/download/v0.0.1/atomCAD-macos-v0.0.1.zip)
-
-### Installation
-1. Download the zip file for your platform
-2. Extract all files to a folder of your choice
-3. Run `flutter_cad.exe` (Windows)
-
-> 📋 **System Requirements**: Windows 10/11 (64-bit)
-
 ## Features
 - **Arbitrary unit cells.** Any unit cell defined by the lattice parameters `(a, b, c, α, β, γ)` is supported. The implied crystal system (*cubic, tetragonal, orthorhombic, hexagonal, trigonal, monoclinic, triclinic*) and its symmetries are automatically determined.
 - **Lattice-constrained geometry.** Geometries are created relative to the unit cell lattice, and operations on those geometries preserve lattice constraints. This makes it easier to design atomic crystal structures that are aligned, physically accurate, and manufacturable.
