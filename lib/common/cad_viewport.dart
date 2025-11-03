@@ -117,34 +117,73 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
     print('PanZoomUpdate - localPosition: ${event.localPosition}, scale: ${event.scale}, pan: ${event.pan}, panDelta: ${event.panDelta}, rotation: ${event.rotation}');
     
+    // Check if Shift is pressed for panning mode
+    bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+    
     // Handle zoom from multiple sources
     bool zoomHandled = false;
     
-    // 1. Trackpad pinch-to-zoom (scale changes)
-    if (event.scale != 1.0) {
+    // 1. Trackpad pinch-to-zoom (scale changes) - only when Shift is NOT pressed
+    if (!isShiftPressed && event.scale != 1.0) {
       final scaleDelta = event.scale - 1.0;
-      final scrollDelta = -scaleDelta * 250.0; // Reduced sensitivity (was 1000.0)
+      final scrollDelta = -scaleDelta * 100.0; // Further reduced sensitivity (was 250.0)
       print('  -> Trackpad pinch: scaleDelta: $scaleDelta to scrollDelta: $scrollDelta');
       scroll(event.localPosition, scrollDelta);
       zoomHandled = true;
     }
     
-    // 2. Magic Mouse / Trackpad vertical pan for zoom (when no scale change)
-    if (!zoomHandled && event.panDelta.dy.abs() > 0.1) {
-      // Use vertical pan delta for zooming
-      final scrollDelta = event.panDelta.dy * 2.0; // Adjust sensitivity as needed
+    // 2. Shift + PanZoom for camera panning
+    if (isShiftPressed && (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
+      // Use pan delta for camera panning when Shift is pressed
+      print('  -> Shift + Pan: panDelta: ${event.panDelta} - starting camera pan');
+      // Convert pan delta to camera movement
+      panCameraWithDelta(event.localPosition, event.panDelta);
+      zoomHandled = true; // Prevent zoom when panning
+    }
+    
+    // 3. Magic Mouse / Trackpad vertical pan for zoom (when no scale change and Shift not pressed)
+    if (!zoomHandled && !isShiftPressed && event.panDelta.dy.abs() > 0.1) {
+      // Use vertical pan delta for zooming - increased sensitivity
+      final scrollDelta = event.panDelta.dy * 4.0; // Increased sensitivity (was 2.0)
       print('  -> Vertical pan zoom: panDelta.dy: ${event.panDelta.dy} to scrollDelta: $scrollDelta');
       scroll(event.localPosition, scrollDelta);
     }
-    
-    // Note: We don't use panDelta.dx for panning to avoid confusion
-    // All users (including trackpad) should use Shift + Right mouse drag for panning
   }
 
   // Handle trackpad/Magic Mouse pan-zoom end
   void onPointerPanZoomEnd(PointerPanZoomEndEvent event) {
     print('PanZoomEnd - localPosition: ${event.localPosition}, pointer: ${event.pointer}');
     // Clean up pan-zoom gesture if needed
+  }
+
+  // Convert pan delta to camera movement for Shift + PanZoom gestures
+  void panCameraWithDelta(Offset pointerPos, Offset panDelta) {
+    final camera = getCamera();
+    final cameraTransform = getCameraTransform(camera);
+    
+    if (cameraTransform == null) return;
+
+    // Calculate movement scale similar to existing camera move logic
+    double movePerPixel;
+    if (camera!.orthographic) {
+      movePerPixel = 2.0 * camera.orthoHalfHeight / viewportHeight;
+    } else {
+      var movePlaneDistance = (cameraTransform.pivotPoint - cameraTransform.eye)
+          .dot(cameraTransform.forward);
+      movePerPixel = 2.0 * movePlaneDistance * tan(camera.fovy * 0.5) / viewportHeight;
+    }
+
+    // Convert pan delta to camera movement (invert Y for natural feel)
+    var moveDelta = cameraTransform.right * ((-movePerPixel) * panDelta.dx) +
+        cameraTransform.up * (movePerPixel * panDelta.dy);
+
+    var newEye = cameraTransform.eye + moveDelta;
+    var newTarget = cameraTransform.target + moveDelta;
+
+    _moveCameraAndRender(
+        eye: Vector3ToAPIVec3(newEye),
+        target: Vector3ToAPIVec3(newTarget),
+        up: Vector3ToAPIVec3(cameraTransform.up));
   }
 
   void onPointerDown(PointerDownEvent event) {
