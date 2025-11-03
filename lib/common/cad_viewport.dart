@@ -106,6 +106,34 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     }
   }
 
+  // Handle trackpad/Magic Mouse pan-zoom start
+  void onPointerPanZoomStart(PointerPanZoomStartEvent event) {
+    print('PanZoomStart - localPosition: ${event.localPosition}, pointer: ${event.pointer}');
+    // Initialize pan-zoom gesture if needed
+  }
+
+  // Handle trackpad/Magic Mouse pan-zoom updates (includes zoom)
+  void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    print('PanZoomUpdate - localPosition: ${event.localPosition}, scale: ${event.scale}, pan: ${event.pan}, panDelta: ${event.panDelta}, rotation: ${event.rotation}');
+    
+    // Use scale for zoom: scale > 1.0 = zoom in, scale < 1.0 = zoom out
+    // Convert scale to scroll delta equivalent for existing scroll method
+    if (event.scale != 1.0) {
+      // Convert scale change to scroll delta
+      // Invert the scale logic: scale > 1.0 should zoom in (negative scroll delta)
+      final scaleDelta = event.scale - 1.0;
+      final scrollDelta = -scaleDelta * 1000.0; // Adjust multiplier as needed
+      print('  -> Converted scaleDelta: $scaleDelta to scrollDelta: $scrollDelta');
+      scroll(event.localPosition, scrollDelta);
+    }
+  }
+
+  // Handle trackpad/Magic Mouse pan-zoom end
+  void onPointerPanZoomEnd(PointerPanZoomEndEvent event) {
+    print('PanZoomEnd - localPosition: ${event.localPosition}, pointer: ${event.pointer}');
+    // Clean up pan-zoom gesture if needed
+  }
+
   void onPointerDown(PointerDownEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
       switch (event.buttons) {
@@ -534,6 +562,15 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
                 return Listener(
                   onPointerSignal: (pointerSignal) {
                     onPointerSignal(pointerSignal);
+                  },
+                  onPointerPanZoomStart: (PointerPanZoomStartEvent event) {
+                    onPointerPanZoomStart(event);
+                  },
+                  onPointerPanZoomUpdate: (PointerPanZoomUpdateEvent event) {
+                    onPointerPanZoomUpdate(event);
+                  },
+                  onPointerPanZoomEnd: (PointerPanZoomEndEvent event) {
+                    onPointerPanZoomEnd(event);
                   },
                   onPointerDown: (PointerDownEvent event) {
                     onPointerDown(event);
