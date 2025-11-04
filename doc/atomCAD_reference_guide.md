@@ -56,11 +56,19 @@ The node network results are displayed here.
 
 ![](./atomCAD_images/3d_viewport.png)
 
-You can navigate the viewport with the mouse as follows:
+You can navigate the viewport with the mouse or touchpad. Although it is possible to use atomCAD with a touchpad we strongly recommend using it with a mouse. You can choose between multiple control mechanism depending on your preference and constraints. (For example some mouses do not have a middle mouse button or a mouse wheel).
 
-- **Pan (move camera):** Middle mouse button + drag
-- **Orbit:** Right mouse button + drag
-- **Zoom:** Mouse scroll wheel
+- **Pan (move camera):**
+  - Option 1: **Middle mouse button drag**
+  - Option 2: SHIFT right mouse button drag
+  - Option 3: SHIFT *touch-pan*  (for Magic Mouse or touchpad)
+
+- **Orbit:** **Right mouse button drag**
+- **Zoom:** 
+  - Option 1: **Mouse scroll wheel**
+  - Option 2: Vertical component of *touch-pan* (for Magic Mouse and touchpad)
+  - Option 3: Pinch zoom (for touchpad)
+
 
 All three operations use a *pivot point*. The pivot is the point where you click when you start dragging: if you click an object, the pivot is the hit point on that object; otherwise the pivot is the point on the XY plane under the cursor. You can visualize the pivot as a small red cube in **Edit → Preferences** (`Display camera pivot point`). For example, orbiting rotates the camera around the pivot point, and zooming moves the camera toward (or away from) the pivot point.
 
@@ -115,8 +123,13 @@ Input pins can be array-typed. An array input pin is visually indicated with a s
 
 ### Navigating in the node network editor panel
 
-The node network canvas can be panned by dragging the middle mouse button.
-If you get lost you can use the 'View/Reset node network view' menu item.
+The node network canvas can be panned the following way:
+
+- Option1: **Middle mouse button drag**
+- Option 2: SHIFT right mouse button drag
+- Option 3: SHIFT *touch-pan* (for Magic Mouse or touchpad)
+
+If you get lost you can use the *View > Reset node network view* menu item.
 
 ### Manipulating nodes and wires
 

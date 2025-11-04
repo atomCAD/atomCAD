@@ -13,8 +13,8 @@ The upper part of the screen with the trusty cube in it is called the **viewport
 When using the application, you will navigate the viewport frequently. Practice these controls to ensure you can use them effortlessly:
 
 - Hover over the cube with the mouse, press and hold the right mouse button **(RMB)** and drag: this is how you **orbit** the camera.
-- If you drag with the middle mouse button (**MMB**) instead, you will **pan** the camera.
-- You can **zoom** in and out using the middle mouse wheel (**MMW**). 
+- If you drag with the middle mouse button (**MMB**) instead, you will **pan** the camera. You can also pan by holding SHIFT and RMB drag, or holding SHIFT and touch-panning on a touchpad.
+- You can **zoom** in and out using the middle mouse wheel (**MMW**). An alternative way is to use 'touch panning' on a MAgic Mouse or a touchpad, or pinch zooming on a touchpad.
 
 >**TIP:** The mouse pointer location when starting these operations determines your **pivot point**. A new pivot point is registered when you hover over an atomic structure, geometry, or the horizontal (XY) plane before starting these operations. You can enable pivot point visualization in **Edit > Preferences > Other Settings > Display camera pivot point**. (A small red cube will be displayed at the pivot point.)
 
@@ -35,7 +35,7 @@ We have a single cuboid node. You can select it by left-clicking on it. The node
 
 ![](./tutorial_images/cuboid_props.png)
 
-> **TIP:** You can drag a node by dragging it with the left mouse button. You can pan the node network canvas by dragging any empty space with the middle mouse button.
+> **TIP:** You can drag a node by dragging it with the left mouse button. You can pan the node network canvas by dragging any empty space with the middle mouse button. For panning holding SHIFT and RMB dragging also works, and also you can pan by shift *touch-panning*.
 
 ## Node properties and the lattice 
 
