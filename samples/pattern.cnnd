@@ -1,0 +1,330 @@
+{
+  "node_networks": [
+    [
+      "pattern",
+      {
+        "next_node_id": 9,
+        "node_type": {
+          "name": "pattern",
+          "parameters": [
+            {
+              "name": "index",
+              "data_type": "Int"
+            },
+            {
+              "name": "gap",
+              "data_type": "Int"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "parameter",
+            "position": [
+              193.60000000000105,
+              50.340000000000146
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "index",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "ivec3",
+            "position": [
+              593.6,
+              80.74000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "expr",
+            "position": [
+              380.7999999999989,
+              117.48000000000013
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "index * gap",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "index"
+                },
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "gap"
+                }
+              ]
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "int",
+            "position": [
+              23.99999999999858,
+              39.88000000000039
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 1
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "int",
+            "position": [
+              22.399999999999352,
+              131.08000000000192
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 4
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "parameter",
+            "position": [
+              188.7999999999999,
+              134.3400000000022
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "gap",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "cuboid",
+            "position": [
+              770.4000000000017,
+              67.14000000000158
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                2,
+                2,
+                2
+              ],
+              "min_corner": [
+                -1,
+                -1,
+                -1
+              ]
+            }
+          }
+        ],
+        "return_node_id": 5,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ],
+          [
+            1,
+            "Normal"
+          ],
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "sample",
+      {
+        "next_node_id": 7,
+        "node_type": {
+          "name": "sample",
+          "parameters": [],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "range",
+            "position": [
+              180.39999999999984,
+              13.939999999999486
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "count": 5,
+              "start": 0,
+              "step": 1
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "int",
+            "position": [
+              12.399999999999068,
+              137.14000000000112
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "union",
+            "position": [
+              653.1999999999991,
+              109.07999999999942
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "map",
+            "position": [
+              425.2000000000001,
+              85.93999999999994
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": -1
+                }
+              }
+            ],
+            "data_type": "map",
+            "data": {
+              "input_type": "Int",
+              "output_type": "Geometry"
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "pattern",
+            "position": [
+              190.8000000000004,
+              133.1399999999967
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            6,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 1
+}
