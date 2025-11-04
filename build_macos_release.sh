@@ -104,7 +104,7 @@ echo ""
 
 # Step 5: Verify release files exist
 RELEASE_PATH="build/macos/Build/Products/Release"
-APP_PATH="$RELEASE_PATH/flutter_cad.app"
+APP_PATH="$RELEASE_PATH/atomCAD.app"
 
 if [ ! -d "$RELEASE_PATH" ]; then
     echo "Error: Release directory not found: $RELEASE_PATH"
@@ -139,7 +139,7 @@ echo "Creating zip archive: $ZIP_FILENAME"
 
 # Create zip from Release folder contents (including the .app bundle)
 cd "$RELEASE_PATH"
-zip -r "$ZIP_PATH" flutter_cad.app
+zip -r "$ZIP_PATH" atomCAD.app
 cd "$PROJECT_ROOT"
 
 if [ ! -f "$ZIP_PATH" ]; then
@@ -159,7 +159,7 @@ echo "Release application: $APP_PATH"
 echo "Zip archive: dist/$ZIP_FILENAME ($ZIP_SIZE)"
 echo ""
 echo "The zip file contains the complete macOS application ready for distribution."
-echo "Extract and run flutter_cad.app on the target macOS machine."
+echo "Extract and run atomCAD.app on the target macOS machine."
 echo ""
 echo "Note: Users may need to right-click and select 'Open' the first time"
 echo "to bypass macOS Gatekeeper (since the app is not code signed)."

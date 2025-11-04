@@ -75,7 +75,7 @@ try {
 
     # Step 5: Verify release files exist
     $ReleasePath = "build\windows\x64\runner\Release"
-    $ExePath = "$ReleasePath\flutter_cad.exe"
+    $ExePath = "$ReleasePath\atomCAD.exe"
     
     if (-not (Test-Path $ReleasePath)) {
         throw "Release directory not found: $ReleasePath"

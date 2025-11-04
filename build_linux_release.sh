@@ -105,7 +105,7 @@ echo ""
 
 # Step 5: Verify release files exist
 RELEASE_PATH="build/linux/x64/release/bundle"
-EXECUTABLE_PATH="$RELEASE_PATH/flutter_cad"
+EXECUTABLE_PATH="$RELEASE_PATH/atomCAD"
 
 if [ ! -d "$RELEASE_PATH" ]; then
     echo "Error: Release directory not found: $RELEASE_PATH"
@@ -160,7 +160,7 @@ echo "Release executable: $EXECUTABLE_PATH"
 echo "Archive: dist/$ARCHIVE_FILENAME ($ARCHIVE_SIZE)"
 echo ""
 echo "The tar.gz file contains the complete Linux application ready for distribution."
-echo "Extract and run: tar -xzf $ARCHIVE_FILENAME && cd bundle && ./flutter_cad"
+echo "Extract and run: tar -xzf $ARCHIVE_FILENAME && cd bundle && ./atomCAD"
 echo ""
 echo "Compatible with Ubuntu, Debian, Fedora, Arch, and most Linux distributions."
 echo "Requires: glibc 2.17+ (available on most modern Linux systems)"
