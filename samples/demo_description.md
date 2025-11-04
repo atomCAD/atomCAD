@@ -26,7 +26,7 @@ example of a truss structure that is aligned with <011>
 
 ## 2D Extrusion Demo
 ![](extrude-demo.png)
-**file:** [extrude_demo.cnnd](extrude_demo.cnnd)\
+**file:** [extrude-demo.cnnd](extrude-demo.cnnd)\
 **node network:** Demo_Extrusion\
 example of using polygons to make letters, extruding these polygons to make 3d geometry, and moving the geometry around to spell "MPS"
 
