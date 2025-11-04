@@ -7,7 +7,7 @@ With atomCAD you can design arbitrary covalently bonded atomic structures that a
 
 ## Download
 
-**Latest Release: [v0.0.1](https://github.com/atomCAD/atomCAD/releases/tag/v0.0.1)**
+**Latest Release: [v0.0.2](https://github.com/atomCAD/atomCAD/releases/tag/v0.0.2)**
 
 ## Features
 - **Arbitrary unit cells.** Any unit cell defined by the lattice parameters `(a, b, c, α, β, γ)` is supported. The implied crystal system (*cubic, tetragonal, orthorhombic, hexagonal, trigonal, monoclinic, triclinic*) and its symmetries are automatically determined.
