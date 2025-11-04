@@ -105,6 +105,8 @@ You can also export the currently visible atomic structures into .xyz or .mol fo
 
 ## Where to go next
 
+Check out the [atomCAD Demo Files](../samples/demo_description.md) to see some examples of what you can do with atomCAD.
+
 - Search for the `polygon` and `extrude` nodes in the [Reference Guide](./atomCAD_reference_guide.md): with these nodes you can create interesting geometries quickly. Also check out the `rect`, `union_2d`, `intersect_2d`, `diff_2d`, and `half_plane` nodes—these are helpful when creating 2D shapes. Always model as much as possible in 2D and use the extrude node: working in 2D is almost always easier and faster than working in 3D.
 - For most geometries, working in 2D and extruding will not be sufficient to reach the final shape. Besides the CSG operations (`union`, `intersect`, `diff`), you will need to learn to use the `half_space` node. It has a steep learning curve but is immensely powerful. As its name suggests, it represents an infinite half-space defined by the bounding plane and a direction (which side of the plane is filled). You could create any crystal geometry using only `half_space` nodes and CSG nodes. For example, it is easy to see that intersecting any geometry with a half-space is equivalent to using the boundary plane of the half-space as a cutter plane on the given geometry.
 - Learn about the `lattice_move` and `lattice_rot` nodes to transform your geometries with respect to lattice symmetries. 
