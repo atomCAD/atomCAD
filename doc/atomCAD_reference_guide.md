@@ -236,27 +236,45 @@ You create 2D geometry to eventually use the **extrude** node to create 3D geome
 
 #### int
 
-Outputs an integer value. 
+Outputs an integer value.
+
+![](./atomCAD_images/int.png)
 
 #### float
 
 Outputs a float value. 
 
+![](./atomCAD_images/float.png)
+
 #### ivec2
 
 Outputs an IVec2 value.
+
+![](./atomCAD_images/ivec2.png)
 
 #### ivec3
 
 Outputs an IVec3 value.
 
+![](./atomCAD_images/ivec3.png)
+
 #### vec2
 
 Outputs a Vec2 value.
 
+![](./atomCAD_images/vec2.png)
+
 #### vec3
 
 Outputs a Vec3 value.
+
+![](./atomCAD_images/vec3.png)
+
+#### string
+
+Outputs a String value.
+
+![](./atomCAD_images/string.png)
 
 #### expr
 
