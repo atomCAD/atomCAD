@@ -1,0 +1,1028 @@
+{
+  "node_networks": [
+    [
+      "hexagem",
+      {
+        "next_node_id": 38,
+        "node_type": {
+          "name": "hexagem",
+          "parameters": [],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 2,
+            "node_type_name": "half_space",
+            "position": [
+              499.812255859375,
+              92.42595214843756
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                -1,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "half_space",
+            "position": [
+              1678.4075927734375,
+              -142.89533691406243
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -2,
+                0,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 24,
+            "node_type_name": "int",
+            "position": [
+              899.8414916992188,
+              588.9596557617188
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 32,
+            "node_type_name": "inv_ivec3",
+            "position": [
+              860.7352294921875,
+              396.20562744140625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "half_space",
+            "position": [
+              1766.19189453125,
+              684.4540283203125
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "27": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                2,
+                1,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "half_space",
+            "position": [
+              1977.345947265625,
+              669.1722290039063
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "27": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                2,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 22,
+            "node_type_name": "ivec3",
+            "position": [
+              476.4102478027344,
+              610.01025390625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -1,
+                -1,
+                2
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "int",
+            "position": [
+              208.6509704589844,
+              200.75212402343757
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 3
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "half_space",
+            "position": [
+              1330.6209106445312,
+              579.2802612304688
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                1,
+                2
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "intersect",
+            "position": [
+              2096.013671875,
+              57.053637695312545
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0,
+                  "16": 0,
+                  "6": 0,
+                  "17": 0,
+                  "12": 0,
+                  "20": 0,
+                  "13": 0,
+                  "10": 0,
+                  "2": 0,
+                  "18": 0,
+                  "4": 0,
+                  "19": 0,
+                  "8": 0,
+                  "11": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 27,
+            "node_type_name": "inv_ivec3",
+            "position": [
+              1819.3004150390625,
+              378.89593505859375
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 17,
+            "node_type_name": "half_space",
+            "position": [
+              1338.19873046875,
+              386.51604003906255
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -2,
+                -1,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "half_space",
+            "position": [
+              1931.4197387695312,
+              477.4304077148438
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "27": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                -1,
+                -2
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 34,
+            "node_type_name": "atom_fill",
+            "position": [
+              2301.4725341796875,
+              42.874316406250074
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "half_space",
+            "position": [
+              1703.4132080078125,
+              478.6570922851563
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "27": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                0,
+                -2
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 25,
+            "node_type_name": "int",
+            "position": [
+              960.5991821289062,
+              746.5031616210938
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "half_space",
+            "position": [
+              1157.8628540039062,
+              558.505908203125
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                -2,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "half_space",
+            "position": [
+              1133.83984375,
+              343.75822753906255
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                0,
+                2
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 37,
+            "node_type_name": "scale_ivec3",
+            "position": [
+              1274.8558959960938,
+              217.91362304687505
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "int",
+            "position": [
+              775.538330078125,
+              245.4468872070313
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "half_space",
+            "position": [
+              1517.9932250976562,
+              -142.50458984374995
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                2,
+                0,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "half_space",
+            "position": [
+              1476.0170288085938,
+              29.97157592773442
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                2,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "half_space",
+            "position": [
+              1663.6090698242188,
+              21.619250488281295
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                -2,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "half_space",
+            "position": [
+              445.9791259765625,
+              353.26713867187505
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                1,
+                1
+              ],
+              "shift": 0
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            5,
+            "Normal"
+          ],
+          [
+            32,
+            "Normal"
+          ],
+          [
+            34,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "scale_ivec3",
+      {
+        "next_node_id": 7,
+        "node_type": {
+          "name": "scale_ivec3",
+          "parameters": [
+            {
+              "name": "scale_factor",
+              "data_type": "Int"
+            },
+            {
+              "name": "vec",
+              "data_type": "IVec3"
+            }
+          ],
+          "output_type": "IVec3"
+        },
+        "nodes": [
+          {
+            "id": 5,
+            "node_type_name": "parameter",
+            "position": [
+              586.071533203125,
+              85.15313720703125
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "scale_factor",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "int",
+            "position": [
+              224.61599731445312,
+              82.85528564453125
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 0
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "parameter",
+            "position": [
+              610.1491088867188,
+              226.7847900390625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "vec",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "ivec3",
+            "position": [
+              326.16387939453125,
+              283.218994140625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "expr",
+            "position": [
+              887.7874755859375,
+              170.5595703125
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "x*vec",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "x"
+                },
+                {
+                  "data_type": "IVec3",
+                  "data_type_str": null,
+                  "name": "vec"
+                }
+              ]
+            }
+          }
+        ],
+        "return_node_id": 2,
+        "displayed_node_ids": []
+      }
+    ],
+    [
+      "inv_ivec3",
+      {
+        "next_node_id": 4,
+        "node_type": {
+          "name": "inv_ivec3",
+          "parameters": [
+            {
+              "name": "vec",
+              "data_type": "IVec3"
+            }
+          ],
+          "output_type": "IVec3"
+        },
+        "nodes": [
+          {
+            "id": 2,
+            "node_type_name": "parameter",
+            "position": [
+              255.0072021484375,
+              165.6483154296875
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "vec",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "expr",
+            "position": [
+              484.4613037109375,
+              177.7056884765625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "-1*x",
+              "parameters": [
+                {
+                  "data_type": "IVec3",
+                  "data_type_str": null,
+                  "name": "x"
+                }
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "ivec3",
+            "position": [
+              349.9471435546875,
+              295.57958984375
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": []
+      }
+    ]
+  ],
+  "version": 2
+}

@@ -1,0 +1,972 @@
+{
+  "node_networks": [
+    [
+      "sample",
+      {
+        "next_node_id": 76,
+        "node_type": {
+          "name": "sample",
+          "parameters": [
+            {
+              "name": "thick",
+              "data_type": "Int"
+            }
+          ],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 68,
+            "node_type_name": "half_space",
+            "position": [
+              1251.3174743652344,
+              -494.6886108398437
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                1,
+                1,
+                8
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                -1,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 58,
+            "node_type_name": "half_space",
+            "position": [
+              650.8133544921875,
+              -575.2666442871093
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "54": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                1,
+                0
+              ],
+              "shift": 3
+            }
+          },
+          {
+            "id": 46,
+            "node_type_name": "half_space",
+            "position": [
+              608.3764953613281,
+              -387.3023803710937
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "52": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                2,
+                2,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                1,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 74,
+            "node_type_name": "lattice_rot",
+            "position": [
+              1581.6192626953125,
+              50.156335449218886
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "23": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 9,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 1
+            }
+          },
+          {
+            "id": 50,
+            "node_type_name": "int",
+            "position": [
+              -105.11534118652344,
+              -181.09302368164057
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 3
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "half_space",
+            "position": [
+              216.37176513671875,
+              194.8095886230469
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "49": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                1,
+                0
+              ],
+              "shift": 3
+            }
+          },
+          {
+            "id": 75,
+            "node_type_name": "union",
+            "position": [
+              2040.8208618164062,
+              -141.0156616210936
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "40": 0,
+                  "74": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 23,
+            "node_type_name": "diff",
+            "position": [
+              1147.020477294922,
+              -147.4670837402344
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "67": 0,
+                  "72": 0,
+                  "45": 0
+                }
+              }
+            ],
+            "data_type": "diff",
+            "data": {}
+          },
+          {
+            "id": 48,
+            "node_type_name": "half_space",
+            "position": [
+              241.39144897460935,
+              -168.264599609375
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                0,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 71,
+            "node_type_name": "lattice_rot",
+            "position": [
+              1732.3209991455078,
+              -385.61481323242185
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "67": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 2
+            }
+          },
+          {
+            "id": 45,
+            "node_type_name": "intersect",
+            "position": [
+              819.2022247314453,
+              -312.27380981445305
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "46": 0,
+                  "9": 0,
+                  "60": 0,
+                  "58": 0,
+                  "51": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 72,
+            "node_type_name": "lattice_move",
+            "position": [
+              1971.1800384521484,
+              -344.6236633300781
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "71": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "translation": [
+                0,
+                0,
+                14
+              ]
+            }
+          },
+          {
+            "id": 57,
+            "node_type_name": "half_space",
+            "position": [
+              169.2119140625,
+              338.66945190429686
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "49": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                -1,
+                0
+              ],
+              "shift": 3
+            }
+          },
+          {
+            "id": 53,
+            "node_type_name": "int",
+            "position": [
+              -39.60505676269531,
+              -453.7833618164061
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 3
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "half_space",
+            "position": [
+              837.2037658691406,
+              -529.9700134277343
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "54": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                -1,
+                0
+              ],
+              "shift": 8
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "half_space",
+            "position": [
+              522.1390380859375,
+              234.86998291015624
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                -1,
+                -1,
+                40
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                1,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 69,
+            "node_type_name": "half_space",
+            "position": [
+              1431.3174743652344,
+              -494.6886108398437
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                1,
+                0
+              ],
+              "shift": 5
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "intersect",
+            "position": [
+              722.3038024902344,
+              23.599505615234364
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "57": 0,
+                  "4": 0,
+                  "5": 0,
+                  "17": 0,
+                  "48": 0,
+                  "59": 0,
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 10,
+            "node_type_name": "half_space",
+            "position": [
+              215.3609619140625,
+              751.4594299316407
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                1,
+                0
+              ],
+              "shift": 8
+            }
+          },
+          {
+            "id": 66,
+            "node_type_name": "half_space",
+            "position": [
+              1081.220672607422,
+              -433.98872070312495
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                20
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                -1,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 54,
+            "node_type_name": "expr",
+            "position": [
+              191.74424743652344,
+              -265.52353515624986
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "49": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "x+1",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "x"
+                }
+              ]
+            }
+          },
+          {
+            "id": 60,
+            "node_type_name": "half_space",
+            "position": [
+              418.6324462890625,
+              -351.06254272460933
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                -1,
+                0
+              ],
+              "shift": 5
+            }
+          },
+          {
+            "id": 67,
+            "node_type_name": "intersect",
+            "position": [
+              1335.8854675292969,
+              -308.2786010742186
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "66": 0,
+                  "68": 0,
+                  "69": 0,
+                  "9": 0,
+                  "58": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "half_space",
+            "position": [
+              257.9483337402344,
+              31.708758544921864
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "49": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                -1,
+                0
+              ],
+              "shift": 3
+            }
+          },
+          {
+            "id": 42,
+            "node_type_name": "atom_fill",
+            "position": [
+              2331.3782348632812,
+              -165.96553955078122
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "75": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 51,
+            "node_type_name": "half_space",
+            "position": [
+              612.0876770019531,
+              -204.64362792968743
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "52": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                2,
+                2,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                1,
+                1,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 49,
+            "node_type_name": "parameter",
+            "position": [
+              -110.29444885253906,
+              -74.72583618164055
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "50": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "thick",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 40,
+            "node_type_name": "lattice_rot",
+            "position": [
+              1805.74267578125,
+              -24.327600097656216
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "74": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 12,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 1
+            }
+          },
+          {
+            "id": 52,
+            "node_type_name": "ivec3",
+            "position": [
+              182.8846893310547,
+              -452.16855468749986
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "53": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "53": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 59,
+            "node_type_name": "half_space",
+            "position": [
+              196.26690673828125,
+              551.3471862792969
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                -1,
+                0
+              ],
+              "shift": 8
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            42,
+            "Normal"
+          ],
+          [
+            75,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}
