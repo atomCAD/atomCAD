@@ -27,13 +27,6 @@ Planned features include:
 
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
 
-### Notations in this document
-
-Instead of the usual TODO notation we use TODOC and TODEV notation in this document:
-
-- TODEV: means that the feature mentioned needs to be developed and documented
-- TODOC: means that something needs to be documented but is already developed in atomCAD
-
 ## Parts of the UI
 
 This is how the full window looks like:
@@ -117,8 +110,6 @@ Currently, only one node or one wire may be selected at a time by left-clicking 
 **Visibility vs selection**
 Selecting a node does *not* make its output visible. Node visibility is controlled independently by the eye icon in the node’s upper-right corner. The **Geometry Visualization** preferences panel also contains node display policies that may automatically change node visibility when selections change (see **Geometry Visualization** preferences).
 
-TODEV: being able to select and drag multiple nodes should be possible.
-
 ### Node Properties Panel
 
 The properties of the active node can be edited here.
@@ -170,7 +161,8 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, and fo
 
 ![](./atomCAD_images/menu_bar.png)
 
-
+- *File > Load Design*, *File > Save Design*, *File > Save Design As*: The native file format of an atomCAD design is the .cnnd file format. CNND stands for Crystal Node Network Design. It is a json based format. It contains a list of node networks. Can be used as a design file or as a design library file intended for reusing node networks from it as custom nodes in other designs.
+- *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
 
 ## Node Networks
 
@@ -624,6 +616,9 @@ Striped rendering is only a visualization aid; it does not affect Boolean result
 #### facet_shell
 
 Builds a finite polyhedral **shell** by clipping an infinite lattice with a user‑supplied set of half‑spaces.
+
+> WARNING: **facet_shell** currently only works correctly with cubic unit cells. We intend to add proper generic unit cell support to the **facet_shell** node in the future.
+
 Internally it is implemented as the intersection of a set of half spaces: the reason for having this as a separate
 built-in node is a set of convenience features.
 Ideal for generating octahedra, dodecahedra, truncated polyhedra, Wulff shapes.
@@ -685,38 +680,71 @@ diff(base, sub) = diff(union(...each base input...), union(...each sub input...)
 
 #### lattice_move
 
-Moves the geometry in the discrete lattice space with a relative vector.
-'Continuous' transformation in the lattice space is not allowed (for continuous transformations use the atom_trans node which is only available for atomic structures).
+**Moves** the geometry in the **discrete lattice space** with a relative vector.
+
+![](./atomCAD_images/lattice_move.png)
+
+
+
+*Continuous* transformation in the lattice space is not allowed (for continuous transformations use the `atom_trans` node which is only available for atomic structures).
 
 You can directly enter the translation vector or drag the axes of the gadget.
 
-TODOC: screenshots
-
 #### lattice_rot
 
-Rotates geometry in lattice space. Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
-You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.
+**Rotates** geometry in lattice space.
 
-TODOC: screenshots 
+![](./atomCAD_images/lattice_rot.png)
+
+Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
+You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.
 
 ### Atomic structure nodes
 
 #### import_xyz
 
 Imports an atomic structure from an xyz file.
+
+![](./atomCAD_images/import_xyz.png)
+
 It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.
+
+#### export_xyz
+
+Exports atomic structure on its `molecule` input into an XYZ file.
+
+![](./atomCAD_images/export_xyz.png)
+
+The XYZ file will be exported when the node is evaluated. You can re-export by making the node invisible and visible again.
+
+This node will be most useful once we will support node network evaluation from the command line so that you will be able to create automated workflows ending in XYZ files. Just to export something manually you can use the *File > Export visible* menu item.
 
 #### atom_fill
 
-Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its input.
+Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its `shape` input.
 
-TODOC: more details, replace old geo_to_atom images
+![](./atomCAD_images/atom_fill_node.png)
 
-![](./atomCAD_images/geo_to_atom_node.png)
+![](./atomCAD_images/atom_fill_props.png)
 
-![](./atomCAD_images/geo_to_atom_props.png)
+![](./atomCAD_images/atom_fill_viewport.png)
 
-![](./atomCAD_images/geo_to_atom_viewport.png)
+The motif passed into the `motif` input pin is the motif used to fill the geometry. If no motif is passed in the cubic zincblende motif is used. (See also: `motif` node).
+
+In the Parameter *Element Value Definition* text area you can specify (override) the values of the parameter elements defined in the motif. If for the default (cubic zincblende motif) you specify the following:
+
+```
+PRIMARY Si
+SECONDARY C
+```
+
+The primary element changes from carbon to silicon:
+
+![](./atomCAD_images/silicon_carbide.png)
+
+
+
+You can also change the fractional motif offset vector. (Each component should be between 0 and 1). This can be useful to finetune where the cuts should be made on the crystal to avoid unwanted features like the methyl groups.
 
 #### atom_trans
 
@@ -756,8 +784,6 @@ Features:
 - Delete selected
 - Replace all selected atom with a specific element
 - Transform (move and rotate) selected atoms
-
-TODEV: gadget for the transformation of the selected atoms
 
 ##### Add atom tool
 
