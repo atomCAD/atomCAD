@@ -10,6 +10,8 @@ When you open atomCAD you will see something like this:
 
 The upper part of the screen with the trusty cube in it is called the **viewport**, while the lower part of the screen is called the **node network editor**.
 
+> **TIP**: Although it is possible to use atomCAD with a touchpad **we strongly recommend using it with a mouse**.
+
 When using the application, you will navigate the viewport frequently. Practice these controls to ensure you can use them effortlessly:
 
 - Hover over the cube with the mouse, press and hold the right mouse button **(RMB)** and drag: this is how you **orbit** the camera.
