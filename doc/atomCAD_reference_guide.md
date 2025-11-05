@@ -27,7 +27,7 @@ Planned features include:
 
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
 
-## Notations in this document
+### Notations in this document
 
 Instead of the usual TODO notation we use TODOC and TODEV notation in this document:
 
@@ -50,13 +50,13 @@ We will discuss the different parts of the UI in detail. The parts are:
 - Geometry Visualization Preferences Panel
 - Camera Control Panel
 
-## 3D Viewport
+### 3D Viewport
 
 The node network results are displayed here.
 
 ![](./atomCAD_images/3d_viewport.png)
 
-You can navigate the viewport with the mouse or touchpad. Although it is possible to use atomCAD with a touchpad we strongly recommend using it with a mouse. You can choose between multiple control mechanism depending on your preference and constraints. (For example some mouses do not have a middle mouse button or a mouse wheel).
+You can navigate the viewport with the mouse or touchpad. Although it is possible to use atomCAD with a touchpad we **strongly recommend using it with a mouse**. You can choose between multiple control mechanisms depending on your preference and constraints. (For example some mouses do not have a middle mouse button or a mouse wheel).
 
 - **Pan (move camera):**
   - Option 1: **Middle mouse button drag**
@@ -72,58 +72,23 @@ You can navigate the viewport with the mouse or touchpad. Although it is possibl
 
 All three operations use a *pivot point*. The pivot is the point where you click when you start dragging: if you click an object, the pivot is the hit point on that object; otherwise the pivot is the point on the XY plane under the cursor. You can visualize the pivot as a small red cube in **Edit → Preferences** (`Display camera pivot point`). For example, orbiting rotates the camera around the pivot point, and zooming moves the camera toward (or away from) the pivot point.
 
-Orbiting is constrained so the camera never rolls (no tilt). This prevents users from getting disoriented. If you need complete freedom, a 6-degree-of-freedom (6DoF) camera mode will be available soon. 
+Orbiting is constrained so the camera never rolls (no tilt). This prevents users from getting disoriented. If you need complete freedom, a 6-degree-of-freedom (6DoF) camera mode will be developed soon. 
 
-## Node network composability and Node Networks list panel
+### Node network composability and Node Networks list panel
 
-A **node network** is a collection of nodes. A node may be either a built-in node or a custom node.
- You create a custom node by adding a node network whose name matches the custom node’s name — that node network becomes the implementation of the custom node. In other words, node networks act like functions: when node `B` is used inside node network `A`, the network `B` serves as a subnetwork of `A`.
-
-Because nodes can have parameters and outputs, subnetworks can expose inputs and outputs that map to the outer node’s parameters — you will see how to set these up in the subnetworks section later in this document.
-
-A structure design consists of node networks. The list of node networks in the current design is shown in the **Node Networks** panel. Select a network in the panel to open it in the node network editor. To create a new network, click the **Add Network** button..
+A structure design consists of node networks. The list of node networks in the current design is shown in the **Node Networks** panel. Select a network in the panel to open it in the node network editor. To create a new network, click the **Add Network** button.
 
 ![](./atomCAD_images/node_networks_list_panel.png)
 
-## Node network editor panel
+### Node network editor panel
 
 ![](./atomCAD_images/node_network_editor_panel.png)
 
-### Anatomy of a node
+#### Navigating in the node network editor panel
 
-![](./atomCAD_images/node_anatomy.png)
+There will be a separate longer chapter in this document about node networks. Here we just discuss how to use the node network editor panel in general. If this UI chapter does not make sense yet to you, come back to it after reading the node networks chapter.
 
-### Anatomy of a node
-
-A **node** may have zero or more *named input pins* (also called the node’s *parameters*). Each node has exactly one *regular output pin*, located at the right-center of the node, and one *function pin*, located at the upper-right corner (the function pin is described in the functional programming section).
-
-Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. TODOC: type conversion rules.
-
-Supported basic data types include:
-
-- `Bool`
-- `String`
-- `Int`
-- `Float`
-- `Vec2` — 2D vector
-- `Vec3` — 3D vector
-- `IVec2` — 2D integer vector
-- `IVec3` — 3D integer vector
-- `UnitCell`
-- `Geometry2D`
-- `Geometry` — 3D geometry
-- `Atomic` — atomic structure
-- `Motif`
-
-Array types are supported. The type `[Int]` means an array of `Int` values.
-
-Function types are written `A -> B`: a function that takes a parameter of type `A` and returns a value of type `B` has type `A -> B`.
-
-Input pins can be array-typed. An array input pin is visually indicated with a small dot. Node networks provide a convenience where you can connect multiple wires into an array-typed input pin; the connected values are concatenated into a single array. Also, a value of type `T` is implicitly convertible to an array of `T` (`T` → `[T]`).
-
-### Navigating in the node network editor panel
-
-The node network canvas can be panned the following way:
+The node network editor canvas can be panned the following way:
 
 - Option1: **Middle mouse button drag**
 - Option 2: SHIFT right mouse button drag
@@ -131,7 +96,7 @@ The node network canvas can be panned the following way:
 
 If you get lost you can use the *View > Reset node network view* menu item.
 
-### Manipulating nodes and wires
+#### Manipulating nodes and wires
 
 **Add nodes**
 Right-click in the node editor to open the **Add Node** menu and add a new node.
@@ -154,18 +119,7 @@ Selecting a node does *not* make its output visible. Node visibility is controll
 
 TODEV: being able to select and drag multiple nodes should be possible.
 
-### Node properties vs. input pins
-
-- Most placed node is the node network has associated data. This data consists of properties of the node which are editable in the node properties panel.
-- Often a node has both a property and input pin for the same concept. For example the cuboid node has a Min corner property and also has a min_corner input pin. In these cases you can both manually (property) and programmatically (input pin) control this aspect. The input pin always takes precedence.
-
-As an example see the input pins and the properties of the `cuboid` node:
-
-![](./atomCAD_images/cuboid_node.png)
-
-![](./atomCAD_images/cuboid_props.png)
-
-## Node Properties Panel
+### Node Properties Panel
 
 The properties of the active node can be edited here.
 
@@ -176,13 +130,13 @@ This is different for each node, we will discuss this in depth at the specific n
 - When dragging the mouse on integer number editor fields the number can be
 incremented or decremented using the moue wheel. Shift + mouse wheel works in 10 increments.
 
-## Geometry Visualization Preferences Panel
+### Geometry Visualization Preferences Panel
 
 .This panel contains common settings for how geometry nodes are visualized.
 
 ![](./atomCAD_images/geometry_visualization_preferences_panel.png)
 
-### Visualization mode
+#### Visualization mode
 
 Choose how geometry node outputs are rendered:
 
@@ -192,7 +146,7 @@ Choose how geometry node outputs are rendered:
 
 In **Surface Splatting** and **Solid** modes the outer surface is shown in green and the inner surface in red (inner = surface facing inward).
 
-### Node display policy
+#### Node display policy
 
 Choose how node output visibility is managed:
 
@@ -204,21 +158,113 @@ Choose how node output visibility is managed:
 
 Even when a non-Manual policy is active, you can still toggle a node’s visibility manually using the eye icon; that manual visibility will persist until the selection or policy changes it.
 
-## Camera Control Panel
+### Camera Control Panel
 
 Contains common settings for the camera.
 
 ![](./atomCAD_images/camera_control_panel.png)
 
-## Menu Bar
+### Menu Bar
 
 Used for loading and saving a design, exporting a design to .xyz or .mol, and for opening the preferences panel.
 
 ![](./atomCAD_images/menu_bar.png)
 
-## Subnetworks
 
-TODOC: parameter nodes and output nodes
+
+## Node Networks
+
+A **node network** is a collection of nodes. A node may be either a built-in node or a custom node.
+
+### Anatomy of a node
+
+![](./atomCAD_images/node_anatomy.png)
+
+A **node** may have zero or more *named input pins* (also called the node’s *parameters*). Each node has exactly one *regular output pin*, located at the right-center of the node, and one *function pin*, located at the upper-right corner (the function pin is described in the functional programming section).
+
+Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. (We will discuss implicit conversion soon.)
+
+### Data types
+
+Supported basic data types include:
+
+- `Bool`
+- `String`
+- `Int`
+- `Float`
+- `Vec2` — 2D vector
+- `Vec3` — 3D vector
+- `IVec2` — 2D integer vector
+- `IVec3` — 3D integer vector
+- `UnitCell`
+- `Geometry2D`
+- `Geometry` — 3D geometry
+- `Atomic` — atomic structure
+- `Motif`
+
+Array types are supported. The type `[Int]` means an array of `Int` values.
+
+Function types are written `A -> B`: a function that takes a parameter of type `A` and returns a value of type `B` has type `A -> B`.
+
+Input pins can be array-typed. An array input pin is visually indicated with a small dot. Node networks provide a convenience that you can connect multiple wires into an array-typed input pin: the connected values will be concatenated into a single array. Also, a value of type `T` is implicitly convertible to an array of `T` (`T` → `[T]`).
+
+#### Implicit type conversion rules
+
+- `Int` and `Float` can be implicitly converted to each other in both directions. When converting a `Float` to an `Int` it is rounded to the nearest integer.
+- Similarly there is implicit conversion between `IVec2` and `Vec2`, and also between `IVec3` and `Vec3`.
+- If `T` is implicitly convertible to `S` then `T` is also implicitly convertible to `[S]`.
+- An essential feature for higher order functions is this: Function type `F` can be converted to function type `G` if:
+  - `F` and `G` have the same return type
+  - `F` contains all parameters of `G` as its first parameters. (`F` can have additional parameters)
+
+### Node properties vs. input pins
+
+- Most placed node is the node network has associated data. This data consists of properties of the node which are editable in the node properties panel.
+- Often a node has both a property and input pin for the same concept. For example the cuboid node has a Min corner property and also has a min_corner input pin. In these cases you can both manually (property) and programmatically (input pin) control this aspect. The input pin always takes precedence.
+
+As an example see the input pins and the properties of the `cuboid` node:
+
+![](./atomCAD_images/cuboid_node.png)
+
+![](./atomCAD_images/cuboid_props.png)
+
+### Subnetworks
+
+You create a custom node by adding a node network whose name matches the custom node’s name — that node network becomes the implementation of the custom node. In other words, node networks act like functions: when node `B` is used inside node network `A`, the network `B` serves as a subnetwork of `A`.
+
+As built-in nodes, custom nodes also can have input pins (a.k.a parameters) and an output pin.
+
+To set up an input pin (parameter) of your custom node you need to use a `parameter` node in your subnetwork.
+
+![](./atomCAD_images/parameter.png)
+
+The above image shows a subnetwork named `cube` which has an integer parameter defined name `size`.
+
+The *sort order* property of a parameter determines the order of the parameters in the resulting custom node.
+
+To make a subnetwork 'return a value' you need to set its *output node*. The output node will supply the output value of the custom node we are defining with our subnetwork. It is similar to a return statement in a programming language. You can set a node as an output node of its node network by right clicking on it and selecting the *Set as return node* menu item. 
+
+![](./atomCAD_images/return_node.png)
+
+Now that we created the `cube` subnetwork when adding a node in a different node network the `cube` custom node will be available: 
+
+![](./atomCAD_images/add_cube.png)
+
+The cube node will have the `Int` typed `size` input pin and a `Geometry` typed output pin:
+
+![](./atomCAD_images/cube_node.png)
+
+### Functional programming in atomCAD
+
+One of the key nodes to make an atomCAD node network more dynamic is the `expr` node. And `expr` node can represent arbitrary mathematical operations and even supports branching with the `if then else` construct. (See the description of the `expr` node in the nodes reference below.)
+
+To create complex programming logic in atomCAD the expr node is not enough: you need to use nodes which represent higher order functions. Currently only the `map` higher order function node is supported, but we plan to add more (e.g. filter, reduce).
+
+To use a higher order function in any language effectively a language feature to be able to dynamically create a *function value* depending on parameters is needed: in some languages these are *closures*, in other languages it is *partial function application*. In an atomCAD node network is it achieved in a very simple way: as we mentioned at the implicit conversion rules: you can supply a function into a function typed input pin that has extra parameters. These extra parameters are bound at the time the function's real time value is created, and this dynamic function value is supplied to the higher order function. (See the description of the `map` node below where we discuss this with a concrete example.)
+
+Another important node for functional programming is the `range` node which creates an array of integers that can be supplied to nodes like the `map` node.
+
+To see functional programming in atomCAD in action please check out the *Pattern* demo [in the demos document](../samples/demo_description.md).
 
 ## Nodes reference
 
@@ -365,6 +411,7 @@ Integers and integer vectors automatically promote to floats and float vectors w
 - `icross(ivec3, ivec3)` - 3D integer cross product (returns ivec3)
 
 **Mathematical Functions:**
+
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
 - `sqrt(x)` - Square root
 - `abs(x)` - Absolute value (float)
@@ -399,17 +446,27 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 
 #### range
 
+Creates an array of integers starting from an integer value and having a specified step between them. The number of integers in the array can also be specified (count).
+
 ![](./atomCAD_images/range_node_props.png)
 
 #### map
 
-TODOC
+Takes an array of values (`xs`) applies the supplied `f` function on all of them and produces an array of the output values.
 
 ![](./atomCAD_images/map_node_props_viewport.png)
 
+To see the map node in action please check out the *Pattern* demo [in the demos document](../samples/demo_description.md).
+
+The above image shows the node network used in the Pattern demo. You can see that the input type chosen for the map node is `Int` and the output type is `Geoemtry`. The data type of the `f` input pin is therefore `Int -> Geometry`. You can see this if you hover over the `f` input pin with the mouse:
+
+![](./atomCAD_images/map_input_pin_type.png)
+
+You can see that the `pattern` custom node in this case has an additional input pin in addition to the required one `Int` input pin: the `gap` pin. As discussed in the functional programming chapter, additional inputs are bound when the function value is supplied to the `map` node (this can be seen as a partial function application): this is the case with the `gap` input pin in this case and so this way the gap of the pattern can be parameterized.
+
 ### 2D Geometry nodes
 
-These nodes output a 2D geometry which can be used later as an input to an extrude node to create 3d geoemtry.
+These nodes output a 2D geometry which can be used later as an input to an extrude node to create 3d geometry.
 2D geometry nodes are on the XY plane.
 Similarly to the 3D geometry nodes, positions and sizes are usually discrete integer numbers meant in crystal lattice coordinates.
 
