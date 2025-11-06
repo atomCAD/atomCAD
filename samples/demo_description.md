@@ -42,3 +42,8 @@ example of a "diamond-like" shape made of diamond
 **node network:** sample\
 Demonstrates how to make a repeating rotary pattern and the different axes available for rotation in atomCAD. Change the value of the integer connected to the parameter "change_this_value" to change the axis of rotation.
 
+## Rutile Motif
+![](motif_rutile_unit_cell.png)\
+**file:** [rutile-motif.cnnd](rutile-motif.cnnd)\
+**node network:** sample\
+Example of how to make and use a motif to make a custom crystal structure. In this example the crystal structure of the TiO2 mineral rutile is modeled.
