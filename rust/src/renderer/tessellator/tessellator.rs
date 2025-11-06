@@ -1,8 +1,15 @@
 use super::super::mesh::Mesh;
 use super::super::mesh::Vertex;
 use super::super::mesh::Material;
+use super::occludable_mesh::{OccludableMesh, OccludableVertex};
 use glam::f64::{DQuat, DVec2, DVec3};
 use glam::Vec3;
+use bytemuck;
+
+pub struct OccluderSphere {
+    pub center: Vec3,        // Center of the sphere that occludes geometry
+    pub radius: f32,         // Radius of the occluding sphere
+}
 
 pub trait Tessellatable {
   fn tessellate(&self, output_mesh: &mut Mesh);
@@ -217,6 +224,124 @@ pub fn tessellate_sphere(
       );
     }
   }
+}
+
+pub fn tessellate_sphere_with_occlusion(
+    output_mesh: &mut Mesh,
+    center: &DVec3,
+    radius: f64,
+    horizontal_divisions: u32,
+    vertical_divisions: u32,
+    material: &Material,
+    occluder_spheres: &Vec<OccluderSphere>,
+) {
+    // Phase 1: Build complete sphere geometry in OccludableMesh
+    let mut occludable_mesh = OccludableMesh::new();
+    build_sphere_geometry(&mut occludable_mesh, center, radius, horizontal_divisions, vertical_divisions);
+    
+    // Phase 2: Mark occlusion for vertices and triangle centers
+    mark_occlusion(&mut occludable_mesh, occluder_spheres);
+    
+    // Phase 3: Add compressed mesh to output (handles all filtering and compression)
+    occludable_mesh.add_to_mesh(output_mesh, material);
+}
+
+/// Phase 1: Build complete sphere geometry without occlusion filtering
+fn build_sphere_geometry(
+    occludable_mesh: &mut OccludableMesh,
+    center: &DVec3,
+    radius: f64,
+    horizontal_divisions: u32,
+    vertical_divisions: u32,
+) {
+    // Add north pole
+    let north_pole_position = Vec3::new(center.x as f32, (center.y + radius) as f32, center.z as f32);
+    let north_pole_normal = Vec3::new(0.0, 1.0, 0.0);
+    let north_pole_index = occludable_mesh.add_vertex(OccludableVertex::new(north_pole_position, north_pole_normal, false));
+
+    // Add south pole
+    let south_pole_position = Vec3::new(center.x as f32, (center.y - radius) as f32, center.z as f32);
+    let south_pole_normal = Vec3::new(0.0, -1.0, 0.0);
+    let south_pole_index = occludable_mesh.add_vertex(OccludableVertex::new(south_pole_position, south_pole_normal, false));
+
+    // Add middle vertices
+    let non_pole_index_start = occludable_mesh.vertex_count() as u32;
+    for y in 1..vertical_divisions {
+        let v = (y as f64) / (vertical_divisions as f64);
+        let phi = v * std::f64::consts::PI;
+        for x in 0..horizontal_divisions {
+            let u = (x as f64) / (horizontal_divisions as f64);
+            let theta = u * 2.0 * std::f64::consts::PI;
+
+            let normal = DVec3::new(theta.sin() * phi.sin(), phi.cos(), theta.cos() * phi.sin());
+            let position = normal * radius + center;
+            
+            occludable_mesh.add_vertex(OccludableVertex::new(
+                position.as_vec3(),
+                normal.as_vec3(),
+                false, // Occlusion will be marked in Phase 2
+            ));
+        }
+    }
+
+    // Add north pole triangles
+    for x in 0..horizontal_divisions {
+        let v1_index = non_pole_index_start + x % horizontal_divisions;
+        let v2_index = non_pole_index_start + (x + 1) % horizontal_divisions;
+        occludable_mesh.add_triangle(north_pole_index, v1_index, v2_index, false); // Center occlusion marked in Phase 2
+    }
+
+    // Add south pole triangles
+    let last_longitude_index_start = non_pole_index_start + (vertical_divisions - 2) * horizontal_divisions;
+    for x in 0..horizontal_divisions {
+        let v1_index = last_longitude_index_start + x % horizontal_divisions;
+        let v2_index = last_longitude_index_start + (x + 1) % horizontal_divisions;
+        occludable_mesh.add_triangle(south_pole_index, v2_index, v1_index, false); // Center occlusion marked in Phase 2
+    }
+
+    // Add middle quads
+    for y in 1..(vertical_divisions - 1) {
+        let offset = non_pole_index_start + (y - 1) * horizontal_divisions;
+        for x in 0..horizontal_divisions {
+            let v0 = offset + (x + 1) % horizontal_divisions;
+            let v1 = offset + x % horizontal_divisions;
+            let v2 = offset + horizontal_divisions + x % horizontal_divisions;
+            let v3 = offset + horizontal_divisions + (x + 1) % horizontal_divisions;
+            occludable_mesh.add_quad(v0, v1, v2, v3, false); // Center occlusion marked in Phase 2
+        }
+    }
+}
+
+/// Phase 2: Mark occlusion for vertices and triangle centers
+fn mark_occlusion(occludable_mesh: &mut OccludableMesh, occluder_spheres: &Vec<OccluderSphere>) {
+    // Mark vertex occlusion
+    for vertex in &mut occludable_mesh.vertices {
+        vertex.occluded = is_vertex_inside_occluder_spheres(&vertex.position, occluder_spheres);
+    }
+    
+    // Mark triangle center occlusion
+    for triangle in &mut occludable_mesh.triangles {
+        // Calculate triangle center
+        let v0_pos = occludable_mesh.vertices[triangle.v0 as usize].position;
+        let v1_pos = occludable_mesh.vertices[triangle.v1 as usize].position;
+        let v2_pos = occludable_mesh.vertices[triangle.v2 as usize].position;
+        let triangle_center = (v0_pos + v1_pos + v2_pos) / 3.0;
+        
+        // Mark center occlusion
+        triangle.center_occluded = is_vertex_inside_occluder_spheres(&triangle_center, occluder_spheres);
+    }
+}
+
+// Helper function to check if a vertex is inside any occluder sphere
+fn is_vertex_inside_occluder_spheres(vertex_position: &Vec3, occluder_spheres: &Vec<OccluderSphere>) -> bool {
+    for sphere in occluder_spheres {
+        let distance_sq = (vertex_position - sphere.center).length_squared();
+        let radius_sq = sphere.radius * sphere.radius;
+        if distance_sq < radius_sq {
+            return true;
+        }
+    }
+    false
 }
 
 pub fn tessellate_cylinder(

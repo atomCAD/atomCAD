@@ -1,20 +1,17 @@
-use crate::renderer::mesh::Mesh;
-use crate::renderer::mesh::Material;
-use crate::common::atomic_structure::AtomicStructure;
-use crate::common::atomic_structure::Atom;
-use crate::common::atomic_structure::Bond;
-use crate::common::atomic_structure::AtomDisplayState;
-use crate::common::common_constants::DEFAULT_ATOM_INFO;
-use crate::common::common_constants::ATOM_INFO;
+use crate::renderer::tessellator::tessellator::{self, OccluderSphere};
+use crate::common::atomic_structure::{Atom, AtomicStructure, AtomDisplayState, Bond};
+use crate::common::common_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use crate::common::scene::Scene;
+use crate::renderer::mesh::{Mesh, Material};
 use crate::api::structure_designer::structure_designer_preferences::{AtomicStructureVisualizationPreferences, AtomicStructureVisualization};
-use super::tessellator;
-use glam::f32::Vec3;
 use glam::f64::DVec3;
+use glam::f32::Vec3;
 
 pub struct AtomicTessellatorParams {
-  pub sphere_horizontal_divisions: u32, // number sections when dividing by horizontal lines
-  pub sphere_vertical_divisions: u32, // number of sections when dividing by vertical lines
+  pub ball_and_stick_sphere_horizontal_divisions: u32, // Ball-and-stick sphere horizontal divisions
+  pub ball_and_stick_sphere_vertical_divisions: u32,   // Ball-and-stick sphere vertical divisions
+  pub space_filling_sphere_horizontal_divisions: u32,  // Space-filling sphere horizontal divisions
+  pub space_filling_sphere_vertical_divisions: u32,    // Space-filling sphere vertical divisions
   pub cylinder_divisions: u32,
 }
 
@@ -84,9 +81,48 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
   }
 }
 
+// Calculate occluder spheres for space-filling visualization
+fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, visualization: &AtomicStructureVisualization) -> Vec<OccluderSphere> {
+  let mut occluder_spheres = Vec::new();
+  
+  // Only calculate occlusion for space-filling mode
+  if *visualization != AtomicStructureVisualization::SpaceFilling {
+    return occluder_spheres;
+  }
+  
+  // Find bonded neighbors
+  for (_bond_id, bond) in atomic_structure.bonds.iter() {
+    let neighbor_id = if bond.atom_id1 == atom.id {
+      bond.atom_id2
+    } else if bond.atom_id2 == atom.id {
+      bond.atom_id1
+    } else {
+      continue; // This bond doesn't involve our atom
+    };
+    
+    if let Some(neighbor) = atomic_structure.atoms.get(&neighbor_id) {
+      let neighbor_info = ATOM_INFO.get(&neighbor.atomic_number).unwrap_or(&DEFAULT_ATOM_INFO);
+      let neighbor_radius = neighbor_info.van_der_waals_radius;
+      
+      // Simple approach: use the neighbor's Van der Waals sphere as an occluder
+      // Any vertex of our atom that falls inside this sphere will be culled
+      occluder_spheres.push(OccluderSphere {
+        center: neighbor.position.as_vec3(),
+        radius: neighbor_radius as f32,
+      });
+    }
+  }
+  
+  occluder_spheres
+}
+
 pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization) {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
+
+  //if atom.atomic_number == 1 {
+  //  return; // Temporarily test without Hydrogen
+  //}
 
   let cluster_selected = _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
   let selected = atom.selected || cluster_selected;
@@ -98,18 +134,49 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
     atom_info.color
   };
   
-  // Render the atom sphere with its normal color
-  tessellator::tessellate_sphere(
-    if cluster_selected { selected_clusters_mesh } else { output_mesh },
-    &atom.position,
-    get_displayed_atom_radius(atom, visualization),
-    params.sphere_horizontal_divisions,
-    params.sphere_vertical_divisions,
-    &Material::new(
-      &atom_color, 
-      if selected { 0.2 } else { 0.8 },
-      0.0),
-  );
+  // Get appropriate tessellation parameters based on visualization mode
+  let (horizontal_divisions, vertical_divisions) = match visualization {
+    AtomicStructureVisualization::BallAndStick => (
+      params.ball_and_stick_sphere_horizontal_divisions,
+      params.ball_and_stick_sphere_vertical_divisions
+    ),
+    AtomicStructureVisualization::SpaceFilling => (
+      params.space_filling_sphere_horizontal_divisions,
+      params.space_filling_sphere_vertical_divisions
+    ),
+  };
+  
+  // Calculate occluder spheres for occlusion culling
+  let occluder_spheres = calculate_occluder_spheres(atom, _model, visualization);
+  
+  // Render the atom sphere with occlusion culling if in space-filling mode
+  if *visualization == AtomicStructureVisualization::SpaceFilling && !occluder_spheres.is_empty() {
+    tessellator::tessellate_sphere_with_occlusion(
+      if cluster_selected { selected_clusters_mesh } else { output_mesh },
+      &atom.position,
+      get_displayed_atom_radius(atom, visualization),
+      horizontal_divisions,
+      vertical_divisions,
+      &Material::new(
+        &atom_color, 
+        if selected { 0.2 } else { 0.8 },
+        0.0),
+      &occluder_spheres,
+    );
+  } else {
+    // Use regular tessellation for ball-and-stick or when no occlusion
+    tessellator::tessellate_sphere(
+      if cluster_selected { selected_clusters_mesh } else { output_mesh },
+      &atom.position,
+      get_displayed_atom_radius(atom, visualization),
+      horizontal_divisions,
+      vertical_divisions,
+      &Material::new(
+        &atom_color, 
+        if selected { 0.2 } else { 0.8 },
+        0.0),
+    );
+  }
   
   // Add a 3D crosshair for marked atoms
   match display_state {

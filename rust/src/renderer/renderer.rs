@@ -115,7 +115,7 @@ impl Renderer {
           up: DVec3::new(0.0, 0.32, 0.95),
           aspect: width as f64 / height as f64,
           fovy: std::f64::consts::PI * 0.15,
-          znear: 0.6,
+          znear: 1.0,
           zfar: 800.0,
           orthographic: false, // Default to perspective mode
           ortho_half_height: 10.0, // Default orthographic half height
@@ -553,8 +553,10 @@ impl Renderer {
             let mut selected_clusters_mesh = Mesh::new();
 
             let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
-                sphere_horizontal_divisions: 12,  // Good balance: not power of 2, divisible by 2,3,4,6
-                sphere_vertical_divisions: 6,     // 2:1 ratio maintains sphere proportions
+                ball_and_stick_sphere_horizontal_divisions: 12,  // Ball-and-stick: lower resolution
+                ball_and_stick_sphere_vertical_divisions: 6,     // Ball-and-stick: lower resolution
+                space_filling_sphere_horizontal_divisions: 36,   // Space-filling: higher resolution for Van der Waals
+                space_filling_sphere_vertical_divisions: 18,     // Space-filling: higher resolution for Van der Waals
                 cylinder_divisions: 12,
             };
 
