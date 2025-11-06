@@ -20,7 +20,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
         if let Some(atom) = structure.get_atom(atom_id) {
             let atom_radius = ATOM_INFO.get(&atom.atomic_number)
                 .unwrap_or(&DEFAULT_ATOM_INFO)
-                .radius;
+                .covalent_radius;
             
             if atom_radius > max_atom_radius {
                 max_atom_radius = atom_radius;
@@ -33,7 +33,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
             let atom_pos = atom.position;
             let atom_radius = ATOM_INFO.get(&atom.atomic_number)
                 .unwrap_or(&DEFAULT_ATOM_INFO)
-                .radius;
+                .covalent_radius;
             
             // MAke the maximum possible bond distance for this atom the search radius.
             // We need to use the max atom radius
@@ -65,7 +65,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
                 if let Some(nearby_atom) = structure.get_atom(nearby_atom_id) {
                     let nearby_atom_radius = ATOM_INFO.get(&nearby_atom.atomic_number)
                         .unwrap_or(&DEFAULT_ATOM_INFO)
-                        .radius;
+                        .covalent_radius;
                     
                     let distance = DVec3::distance(atom_pos, nearby_atom.position);                    
                     let max_bond_distance = (atom_radius + nearby_atom_radius) * BOND_DISTANCE_MULTIPLIER;

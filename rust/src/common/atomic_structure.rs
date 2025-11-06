@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::util::hit_test_utils;
 use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
+use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::renderer::tessellator::atomic_tessellator::BAS_STICK_RADIUS;
 use crate::api::common_api_types::SelectModifier;
 use std::hash::{Hash, Hasher};
@@ -685,14 +686,14 @@ impl AtomicStructure {
   /// Tests if a ray hits any atom or bond in the structure
   /// 
   /// Returns the closest hit with its distance, or HitTestResult::None if nothing was hit
-  pub fn hit_test(&self, ray_start: &DVec3, ray_dir: &DVec3) -> HitTestResult {
+  pub fn hit_test(&self, ray_start: &DVec3, ray_dir: &DVec3, visualization: &AtomicStructureVisualization) -> HitTestResult {
     let mut closest_hit: Option<(HitTestResult, f64)> = None;
 
     // Check atoms
     for atom in self.atoms.values() {
       if let Some(distance) = hit_test_utils::sphere_hit_test(
           &atom.position, 
-          get_displayed_atom_radius(atom), 
+          get_displayed_atom_radius(atom, visualization), 
           ray_start, 
           ray_dir) {
         // If this hit is closer than our current closest, replace it
@@ -702,17 +703,19 @@ impl AtomicStructure {
       }
     }
     
-    // Check bonds
-    for bond in self.bonds.values() {
-      if let Some(distance) = hit_test_utils::cylinder_hit_test(
-          &self.get_atom(bond.atom_id1).unwrap().position,
-          &self.get_atom(bond.atom_id2).unwrap().position,
-          BAS_STICK_RADIUS,
-          ray_start,
-          ray_dir) {
-        // If this hit is closer than our current closest, replace it
-        if closest_hit.is_none() || distance < closest_hit.as_ref().unwrap().1 {
-          closest_hit = Some((HitTestResult::Bond(bond.id, distance), distance));
+    // Only check bonds for ball-and-stick visualization
+    if *visualization == AtomicStructureVisualization::BallAndStick {
+      for bond in self.bonds.values() {
+        if let Some(distance) = hit_test_utils::cylinder_hit_test(
+            &self.get_atom(bond.atom_id1).unwrap().position,
+            &self.get_atom(bond.atom_id2).unwrap().position,
+            BAS_STICK_RADIUS,
+            ray_start,
+            ray_dir) {
+          // If this hit is closer than our current closest, replace it
+          if closest_hit.is_none() || distance < closest_hit.as_ref().unwrap().1 {
+            closest_hit = Some((HitTestResult::Bond(bond.id, distance), distance));
+          }
         }
       }
     }

@@ -7,7 +7,7 @@ use crate::common::atomic_structure::AtomDisplayState;
 use crate::common::common_constants::DEFAULT_ATOM_INFO;
 use crate::common::common_constants::ATOM_INFO;
 use crate::common::scene::Scene;
-use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences;
+use crate::api::structure_designer::structure_designer_preferences::{AtomicStructureVisualizationPreferences, AtomicStructureVisualization};
 use super::tessellator;
 use glam::f32::Vec3;
 use glam::f64::DVec3;
@@ -54,30 +54,37 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
       continue;
     }
     
-    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state);
+    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state, &atomic_viz_prefs.visualization);
   }
   
-  for (_id, bond) in atomic_structure.bonds.iter() {
-    // Check if both atoms of the bond should be rendered
-    let atom1 = atomic_structure.atoms.get(&bond.atom_id1);
-    let atom2 = atomic_structure.atoms.get(&bond.atom_id2);
-    
-    if let (Some(atom1), Some(atom2)) = (atom1, atom2) {
-      // Only tessellate the bond if both atoms are being rendered (not culled)
-      if !should_cull_atom(atom1, atomic_viz_prefs) && !should_cull_atom(atom2, atomic_viz_prefs) {
-        tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
+  // Only tessellate bonds for ball-and-stick visualization
+  if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
+    for (_id, bond) in atomic_structure.bonds.iter() {
+      // Check if both atoms of the bond should be rendered
+      let atom1 = atomic_structure.atoms.get(&bond.atom_id1);
+      let atom2 = atomic_structure.atoms.get(&bond.atom_id2);
+      
+      if let (Some(atom1), Some(atom2)) = (atom1, atom2) {
+        // Only tessellate the bond if both atoms are being rendered (not culled)
+        if !should_cull_atom(atom1, atomic_viz_prefs) && !should_cull_atom(atom2, atomic_viz_prefs) {
+          tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
+        }
       }
     }
   }
 }
 
-pub fn get_displayed_atom_radius(atom: &Atom) -> f64 {
+pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVisualization) -> f64 {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
-  atom_info.radius * BAS_ATOM_RADIUS_FACTOR
+  
+  match visualization {
+    AtomicStructureVisualization::BallAndStick => atom_info.covalent_radius * BAS_ATOM_RADIUS_FACTOR,
+    AtomicStructureVisualization::SpaceFilling => atom_info.van_der_waals_radius,
+  }
 }
 
-pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState) {
+pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization) {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
@@ -95,7 +102,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   tessellator::tessellate_sphere(
     if cluster_selected { selected_clusters_mesh } else { output_mesh },
     &atom.position,
-    get_displayed_atom_radius(atom),
+    get_displayed_atom_radius(atom, visualization),
     params.sphere_horizontal_divisions,
     params.sphere_vertical_divisions,
     &Material::new(
@@ -115,7 +122,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
       };
       
       // Calculate crosshair dimensions
-      let radius = get_displayed_atom_radius(atom);
+      let radius = get_displayed_atom_radius(atom, visualization);
       let half_length = radius * 1.5;
       let crosshair_radius = radius * 0.4;
 

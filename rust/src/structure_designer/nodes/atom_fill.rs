@@ -604,10 +604,10 @@ impl AtomFillData {
       } else {
         // General case: sum of covalent radii
         let atom_1_radius = ATOM_INFO.get(&found_atom.atomic_number)
-          .map(|info| info.radius)
+          .map(|info| info.covalent_radius)
           .unwrap_or(0.7); // Default radius if not found
         let hydrogen_radius = ATOM_INFO.get(&1)
-          .map(|info| info.radius)
+          .map(|info| info.covalent_radius)
           .unwrap_or(0.31); // Default hydrogen radius
         atom_1_radius + hydrogen_radius
       };

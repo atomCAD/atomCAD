@@ -13,6 +13,7 @@ use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::add_sample_network;
 use crate::api::api_common::refresh_renderer;
+use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
 use crate::api::api_common::with_mut_cad_instance;
@@ -267,8 +268,8 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
       // Get the current camera eye position
       let eye = cad_instance.renderer.camera.eye;
       
-      // Perform raytracing based on the active editor
-      let mut hit_distance = cad_instance.structure_designer.raytrace(&ray_origin, &ray_direction);
+      // Perform raytracing based on the active editor using space filling visualization for camera targeting
+      let mut hit_distance = cad_instance.structure_designer.raytrace(&ray_origin, &ray_direction, &AtomicStructureVisualization::SpaceFilling);
 
       // Fallback: Calculate where input ray intersects XY plane
       if hit_distance.is_none() {

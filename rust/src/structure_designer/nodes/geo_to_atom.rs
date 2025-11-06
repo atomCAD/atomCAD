@@ -328,7 +328,7 @@ pub fn estimate_unit_cell_size(primary_atomic_number: i32, secondary_atomic_numb
   if let (Some(primary), Some(secondary)) = (primary_info, secondary_info) {
     // Calculate estimated bond length based on covalent radii
     // For zinc blende structures, the bond length is approximately the sum of the covalent radii
-    let bond_length = primary.radius + secondary.radius;
+    let bond_length = primary.covalent_radius + secondary.covalent_radius;
       
     // In zinc blende/diamond structures, the unit cell size is approximately 4 times the bond length
     // between two adjacent atoms, divided by sqrt(3)

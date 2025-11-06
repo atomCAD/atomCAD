@@ -13,7 +13,7 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
-use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
+use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicStructureVisualization};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::HashSet;
@@ -789,16 +789,17 @@ impl StructureDesigner {
   /// 
   /// * `ray_origin` - The origin point of the ray
   /// * `ray_direction` - The direction vector of the ray (does not need to be normalized)
+  /// * `visualization` - The visualization mode to use for hit testing
   /// 
   /// # Returns
   /// 
   /// The distance to the closest intersection, or None if no intersection was found
-  pub fn raytrace(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<f64> {
+  pub fn raytrace(&self, ray_origin: &DVec3, ray_direction: &DVec3, visualization: &AtomicStructureVisualization) -> Option<f64> {
     let mut min_distance: Option<f64> = None;
     
     // First, check all atomic structures in the scene
     for atomic_structure in &self.last_generated_structure_designer_scene.atomic_structures {
-      match atomic_structure.hit_test(ray_origin, ray_direction) {
+      match atomic_structure.hit_test(ray_origin, ray_direction, visualization) {
         crate::common::atomic_structure::HitTestResult::Atom(_, distance) | 
         crate::common::atomic_structure::HitTestResult::Bond(_, distance) => {
           // Update minimum distance if this hit is closer

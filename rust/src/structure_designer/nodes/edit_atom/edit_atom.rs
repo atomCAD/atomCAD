@@ -18,6 +18,7 @@ use crate::structure_designer::nodes::edit_atom::commands::add_atom_command::Add
 use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::AddBondCommand;
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
 use crate::common::atomic_structure::BondReference;
+use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
 use crate::structure_designer::node_type::NodeType;
 
@@ -243,7 +244,8 @@ pub fn select_atom_or_bond_by_ray(structure_designer: &mut StructureDesigner, ra
   let atomic_structure = atomic_structure.unwrap();
     
   // Use the unified hit_test function instead of separate atom and bond tests
-  match atomic_structure.hit_test(ray_start, ray_dir) {
+  let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
+  match atomic_structure.hit_test(ray_start, ray_dir, visualization) {
     HitTestResult::Atom(atom_id, _distance) => {
       select_atom_by_id(structure_designer, atom_id, select_modifier);
       true
@@ -323,7 +325,8 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
   };
 
   // Find the atom along the ray, ignoring bond hits
-  let atom_id = match atomic_structure.hit_test(ray_start, ray_dir) {
+  let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
+  let atom_id = match atomic_structure.hit_test(ray_start, ray_dir, visualization) {
     HitTestResult::Atom(id, _) => id,
     _ => return,
   };
