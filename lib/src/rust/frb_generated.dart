@@ -5077,8 +5077,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return AtomicStructureVisualizationPreferences(
       visualization: dco_decode_atomic_structure_visualization(arr[0]),
-      ballAndStickCullDepth: dco_decode_opt_box_autoadd_f_32(arr[1]),
-      spaceFillingDepthCulling: dco_decode_bool(arr[2]),
+      ballAndStickCullDepth: dco_decode_opt_box_autoadd_f_64(arr[1]),
+      spaceFillingCullDepth: dco_decode_opt_box_autoadd_f_64(arr[2]),
     );
   }
 
@@ -5342,7 +5342,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double dco_decode_box_autoadd_f_32(dynamic raw) {
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
   }
@@ -5388,12 +5388,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       atomicNumber: dco_decode_i_32(arr[0]),
       elementName: dco_decode_String(arr[1]),
     );
-  }
-
-  @protected
-  double dco_decode_f_32(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as double;
   }
 
   @protected
@@ -5839,9 +5833,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double? dco_decode_opt_box_autoadd_f_32(dynamic raw) {
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_f_32(raw);
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
   }
 
   @protected
@@ -6542,12 +6536,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_visualization =
         sse_decode_atomic_structure_visualization(deserializer);
     var var_ballAndStickCullDepth =
-        sse_decode_opt_box_autoadd_f_32(deserializer);
-    var var_spaceFillingDepthCulling = sse_decode_bool(deserializer);
+        sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_spaceFillingCullDepth =
+        sse_decode_opt_box_autoadd_f_64(deserializer);
     return AtomicStructureVisualizationPreferences(
         visualization: var_visualization,
         ballAndStickCullDepth: var_ballAndStickCullDepth,
-        spaceFillingDepthCulling: var_spaceFillingDepthCulling);
+        spaceFillingCullDepth: var_spaceFillingCullDepth);
   }
 
   @protected
@@ -6844,9 +6839,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer) {
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_f_32(deserializer));
+    return (sse_decode_f_64(deserializer));
   }
 
   @protected
@@ -6889,12 +6884,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_elementName = sse_decode_String(deserializer);
     return ElementSummary(
         atomicNumber: var_atomicNumber, elementName: var_elementName);
-  }
-
-  @protected
-  double sse_decode_f_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getFloat32();
   }
 
   @protected
@@ -7624,11 +7613,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer) {
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_f_32(deserializer));
+      return (sse_decode_box_autoadd_f_64(deserializer));
     } else {
       return null;
     }
@@ -8243,8 +8232,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       AtomicStructureVisualizationPreferences self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_atomic_structure_visualization(self.visualization, serializer);
-    sse_encode_opt_box_autoadd_f_32(self.ballAndStickCullDepth, serializer);
-    sse_encode_bool(self.spaceFillingDepthCulling, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.ballAndStickCullDepth, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.spaceFillingCullDepth, serializer);
   }
 
   @protected
@@ -8548,9 +8537,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer) {
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_f_32(self, serializer);
+    sse_encode_f_64(self, serializer);
   }
 
   @protected
@@ -8591,12 +8580,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.atomicNumber, serializer);
     sse_encode_String(self.elementName, serializer);
-  }
-
-  @protected
-  void sse_encode_f_32(double self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putFloat32(self);
   }
 
   @protected
@@ -9231,12 +9214,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer) {
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
-      sse_encode_box_autoadd_f_32(self, serializer);
+      sse_encode_box_autoadd_f_64(self, serializer);
     }
   }
 

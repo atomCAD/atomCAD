@@ -389,30 +389,23 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           // Space filling specific settings
                           if (_preferences.atomicStructureVisualizationPreferences.visualization ==
                               AtomicStructureVisualization.spaceFilling) ...[
-                            Row(
-                              children: [
-                                Checkbox(
-                                  value: _preferences
+                            FloatInput(
+                              label: 'Space filling depth culling threshold (Å)',
+                              value: _preferences
+                                  .atomicStructureVisualizationPreferences
+                                  .spaceFillingCullDepth ?? 0.0,
+                              onChanged: (value) {
+                                setState(() {
+                                  _preferences
                                       .atomicStructureVisualizationPreferences
-                                      .spaceFillingDepthCulling,
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() {
-                                        _preferences
-                                            .atomicStructureVisualizationPreferences
-                                            .spaceFillingDepthCulling = value;
-                                      });
-                                      _applyPreferences();
-                                    }
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                const Text('Enable space filling depth culling'),
-                              ],
+                                      .spaceFillingCullDepth = value > 0.0 ? value : null;
+                                });
+                                _applyPreferences();
+                              },
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Improves performance by culling atoms that are completely hidden inside other atoms',
+                              'Atoms deeper than this threshold will be culled to improve performance (set to 0 to disable)',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey[600],

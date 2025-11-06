@@ -17,19 +17,19 @@ enum AtomicStructureVisualization {
 class AtomicStructureVisualizationPreferences {
   AtomicStructureVisualization visualization;
   double? ballAndStickCullDepth;
-  bool spaceFillingDepthCulling;
+  double? spaceFillingCullDepth;
 
   AtomicStructureVisualizationPreferences({
     required this.visualization,
     this.ballAndStickCullDepth,
-    required this.spaceFillingDepthCulling,
+    this.spaceFillingCullDepth,
   });
 
   @override
   int get hashCode =>
       visualization.hashCode ^
       ballAndStickCullDepth.hashCode ^
-      spaceFillingDepthCulling.hashCode;
+      spaceFillingCullDepth.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -38,7 +38,7 @@ class AtomicStructureVisualizationPreferences {
           runtimeType == other.runtimeType &&
           visualization == other.visualization &&
           ballAndStickCullDepth == other.ballAndStickCullDepth &&
-          spaceFillingDepthCulling == other.spaceFillingDepthCulling;
+          spaceFillingCullDepth == other.spaceFillingCullDepth;
 }
 
 enum GeometryVisualization {

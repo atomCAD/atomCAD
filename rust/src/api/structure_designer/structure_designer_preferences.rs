@@ -54,7 +54,7 @@ pub struct NodeDisplayPreferences {
 }
 
 #[frb]
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum AtomicStructureVisualization {
   BallAndStick,
   SpaceFilling,
@@ -66,9 +66,9 @@ pub struct AtomicStructureVisualizationPreferences {
   #[frb(non_final)]
   pub visualization: AtomicStructureVisualization,
   #[frb(non_final)]
-  pub ball_and_stick_cull_depth: Option<f32>,
+  pub ball_and_stick_cull_depth: Option<f64>,
   #[frb(non_final)]
-  pub space_filling_depth_culling: bool,
+  pub space_filling_cull_depth: Option<f64>,
 }
 
 #[frb]
@@ -97,7 +97,7 @@ impl StructureDesignerPreferences {
       atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences {
         visualization: AtomicStructureVisualization::BallAndStick,
         ball_and_stick_cull_depth: Some(8.0), // Conservative depth culling at 8.0 Angstroms
-        space_filling_depth_culling: true, // Enable depth culling for space filling by default
+        space_filling_cull_depth: Some(6.0), // Conservative depth culling at 6.0 Angstroms for space filling
       },
     }
   }

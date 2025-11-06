@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::common::atomic_structure::AtomicStructure;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -24,6 +24,7 @@ use crate::structure_designer::node_network::ValidationError;
 use crate::common::serialization_utils::dvec3_serializer;
 use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::evaluator::motif::SiteSpecifier;
+use crate::util::timer::Timer;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -226,6 +227,8 @@ impl NodeData for AtomFillData {
         Err(error) => return error,
       };
 
+      let _timer = Timer::new("AtomFill total");
+
       let mut atomic_structure = AtomicStructure::new();
       let mut statistics = AtomFillStatistics::new();
       let mut atom_tracker = PlacedAtomTracker::new();
@@ -233,26 +236,39 @@ impl NodeData for AtomFillData {
       // Calculate effective parameter element values (fill in defaults for missing values)
       let effective_parameter_values = motif.get_effective_parameter_element_values(&self.parameter_element_values);
 
-      self.fill_box(
-        &mesh.unit_cell,
-        &mesh.geo_tree_root,
-        &motif,
-        &REAL_IMPLICIT_VOLUME_MIN,
-        &(REAL_IMPLICIT_VOLUME_MAX - REAL_IMPLICIT_VOLUME_MIN),
-        &mut atomic_structure,
-        &mut statistics,
-        &effective_parameter_values,
-        &mut atom_tracker);
+      // Create a set to track which motif cells have been processed to avoid duplicates
+      let mut processed_cells = HashSet::new();
 
-      // Create bonds after all atoms have been placed
-      self.create_bonds(&motif, &atom_tracker, &mut atomic_structure, &mut statistics);
+      {
+        let _fill_timer = Timer::new("AtomFill geometry filling");
+        self.fill_box(
+          &mesh.unit_cell,
+          &mesh.geo_tree_root,
+          &motif,
+          &REAL_IMPLICIT_VOLUME_MIN,
+          &(REAL_IMPLICIT_VOLUME_MAX - REAL_IMPLICIT_VOLUME_MIN),
+          &mut atomic_structure,
+          &mut statistics,
+          &effective_parameter_values,
+          &mut atom_tracker,
+          &mut processed_cells);
+      }
+
+      {
+        let _bond_timer = Timer::new("AtomFill bond creation");
+        // Create bonds after all atoms have been placed
+        self.create_bonds(&motif, &atom_tracker, &mut atomic_structure, &mut statistics);
+      }
       
-      // Remove lone atoms before hydrogen passivation (passivation will bond them)
-      atomic_structure.remove_lone_atoms();
-      
-      // Apply hydrogen passivation after bonds are created and lone atoms removed
-      if self.hydrogen_passivation {
-        self.hydrogen_passivate(&mesh.unit_cell, &motif, &atom_tracker, &mut atomic_structure, &mut statistics);
+      {
+        let _cleanup_timer = Timer::new("AtomFill cleanup and passivation");
+        // Remove lone atoms before hydrogen passivation (passivation will bond them)
+        atomic_structure.remove_lone_atoms();
+        
+        // Apply hydrogen passivation after bonds are created and lone atoms removed
+        if self.hydrogen_passivation {
+          self.hydrogen_passivate(&mesh.unit_cell, &motif, &atom_tracker, &mut atomic_structure, &mut statistics);
+        }
       }
 
       // TODO: Log or use statistics for debugging/optimization
@@ -283,7 +299,8 @@ impl AtomFillData {
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
     parameter_element_values: &HashMap<String, i32>,
-    atom_tracker: &mut PlacedAtomTracker) {
+    atom_tracker: &mut PlacedAtomTracker,
+    processed_cells: &mut HashSet<IVec3>) {
     
     statistics.fill_box_calls += 1;
     let box_center = start_pos + size / 2.0;
@@ -318,7 +335,8 @@ impl AtomFillData {
         atomic_structure,
         statistics,
         parameter_element_values,
-        atom_tracker
+        atom_tracker,
+        processed_cells
       );
       return;
     }
@@ -343,7 +361,8 @@ impl AtomFillData {
         atomic_structure,
         statistics,
         parameter_element_values,
-        atom_tracker
+        atom_tracker,
+        processed_cells
       );
     }
   }
@@ -361,7 +380,8 @@ impl AtomFillData {
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
     parameter_element_values: &HashMap<String, i32>,
-    atom_tracker: &mut PlacedAtomTracker) {
+    atom_tracker: &mut PlacedAtomTracker,
+    processed_cells: &mut HashSet<IVec3>) {
     
     statistics.do_fill_box_calls += 1;
     statistics.do_fill_box_total_size += *size;
@@ -382,20 +402,25 @@ impl AtomFillData {
           
           // Check if this motif cell has any overlap with the real-space box
           if self.cell_overlaps_with_box(&cell_real_pos, unit_cell, start_pos, size) {
-            statistics.motif_cells_processed += 1;
-            
-            // Fill this motif cell with atoms from the motif
-            self.fill_cell(
-              unit_cell,
-              geo_tree_root,
-              motif,
-              &motif_pos,
-              &cell_real_pos,
-              atomic_structure,
-              statistics,
-              parameter_element_values,
-              atom_tracker
-            );
+            // Check if this motif cell has already been processed
+            if !processed_cells.contains(&motif_pos) {
+              // Mark this cell as processed
+              processed_cells.insert(motif_pos);
+              statistics.motif_cells_processed += 1;
+              
+              // Fill this motif cell with atoms from the motif
+              self.fill_cell(
+                unit_cell,
+                geo_tree_root,
+                motif,
+                &motif_pos,
+                &cell_real_pos,
+                atomic_structure,
+                statistics,
+                parameter_element_values,
+                atom_tracker
+              );
+            }
             
             // Commented out for testing - can be uncommented anytime
             // let cell_center = cell_real_pos + (unit_cell.a + unit_cell.b + unit_cell.c) / 2.0;

@@ -4812,9 +4812,9 @@ impl SseDecode
 impl SseDecode for crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences {
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {let mut var_visualization = <crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization>::sse_decode(deserializer);
-let mut var_ballAndStickCullDepth = <Option<f32>>::sse_decode(deserializer);
-let mut var_spaceFillingDepthCulling = <bool>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_depth_culling: var_spaceFillingDepthCulling};}
+let mut var_ballAndStickCullDepth = <Option<f64>>::sse_decode(deserializer);
+let mut var_spaceFillingCullDepth = <Option<f64>>::sse_decode(deserializer);
+return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth};}
                 }
 
 impl SseDecode for bool {
@@ -4833,13 +4833,6 @@ impl SseDecode for crate::api::common_api_types::ElementSummary {
             atomic_number: var_atomicNumber,
             element_name: var_elementName,
         };
-    }
-}
-
-impl SseDecode for f32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_f32::<NativeEndian>().unwrap()
     }
 }
 
@@ -5650,11 +5643,11 @@ impl SseDecode
     }
 }
 
-impl SseDecode for Option<f32> {
+impl SseDecode for Option<f64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<f32>::sse_decode(deserializer));
+            return Some(<f64>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -7346,7 +7339,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::structure_designer::structure
                     [
                     self.visualization.into_into_dart().into_dart(),
 self.ball_and_stick_cull_depth.into_into_dart().into_dart(),
-self.space_filling_depth_culling.into_into_dart().into_dart()
+self.space_filling_cull_depth.into_into_dart().into_dart()
                 ].into_dart()
                 }
             }
@@ -8212,8 +8205,8 @@ crate::api::structure_designer::structure_designer_preferences::AtomicStructureV
 impl SseEncode for crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences {
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {<crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization>::sse_encode(self.visualization, serializer);
-<Option<f32>>::sse_encode(self.ball_and_stick_cull_depth, serializer);
-<bool>::sse_encode(self.space_filling_depth_culling, serializer);}
+<Option<f64>>::sse_encode(self.ball_and_stick_cull_depth, serializer);
+<Option<f64>>::sse_encode(self.space_filling_cull_depth, serializer);}
                 }
 
 impl SseEncode for bool {
@@ -8228,13 +8221,6 @@ impl SseEncode for crate::api::common_api_types::ElementSummary {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.atomic_number, serializer);
         <String>::sse_encode(self.element_name, serializer);
-    }
-}
-
-impl SseEncode for f32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_f32::<NativeEndian>(self).unwrap();
     }
 }
 
@@ -8958,12 +8944,12 @@ impl SseEncode
     }
 }
 
-impl SseEncode for Option<f32> {
+impl SseEncode for Option<f64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <f32>::sse_encode(value, serializer);
+            <f64>::sse_encode(value, serializer);
         }
     }
 }

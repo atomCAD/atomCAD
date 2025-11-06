@@ -6,6 +6,7 @@ use crate::renderer::mesh::{Mesh, Material};
 use crate::api::structure_designer::structure_designer_preferences::{AtomicStructureVisualizationPreferences, AtomicStructureVisualization};
 use glam::f64::DVec3;
 use glam::f32::Vec3;
+use crate::util::timer::Timer;
 
 pub struct AtomicTessellatorParams {
   pub ball_and_stick_sphere_horizontal_divisions: u32, // Ball-and-stick sphere horizontal divisions
@@ -28,14 +29,30 @@ const SECONDARY_MARKER_COLOR: Vec3 = Vec3::new(0.0, 0.5, 1.0);
 
 /// Helper function to determine if an atom should be culled based on depth
 fn should_cull_atom(atom: &Atom, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) -> bool {
-  if let Some(cull_depth) = atomic_viz_prefs.ball_and_stick_cull_depth {
-    atom.in_crystal_depth > cull_depth
-  } else {
-    false
+  match atomic_viz_prefs.visualization {
+    AtomicStructureVisualization::BallAndStick => {
+      if let Some(cull_depth) = atomic_viz_prefs.ball_and_stick_cull_depth {
+        atom.in_crystal_depth > cull_depth as f32
+      } else {
+        false
+      }
+    }
+    AtomicStructureVisualization::SpaceFilling => {
+      if let Some(cull_depth) = atomic_viz_prefs.space_filling_cull_depth {
+        atom.in_crystal_depth > cull_depth as f32
+      } else {
+        false
+      }
+    }
   }
 }
 
 pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
+  let _timer = Timer::new("Atomic tessellation");
+
+  let mut culled_count = 0;
+  let mut tessellated_count = 0;
+  
   for (id, atom) in atomic_structure.atoms.iter() {
     // Get display state from the decorator and override it to Marked if scene.is_atom_marked is true
     let mut display_state = atomic_structure.decorator.get_atom_display_state(*id);
@@ -48,9 +65,11 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
     // Apply depth culling if enabled
     if should_cull_atom(atom, atomic_viz_prefs) {
       // Skip tessellating this atom - it's too deep inside and can't be seen
+      culled_count += 1;
       continue;
     }
     
+    tessellated_count += 1;
     tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state, &atomic_viz_prefs.visualization);
   }
   
@@ -69,6 +88,9 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
       }
     }
   }
+
+  println!("Atomic tessellation: {:?} visualization, {} atoms tessellated, {} atoms culled", 
+           atomic_viz_prefs.visualization, tessellated_count, culled_count);
 }
 
 pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVisualization) -> f64 {
