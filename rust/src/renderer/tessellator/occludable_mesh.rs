@@ -2,7 +2,7 @@ use glam::Vec3;
 use crate::renderer::mesh::{Mesh, Material, Vertex};
 
 /// A vertex that can be marked as occluded during tessellation
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct OccludableVertex {
     pub position: Vec3,
     pub normal: Vec3,
@@ -20,7 +20,7 @@ impl OccludableVertex {
 }
 
 /// A triangle represented by three vertex indices
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Triangle {
     pub v0: u32,
     pub v1: u32,
@@ -34,30 +34,55 @@ impl Triangle {
     }
 }
 
-/// A mesh structure that supports occlusion marking before final tessellation
+/// Maximum vertices for a sphere (36x18 divisions = ~1224 vertices max)
+pub const MAX_VERTICES: usize = 2048;
+/// Maximum triangles for a sphere (36x18 divisions = ~2448 triangles max)  
+pub const MAX_TRIANGLES: usize = 4096;
+
+/// A mesh structure that supports occlusion marking with pre-allocated buffers
 pub struct OccludableMesh {
-    pub vertices: Vec<OccludableVertex>,
-    pub triangles: Vec<Triangle>,
+    // Pre-allocated buffers to avoid memory allocation during tessellation
+    vertices: [OccludableVertex; MAX_VERTICES],
+    triangles: [Triangle; MAX_TRIANGLES],
+    
+    // Current usage counters
+    vertex_count: usize,
+    triangle_count: usize,
 }
 
 impl OccludableMesh {
     pub fn new() -> Self {
         Self {
-            vertices: Vec::new(),
-            triangles: Vec::new(),
+            // Initialize with default values
+            vertices: [OccludableVertex::new(Vec3::ZERO, Vec3::Y, false); MAX_VERTICES],
+            triangles: [Triangle::new(0, 0, 0, false); MAX_TRIANGLES],
+            vertex_count: 0,
+            triangle_count: 0,
         }
+    }
+
+    /// Reset the mesh for reuse (no memory allocation)
+    pub fn reset(&mut self) {
+        self.vertex_count = 0;
+        self.triangle_count = 0;
     }
 
     /// Add a vertex and return its index
     pub fn add_vertex(&mut self, vertex: OccludableVertex) -> u32 {
-        let index = self.vertices.len() as u32;
-        self.vertices.push(vertex);
+        debug_assert!(self.vertex_count < MAX_VERTICES, "OccludableMesh vertex buffer overflow");
+        
+        let index = self.vertex_count as u32;
+        self.vertices[self.vertex_count] = vertex;
+        self.vertex_count += 1;
         index
     }
 
     /// Add a triangle using three vertex indices and center occlusion status
     pub fn add_triangle(&mut self, v0: u32, v1: u32, v2: u32, center_occluded: bool) {
-        self.triangles.push(Triangle::new(v0, v1, v2, center_occluded));
+        debug_assert!(self.triangle_count < MAX_TRIANGLES, "OccludableMesh triangle buffer overflow");
+        
+        self.triangles[self.triangle_count] = Triangle::new(v0, v1, v2, center_occluded);
+        self.triangle_count += 1;
     }
 
     /// Add a quad using four vertex indices (creates two triangles)
@@ -67,36 +92,53 @@ impl OccludableMesh {
         self.add_triangle(v2, v3, v0, center_occluded);
     }
 
-    /// Get the number of vertices
+    /// Get the number of vertices currently in use
     pub fn vertex_count(&self) -> usize {
-        self.vertices.len()
+        self.vertex_count
     }
 
-    /// Get the number of triangles
+    /// Get the number of triangles currently in use
     pub fn triangle_count(&self) -> usize {
-        self.triangles.len()
+        self.triangle_count
     }
 
     /// Get the total number of indices (triangles * 3)
     pub fn index_count(&self) -> usize {
-        self.triangles.len() * 3
+        self.triangle_count * 3
     }
 
-    /// Clear all vertices and triangles
-    pub fn clear(&mut self) {
-        self.vertices.clear();
-        self.triangles.clear();
+    /// Get slice of vertices currently in use
+    pub fn vertices(&self) -> &[OccludableVertex] {
+        &self.vertices[..self.vertex_count]
+    }
+
+    /// Get slice of triangles currently in use
+    pub fn triangles(&self) -> &[Triangle] {
+        &self.triangles[..self.triangle_count]
+    }
+
+    /// Get mutable slice of vertices currently in use
+    pub fn vertices_mut(&mut self) -> &mut [OccludableVertex] {
+        &mut self.vertices[..self.vertex_count]
+    }
+
+    /// Get mutable slice of triangles currently in use
+    pub fn triangles_mut(&mut self) -> &mut [Triangle] {
+        &mut self.triangles[..self.triangle_count]
     }
 
     /// Add this occludable mesh to the output mesh, handling occlusion compression
+    /// Zero-allocation implementation using dual-index compression
     pub fn add_to_mesh(&self, output_mesh: &mut Mesh, material: &Material) {
-        // Step 1: Set up boolean Vec to mark which vertices are needed
-        let mut vertex_needed = vec![false; self.vertices.len()];
+        // Pre-allocate index mapping array (reuse the vertices array space conceptually)
+        let mut index_mapping = [0u32; MAX_VERTICES];
+        let mut vertex_needed = [false; MAX_VERTICES];
         
-        // Step 2: Go through triangles and determine which to keep
-        let mut compressed_triangles = Vec::new();
-        
-        for triangle in &self.triangles {
+        // Step 1: Mark which vertices are needed by scanning triangles
+        let mut kept_triangle_count = 0;
+        for i in 0..self.triangle_count {
+            let triangle = &self.triangles[i];
+            
             // Check if triangle has any non-occluded point (vertices + center)
             let v0_occluded = self.vertices[triangle.v0 as usize].occluded;
             let v1_occluded = self.vertices[triangle.v1 as usize].occluded;
@@ -107,76 +149,56 @@ impl OccludableMesh {
             let should_keep = !v0_occluded || !v1_occluded || !v2_occluded || !center_occluded;
             
             if should_keep {
-                // Mark all vertices of this triangle as needed
+                // Mark vertices as needed
                 vertex_needed[triangle.v0 as usize] = true;
                 vertex_needed[triangle.v1 as usize] = true;
                 vertex_needed[triangle.v2 as usize] = true;
-                
-                // Keep this triangle
-                compressed_triangles.push(triangle.clone());
+                kept_triangle_count += 1;
             }
         }
         
-        // Step 3: Create compressed vertex vector and index mapping
-        let (compressed_vertices, index_mapping) = self.compress_vertices(&vertex_needed);
-        
-        // Step 4: Update triangle indices to use compressed vertex indices
-        let mut final_triangles = Vec::new();
-        for triangle in compressed_triangles {
-            let new_v0 = index_mapping[triangle.v0 as usize];
-            let new_v1 = index_mapping[triangle.v1 as usize];
-            let new_v2 = index_mapping[triangle.v2 as usize];
-            
-            final_triangles.push(Triangle::new(new_v0, new_v1, new_v2, triangle.center_occluded));
-        }
-        
-        // Step 5: Add compressed vertices and triangles to output mesh
-        self.add_compressed_to_mesh(output_mesh, material, &compressed_vertices, &final_triangles);
-    }
-
-    /// Helper method to compress vertices and create index mapping
-    fn compress_vertices(&self, vertex_needed: &[bool]) -> (Vec<&OccludableVertex>, Vec<u32>) {
-        let mut compressed_vertices = Vec::new();
-        let mut index_mapping = vec![0u32; self.vertices.len()];
-        
-        for (old_index, &needed) in vertex_needed.iter().enumerate() {
-            if needed {
-                let new_index = compressed_vertices.len() as u32;
-                index_mapping[old_index] = new_index;
-                compressed_vertices.push(&self.vertices[old_index]);
-            }
-        }
-        
-        (compressed_vertices, index_mapping)
-    }
-
-    /// Helper method to add compressed data to the output mesh
-    fn add_compressed_to_mesh(
-        &self,
-        output_mesh: &mut Mesh,
-        material: &Material,
-        compressed_vertices: &[&OccludableVertex],
-        final_triangles: &[Triangle],
-    ) {
-        // Add all compressed vertices to the output mesh
+        // Step 2: Build index mapping and add vertices to output mesh
         let vertex_start_index = output_mesh.vertices.len() as u32;
+        let mut compressed_vertex_count = 0u32;
         
-        for occludable_vertex in compressed_vertices {
-            let vertex = Vertex::new(
-                &occludable_vertex.position,
-                &occludable_vertex.normal,
-                material,
-            );
-            output_mesh.add_vertex(vertex);
+        for old_index in 0..self.vertex_count {
+            if vertex_needed[old_index] {
+                index_mapping[old_index] = compressed_vertex_count;
+                
+                // Add vertex directly to output mesh
+                let occludable_vertex = &self.vertices[old_index];
+                let vertex = Vertex::new(
+                    &occludable_vertex.position,
+                    &occludable_vertex.normal,
+                    material,
+                );
+                output_mesh.add_vertex(vertex);
+                
+                compressed_vertex_count += 1;
+            }
         }
         
-        // Add all triangles to the output mesh
-        for triangle in final_triangles {
-            output_mesh.add_triangle(
-                vertex_start_index + triangle.v0,
-                vertex_start_index + triangle.v1,
-                vertex_start_index + triangle.v2,
-            );
+        // Step 3: Add triangles with remapped indices directly to output mesh
+        for i in 0..self.triangle_count {
+            let triangle = &self.triangles[i];
+            
+            // Check if triangle should be kept (same logic as Step 1)
+            let v0_occluded = self.vertices[triangle.v0 as usize].occluded;
+            let v1_occluded = self.vertices[triangle.v1 as usize].occluded;
+            let v2_occluded = self.vertices[triangle.v2 as usize].occluded;
+            let center_occluded = triangle.center_occluded;
+            
+            let should_keep = !v0_occluded || !v1_occluded || !v2_occluded || !center_occluded;
+            
+            if should_keep {
+                // Add triangle with remapped indices
+                let new_v0 = vertex_start_index + index_mapping[triangle.v0 as usize];
+                let new_v1 = vertex_start_index + index_mapping[triangle.v1 as usize];
+                let new_v2 = vertex_start_index + index_mapping[triangle.v2 as usize];
+                
+                output_mesh.add_triangle(new_v0, new_v1, new_v2);
+            }
         }
     }
+
 }

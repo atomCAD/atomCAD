@@ -50,6 +50,38 @@ fn should_cull_atom(atom: &Atom, atomic_viz_prefs: &AtomicStructureVisualization
 pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
   let _timer = Timer::new("Atomic tessellation");
 
+  // Pre-allocate mesh capacity for worst-case scenario (no compression)
+  let total_atoms = atomic_structure.atoms.len();
+  let (h_div, v_div) = match atomic_viz_prefs.visualization {
+    AtomicStructureVisualization::BallAndStick => (
+      params.ball_and_stick_sphere_horizontal_divisions,
+      params.ball_and_stick_sphere_vertical_divisions
+    ),
+    AtomicStructureVisualization::SpaceFilling => (
+      params.space_filling_sphere_horizontal_divisions,
+      params.space_filling_sphere_vertical_divisions
+    ),
+  };
+  
+  // Worst-case vertices per sphere: (h_div * (v_div - 1)) + 2 (poles)
+  let vertices_per_sphere = (h_div * (v_div - 1)) + 2;
+  // Worst-case triangles per sphere: h_div * 2 + (h_div * (v_div - 2) * 2)
+  let triangles_per_sphere = h_div * 2 + (h_div * (v_div - 2) * 2);
+  let indices_per_sphere = triangles_per_sphere * 3;
+  
+  // Reserve capacity for worst case (all atoms tessellated, no compression)
+  let estimated_vertices = total_atoms * vertices_per_sphere as usize;
+  let estimated_indices = total_atoms * indices_per_sphere as usize;
+  
+  output_mesh.vertices.reserve(estimated_vertices);
+  output_mesh.indices.reserve(estimated_indices);
+  selected_clusters_mesh.vertices.reserve(estimated_vertices / 10); // Assume 10% selected
+  selected_clusters_mesh.indices.reserve(estimated_indices / 10);
+
+  // Create reusable data structures for all sphere tessellations
+  let mut reusable_occludable_mesh = tessellator::OccludableMesh::new();
+  let mut reusable_occluder_array = OccluderArray::new();
+
   let mut culled_count = 0;
   let mut tessellated_count = 0;
   
@@ -70,7 +102,7 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
     }
     
     tessellated_count += 1;
-    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state, &atomic_viz_prefs.visualization);
+    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state, &atomic_viz_prefs.visualization, &mut reusable_occludable_mesh, &mut reusable_occluder_array);
   }
   
   // Only tessellate bonds for ball-and-stick visualization
@@ -103,42 +135,72 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
   }
 }
 
+/// Maximum number of bonds per atom (reasonable upper bound)
+const MAX_OCCLUDERS: usize = 32;
+
+/// Pre-allocated occluder sphere array to avoid allocations
+struct OccluderArray {
+    spheres: [OccluderSphere; MAX_OCCLUDERS],
+    count: usize,
+}
+
+impl OccluderArray {
+    fn new() -> Self {
+        Self {
+            spheres: [OccluderSphere { center: Vec3::ZERO, radius: 0.0 }; MAX_OCCLUDERS],
+            count: 0,
+        }
+    }
+    
+    fn clear(&mut self) {
+        self.count = 0;
+    }
+    
+    fn push(&mut self, sphere: OccluderSphere) {
+        debug_assert!(self.count < MAX_OCCLUDERS, "Too many occluder spheres");
+        if self.count < MAX_OCCLUDERS {
+            self.spheres[self.count] = sphere;
+            self.count += 1;
+        }
+    }
+    
+    fn as_slice(&self) -> &[OccluderSphere] {
+        &self.spheres[..self.count]
+    }
+}
+
 // Calculate occluder spheres for space-filling visualization
-fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, visualization: &AtomicStructureVisualization) -> Vec<OccluderSphere> {
-  let mut occluder_spheres = Vec::new();
+fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, visualization: &AtomicStructureVisualization, occluder_array: &mut OccluderArray) {
+  occluder_array.clear();
   
   // Only calculate occlusion for space-filling mode
   if *visualization != AtomicStructureVisualization::SpaceFilling {
-    return occluder_spheres;
+    return;
   }
   
-  // Find bonded neighbors
-  for (_bond_id, bond) in atomic_structure.bonds.iter() {
-    let neighbor_id = if bond.atom_id1 == atom.id {
-      bond.atom_id2
-    } else if bond.atom_id2 == atom.id {
-      bond.atom_id1
-    } else {
-      continue; // This bond doesn't involve our atom
-    };
-    
-    if let Some(neighbor) = atomic_structure.atoms.get(&neighbor_id) {
-      let neighbor_info = ATOM_INFO.get(&neighbor.atomic_number).unwrap_or(&DEFAULT_ATOM_INFO);
-      let neighbor_radius = neighbor_info.van_der_waals_radius;
+  // Use atom's direct bond_ids vector for O(1) neighbor access
+  for &bond_id in &atom.bond_ids {
+    if let Some(bond) = atomic_structure.bonds.get(&bond_id) {
+      // Find the neighbor atom (the other atom in this bond)
+      let neighbor_atom_id = if bond.atom_id1 == atom.id {
+        bond.atom_id2
+      } else {
+        bond.atom_id1
+      };
       
-      // Simple approach: use the neighbor's Van der Waals sphere as an occluder
-      // Any vertex of our atom that falls inside this sphere will be culled
-      occluder_spheres.push(OccluderSphere {
-        center: neighbor.position.as_vec3(),
-        radius: neighbor_radius as f32,
-      });
+      if let Some(neighbor) = atomic_structure.atoms.get(&neighbor_atom_id) {
+        let neighbor_radius = get_displayed_atom_radius(neighbor, visualization);
+        
+        occluder_array.push(OccluderSphere {
+          center: neighbor.position.as_vec3(),
+          radius: neighbor_radius as f32,
+        });
+      }
     }
   }
-  
-  occluder_spheres
 }
 
-pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization) {
+pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization, reusable_occludable_mesh: &mut tessellator::OccludableMesh, reusable_occluder_array: &mut OccluderArray) {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
@@ -169,12 +231,13 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   };
   
   // Calculate occluder spheres for occlusion culling
-  let occluder_spheres = calculate_occluder_spheres(atom, _model, visualization);
+  calculate_occluder_spheres(atom, _model, visualization, reusable_occluder_array);
   
   // Render the atom sphere with occlusion culling if in space-filling mode
-  if *visualization == AtomicStructureVisualization::SpaceFilling && !occluder_spheres.is_empty() {
+  if *visualization == AtomicStructureVisualization::SpaceFilling && reusable_occluder_array.count > 0 {
     tessellator::tessellate_sphere_with_occlusion(
       if cluster_selected { selected_clusters_mesh } else { output_mesh },
+      reusable_occludable_mesh,
       &atom.position,
       get_displayed_atom_radius(atom, visualization),
       horizontal_divisions,
@@ -183,7 +246,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
         &atom_color, 
         if selected { 0.2 } else { 0.8 },
         0.0),
-      &occluder_spheres,
+      reusable_occluder_array.as_slice(),
     );
   } else {
     // Use regular tessellation for ball-and-stick or when no occlusion

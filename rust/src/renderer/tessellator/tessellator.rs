@@ -1,11 +1,12 @@
 use super::super::mesh::Mesh;
 use super::super::mesh::Vertex;
 use super::super::mesh::Material;
-use super::occludable_mesh::{OccludableMesh, OccludableVertex};
+pub use super::occludable_mesh::{OccludableMesh, OccludableVertex};
 use glam::f64::{DQuat, DVec2, DVec3};
 use glam::Vec3;
 use bytemuck;
 
+#[derive(Clone, Copy)]
 pub struct OccluderSphere {
     pub center: Vec3,        // Center of the sphere that occludes geometry
     pub radius: f32,         // Radius of the occluding sphere
@@ -228,19 +229,22 @@ pub fn tessellate_sphere(
 
 pub fn tessellate_sphere_with_occlusion(
     output_mesh: &mut Mesh,
+    occludable_mesh: &mut OccludableMesh,
     center: &DVec3,
     radius: f64,
     horizontal_divisions: u32,
     vertical_divisions: u32,
     material: &Material,
-    occluder_spheres: &Vec<OccluderSphere>,
+    occluder_spheres: &[OccluderSphere],
 ) {
+    // Reset the mesh for reuse (no memory allocation)
+    occludable_mesh.reset();
+    
     // Phase 1: Build complete sphere geometry in OccludableMesh
-    let mut occludable_mesh = OccludableMesh::new();
-    build_sphere_geometry(&mut occludable_mesh, center, radius, horizontal_divisions, vertical_divisions);
+    build_sphere_geometry(occludable_mesh, center, radius, horizontal_divisions, vertical_divisions);
     
     // Phase 2: Mark occlusion for vertices and triangle centers
-    mark_occlusion(&mut occludable_mesh, occluder_spheres);
+    mark_occlusion(occludable_mesh, occluder_spheres);
     
     // Phase 3: Add compressed mesh to output (handles all filtering and compression)
     occludable_mesh.add_to_mesh(output_mesh, material);
@@ -313,27 +317,29 @@ fn build_sphere_geometry(
 }
 
 /// Phase 2: Mark occlusion for vertices and triangle centers
-fn mark_occlusion(occludable_mesh: &mut OccludableMesh, occluder_spheres: &Vec<OccluderSphere>) {
+fn mark_occlusion(occludable_mesh: &mut OccludableMesh, occluder_spheres: &[OccluderSphere]) {
     // Mark vertex occlusion
-    for vertex in &mut occludable_mesh.vertices {
-        vertex.occluded = is_vertex_inside_occluder_spheres(&vertex.position, occluder_spheres);
+    for i in 0..occludable_mesh.vertex_count() {
+        let position = occludable_mesh.vertices()[i].position;
+        occludable_mesh.vertices_mut()[i].occluded = is_vertex_inside_occluder_spheres(&position, occluder_spheres);
     }
     
     // Mark triangle center occlusion
-    for triangle in &mut occludable_mesh.triangles {
-        // Calculate triangle center
-        let v0_pos = occludable_mesh.vertices[triangle.v0 as usize].position;
-        let v1_pos = occludable_mesh.vertices[triangle.v1 as usize].position;
-        let v2_pos = occludable_mesh.vertices[triangle.v2 as usize].position;
+    for i in 0..occludable_mesh.triangle_count() {
+        // Get vertex positions for triangle center calculation
+        let triangle = occludable_mesh.triangles()[i];
+        let v0_pos = occludable_mesh.vertices()[triangle.v0 as usize].position;
+        let v1_pos = occludable_mesh.vertices()[triangle.v1 as usize].position;
+        let v2_pos = occludable_mesh.vertices()[triangle.v2 as usize].position;
         let triangle_center = (v0_pos + v1_pos + v2_pos) / 3.0;
         
         // Mark center occlusion
-        triangle.center_occluded = is_vertex_inside_occluder_spheres(&triangle_center, occluder_spheres);
+        occludable_mesh.triangles_mut()[i].center_occluded = is_vertex_inside_occluder_spheres(&triangle_center, occluder_spheres);
     }
 }
 
 // Helper function to check if a vertex is inside any occluder sphere
-fn is_vertex_inside_occluder_spheres(vertex_position: &Vec3, occluder_spheres: &Vec<OccluderSphere>) -> bool {
+fn is_vertex_inside_occluder_spheres(vertex_position: &Vec3, occluder_spheres: &[OccluderSphere]) -> bool {
     for sphere in occluder_spheres {
         let distance_sq = (vertex_position - sphere.center).length_squared();
         let radius_sq = sphere.radius * sphere.radius;
