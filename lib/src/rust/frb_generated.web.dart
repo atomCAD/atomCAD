@@ -11,6 +11,7 @@ import 'api/common_api_types.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/geo_to_atom_api.dart';
+import 'api/structure_designer/import_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';

@@ -1,5 +1,4 @@
 use std::io;
-use std::collections::HashSet;
 use super::node_type_registry::NodeTypeRegistry;
 use super::serialization::node_networks_serialization;
 

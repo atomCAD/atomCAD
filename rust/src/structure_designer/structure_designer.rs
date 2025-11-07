@@ -15,6 +15,7 @@ use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicStructureVisualization};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
+use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::HashSet;
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
@@ -31,6 +32,7 @@ pub struct StructureDesigner {
   pub last_generated_structure_designer_scene: StructureDesignerScene,
   pub preferences: StructureDesignerPreferences,
   pub node_display_policy_resolver: NodeDisplayPolicyResolver,
+  pub import_manager: NodeNetworksImportManager,
   pub is_dirty: bool,
   pub file_path: Option<String>,
 }
@@ -51,6 +53,7 @@ impl StructureDesigner {
       last_generated_structure_designer_scene: StructureDesignerScene::new(),
       preferences: StructureDesignerPreferences::new(),
       node_display_policy_resolver,
+      import_manager: NodeNetworksImportManager::new(),
       is_dirty: false,
       file_path: None,
     }
@@ -975,6 +978,36 @@ impl StructureDesigner {
       }
       None => None, // No file path available
     }
+  }
+
+  /// Imports selected node networks from the loaded import library
+  /// 
+  /// This is a wrapper around the import manager that adds business logic
+  /// such as marking the design as dirty and applying display policies.
+  /// 
+  /// # Arguments
+  /// * `network_names` - List of network names to import
+  /// * `name_prefix` - Optional prefix to prepend to imported network names
+  /// 
+  /// # Returns
+  /// * `Ok(())` if all networks were imported successfully
+  /// * `Err(String)` with error message if import failed
+  pub fn import_networks(&mut self, network_names: &[String], name_prefix: Option<&str>) -> Result<(), String> {
+    let result = self.import_manager.import_networks_and_clear(
+      network_names,
+      &mut self.node_type_registry,
+      name_prefix
+    );
+    
+    if result.is_ok() {
+      // Mark as dirty since we modified the design
+      self.is_dirty = true;
+      
+      // Apply display policy to newly imported networks
+      self.apply_node_display_policy(None);
+    }
+    
+    result
   }
 
   // Loads node networks from a file
