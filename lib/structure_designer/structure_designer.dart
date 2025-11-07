@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
-import 'package:flutter_cad/structure_designer/main_content_area.dart';
-import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-import 'package:flutter_cad/structure_designer/node_networks_list_panel.dart';
-import 'package:flutter_cad/structure_designer/node_display_widget.dart';
-import 'package:flutter_cad/structure_designer/camera_control_widget.dart';
-import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_cad/structure_designer/geometry_visualization_widget.dart';
-import 'package:flutter_cad/structure_designer/atomic_structure_visualization_widget.dart';
-import 'package:flutter_cad/structure_designer/preferences_window.dart';
-import 'package:flutter_cad/common/menu_widget.dart';
+import '../common/menu_widget.dart';
+import '../common/section.dart';
+import 'structure_designer_model.dart';
+import 'node_network/node_network.dart';
+import 'atomic_structure_visualization_widget.dart';
+import 'geometry_visualization_widget.dart';
+import 'import_cnnd_library_dialog.dart';
+import 'node_networks_list_panel.dart';
+import 'node_display_widget.dart';
+import 'camera_control_widget.dart';
+import 'preferences_window.dart';
+import 'main_content_area.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -80,6 +81,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
                       MenuItemButton(
                         onPressed: _exportVisible,
                         child: const Text('Export visible'),
+                      ),
+                      MenuItemButton(
+                        onPressed: _importFromCnndLibrary,
+                        child: const Text('Import from .cnnd library'),
                       ),
                     ],
                   );
@@ -295,6 +300,63 @@ class _StructureDesignerState extends State<StructureDesigner> {
     setState(() {
       verticalDivision = !verticalDivision;
     });
+  }
+
+  /// Import node networks from a .cnnd library file
+  Future<void> _importFromCnndLibrary() async {
+    try {
+      // Open file picker for CNND library files
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['cnnd'],
+        dialogTitle: 'Select .cnnd Library File',
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        String filePath = result.files.first.path!;
+        
+        // Show the import dialog
+        if (mounted) {
+          final importResult = await showDialog<Map<String, dynamic>>(
+            context: context,
+            builder: (context) => ImportCnndLibraryDialog(
+              libraryFilePath: filePath,
+            ),
+          );
+
+          if (importResult != null) {
+            // TODO: Handle the import result in the next step
+            // For now, just show a placeholder message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Import functionality will be implemented in the next step. '
+                  'Selected ${importResult['selectedNetworks'].length} networks '
+                  'with prefix: ${importResult['namePrefix'] ?? 'none'}'
+                ),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      // Handle any unexpected errors
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Import Error'),
+            content: Text('An unexpected error occurred: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   /// Export visible atomic structures as XYZ or MOL file
