@@ -17,7 +17,7 @@ import 'main_content_area.dart';
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
   final StructureDesignerModel model;
-  
+
   const StructureDesigner({super.key, required this.model});
 
   @override
@@ -48,161 +48,164 @@ class _StructureDesignerState extends State<StructureDesigner> {
         children: [
           // Menu bar
           Container(
-          height: 30,
-          decoration: const BoxDecoration(
-            color: Colors.grey,
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.black26,
-                width: 1,
+            height: 30,
+            decoration: const BoxDecoration(
+              color: Colors.grey,
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.black26,
+                  width: 1,
+                ),
               ),
             ),
-          ),
-          child: Row(
-            children: [
-              // File Menu
-              Consumer<StructureDesignerModel>(
-                builder: (context, model, child) {
-                  return MenuWidget(
-                    label: 'File',
-                    menuItems: [
-                      MenuItemButton(
-                        onPressed: _loadDesign,
-                        child: const Text('Load Design'),
-                      ),
-                      MenuItemButton(
-                        onPressed: model.canSave ? _saveDesign : null,
-                        child: const Text('Save Design'),
-                      ),
-                      MenuItemButton(
-                        onPressed: _saveDesignAs,
-                        child: const Text('Save Design As'),
-                      ),
-                      MenuItemButton(
-                        onPressed: _exportVisible,
-                        child: const Text('Export visible'),
-                      ),
-                      MenuItemButton(
+            child: Row(
+              children: [
+                // File Menu
+                Consumer<StructureDesignerModel>(
+                  builder: (context, model, child) {
+                    return MenuWidget(
+                      label: 'File',
+                      menuItems: [
+                        MenuItemButton(
+                          onPressed: _loadDesign,
+                          child: const Text('Load Design'),
+                        ),
+                        MenuItemButton(
+                          onPressed: model.canSave ? _saveDesign : null,
+                          child: const Text('Save Design'),
+                        ),
+                        MenuItemButton(
+                          onPressed: _saveDesignAs,
+                          child: const Text('Save Design As'),
+                        ),
+                        MenuItemButton(
+                          onPressed: _exportVisible,
+                          child: const Text('Export visible'),
+                        ),
+                        /*MenuItemButton(
                         onPressed: _importFromCnndLibrary,
                         child: const Text('Import from .cnnd library'),
-                      ),
-                    ],
-                  );
-                },
-              ),
-
-              // View Menu
-              MenuWidget(
-                label: 'View',
-                menuItems: [
-                  MenuItemButton(
-                    onPressed: _resetNodeNetworkView,
-                    child: const Text('Reset node network view'),
-                  ),
-                  MenuItemButton(
-                    onPressed: _toggleDivisionOrientation,
-                    child: Text(verticalDivision
-                        ? 'Switch to Horizontal Layout'
-                        : 'Switch to Vertical Layout'),
-                  ),
-                ],
-              ),
-
-              // Edit Menu
-              MenuWidget(
-                label: 'Edit',
-                menuItems: [
-                  MenuItemButton(
-                    onPressed: _showPreferences,
-                    child: const Text('Preferences'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        // Main content
-        Expanded(
-          child: Row(
-            children: [
-              // Node Networks List Panel (left sidebar)
-              Container(
-                width: 200,
-                decoration: const BoxDecoration(
-                  border: Border(
-                    right: BorderSide(
-                      color: Colors.grey,
-                      width: 1,
-                    ),
-                  ),
+                      ),*/
+                      ],
+                    );
+                  },
                 ),
-                child: Column(
-                  children: [
-                    // Display settings section
-                    Section(
-                      title: 'Display',
-                      content: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0, vertical: 4.0),
-                        child: Column(
-                          children: [
-                            // First row: Geometry visualization and Node display
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                // Geometry visualization widget (left aligned)
-                                GeometryVisualizationWidget(model: graphModel),
 
-                                // Node display widget (right aligned)
-                                NodeDisplayWidget(model: graphModel),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            // Second row: Atomic structure visualization
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              children: [
-                                AtomicStructureVisualizationWidget(model: graphModel),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      expand: false,
+                // View Menu
+                MenuWidget(
+                  label: 'View',
+                  menuItems: [
+                    MenuItemButton(
+                      onPressed: _resetNodeNetworkView,
+                      child: const Text('Reset node network view'),
                     ),
-                    const SizedBox(height: 8),
-                    // Camera Control section
-                    Section(
-                      title: 'Camera control',
-                      content: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0, vertical: 4.0),
-                        child: CameraControlWidget(model: graphModel),
-                      ),
-                      expand: false,
-                    ),
-                    const SizedBox(height: 8),
-                    // Node networks section
-                    Expanded(
-                      flex: 5,
-                      child: Section(
-                        title: 'Node networks',
-                        content: NodeNetworksListPanel(model: graphModel),
-                        expand: true,
-                      ),
+                    MenuItemButton(
+                      onPressed: _toggleDivisionOrientation,
+                      child: Text(verticalDivision
+                          ? 'Switch to Horizontal Layout'
+                          : 'Switch to Vertical Layout'),
                     ),
                   ],
                 ),
-              ),
-              // Main content area
-              MainContentArea(
-                graphModel: graphModel,
-                nodeNetworkKey: nodeNetworkKey,
-                verticalDivision: verticalDivision,
-              ),
-            ],
+
+                // Edit Menu
+                MenuWidget(
+                  label: 'Edit',
+                  menuItems: [
+                    MenuItemButton(
+                      onPressed: _showPreferences,
+                      child: const Text('Preferences'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
+          // Main content
+          Expanded(
+            child: Row(
+              children: [
+                // Node Networks List Panel (left sidebar)
+                Container(
+                  width: 200,
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      right: BorderSide(
+                        color: Colors.grey,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      // Display settings section
+                      Section(
+                        title: 'Display',
+                        content: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0, vertical: 4.0),
+                          child: Column(
+                            children: [
+                              // First row: Geometry visualization and Node display
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  // Geometry visualization widget (left aligned)
+                                  GeometryVisualizationWidget(
+                                      model: graphModel),
+
+                                  // Node display widget (right aligned)
+                                  NodeDisplayWidget(model: graphModel),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // Second row: Atomic structure visualization
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  AtomicStructureVisualizationWidget(
+                                      model: graphModel),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        expand: false,
+                      ),
+                      const SizedBox(height: 8),
+                      // Camera Control section
+                      Section(
+                        title: 'Camera control',
+                        content: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0, vertical: 4.0),
+                          child: CameraControlWidget(model: graphModel),
+                        ),
+                        expand: false,
+                      ),
+                      const SizedBox(height: 8),
+                      // Node networks section
+                      Expanded(
+                        flex: 5,
+                        child: Section(
+                          title: 'Node networks',
+                          content: NodeNetworksListPanel(model: graphModel),
+                          expand: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Main content area
+                MainContentArea(
+                  graphModel: graphModel,
+                  nodeNetworkKey: nodeNetworkKey,
+                  verticalDivision: verticalDivision,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -273,7 +276,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
     }
   }
 
-
   void _showPreferences() {
     showDialog(
       context: context,
@@ -314,7 +316,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
       if (result != null && result.files.isNotEmpty) {
         String filePath = result.files.first.path!;
-        
+
         // Show the import dialog
         if (mounted) {
           showDialog(

@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::util::box_subdivision::subdivide_box_float;
+use crate::util::box_subdivision::{subdivide_box_float, subdivide_daabox};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
@@ -25,6 +25,7 @@ use crate::common::serialization_utils::dvec3_serializer;
 use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::evaluator::motif::SiteSpecifier;
 use crate::util::timer::Timer;
+use crate::util::daabox::DAABox;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -241,12 +242,15 @@ impl NodeData for AtomFillData {
 
       {
         let _fill_timer = Timer::new("AtomFill geometry filling");
+        let fill_box = DAABox::from_start_and_size(
+          REAL_IMPLICIT_VOLUME_MIN,
+          REAL_IMPLICIT_VOLUME_MAX - REAL_IMPLICIT_VOLUME_MIN
+        );
         self.fill_box(
           &mesh.unit_cell,
           &mesh.geo_tree_root,
           &motif,
-          &REAL_IMPLICIT_VOLUME_MIN,
-          &(REAL_IMPLICIT_VOLUME_MAX - REAL_IMPLICIT_VOLUME_MIN),
+          &fill_box,
           &mut atomic_structure,
           &mut statistics,
           &effective_parameter_values,
@@ -294,8 +298,7 @@ impl AtomFillData {
     unit_cell: &UnitCellStruct,
     geo_tree_root: &GeoNode,
     motif: &Motif,
-    start_pos: &DVec3,
-    size: &DVec3,
+    box_to_fill: &DAABox,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
     parameter_element_values: &HashMap<String, i32>,
@@ -303,12 +306,13 @@ impl AtomFillData {
     processed_cells: &mut HashSet<IVec3>) {
     
     statistics.fill_box_calls += 1;
-    let box_center = start_pos + size / 2.0;
+    let box_center = box_to_fill.center();
 
     // Evaluate SDF at the box center
     let sdf_value = geo_tree_root.implicit_eval_3d(&box_center);
 
-    let half_diagonal = size.length() / 2.0;
+    let box_size = box_to_fill.size();
+    let half_diagonal = box_size.length() / 2.0;
 
     // If SDF value is greater than half diagonal plus a treshold, there is no atom in this box.
     if sdf_value > half_diagonal + CRYSTAL_SAMPLE_THRESHOLD + CONSERVATIVE_EPSILON {
@@ -319,9 +323,9 @@ impl AtomFillData {
     let filled = sdf_value < (-half_diagonal - CONSERVATIVE_EPSILON);
 
     // Determine if we should subdivide in each dimension (size >= 4)
-    let should_subdivide_x = size.x >= 2.0 * SMALLEST_FILL_BOX_SIZE;
-    let should_subdivide_y = size.y >= 2.0 * SMALLEST_FILL_BOX_SIZE;
-    let should_subdivide_z = size.z >= 2.0 * SMALLEST_FILL_BOX_SIZE;
+    let should_subdivide_x = box_size.x >= 2.0 * SMALLEST_FILL_BOX_SIZE;
+    let should_subdivide_y = box_size.y >= 2.0 * SMALLEST_FILL_BOX_SIZE;
+    let should_subdivide_z = box_size.z >= 2.0 * SMALLEST_FILL_BOX_SIZE;
 
     // If the whole box is filled or we can't subdivide in any direction,
     // we need to actually do the filling for this box
@@ -330,8 +334,7 @@ impl AtomFillData {
         unit_cell,
         geo_tree_root,
         motif,
-        start_pos,
-        size,
+        box_to_fill,
         atomic_structure,
         statistics,
         parameter_element_values,
@@ -342,22 +345,20 @@ impl AtomFillData {
     }
 
     // Otherwise, subdivide the box and recursively process each subdivision
-    let subdivisions = subdivide_box_float(
-      start_pos,
-      size,
+    let subdivisions = subdivide_daabox(
+      box_to_fill,
       should_subdivide_x,
       should_subdivide_y,
       should_subdivide_z
     );
     
     // Process each subdivision recursively
-    for (sub_start, sub_size) in subdivisions {
+    for sub_box in subdivisions {
       self.fill_box(
         unit_cell,
         geo_tree_root,
         motif,
-        &sub_start,
-        &sub_size,
+        &sub_box,
         atomic_structure,
         statistics,
         parameter_element_values,
@@ -375,8 +376,7 @@ impl AtomFillData {
     unit_cell: &UnitCellStruct,
     geo_tree_root: &GeoNode,
     motif: &Motif,
-    start_pos: &DVec3,
-    size: &DVec3,
+    box_to_fill: &DAABox,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
     parameter_element_values: &HashMap<String, i32>,
@@ -384,10 +384,11 @@ impl AtomFillData {
     processed_cells: &mut HashSet<IVec3>) {
     
     statistics.do_fill_box_calls += 1;
-    statistics.do_fill_box_total_size += *size;
+    let box_size = box_to_fill.size();
+    statistics.do_fill_box_total_size += box_size;
     
     // Calculate the motif-space box that completely covers the real-space box
-    let (motif_min, motif_size) = self.calculate_motif_space_box(unit_cell, start_pos, size);
+    let (motif_min, motif_size) = self.calculate_motif_space_box(unit_cell, &box_to_fill.min, &box_size);
     
     // Iterate through all motif cells in the calculated box
     for i in 0..motif_size.x {
@@ -401,7 +402,7 @@ impl AtomFillData {
           let cell_real_pos = self.motif_to_real(unit_cell, &motif_pos_dvec3);
           
           // Check if this motif cell has any overlap with the real-space box
-          if self.cell_overlaps_with_box(&cell_real_pos, unit_cell, start_pos, size) {
+          if self.cell_overlaps_with_box(&cell_real_pos, unit_cell, box_to_fill) {
             // Check if this motif cell has already been processed
             if !processed_cells.contains(&motif_pos) {
               // Mark this cell as processed
@@ -688,31 +689,59 @@ impl AtomFillData {
     (motif_min, motif_size)
   }
 
+  // Helper method to calculate the axis-aligned bounding box of a unit cell
+  // A unit cell is a parallelepiped defined by vectors a, b, c from a base position
+  // We need to find the AABB that contains all 8 corners of this parallelepiped
+  fn calculate_unit_cell_aabb(
+    &self,
+    cell_real_pos: &DVec3,
+    unit_cell: &UnitCellStruct
+  ) -> DAABox {
+    // Calculate all 8 corners of the unit cell parallelepiped
+    let corners = [
+      *cell_real_pos,                                           // (0,0,0)
+      *cell_real_pos + unit_cell.a,                            // (1,0,0)
+      *cell_real_pos + unit_cell.b,                            // (0,1,0)
+      *cell_real_pos + unit_cell.c,                            // (0,0,1)
+      *cell_real_pos + unit_cell.a + unit_cell.b,              // (1,1,0)
+      *cell_real_pos + unit_cell.a + unit_cell.c,              // (1,0,1)
+      *cell_real_pos + unit_cell.b + unit_cell.c,              // (0,1,1)
+      *cell_real_pos + unit_cell.a + unit_cell.b + unit_cell.c // (1,1,1)
+    ];
+
+    // Find the min and max coordinates across all corners
+    let mut min = corners[0];
+    let mut max = corners[0];
+    
+    for corner in &corners[1..] {
+      min = DVec3::new(
+        min.x.min(corner.x),
+        min.y.min(corner.y),
+        min.z.min(corner.z)
+      );
+      max = DVec3::new(
+        max.x.max(corner.x),
+        max.y.max(corner.y),
+        max.z.max(corner.z)
+      );
+    }
+
+    DAABox::from_min_max(min, max)
+  }
+
   // Helper method to check if a motif cell overlaps with the real-space box
   fn cell_overlaps_with_box(
     &self,
     cell_real_pos: &DVec3,
     unit_cell: &UnitCellStruct,
-    box_start: &DVec3,
-    box_size: &DVec3
+    query_box: &DAABox
   ) -> bool {
-    let box_end = box_start + box_size;
+    // Calculate the axis-aligned bounding box of the unit cell
+    // This correctly handles rotated/skewed unit cells by considering all 8 corners
+    let cell_aabb = self.calculate_unit_cell_aabb(cell_real_pos, unit_cell);
     
-    // Calculate the bounds of the motif unit cell in real space
-    // A unit cell at motif space position (i,j,k) spans from that position to (i+1,j+1,k+1)
-    let cell_end = cell_real_pos + &unit_cell.a + &unit_cell.b + &unit_cell.c;
-    
-    // Check for overlap using axis-aligned bounding box intersection
-    // Two boxes overlap if they overlap in all three dimensions
-    // Be conservative by adding epsilon to ensure we don't miss cells due to numerical errors
-    let overlaps_x = cell_real_pos.x < box_end.x + CONSERVATIVE_EPSILON && 
-                     cell_end.x > box_start.x - CONSERVATIVE_EPSILON;
-    let overlaps_y = cell_real_pos.y < box_end.y + CONSERVATIVE_EPSILON && 
-                     cell_end.y > box_start.y - CONSERVATIVE_EPSILON;
-    let overlaps_z = cell_real_pos.z < box_end.z + CONSERVATIVE_EPSILON && 
-                     cell_end.z > box_start.z - CONSERVATIVE_EPSILON;
-    
-    overlaps_x && overlaps_y && overlaps_z
+    // Use conservative overlap to ensure we don't miss cells due to numerical errors
+    cell_aabb.conservative_overlap(query_box, CONSERVATIVE_EPSILON)
   }
 
 }
