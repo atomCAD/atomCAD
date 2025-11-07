@@ -107,7 +107,7 @@ You can also export the currently visible atomic structures into .xyz or .mol fo
 
 ## Where to go next
 
-First of all check out the [atomCAD Part Design Tutorial](./doc/part_design_tutorial.md) which covers essential concepts that were not covered in this tutorial.
+First of all check out the [atomCAD Part Design Tutorial](./part_design_tutorial.md) which covers essential concepts that were not covered in this tutorial.
 
 Then you can check out the [atomCAD Demo Files](../samples/demo_description.md) to see some examples of what you can do with atomCAD.
 
