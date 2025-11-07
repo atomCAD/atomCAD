@@ -51,3 +51,36 @@ bool isImportLibraryLoaded() => RustLib.instance.api
 /// Returns empty string if no library is loaded.
 String getImportLibraryFilePath() => RustLib.instance.api
     .crateApiStructureDesignerImportApiGetImportLibraryFilePath();
+
+/// Computes the transitive closure of dependencies for the given network names
+/// from the loaded import library.
+///
+/// Given a list of node network names, returns all networks they depend on
+/// (directly and indirectly), including the original networks. This is useful
+/// for automatically selecting all required dependencies when importing.
+///
+/// # Arguments
+/// * `network_names` - The initial set of node network names to compute dependencies for
+///
+/// # Returns
+/// A vector containing all networks in the transitive closure, or empty vector on error
+List<String> importComputeTransitiveDependencies(
+        {required List<String> networkNames}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerImportApiImportComputeTransitiveDependencies(
+            networkNames: networkNames);
+
+/// Previews the final names that networks would have after import with the given prefix
+///
+/// This is useful for UI preview to show users what the imported names will be.
+///
+/// # Arguments
+/// * `network_names` - List of network names to preview
+/// * `name_prefix` - Optional prefix to apply to the names
+///
+/// # Returns
+/// A vector of the final names after applying the prefix, or empty vector on error
+List<String> previewImportNames(
+        {required List<String> networkNames, String? namePrefix}) =>
+    RustLib.instance.api.crateApiStructureDesignerImportApiPreviewImportNames(
+        networkNames: networkNames, namePrefix: namePrefix);

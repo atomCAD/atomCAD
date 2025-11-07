@@ -122,3 +122,55 @@ pub fn get_import_library_file_path() -> String {
         )
     }
 }
+
+/// Computes the transitive closure of dependencies for the given network names
+/// from the loaded import library.
+/// 
+/// Given a list of node network names, returns all networks they depend on
+/// (directly and indirectly), including the original networks. This is useful
+/// for automatically selecting all required dependencies when importing.
+/// 
+/// # Arguments
+/// * `network_names` - The initial set of node network names to compute dependencies for
+/// 
+/// # Returns
+/// A vector containing all networks in the transitive closure, or empty vector on error
+#[flutter_rust_bridge::frb(sync)]
+pub fn import_compute_transitive_dependencies(network_names: Vec<String>) -> Vec<String> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                match cad_instance.structure_designer.import_manager.compute_transitive_dependencies(&network_names) {
+                    Ok(dependencies) => dependencies,
+                    Err(_) => Vec::new(), // Return empty vector on error
+                }
+            },
+            Vec::new()
+        )
+    }
+}
+
+/// Previews the final names that networks would have after import with the given prefix
+/// 
+/// This is useful for UI preview to show users what the imported names will be.
+/// 
+/// # Arguments
+/// * `network_names` - List of network names to preview
+/// * `name_prefix` - Optional prefix to apply to the names
+/// 
+/// # Returns
+/// A vector of the final names after applying the prefix, or empty vector on error
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_import_names(network_names: Vec<String>, name_prefix: Option<String>) -> Vec<String> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance.structure_designer.import_manager.preview_import_names(
+                    &network_names,
+                    name_prefix.as_deref()
+                )
+            },
+            Vec::new()
+        )
+    }
+}

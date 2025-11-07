@@ -87,20 +87,22 @@ impl NodeNetworksImportManager {
         }).collect()
     }
     
-    /// Imports selected node networks from the loaded library into the target registry
-    /// and clears the library afterwards.
+    /// Imports the specified node networks from the loaded library into the target registry
     /// 
-    /// The imported networks are moved (not cloned) from the library registry to the
-    /// target registry. This avoids the need to implement Clone for NodeNetwork.
+    /// This method automatically computes and imports all transitive dependencies of the
+    /// specified networks. Network names can be prefixed to avoid conflicts. If a prefix 
+    /// is provided, all internal references between the imported networks are automatically 
+    /// updated to use the prefixed names.
+    /// 
     /// After import, the library is automatically cleared.
     /// 
     /// # Arguments
-    /// * `network_names` - List of network names to import
+    /// * `network_names` - List of network names to import (dependencies will be computed automatically)
     /// * `target_registry` - The registry to import the networks into
     /// * `name_prefix` - Optional prefix to prepend to imported network names (e.g., "mylib::")
     /// 
     /// # Returns
-    /// * `Ok(())` if all networks were imported successfully
+    /// * `Ok(())` if all networks and their dependencies were imported successfully
     /// * `Err(String)` with error message if:
     ///   - No library is loaded
     ///   - One or more specified networks don't exist in the library
@@ -108,13 +110,13 @@ impl NodeNetworksImportManager {
     /// 
     /// # Examples
     /// ```
-    /// // Import without prefix
-    /// manager.import_networks_and_clear(&["network1"], &mut registry, None)?;
-    /// // Result: "network1" 
+    /// // Import with all dependencies - if "physics" depends on "math" and "utils":
+    /// manager.import_networks_and_clear(&["physics"], &mut registry, None)?;
+    /// // Result: "physics", "math", "utils" all imported
     /// 
-    /// // Import with prefix
-    /// manager.import_networks_and_clear(&["network1"], &mut registry, Some("physics::"))?;
-    /// // Result: "physics::network1"
+    /// // Import with prefix and dependencies:
+    /// manager.import_networks_and_clear(&["physics"], &mut registry, Some("lib::"))?;
+    /// // Result: "lib::physics", "lib::math", "lib::utils" all imported
     /// ```
     pub fn import_networks_and_clear(
         &mut self, 
@@ -122,14 +124,20 @@ impl NodeNetworksImportManager {
         target_registry: &mut NodeTypeRegistry,
         name_prefix: Option<&str>
     ) -> Result<(), String> {
+        // Compute transitive dependencies for the requested networks
+        let networks_with_dependencies = match self.compute_transitive_dependencies(network_names) {
+            Ok(deps) => deps,
+            Err(e) => return Err(e),
+        };
+        
         // Take ownership of the library registry to enable moving networks
         let mut library_registry = match self.library_registry.take() {
             Some(registry) => registry,
             None => return Err("No library is loaded. Call load_library() first.".to_string()),
         };
         
-        // Validate that all requested networks exist in the library
-        for network_name in network_names {
+        // Validate that all networks (including dependencies) exist in the library
+        for network_name in &networks_with_dependencies {
             if !library_registry.node_networks.contains_key(network_name) {
                 // Restore the library registry since validation failed
                 self.library_registry = Some(library_registry);
@@ -141,7 +149,7 @@ impl NodeNetworksImportManager {
         }
         
         // Check for name conflicts in the target registry (using prefixed names)
-        for network_name in network_names {
+        for network_name in &networks_with_dependencies {
             let final_name = match name_prefix {
                 Some(prefix) => format!("{}{}", prefix, network_name),
                 None => network_name.clone(),
@@ -159,7 +167,7 @@ impl NodeNetworksImportManager {
         
         // Create a mapping of old names to new names for renaming references
         let mut name_mapping = std::collections::HashMap::new();
-        for network_name in network_names {
+        for network_name in &networks_with_dependencies {
             let final_name = match name_prefix {
                 Some(prefix) => format!("{}{}", prefix, network_name),
                 None => network_name.clone(),
@@ -167,8 +175,8 @@ impl NodeNetworksImportManager {
             name_mapping.insert(network_name.clone(), final_name);
         }
         
-        // Import the networks by moving them from library to target
-        for network_name in network_names {
+        // Import the networks (including all dependencies) by moving them from library to target
+        for network_name in &networks_with_dependencies {
             if let Some(mut network) = library_registry.node_networks.remove(network_name) {
                 let final_name = name_mapping.get(network_name).unwrap();
                 
@@ -216,6 +224,27 @@ impl NodeNetworksImportManager {
     /// * `None` - No library is currently loaded
     pub fn get_library_file_path(&self) -> Option<&str> {
         self.library_file_path.as_deref()
+    }
+    
+    /// Computes the transitive closure of dependencies for the given network names
+    /// from the loaded library.
+    /// 
+    /// Given a list of node network names, returns all networks they depend on
+    /// (directly and indirectly), including the original networks.
+    /// 
+    /// # Arguments
+    /// * `network_names` - The initial set of node network names
+    /// 
+    /// # Returns
+    /// * `Ok(Vec<String>)` - All networks in the transitive closure of dependencies
+    /// * `Err(String)` - Error message if no library is loaded or other error occurs
+    pub fn compute_transitive_dependencies(&self, network_names: &[String]) -> Result<Vec<String>, String> {
+        match &self.library_registry {
+            Some(registry) => {
+                Ok(registry.compute_transitive_dependencies(network_names))
+            },
+            None => Err("No library is loaded. Call load_library() first.".to_string()),
+        }
     }
 }
 

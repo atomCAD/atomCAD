@@ -14,7 +14,8 @@ class ImportCnndLibraryDialog extends StatefulWidget {
   });
 
   @override
-  State<ImportCnndLibraryDialog> createState() => _ImportCnndLibraryDialogState();
+  State<ImportCnndLibraryDialog> createState() =>
+      _ImportCnndLibraryDialogState();
 }
 
 class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
@@ -39,7 +40,7 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
     try {
       // Load the library file
       final result = loadImportLibrary(filePath: widget.libraryFilePath);
-      
+
       if (result.success) {
         // Get available networks
         final networks = getImportableNetworkNames();
@@ -83,6 +84,54 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
     });
   }
 
+  void _selectDependencies() {
+    if (_selectedNetworks.isEmpty) return;
+
+    try {
+      // Store original selection count
+      final originalCount = _selectedNetworks.length;
+
+      // Get transitive dependencies for currently selected networks
+      final dependencies = importComputeTransitiveDependencies(
+        networkNames: _selectedNetworks.toList(),
+      );
+
+      // Update selection to include all dependencies
+      setState(() {
+        _selectedNetworks = Set.from(dependencies);
+      });
+
+      // Show a snackbar to inform the user what happened
+      final additionalCount = dependencies.length - originalCount;
+      if (additionalCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Selected $additionalCount additional dependencies',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No additional dependencies found'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error if dependency computation fails
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to compute dependencies: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   void _onImport() {
     setState(() {
       _isLoading = true;
@@ -104,7 +153,7 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Successfully imported ${_selectedNetworks.length} node network(s)'
+                'Successfully imported the selected networks and their dependencies'
                 '${_namePrefix.isNotEmpty ? ' with prefix "$_namePrefix"' : ''}',
               ),
               backgroundColor: Colors.green,
@@ -138,7 +187,7 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       child: Container(
-        width: 500,
+        width: 620,
         height: 600,
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -150,13 +199,13 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
-            
+
             // Library file path
             Text(
               'Library: ${widget.libraryFilePath}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
-              ),
+                    color: Colors.grey[600],
+                  ),
             ),
             const SizedBox(height: 24),
 
@@ -166,7 +215,8 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
                 labelText: 'Name Prefix (optional)',
                 hintText: 'e.g., "physics::" or "lib_"',
                 border: OutlineInputBorder(),
-                helperText: 'Prefix to add to imported network names to avoid conflicts',
+                helperText:
+                    'Prefix to add to imported network names to avoid conflicts',
               ),
               onChanged: (value) {
                 setState(() {
@@ -243,24 +293,50 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
 
             // Action buttons
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                // Left side - Select Dependencies button
+                TextButton.icon(
+                  onPressed: _selectedNetworks.isEmpty || _isLoading
+                      ? null
+                      : _selectDependencies,
+                  icon: const Icon(Icons.account_tree, size: 18),
+                  label: const Text('Select Dependencies'),
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _selectedNetworks.isEmpty || _isLoading ? null : _onImport,
-                  child: _isLoading 
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Import'),
+                // Right side - Cancel and Import buttons
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: _selectedNetworks.isEmpty || _isLoading
+                          ? null
+                          : _onImport,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Import with Dependencies'),
+                    ),
+                  ],
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+
+            // Explanation text
+            Text(
+              'Networks are always imported with their dependencies. Use "Select Dependencies" to preview what will be included.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -336,10 +412,10 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
       itemBuilder: (context, index) {
         final networkName = _availableNetworks[index];
         final isSelected = _selectedNetworks.contains(networkName);
-        
+
         return CheckboxListTile(
           title: Text(networkName),
-          subtitle: _namePrefix.isNotEmpty 
+          subtitle: _namePrefix.isNotEmpty
               ? Text('Will be imported as: $_namePrefix$networkName')
               : null,
           value: isSelected,

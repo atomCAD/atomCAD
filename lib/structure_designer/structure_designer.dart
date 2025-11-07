@@ -82,10 +82,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
                           onPressed: _exportVisible,
                           child: const Text('Export visible'),
                         ),
-                        /*MenuItemButton(
-                        onPressed: _importFromCnndLibrary,
-                        child: const Text('Import from .cnnd library'),
-                      ),*/
+                        MenuItemButton(
+                          onPressed: _importFromCnndLibrary,
+                          child: const Text('Import from .cnnd library'),
+                        ),
                       ],
                     );
                   },

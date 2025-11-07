@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use glam::DVec2;
 use super::node_type::NodeType;
@@ -1162,5 +1162,63 @@ impl NodeTypeRegistry {
         }
       }
     }
+  }
+
+  /// Computes the transitive closure of node network dependencies.
+  /// 
+  /// Given a vector of node network names, returns a vector containing all the networks
+  /// they depend on (directly and indirectly), including the original networks.
+  /// 
+  /// A node network 'A' depends on 'B' if there is a node in 'A' with node_type_name 'B'.
+  /// 
+  /// # Arguments
+  /// * `network_names` - The initial set of node network names
+  /// 
+  /// # Returns
+  /// A vector containing all networks in the transitive closure of dependencies
+  pub fn compute_transitive_dependencies(&self, network_names: &[String]) -> Vec<String> {
+    let mut result = HashSet::new();
+    let mut visited = HashSet::new();
+    
+    // Start DFS from each requested network
+    for network_name in network_names {
+      self.dfs_dependencies(network_name, &mut result, &mut visited);
+    }
+    
+    // Convert to sorted vector for deterministic output
+    let mut result_vec: Vec<String> = result.into_iter().collect();
+    result_vec.sort();
+    result_vec
+  }
+  
+  /// Depth-first search to find all dependencies of a node network
+  fn dfs_dependencies(&self, network_name: &str, result: &mut HashSet<String>, visited: &mut HashSet<String>) {
+    // Avoid infinite recursion in case of circular dependencies
+    if visited.contains(network_name) {
+      return;
+    }
+    visited.insert(network_name.to_string());
+    
+    // Add this network to the result
+    result.insert(network_name.to_string());
+    
+    // Find the network in our registry
+    if let Some(network) = self.node_networks.get(network_name) {
+      // Examine all nodes in this network
+      for node in network.nodes.values() {
+        let node_type_name = &node.node_type_name;
+        
+        // Check if this node references another user-defined network
+        // (Skip built-in node types)
+        if self.node_networks.contains_key(node_type_name) {
+          // Recursively find dependencies of this referenced network
+          self.dfs_dependencies(node_type_name, result, visited);
+        }
+      }
+    }
+    
+    // Remove from visited to allow revisiting in different paths
+    // (This is safe because we use the result set to track what we've already processed)
+    visited.remove(network_name);
   }
 }
