@@ -190,10 +190,10 @@ impl StructureDesigner {
 
   pub fn add_new_node_network(&mut self) {
     // Generate a unique name for the new node network
-    let mut name = "untitled".to_string();
+    let mut name = "UNTITLED".to_string();
     let mut i = 1;
     while self.node_type_registry.node_networks.contains_key(&name) {
-      name = format!("untitled{}", i);
+      name = format!("UNTITLED{}", i);
       i += 1;
     }
     self.add_node_network(&name);
