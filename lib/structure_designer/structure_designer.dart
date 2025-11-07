@@ -317,26 +317,13 @@ class _StructureDesignerState extends State<StructureDesigner> {
         
         // Show the import dialog
         if (mounted) {
-          final importResult = await showDialog<Map<String, dynamic>>(
+          showDialog(
             context: context,
             builder: (context) => ImportCnndLibraryDialog(
               libraryFilePath: filePath,
+              model: graphModel,
             ),
           );
-
-          if (importResult != null) {
-            // TODO: Handle the import result in the next step
-            // For now, just show a placeholder message
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Import functionality will be implemented in the next step. '
-                  'Selected ${importResult['selectedNetworks'].length} networks '
-                  'with prefix: ${importResult['namePrefix'] ?? 'none'}'
-                ),
-              ),
-            );
-          }
         }
       }
     } catch (e) {

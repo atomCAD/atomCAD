@@ -12,6 +12,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/facet_shell_api.dart
     as facet_shell_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
     as import_xyz_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/import_api.dart'
+    as import_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 enum PinType {
@@ -710,5 +712,41 @@ class StructureDesignerModel extends ChangeNotifier {
         filePath: filePath);
     refreshFromKernel();
     return ret;
+  }
+
+  /// Imports selected node networks from a .cnnd library file
+  /// 
+  /// This method handles the complete import process:
+  /// 1. Loads the library file
+  /// 2. Imports the selected networks with optional name prefix
+  /// 3. Refreshes the UI to show the newly imported networks
+  /// 
+  /// Returns APIResult indicating success or failure
+  APIResult importFromCnndLibrary(String libraryFilePath, List<String> networkNames, String? namePrefix) {
+    try {
+      // Load the library file
+      final loadResult = import_api.loadImportLibrary(filePath: libraryFilePath);
+      if (!loadResult.success) {
+        return loadResult;
+      }
+
+      // Import the selected networks
+      final importResult = import_api.importNetworksAndClear(
+        networkNames: networkNames,
+        namePrefix: namePrefix,
+      );
+
+      // Refresh the UI regardless of import result
+      refreshFromKernel();
+      
+      return importResult;
+    } catch (e) {
+      // Ensure UI is refreshed even on error
+      refreshFromKernel();
+      return APIResult(
+        success: false,
+        errorMessage: 'Import failed: $e',
+      );
+    }
   }
 }

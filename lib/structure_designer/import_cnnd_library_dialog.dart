@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../src/rust/api/structure_designer/import_api.dart';
+import 'structure_designer_model.dart';
 
 /// Dialog for importing node networks from a .cnnd library file
 class ImportCnndLibraryDialog extends StatefulWidget {
   final String libraryFilePath;
+  final StructureDesignerModel model;
 
   const ImportCnndLibraryDialog({
     super.key,
     required this.libraryFilePath,
+    required this.model,
   });
 
   @override
@@ -27,7 +30,7 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
     _loadLibrary();
   }
 
-  Future<void> _loadLibrary() async {
+  void _loadLibrary() {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -35,11 +38,11 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
 
     try {
       // Load the library file
-      final result = await loadImportLibrary(filePath: widget.libraryFilePath);
+      final result = loadImportLibrary(filePath: widget.libraryFilePath);
       
       if (result.success) {
         // Get available networks
-        final networks = await getImportableNetworkNames();
+        final networks = getImportableNetworkNames();
         setState(() {
           _availableNetworks = networks;
           _isLoading = false;
@@ -81,11 +84,47 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
   }
 
   void _onImport() {
-    // TODO: Implement import functionality in next step
-    Navigator.of(context).pop({
-      'selectedNetworks': _selectedNetworks.toList(),
-      'namePrefix': _namePrefix.isEmpty ? null : _namePrefix,
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    try {
+      // Perform the import using the model
+      final result = widget.model.importFromCnndLibrary(
+        widget.libraryFilePath,
+        _selectedNetworks.toList(),
+        _namePrefix.isEmpty ? null : _namePrefix,
+      );
+
+      if (result.success) {
+        // Success - close dialog and show success message
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Successfully imported ${_selectedNetworks.length} node network(s)'
+                '${_namePrefix.isNotEmpty ? ' with prefix "$_namePrefix"' : ''}',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        // Error - keep dialog open and show error
+        setState(() {
+          _errorMessage = result.errorMessage;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      // Unexpected error - keep dialog open and show error
+      setState(() {
+        _errorMessage = 'Import failed: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -173,7 +212,34 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
                 child: _buildNetworksList(),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Error message display
+            if (_errorMessage != null && !_isLoading) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  border: Border.all(color: Colors.red[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: TextStyle(color: Colors.red[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              const SizedBox(height: 8),
+            ],
 
             // Action buttons
             Row(
@@ -186,7 +252,13 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
                 const SizedBox(width: 12),
                 ElevatedButton(
                   onPressed: _selectedNetworks.isEmpty || _isLoading ? null : _onImport,
-                  child: const Text('Import'),
+                  child: _isLoading 
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Import'),
                 ),
               ],
             ),
