@@ -223,6 +223,10 @@ impl StructureDesigner {
     if self.node_type_registry.node_networks.contains_key(new_name) {
       return false; // New name already exists
     }
+    // Check if the new name conflicts with a built-in node type
+    if self.node_type_registry.built_in_node_types.contains_key(new_name) {
+      return false; // New name conflicts with built-in node type
+    }
 
     // Take the network out of the registry
     let mut network = match self.node_type_registry.node_networks.remove(old_name) {
