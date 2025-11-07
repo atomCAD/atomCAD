@@ -9,6 +9,7 @@ import 'package:flutter_cad/structure_designer/camera_control_widget.dart';
 import 'package:flutter_cad/common/section.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_cad/structure_designer/geometry_visualization_widget.dart';
+import 'package:flutter_cad/structure_designer/atomic_structure_visualization_widget.dart';
 import 'package:flutter_cad/structure_designer/preferences_window.dart';
 import 'package:flutter_cad/common/menu_widget.dart';
 
@@ -138,14 +139,27 @@ class _StructureDesignerState extends State<StructureDesigner> {
                       content: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8.0, vertical: 4.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
                           children: [
-                            // Geometry visualization widget (left aligned)
-                            GeometryVisualizationWidget(model: graphModel),
+                            // First row: Geometry visualization and Node display
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Geometry visualization widget (left aligned)
+                                GeometryVisualizationWidget(model: graphModel),
 
-                            // Node display widget (right aligned)
-                            NodeDisplayWidget(model: graphModel),
+                                // Node display widget (right aligned)
+                                NodeDisplayWidget(model: graphModel),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Second row: Atomic structure visualization
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.start,
+                              children: [
+                                AtomicStructureVisualizationWidget(model: graphModel),
+                              ],
+                            ),
                           ],
                         ),
                       ),
