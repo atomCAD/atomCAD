@@ -9,7 +9,7 @@ With atomCAD you can design arbitrary covalently bonded atomic structures that a
 
 ![](./atomCAD_images/nut-bolt-example0-1.png)
 
-If you are new to atomCAD check out the [atomCAD Basic Tutorial](./atomCAD_basic_tutorial.md) and the [atomCAD Part Design Tutorial](./doc/part_design_tutorial.md) first.
+If you are new to atomCAD check out the [atomCAD Basic Tutorial](./atomCAD_basic_tutorial.md) and the [atomCAD Part Design Tutorial](./part_design_tutorial.md) first.
 
 Basic features:
 - **Arbitrary unit cells.** Any unit cell defined by the lattice parameters `(a, b, c, α, β, γ)` is supported. The implied crystal system (*cubic, tetragonal, orthorhombic, hexagonal, trigonal, monoclinic, triclinic*) and its symmetries are automatically determined.
