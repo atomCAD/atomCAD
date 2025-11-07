@@ -1,4 +1,5 @@
 use std::io;
+use std::collections::HashSet;
 use super::node_type_registry::NodeTypeRegistry;
 use super::serialization::node_networks_serialization;
 
@@ -157,16 +158,33 @@ impl NodeNetworksImportManager {
             }
         }
         
+        // Create a mapping of old names to new names for renaming references
+        let mut name_mapping = std::collections::HashMap::new();
+        for network_name in network_names {
+            let final_name = match name_prefix {
+                Some(prefix) => format!("{}{}", prefix, network_name),
+                None => network_name.clone(),
+            };
+            name_mapping.insert(network_name.clone(), final_name);
+        }
+        
         // Import the networks by moving them from library to target
         for network_name in network_names {
-            if let Some(network) = library_registry.node_networks.remove(network_name) {
-                let final_name = match name_prefix {
-                    Some(prefix) => format!("{}{}", prefix, network_name),
-                    None => network_name.clone(),
-                };
+            if let Some(mut network) = library_registry.node_networks.remove(network_name) {
+                let final_name = name_mapping.get(network_name).unwrap();
+                
+                // 1. Update the network's internal node type name
+                network.node_type.name = final_name.clone();
+                
+                // 2. Update all nodes in this network that reference any of the imported network names
+                for (_node_id, node) in network.nodes.iter_mut() {
+                    if let Some(new_name) = name_mapping.get(&node.node_type_name) {
+                        node.node_type_name = new_name.clone();
+                    }
+                }
                 
                 target_registry.node_networks.insert(
-                    final_name, 
+                    final_name.clone(), 
                     network
                 );
             }
