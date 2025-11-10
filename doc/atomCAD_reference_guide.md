@@ -40,7 +40,7 @@ We will discuss the different parts of the UI in detail. The parts are:
 - Node Networks List Panel
 - Node Network Editor Panel
 - Node Properties Panel
-- Geometry Visualization Preferences Panel
+- Display Preferences Panel
 - Camera Control Panel
 
 ### 3D Viewport
@@ -121,13 +121,13 @@ This is different for each node, we will discuss this in depth at the specific n
 - When dragging the mouse on integer number editor fields the number can be
 incremented or decremented using the moue wheel. Shift + mouse wheel works in 10 increments.
 
-### Geometry Visualization Preferences Panel
+### Display Preferences Panel
 
-.This panel contains common settings for how geometry nodes are visualized.
+This panel contains common settings for how geometry and atomic structures are visualized.
 
-![](./atomCAD_images/geometry_visualization_preferences_panel.png)
+![](./atomCAD_images/display_preferences_panel.png)
 
-#### Visualization mode
+#### Geometry Visualization mode
 
 Choose how geometry node outputs are rendered:
 
@@ -149,6 +149,11 @@ Choose how node output visibility is managed:
 
 Even when a non-Manual policy is active, you can still toggle a node’s visibility manually using the eye icon; that manual visibility will persist until the selection or policy changes it.
 
+#### Atomic visualization
+
+- Ball and stick: atoms are represented with small balls (their radius is hslf the covalent radius) and bonds are represented as sticks.
+- Space-filling: atoms are represented as big balls: their radius is exactly the van der Waals radius (we use data published by Santiago Alvarez in 2014)
+
 ### Camera Control Panel
 
 Contains common settings for the camera.
@@ -163,6 +168,20 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, and fo
 
 - *File > Load Design*, *File > Save Design*, *File > Save Design As*: The native file format of an atomCAD design is the .cnnd file format. CNND stands for Crystal Node Network Design. It is a json based format. It contains a list of node networks. Can be used as a design file or as a design library file intended for reusing node networks from it as custom nodes in other designs.
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
+
+### Import from library .cnnd files
+
+The *File > Import from .cnnd library* menu item allows you import selected node networks from a library .cnnd file.
+
+A library .cnnd file is just a regular .cnnd file containing node networks created to be reused in other files.
+
+![](./atomCAD_images/import_from_lib.png)
+
+- It is possible to select any number of node networks to import from a library .cnnd file
+- Always imports with transitive dependencies
+- It is possible to select (preview) those dependencies
+- You can specify a prefix which will be prepended to all the network names to avoid naming conflicts or to be able to load a parallel version of networks under a different 'namespace' to be able to compare them.
+- From time to time you might want to import a new version of the node networks with the same new from a file with a new version. It is possible to overwrite node network with the same name when importing but a proper 'Overwrite warning' message is displayed.
 
 ## Node Networks
 
