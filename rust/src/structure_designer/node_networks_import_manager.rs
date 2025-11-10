@@ -61,8 +61,10 @@ impl NodeNetworksImportManager {
     pub fn get_available_networks(&self) -> Vec<String> {
         match &self.library_registry {
             Some(registry) => {
-                // Get all node network names from the loaded library
-                registry.node_networks.keys().cloned().collect()
+                // Get all node network names from the loaded library and sort them
+                let mut networks: Vec<String> = registry.node_networks.keys().cloned().collect();
+                networks.sort();
+                networks
             }
             None => Vec::new(),
         }
