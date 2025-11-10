@@ -6,6 +6,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::common::atomic_structure::AtomicStructure;
 use std::collections::{HashMap, HashSet};
+use indexmap::IndexMap;
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -95,13 +96,13 @@ impl AtomFillStatistics {
 #[derive(Debug, Clone)]
 pub struct PlacedAtomTracker {
   // Primary storage: maps (motif_space_pos, site_index) -> atom_id
-  atom_map: HashMap<(IVec3, usize), u64>,
+  atom_map: IndexMap<(IVec3, usize), u64>,
 }
 
 impl PlacedAtomTracker {
   pub fn new() -> Self {
     PlacedAtomTracker {
-      atom_map: HashMap::new(),
+      atom_map: IndexMap::new(),
     }
   }
   

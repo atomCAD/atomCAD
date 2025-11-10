@@ -2896,6 +2896,7 @@ dependencies = [
  "flutter_rust_bridge_codegen",
  "geo",
  "glam",
+ "indexmap 2.7.0",
  "lazy_static",
  "lru",
  "nalgebra",
