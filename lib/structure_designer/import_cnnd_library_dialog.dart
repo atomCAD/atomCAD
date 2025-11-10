@@ -132,7 +132,98 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
     }
   }
 
-  void _onImport() {
+  Future<bool> _checkForOverwrites() async {
+    try {
+      // Get transitive dependencies for selected networks
+      final dependencies = importComputeTransitiveDependencies(
+        networkNames: _selectedNetworks.toList(),
+      );
+      
+      // Get current network names from the model
+      final existingNetworks = widget.model.nodeNetworkNames.map((n) => n.name).toSet();
+      
+      // Apply prefix to dependency names to check for actual conflicts
+      final conflictingNetworks = <String>[];
+      for (final networkName in dependencies) {
+        final finalName = _namePrefix.isEmpty 
+            ? networkName 
+            : '$_namePrefix$networkName';
+        if (existingNetworks.contains(finalName)) {
+          conflictingNetworks.add(finalName);
+        }
+      }
+      
+      // If no conflicts, proceed without warning
+      if (conflictingNetworks.isEmpty) {
+        return true;
+      }
+      
+      // Show warning dialog for conflicts
+      return await _showOverwriteWarning(conflictingNetworks);
+    } catch (e) {
+      // If dependency computation fails, show error and don't proceed
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to check for overwrites: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> _showOverwriteWarning(List<String> conflictingNetworks) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Overwrite Warning'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('The following networks already exist and will be overwritten:'),
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: conflictingNetworks.map((name) => 
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text('• $name', style: const TextStyle(fontFamily: 'monospace')),
+                    )
+                  ).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text('Do you want to proceed and overwrite these networks?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Overwrite'),
+          ),
+        ],
+      ),
+    ) ?? false; // Default to false if dialog is dismissed
+  }
+
+  void _onImport() async {
+    // Check for overwrites before proceeding
+    final shouldProceed = await _checkForOverwrites();
+    if (!shouldProceed) return;
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;

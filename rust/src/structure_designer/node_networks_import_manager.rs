@@ -106,7 +106,10 @@ impl NodeNetworksImportManager {
     /// * `Err(String)` with error message if:
     ///   - No library is loaded
     ///   - One or more specified networks don't exist in the library
-    ///   - A network with the prefixed name already exists in the target registry
+    /// 
+    /// # Note
+    /// This method allows overwriting existing networks to support library updates.
+    /// The UI should warn users about potential overwrites before calling this method.
     /// 
     /// # Examples
     /// ```
@@ -148,22 +151,8 @@ impl NodeNetworksImportManager {
             }
         }
         
-        // Check for name conflicts in the target registry (using prefixed names)
-        for network_name in &networks_with_dependencies {
-            let final_name = match name_prefix {
-                Some(prefix) => format!("{}{}", prefix, network_name),
-                None => network_name.clone(),
-            };
-            
-            if target_registry.node_networks.contains_key(&final_name) {
-                // Restore the library registry since validation failed
-                self.library_registry = Some(library_registry);
-                return Err(format!(
-                    "Network '{}' already exists in the target registry. Import would overwrite existing network.", 
-                    final_name
-                ));
-            }
-        }
+        // Note: We allow overwriting existing networks to support library updates
+        // The UI should handle warning the user about overwrites before calling this method
         
         // Create a mapping of old names to new names for renaming references
         let mut name_mapping = std::collections::HashMap::new();
