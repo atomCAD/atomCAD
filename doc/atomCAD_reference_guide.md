@@ -49,7 +49,7 @@ The node network results are displayed here.
 
 ![](./atomCAD_images/3d_viewport.png)
 
-You can navigate the viewport with the mouse or touchpad. Although it is possible to use atomCAD with a touchpad we **strongly recommend using it with a mouse**. You can choose between multiple control mechanisms depending on your preference and constraints. (For example some mouses do not have a middle mouse button or a mouse wheel).
+You can navigate the viewport with the mouse or touchpad. Although it is possible to use atomCAD with a touchpad we **strongly recommend using it with a mouse**. You can choose between multiple control mechanisms depending on your preference and constraints. (For example some mice do not have a middle mouse button or a mouse wheel).
 
 - **Pan (move camera):**
   - Option 1: **Middle mouse button drag**
@@ -151,7 +151,7 @@ Even when a non-Manual policy is active, you can still toggle a node’s visibil
 
 #### Atomic visualization
 
-- Ball and stick: atoms are represented with small balls (their radius is hslf the covalent radius) and bonds are represented as sticks.
+- Ball and stick: atoms are represented with small balls (their radius is half the covalent radius) and bonds are represented as sticks.
 - Space-filling: atoms are represented as big balls: their radius is exactly the van der Waals radius (we use data published by Santiago Alvarez in 2014)
 
 ### Camera Control Panel
@@ -527,7 +527,7 @@ Delete a vertex by dragging it onto one of its neighbour.
 
 Outputs a half plane.
 You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
-Both vertices are displayed as a ritnalge based prism. The direction of the half plane is indicated by the direction of the triangle.
+Both vertices are displayed as a triangle based prism. The direction of the half plane is indicated by the direction of the triangle.
 
 ![](./atomCAD_images/half_plane_node.png)
 
@@ -585,7 +585,7 @@ Extrudes a 2D geometry to a 3D geometry.
 
 #### cuboid
 
-Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. Please note that if the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a pralalepiped. 
+Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. Please note that if the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped. 
 
 ![](./atomCAD_images/cuboid_node.png)
 
@@ -650,7 +650,7 @@ Ideal for generating octahedra, dodecahedra, truncated polyhedra, Wulff shapes.
 
 This node generally offers the same features as the half_space node, but some additional features are also available:
 
-- clicking on a facet selectes it.
+- clicking on a facet selects it.
 - when a facet is selected you can manipulate it the same way as a half space.
 - if you turn on the **symmetrize** boolean property for a facet, the facet will be symmetrized using the natural point group symmetry according to the miller index family. Basically a symmetrized facet is replaced with a set of facets according to the following table:
 
@@ -781,9 +781,9 @@ By dragging the gadget axes you can move the structure. By dragging the thicker 
 
 #### edit_atom
 
-Note: The `edit_atom` node will be more more usable when we will support atomic structure relaxations.
+Note: The `edit_atom` node will be more usable when we will support atomic structure relaxations.
 
-This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. There user can freely group atomic editing commands into edit_atom_nodes at their will. 
+This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom_nodes at their will. 
 
 ![](./atomCAD_images/edit_atom_node.png)
 
@@ -845,7 +845,7 @@ Produces a `UnitCell` value representing the three lattice basis vectors defined
 
 #### motif
 
-The `motif` node produces a `Motif` value which can be an input to an`atom_fill` node and determines the content which fills the provided geometry.
+The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.
 
 ![](./atomCAD_images/motif_node.png)
 
