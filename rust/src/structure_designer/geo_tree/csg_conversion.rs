@@ -12,6 +12,7 @@ use csgrs::mesh::vertex::Vertex;
 
 impl GeoNode {
   pub fn to_csg_mesh(&self) -> Option<CSGMesh> {
+    //let _timer = Timer::new("GeoNode::to_csg_mesh");
     self.internal_to_csg_mesh(true)
   }
 

@@ -511,7 +511,7 @@ impl Renderer {
         lightweight: bool,
         preferences: &StructureDesignerPreferences
     ) {
-        //let start_time = Instant::now();
+        //let _timer = Timer::new("Renderer::refresh");
 
         // Always refresh lightweight buffers with extra tessellatable data
         let mut lightweight_mesh = Mesh::new();
@@ -608,7 +608,8 @@ impl Renderer {
                 }
             }
 
-            //println!("main buffers tessellated {} vertices and {} indices", mesh.vertices.len(), mesh.indices.len());
+            //println!("main buffers tessellated {} vertices and {} indices, {} bytes", 
+            //         mesh.vertices.len(), mesh.indices.len(), mesh.memory_usage_bytes());
 
             // Update main GPU mesh
             self.main_mesh.update_from_mesh(&self.device, &mesh, "Main");

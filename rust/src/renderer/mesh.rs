@@ -106,4 +106,11 @@ impl Mesh {
     self.add_triangle(index0, index1, index2);
     self.add_triangle(index2, index3, index0);
   }
+
+  /// Returns the total memory usage in bytes for vertices and indices vectors
+  pub fn memory_usage_bytes(&self) -> usize {
+    let vertices_bytes = self.vertices.len() * std::mem::size_of::<Vertex>();
+    let indices_bytes = self.indices.len() * std::mem::size_of::<u32>();
+    vertices_bytes + indices_bytes
+  }
 }
