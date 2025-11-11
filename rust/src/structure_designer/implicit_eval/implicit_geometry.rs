@@ -1,5 +1,7 @@
 use glam::f64::{DVec2, DVec3};
 
+pub const BATCH_SIZE: usize = 1024;
+
 /*
  * Any 3D geometry that can be implicitly evaluated.
  */
@@ -10,6 +12,8 @@ pub trait ImplicitGeometry3D {
   ) -> (DVec3, f64);
 
   fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64;
+
+  fn implicit_eval_3d_batch(&self, sample_points: &[DVec3; BATCH_SIZE]) -> [f64; BATCH_SIZE];
 
   fn is3d(&self) -> bool;
 }
