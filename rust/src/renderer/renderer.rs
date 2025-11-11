@@ -123,7 +123,11 @@ impl Renderer {
         };
 
         // Initialize GPU
-        let instance = Instance::default();
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            ..Default::default()
+        });
+
         let adapter = instance
             .request_adapter(&RequestAdapterOptions::default())
             .await
