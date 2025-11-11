@@ -115,8 +115,8 @@ impl Renderer {
           up: DVec3::new(0.0, 0.32, 0.95),
           aspect: width as f64 / height as f64,
           fovy: std::f64::consts::PI * 0.15,
-          znear: 1.0,
-          zfar: 800.0,
+          znear: 1.2,
+          zfar: 1600.0,
           orthographic: false, // Default to perspective mode
           ortho_half_height: 10.0, // Default orthographic half height
           pivot_point: DVec3::new(0.0, 0.0, 0.0),
