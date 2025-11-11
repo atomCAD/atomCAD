@@ -44,6 +44,12 @@ impl ImplicitGeometry2D for GeoNode {
     }
   }
 
+  fn implicit_eval_2d_batch(&self, sample_points: &[DVec2; BATCH_SIZE], results: &mut [f64; BATCH_SIZE]) {
+    for i in 0..BATCH_SIZE {
+      results[i] = self.implicit_eval_2d(&sample_points[i]);
+    }
+  }
+
   fn is2d(&self) -> bool {
     match self {
       GeoNode::HalfPlane { .. } => true,
@@ -105,8 +111,34 @@ impl ImplicitGeometry3D for GeoNode {
   }
 
   fn implicit_eval_3d_batch(&self, sample_points: &[DVec3; BATCH_SIZE], results: &mut [f64; BATCH_SIZE]) {
-    for i in 0..BATCH_SIZE {
-      results[i] = self.implicit_eval_3d(&sample_points[i]);
+    match self {
+      GeoNode::HalfSpace { normal, center } => {
+        Self::half_space_implicit_eval_batch(*normal, *center, sample_points, results)
+      }
+      GeoNode::Sphere { center, radius } => {
+        Self::sphere_implicit_eval_batch(*center, *radius, sample_points, results)
+      }
+      GeoNode::Extrude { height, direction, shape } => {
+        Self::extrude_implicit_eval_batch(*height, *direction, shape, sample_points, results)
+      }
+      GeoNode::Transform { transform, shape } => {
+        Self::transform_implicit_eval_batch(transform, shape, sample_points, results)
+      }
+      GeoNode::Union3D { shapes } => {
+        Self::union_3d_implicit_eval_batch(shapes, sample_points, results)
+      }
+      GeoNode::Intersection3D { shapes } => {
+        Self::intersection_3d_implicit_eval_batch(shapes, sample_points, results)
+      }
+      GeoNode::Difference3D { base, sub } => {
+        Self::difference_3d_implicit_eval_batch(base, sub, sample_points, results)
+      }
+      // For all other node types, use naive implementation for now
+      _ => {
+        for i in 0..BATCH_SIZE {
+          results[i] = self.implicit_eval_3d(&sample_points[i]);
+        }
+      }
     }
   }
 
@@ -130,6 +162,19 @@ impl GeoNode {
     return normal.dot(*sample_point - center);
   }
 
+  fn half_space_implicit_eval_batch(
+    normal: DVec3, 
+    center: DVec3, 
+    sample_points: &[DVec3; BATCH_SIZE], 
+    results: &mut [f64; BATCH_SIZE]
+  ) {
+    // Calculate signed distance from each point to the plane defined by normal and center
+    // This is highly optimizable since it's just dot products
+    for i in 0..BATCH_SIZE {
+      results[i] = normal.dot(sample_points[i] - center);
+    }
+  }
+
   fn half_plane_implicit_eval(point1: DVec2, point2: DVec2, sample_point: &DVec2) -> f64 {
     // Points are already in double precision
     
@@ -148,6 +193,19 @@ impl GeoNode {
 
   fn sphere_implicit_eval(center: DVec3, radius: f64, sample_point: &DVec3) -> f64 {
     (sample_point - center).length() - radius
+  }
+
+  fn sphere_implicit_eval_batch(
+    center: DVec3, 
+    radius: f64, 
+    sample_points: &[DVec3; BATCH_SIZE], 
+    results: &mut [f64; BATCH_SIZE]
+  ) {
+    // Calculate distance from each point to sphere center, then subtract radius
+    // This is highly optimizable since it's just vector operations
+    for i in 0..BATCH_SIZE {
+      results[i] = (sample_points[i] - center).length() - radius;
+    }
   }
 
   fn polygon_implicit_eval(vertices: &Vec<DVec2>, sample_point: &DVec2) -> f64 {
@@ -275,6 +333,41 @@ impl GeoNode {
     f64::max(z_val, input_val)
   }
 
+  fn extrude_implicit_eval_batch(
+    height: f64, 
+    direction: DVec3, 
+    shape: &Box<GeoNode>, 
+    sample_points: &[DVec3; BATCH_SIZE], 
+    results: &mut [f64; BATCH_SIZE]
+  ) {
+    // Pre-calculate constants
+    let height_z = direction.z * height;
+    let horizontal_direction = DVec2::new(direction.x, direction.y);
+    let inv_direction_z = 1.0 / direction.z;
+    
+    // Prepare 2D sample points for batch evaluation
+    let mut sample_points_2d = [DVec2::ZERO; BATCH_SIZE];
+    let mut z_constraints = [0.0; BATCH_SIZE];
+    
+    for i in 0..BATCH_SIZE {
+      // Calculate Z bounds constraint
+      z_constraints[i] = f64::max(-sample_points[i].z, sample_points[i].z - height_z);
+      
+      // Project 3D point to 2D for shape evaluation
+      let sample_horizontal_displacement = horizontal_direction * sample_points[i].z * inv_direction_z;
+      sample_points_2d[i] = DVec2::new(sample_points[i].x, sample_points[i].y) - sample_horizontal_displacement;
+    }
+    
+    // Evaluate 2D shape in batch
+    let mut shape_results = [0.0; BATCH_SIZE];
+    shape.implicit_eval_2d_batch(&sample_points_2d, &mut shape_results);
+    
+    // Combine Z constraint and 2D shape evaluation
+    for i in 0..BATCH_SIZE {
+      results[i] = f64::max(z_constraints[i], shape_results[i]);
+    }
+  }
+
   fn transform_implicit_eval(transform: &Transform, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
     // Apply inverse transform to the sample point to get the point in the shape's local space
     let inverse_transform = transform.inverse();
@@ -282,6 +375,24 @@ impl GeoNode {
     
     // Evaluate the shape at the transformed point
     shape.implicit_eval_3d(&transformed_point)
+  }
+
+  fn transform_implicit_eval_batch(
+    transform: &Transform, 
+    shape: &Box<GeoNode>, 
+    sample_points: &[DVec3; BATCH_SIZE], 
+    results: &mut [f64; BATCH_SIZE]
+  ) {
+    // Apply inverse transform to all sample points to get points in the shape's local space
+    let inverse_transform = transform.inverse();
+    let mut transformed_points = [DVec3::ZERO; BATCH_SIZE];
+    
+    for i in 0..BATCH_SIZE {
+      transformed_points[i] = inverse_transform.apply_to_position(&sample_points[i]);
+    }
+    
+    // Evaluate the shape at all transformed points using batch evaluation
+    shape.implicit_eval_3d_batch(&transformed_points, results);
   }
 
   fn union_2d_implicit_eval(shapes: &Vec<GeoNode>, sample_point: &DVec2) -> f64 {
@@ -296,6 +407,32 @@ impl GeoNode {
     }).reduce(f64::min).unwrap_or(f64::MAX)
   }
 
+  fn union_3d_implicit_eval_batch(
+    shapes: &Vec<GeoNode>, 
+    sample_points: &[DVec3; BATCH_SIZE], 
+    results: &mut [f64; BATCH_SIZE]
+  ) {
+    if shapes.is_empty() {
+      // No shapes - fill with maximum distance (outside everything)
+      results.fill(f64::MAX);
+      return;
+    }
+
+    // Initialize results with the first shape's evaluation
+    shapes[0].implicit_eval_3d_batch(sample_points, results);
+
+    // For each additional shape, evaluate in batch and take minimum with current results
+    let mut shape_results = [0.0; BATCH_SIZE];
+    for shape in shapes.iter().skip(1) {
+      shape.implicit_eval_3d_batch(sample_points, &mut shape_results);
+      
+      // Take minimum of current results and this shape's results (union operation)
+      for i in 0..BATCH_SIZE {
+        results[i] = results[i].min(shape_results[i]);
+      }
+    }
+  }
+
   fn intersection_2d_implicit_eval(shapes: &Vec<GeoNode>, sample_point: &DVec2) -> f64 {
     shapes.iter().map(|shape| {
       shape.implicit_eval_2d(sample_point)
@@ -306,6 +443,32 @@ impl GeoNode {
     shapes.iter().map(|shape| {
       shape.implicit_eval_3d(sample_point)
     }).reduce(f64::max).unwrap_or(f64::MIN)
+  }
+
+  fn intersection_3d_implicit_eval_batch(
+    shapes: &Vec<GeoNode>, 
+    sample_points: &[DVec3; BATCH_SIZE], 
+    results: &mut [f64; BATCH_SIZE]
+  ) {
+    if shapes.is_empty() {
+      // No shapes - fill with minimum distance (inside everything)
+      results.fill(f64::MIN);
+      return;
+    }
+
+    // Initialize results with the first shape's evaluation
+    shapes[0].implicit_eval_3d_batch(sample_points, results);
+
+    // For each additional shape, evaluate in batch and take maximum with current results
+    let mut shape_results = [0.0; BATCH_SIZE];
+    for shape in shapes.iter().skip(1) {
+      shape.implicit_eval_3d_batch(sample_points, &mut shape_results);
+      
+      // Take maximum of current results and this shape's results (intersection operation)
+      for i in 0..BATCH_SIZE {
+        results[i] = results[i].max(shape_results[i]);
+      }
+    }
   }
 
   fn difference_2d_implicit_eval(base: &Box<GeoNode>, sub: &Box<GeoNode>, sample_point: &DVec2) -> f64 {
@@ -320,5 +483,24 @@ impl GeoNode {
     let usub = sub.implicit_eval_3d(sample_point);
     
     f64::max(ubase, -usub)
+  }
+
+  fn difference_3d_implicit_eval_batch(
+    base: &Box<GeoNode>, 
+    sub: &Box<GeoNode>, 
+    sample_points: &[DVec3; BATCH_SIZE], 
+    results: &mut [f64; BATCH_SIZE]
+  ) {
+    // Evaluate base shape in batch
+    base.implicit_eval_3d_batch(sample_points, results);
+    
+    // Evaluate subtracted shape in batch
+    let mut sub_results = [0.0; BATCH_SIZE];
+    sub.implicit_eval_3d_batch(sample_points, &mut sub_results);
+    
+    // Apply difference operation: max(base, -sub) for each point
+    for i in 0..BATCH_SIZE {
+      results[i] = results[i].max(-sub_results[i]);
+    }
   }
 }

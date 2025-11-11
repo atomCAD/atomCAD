@@ -1,7 +1,7 @@
 use rust_lib_flutter_cad::structure_designer::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 use rust_lib_flutter_cad::structure_designer::geo_tree::GeoNode;
-use rust_lib_flutter_cad::structure_designer::implicit_eval::implicit_geometry::{ImplicitGeometry3D, BATCH_SIZE};
-use glam::f64::DVec3;
+use rust_lib_flutter_cad::structure_designer::implicit_eval::implicit_geometry::{ImplicitGeometry3D, ImplicitGeometry2D, BATCH_SIZE};
+use glam::f64::{DVec2, DVec3};
 
 #[test]
 fn test_batched_evaluator_basic() {
@@ -115,6 +115,33 @@ fn test_utility_methods() {
     
     assert_eq!(evaluator.pending_count(), 0);
     assert!(!evaluator.has_pending());
+}
+
+#[test]
+fn test_direct_2d_batch() {
+    let circle = GeoNode::Circle {
+        center: DVec2::ZERO,
+        radius: 1.0,
+    };
+    
+    // Test direct 2D batch evaluation
+    let mut batch_points = [DVec2::ZERO; BATCH_SIZE];
+    let mut batch_results = [0.0; BATCH_SIZE];
+    
+    // Fill with test points
+    for i in 0..10 {
+        batch_points[i] = DVec2::new(i as f64 * 0.1, 0.0); // Points from 0.0 to 0.9
+    }
+    
+    // Evaluate 2D batch inplace
+    circle.implicit_eval_2d_batch(&batch_points, &mut batch_results);
+    
+    // Check first few results
+    for i in 0..10 {
+        let expected = (i as f64 * 0.1) - 1.0; // Distance to circle edge
+        assert!((batch_results[i] - expected).abs() < 1e-10, 
+                "Point {}: expected {}, got {}", i, expected, batch_results[i]);
+    }
 }
 
 #[test]

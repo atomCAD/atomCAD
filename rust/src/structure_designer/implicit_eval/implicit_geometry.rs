@@ -29,5 +29,7 @@ pub trait ImplicitGeometry2D {
 
   fn implicit_eval_2d(&self, sample_point: &DVec2) -> f64;
 
+  fn implicit_eval_2d_batch(&self, sample_points: &[DVec2; BATCH_SIZE], results: &mut [f64; BATCH_SIZE]);
+
   fn is2d(&self) -> bool;
 }
