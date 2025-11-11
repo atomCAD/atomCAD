@@ -63,6 +63,7 @@ use std::fmt;
 
 mod csg_conversion;
 mod implicit_eval;
+pub mod batched_implicit_evaluator;
 
 impl fmt::Display for GeoNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -13,7 +13,7 @@ pub trait ImplicitGeometry3D {
 
   fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64;
 
-  fn implicit_eval_3d_batch(&self, sample_points: &[DVec3; BATCH_SIZE]) -> [f64; BATCH_SIZE];
+  fn implicit_eval_3d_batch(&self, sample_points: &[DVec3; BATCH_SIZE], results: &mut [f64; BATCH_SIZE]);
 
   fn is3d(&self) -> bool;
 }

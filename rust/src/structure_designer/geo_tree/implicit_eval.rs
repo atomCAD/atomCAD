@@ -104,12 +104,10 @@ impl ImplicitGeometry3D for GeoNode {
     }
   }
 
-  fn implicit_eval_3d_batch(&self, sample_points: &[DVec3; BATCH_SIZE]) -> [f64; BATCH_SIZE] {
-    let mut results = [0.0; BATCH_SIZE];
+  fn implicit_eval_3d_batch(&self, sample_points: &[DVec3; BATCH_SIZE], results: &mut [f64; BATCH_SIZE]) {
     for i in 0..BATCH_SIZE {
       results[i] = self.implicit_eval_3d(&sample_points[i]);
     }
-    results
   }
 
   fn is3d(&self) -> bool {
