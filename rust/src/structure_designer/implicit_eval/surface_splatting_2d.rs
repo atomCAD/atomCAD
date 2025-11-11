@@ -16,19 +16,14 @@ pub fn generate_2d_point_cloud_scene(
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) -> StructureDesignerScene {
   let mut point_cloud = SurfacePointCloud2D::new();
-  let cache_size = i32::min(
-    (common_constants::IMPLICIT_VOLUME_MAX.y - common_constants::IMPLICIT_VOLUME_MIN.y + 1) *
-    (common_constants::IMPLICIT_VOLUME_MAX.x - common_constants::IMPLICIT_VOLUME_MIN.x + 1) *
-    geometry_visualization_preferences.samples_per_unit_cell * geometry_visualization_preferences.samples_per_unit_cell,
-    common_constants::MAX_EVAL_CACHE_SIZE
-  );
+  let cache_size = common_constants::MAX_EVAL_CACHE_SIZE;
 
   let mut eval_cache = LruCache::new(std::num::NonZeroUsize::new(cache_size as usize).unwrap());
 
   process_rect_for_point_cloud(
       geometry,
-      &(common_constants::IMPLICIT_VOLUME_MIN.xy() * geometry_visualization_preferences.samples_per_unit_cell),
-      &((common_constants::IMPLICIT_VOLUME_MAX.xy() - common_constants::IMPLICIT_VOLUME_MIN.xy()) * geometry_visualization_preferences.samples_per_unit_cell),
+      &(common_constants::REAL_IMPLICIT_VOLUME_MIN.round().as_ivec3().xy() * geometry_visualization_preferences.samples_per_unit_cell),
+      &((common_constants::REAL_IMPLICIT_VOLUME_MAX.round().as_ivec3().xy() - common_constants::REAL_IMPLICIT_VOLUME_MIN.round().as_ivec3().xy()) * geometry_visualization_preferences.samples_per_unit_cell),
       &mut eval_cache,
       &mut point_cloud,
       geometry_visualization_preferences);

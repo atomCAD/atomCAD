@@ -75,8 +75,8 @@ fn generate_cells(geometry: &dyn ImplicitGeometry3D, geometry_visualization_pref
 
   generate_cells_for_box(
     geometry,
-    &(common_constants::IMPLICIT_VOLUME_MIN * geometry_visualization_preferences.samples_per_unit_cell),
-    &((common_constants::IMPLICIT_VOLUME_MAX - common_constants::IMPLICIT_VOLUME_MIN) * geometry_visualization_preferences.samples_per_unit_cell),
+    &(common_constants::REAL_IMPLICIT_VOLUME_MIN.round().as_ivec3() * geometry_visualization_preferences.samples_per_unit_cell),
+    &((common_constants::REAL_IMPLICIT_VOLUME_MAX.round().as_ivec3() - common_constants::REAL_IMPLICIT_VOLUME_MIN.round().as_ivec3()) * geometry_visualization_preferences.samples_per_unit_cell),
     &mut cells,
     geometry_visualization_preferences);
 
