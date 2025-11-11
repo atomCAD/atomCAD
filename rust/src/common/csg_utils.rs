@@ -29,7 +29,7 @@ pub fn convert_csg_sketch_to_poly_mesh(csg_sketch: CSGSketch, triangulate_2d: bo
     // Add small Z offset to render 2D sketches slightly above the grid (avoid z-fighting)
     for poly in &mut polys {
         for vertex in &mut poly.vertices {
-            vertex.pos.z += 0.001;
+            vertex.pos.z += scale_to_csg(0.001) as Real;
         }
     }
 
@@ -40,7 +40,7 @@ fn convert_polygons_to_poly_mesh(polygons: &Vec<Polygon<()>>, open: bool, hatche
 
     // Use our spatial hashing structure with a small epsilon for vertex precision
     // The epsilon value should be adjusted based on the scale of your models
-    let epsilon = 1e-5;
+    let epsilon = unscale_from_csg(1e-5);
     let mut unique_vertices = Unique3DPoints::new(epsilon);
 
     let mut poly_mesh = PolyMesh::new(open, hatched);
@@ -51,11 +51,11 @@ fn convert_polygons_to_poly_mesh(polygons: &Vec<Polygon<()>>, open: bool, hatche
         
         // Process each vertex in the polygon
         for vertex in &polygon.vertices {
-            // Convert nalgebra Point3 to glam DVec3
+            // Convert nalgebra Point3 to glam DVec3 and unscale from CSG coordinates
             let position = DVec3::new(
-                vertex.pos.x as f64,
-                vertex.pos.y as f64,
-                vertex.pos.z as f64,
+                unscale_from_csg(vertex.pos.x as f64),
+                unscale_from_csg(vertex.pos.y as f64),
+                unscale_from_csg(vertex.pos.z as f64),
             );
 
             // Get or insert the vertex, retrieving its index
@@ -76,12 +76,34 @@ fn convert_polygons_to_poly_mesh(polygons: &Vec<Polygon<()>>, open: bool, hatche
     poly_mesh
 }
 
+/// Scaling factor for CSG operations to handle large geometry.
+/// Currently set to 1.0 (no scaling), but can be adjusted as needed.
+const CSG_SCALING: f64 = 1.0;
+
+/// Scale coordinate values for CSG operations to handle large geometry.
+pub fn scale_to_csg(coord: f64) -> f64 {
+    coord * CSG_SCALING
+}
+
+/// Unscale coordinate values from CSG operations back to original scale.
+pub fn unscale_from_csg(coord: f64) -> f64 {
+    coord / CSG_SCALING
+}
+
 pub fn dvec3_to_point3(dvec3: DVec3) -> Point3<Real> {
-    Point3::new(dvec3.x as Real, dvec3.y as Real, dvec3.z as Real)
+    Point3::new(
+        scale_to_csg(dvec3.x) as Real, 
+        scale_to_csg(dvec3.y) as Real, 
+        scale_to_csg(dvec3.z) as Real
+    )
 }
 
 pub fn dvec3_to_vector3(dvec3: DVec3) -> Vector3<Real> {
-    Vector3::new(dvec3.x as Real, dvec3.y as Real, dvec3.z as Real)
+    Vector3::new(
+        scale_to_csg(dvec3.x) as Real, 
+        scale_to_csg(dvec3.y) as Real, 
+        scale_to_csg(dvec3.z) as Real
+    )
 }
 
 fn triangulate_geo_polygon(poly2d: &GeoPolygon<Real>) -> Vec<Polygon<()>> {
