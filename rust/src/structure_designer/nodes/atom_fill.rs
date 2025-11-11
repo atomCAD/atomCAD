@@ -1,4 +1,5 @@
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
+use crate::structure_designer::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
@@ -31,6 +32,19 @@ use crate::util::daabox::DAABox;
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
 const CONSERVATIVE_EPSILON: f64 = 0.001;
+
+/// Data associated with each point to be evaluated in batch
+#[derive(Debug, Clone)]
+struct PendingAtomData {
+    /// The 3D position where SDF will be evaluated
+    position: DVec3,
+    /// Effective atomic number for this site
+    atomic_number: i32,
+    /// Motif position in lattice coordinates
+    motif_pos: IVec3,
+    /// Site index within the motif
+    site_index: usize,
+}
 
 /// Standard C-H bond length in Angstroms
 const C_H_BOND_LENGTH: f64 = 1.09;
@@ -241,6 +255,10 @@ impl NodeData for AtomFillData {
       // Create a set to track which motif cells have been processed to avoid duplicates
       let mut processed_cells = HashSet::new();
 
+      // Create batched evaluator and pending atom data storage
+      let mut batched_evaluator = BatchedImplicitEvaluator::new(&mesh.geo_tree_root);
+      let mut pending_atoms = Vec::new();
+
       {
         let _fill_timer = Timer::new("AtomFill geometry filling");
         let fill_box = DAABox::from_start_and_size(
@@ -256,7 +274,40 @@ impl NodeData for AtomFillData {
           &mut statistics,
           &effective_parameter_values,
           &mut atom_tracker,
-          &mut processed_cells);
+          &mut processed_cells,
+          &mut batched_evaluator,
+          &mut pending_atoms);
+      }
+
+      {
+        let _batch_timer = Timer::new("AtomFill batch evaluation");
+        // Process all batched evaluations
+        let sdf_results = batched_evaluator.flush();
+        
+        // Process results and add atoms
+        for (i, &sdf_value) in sdf_results.iter().enumerate() {
+          let atom_data = &pending_atoms[i];
+          
+          // Add atom if we are within the geometry
+          if sdf_value <= CRYSTAL_SAMPLE_THRESHOLD {
+            let atom_id = atomic_structure.add_atom(atom_data.atomic_number, atom_data.position, 0);
+            
+            // Set the depth value based on SDF (negative SDF means inside the geometry)
+            // Convert to f32 for memory efficiency and negate to make depth positive inside geometry
+            let depth = (-sdf_value) as f32;
+            atomic_structure.set_atom_depth(atom_id, depth);
+            
+            // Update depth statistics
+            let depth_f64 = depth as f64;
+            statistics.total_depth += depth_f64;
+            if depth_f64 > statistics.max_depth {
+              statistics.max_depth = depth_f64;
+            }
+            
+            atom_tracker.record_atom(atom_data.motif_pos, atom_data.site_index, atom_id);
+            statistics.atoms += 1;
+          }
+        }
       }
 
       {
@@ -304,7 +355,9 @@ impl AtomFillData {
     statistics: &mut AtomFillStatistics,
     parameter_element_values: &HashMap<String, i32>,
     atom_tracker: &mut PlacedAtomTracker,
-    processed_cells: &mut HashSet<IVec3>) {
+    processed_cells: &mut HashSet<IVec3>,
+    batched_evaluator: &mut BatchedImplicitEvaluator,
+    pending_atoms: &mut Vec<PendingAtomData>) {
     
     statistics.fill_box_calls += 1;
     let box_center = box_to_fill.center();
@@ -340,7 +393,9 @@ impl AtomFillData {
         statistics,
         parameter_element_values,
         atom_tracker,
-        processed_cells
+        processed_cells,
+        batched_evaluator,
+        pending_atoms
       );
       return;
     }
@@ -364,7 +419,9 @@ impl AtomFillData {
         statistics,
         parameter_element_values,
         atom_tracker,
-        processed_cells
+        processed_cells,
+        batched_evaluator,
+        pending_atoms
       );
     }
   }
@@ -382,7 +439,9 @@ impl AtomFillData {
     statistics: &mut AtomFillStatistics,
     parameter_element_values: &HashMap<String, i32>,
     atom_tracker: &mut PlacedAtomTracker,
-    processed_cells: &mut HashSet<IVec3>) {
+    processed_cells: &mut HashSet<IVec3>,
+    batched_evaluator: &mut BatchedImplicitEvaluator,
+    pending_atoms: &mut Vec<PendingAtomData>) {
     
     statistics.do_fill_box_calls += 1;
     let box_size = box_to_fill.size();
@@ -420,7 +479,9 @@ impl AtomFillData {
                 atomic_structure,
                 statistics,
                 parameter_element_values,
-                atom_tracker
+                atom_tracker,
+                batched_evaluator,
+                pending_atoms
               );
             }
             
@@ -437,14 +498,16 @@ impl AtomFillData {
   fn fill_cell(
     &self,
     unit_cell: &UnitCellStruct,
-    geo_tree_root: &GeoNode,
+    _geo_tree_root: &GeoNode,
     motif: &Motif,
     motif_pos: &IVec3,
-    cell_real_pos: &DVec3,
-    atomic_structure: &mut AtomicStructure,
-    statistics: &mut AtomFillStatistics,
+    _cell_real_pos: &DVec3,
+    _atomic_structure: &mut AtomicStructure,
+    _statistics: &mut AtomFillStatistics,
     parameter_element_values: &HashMap<String, i32>,
-    atom_tracker: &mut PlacedAtomTracker
+    _atom_tracker: &mut PlacedAtomTracker,
+    batched_evaluator: &mut BatchedImplicitEvaluator,
+    pending_atoms: &mut Vec<PendingAtomData>
   ) {
     // Step 1: Place all atoms in this cell and record them in the tracker
     for (site_index, site) in motif.sites.iter().enumerate() {
@@ -478,28 +541,16 @@ impl AtomFillData {
       let site_motif_pos = motif_pos_dvec3 + site.position;
       let absolute_real_pos = self.motif_to_real(unit_cell, &site_motif_pos);
       
-      // Do implicit evaluation at this position
-      let sdf_value = geo_tree_root.implicit_eval_3d(&absolute_real_pos);
+      // Add this point to the batch for later evaluation
+      batched_evaluator.add_point(absolute_real_pos);
       
-      // Add atom if we are within the geometry
-      if sdf_value <= CRYSTAL_SAMPLE_THRESHOLD {
-        let atom_id = atomic_structure.add_atom(effective_atomic_number, absolute_real_pos, 0);
-        
-        // Set the depth value based on SDF (negative SDF means inside the geometry)
-        // Convert to f32 for memory efficiency and negate to make depth positive inside geometry
-        let depth = (-sdf_value) as f32;
-        atomic_structure.set_atom_depth(atom_id, depth);
-        
-        // Update depth statistics
-        let depth_f64 = depth as f64;
-        statistics.total_depth += depth_f64;
-        if depth_f64 > statistics.max_depth {
-          statistics.max_depth = depth_f64;
-        }
-        
-        atom_tracker.record_atom(*motif_pos, site_index, atom_id);
-        statistics.atoms += 1;
-      }
+      // Store the associated data for this evaluation point
+      pending_atoms.push(PendingAtomData {
+        position: absolute_real_pos,
+        atomic_number: effective_atomic_number,
+        motif_pos: *motif_pos,
+        site_index,
+      });
     }
   }
 
