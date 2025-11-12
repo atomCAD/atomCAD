@@ -59,6 +59,8 @@ pub struct AtomFillStatistics {
   pub bonds: i32,
   pub total_depth: f64,
   pub max_depth: f64,
+  pub non_batched_evaluations: i32,
+  pub batched_evaluations: i32,
 }
 
 impl AtomFillStatistics {
@@ -72,6 +74,8 @@ impl AtomFillStatistics {
       bonds: 0,
       total_depth: 0.0,
       max_depth: f64::NEG_INFINITY,
+      non_batched_evaluations: 0,
+      batched_evaluations: 0,
     }
   }
 
@@ -100,6 +104,7 @@ impl AtomFillStatistics {
     println!("  motif cells processed: {}", self.motif_cells_processed);
     println!("  atoms added: {}", self.atoms);
     println!("  bonds created: {}", self.bonds);
+    println!("  evaluations: {} non-batched, {} batched", self.non_batched_evaluations, self.batched_evaluations);
     if self.atoms > 0 {
       println!("  average depth: {:.3} Å", self.get_average_depth());
       println!("  max depth: {:.3} Å", self.max_depth);
@@ -255,8 +260,8 @@ impl NodeData for AtomFillData {
       // Create a set to track which motif cells have been processed to avoid duplicates
       let mut processed_cells = HashSet::new();
 
-      // Create batched evaluator and pending atom data storage
-      let mut batched_evaluator = BatchedImplicitEvaluator::new(&mesh.geo_tree_root);
+      // Create batched evaluator with multi-threading enabled and pending atom data storage
+      let mut batched_evaluator = BatchedImplicitEvaluator::new_with_threading(&mesh.geo_tree_root, true);
       let mut pending_atoms = Vec::new();
 
       {
@@ -283,6 +288,7 @@ impl NodeData for AtomFillData {
         let _batch_timer = Timer::new("AtomFill batch evaluation");
         // Process all batched evaluations
         let sdf_results = batched_evaluator.flush();
+        statistics.batched_evaluations += sdf_results.len() as i32;
         
         // Process results and add atoms
         for (i, &sdf_value) in sdf_results.iter().enumerate() {
@@ -364,6 +370,7 @@ impl AtomFillData {
 
     // Evaluate SDF at the box center
     let sdf_value = geo_tree_root.implicit_eval_3d(&box_center);
+    statistics.non_batched_evaluations += 1;
 
     let box_size = box_to_fill.size();
     let half_diagonal = box_size.length() / 2.0;
