@@ -13,7 +13,7 @@ use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::add_sample_network;
 use crate::api::api_common::refresh_renderer;
-use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
+use crate::api::structure_designer::structure_designer_preferences::{AtomicStructureVisualization, BackgroundPreferences};
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
 use crate::api::api_common::with_mut_cad_instance;
@@ -85,7 +85,7 @@ async fn initialize_cad_instance_async() {
     );
 
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
-      cad_instance.renderer.refresh_background(None);
+      cad_instance.renderer.refresh_background(None, &cad_instance.structure_designer.preferences.background_preferences);
       add_sample_network(&mut cad_instance.structure_designer);
       cad_instance.structure_designer.apply_node_display_policy(None);
       refresh_structure_designer(cad_instance, false);
@@ -126,7 +126,7 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
   unsafe {
     // Use regular with_mut_cad_instance which returns Option<()>
     if with_mut_cad_instance(|cad_instance| {
-      let v = cad_instance.renderer.render();
+      let v = cad_instance.renderer.render(&cad_instance.structure_designer.preferences.background_preferences);
       send_texture(texture_ptr, cad_instance.renderer.texture_size.width, cad_instance.renderer.texture_size.height, v);
     }).is_none() {
       // Handle the None case

@@ -154,7 +154,7 @@ impl Tessellatable for HalfPlaneGadget {
         let line_material = Material::new(&common_constants::LINE_COLOR, roughness, metallic);
         
         // Calculate the extended line across the entire coordinate system
-        use crate::renderer::tessellator::coordinate_system_tessellator::CS_SIZE;
+        const DEFAULT_GRID_SIZE: i32 = 200; // Default grid size for visualization
         
         // Calculate the line direction in 3D space
         let line_direction = (p2_3d - p1_3d).normalize();
@@ -163,7 +163,7 @@ impl Tessellatable for HalfPlaneGadget {
         let line_center = (p1_3d + p2_3d) * 0.5;
         
         // Calculate the desired total line length
-        let half_length = self.unit_cell.float_lattice_to_real(CS_SIZE as f64);
+        let half_length = self.unit_cell.float_lattice_to_real(DEFAULT_GRID_SIZE as f64);
 
         // Extend the line symmetrically from the center
         let extended_line_start = line_center - line_direction * half_length;

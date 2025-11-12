@@ -21,7 +21,7 @@ use crate::common::scene::Scene;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::renderer::mesh::Material;
-use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
+use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, BackgroundPreferences};
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 #[repr(C)]
@@ -624,13 +624,13 @@ impl Renderer {
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
             
             // Refresh the background coordinate system with the scene's unit cell
-            self.refresh_background(scene.get_unit_cell());
+            self.refresh_background(scene.get_unit_cell(), &preferences.background_preferences);
         }
 
         //println!("refresh took: {:?}", start_time.elapsed());
     }
 
-    pub fn refresh_background(&mut self, unit_cell: Option<&UnitCellStruct>) {
+    pub fn refresh_background(&mut self, unit_cell: Option<&UnitCellStruct>, background_preferences: &BackgroundPreferences) {
         let _lock = self.render_mutex.lock().unwrap();
         
         // Create a new LineMesh for the coordinate system
@@ -638,7 +638,7 @@ impl Renderer {
         
         // Use the coordinate system tessellator to populate it
         let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
-        crate::renderer::tessellator::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use);
+        crate::renderer::tessellator::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
         
         // Update the background mesh with the line mesh
         self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "Background");
@@ -647,7 +647,7 @@ impl Renderer {
         self.background_mesh.set_identity_transform(&self.queue);
     }
 
-    pub fn render(&mut self) -> Vec<u8> {
+    pub fn render(&mut self, background_preferences: &BackgroundPreferences) -> Vec<u8> {
         // Acquire lock before rendering
         let _lock = self.render_mutex.lock().unwrap();
 
@@ -658,6 +658,14 @@ impl Renderer {
                 label: Some("Command Encoder"),
             });
 
+        // Convert background color from 0-255 RGB to 0.0-1.0 range
+        let bg_color = Color {
+            r: background_preferences.background_color.x as f64 / 255.0,
+            g: background_preferences.background_color.y as f64 / 255.0,
+            b: background_preferences.background_color.z as f64 / 255.0,
+            a: 1.0,
+        };
+
         // Render pass
         {
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -666,12 +674,7 @@ impl Renderer {
                     view: &self.texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(Color {
-                            r: 0.6,
-                            g: 0.6,
-                            b: 0.6,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(bg_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
