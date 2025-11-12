@@ -5058,6 +5058,22 @@ let mut var_spaceFillingCullDepth = <Option<f64>>::sse_decode(deserializer);
 return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth};}
                 }
 
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_backgroundColor =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_showGrid = <bool>::sse_decode(deserializer);
+        let mut var_gridSize = <i32>::sse_decode(deserializer);
+        let mut var_gridColor = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_gridStrongColor =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences{background_color: var_backgroundColor, show_grid: var_showGrid, grid_size: var_gridSize, grid_color: var_gridColor, grid_strong_color: var_gridStrongColor};
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6008,7 +6024,8 @@ impl SseDecode
         let mut var_geometryVisualizationPreferences = <crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences>::sse_decode(deserializer);
         let mut var_nodeDisplayPreferences = <crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences>::sse_decode(deserializer);
         let mut var_atomicStructureVisualizationPreferences = <crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences{geometry_visualization_preferences: var_geometryVisualizationPreferences, node_display_preferences: var_nodeDisplayPreferences, atomic_structure_visualization_preferences: var_atomicStructureVisualizationPreferences};
+        let mut var_backgroundPreferences = <crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences{geometry_visualization_preferences: var_geometryVisualizationPreferences, node_display_preferences: var_nodeDisplayPreferences, atomic_structure_visualization_preferences: var_atomicStructureVisualizationPreferences, background_preferences: var_backgroundPreferences};
     }
 }
 
@@ -7599,6 +7616,36 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::structure_designer::structure
             }
         }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.background_color.into_into_dart().into_dart(),
+            self.show_grid.into_into_dart().into_dart(),
+            self.grid_size.into_into_dart().into_dart(),
+            self.grid_color.into_into_dart().into_dart(),
+            self.grid_strong_color.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences,
+    > for crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::ElementSummary {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -7874,6 +7921,7 @@ impl flutter_rust_bridge::IntoDart
             self.atomic_structure_visualization_preferences
                 .into_into_dart()
                 .into_dart(),
+            self.background_preferences.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8457,6 +8505,19 @@ impl SseEncode for crate::api::structure_designer::structure_designer_preference
 <Option<f64>>::sse_encode(self.ball_and_stick_cull_depth, serializer);
 <Option<f64>>::sse_encode(self.space_filling_cull_depth, serializer);}
                 }
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::common_api_types::APIIVec3>::sse_encode(self.background_color, serializer);
+        <bool>::sse_encode(self.show_grid, serializer);
+        <i32>::sse_encode(self.grid_size, serializer);
+        <crate::api::common_api_types::APIIVec3>::sse_encode(self.grid_color, serializer);
+        <crate::api::common_api_types::APIIVec3>::sse_encode(self.grid_strong_color, serializer);
+    }
+}
 
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9311,6 +9372,7 @@ impl SseEncode
         <crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences>::sse_encode(self.geometry_visualization_preferences, serializer);
         <crate::api::structure_designer::structure_designer_preferences::NodeDisplayPreferences>::sse_encode(self.node_display_preferences, serializer);
         <crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences>::sse_encode(self.atomic_structure_visualization_preferences, serializer);
+        <crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences>::sse_encode(self.background_preferences, serializer);
     }
 }
 

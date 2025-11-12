@@ -23,7 +23,12 @@ regex = "1.5.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 indexmap = "2.0"
-csgrs = "0.20.1"
+# csgrs: Using local copy with increased EPSILON for precision fix
+# Base commit: bbd5a7a (2024-11-12) - "Merge pull request #105 from ArchiyouApp/main"
+# Modification: Changed EPSILON from 1e-8 to 1e-6 in src/float_types.rs (line 23)
+# Reason: Fixes CSG intersection bug with near-unit vectors (0.9999999999999999)
+# Issue: https://github.com/timschmidt/csgrs/issues/107
+csgrs = { path = "../csgrs" }
 nalgebra = "^0.33"
 geo = "^0.29.3"
 # pyo3 = { version = "0.22", features = ["auto-initialize"] }

@@ -4,9 +4,10 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../../frb_generated.dart';
+import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`
 
 enum AtomicStructureVisualization {
   ballAndStick,
@@ -39,6 +40,41 @@ class AtomicStructureVisualizationPreferences {
           visualization == other.visualization &&
           ballAndStickCullDepth == other.ballAndStickCullDepth &&
           spaceFillingCullDepth == other.spaceFillingCullDepth;
+}
+
+class BackgroundPreferences {
+  APIIVec3 backgroundColor;
+  bool showGrid;
+  int gridSize;
+  APIIVec3 gridColor;
+  APIIVec3 gridStrongColor;
+
+  BackgroundPreferences({
+    required this.backgroundColor,
+    required this.showGrid,
+    required this.gridSize,
+    required this.gridColor,
+    required this.gridStrongColor,
+  });
+
+  @override
+  int get hashCode =>
+      backgroundColor.hashCode ^
+      showGrid.hashCode ^
+      gridSize.hashCode ^
+      gridColor.hashCode ^
+      gridStrongColor.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BackgroundPreferences &&
+          runtimeType == other.runtimeType &&
+          backgroundColor == other.backgroundColor &&
+          showGrid == other.showGrid &&
+          gridSize == other.gridSize &&
+          gridColor == other.gridColor &&
+          gridStrongColor == other.gridStrongColor;
 }
 
 enum GeometryVisualization {
@@ -132,11 +168,13 @@ class StructureDesignerPreferences {
   final NodeDisplayPreferences nodeDisplayPreferences;
   final AtomicStructureVisualizationPreferences
       atomicStructureVisualizationPreferences;
+  final BackgroundPreferences backgroundPreferences;
 
   const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
     required this.nodeDisplayPreferences,
     required this.atomicStructureVisualizationPreferences,
+    required this.backgroundPreferences,
   });
 
   StructureDesignerPreferences cloneSelf() => RustLib.instance.api
@@ -151,7 +189,8 @@ class StructureDesignerPreferences {
   int get hashCode =>
       geometryVisualizationPreferences.hashCode ^
       nodeDisplayPreferences.hashCode ^
-      atomicStructureVisualizationPreferences.hashCode;
+      atomicStructureVisualizationPreferences.hashCode ^
+      backgroundPreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -162,5 +201,6 @@ class StructureDesignerPreferences {
               other.geometryVisualizationPreferences &&
           nodeDisplayPreferences == other.nodeDisplayPreferences &&
           atomicStructureVisualizationPreferences ==
-              other.atomicStructureVisualizationPreferences;
+              other.atomicStructureVisualizationPreferences &&
+          backgroundPreferences == other.backgroundPreferences;
 }

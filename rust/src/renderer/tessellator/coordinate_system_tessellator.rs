@@ -3,11 +3,9 @@ use glam::f32::Vec3;
 use crate::renderer::line_mesh::LineMesh;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
 
 // Constants for coordinate system visualization
-pub const CS_SIZE: i32 = 200;
-pub const GRID_PRIMARY_COLOR: [f32; 3] = [0.52, 0.52, 0.52]; // Light gray for regular grid lines
-pub const GRID_SECONDARY_COLOR: [f32; 3] = [0.35, 0.35, 0.35]; // Darker gray for emphasized grid lines (every 10th)
 pub const X_AXIS_COLOR: [f32; 3] = [1.0, 0.0, 0.0]; // Red for X-axis
 pub const Y_AXIS_COLOR: [f32; 3] = [0.0, 1.0, 0.0]; // Green for Y-axis
 pub const Z_AXIS_COLOR: [f32; 3] = [0.0, 0.0, 1.0]; // Blue for Z-axis
@@ -16,13 +14,18 @@ pub const Z_AXIS_COLOR: [f32; 3] = [0.0, 0.0, 1.0]; // Blue for Z-axis
 /// - RGB colored coordinate axes (X=red, Y=green, Z=blue) aligned with unit cell basis vectors
 /// - A lattice grid following the unit cell's a and b basis vectors
 /// - Enhanced grid lines every 10 units
-pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &UnitCellStruct) {
+pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &UnitCellStruct, background_preferences: &BackgroundPreferences) {
+    // Skip rendering if grid is disabled
+    if !background_preferences.show_grid {
+        return;
+    }
+    
     // Origin point
     let origin = DVec3::new(0.0, 0.0, 0.0);
     
     // Coordinate axes using unit cell basis vectors
     // Scale the basis vectors to the desired display size
-    let cs_size = CS_SIZE as f64;
+    let cs_size = background_preferences.grid_size as f64;
     let x_end = origin + unit_cell.a * cs_size;
     let y_end = origin + unit_cell.b * cs_size;
     let z_end = origin + unit_cell.c * cs_size;
@@ -33,7 +36,7 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
     add_axis_line(output_mesh, &origin, &z_end, &Z_AXIS_COLOR);
     
     // Create grid based on unit cell lattice
-    tessellate_unit_cell_grid(output_mesh, unit_cell);
+    tessellate_unit_cell_grid(output_mesh, unit_cell, background_preferences);
 }
 
 /// Adds a single axis line from start to end with the specified color
@@ -46,19 +49,31 @@ fn add_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: 
 
 /// Creates a grid based on the unit cell lattice structure
 /// The grid follows the unit cell's a and b basis vectors (treating them as the "XY" plane equivalent)
-fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStruct) {
+fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStruct, background_preferences: &BackgroundPreferences) {
     let origin = DVec3::new(0.0, 0.0, 0.0);
     
     // Calculate the number of lines needed in each direction
-    let line_count = 2 * CS_SIZE + 1;
-    let grid_range = CS_SIZE as i32;
+    let grid_size = background_preferences.grid_size;
+    let grid_range = grid_size as i32;
+    
+    // Convert APIIVec3 colors to [f32; 3] arrays (normalize from 0-255 to 0.0-1.0)
+    let grid_primary_color = [
+        background_preferences.grid_color.x as f32 / 255.0,
+        background_preferences.grid_color.y as f32 / 255.0,
+        background_preferences.grid_color.z as f32 / 255.0,
+    ];
+    let grid_secondary_color = [
+        background_preferences.grid_strong_color.x as f32 / 255.0,
+        background_preferences.grid_strong_color.y as f32 / 255.0,
+        background_preferences.grid_strong_color.z as f32 / 255.0,
+    ];
     
     // Create grid lines parallel to the 'a' basis vector (varying along 'b' direction)
     for i in -grid_range..=grid_range {
         let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized { GRID_SECONDARY_COLOR } else { GRID_PRIMARY_COLOR };
+        let color = if is_emphasized { grid_secondary_color } else { grid_primary_color };
         
-        // Line runs from -CS_SIZE*a to +CS_SIZE*a, offset by i*b
+        // Line runs from -grid_size*a to +grid_size*a, offset by i*b
         let offset = unit_cell.b * (i as f64);
         let start = origin + offset - unit_cell.a * (grid_range as f64);
         let end = origin + offset + unit_cell.a * (grid_range as f64);
@@ -76,9 +91,9 @@ fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStr
     // Create grid lines parallel to the 'b' basis vector (varying along 'a' direction)
     for i in -grid_range..=grid_range {
         let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized { GRID_SECONDARY_COLOR } else { GRID_PRIMARY_COLOR };
+        let color = if is_emphasized { grid_secondary_color } else { grid_primary_color };
         
-        // Line runs from -CS_SIZE*b to +CS_SIZE*b, offset by i*a
+        // Line runs from -grid_size*b to +grid_size*b, offset by i*a
         let offset = unit_cell.a * (i as f64);
         let start = origin + offset - unit_cell.b * (grid_range as f64);
         let end = origin + offset + unit_cell.b * (grid_range as f64);

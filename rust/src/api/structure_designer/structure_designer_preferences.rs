@@ -1,4 +1,5 @@
 use flutter_rust_bridge::frb;
+use crate::api::common_api_types::APIIVec3;
 
 #[frb]
 #[derive(PartialEq, Clone)]
@@ -72,11 +73,27 @@ pub struct AtomicStructureVisualizationPreferences {
 }
 
 #[frb]
+#[derive(Clone, PartialEq)]
+pub struct BackgroundPreferences {
+  #[frb(non_final)]
+  pub background_color: APIIVec3,
+  #[frb(non_final)]
+  pub show_grid: bool,
+  #[frb(non_final)]
+  pub grid_size: i32,
+  #[frb(non_final)]
+  pub grid_color: APIIVec3,
+  #[frb(non_final)]
+  pub grid_strong_color: APIIVec3,
+}
+
+#[frb]
 #[derive(Clone)]
 pub struct StructureDesignerPreferences {
   pub geometry_visualization_preferences: GeometryVisualizationPreferences,
   pub node_display_preferences: NodeDisplayPreferences,
   pub atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences,
+  pub background_preferences: BackgroundPreferences,
 }
 
 impl StructureDesignerPreferences {
@@ -98,6 +115,13 @@ impl StructureDesignerPreferences {
         visualization: AtomicStructureVisualization::BallAndStick,
         ball_and_stick_cull_depth: Some(8.0), // Conservative depth culling at 8.0 Angstroms
         space_filling_cull_depth: Some(6.0), // Conservative depth culling at 6.0 Angstroms for space filling
+      },
+      background_preferences: BackgroundPreferences {
+        background_color: APIIVec3 { x: 150, y: 150, z: 150 },
+        show_grid: true,
+        grid_size: 200,
+        grid_color: APIIVec3 { x: 132, y: 132, z: 132 },
+        grid_strong_color: APIIVec3 { x: 90, y: 90, z: 90 },
       },
     }
   }
