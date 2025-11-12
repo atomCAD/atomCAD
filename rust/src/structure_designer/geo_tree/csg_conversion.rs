@@ -103,10 +103,16 @@ impl GeoNode {
   }
 
   fn sphere_to_csg(center: DVec3, radius: f64) -> CSGMesh {
+    // Calculate adaptive subdivision based on radius
+    // Use square root for more gradual scaling than linear
+    let scale = (radius.sqrt() * 3.0).max(6.0) as i32;
+    let segments = (scale * 4) as usize;
+    let stacks = (scale * 2) as usize;
+    
     CSGMesh::sphere(
       scale_to_csg(radius),
-      24,
-      12,
+      segments,
+      stacks,
       None
     )
       .translate(scale_to_csg(center.x), scale_to_csg(center.y), scale_to_csg(center.z))
