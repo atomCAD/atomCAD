@@ -83,11 +83,13 @@ const CSG_SCALING: f64 = 1.0;
 /// Scale coordinate values for CSG operations to handle large geometry.
 pub fn scale_to_csg(coord: f64) -> f64 {
     coord * CSG_SCALING
+    //coord
 }
 
 /// Unscale coordinate values from CSG operations back to original scale.
 pub fn unscale_from_csg(coord: f64) -> f64 {
     coord / CSG_SCALING
+    //coord
 }
 
 pub fn dvec3_to_point3(dvec3: DVec3) -> Point3<Real> {

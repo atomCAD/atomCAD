@@ -83,8 +83,8 @@ impl GeoNode {
     
     let center_pos = point1 + dir_vector * 0.5;
   
-    let width = 400.0;
-    let height = 400.0;
+    let width = 1200.0;
+    let height = 1200.0;
   
     let tr = center_pos - dir * width * 0.5 - normal * height;
 
@@ -214,8 +214,8 @@ pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) 
   let na_normal = dvec3_to_vector3(*normal);
   let rotation = DQuat::from_rotation_arc(DVec3::Z, *normal);
 
-  let width : f64 = if is_root { 100.0 } else { 400.0 };
-  let height : f64 = if is_root { 100.0 } else { 400.0 };
+  let width : f64 = if is_root { 100.0 } else { 1200.0 };
+  let height : f64 = if is_root { 100.0 } else { 1200.0 };
   let scaled_width = scale_to_csg(width);
   let scaled_height = scale_to_csg(height);
 
