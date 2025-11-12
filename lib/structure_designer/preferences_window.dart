@@ -3,6 +3,8 @@ import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
+import 'package:flutter_cad/inputs/ivec3_input.dart';
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -458,6 +460,108 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const SizedBox(width: 8),
                               const Text('Display camera pivot point'),
                             ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.medium),
+
+                    // Background Preferences Section
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.medium),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Background',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Background color
+                          IVec3Input(
+                            label: 'Background color (RGB)',
+                            value: _preferences.backgroundPreferences.backgroundColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences.backgroundColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue: const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Show grid checkbox
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _preferences.backgroundPreferences.showGrid,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.backgroundPreferences.showGrid = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('Show grid'),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Grid size
+                          IntInput(
+                            label: 'Grid size',
+                            value: _preferences.backgroundPreferences.gridSize,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences.gridSize = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: 1,
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Grid color
+                          IVec3Input(
+                            label: 'Grid color (RGB)',
+                            value: _preferences.backgroundPreferences.gridColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences.gridColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue: const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Grid strong color
+                          IVec3Input(
+                            label: 'Grid strong color (RGB)',
+                            value: _preferences.backgroundPreferences.gridStrongColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences.gridStrongColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue: const APIIVec3(x: 255, y: 255, z: 255),
                           ),
                         ],
                       ),
