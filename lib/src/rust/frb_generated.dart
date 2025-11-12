@@ -5313,6 +5313,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BackgroundPreferences dco_decode_background_preferences(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return BackgroundPreferences(
+      backgroundColor: dco_decode_apii_vec_3(arr[0]),
+      showGrid: dco_decode_bool(arr[1]),
+      gridSize: dco_decode_i_32(arr[2]),
+      gridColor: dco_decode_apii_vec_3(arr[3]),
+      gridStrongColor: dco_decode_apii_vec_3(arr[4]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -6140,14 +6155,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return StructureDesignerPreferences.raw(
       geometryVisualizationPreferences:
           dco_decode_geometry_visualization_preferences(arr[0]),
       nodeDisplayPreferences: dco_decode_node_display_preferences(arr[1]),
       atomicStructureVisualizationPreferences:
           dco_decode_atomic_structure_visualization_preferences(arr[2]),
+      backgroundPreferences: dco_decode_background_preferences(arr[3]),
     );
   }
 
@@ -6773,6 +6789,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         visualization: var_visualization,
         ballAndStickCullDepth: var_ballAndStickCullDepth,
         spaceFillingCullDepth: var_spaceFillingCullDepth);
+  }
+
+  @protected
+  BackgroundPreferences sse_decode_background_preferences(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_backgroundColor = sse_decode_apii_vec_3(deserializer);
+    var var_showGrid = sse_decode_bool(deserializer);
+    var var_gridSize = sse_decode_i_32(deserializer);
+    var var_gridColor = sse_decode_apii_vec_3(deserializer);
+    var var_gridStrongColor = sse_decode_apii_vec_3(deserializer);
+    return BackgroundPreferences(
+        backgroundColor: var_backgroundColor,
+        showGrid: var_showGrid,
+        gridSize: var_gridSize,
+        gridColor: var_gridColor,
+        gridStrongColor: var_gridStrongColor);
   }
 
   @protected
@@ -7962,11 +7995,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_node_display_preferences(deserializer);
     var var_atomicStructureVisualizationPreferences =
         sse_decode_atomic_structure_visualization_preferences(deserializer);
+    var var_backgroundPreferences =
+        sse_decode_background_preferences(deserializer);
     return StructureDesignerPreferences.raw(
         geometryVisualizationPreferences: var_geometryVisualizationPreferences,
         nodeDisplayPreferences: var_nodeDisplayPreferences,
         atomicStructureVisualizationPreferences:
-            var_atomicStructureVisualizationPreferences);
+            var_atomicStructureVisualizationPreferences,
+        backgroundPreferences: var_backgroundPreferences);
   }
 
   @protected
@@ -8464,6 +8500,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_atomic_structure_visualization(self.visualization, serializer);
     sse_encode_opt_box_autoadd_f_64(self.ballAndStickCullDepth, serializer);
     sse_encode_opt_box_autoadd_f_64(self.spaceFillingCullDepth, serializer);
+  }
+
+  @protected
+  void sse_encode_background_preferences(
+      BackgroundPreferences self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_apii_vec_3(self.backgroundColor, serializer);
+    sse_encode_bool(self.showGrid, serializer);
+    sse_encode_i_32(self.gridSize, serializer);
+    sse_encode_apii_vec_3(self.gridColor, serializer);
+    sse_encode_apii_vec_3(self.gridStrongColor, serializer);
   }
 
   @protected
@@ -9553,6 +9600,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         self.nodeDisplayPreferences, serializer);
     sse_encode_atomic_structure_visualization_preferences(
         self.atomicStructureVisualizationPreferences, serializer);
+    sse_encode_background_preferences(self.backgroundPreferences, serializer);
   }
 
   @protected

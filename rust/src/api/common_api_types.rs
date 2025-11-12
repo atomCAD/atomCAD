@@ -16,6 +16,7 @@ pub struct APIIVec2 {
   pub y: i32,
 }
 
+#[derive(Clone, PartialEq)]
 pub struct APIIVec3 {
   pub x: i32,
   pub y: i32,

@@ -199,6 +199,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_atomic_structure_visualization_preferences(dynamic raw);
 
   @protected
+  BackgroundPreferences dco_decode_background_preferences(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -772,6 +775,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AtomicStructureVisualizationPreferences
       sse_decode_atomic_structure_visualization_preferences(
           SseDeserializer deserializer);
+
+  @protected
+  BackgroundPreferences sse_decode_background_preferences(
+      SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -1445,6 +1452,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_atomic_structure_visualization_preferences(
       AtomicStructureVisualizationPreferences self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_background_preferences(
+      BackgroundPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
