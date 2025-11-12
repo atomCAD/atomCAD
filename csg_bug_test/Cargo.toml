@@ -1,0 +1,15 @@
+[package]
+name = "csg_intersection_bug_test"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "csg_bug_test"
+path = "src/main.rs"
+
+[dependencies]
+csgrs = { path = "../csgrs" }
+nalgebra = "0.33"
+glam = "0.25"
+
+[dev-dependencies]
