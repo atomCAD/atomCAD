@@ -138,8 +138,9 @@ fi
 echo "Creating zip archive: $ZIP_FILENAME"
 
 # Create zip from Release folder contents (including the .app bundle)
+# Use -y flag to preserve symlinks, required for proper macOS framework bundle format and code signing
 cd "$RELEASE_PATH"
-zip -r "$ZIP_PATH" atomCAD.app
+zip -ry "$ZIP_PATH" atomCAD.app
 cd "$PROJECT_ROOT"
 
 if [ ! -f "$ZIP_PATH" ]; then
