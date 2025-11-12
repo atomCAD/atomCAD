@@ -94,9 +94,14 @@ impl GeoNode {
   }
 
   fn circle_to_csg(center: DVec2, radius: f64) -> CSGSketch {
+    // Calculate adaptive subdivision based on radius
+    // Use square root for more gradual scaling than linear
+    let scale = (radius.sqrt() * 3.0).max(6.0) as i32;
+    let segments = (scale * 4) as usize;
+    
     CSGSketch::circle(
       scale_to_csg(radius),
-      32,
+      segments,
       None
     )
     .translate(scale_to_csg(center.x), scale_to_csg(center.y), 0.0)
