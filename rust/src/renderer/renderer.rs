@@ -663,8 +663,46 @@ impl Renderer {
     ) {
         //let _timer = Timer::new("Renderer::refresh");
 
-        // Always refresh lightweight buffers with extra tessellatable data
+        // ===== 1. HANDLE LIGHTWEIGHT MESH (always) =====
+        let lightweight_mesh = self.tessellate_lightweight_content(scene, preferences);
+
+        // ===== 2. DETERMINE CPU MESHES (when !lightweight) =====
+        let (main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
+            if !lightweight {
+                self.tessellate_non_lightweight_content(scene, preferences)
+            } else {
+                // Return empty meshes when in lightweight mode
+                (Mesh::new(), LineMesh::new(), Mesh::new(), AtomImpostorMesh::new(), BondImpostorMesh::new())
+            };
+
+        // ===== 3. UPDATE ALL GPU MESHES (irrespective of rendering method) =====
+        self.update_all_gpu_meshes(
+            &lightweight_mesh,
+            &main_mesh,
+            &wireframe_mesh,
+            &selected_clusters_mesh,
+            &atom_impostor_mesh,
+            &bond_impostor_mesh,
+            !lightweight
+        );
+
+        // Refresh the background coordinate system (only when not lightweight)
+        if !lightweight {
+            self.refresh_background(scene.get_unit_cell(), &preferences.background_preferences);
+        }
+
+        //println!("refresh took: {:?}", start_time.elapsed());
+    }
+
+    // Helper method to tessellate lightweight content (always executed)
+    fn tessellate_lightweight_content<'a, S: Scene<'a>>(
+        &self,
+        scene: &S,
+        preferences: &StructureDesignerPreferences
+    ) -> Mesh {
         let mut lightweight_mesh = Mesh::new();
+        
+        // Tessellate extra tessellatable data
         if let Some(tessellatable) = scene.tessellatable() {
             tessellatable.tessellate(&mut lightweight_mesh);
         }
@@ -690,129 +728,148 @@ impl Renderer {
         //println!("lightweight tessellated {} vertices and {} indices", 
         //         lightweight_mesh.vertices.len(), lightweight_mesh.indices.len());
 
-        // Update lightweight GPU mesh
-        self.lightweight_mesh.update_from_mesh(&self.device, &lightweight_mesh, "Lightweight");
-        // Set the identity transform for the lightweight mesh
-        self.lightweight_mesh.set_identity_transform(&self.queue);
+        lightweight_mesh
+    }
 
-        // Only refresh main buffers when not in lightweight mode
-        if !lightweight {
-            // Tessellate everything except tessellatable into main buffers
-            let mut mesh = Mesh::new();
-            let mut wireframe_mesh = LineMesh::new();
-            let mut selected_clusters_mesh = Mesh::new();
+    // Helper method to tessellate non-lightweight content based on rendering method
+    fn tessellate_non_lightweight_content<'a, S: Scene<'a>>(
+        &self,
+        scene: &S,
+        preferences: &StructureDesignerPreferences
+    ) -> (Mesh, LineMesh, Mesh, AtomImpostorMesh, BondImpostorMesh) {
+        let mut main_mesh = Mesh::new();
+        let mut wireframe_mesh = LineMesh::new();
+        let mut selected_clusters_mesh = Mesh::new();
+        let mut atom_impostor_mesh = AtomImpostorMesh::new();
+        let mut bond_impostor_mesh = BondImpostorMesh::new();
 
-            let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
-                ball_and_stick_sphere_horizontal_divisions: 12,  // Ball-and-stick: lower resolution
-                ball_and_stick_sphere_vertical_divisions: 6,     // Ball-and-stick: lower resolution
-                space_filling_sphere_horizontal_divisions: 36,   // Space-filling: higher resolution for Van der Waals
-                space_filling_sphere_vertical_divisions: 18,     // Space-filling: higher resolution for Van der Waals
-                cylinder_divisions: 12,
-            };
+        let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
+            ball_and_stick_sphere_horizontal_divisions: 12,  // Ball-and-stick: lower resolution
+            ball_and_stick_sphere_vertical_divisions: 6,     // Ball-and-stick: lower resolution
+            space_filling_sphere_horizontal_divisions: 36,   // Space-filling: higher resolution for Van der Waals
+            space_filling_sphere_vertical_divisions: 18,     // Space-filling: higher resolution for Van der Waals
+            cylinder_divisions: 12,
+        };
 
-            // Choose tessellation method based on user preferences
-            match preferences.atomic_structure_visualization_preferences.rendering_method {
-                AtomicRenderingMethod::TriangleMesh => {
-                    // Traditional triangle mesh tessellation
-                    for atomic_structure in scene.atomic_structures() {
-                        atomic_tessellator::tessellate_atomic_structure(&mut mesh, &mut selected_clusters_mesh, atomic_structure, &atomic_tessellation_params, scene, &preferences.atomic_structure_visualization_preferences);
-                    }
-                    
-                    // Clear impostor meshes to ensure they don't render when triangle mesh is selected
-                    let empty_atom_impostor_mesh = AtomImpostorMesh::new();
-                    let empty_bond_impostor_mesh = BondImpostorMesh::new();
-                    self.atom_impostor_mesh.update_from_atom_impostor_mesh(&self.device, &empty_atom_impostor_mesh, "Empty Atom Impostors");
-                    self.bond_impostor_mesh.update_from_bond_impostor_mesh(&self.device, &empty_bond_impostor_mesh, "Empty Bond Impostors");
-                },
-                AtomicRenderingMethod::Impostors => {
-                    // Impostor tessellation - create impostor mesh data
-                    let mut atom_impostor_mesh_data = AtomImpostorMesh::new();
-                    let mut bond_impostor_mesh_data = BondImpostorMesh::new();
-                    
-                    for atomic_structure in scene.atomic_structures() {
-                        atomic_tessellator::tessellate_atomic_structure_impostors(
-                            &mut atom_impostor_mesh_data, 
-                            &mut bond_impostor_mesh_data, 
-                            atomic_structure, 
-                            scene, 
-                            &preferences.atomic_structure_visualization_preferences
-                        );
-                    }
-                    
-                    // Update GPU meshes with impostor data
-                    self.atom_impostor_mesh.update_from_atom_impostor_mesh(&self.device, &atom_impostor_mesh_data, "Atom Impostors");
-                    self.bond_impostor_mesh.update_from_bond_impostor_mesh(&self.device, &bond_impostor_mesh_data, "Bond Impostors");
-                    
-                    // Set identity transforms for impostor meshes
-                    self.atom_impostor_mesh.set_identity_transform(&self.queue);
-                    self.bond_impostor_mesh.set_identity_transform(&self.queue);
-                }
-            }
-
-            for surface_point_cloud in scene.surface_point_cloud_2ds() {
-                surface_point_tessellator::tessellate_surface_point_cloud_2d(&mut mesh, surface_point_cloud);
-            }
-
-            for surface_point_cloud in scene.surface_point_clouds() {
-                surface_point_tessellator::tessellate_surface_point_cloud(&mut mesh, surface_point_cloud);
-            }
-
-            for poly_mesh in scene.poly_meshes() {
-                if preferences.geometry_visualization_preferences.wireframe_geometry {
-                    tessellate_poly_mesh_to_line_mesh(
-                        &poly_mesh,
-                        &mut wireframe_mesh, 
-                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
-                        Vec3::new(0.0, 0.0, 0.0).to_array(),
-                        // normally normal_edge_color should be Vec3::new(0.4, 0.4, 0.4), but we do not show the difference here
-                        // as csgrs sometimes creates non-manifold edges (false sharp edges) where it should not.
-                        // Fortunatelly csgrs only do this on edges on a plane, so it does not matter for the
-                        // solid visualization. 
-                        Vec3::new(0.0, 0.0, 0.0).to_array()); 
-                } else {
-                    tessellate_poly_mesh(
-                        &poly_mesh,
-                        &mut mesh, 
-                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
-                        &Material::new(
-                            &Vec3::new(0.0, 1.0, 0.0), 
-                            1.0, 
-                            0.0
-                        ),
-                        Some(&Material::new(
-                            &Vec3::new(1.0, 0.0, 0.0), 
-                            1.0, 
-                            0.0
-                        )),
-                        Some(&Material::new(
-                            &Vec3::new(0.0, 0.0, 1.0), 
-                            1.0, 
-                            0.0
-                        )),
+        // Tessellate atomic structures based on rendering method
+        match preferences.atomic_structure_visualization_preferences.rendering_method {
+            AtomicRenderingMethod::TriangleMesh => {
+                // Traditional triangle mesh tessellation
+                for atomic_structure in scene.atomic_structures() {
+                    atomic_tessellator::tessellate_atomic_structure(
+                        &mut main_mesh, 
+                        &mut selected_clusters_mesh, 
+                        atomic_structure, 
+                        &atomic_tessellation_params, 
+                        scene, 
+                        &preferences.atomic_structure_visualization_preferences
                     );
                 }
+                // Note: atom_impostor_mesh and bond_impostor_mesh remain empty (will be cleared in GPU update)
+            },
+            AtomicRenderingMethod::Impostors => {
+                // Impostor tessellation
+                for atomic_structure in scene.atomic_structures() {
+                    atomic_tessellator::tessellate_atomic_structure_impostors(
+                        &mut atom_impostor_mesh, 
+                        &mut bond_impostor_mesh, 
+                        atomic_structure, 
+                        scene, 
+                        &preferences.atomic_structure_visualization_preferences
+                    );
+                }
+                // Note: main_mesh and selected_clusters_mesh remain empty for atomic content
             }
-
-            //println!("main buffers tessellated {} vertices and {} indices, {} bytes", 
-            //         mesh.vertices.len(), mesh.indices.len(), mesh.memory_usage_bytes());
-
-            // Update main GPU mesh
-            self.main_mesh.update_from_mesh(&self.device, &mesh, "Main");
-            self.wireframe_mesh.update_from_line_mesh(&self.device, &wireframe_mesh, "Wireframe");
-            self.selected_clusters_mesh.update_from_mesh(&self.device, &selected_clusters_mesh, "Selected Clusters");
-            
-            // Set identity transform for main mesh
-            self.main_mesh.set_identity_transform(&self.queue);
-            self.wireframe_mesh.set_identity_transform(&self.queue);
-            
-            // Apply the current selected clusters transform
-            self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
-            
-            // Refresh the background coordinate system with the scene's unit cell
-            self.refresh_background(scene.get_unit_cell(), &preferences.background_preferences);
         }
 
-        //println!("refresh took: {:?}", start_time.elapsed());
+        // Tessellate surface point clouds (always to triangle mesh)
+        for surface_point_cloud in scene.surface_point_cloud_2ds() {
+            surface_point_tessellator::tessellate_surface_point_cloud_2d(&mut main_mesh, surface_point_cloud);
+        }
+
+        for surface_point_cloud in scene.surface_point_clouds() {
+            surface_point_tessellator::tessellate_surface_point_cloud(&mut main_mesh, surface_point_cloud);
+        }
+
+        // Tessellate poly meshes (always to triangle/line mesh)
+        for poly_mesh in scene.poly_meshes() {
+            if preferences.geometry_visualization_preferences.wireframe_geometry {
+                tessellate_poly_mesh_to_line_mesh(
+                    &poly_mesh,
+                    &mut wireframe_mesh, 
+                    preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
+                    Vec3::new(0.0, 0.0, 0.0).to_array(),
+                    // normally normal_edge_color should be Vec3::new(0.4, 0.4, 0.4), but we do not show the difference here
+                    // as csgrs sometimes creates non-manifold edges (false sharp edges) where it should not.
+                    // Fortunatelly csgrs only do this on edges on a plane, so it does not matter for the
+                    // solid visualization. 
+                    Vec3::new(0.0, 0.0, 0.0).to_array()
+                ); 
+            } else {
+                tessellate_poly_mesh(
+                    &poly_mesh,
+                    &mut main_mesh, 
+                    preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
+                    &Material::new(
+                        &Vec3::new(0.0, 1.0, 0.0), 
+                        1.0, 
+                        0.0
+                    ),
+                    Some(&Material::new(
+                        &Vec3::new(1.0, 0.0, 0.0), 
+                        1.0, 
+                        0.0
+                    )),
+                    Some(&Material::new(
+                        &Vec3::new(0.0, 0.0, 1.0), 
+                        1.0, 
+                        0.0
+                    )),
+                );
+            }
+        }
+
+        //println!("main buffers tessellated {} vertices and {} indices, {} bytes", 
+        //         main_mesh.vertices.len(), main_mesh.indices.len(), main_mesh.memory_usage_bytes());
+
+        (main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh)
+    }
+
+    // Helper method to update all GPU meshes consistently
+    fn update_all_gpu_meshes(
+        &mut self,
+        lightweight_mesh: &Mesh,
+        main_mesh: &Mesh,
+        wireframe_mesh: &LineMesh,
+        selected_clusters_mesh: &Mesh,
+        atom_impostor_mesh: &AtomImpostorMesh,
+        bond_impostor_mesh: &BondImpostorMesh,
+        update_non_lightweight: bool
+    ) {
+        // Always update lightweight mesh
+        self.lightweight_mesh.update_from_mesh(&self.device, lightweight_mesh, "Lightweight");
+        self.lightweight_mesh.set_identity_transform(&self.queue);
+
+        // Update non-lightweight meshes only when needed
+        if update_non_lightweight {
+            // Update triangle meshes
+            self.main_mesh.update_from_mesh(&self.device, main_mesh, "Main");
+            self.wireframe_mesh.update_from_line_mesh(&self.device, wireframe_mesh, "Wireframe");
+            self.selected_clusters_mesh.update_from_mesh(&self.device, selected_clusters_mesh, "Selected Clusters");
+            
+            // Update impostor meshes (always update both - empty ones will clear previous data)
+            self.atom_impostor_mesh.update_from_atom_impostor_mesh(&self.device, atom_impostor_mesh, "Atom Impostors");
+            self.bond_impostor_mesh.update_from_bond_impostor_mesh(&self.device, bond_impostor_mesh, "Bond Impostors");
+            
+            // Set transforms for triangle meshes
+            self.main_mesh.set_identity_transform(&self.queue);
+            self.wireframe_mesh.set_identity_transform(&self.queue);
+            self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
+            
+            // Set transforms for impostor meshes
+            self.atom_impostor_mesh.set_identity_transform(&self.queue);
+            self.bond_impostor_mesh.set_identity_transform(&self.queue);
+        }
     }
 
     pub fn refresh_background(&mut self, unit_cell: Option<&UnitCellStruct>, background_preferences: &BackgroundPreferences) {
