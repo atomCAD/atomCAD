@@ -134,15 +134,23 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     // Transform atom center to world space
     let world_center = (model.model_matrix * vec4<f32>(input.center_position, 1.0)).xyz;
     
-    // Transform center to clip space to get the base position
-    let center_clip = camera.view_proj * vec4<f32>(world_center, 1.0);
+    // Extract camera right and up vectors from view matrix
+    // The view_proj matrix is view * projection, so we need to extract from the view part
+    // We can get the inverse view matrix vectors by using the transpose approach
+    // For now, let's calculate them manually from camera position
+    let view_dir = normalize(camera.camera_position - world_center);
     
-    // Calculate screen-space radius (perspective-correct scaling)
-    // Use the projection matrix's Y-scale component for consistent sizing
-    let screen_radius = input.radius * camera.view_proj[1][1] / center_clip.w;
+    // Use the same robust method as before but simpler
+    let world_up = vec3<f32>(0.0, 1.0, 0.0);
+    let right = normalize(cross(world_up, view_dir));
+    let up = normalize(cross(view_dir, right));
     
-    // Expand the quad based on the offset and screen-space radius
-    output.clip_position = center_clip + vec4<f32>(input.quad_offset * screen_radius, 0.0, 0.0);
+    // Create camera-facing billboard quad
+    let world_offset = (input.quad_offset.x * right + input.quad_offset.y * up) * input.radius;
+    let quad_world_pos = world_center + world_offset;
+    
+    // Transform to clip space
+    output.clip_position = camera.view_proj * vec4<f32>(quad_world_pos, 1.0);
     
     // Pass through data needed for fragment shader
     output.world_center = world_center;
