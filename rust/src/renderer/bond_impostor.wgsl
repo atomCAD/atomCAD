@@ -226,43 +226,78 @@ struct BondFragmentOutput {
 
 @fragment
 fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
-    // EXACT reference shader approach - follow their implementation exactly
-    // Calculate local bond axis coordinates
-    let p = input.quad_uv;
-
-    // Calculate signed distance to capsule (EXACT reference values)
-    let capsule_dist = sd_capsule(p, vec2<f32>(0.0, -1.0), vec2<f32>(0.0, 1.0), 0.5);
-
-    // Discard fragments outside the capsule with a small antialiasing border
-    if capsule_dist > 0.0 {
+    // Ray-cylinder intersection approach (mathematically correct)
+    
+    // Step 1: Set up ray
+    let ray_origin = camera.camera_position;
+    let ray_dir = normalize(input.world_position - ray_origin);
+    
+    // Step 2: Define cylinder parameters
+    let cylinder_start = input.world_start;
+    let cylinder_end = input.world_end;
+    let cylinder_axis = normalize(cylinder_end - cylinder_start);
+    let cylinder_length = length(cylinder_end - cylinder_start);
+    let cylinder_radius = input.radius;
+    
+    // Step 3: Ray-infinite cylinder intersection
+    // Vector from ray origin to cylinder start
+    let oc = ray_origin - cylinder_start;
+    
+    // Project ray direction and oc onto plane perpendicular to cylinder axis
+    let ray_perp = ray_dir - dot(ray_dir, cylinder_axis) * cylinder_axis;
+    let oc_perp = oc - dot(oc, cylinder_axis) * cylinder_axis;
+    
+    // Solve quadratic equation: at² + bt + c = 0
+    let a = dot(ray_perp, ray_perp);
+    let b = 2.0 * dot(oc_perp, ray_perp);
+    let c = dot(oc_perp, oc_perp) - cylinder_radius * cylinder_radius;
+    
+    let discriminant = b * b - 4.0 * a * c;
+    
+    // No intersection if discriminant is negative
+    if discriminant < 0.0 {
         discard;
     }
-
-    // Calculate closest point to camera ray on the bond axis using an approximation
-    // We use the UV y-coordinate (-1 to 1) to interpolate between atom centers
-    let t = (input.quad_uv.y + 1.0) * 0.5; // Map from [-1,1] to [0,1]
-    let closest_point = mix(input.world_start, input.world_end, t);
-
-    // Calculate point on surface of the bond cylinder
-    // (cylinder radius * normalized distance from center)
-    let radial_offset = -capsule_dist * input.radius;
-
-    // We need to calculate appropriate depth adjustment based on cylinder surface
-    // Use view.clip_from_view to properly project the depth (EXACT reference approach)
-    let view_pos = camera.view_matrix * vec4<f32>(input.world_position, 1.0);
-    var adjusted_view_pos = view_pos;
-    adjusted_view_pos.z += radial_offset * 0.5; // Adjust depth by scaled radial offset
-
-    let clip_pos = camera.proj_matrix * adjusted_view_pos;
+    
+    // Step 4: Find intersection points
+    let sqrt_discriminant = sqrt(discriminant);
+    let t1 = (-b - sqrt_discriminant) / (2.0 * a);
+    let t2 = (-b + sqrt_discriminant) / (2.0 * a);
+    
+    // Choose the nearest positive intersection
+    var t = t1;
+    if t1 < 0.0 {
+        t = t2;
+    }
+    if t < 0.0 {
+        discard;
+    }
+    
+    // Step 5: Calculate hit point and check cylinder bounds
+    let hit_point = ray_origin + t * ray_dir;
+    let hit_to_start = hit_point - cylinder_start;
+    let projection_length = dot(hit_to_start, cylinder_axis);
+    
+    // Check if hit point is within cylinder length
+    if projection_length < 0.0 || projection_length > cylinder_length {
+        discard;
+    }
+    
+    // Step 6: Calculate surface normal
+    let axis_point = cylinder_start + projection_length * cylinder_axis;
+    let surface_normal = normalize(hit_point - axis_point);
+    
+    // Step 7: Calculate depth
+    let view_pos = camera.view_matrix * vec4<f32>(hit_point, 1.0);
+    let clip_pos = camera.proj_matrix * view_pos;
     let depth = clip_pos.z / clip_pos.w;
-
-    // Calculate lighting - simple gradient from center outward (EXACT reference approach)
-    let edge_factor = smoothstep(-0.1, 0.0, capsule_dist);
-    let light_factor = 1.0 - edge_factor * 0.3;
-
-    // Apply lighting to bond color (EXACT reference approach)
+    
+    // Step 8: Simple lighting (can be upgraded to PBR later)
+    let light_dir = normalize(-camera.head_light_dir);
+    let light_intensity = max(dot(surface_normal, light_dir), 0.2); // Ambient minimum
+    
     var output: BondFragmentOutput;
     output.depth = depth;
-    output.color = vec4<f32>(input.color * light_factor, 1.0);
+    output.color = vec4<f32>(input.color * light_intensity, 1.0);
     return output;
 }
