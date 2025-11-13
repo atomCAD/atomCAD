@@ -136,7 +136,7 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
     atom_info.color
   };
   
-  let roughness = if atom.selected { 0.2 } else { 0.8 };
+  let roughness = if atom.selected { 0.15 } else { 0.25 };
   let metallic = 0.0;
   
   (atom_color, roughness, metallic)
