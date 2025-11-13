@@ -3,6 +3,8 @@ use crate::common::atomic_structure::{Atom, AtomicStructure, AtomDisplayState, B
 use crate::common::common_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use crate::common::scene::Scene;
 use crate::renderer::mesh::{Mesh, Material};
+use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
+use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::api::structure_designer::structure_designer_preferences::{AtomicStructureVisualizationPreferences, AtomicStructureVisualization};
 use glam::f64::DVec3;
 use glam::f32::Vec3;
@@ -86,13 +88,8 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
   let mut tessellated_count = 0;
   
   for (id, atom) in atomic_structure.atoms.iter() {
-    // Get display state from the decorator and override it to Marked if scene.is_atom_marked is true
-    let mut display_state = atomic_structure.decorator.get_atom_display_state(*id);
-    if scene.is_atom_marked(*id) {
-      display_state = AtomDisplayState::Marked;
-    } else if scene.is_atom_secondary_marked(*id) {
-      display_state = AtomDisplayState::SecondaryMarked;
-    }
+    // Get effective display state (considering scene markers)
+    let display_state = get_atom_display_state(*id, atomic_structure, scene);
     
     // Apply depth culling if enabled
     if should_cull_atom(atom, atomic_viz_prefs) {
@@ -108,15 +105,8 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
   // Only tessellate bonds for ball-and-stick visualization
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
     for (_id, bond) in atomic_structure.bonds.iter() {
-      // Check if both atoms of the bond should be rendered
-      let atom1 = atomic_structure.atoms.get(&bond.atom_id1);
-      let atom2 = atomic_structure.atoms.get(&bond.atom_id2);
-      
-      if let (Some(atom1), Some(atom2)) = (atom1, atom2) {
-        // Only tessellate the bond if both atoms are being rendered (not culled)
-        if !should_cull_atom(atom1, atomic_viz_prefs) && !should_cull_atom(atom2, atomic_viz_prefs) {
-          tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
-        }
+      if should_render_bond(bond, atomic_structure, atomic_viz_prefs) {
+        tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
       }
     }
   }
@@ -133,6 +123,64 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
     AtomicStructureVisualization::BallAndStick => atom_info.covalent_radius * BAS_ATOM_RADIUS_FACTOR,
     AtomicStructureVisualization::SpaceFilling => atom_info.van_der_waals_radius,
   }
+}
+
+/// Shared helper to get atom color and material properties based on selection state
+fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
+  let atom_info = ATOM_INFO.get(&atom.atomic_number)
+    .unwrap_or(&DEFAULT_ATOM_INFO);
+
+  let atom_color = if atom.selected {
+    to_selected_color(&atom_info.color)
+  } else { 
+    atom_info.color
+  };
+  
+  let roughness = if atom.selected { 0.2 } else { 0.8 };
+  let metallic = 0.0;
+  
+  (atom_color, roughness, metallic)
+}
+
+/// Shared helper to determine if a bond should be rendered (both atoms not culled)
+fn should_render_bond(bond: &Bond, atomic_structure: &AtomicStructure, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) -> bool {
+  let atom1 = atomic_structure.atoms.get(&bond.atom_id1);
+  let atom2 = atomic_structure.atoms.get(&bond.atom_id2);
+  
+  if let (Some(atom1), Some(atom2)) = (atom1, atom2) {
+    !should_cull_atom(atom1, atomic_viz_prefs) && !should_cull_atom(atom2, atomic_viz_prefs)
+  } else {
+    false
+  }
+}
+
+/// Shared helper to get bond color based on selection state
+fn get_bond_color(bond: &Bond) -> Vec3 {
+  let base_color = Vec3::new(0.8, 0.8, 0.8);
+  if bond.selected {
+    to_selected_color(&base_color)
+  } else {
+    base_color
+  }
+}
+
+/// Shared helper to get the effective display state of an atom (considering scene markers)
+fn get_atom_display_state<'a, S: Scene<'a>>(
+  atom_id: u64,
+  atomic_structure: &AtomicStructure,
+  scene: &S
+) -> AtomDisplayState {
+  // Get base display state from the decorator
+  let mut display_state = atomic_structure.decorator.get_atom_display_state(atom_id);
+  
+  // Override with scene markers (scene markers take precedence)
+  if scene.is_atom_marked(atom_id) {
+    display_state = AtomDisplayState::Marked;
+  } else if scene.is_atom_secondary_marked(atom_id) {
+    display_state = AtomDisplayState::SecondaryMarked;
+  }
+  
+  display_state
 }
 
 /// Maximum number of bonds per atom (reasonable upper bound)
@@ -209,14 +257,9 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   //}
 
   let cluster_selected = _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
-  let selected = atom.selected || cluster_selected;
 
-  // Determine atom color based on selection state (not marking state)
-  let atom_color = if selected {
-    to_selected_color(&atom_info.color)
-  } else { 
-    atom_info.color
-  };
+  // Use shared helper for color and material calculation
+  let (atom_color, roughness, metallic) = get_atom_color_and_material(atom);
   
   // Get appropriate tessellation parameters based on visualization mode
   let (horizontal_divisions, vertical_divisions) = match visualization {
@@ -244,8 +287,8 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
       vertical_divisions,
       &Material::new(
         &atom_color, 
-        if selected { 0.2 } else { 0.8 },
-        0.0),
+        roughness,
+        metallic),
       reusable_occluder_array.as_slice(),
     );
   } else {
@@ -258,8 +301,8 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
       vertical_divisions,
       &Material::new(
         &atom_color, 
-        if selected { 0.2 } else { 0.8 },
-        0.0),
+        roughness,
+        metallic),
     );
   }
   
@@ -311,11 +354,8 @@ pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
 
   let selected = bond.selected || cluster_selected1 || cluster_selected2;
 
-  let color = if selected {
-    to_selected_color(&Vec3::new(0.8, 0.8, 0.8))
-  } else {
-    Vec3::new(0.8, 0.8, 0.8)
-  };
+  // Use shared helper for bond color calculation
+  let color = get_bond_color(bond);
 
   tessellator::tessellate_cylinder(
     if cluster_selected1 && cluster_selected2 { selected_clusters_mesh } else { output_mesh },
@@ -330,6 +370,113 @@ pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
     false,
     None,
     None
+  );
+}
+
+// ============================================================================
+// IMPOSTOR TESSELLATION METHODS
+// ============================================================================
+
+/// Main entry point for impostor-based atomic structure tessellation
+pub fn tessellate_atomic_structure_impostors<'a, S: Scene<'a>>(
+  atom_impostor_mesh: &mut AtomImpostorMesh, 
+  bond_impostor_mesh: &mut BondImpostorMesh, 
+  atomic_structure: &AtomicStructure, 
+  scene: &S, 
+  atomic_viz_prefs: &AtomicStructureVisualizationPreferences
+) {
+  let _timer = Timer::new("Atomic impostor tessellation");
+
+  // Pre-allocate impostor mesh capacity (much smaller than triangle tessellation)
+  let total_atoms = atomic_structure.atoms.len();
+  let total_bonds = atomic_structure.bonds.len();
+  
+  // Each atom = 4 vertices + 6 indices, each bond = 4 vertices + 6 indices
+  atom_impostor_mesh.vertices.reserve(total_atoms * 4);
+  atom_impostor_mesh.indices.reserve(total_atoms * 6);
+  bond_impostor_mesh.vertices.reserve(total_bonds * 4);
+  bond_impostor_mesh.indices.reserve(total_bonds * 6);
+
+  let mut culled_count = 0;
+  let mut tessellated_count = 0;
+  
+  // Tessellate atoms
+  for (id, atom) in atomic_structure.atoms.iter() {
+    // Get effective display state (considering scene markers)
+    let display_state = get_atom_display_state(*id, atomic_structure, scene);
+    
+    // Apply depth culling if enabled
+    if should_cull_atom(atom, atomic_viz_prefs) {
+      culled_count += 1;
+      continue;
+    }
+    
+    tessellated_count += 1;
+    tessellate_atom_impostor(atom_impostor_mesh, atom, display_state, &atomic_viz_prefs.visualization);
+  }
+  
+  // Only tessellate bonds for ball-and-stick visualization
+  if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
+    for (_id, bond) in atomic_structure.bonds.iter() {
+      if should_render_bond(bond, atomic_structure, atomic_viz_prefs) {
+        tessellate_bond_impostor(bond_impostor_mesh, atomic_structure, bond);
+      }
+    }
+  }
+
+  println!("Atomic impostor tessellation: {:?} visualization, {} atoms tessellated, {} atoms culled", 
+           atomic_viz_prefs.visualization, tessellated_count, culled_count);
+}
+
+/// Tessellate a single atom as an impostor (4 vertices, 6 indices)
+pub fn tessellate_atom_impostor(
+  atom_impostor_mesh: &mut AtomImpostorMesh,
+  atom: &Atom, 
+  display_state: AtomDisplayState,
+  visualization: &AtomicStructureVisualization
+) {
+  let radius = get_displayed_atom_radius(atom, visualization) as f32;
+  let (color, roughness, metallic) = get_atom_color_and_material(atom);
+  
+  // Add the atom quad to the impostor mesh
+  atom_impostor_mesh.add_atom_quad(
+    &atom.position.as_vec3(),
+    radius,
+    &color.to_array(),
+    roughness,
+    metallic
+  );
+  
+  // TODO: Handle markers for marked atoms (AtomDisplayState::Marked, AtomDisplayState::SecondaryMarked)
+  // For now, we'll skip marker rendering in impostors - can be added later if needed
+  match display_state {
+    AtomDisplayState::Marked | AtomDisplayState::SecondaryMarked => {
+      // Marker rendering for impostors could be implemented later
+      // This would require additional impostor quads or a separate marker system
+    },
+    AtomDisplayState::Normal => {
+      // No marker for normal atoms
+    }
+  }
+}
+
+/// Tessellate a single bond as an impostor (4 vertices, 6 indices)
+pub fn tessellate_bond_impostor(
+  bond_impostor_mesh: &mut BondImpostorMesh,
+  atomic_structure: &AtomicStructure,
+  bond: &Bond
+) {
+  let atom_pos1 = atomic_structure.get_atom(bond.atom_id1).unwrap().position;
+  let atom_pos2 = atomic_structure.get_atom(bond.atom_id2).unwrap().position;
+  
+  let color = get_bond_color(bond);
+  
+  // Add the bond quad to the impostor mesh
+  bond_impostor_mesh.add_bond_quad(
+    &atom_pos1.as_vec3(),
+    &atom_pos2.as_vec3(),
+    BAS_STICK_RADIUS as f32,
+    &color.to_array()
   );
 }
 
