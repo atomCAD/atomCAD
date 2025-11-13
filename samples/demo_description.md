@@ -58,7 +58,7 @@ Example of how to make and use a motif to make a custom crystal structure. In th
 ![](flexure-delta-robot-vdw.png)
 **file:** [flexure-delta-robot.cnnd](flexure-delta-robot.cnnd)\
 **node network:** flexure-delta-robot\
-Example of a complicated part made using atomCAD. A delta robot is a type of parallel robot that can be used for XYZ positioning. This design has been modified from the classical delta robot in that linear actuators are intended to be used rather than rotary actuators and flexure joints are used rather than ball and revolute joints. This allows the entire structure to be made from unstrained diamond. Provided as an example part only, may not function as intended. Actuators are not included in the model at present. Running
+Example of a complicated part made using atomCAD. A delta robot is a type of parallel robot that can be used for XYZ positioning. This design has been modified from the classical delta robot in that linear actuators are intended to be used rather than rotary actuators and flexure joints are used rather than ball and revolute joints. This allows the entire structure to be made from unstrained diamond. Provided as an example part only, may not function as intended. Actuators are not included in the model at present. Rendering atom fills may take longer than usual due to the high atom count.
 
 ## MOF-5 Motif
 ![](MOF5-motif-demo.png)
