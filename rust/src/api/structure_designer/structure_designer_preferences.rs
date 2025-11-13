@@ -122,7 +122,7 @@ impl StructureDesignerPreferences {
       },
       atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences {
         visualization: AtomicStructureVisualization::BallAndStick,
-        rendering_method: AtomicRenderingMethod::TriangleMesh, // Default to traditional triangle mesh rendering
+        rendering_method: AtomicRenderingMethod::Impostors, // Default to high-performance impostor rendering
         ball_and_stick_cull_depth: Some(8.0), // Conservative depth culling at 8.0 Angstroms
         space_filling_cull_depth: Some(6.0), // Conservative depth culling at 6.0 Angstroms for space filling
       },
