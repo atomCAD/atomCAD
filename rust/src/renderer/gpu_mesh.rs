@@ -2,6 +2,8 @@ use wgpu::{BufferUsages, Device, util::DeviceExt};
 use bytemuck;
 use super::mesh::Mesh;
 use crate::renderer::line_mesh::LineMesh;
+use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
+use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use glam::Mat4;
 
 #[repr(C)]
@@ -42,6 +44,10 @@ pub enum MeshType {
     Triangles,
     /// Line mesh rendered with lines primitive topology
     Lines,
+    /// Atom impostor mesh rendered as quads with sphere ray-casting
+    AtomImpostors,
+    /// Bond impostor mesh rendered as quads with cylinder ray-casting
+    BondImpostors,
 }
 
 /// Represents a mesh on the GPU with vertex and index buffers and its own transform
@@ -78,6 +84,26 @@ impl GPUMesh {
                     }
                 );
                 (vertex_buffer, "Empty Line Vertex Buffer")
+            },
+            MeshType::AtomImpostors => {
+                let vertex_buffer = device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("Empty Atom Impostor Vertex Buffer"),
+                        contents: bytemuck::cast_slice(&[] as &[crate::renderer::atom_impostor_mesh::AtomImpostorVertex]),
+                        usage: BufferUsages::VERTEX,
+                    }
+                );
+                (vertex_buffer, "Empty Atom Impostor Vertex Buffer")
+            },
+            MeshType::BondImpostors => {
+                let vertex_buffer = device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("Empty Bond Impostor Vertex Buffer"),
+                        contents: bytemuck::cast_slice(&[] as &[crate::renderer::bond_impostor_mesh::BondImpostorVertex]),
+                        usage: BufferUsages::VERTEX,
+                    }
+                );
+                (vertex_buffer, "Empty Bond Impostor Vertex Buffer")
             },
         };
 
@@ -129,6 +155,16 @@ impl GPUMesh {
     /// Creates a new empty line mesh
     pub fn new_empty_line_mesh(device: &Device, model_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         Self::new_empty(device, MeshType::Lines, model_bind_group_layout)
+    }
+
+    /// Creates a new empty atom impostor mesh
+    pub fn new_empty_atom_impostor_mesh(device: &Device, model_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+        Self::new_empty(device, MeshType::AtomImpostors, model_bind_group_layout)
+    }
+
+    /// Creates a new empty bond impostor mesh
+    pub fn new_empty_bond_impostor_mesh(device: &Device, model_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+        Self::new_empty(device, MeshType::BondImpostors, model_bind_group_layout)
     }
 
     /// Updates the GPUMesh from a CPU Triangle Mesh
@@ -189,6 +225,68 @@ impl GPUMesh {
         );
 
         self.num_indices = line_mesh.indices.len() as u32;
+        
+        // Note: The model buffer and bind group remain unchanged
+    }
+
+    /// Updates the GPUMesh from a CPU Atom Impostor Mesh
+    pub fn update_from_atom_impostor_mesh(&mut self, device: &Device, atom_impostor_mesh: &AtomImpostorMesh, label_prefix: &str) {
+        assert!(self.mesh_type == MeshType::AtomImpostors, "Cannot update a non-atom-impostor GPUMesh with an AtomImpostorMesh");
+        
+        let vertex_label = format!("{} Atom Impostor Vertex Buffer", label_prefix);
+        let index_label = format!("{} Atom Impostor Index Buffer", label_prefix);
+
+        // TODO: In the future, consider updating buffer data in-place if size permits
+        // instead of recreating buffers
+
+        self.vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some(&vertex_label),
+                contents: bytemuck::cast_slice(atom_impostor_mesh.vertices.as_slice()),
+                usage: BufferUsages::VERTEX,
+            }
+        );
+
+        self.index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some(&index_label),
+                contents: bytemuck::cast_slice(atom_impostor_mesh.indices.as_slice()),
+                usage: BufferUsages::INDEX,
+            }
+        );
+
+        self.num_indices = atom_impostor_mesh.indices.len() as u32;
+        
+        // Note: The model buffer and bind group remain unchanged
+    }
+
+    /// Updates the GPUMesh from a CPU Bond Impostor Mesh
+    pub fn update_from_bond_impostor_mesh(&mut self, device: &Device, bond_impostor_mesh: &BondImpostorMesh, label_prefix: &str) {
+        assert!(self.mesh_type == MeshType::BondImpostors, "Cannot update a non-bond-impostor GPUMesh with a BondImpostorMesh");
+        
+        let vertex_label = format!("{} Bond Impostor Vertex Buffer", label_prefix);
+        let index_label = format!("{} Bond Impostor Index Buffer", label_prefix);
+
+        // TODO: In the future, consider updating buffer data in-place if size permits
+        // instead of recreating buffers
+
+        self.vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some(&vertex_label),
+                contents: bytemuck::cast_slice(bond_impostor_mesh.vertices.as_slice()),
+                usage: BufferUsages::VERTEX,
+            }
+        );
+
+        self.index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some(&index_label),
+                contents: bytemuck::cast_slice(bond_impostor_mesh.indices.as_slice()),
+                usage: BufferUsages::INDEX,
+            }
+        );
+
+        self.num_indices = bond_impostor_mesh.indices.len() as u32;
         
         // Note: The model buffer and bind group remain unchanged
     }
