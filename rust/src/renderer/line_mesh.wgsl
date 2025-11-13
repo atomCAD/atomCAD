@@ -3,6 +3,8 @@ const PI: f32 = 3.14159265359;
 // Reusing the camera uniform structure from mesh.wgsl
 struct CameraUniform {
   view_proj: mat4x4<f32>,
+  view_matrix: mat4x4<f32>,
+  proj_matrix: mat4x4<f32>,
   camera_position: vec3<f32>,
   head_light_dir: vec3<f32>,
   is_orthographic: f32,      // 1.0 = orthographic, 0.0 = perspective

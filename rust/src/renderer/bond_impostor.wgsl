@@ -2,6 +2,8 @@ const PI: f32 = 3.14159265359;
 
 struct CameraUniform {
   view_proj: mat4x4<f32>,
+  view_matrix: mat4x4<f32>,
+  proj_matrix: mat4x4<f32>,
   camera_position: vec3<f32>,
   head_light_dir: vec3<f32>,
   is_orthographic: f32,      // 1.0 = orthographic, 0.0 = perspective
@@ -217,8 +219,13 @@ fn sd_capsule(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
     return length(pa - ba * h) - r;
 }
 
+struct BondFragmentOutput {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
+}
+
 @fragment
-fn fs_main(input: BondImpostorVertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
     // Use UV coordinates for 2D capsule SDF
     // Map quad_offset from [-1,1] to appropriate capsule coordinates
     let p = vec2<f32>(input.quad_uv.x * 2.0, input.quad_uv.y * 2.0);
@@ -232,10 +239,31 @@ fn fs_main(input: BondImpostorVertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
     
+    // Calculate depth using EXACT reference shader approach
+    // Reference: let view_pos = view.view_from_world * vec4<f32>(in.world_position, 1.0);
+    //           var adjusted_view_pos = view_pos;
+    //           adjusted_view_pos.z += radial_offset * 0.5;
+    //           let clip_pos = view.clip_from_view * adjusted_view_pos;
+    let radial_offset = -capsule_dist * input.radius;
+    
+    // Transform to view space using our view matrix
+    let view_pos = camera.view_matrix * vec4<f32>(input.world_position, 1.0);
+    
+    // Adjust view space Z by radial offset (scaled as in reference)
+    var adjusted_view_pos = view_pos;
+    adjusted_view_pos.z += radial_offset * 0.5;
+    
+    // Transform adjusted view position to clip space
+    let clip_pos = camera.proj_matrix * adjusted_view_pos;
+    let depth = clip_pos.z / clip_pos.w;
+    
     // Simple lighting based on distance from center
     let edge_factor = smoothstep(-0.1, 0.0, capsule_dist);
     let light_factor = 1.0 - edge_factor * 0.3;
     
     // Apply lighting to bond color
-    return vec4<f32>(input.color * light_factor, 1.0);
+    var output: BondFragmentOutput;
+    output.depth = depth;
+    output.color = vec4<f32>(input.color * light_factor, 1.0);
+    return output;
 }

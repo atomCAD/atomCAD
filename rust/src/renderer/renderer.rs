@@ -25,17 +25,15 @@ use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
     view_proj: [[f32; 4]; 4],
+    view_matrix: [[f32; 4]; 4],        // Separate view matrix
+    proj_matrix: [[f32; 4]; 4],        // Separate projection matrix
 
     camera_position: [f32; 3],
-
-    // Due to uniforms requiring 16 byte (4 float) spacing, we need to use padding fields
     _padding0: u32,
 
-    // There is a directional light 'attached' to the camera.
-    // It behaves as a 'head light', so it always shines slightly 'from above'.
     head_light_dir: [f32; 3],
-
     _padding1: u32,
+
     
     // Orthographic rendering flag (1.0 = orthographic, 0.0 = perspective)
     is_orthographic: f32,
@@ -51,6 +49,8 @@ impl CameraUniform {
   fn new() -> Self {
       Self {
         view_proj: Mat4::IDENTITY.to_cols_array_2d(),
+        view_matrix: Mat4::IDENTITY.to_cols_array_2d(),
+        proj_matrix: Mat4::IDENTITY.to_cols_array_2d(),
         camera_position: Vec3::new(0.0, 0.0, 0.0).to_array(),
         _padding0: 0,
         head_light_dir: Vec3::new(0.0, -1.0, 0.0).to_array(),
@@ -62,7 +62,13 @@ impl CameraUniform {
   }
 
   fn refresh(&mut self, camera: &Camera) {
-    self.view_proj = camera.build_view_projection_matrix().as_mat4().to_cols_array_2d();
+    let view_matrix = camera.build_view_matrix().as_mat4();
+    let proj_matrix = camera.build_projection_matrix().as_mat4();
+    let view_proj_matrix = proj_matrix * view_matrix;
+    
+    self.view_proj = view_proj_matrix.to_cols_array_2d();
+    self.view_matrix = view_matrix.to_cols_array_2d();
+    self.proj_matrix = proj_matrix.to_cols_array_2d();
     self.camera_position = camera.eye.as_vec3().to_array();
     self.head_light_dir = camera.calc_headlight_direction().as_vec3().to_array();
     self.is_orthographic = if camera.orthographic { 1.0 } else { 0.0 };

@@ -2,6 +2,8 @@ const PI: f32 = 3.14159265359;
 
 struct CameraUniform {
   view_proj: mat4x4<f32>,
+  view_matrix: mat4x4<f32>,
+  proj_matrix: mat4x4<f32>,
   camera_position: vec3<f32>,
   head_light_dir: vec3<f32>,
   is_orthographic: f32,      // 1.0 = orthographic, 0.0 = perspective
@@ -163,8 +165,13 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     return output;
 }
 
+struct AtomFragmentOutput {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
+}
+
 @fragment
-fn fs_main(input: AtomImpostorVertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
     // Ray-sphere intersection using quad UV coordinates
     let uv_length_sq = dot(input.quad_uv, input.quad_uv);
     
@@ -187,6 +194,20 @@ fn fs_main(input: AtomImpostorVertexOutput) -> @location(0) vec4<f32> {
     let surface_offset = local_normal * input.radius;
     let world_position = input.world_center + surface_offset;
     
+    // Calculate proper depth using EXACT reference shader approach
+    // Reference: let adjusted_clip_pos = in.clip_position + proj[2] * z_offset;
+    let z_normalized = z; // sqrt(1.0 - uv_length_sq)
+    let z_offset = z_normalized * input.radius;
+    
+    // Get the clip position of the atom center (this is our "in.clip_position")
+    let center_clip = camera.view_proj * vec4<f32>(input.world_center, 1.0);
+    
+    // Apply the EXACT reference formula: adjusted_clip_pos = in.clip_position + proj[2] * z_offset
+    // proj[2] is the third column of the projection matrix (Z transformation)
+    let proj_z_col = camera.proj_matrix[2];
+    let adjusted_clip_pos = center_clip + proj_z_col * z_offset;
+    let depth = adjusted_clip_pos.z / adjusted_clip_pos.w;
+    
     // Calculate PBR lighting using the shared function
     let color = calculate_pbr_lighting(
         world_position,
@@ -196,5 +217,8 @@ fn fs_main(input: AtomImpostorVertexOutput) -> @location(0) vec4<f32> {
         input.metallic
     );
     
-    return vec4<f32>(color, 1.0);
+    var output: AtomFragmentOutput;
+    output.depth = depth;
+    output.color = vec4<f32>(color, 1.0);
+    return output;
 }

@@ -17,23 +17,27 @@ pub struct Camera {
 }
 
 impl Camera {
-  pub fn build_view_projection_matrix(&self) -> DMat4 {
-      let view = DMat4::look_at_rh(self.eye, self.target, self.up);
-      let proj = if self.orthographic {
+  pub fn build_view_matrix(&self) -> DMat4 {
+      DMat4::look_at_rh(self.eye, self.target, self.up)
+  }
+
+  pub fn build_projection_matrix(&self) -> DMat4 {
+      if self.orthographic {
           // Calculate the orthographic projection matrix
           let right = self.ortho_half_height * self.aspect;
-          let ortho_matrix = DMat4::orthographic_rh(
+          DMat4::orthographic_rh(
               -right, right,
               -self.ortho_half_height, self.ortho_half_height,
               self.znear, self.zfar
-          );
-          //println!("  right: {}, half_height: {}, aspect: {}, znear: {}, zfar: {}", 
-          //        right, self.ortho_half_height, self.aspect, self.znear, self.zfar);
-          ortho_matrix
+          )
       } else {
-          let perspective_matrix = DMat4::perspective_rh_gl(self.fovy, self.aspect, self.znear, self.zfar);
-          perspective_matrix
-      };
+          DMat4::perspective_rh_gl(self.fovy, self.aspect, self.znear, self.zfar)
+      }
+  }
+
+  pub fn build_view_projection_matrix(&self) -> DMat4 {
+      let view = self.build_view_matrix();
+      let proj = self.build_projection_matrix();
       // println!("Projection matrix: {:?}", proj);
       return proj * view;
   }
