@@ -1,0 +1,790 @@
+{
+  "node_networks": [
+    [
+      "α_polonium_motif",
+      {
+        "next_node_id": 5,
+        "node_type": {
+          "name": "α_polonium_motif",
+          "parameters": [],
+          "output_type": "Motif"
+        },
+        "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "α_polonium_unit_cell",
+            "position": [
+              85.52212524414062,
+              129.4938842773438
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "atom_fill",
+            "position": [
+              491.4937438964844,
+              232.11707153320316
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "cuboid",
+            "position": [
+              284.90594482421875,
+              246.39274902343757
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                3
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "motif",
+            "position": [
+              345.6614074707031,
+              84.94865722656249
+            ],
+            "arguments": [],
+            "data_type": "motif",
+            "data": {
+              "definition": "PARAM POLO Po\nSITE Po1 POLO 0.0 0.0 0.0\nSITE Po2 POLO 1.0 0.0 0.0\nSITE Po3 POLO 0.0 1.0 0.0\nSITE Po4 POLO 0.0 0.0 1.0\nSITE Po5 POLO 1.0 1.0 0.0\nSITE Po6 POLO 0.0 1.0 1.0\nSITE Po7 POLO 1.0 0.0 1.0\nSITE Po8 POLO 1.0 1.0 1.0\nBOND Po1 ...Po2\nBOND Po1 ...Po3\nBOND Po1 ...Po4\nBOND Po2 ...Po5\nBOND Po5 ...Po3\nBOND Po3 ...Po6\nBOND Po2 ...Po7\nBOND Po4 ...Po6\nBOND Po4 ...Po7\nBOND Po8 ...Po6\nBOND Po8 ...Po7\n",
+              "name": "α_polonium"
+            }
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "monoclinic_demo",
+      {
+        "next_node_id": 9,
+        "node_type": {
+          "name": "monoclinic_demo",
+          "parameters": [
+            {
+              "name": "change_this",
+              "data_type": "IVec3"
+            }
+          ],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 6,
+            "node_type_name": "atom_fill",
+            "position": [
+              1276.6890258789062,
+              172.0539306640626
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "α_polonium_motif",
+            "position": [
+              969.1420288085938,
+              280.81743164062505
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "ivec3",
+            "position": [
+              166.83810424804688,
+              374.5920471191407
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "unit_cell",
+            "position": [
+              239.12762451171875,
+              175.88969726562505
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 70.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.352,
+              "cell_length_b": 3.352,
+              "cell_length_c": 3.352
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "cuboid",
+            "position": [
+              462.98834228515625,
+              60.114062500000045
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                4
+              ],
+              "min_corner": [
+                -2,
+                -2,
+                -2
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "parameter",
+            "position": [
+              416.6580505371094,
+              387.55744018554697
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "change_this",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "half_space",
+            "position": [
+              646.23828125,
+              359.37650146484384
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                1,
+                0,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "intersect",
+            "position": [
+              823.3515014648438,
+              165.0215820312501
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0,
+                  "2": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ],
+          [
+            6,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "α_polonium_unit_cell",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "α_polonium_unit_cell",
+          "parameters": [],
+          "output_type": "UnitCell"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "unit_cell",
+            "position": [
+              156.867431640625,
+              31.85643310546874
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.352,
+              "cell_length_b": 3.352,
+              "cell_length_c": 3.352
+            }
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "half_lattice_spacing",
+      {
+        "next_node_id": 7,
+        "node_type": {
+          "name": "half_lattice_spacing",
+          "parameters": [],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 5,
+            "node_type_name": "intersect",
+            "position": [
+              641.9463500976562,
+              208.93324584960942
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0,
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 2,
+            "node_type_name": "half_space",
+            "position": [
+              379.8970947265625,
+              311.8952514648438
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                2,
+                0,
+                0
+              ],
+              "shift": 1
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "α_polonium_unit_cell",
+            "position": [
+              148.21621704101562,
+              208.9915649414063
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 6,
+            "node_type_name": "α_polonium_motif",
+            "position": [
+              626.9924926757812,
+              369.01591796875005
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 3,
+            "node_type_name": "cuboid",
+            "position": [
+              389.11553955078125,
+              123.4798461914063
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "atom_fill",
+            "position": [
+              873.162109375,
+              198.09086914062505
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            4,
+            "Normal"
+          ],
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "half_space_demo",
+      {
+        "next_node_id": 13,
+        "node_type": {
+          "name": "half_space_demo",
+          "parameters": [
+            {
+              "name": "change_this",
+              "data_type": "IVec3"
+            }
+          ],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "α_polonium_unit_cell",
+            "position": [
+              218.55670166015625,
+              278.36519165039067
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 12,
+            "node_type_name": "parameter",
+            "position": [
+              423.72381591796875,
+              417.6106140136719
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "change_this",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "atom_fill",
+            "position": [
+              1105.3114013671875,
+              343.25191040039067
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "half_space",
+            "position": [
+              617.9793090820312,
+              245.9594604492188
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                0,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "α_polonium_motif",
+            "position": [
+              804.1868286132812,
+              410.3940002441407
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 1,
+            "node_type_name": "cuboid",
+            "position": [
+              434.9980163574218,
+              87.28814697265626
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                4
+              ],
+              "min_corner": [
+                -2,
+                -2,
+                -2
+              ]
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "ivec3",
+            "position": [
+              215.82058715820312,
+              377.74409790039067
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "intersect",
+            "position": [
+              1042.9336547851562,
+              237.3331176757813
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0,
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}
