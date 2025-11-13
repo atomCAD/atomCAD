@@ -226,42 +226,41 @@ struct BondFragmentOutput {
 
 @fragment
 fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
-    // Use UV coordinates for 2D capsule SDF
-    // Map quad_offset from [-1,1] to appropriate capsule coordinates
-    let p = vec2<f32>(input.quad_uv.x * 2.0, input.quad_uv.y * 2.0);
-    
-    // Calculate signed distance to capsule (cylinder with rounded ends)
-    // Capsule goes from (-1, 0) to (1, 0) with radius 0.5 in normalized coordinates
+    // EXACT reference shader approach - follow their implementation exactly
+    // Calculate local bond axis coordinates
+    let p = input.quad_uv;
+
+    // Calculate signed distance to capsule (EXACT reference values)
     let capsule_dist = sd_capsule(p, vec2<f32>(0.0, -1.0), vec2<f32>(0.0, 1.0), 0.5);
-    
-    // Discard fragments outside the capsule
-    if (capsule_dist > 0.0) {
+
+    // Discard fragments outside the capsule with a small antialiasing border
+    if capsule_dist > 0.0 {
         discard;
     }
-    
-    // Calculate depth using EXACT reference shader approach
-    // Reference: let view_pos = view.view_from_world * vec4<f32>(in.world_position, 1.0);
-    //           var adjusted_view_pos = view_pos;
-    //           adjusted_view_pos.z += radial_offset * 0.5;
-    //           let clip_pos = view.clip_from_view * adjusted_view_pos;
+
+    // Calculate closest point to camera ray on the bond axis using an approximation
+    // We use the UV y-coordinate (-1 to 1) to interpolate between atom centers
+    let t = (input.quad_uv.y + 1.0) * 0.5; // Map from [-1,1] to [0,1]
+    let closest_point = mix(input.world_start, input.world_end, t);
+
+    // Calculate point on surface of the bond cylinder
+    // (cylinder radius * normalized distance from center)
     let radial_offset = -capsule_dist * input.radius;
-    
-    // Transform to view space using our view matrix
+
+    // We need to calculate appropriate depth adjustment based on cylinder surface
+    // Use view.clip_from_view to properly project the depth (EXACT reference approach)
     let view_pos = camera.view_matrix * vec4<f32>(input.world_position, 1.0);
-    
-    // Adjust view space Z by radial offset (scaled as in reference)
     var adjusted_view_pos = view_pos;
-    adjusted_view_pos.z += radial_offset * 0.5;
-    
-    // Transform adjusted view position to clip space
+    adjusted_view_pos.z += radial_offset * 0.5; // Adjust depth by scaled radial offset
+
     let clip_pos = camera.proj_matrix * adjusted_view_pos;
     let depth = clip_pos.z / clip_pos.w;
-    
-    // Simple lighting based on distance from center
+
+    // Calculate lighting - simple gradient from center outward (EXACT reference approach)
     let edge_factor = smoothstep(-0.1, 0.0, capsule_dist);
     let light_factor = 1.0 - edge_factor * 0.3;
-    
-    // Apply lighting to bond color
+
+    // Apply lighting to bond color (EXACT reference approach)
     var output: BondFragmentOutput;
     output.depth = depth;
     output.color = vec4<f32>(input.color * light_factor, 1.0);
