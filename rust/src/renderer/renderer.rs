@@ -7,6 +7,8 @@ use super::gpu_mesh::GPUMesh;
 use super::tessellator::poly_mesh_tessellator::{tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh};
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::line_mesh::LineMesh;
+use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
+use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use super::tessellator::atomic_tessellator;
 use super::tessellator::surface_point_tessellator;
 use super::tessellator::tessellator::tessellate_cuboid;
@@ -21,7 +23,7 @@ use crate::common::scene::Scene;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::renderer::mesh::Material;
-use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, BackgroundPreferences};
+use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, BackgroundPreferences, AtomicRenderingMethod};
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 #[repr(C)]
@@ -81,11 +83,15 @@ pub struct Renderer  {
     triangle_pipeline: RenderPipeline,
     line_pipeline: RenderPipeline,
     background_line_pipeline: RenderPipeline,
+    atom_impostor_pipeline: RenderPipeline,
+    bond_impostor_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
     selected_clusters_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
     background_mesh: GPUMesh,
+    atom_impostor_mesh: GPUMesh,
+    bond_impostor_mesh: GPUMesh,
     texture: Texture,
     texture_view: TextureView,
     depth_texture: Texture,
@@ -173,6 +179,10 @@ impl Renderer {
         
         let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
         let background_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
+        
+        // Initialize impostor meshes
+        let atom_impostor_mesh = GPUMesh::new_empty_atom_impostor_mesh(&device, &model_bind_group_layout);
+        let bond_impostor_mesh = GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
 
         let texture_size = Extent3d {
             width: width,
@@ -209,6 +219,17 @@ impl Renderer {
         let triangle_shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Triangle Shader"),
             source: ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
+        });
+
+        // Impostor shader modules
+        let atom_impostor_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Atom Impostor Shader"),
+            source: ShaderSource::Wgsl(include_str!("atom_impostor.wgsl").into()),
+        });
+
+        let bond_impostor_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Bond Impostor Shader"),
+            source: ShaderSource::Wgsl(include_str!("bond_impostor.wgsl").into()),
         });
 
         let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -290,17 +311,34 @@ impl Renderer {
             }
         );
 
+        // Impostor pipelines
+        let atom_impostor_pipeline = Self::create_atom_impostor_pipeline(
+            &device,
+            &pipeline_layout,
+            &atom_impostor_shader,
+        );
+
+        let bond_impostor_pipeline = Self::create_bond_impostor_pipeline(
+            &device,
+            &pipeline_layout,
+            &bond_impostor_shader,
+        );
+
         let result = Self {
           device,
           queue,
           triangle_pipeline,
           line_pipeline,
           background_line_pipeline,
+          atom_impostor_pipeline,
+          bond_impostor_pipeline,
           main_mesh,
           wireframe_mesh,
           selected_clusters_mesh,
           lightweight_mesh,
           background_mesh,
+          atom_impostor_mesh,
+          bond_impostor_mesh,
           texture,
           texture_view,
           depth_texture,
@@ -456,6 +494,118 @@ impl Renderer {
         })
     }
 
+    fn create_atom_impostor_pipeline(
+        device: &Device,
+        pipeline_layout: &wgpu::PipelineLayout,
+        atom_impostor_shader: &wgpu::ShaderModule,
+    ) -> RenderPipeline {
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Atom Impostor Render Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &atom_impostor_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[
+                  crate::renderer::atom_impostor_mesh::AtomImpostorVertex::desc(),
+                ],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &atom_impostor_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::REPLACE),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+              topology: wgpu::PrimitiveTopology::TriangleList,
+              strip_index_format: None,
+              front_face: wgpu::FrontFace::Ccw,
+              cull_mode: Some(wgpu::Face::Back),
+              polygon_mode: wgpu::PolygonMode::Fill,
+              unclipped_depth: false,
+              conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        })
+    }
+
+    fn create_bond_impostor_pipeline(
+        device: &Device,
+        pipeline_layout: &wgpu::PipelineLayout,
+        bond_impostor_shader: &wgpu::ShaderModule,
+    ) -> RenderPipeline {
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Bond Impostor Render Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &bond_impostor_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[
+                  crate::renderer::bond_impostor_mesh::BondImpostorVertex::desc(),
+                ],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &bond_impostor_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::REPLACE),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+              topology: wgpu::PrimitiveTopology::TriangleList,
+              strip_index_format: None,
+              front_face: wgpu::FrontFace::Ccw,
+              cull_mode: Some(wgpu::Face::Back),
+              polygon_mode: wgpu::PolygonMode::Fill,
+              unclipped_depth: false,
+              conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        })
+    }
+
     pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
       self.camera.eye = *eye;
       self.camera.target = *target;
@@ -560,8 +710,43 @@ impl Renderer {
                 cylinder_divisions: 12,
             };
 
-            for atomic_structure in scene.atomic_structures() {
-                atomic_tessellator::tessellate_atomic_structure(&mut mesh, &mut selected_clusters_mesh, atomic_structure, &atomic_tessellation_params, scene, &preferences.atomic_structure_visualization_preferences);
+            // Choose tessellation method based on user preferences
+            match preferences.atomic_structure_visualization_preferences.rendering_method {
+                AtomicRenderingMethod::TriangleMesh => {
+                    // Traditional triangle mesh tessellation
+                    for atomic_structure in scene.atomic_structures() {
+                        atomic_tessellator::tessellate_atomic_structure(&mut mesh, &mut selected_clusters_mesh, atomic_structure, &atomic_tessellation_params, scene, &preferences.atomic_structure_visualization_preferences);
+                    }
+                    
+                    // Clear impostor meshes to ensure they don't render when triangle mesh is selected
+                    let empty_atom_impostor_mesh = AtomImpostorMesh::new();
+                    let empty_bond_impostor_mesh = BondImpostorMesh::new();
+                    self.atom_impostor_mesh.update_from_atom_impostor_mesh(&self.device, &empty_atom_impostor_mesh, "Empty Atom Impostors");
+                    self.bond_impostor_mesh.update_from_bond_impostor_mesh(&self.device, &empty_bond_impostor_mesh, "Empty Bond Impostors");
+                },
+                AtomicRenderingMethod::Impostors => {
+                    // Impostor tessellation - create impostor mesh data
+                    let mut atom_impostor_mesh_data = AtomImpostorMesh::new();
+                    let mut bond_impostor_mesh_data = BondImpostorMesh::new();
+                    
+                    for atomic_structure in scene.atomic_structures() {
+                        atomic_tessellator::tessellate_atomic_structure_impostors(
+                            &mut atom_impostor_mesh_data, 
+                            &mut bond_impostor_mesh_data, 
+                            atomic_structure, 
+                            scene, 
+                            &preferences.atomic_structure_visualization_preferences
+                        );
+                    }
+                    
+                    // Update GPU meshes with impostor data
+                    self.atom_impostor_mesh.update_from_atom_impostor_mesh(&self.device, &atom_impostor_mesh_data, "Atom Impostors");
+                    self.bond_impostor_mesh.update_from_bond_impostor_mesh(&self.device, &bond_impostor_mesh_data, "Bond Impostors");
+                    
+                    // Set identity transforms for impostor meshes
+                    self.atom_impostor_mesh.set_identity_transform(&self.queue);
+                    self.bond_impostor_mesh.set_identity_transform(&self.queue);
+                }
             }
 
             for surface_point_cloud in scene.surface_point_cloud_2ds() {
@@ -709,6 +894,16 @@ impl Renderer {
             self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
             render_pass.set_pipeline(&self.triangle_pipeline);
             self.render_mesh(&mut render_pass, &self.selected_clusters_mesh);
+
+            // Render impostor meshes (if they have data)
+            // Note: Impostor meshes are only populated when AtomicRenderingMethod::Impostors is selected
+            self.atom_impostor_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.atom_impostor_pipeline);
+            self.render_mesh(&mut render_pass, &self.atom_impostor_mesh);
+
+            self.bond_impostor_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.bond_impostor_pipeline);
+            self.render_mesh(&mut render_pass, &self.bond_impostor_mesh);
 
             // Set identity transform for background mesh and render it
             self.background_mesh.set_identity_transform(&self.queue);

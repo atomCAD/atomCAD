@@ -189,6 +189,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIVec3Data dco_decode_apii_vec_3_data(dynamic raw);
 
   @protected
+  AtomicRenderingMethod dco_decode_atomic_rendering_method(dynamic raw);
+
+  @protected
   AtomicStructureVisualization dco_decode_atomic_structure_visualization(
       dynamic raw);
 
@@ -764,6 +767,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIVec3Data sse_decode_apii_vec_3_data(SseDeserializer deserializer);
+
+  @protected
+  AtomicRenderingMethod sse_decode_atomic_rendering_method(
+      SseDeserializer deserializer);
 
   @protected
   AtomicStructureVisualization sse_decode_atomic_structure_visualization(
@@ -1442,6 +1449,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_apii_vec_3_data(APIIVec3Data self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_atomic_rendering_method(
+      AtomicRenderingMethod self, SseSerializer serializer);
 
   @protected
   void sse_encode_atomic_structure_visualization(

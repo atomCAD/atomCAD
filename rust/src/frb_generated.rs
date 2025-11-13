@@ -5037,6 +5037,20 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 }
 
 impl SseDecode
+    for crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod::TriangleMesh,
+1 => crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod::Impostors,
+            _ => unreachable!("Invalid variant for AtomicRenderingMethod: {}", inner),
+        };
+    }
+}
+
+impl SseDecode
     for crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -5053,9 +5067,10 @@ impl SseDecode
 impl SseDecode for crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences {
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {let mut var_visualization = <crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization>::sse_decode(deserializer);
+let mut var_renderingMethod = <crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod>::sse_decode(deserializer);
 let mut var_ballAndStickCullDepth = <Option<f64>>::sse_decode(deserializer);
 let mut var_spaceFillingCullDepth = <Option<f64>>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth};}
+return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, rendering_method: var_renderingMethod, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth};}
                 }
 
 impl SseDecode
@@ -7580,6 +7595,33 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::TriangleMesh => 0.into_dart(),
+            Self::Impostors => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod,
+    > for crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -7604,6 +7646,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::structure_designer::structure
                 fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
                     [
                     self.visualization.into_into_dart().into_dart(),
+self.rendering_method.into_into_dart().into_dart(),
 self.ball_and_stick_cull_depth.into_into_dart().into_dart(),
 self.space_filling_cull_depth.into_into_dart().into_dart()
                 ].into_dart()
@@ -8489,6 +8532,17 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 }
 
 impl SseEncode
+    for crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod::TriangleMesh => { 0 }
+crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod::Impostors => { 1 }
+ _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
+impl SseEncode
     for crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8502,6 +8556,7 @@ crate::api::structure_designer::structure_designer_preferences::AtomicStructureV
 impl SseEncode for crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences {
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {<crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization>::sse_encode(self.visualization, serializer);
+<crate::api::structure_designer::structure_designer_preferences::AtomicRenderingMethod>::sse_encode(self.rendering_method, serializer);
 <Option<f64>>::sse_encode(self.ball_and_stick_cull_depth, serializer);
 <Option<f64>>::sse_encode(self.space_filling_cull_depth, serializer);}
                 }

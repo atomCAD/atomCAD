@@ -5292,6 +5292,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AtomicRenderingMethod dco_decode_atomic_rendering_method(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AtomicRenderingMethod.values[raw as int];
+  }
+
+  @protected
   AtomicStructureVisualization dco_decode_atomic_structure_visualization(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -5303,12 +5309,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dco_decode_atomic_structure_visualization_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return AtomicStructureVisualizationPreferences(
       visualization: dco_decode_atomic_structure_visualization(arr[0]),
-      ballAndStickCullDepth: dco_decode_opt_box_autoadd_f_64(arr[1]),
-      spaceFillingCullDepth: dco_decode_opt_box_autoadd_f_64(arr[2]),
+      renderingMethod: dco_decode_atomic_rendering_method(arr[1]),
+      ballAndStickCullDepth: dco_decode_opt_box_autoadd_f_64(arr[2]),
+      spaceFillingCullDepth: dco_decode_opt_box_autoadd_f_64(arr[3]),
     );
   }
 
@@ -6767,6 +6774,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AtomicRenderingMethod sse_decode_atomic_rendering_method(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return AtomicRenderingMethod.values[inner];
+  }
+
+  @protected
   AtomicStructureVisualization sse_decode_atomic_structure_visualization(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6781,12 +6796,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_visualization =
         sse_decode_atomic_structure_visualization(deserializer);
+    var var_renderingMethod = sse_decode_atomic_rendering_method(deserializer);
     var var_ballAndStickCullDepth =
         sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_spaceFillingCullDepth =
         sse_decode_opt_box_autoadd_f_64(deserializer);
     return AtomicStructureVisualizationPreferences(
         visualization: var_visualization,
+        renderingMethod: var_renderingMethod,
         ballAndStickCullDepth: var_ballAndStickCullDepth,
         spaceFillingCullDepth: var_spaceFillingCullDepth);
   }
@@ -8487,6 +8504,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_atomic_rendering_method(
+      AtomicRenderingMethod self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_atomic_structure_visualization(
       AtomicStructureVisualization self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8498,6 +8522,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       AtomicStructureVisualizationPreferences self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_atomic_structure_visualization(self.visualization, serializer);
+    sse_encode_atomic_rendering_method(self.renderingMethod, serializer);
     sse_encode_opt_box_autoadd_f_64(self.ballAndStickCullDepth, serializer);
     sse_encode_opt_box_autoadd_f_64(self.spaceFillingCullDepth, serializer);
   }

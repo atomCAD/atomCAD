@@ -7,7 +7,13 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
+
+enum AtomicRenderingMethod {
+  triangleMesh,
+  impostors,
+  ;
+}
 
 enum AtomicStructureVisualization {
   ballAndStick,
@@ -17,11 +23,13 @@ enum AtomicStructureVisualization {
 
 class AtomicStructureVisualizationPreferences {
   AtomicStructureVisualization visualization;
+  AtomicRenderingMethod renderingMethod;
   double? ballAndStickCullDepth;
   double? spaceFillingCullDepth;
 
   AtomicStructureVisualizationPreferences({
     required this.visualization,
+    required this.renderingMethod,
     this.ballAndStickCullDepth,
     this.spaceFillingCullDepth,
   });
@@ -29,6 +37,7 @@ class AtomicStructureVisualizationPreferences {
   @override
   int get hashCode =>
       visualization.hashCode ^
+      renderingMethod.hashCode ^
       ballAndStickCullDepth.hashCode ^
       spaceFillingCullDepth.hashCode;
 
@@ -38,6 +47,7 @@ class AtomicStructureVisualizationPreferences {
       other is AtomicStructureVisualizationPreferences &&
           runtimeType == other.runtimeType &&
           visualization == other.visualization &&
+          renderingMethod == other.renderingMethod &&
           ballAndStickCullDepth == other.ballAndStickCullDepth &&
           spaceFillingCullDepth == other.spaceFillingCullDepth;
 }

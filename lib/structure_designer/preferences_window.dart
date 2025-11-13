@@ -85,14 +85,38 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
   // Helper to get the selected atomic structure visualization index
   int _getAtomicVisualizationIndex() {
     return _preferences.atomicStructureVisualizationPreferences.visualization ==
-        AtomicStructureVisualization.ballAndStick ? 0 : 1;
+            AtomicStructureVisualization.ballAndStick
+        ? 0
+        : 1;
   }
 
   // Helper method to update atomic structure visualization
   void _updateAtomicVisualization(int value) {
     setState(() {
       _preferences.atomicStructureVisualizationPreferences.visualization =
-          value == 0 ? AtomicStructureVisualization.ballAndStick : AtomicStructureVisualization.spaceFilling;
+          value == 0
+              ? AtomicStructureVisualization.ballAndStick
+              : AtomicStructureVisualization.spaceFilling;
+    });
+    _applyPreferences();
+  }
+
+  // Helper to get the selected atomic rendering method index
+  int _getAtomicRenderingMethodIndex() {
+    return _preferences
+                .atomicStructureVisualizationPreferences.renderingMethod ==
+            AtomicRenderingMethod.triangleMesh
+        ? 0
+        : 1;
+  }
+
+  // Helper method to update atomic rendering method
+  void _updateAtomicRenderingMethod(int value) {
+    setState(() {
+      _preferences.atomicStructureVisualizationPreferences.renderingMethod =
+          value == 0
+              ? AtomicRenderingMethod.triangleMesh
+              : AtomicRenderingMethod.impostors;
     });
     _applyPreferences();
   }
@@ -361,19 +385,54 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           ),
                           const SizedBox(height: AppSpacing.medium),
 
+                          // Rendering method selection
+                          Row(
+                            children: [
+                              const Text('Rendering Method:'),
+                              const SizedBox(width: AppSpacing.medium),
+                              Expanded(
+                                child: DropdownButton<int>(
+                                  value: _getAtomicRenderingMethodIndex(),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 0,
+                                      child: Text('Triangle Mesh'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 1,
+                                      child: Text('Impostors'),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      _updateAtomicRenderingMethod(value);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
                           // Ball and stick specific settings
-                          if (_preferences.atomicStructureVisualizationPreferences.visualization ==
+                          if (_preferences
+                                  .atomicStructureVisualizationPreferences
+                                  .visualization ==
                               AtomicStructureVisualization.ballAndStick) ...[
                             FloatInput(
                               label: 'Ball & stick depth culling threshold (Å)',
                               value: _preferences
-                                  .atomicStructureVisualizationPreferences
-                                  .ballAndStickCullDepth ?? 0.0,
+                                      .atomicStructureVisualizationPreferences
+                                      .ballAndStickCullDepth ??
+                                  0.0,
                               onChanged: (value) {
                                 setState(() {
                                   _preferences
                                       .atomicStructureVisualizationPreferences
-                                      .ballAndStickCullDepth = value > 0.0 ? value : null;
+                                      .ballAndStickCullDepth = value >
+                                          0.0
+                                      ? value
+                                      : null;
                                 });
                                 _applyPreferences();
                               },
@@ -389,18 +448,25 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           ],
 
                           // Space filling specific settings
-                          if (_preferences.atomicStructureVisualizationPreferences.visualization ==
+                          if (_preferences
+                                  .atomicStructureVisualizationPreferences
+                                  .visualization ==
                               AtomicStructureVisualization.spaceFilling) ...[
                             FloatInput(
-                              label: 'Space filling depth culling threshold (Å)',
+                              label:
+                                  'Space filling depth culling threshold (Å)',
                               value: _preferences
-                                  .atomicStructureVisualizationPreferences
-                                  .spaceFillingCullDepth ?? 0.0,
+                                      .atomicStructureVisualizationPreferences
+                                      .spaceFillingCullDepth ??
+                                  0.0,
                               onChanged: (value) {
                                 setState(() {
                                   _preferences
                                       .atomicStructureVisualizationPreferences
-                                      .spaceFillingCullDepth = value > 0.0 ? value : null;
+                                      .spaceFillingCullDepth = value >
+                                          0.0
+                                      ? value
+                                      : null;
                                 });
                                 _applyPreferences();
                               },
@@ -489,15 +555,18 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           // Background color
                           IVec3Input(
                             label: 'Background color (RGB)',
-                            value: _preferences.backgroundPreferences.backgroundColor,
+                            value: _preferences
+                                .backgroundPreferences.backgroundColor,
                             onChanged: (value) {
                               setState(() {
-                                _preferences.backgroundPreferences.backgroundColor = value;
+                                _preferences.backgroundPreferences
+                                    .backgroundColor = value;
                               });
                               _applyPreferences();
                             },
                             minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
-                            maximumValue: const APIIVec3(x: 255, y: 255, z: 255),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
                           ),
                           const SizedBox(height: AppSpacing.medium),
 
@@ -505,11 +574,13 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           Row(
                             children: [
                               Checkbox(
-                                value: _preferences.backgroundPreferences.showGrid,
+                                value:
+                                    _preferences.backgroundPreferences.showGrid,
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() {
-                                      _preferences.backgroundPreferences.showGrid = value;
+                                      _preferences.backgroundPreferences
+                                          .showGrid = value;
                                     });
                                     _applyPreferences();
                                   }
@@ -527,7 +598,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             value: _preferences.backgroundPreferences.gridSize,
                             onChanged: (value) {
                               setState(() {
-                                _preferences.backgroundPreferences.gridSize = value;
+                                _preferences.backgroundPreferences.gridSize =
+                                    value;
                               });
                               _applyPreferences();
                             },
@@ -541,27 +613,32 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             value: _preferences.backgroundPreferences.gridColor,
                             onChanged: (value) {
                               setState(() {
-                                _preferences.backgroundPreferences.gridColor = value;
+                                _preferences.backgroundPreferences.gridColor =
+                                    value;
                               });
                               _applyPreferences();
                             },
                             minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
-                            maximumValue: const APIIVec3(x: 255, y: 255, z: 255),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
                           ),
                           const SizedBox(height: AppSpacing.medium),
 
                           // Grid strong color
                           IVec3Input(
                             label: 'Grid strong color (RGB)',
-                            value: _preferences.backgroundPreferences.gridStrongColor,
+                            value: _preferences
+                                .backgroundPreferences.gridStrongColor,
                             onChanged: (value) {
                               setState(() {
-                                _preferences.backgroundPreferences.gridStrongColor = value;
+                                _preferences.backgroundPreferences
+                                    .gridStrongColor = value;
                               });
                               _applyPreferences();
                             },
                             minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
-                            maximumValue: const APIIVec3(x: 255, y: 255, z: 255),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
                           ),
                         ],
                       ),
