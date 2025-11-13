@@ -31,11 +31,12 @@ struct AtomImpostorVertexInput {
 struct AtomImpostorVertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_center: vec3<f32>,
-    @location(1) radius: f32,
-    @location(2) albedo: vec3<f32>,
-    @location(3) roughness: f32,
-    @location(4) metallic: f32,
-    @location(5) quad_uv: vec2<f32>, // For ray-casting (-1 to 1 range)
+    @location(1) world_position: vec3<f32>,  // World position of the quad vertex
+    @location(2) radius: f32,
+    @location(3) albedo: vec3<f32>,
+    @location(4) roughness: f32,
+    @location(5) metallic: f32,
+    @location(6) quad_uv: vec2<f32>, // For ray-casting (-1 to 1 range)
 }
 
 // ============================================================================
@@ -156,6 +157,7 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     
     // Pass through data needed for fragment shader
     output.world_center = world_center;
+    output.world_position = quad_world_pos;  // World position of the quad vertex
     output.radius = input.radius;
     output.albedo = input.albedo;
     output.roughness = input.roughness;
@@ -172,51 +174,66 @@ struct AtomFragmentOutput {
 
 @fragment
 fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
-    // Ray-sphere intersection using quad UV coordinates
-    let uv_length_sq = dot(input.quad_uv, input.quad_uv);
-    
-    // Discard fragments outside the sphere
-    if (uv_length_sq > 1.0) {
+    // Early discard for fragments outside the circle (following reference)
+    let dist_sq = dot(input.quad_uv, input.quad_uv);
+    if dist_sq > 1.0 {
         discard;
     }
-    
-    // Calculate the Z component of the sphere surface normal
-    // For a unit sphere: x² + y² + z² = 1, so z = sqrt(1 - x² - y²)
-    let z = sqrt(1.0 - uv_length_sq);
-    
-    // The surface normal in sphere-local space (pointing outward)
-    let local_normal = vec3<f32>(input.quad_uv.x, input.quad_uv.y, z);
-    
-    // Transform normal to world space (sphere is axis-aligned, so no rotation needed)
-    let world_normal = normalize(local_normal);
-    
-    // Calculate the actual world position of this fragment on the sphere surface
-    let surface_offset = local_normal * input.radius;
-    let world_position = input.world_center + surface_offset;
-    
-    // Calculate proper depth using EXACT reference shader approach
-    // Reference: let adjusted_clip_pos = in.clip_position + proj[2] * z_offset;
-    let z_normalized = z; // sqrt(1.0 - uv_length_sq)
+
+    // Ray-sphere intersection using view space for better precision (following reference)
+    let ray_origin = camera.camera_position;
+    let ray_dir = normalize(input.world_position - ray_origin);
+
+    // Optimized ray-sphere intersection (following reference)
+    let oc = input.world_center - ray_origin;
+    let tca = dot(oc, ray_dir);
+
+    // Early out if sphere is behind camera (following reference)
+    if tca < 0.0 {
+        discard;
+    }
+
+    let d2 = dot(oc, oc) - tca * tca;
+    let radius2 = input.radius * input.radius;
+
+    if d2 > radius2 {
+        discard;
+    }
+
+    // Calculate intersection (following reference)
+    let thc = sqrt(radius2 - d2);
+    let t0 = tca - thc;
+    let t1 = tca + thc;
+
+    // Use the nearest positive intersection (following reference)
+    let t = select(t1, t0, t0 > 0.0);
+    if t < 0.0 {
+        discard;
+    }
+
+    // Calculate the sphere surface z-offset (following reference)
+    let z_normalized = sqrt(1.0 - dist_sq);
     let z_offset = z_normalized * input.radius;
-    
-    // Get the clip position of the atom center (this is our "in.clip_position")
-    let center_clip = camera.view_proj * vec4<f32>(input.world_center, 1.0);
-    
-    // Apply the EXACT reference formula: adjusted_clip_pos = in.clip_position + proj[2] * z_offset
-    // proj[2] is the third column of the projection matrix (Z transformation)
+
+    // Adjust clip position using projection matrix (following reference)
     let proj_z_col = camera.proj_matrix[2];
+    let center_clip = camera.view_proj * vec4<f32>(input.world_center, 1.0);
     let adjusted_clip_pos = center_clip + proj_z_col * z_offset;
     let depth = adjusted_clip_pos.z / adjusted_clip_pos.w;
-    
+
+    // Calculate hit point and normal (following reference)
+    let hit_point = ray_origin + t * ray_dir;
+    let world_normal = normalize(hit_point - input.world_center);
+
     // Calculate PBR lighting using the shared function
     let color = calculate_pbr_lighting(
-        world_position,
+        hit_point,
         world_normal,
         input.albedo,
         input.roughness,
         input.metallic
     );
-    
+
     var output: AtomFragmentOutput;
     output.depth = depth;
     output.color = vec4<f32>(color, 1.0);
