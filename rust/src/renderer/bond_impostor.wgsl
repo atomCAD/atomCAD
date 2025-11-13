@@ -163,6 +163,93 @@ fn calculate_bond_lighting(
 }
 
 // ============================================================================
+// PBR Helper Functions (copied from atom_impostor.wgsl)
+// ============================================================================
+
+fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
+    return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
+}
+
+fn distribution_ggx(N: vec3<f32>, H: vec3<f32>, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let NdotH = max(dot(N, H), 0.0);
+    let NdotH2 = NdotH * NdotH;
+
+    let num = a2;
+    let denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    return num / (PI * denom * denom);
+}
+
+fn geometry_schlick_ggx(NdotV: f32, roughness: f32) -> f32 {
+    let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+
+fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f32 {
+    let NdotV = max(dot(N, V), 0.0);
+    let NdotL = max(dot(N, L), 0.0);
+    let ggx2 = geometry_schlick_ggx(NdotV, roughness);
+    let ggx1 = geometry_schlick_ggx(NdotL, roughness);
+    return ggx1 * ggx2;
+}
+
+fn calculate_pbr_lighting(
+    world_position: vec3<f32>,
+    normal: vec3<f32>, 
+    albedo: vec3<f32>,
+    roughness: f32,
+    metallic: f32
+) -> vec3<f32> {
+    let N = normalize(normal);
+    let V = normalize(camera.camera_position - world_position);
+    let L = normalize(-camera.head_light_dir);
+    let H = normalize(V + L);
+
+    // Base reflectivity for metallic/non-metallic materials
+    let f0 = mix(vec3<f32>(0.04), albedo, metallic);
+
+    // Fresnel term
+    let F = fresnel_schlick(max(dot(H, V), 0.0), f0);
+
+    // Normal Distribution Function (NDF)
+    let D = distribution_ggx(N, H, roughness);
+
+    // Geometry term
+    let G = geometry_smith(N, V, L, roughness);
+
+    // BRDF
+    let numerator = D * G * F;
+    let denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
+    let specular = numerator / denominator;
+
+    // Diffuse term (Lambertian reflection)
+    let k_d = (vec3<f32>(1.0) - F) * (1.0 - metallic);
+    let diffuse = k_d * albedo / PI;
+
+    let NdotL = max(dot(N, L), 0.0);
+    let light_color = vec3<f32>(2.0);
+    let light_contribution = light_color * NdotL;
+
+    // Diffuse ambient term (non-metallic contribution)
+    let ambient_light_color: vec3<f32> = vec3<f32>(0.2); // Ambient light color
+    let ambient_diffuse = ambient_light_color * albedo;
+
+    // Specular ambient term (reflective contribution)
+    let ambient_specular = ambient_light_color * fresnel_schlick(max(dot(V, N), 0.0), f0);
+
+    // Blend ambient terms based on the material's metallic property
+    let ambient = mix(ambient_diffuse, ambient_specular, metallic);
+
+    var color = light_contribution * (diffuse + specular) + ambient;
+	
+    color = color / (color + vec3(1.0)); // Tone mapping
+    color = pow(color, vec3(1.0/2.2)); // Gamma correction
+
+    return color;
+}
+
+// ============================================================================
 // Bond Impostor Shaders
 // ============================================================================
 
@@ -292,12 +379,17 @@ fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
     let clip_pos = camera.proj_matrix * view_pos;
     let depth = clip_pos.z / clip_pos.w;
     
-    // Step 8: Simple lighting (can be upgraded to PBR later)
-    let light_dir = normalize(-camera.head_light_dir);
-    let light_intensity = max(dot(surface_normal, light_dir), 0.2); // Ambient minimum
+    // Step 8: PBR lighting using the correct surface normal
+    let color = calculate_pbr_lighting(
+        hit_point,
+        surface_normal,
+        input.color,
+        0.5,  // roughness - moderate for bonds
+        0.0   // metallic - bonds are non-metallic
+    );
     
     var output: BondFragmentOutput;
     output.depth = depth;
-    output.color = vec4<f32>(input.color * light_intensity, 1.0);
+    output.color = vec4<f32>(color, 1.0);
     return output;
 }
