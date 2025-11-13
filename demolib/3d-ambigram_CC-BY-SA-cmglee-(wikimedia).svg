@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="-133 -99 256 192">
+ <title>3d-ambigram</title>
+ <desc>A three-dimensional ambigram vectorised by CMG Lee based on http://commons.wikimedia.org/wiki/File:3d-ambigram.jpg .</desc>
+ <style type="text/css">
+svg { stroke:#fff; stroke-opacity:0.1; stroke-linejoin:round; }
+.a { fill:url(#pattern_a); }
+.b { fill:url(#pattern_b); }
+.c { fill:url(#pattern_c); }
+.d { filter:url(#filter_dark); }
+ </style>
+ <filter id="filter_blur">
+  <feGaussianBlur stdDeviation="3"/>
+ </filter>
+ <filter id="filter_smudge">
+  <feGaussianBlur stdDeviation="1"/>
+ </filter>
+ <filter id="filter_dark">
+  <feColorMatrix type="matrix" values="0.5,0,0,0,0 0,0.5,0,0,0 0,0,0.5,0,0 0,0,0,1,0"/>
+ </filter>
+ <radialGradient id="grad_bg_a" cx="0" cy="0" r="25%" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#f00"/><stop offset="0.9"/></radialGradient>
+ <radialGradient id="grad_bg_b" cx="0" cy="0" r="25%" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#0c6"/><stop offset="0.9"/></radialGradient>
+ <radialGradient id="grad_bg_c" cx="0" cy="0" r="25%" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#36f"/><stop offset="0.9"/></radialGradient>
+ <radialGradient id="grad_a"><stop stop-color="#f96"/><stop offset="1" stop-color="#f00"/></radialGradient>
+ <radialGradient id="grad_b"><stop stop-color="#6f9"/><stop offset="1" stop-color="#0c6"/></radialGradient>
+ <radialGradient id="grad_c"><stop stop-color="#ccf"/><stop offset="1" stop-color="#36f"/></radialGradient>
+ <pattern id="pattern_a" patternUnits="userSpaceOnUse" width="50" height="50">
+  <rect width="50" height="50" fill="url(#grad_a)"/>
+ </pattern>
+ <pattern id="pattern_b" patternUnits="userSpaceOnUse" width="50" height="50">
+  <rect width="50" height="50" fill="url(#grad_b)"/>
+ </pattern>
+ <pattern id="pattern_c" patternUnits="userSpaceOnUse" width="50" height="50">
+  <rect width="50" height="50" fill="url(#grad_c)"/>
+ </pattern>
+ <circle cx="0" cy="0" r="99999" fill="#000"/>
+ <g fill-rule="evenodd" stroke="none" filter="url(#filter_blur)">
+  <g transform="matrix(1,-0.5  0,1 -80,-40)"><path fill="url(#grad_bg_a)" d="M 60,70 V -70 H -60 V 70 M -20,-25 h 40 v 50 h -10 v -40 h -20 v 10 h 20 v 10 h -20 v 20 h -10"/></g>
+  <g transform="matrix(1, 0.5  0,1  70,-40)"><path fill="url(#grad_bg_b)" d="M 60,70 V -70 H -60 V 70 M -20,-25 h 40 v 20 h  10 v  30 h -50 m 10,-20 h 30 v 10 h -30 v -30 h 20 v 10 h -20"/></g>
+  <g transform="matrix(1, 0.5 -1,0.5 0, 55)"><path fill="url(#grad_bg_c)" d="M 70,70 V -70 H -70 V 70 M -25,-20 h 50 v 40 h -10 v -30 h -30 v 30 h -10"/></g>
+ </g>
+ <path class="b d" transform="matrix(1, 0.5  0,1   -15,-47.5)" d="M 10,40 v -30 h -10 v 10 h 10 v 10 h -10 v 20 h 10 m 30,0 h 10 v -20 h -10"/>
+ <path class="a d" transform="matrix(1,-0.5  0,1   -40,-25  )" d="M  5,20 v 10 h 40 v 10 h -10 v -30 h 10 v 10 h -30"/>
+ <path class="c d" transform="matrix(1, 0.5 -1,0.5   0,-15  )" d="M 10, 5 h 30 v 10 h -30"/>
+ <path class="c d" transform="matrix(1, 0.5 -1,0.5   0,-35  )" d="M 10, 5 h 20 v 10 h -30 v 20 h 10"/>
+ <path class="a"   transform="matrix(1,-0.5  0,1   -40,-25  )" d="M  5,30 v -30 h 30 v 10 h -20 v 10 h -10 v 30 h 10 v -20"/>
+ <path class="a"   transform="matrix(1,-0.5  0,1   -10,-10  )" d="M 35, 0 h 10 v 20 h -10"/>
+ <path class="b"   transform="matrix(1, 0.5  0,1   -15,-47.5)" d="M 10,40 h 30 v 10 h -30 v -20 h 30 v -30 h -30 v 10 h 20 v 10 h -20"/>
+ <path class="b"   transform="matrix(1, 0.5  0,1   -45,-32.5)" d="M  0, 0 h 10 v 50 h -10 z m 40,20 h 10 v 10 h -10 z"/>
+ <path class="c"   transform="matrix(1, 0.5 -1,0.5   0,-35  )" d="M 40, 5 h 10 v 40 h -10 z"/>
+ <path class="c"   transform="matrix(1, 0.5 -1,0.5   0,-55  )" d="M  0, 5 h 40 v 10 h -30 v 30 h -10 z"/>
+ <path class="a"   transform="matrix(1,-0.5  0,1     0,   -5)" d="M  5,20 h 40 v 30 h -10 v -20 h -30 z"/>
+ <g filter="url(#filter_smudge)">
+  <path class="a d" transform="matrix(1,-0.5,0,1  ,-40,-25  )" d="M 10.5,18 a 5,2.2 0 1 0 0.1,0 M 10.5,27 a 5,2.2 0 1 0 0.1,0"/>
+  <path class="b d" transform="matrix(1, 0.5,0,1  ,-20,-50  )" d="M 12.3,45 a 2.2,6 0 1 1 0,0.1 M 43.5,45 a 2.2,5 0 1 1 0,0.1"/>
+ </g>
+</svg>

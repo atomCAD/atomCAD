@@ -31,4 +31,6 @@ Check out the [atomCAD Demo Files](./samples/demo_description.md) to see some ex
 
 For more details see [atomCAD Reference Guide](./doc/atomCAD_reference_guide.md).
 
+The `demolib` folder contains a comprehensive example library showcasing advanced design patterns and reusable components for atomically precise manufacturing - see [design decisions](./demolib/example-lib_design-decisions.md) and [demo descriptions](./demolib/example-lib_demo-descriptions.md) for detailed explanations.
+
 Interested in contributing? See our [developer documentation](./doc/for_developers.md) to get started.
