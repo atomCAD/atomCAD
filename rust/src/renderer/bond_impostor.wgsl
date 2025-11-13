@@ -178,21 +178,22 @@ fn vs_main(input: BondImpostorVertexInput) -> BondImpostorVertexOutput {
     let bond_length = length(bond_vector);
     let bond_dir = bond_vector / bond_length;
     
-    // Calculate view direction
-    let view_dir = normalize(camera.camera_position - bond_center);
+    // Calculate camera forward direction (from bond center to camera)
+    let camera_forward = normalize(camera.camera_position - bond_center);
     
-    // Create billboard vectors (perpendicular to both bond and view direction)
-    let right = normalize(cross(bond_dir, view_dir));
-    let up = normalize(cross(right, bond_dir));
+    // Create billboard vectors - right is perpendicular to both bond and camera direction
+    let right = normalize(cross(bond_dir, camera_forward));
+    // Bond direction is used as the "up" axis for the quad
     
-    // Calculate the quad size (needs to cover the cylinder from any angle)
-    let quad_half_width = input.radius;
-    let quad_half_height = bond_length * 0.5 + input.radius; // Add radius for end caps
+    // Calculate the quad size following the reference approach
+    let quad_width = input.radius * 2.5; // Extra width for proper coverage
+    let quad_height = bond_length * 1.1; // Extra height for coverage
     
     // Calculate world position of this quad vertex
+    // x offset uses right vector, y offset uses bond direction
     let quad_world_pos = bond_center + 
-                        input.quad_offset.x * right * quad_half_width +
-                        input.quad_offset.y * up * quad_half_height;
+                        input.quad_offset.x * right * quad_width +
+                        input.quad_offset.y * bond_dir * quad_height * 0.5;
     
     // Transform to clip space
     output.clip_position = camera.view_proj * vec4<f32>(quad_world_pos, 1.0);
@@ -208,32 +209,33 @@ fn vs_main(input: BondImpostorVertexInput) -> BondImpostorVertexOutput {
     return output;
 }
 
+// Signed distance function for 2D capsule (cylinder with rounded ends)
+fn sd_capsule(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
+    let pa = p - a;
+    let ba = b - a;
+    let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+}
+
 @fragment
 fn fs_main(input: BondImpostorVertexOutput) -> @location(0) vec4<f32> {
-    // Calculate ray from camera through this fragment
-    let ray_origin = camera.camera_position;
-    let ray_dir = normalize(input.world_position - camera.camera_position);
+    // Use UV coordinates for 2D capsule SDF
+    // Map quad_offset from [-1,1] to appropriate capsule coordinates
+    let p = vec2<f32>(input.quad_uv.x * 2.0, input.quad_uv.y * 2.0);
     
-    // Perform ray-cylinder intersection
-    let intersection = ray_cylinder_intersect(
-        ray_origin,
-        ray_dir,
-        input.world_start,
-        input.world_end,
-        input.radius
-    );
+    // Calculate signed distance to capsule (cylinder with rounded ends)
+    // Capsule goes from (-1, 0) to (1, 0) with radius 0.5 in normalized coordinates
+    let capsule_dist = sd_capsule(p, vec2<f32>(0.0, -1.0), vec2<f32>(0.0, 1.0), 0.5);
     
-    // Discard if no intersection
-    if (!intersection.hit) {
+    // Discard fragments outside the capsule
+    if (capsule_dist > 0.0) {
         discard;
     }
     
-    // Calculate lighting using the intersection point and normal
-    let color = calculate_bond_lighting(
-        intersection.position,
-        intersection.normal,
-        input.color
-    );
+    // Simple lighting based on distance from center
+    let edge_factor = smoothstep(-0.1, 0.0, capsule_dist);
+    let light_factor = 1.0 - edge_factor * 0.3;
     
-    return vec4<f32>(color, 1.0);
+    // Apply lighting to bond color
+    return vec4<f32>(input.color * light_factor, 1.0);
 }
