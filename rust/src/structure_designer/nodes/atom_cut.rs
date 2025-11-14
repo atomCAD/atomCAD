@@ -5,6 +5,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::geo_tree::GeoNode;
+use std::rc::Rc;
 use serde::{Serialize, Deserialize};
 use crate::common::atomic_structure::AtomicStructure;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
@@ -69,7 +70,7 @@ impl NodeData for AtomCutData {
         return shapes_val;
       }
 
-      let mut shapes: Vec<GeoNode> = Vec::new();
+      let mut shapes: Vec<Rc<GeoNode>> = Vec::new();
 
       // Extract the array elements from shapes_val
       let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
@@ -83,10 +84,10 @@ impl NodeData for AtomCutData {
           shapes.push(shape.geo_tree_root); 
         }
       }
-    
-      let cutter_geo_tree_root = GeoNode::Intersection3D { shapes: shapes };
+
+      let cutter_geo_tree_root: Rc<GeoNode> = context.geo_tree_cache.intersection3d(shapes);
   
-      cut_atomic_structure(&mut atomic_structure, &cutter_geo_tree_root, self.cut_sdf_value, self.unit_cell_size);
+      cut_atomic_structure(&mut atomic_structure, cutter_geo_tree_root.as_ref(), self.cut_sdf_value, self.unit_cell_size);
   
       return NetworkResult::Atomic(atomic_structure);
     }

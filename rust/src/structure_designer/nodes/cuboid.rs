@@ -16,6 +16,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CuboidData {
@@ -77,7 +78,8 @@ impl NodeData for CuboidData {
       let geo_tree_root = create_parallelepiped_from_lattice(
         &unit_cell,
         min_corner.as_dvec3(),
-        extent.as_dvec3()
+        extent.as_dvec3(),
+        &context,
       );
 
       //println!("{}", geo_tree_root);
@@ -118,8 +120,9 @@ impl NodeData for CuboidData {
 fn create_parallelepiped_from_lattice(
   unit_cell: &UnitCellStruct,
   min_corner_lattice: DVec3,
-  extent_lattice: DVec3
-) -> GeoNode {
+  extent_lattice: DVec3,
+  context: &NetworkEvaluationContext,
+) -> Rc<GeoNode> {
   // Get the unit cell basis vectors
   let basis_a = unit_cell.a;
   let basis_b = unit_cell.b;
@@ -136,7 +139,7 @@ fn create_parallelepiped_from_lattice(
                        max_corner_lattice.z * basis_c;
   
   // Create 6 half-spaces defining the parallelepiped faces
-  let mut half_spaces = Vec::new();
+  let mut half_spaces: Vec<Rc<GeoNode>> = Vec::new();
   
   // Calculate the center of the parallelepiped for reference
   let parallelepiped_center = min_corner_real + 
@@ -152,14 +155,8 @@ fn create_parallelepiped_from_lattice(
   let max_face_center_a = min_corner_real + extent_lattice.x * basis_a + 
     (extent_lattice.y * basis_b + extent_lattice.z * basis_c) / 2.0;
   
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: -normal_a,
-    center: min_face_center_a,
-  });
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: normal_a,
-    center: max_face_center_a,
-  });
+  half_spaces.push(context.geo_tree_cache.half_space(-normal_a, min_face_center_a));
+  half_spaces.push(context.geo_tree_cache.half_space(normal_a, max_face_center_a));
   
   // Face pair perpendicular to the plane containing basis_c and basis_a (B-direction faces)
   let normal_b = (basis_c.cross(basis_a)).normalize();
@@ -169,14 +166,8 @@ fn create_parallelepiped_from_lattice(
   let max_face_center_b = min_corner_real + extent_lattice.y * basis_b + 
     (extent_lattice.x * basis_a + extent_lattice.z * basis_c) / 2.0;
   
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: -normal_b,
-    center: min_face_center_b,
-  });
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: normal_b,
-    center: max_face_center_b,
-  });
+  half_spaces.push(context.geo_tree_cache.half_space(-normal_b, min_face_center_b));
+  half_spaces.push(context.geo_tree_cache.half_space(normal_b, max_face_center_b));
   
   // Face pair perpendicular to the plane containing basis_a and basis_b (C-direction faces)
   let normal_c = (basis_a.cross(basis_b)).normalize();
@@ -186,19 +177,11 @@ fn create_parallelepiped_from_lattice(
   let max_face_center_c = min_corner_real + extent_lattice.z * basis_c + 
     (extent_lattice.x * basis_a + extent_lattice.y * basis_b) / 2.0;
   
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: -normal_c,
-    center: min_face_center_c,
-  });
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: normal_c,
-    center: max_face_center_c,
-  });
+  half_spaces.push(context.geo_tree_cache.half_space(-normal_c, min_face_center_c));
+  half_spaces.push(context.geo_tree_cache.half_space(normal_c, max_face_center_c));
   
 
   
   // Return the intersection of all half-spaces
-  GeoNode::Intersection3D {
-    shapes: half_spaces
-  }
+  context.geo_tree_cache.intersection3d(half_spaces)
 }

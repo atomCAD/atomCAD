@@ -76,7 +76,7 @@ impl NodeData for RegPolyData {
               DVec2::new(0.0, 0.0),  // Center at origin
               0.0,                   // No rotation
             ),
-            geo_tree_root: GeoNode::Polygon { vertices: real_vertices },
+            geo_tree_root: context.geo_tree_cache.polygon(real_vertices),
           }
         );
     }

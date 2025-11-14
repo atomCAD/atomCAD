@@ -23,6 +23,7 @@ use crate::structure_designer::evaluator::unit_cell_symmetries::analyze_unit_cel
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct LatticeSymopEvalCache {
@@ -205,13 +206,13 @@ impl NodeData for LatticeSymopData {
             real_rotation_quat
           );
 
+          let s: Rc<GeoNode> = shape.geo_tree_root;
+          let geo_tree_root = context.geo_tree_cache.transform(tr, s);
+
           return NetworkResult::Geometry(GeometrySummary {
             unit_cell: shape.unit_cell.clone(),
             frame_transform,
-            geo_tree_root: GeoNode::Transform {
-              transform: tr,
-              shape: Box::new(shape.geo_tree_root),
-            },
+            geo_tree_root,
           });
         }
       } else {

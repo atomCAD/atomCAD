@@ -2,8 +2,7 @@ use glam::f64::DVec3;
 use glam::f64::DVec2;
 use crate::util::transform::Transform;
 use std::fmt;
-use std::cell::RefCell;
-use std::rc::{Rc, Weak};
+use std::sync::{Arc, RwLock, Weak};
 
 use crate::structure_designer::geo_tree::geo_tree_cache::GeoTreeCacheInner;
 
@@ -23,7 +22,7 @@ pub mod geo_tree_cache;
 pub struct GeoNode {
     pub id: u64,
     pub kind: GeoNodeKind,
-    cache: Weak<RefCell<GeoTreeCacheInner>>, // used for deletion notifications
+    cache: Weak<RwLock<GeoTreeCacheInner>>, // used for deletion notifications
 }
 
 /// The actual geometry variants.
@@ -51,31 +50,31 @@ pub enum GeoNodeKind {
     Extrude {
         height: f64,
         direction: DVec3,
-        shape: Rc<GeoNode>,
+        shape: Arc<GeoNode>,
     },
     Transform {
         transform: Transform,
-        shape: Rc<GeoNode>,
+        shape: Arc<GeoNode>,
     },
     Union2D {
-        shapes: Vec<Rc<GeoNode>>,
+        shapes: Vec<Arc<GeoNode>>,
     },
     Union3D {
-        shapes: Vec<Rc<GeoNode>>,
+        shapes: Vec<Arc<GeoNode>>,
     },
     Intersection2D {
-        shapes: Vec<Rc<GeoNode>>,
+        shapes: Vec<Arc<GeoNode>>,
     },
     Intersection3D {
-        shapes: Vec<Rc<GeoNode>>,
+        shapes: Vec<Arc<GeoNode>>,
     },
     Difference2D {
-        base: Rc<GeoNode>,
-        sub: Rc<GeoNode>,
+        base: Arc<GeoNode>,
+        sub: Arc<GeoNode>,
     },
     Difference3D {
-        base: Rc<GeoNode>,
-        sub: Rc<GeoNode>,
+        base: Arc<GeoNode>,
+        sub: Arc<GeoNode>,
     },
 }
 
@@ -172,8 +171,8 @@ impl GeoNode {
 
 impl Drop for GeoNode {
     fn drop(&mut self) {
-        if let Some(cache_rc) = self.cache.upgrade() {
-            if let Ok(mut inner) = cache_rc.try_borrow_mut() {
+        if let Some(cache_arc) = self.cache.upgrade() {
+            if let Ok(mut inner) = cache_arc.try_write() {
                 inner.node_deleted(self.id);
             }
         }

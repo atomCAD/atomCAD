@@ -3,11 +3,6 @@ use crate::structure_designer::implicit_eval::implicit_geometry::{ImplicitGeomet
 use crate::structure_designer::geo_tree::GeoNode;
 use rayon::prelude::*;
 
-/// Minimum number of points required to consider multi-threading
-const MIN_POINTS_FOR_THREADING: usize = BATCH_SIZE * 2; // ~2048 points
-/// Maximum number of threads to use for parallel evaluation
-const MAX_THREADS: usize = 7;
-
 /// BatchedImplicitEvaluator accumulates sample points and evaluates them in batches
 /// for improved performance by reducing function call overhead and enabling parallel processing.
 pub struct BatchedImplicitEvaluator<'a> {
@@ -49,18 +44,6 @@ impl<'a> BatchedImplicitEvaluator<'a> {
         self.geo_tree.implicit_eval_3d(point)
     }
     
-    /// Determine the optimal number of threads to use for parallel evaluation
-    fn determine_thread_count() -> usize {
-        let available_cores = std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1);
-        
-        println!("Available parallel cores: {}", available_cores);
-        
-        // Use at most (cores - 1), never more than MAX_THREADS, minimum 1
-        std::cmp::min(MAX_THREADS, std::cmp::max(1, available_cores.saturating_sub(1)))
-    }
-    
     /// Process all pending points in batches and return results
     /// Automatically chooses between single-threaded and multi-threaded evaluation
     /// The returned vector contains results in the same order as points were added
@@ -69,30 +52,17 @@ impl<'a> BatchedImplicitEvaluator<'a> {
         if self.pending_points.is_empty() {
             return Vec::new();
         }
-        
-        // Debug print the geometry tree structure to analyze node frequency
-        // println!("=== Geometry Tree Structure for Batch Evaluation ===");
-        // println!("{}", self.geo_tree);
-        // println!("=== End Geometry Tree Structure ===");
-        
-        let total_points = self.pending_points.len();
-        let thread_count = Self::determine_thread_count();
-        
-        // Choose evaluation strategy based on workload size and threading configuration
-        if self.use_multithreading && total_points >= MIN_POINTS_FOR_THREADING && thread_count > 1 {
-            println!("Using multi-threaded evaluation with {} threads for {} points", thread_count, total_points);
-            self.flush_multi_threaded()
-        } else {
-            if self.use_multithreading {
-                println!("Falling back to single-threaded evaluation (points: {}, threads: {})", total_points, thread_count);
-            }
-            self.flush_single_threaded()
+
+        if !self.use_multithreading {
+            return self.flush_single_threaded();
         }
+
+        self.flush_multi_threaded()
     }
     
     /// Process all pending points using single-threaded batch evaluation
     pub fn flush_single_threaded(&mut self) -> Vec<f64> {
-        // Use the same process_chunk method as multi-threaded, but on the entire slice
+        // Process the entire slice in a single thread using batched evaluation.
         let results = self.process_chunk(&self.pending_points);
         
         // Clear pending points for next batch
@@ -100,29 +70,49 @@ impl<'a> BatchedImplicitEvaluator<'a> {
         
         results
     }
-    
+
     /// Process all pending points using multi-threaded batch evaluation
     pub fn flush_multi_threaded(&mut self) -> Vec<f64> {
-        let original_len = self.pending_points.len();
-        let thread_count = Self::determine_thread_count();
-        
-        // Calculate points per thread, ensuring each thread gets at least one full batch
-        let points_per_thread = std::cmp::max(BATCH_SIZE, original_len / thread_count);
-        
-        // Process chunks in parallel using Rayon - no copying, works directly on slices
-        let chunk_results: Vec<Vec<f64>> = self.pending_points
-            .par_chunks(points_per_thread)
-            .map(|chunk| {
-                self.process_chunk(chunk)
-            })
-            .collect();
-        
-        // Flatten results back into single vector in original order
-        let results: Vec<f64> = chunk_results.into_iter().flatten().collect();
-        
-        // Clear pending points for next batch
-        self.pending_points.clear();
-        
+        if self.pending_points.is_empty() {
+            return Vec::new();
+        }
+
+        // Take ownership of the pending points to avoid sharing &mut self across threads
+        let points = std::mem::take(&mut self.pending_points);
+        let original_len = points.len();
+
+        // Pad to multiple of BATCH_SIZE for efficient batch processing
+        let padded_len = ((original_len + BATCH_SIZE - 1) / BATCH_SIZE) * BATCH_SIZE;
+
+        let mut padded_points = points;
+        let padding_point = *padded_points.last().unwrap_or(&DVec3::ZERO);
+        padded_points.resize(padded_len, padding_point);
+
+        // Pre-allocate results for all batches (including padding)
+        let mut results = vec![0.0; padded_len];
+
+        let geo = self.geo_tree;
+
+        results
+            .par_chunks_mut(BATCH_SIZE)
+            .enumerate()
+            .for_each(|(chunk_idx, res_chunk)| {
+                let chunk_start = chunk_idx * BATCH_SIZE;
+                let pts_chunk = &padded_points[chunk_start..chunk_start + BATCH_SIZE];
+
+                let mut batch_points = [DVec3::ZERO; BATCH_SIZE];
+                for i in 0..BATCH_SIZE {
+                    batch_points[i] = pts_chunk[i];
+                }
+
+                // SAFETY: res_chunk length is exactly BATCH_SIZE due to par_chunks_mut(BATCH_SIZE)
+                let batch_results: &mut [f64; BATCH_SIZE] = res_chunk.try_into().unwrap();
+                geo.implicit_eval_3d_batch(&batch_points, batch_results);
+            });
+
+        // Truncate to original length to remove padding results
+        results.truncate(original_len);
+
         results
     }
     

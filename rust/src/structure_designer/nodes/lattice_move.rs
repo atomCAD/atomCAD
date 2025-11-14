@@ -20,6 +20,7 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::util::mat_utils::unit_ivec3;
@@ -85,13 +86,14 @@ impl NodeData for LatticeMoveData {
           context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
 
+        let tr = Transform::new(real_translation, DQuat::IDENTITY);
+        let s: Rc<GeoNode> = shape.geo_tree_root;
+        let geo_tree_root = context.geo_tree_cache.transform(tr, s);
+
         return NetworkResult::Geometry(GeometrySummary {
           unit_cell: shape.unit_cell.clone(),
           frame_transform: Transform::default(),
-          geo_tree_root: GeoNode::Transform {
-            transform: Transform::new(real_translation, DQuat::IDENTITY),
-            shape: Box::new(shape.geo_tree_root),
-          },
+          geo_tree_root,
         });
 
       } else {

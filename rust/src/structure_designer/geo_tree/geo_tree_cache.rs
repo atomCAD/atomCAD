@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::{Rc, Weak};
+use std::sync::{Arc, RwLock, Weak};
 
 use super::{GeoNode, GeoNodeKind};
 
@@ -34,17 +33,17 @@ impl GeoTreeCacheInner {
 
 /// Public handle for the geometry tree cache.
 ///
-/// This wraps the internally mutable cache state in `Rc<RefCell<...>>`
-/// so that GeoNodes can hold `Weak` references back to it in later steps.
+/// This wraps the internally mutable cache state in `Arc<RwLock<...>>`
+/// so that GeoNodes can hold `Weak` references back to it.
 #[derive(Clone)]
 pub struct GeoTreeCache {
-    pub(crate) inner: Rc<RefCell<GeoTreeCacheInner>>, // visibility may be tightened later
+    pub(crate) inner: Arc<RwLock<GeoTreeCacheInner>>, // visibility may be tightened later
 }
 
 impl GeoTreeCache {
     pub fn new() -> Self {
         Self {
-            inner: Rc::new(RefCell::new(GeoTreeCacheInner::new())),
+            inner: Arc::new(RwLock::new(GeoTreeCacheInner::new())),
         }
     }
 
@@ -52,14 +51,14 @@ impl GeoTreeCache {
     ///
     /// This wires up a unique id and a weak back-reference to the cache so
     /// that the node can notify the cache when it is dropped.
-    pub fn alloc_node_with_kind(&self, kind: GeoNodeKind) -> Rc<GeoNode> {
-        let weak_cache: Weak<RefCell<GeoTreeCacheInner>> = Rc::downgrade(&self.inner);
+    pub fn alloc_node_with_kind(&self, kind: GeoNodeKind) -> Arc<GeoNode> {
+        let weak_cache: Weak<RwLock<GeoTreeCacheInner>> = Arc::downgrade(&self.inner);
         let id = {
-            let mut inner = self.inner.borrow_mut();
+            let mut inner = self.inner.write().unwrap();
             inner.allocate_id()
         };
 
-        Rc::new(GeoNode {
+        Arc::new(GeoNode {
             id,
             kind,
             cache: weak_cache,
@@ -68,55 +67,55 @@ impl GeoTreeCache {
 
     // --- Convenience constructors for common node variants ---
 
-    pub fn half_space(&self, normal: glam::f64::DVec3, center: glam::f64::DVec3) -> Rc<GeoNode> {
+    pub fn half_space(&self, normal: glam::f64::DVec3, center: glam::f64::DVec3) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::HalfSpace { normal, center })
     }
 
-    pub fn half_plane(&self, point1: glam::f64::DVec2, point2: glam::f64::DVec2) -> Rc<GeoNode> {
+    pub fn half_plane(&self, point1: glam::f64::DVec2, point2: glam::f64::DVec2) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::HalfPlane { point1, point2 })
     }
 
-    pub fn circle(&self, center: glam::f64::DVec2, radius: f64) -> Rc<GeoNode> {
+    pub fn circle(&self, center: glam::f64::DVec2, radius: f64) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Circle { center, radius })
     }
 
-    pub fn sphere(&self, center: glam::f64::DVec3, radius: f64) -> Rc<GeoNode> {
+    pub fn sphere(&self, center: glam::f64::DVec3, radius: f64) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Sphere { center, radius })
     }
 
-    pub fn polygon(&self, vertices: Vec<glam::f64::DVec2>) -> Rc<GeoNode> {
+    pub fn polygon(&self, vertices: Vec<glam::f64::DVec2>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Polygon { vertices })
     }
 
-    pub fn extrude(&self, height: f64, direction: glam::f64::DVec3, shape: Rc<GeoNode>) -> Rc<GeoNode> {
+    pub fn extrude(&self, height: f64, direction: glam::f64::DVec3, shape: Arc<GeoNode>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Extrude { height, direction, shape })
     }
 
-    pub fn transform(&self, transform: crate::util::transform::Transform, shape: Rc<GeoNode>) -> Rc<GeoNode> {
+    pub fn transform(&self, transform: crate::util::transform::Transform, shape: Arc<GeoNode>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Transform { transform, shape })
     }
 
-    pub fn union2d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+    pub fn union2d(&self, shapes: Vec<Arc<GeoNode>>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Union2D { shapes })
     }
 
-    pub fn union3d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+    pub fn union3d(&self, shapes: Vec<Arc<GeoNode>>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Union3D { shapes })
     }
 
-    pub fn intersection2d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+    pub fn intersection2d(&self, shapes: Vec<Arc<GeoNode>>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Intersection2D { shapes })
     }
 
-    pub fn intersection3d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+    pub fn intersection3d(&self, shapes: Vec<Arc<GeoNode>>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Intersection3D { shapes })
     }
 
-    pub fn difference2d(&self, base: Rc<GeoNode>, sub: Rc<GeoNode>) -> Rc<GeoNode> {
+    pub fn difference2d(&self, base: Arc<GeoNode>, sub: Arc<GeoNode>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Difference2D { base, sub })
     }
 
-    pub fn difference3d(&self, base: Rc<GeoNode>, sub: Rc<GeoNode>) -> Rc<GeoNode> {
+    pub fn difference3d(&self, base: Arc<GeoNode>, sub: Arc<GeoNode>) -> Arc<GeoNode> {
         self.alloc_node_with_kind(GeoNodeKind::Difference3D { base, sub })
     }
 }

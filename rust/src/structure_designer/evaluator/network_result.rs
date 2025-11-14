@@ -2,7 +2,7 @@ use glam::i32::IVec2;
 use glam::i32::IVec3;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
-use std::rc::Rc;
+use std::sync::Arc;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
@@ -15,7 +15,7 @@ use crate::structure_designer::evaluator::motif::Motif;
 pub struct GeometrySummary2D {
   pub unit_cell: UnitCellStruct,
   pub frame_transform: Transform2D,
-  pub geo_tree_root: Rc<GeoNode>,
+  pub geo_tree_root: Arc<GeoNode>,
 }
 
 impl GeometrySummary2D {
@@ -61,7 +61,7 @@ impl GeometrySummary2D {
 pub struct GeometrySummary {
   pub unit_cell: UnitCellStruct,
   pub frame_transform: Transform,
-  pub geo_tree_root: Rc<GeoNode>,
+  pub geo_tree_root: Arc<GeoNode>,
 }
 
 impl GeometrySummary {

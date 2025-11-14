@@ -501,7 +501,7 @@ impl NodeData for FacetShellData {
 
         let center_pos = unit_cell.ivec3_lattice_to_real(&center);
 
-        let shapes: Vec<GeoNode> = self.cached_facets.iter().map(|facet| {
+        let shapes: Vec<std::rc::Rc<GeoNode>> = self.cached_facets.iter().map(|facet| {
           // Get crystallographically correct plane properties (normal and d-spacing)
           let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index);
 
@@ -509,11 +509,10 @@ impl NodeData for FacetShellData {
           let shift_distance = facet.shift as f64 * plane_props.d_spacing;
           let shifted_center = center_pos + plane_props.normal * shift_distance;
 
-          GeoNode::HalfSpace {
-            normal: plane_props.normal,
-            center: shifted_center,
-          }
+          context.geo_tree_cache.half_space(plane_props.normal, shifted_center)
         }).collect();
+
+        let geo_tree_root = context.geo_tree_cache.intersection3d(shapes);
 
         return NetworkResult::Geometry(GeometrySummary {
           unit_cell: unit_cell.clone(),
@@ -521,7 +520,7 @@ impl NodeData for FacetShellData {
             center_pos,
             DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
           ),
-          geo_tree_root: GeoNode::Intersection3D { shapes }
+          geo_tree_root,
         });
       }
 

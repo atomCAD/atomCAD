@@ -116,7 +116,7 @@ impl NetworkEvaluator {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
-          let mut ret = generate_2d_point_cloud_scene(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences);
+          let mut ret = generate_2d_point_cloud_scene(geometry_summary_2d.geo_tree_root.as_ref(), &mut context, geometry_visualization_preferences);
           ret.geo_trees.push(geometry_summary_2d.geo_tree_root);
           ret
         } else {
@@ -131,7 +131,7 @@ impl NetworkEvaluator {
     else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         if let NetworkResult::Geometry(geometry_summary) = result {
-          let mut ret = generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences);
+          let mut ret = generate_point_cloud_scene(geometry_summary.geo_tree_root.as_ref(), &mut context, geometry_visualization_preferences);
           ret.geo_trees.push(geometry_summary.geo_tree_root);
           ret
         } else {
@@ -139,7 +139,7 @@ impl NetworkEvaluator {
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         if let NetworkResult::Geometry(geometry_summary) = result {
-          let mut ret = generate_dual_contour_3d_scene(&geometry_summary.geo_tree_root, geometry_visualization_preferences);
+          let mut ret = generate_dual_contour_3d_scene(geometry_summary.geo_tree_root.as_ref(), geometry_visualization_preferences);
           ret.geo_trees.push(geometry_summary.geo_tree_root);
           ret
         } else {

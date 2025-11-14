@@ -106,13 +106,13 @@ impl FunctionEvaluator {
       // We assign the root node network zero node id. It is not used in the evaluation.
       network_stack.push(NetworkStackElement { node_network: &self.node_network, node_id: 0 });
 
-      // TODO: think about whether the context is ok this way?
+      let mut context = NetworkEvaluationContext::new(evaluator.geo_tree_cache.clone());
       evaluator.evaluate(
         &network_stack,
         self.main_node_id,
         0,
         registry,
         false,
-        &mut NetworkEvaluationContext::new())
+        &mut context)
   }
 }

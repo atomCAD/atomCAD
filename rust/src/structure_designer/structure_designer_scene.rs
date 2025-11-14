@@ -7,11 +7,12 @@ use std::collections::HashMap;
 use std::any::Any;
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::geo_tree::GeoNode;
+use std::rc::Rc;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 // StructureDesignerScene is a struct that holds the scene to be rendered in the structure designer.
 pub struct StructureDesignerScene {
-    pub geo_trees: Vec<GeoNode>,
+    pub geo_trees: Vec<Rc<GeoNode>>,
     pub atomic_structures: Vec<AtomicStructure>,
     pub surface_point_clouds: Vec<SurfacePointCloud>,
     pub surface_point_cloud_2ds: Vec<SurfacePointCloud2D>,
