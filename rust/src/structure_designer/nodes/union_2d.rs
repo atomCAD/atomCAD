@@ -2,6 +2,10 @@ use crate::util::transform::Transform2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DVec2;
+use crate::util::transform::Transform2D;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use glam::f64::DVec2;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -14,6 +18,7 @@ use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Union2DData {
@@ -38,7 +43,7 @@ impl NodeData for Union2DData {
     context: &mut NetworkEvaluationContext,
   ) -> NetworkResult {
     //let _timer = Timer::new("eval_union");
-    let mut shapes: Vec<GeoNode> = Vec::new();
+    let mut shapes: Vec<Rc<GeoNode>> = Vec::new();
     let mut frame_translation = DVec2::ZERO;
   
     let shapes_val = network_evaluator.evaluate_arg_required(
@@ -90,13 +95,15 @@ impl NodeData for Union2DData {
   
     frame_translation /= shape_count as f64;
   
+    let geo_tree_root = context.geo_tree_cache.union2d(shapes);
+
     return NetworkResult::Geometry2D(GeometrySummary2D { 
       unit_cell: first_unit_cell.clone(),
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,
       ),
-      geo_tree_root: GeoNode::Union2D { shapes },
+      geo_tree_root,
     });
   }
 

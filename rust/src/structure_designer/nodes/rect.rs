@@ -15,6 +15,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RectData {
@@ -72,11 +73,12 @@ impl NodeData for RectData {
       let real_min_corner = unit_cell.ivec2_lattice_to_real(&min_corner);
       let real_extent = unit_cell.ivec2_lattice_to_real(&extent);
       let center = real_min_corner + real_extent / 2.0;
-    
+
       let geo_tree_root = create_parallelogram_from_lattice(
         &unit_cell,
         min_corner.as_dvec2(),
         extent.as_dvec2(),
+        &context,
       );
 
       return NetworkResult::Geometry2D(
@@ -117,8 +119,9 @@ impl NodeData for RectData {
 fn create_parallelogram_from_lattice(
   unit_cell: &UnitCellStruct,
   min_corner_lattice: DVec2,
-  extent_lattice: DVec2
-) -> GeoNode {
+  extent_lattice: DVec2,
+  context: &NetworkEvaluationContext,
+) -> Rc<GeoNode> {
   // Convert lattice coordinates to real space coordinates using the proper UnitCellStruct method
   let min_corner_real = unit_cell.dvec2_lattice_to_real(&min_corner_lattice);
   
@@ -129,28 +132,14 @@ fn create_parallelogram_from_lattice(
   let corner_11 = unit_cell.dvec2_lattice_to_real(&(min_corner_lattice + extent_lattice)); // max_corner
   
   // Create 4 half-planes defining the parallelogram edges
-  let mut half_planes = Vec::new();
+  let mut half_planes: Vec<Rc<GeoNode>> = Vec::new();
   
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_10,
-    point2: corner_00,
-  });
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_01,
-    point2: corner_11,
-  });
+  half_planes.push(context.geo_tree_cache.half_plane(corner_10, corner_00));
+  half_planes.push(context.geo_tree_cache.half_plane(corner_01, corner_11));
   
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_00,
-    point2: corner_01,
-  });
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_11,
-    point2: corner_10,
-  });
+  half_planes.push(context.geo_tree_cache.half_plane(corner_00, corner_01));
+  half_planes.push(context.geo_tree_cache.half_plane(corner_11, corner_10));
   
   // Return the intersection of all half-planes
-  GeoNode::Intersection2D {
-    shapes: half_planes
-  }
+  context.geo_tree_cache.intersection2d(half_planes)
 }

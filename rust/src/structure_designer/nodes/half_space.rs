@@ -22,6 +22,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HalfSpaceData {
@@ -113,16 +114,15 @@ impl NodeData for HalfSpaceData {
       let shift_distance = shift as f64 * plane_props.d_spacing;
       let shifted_center = center_pos + plane_props.normal * shift_distance;
 
+      let geo_tree_root: Rc<GeoNode> = context.geo_tree_cache.half_space(plane_props.normal, shifted_center);
+
       return NetworkResult::Geometry(GeometrySummary {
         unit_cell: unit_cell.clone(),
         frame_transform: Transform::new(
           center_pos,
           DQuat::from_rotation_arc(DVec3::Y, plane_props.normal),
         ),
-        geo_tree_root: GeoNode::HalfSpace {
-            normal: plane_props.normal,
-            center: shifted_center,
-        },
+        geo_tree_root,
       });
     }
 

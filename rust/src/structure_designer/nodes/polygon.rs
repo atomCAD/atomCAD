@@ -23,6 +23,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -79,7 +80,7 @@ impl NodeData for PolygonData {
             DVec2::new(0.0, 0.0),
             0.0,
           ),
-          geo_tree_root: GeoNode::Polygon { vertices: real_vertices },
+          geo_tree_root: context.geo_tree_cache.polygon(real_vertices),
         }
       );
     }

@@ -14,6 +14,7 @@ use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Intersect2DData {
@@ -38,7 +39,7 @@ impl NodeData for Intersect2DData {
     context: &mut NetworkEvaluationContext,
   ) -> NetworkResult {
     //let _timer = Timer::new("eval_intersect");
-    let mut shapes: Vec<GeoNode> = Vec::new();
+    let mut shapes: Vec<Rc<GeoNode>> = Vec::new();
     let mut frame_translation = DVec2::ZERO;
   
     let shapes_val = network_evaluator.evaluate_arg_required(
@@ -89,14 +90,16 @@ impl NodeData for Intersect2DData {
     }
   
     frame_translation /= shape_count as f64;
-  
+
+    let geo_tree_root = context.geo_tree_cache.intersection2d(shapes);
+
     return NetworkResult::Geometry2D(GeometrySummary2D { 
       unit_cell: first_unit_cell.clone(),
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,
       ),
-      geo_tree_root: GeoNode::Intersection2D { shapes },
+      geo_tree_root,
     });
   }
 

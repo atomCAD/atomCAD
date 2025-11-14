@@ -15,6 +15,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
@@ -80,15 +81,12 @@ impl NodeData for ExtrudeData {
     
         let direction = unit_cell.c.normalize();
         let height = unit_cell.c.length() * (height as f64);
-        let s = shape.geo_tree_root;
+        let s: Rc<GeoNode> = shape.geo_tree_root;
+        let geo_tree_root = context.geo_tree_cache.extrude(height, direction, s);
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,
           frame_transform,
-          geo_tree_root: GeoNode::Extrude { 
-            height: height,
-            direction: direction,
-            shape: Box::new(s),
-          },
+          geo_tree_root,
         });
       } else {
         return runtime_type_error_in_input(0);

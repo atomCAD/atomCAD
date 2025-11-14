@@ -15,6 +15,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SphereData {
@@ -71,16 +72,15 @@ impl NodeData for SphereData {
       let real_center = unit_cell.ivec3_lattice_to_real(&center);
       let real_radius = unit_cell.int_lattice_to_real(radius);
 
+      let geo_tree_root: Rc<GeoNode> = context.geo_tree_cache.sphere(real_center, real_radius);
+
       return NetworkResult::Geometry(GeometrySummary { 
         unit_cell,
         frame_transform: Transform::new(
         real_center,
         DQuat::IDENTITY,
         ),
-        geo_tree_root: GeoNode::Sphere {
-          center: real_center,
-          radius: real_radius,
-        },
+        geo_tree_root,
       });
     }
 

@@ -16,6 +16,7 @@ use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diff2DData {
@@ -90,7 +91,7 @@ impl NodeData for Diff2DData {
         return unit_cell_mismatch_error();
       }
   
-      geometry = Some(GeoNode::Difference2D { base: Box::new(geometry.unwrap()), sub: Box::new(sub_geometry.unwrap()) });
+      geometry = Some(context.geo_tree_cache.difference2d(geometry.unwrap(), sub_geometry.unwrap()));
   
       frame_translation += sub_frame_translation;
       frame_translation *= 0.5;
@@ -121,8 +122,8 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   parameter_index: usize,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> (Option<GeoNode>, DVec2, Option<UnitCellStruct>) {
-  let mut shapes: Vec<GeoNode> = Vec::new();
+) -> (Option<Rc<GeoNode>>, DVec2, Option<UnitCellStruct>) {
+  let mut shapes: Vec<Rc<GeoNode>> = Vec::new();
   let mut frame_translation = DVec2::ZERO;
 
   let shapes_val = network_evaluator.evaluate_arg_required(
@@ -173,5 +174,8 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   }
 
   frame_translation /= shape_count as f64;
-  return (Some(GeoNode::Union2D { shapes }), frame_translation, Some(first_unit_cell));
+
+  let union_root = context.geo_tree_cache.union2d(shapes);
+
+  return (Some(union_root), frame_translation, Some(first_unit_cell));
 }

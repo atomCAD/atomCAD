@@ -23,6 +23,7 @@ use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -87,7 +88,7 @@ impl NodeData for HalfPlaneData {
             point1,
             normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
           ),
-          geo_tree_root: GeoNode::HalfPlane { point1, point2 },
+          geo_tree_root: context.geo_tree_cache.half_plane(point1, point2),
         });
     }
 
