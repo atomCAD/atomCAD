@@ -25,12 +25,34 @@ Planned features include:
 
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
 
+## Demos
+
 If you are new to atomCAD check out the [atomCAD Basic Tutorial](./doc/atomCAD_basic_tutorial.md) and the [atomCAD Part Design Tutorial](./doc/part_design_tutorial.md) (in this order).
 
 Check out the [atomCAD Demo Files](./samples/demo_description.md) to see some examples of what you can do with atomCAD.
 
 For more details see [atomCAD Reference Guide](./doc/atomCAD_reference_guide.md).
 
-The `demolib` folder contains a comprehensive example library showcasing advanced design patterns and reusable components for atomically precise manufacturing - see [design decisions](./demolib/example-lib_design-decisions.md) and [demo descriptions](./demolib/example-lib_demo-descriptions.md) for detailed explanations.
+### Demolib
 
-Interested in contributing? See our [developer documentation](./doc/for_developers.md) to get started.
+The `demolib` folder contains three things:   
+★ (1) An example library of reusable geometries.  
+– Particularly useful: Infinitely long rods ("irods") of ehaustive types.  
+– For infos to that library see page: [library overview and design decisions](./demolib/example-lib_design-decisions.md)  
+★ (2) Some demos showcasing library usage for structures of varying complexity  
+… including some simple composite geometries and   
+… interlocking racks potentially relevant for future atomically precise manufacturing   
+– The page [demo descriptions](./demolib/example-lib_demo-descriptions.md) holds explanations to the motivations and decisions behind these demos. It covers some possible (vdW force employing) design principles for achieving some things like:  
+– V and W shapes for self-centering to equilibrium distance   
+– incommensurate alignment for superlubric sliding  
+– setup for crystal structure transitions (early)  
+★ (3) [Orientation help info for finding the desired miller indieces](./demolib/miller-index_helpers-for-orientation.md).  
+
+![](./demolib/demolib-collage.svg)
+Above is a collage of the demos descibed in [(demo descriptions)](./demolib/example-lib_demo-descriptions.md)  
+Demos based on the on the demo lib [(library overview and design decisions)](./demolib/example-lib_design-decisions.md)
+
+## Conribute
+
+**Interested in contributing?**  
+See our [developer documentation](./doc/for_developers.mid) to get started.
