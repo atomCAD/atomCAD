@@ -25,13 +25,16 @@ Planned features include:
 
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
 
-## Demos
+## Tutorials and Reference Guide
 
 If you are new to atomCAD check out the [atomCAD Basic Tutorial](./doc/atomCAD_basic_tutorial.md) and the [atomCAD Part Design Tutorial](./doc/part_design_tutorial.md) (in this order).
 
-Check out the [atomCAD Demo Files](./samples/demo_description.md) to see some examples of what you can do with atomCAD.
 
 For more details see [atomCAD Reference Guide](./doc/atomCAD_reference_guide.md).
+
+## Demos
+
+Check out the [atomCAD Demo Files](./samples/demo_description.md) to see some examples of what you can do with atomCAD.
 
 ### Demolib
 
