@@ -124,7 +124,7 @@ impl StructureDesignerPreferences {
         visualization: AtomicStructureVisualization::BallAndStick,
         rendering_method: AtomicRenderingMethod::Impostors, // Default to high-performance impostor rendering
         ball_and_stick_cull_depth: Some(8.0), // Conservative depth culling at 8.0 Angstroms
-        space_filling_cull_depth: Some(6.0), // Conservative depth culling at 6.0 Angstroms for space filling
+        space_filling_cull_depth: Some(3.0),
       },
       background_preferences: BackgroundPreferences {
         background_color: APIIVec3 { x: 150, y: 150, z: 150 },

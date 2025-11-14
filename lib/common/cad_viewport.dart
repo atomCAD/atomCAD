@@ -84,7 +84,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   static const double ROT_PER_PIXEL = 0.02;
 
   // amount of relative zoom to the zoom target per reported zoom delta.
-  static const double ZOOM_PER_ZOOM_DELTA = 0.0015;
+  static const double ZOOM_PER_ZOOM_DELTA = 0.002;
 
   TextureRgbaRenderer? _textureRenderer;
 
@@ -116,30 +116,33 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
     // Check if Shift is pressed for panning mode
     bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-    
+
     // Handle zoom from multiple sources
     bool zoomHandled = false;
-    
+
     // 1. Trackpad pinch-to-zoom (scale changes) - only when Shift is NOT pressed
     if (!isShiftPressed && event.scale != 1.0) {
       final scaleDelta = event.scale - 1.0;
-      final scrollDelta = -scaleDelta * 100.0; // Further reduced sensitivity (was 250.0)
+      final scrollDelta =
+          -scaleDelta * 100.0; // Further reduced sensitivity (was 250.0)
       scroll(event.localPosition, scrollDelta);
       zoomHandled = true;
     }
-    
+
     // 2. Shift + PanZoom for camera panning
-    if (isShiftPressed && (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
+    if (isShiftPressed &&
+        (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
       // Use pan delta for camera panning when Shift is pressed
       // Convert pan delta to camera movement
       panCameraWithDelta(event.localPosition, event.panDelta);
       zoomHandled = true; // Prevent zoom when panning
     }
-    
+
     // 3. Magic Mouse / Trackpad vertical pan for zoom (when no scale change and Shift not pressed)
     if (!zoomHandled && !isShiftPressed && event.panDelta.dy.abs() > 0.1) {
       // Use vertical pan delta for zooming - increased sensitivity
-      final scrollDelta = event.panDelta.dy * 4.0; // Increased sensitivity (was 2.0)
+      final scrollDelta =
+          event.panDelta.dy * 4.0; // Increased sensitivity (was 2.0)
       scroll(event.localPosition, scrollDelta);
     }
   }
@@ -153,7 +156,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void panCameraWithDelta(Offset pointerPos, Offset panDelta) {
     final camera = getCamera();
     final cameraTransform = getCameraTransform(camera);
-    
+
     if (cameraTransform == null) return;
 
     // Calculate movement scale similar to existing camera move logic
@@ -163,7 +166,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     } else {
       var movePlaneDistance = (cameraTransform.pivotPoint - cameraTransform.eye)
           .dot(cameraTransform.forward);
-      movePerPixel = 2.0 * movePlaneDistance * tan(camera.fovy * 0.5) / viewportHeight;
+      movePerPixel =
+          2.0 * movePlaneDistance * tan(camera.fovy * 0.5) / viewportHeight;
     }
 
     // Convert pan delta to camera movement (invert Y for natural feel)
