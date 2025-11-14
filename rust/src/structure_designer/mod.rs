@@ -17,4 +17,6 @@ pub mod geo_tree;
 pub mod implicit_eval;
 pub mod expr;
 pub mod node_networks_import_manager;
+pub mod geo_tree_cache;
+
 
