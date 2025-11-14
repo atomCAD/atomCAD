@@ -24,6 +24,7 @@ use crate::common::xyz_saver::save_xyz;
 use crate::common::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::structure_designer::geo_tree::geo_tree_cache::GeoTreeCache;
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
@@ -42,7 +43,8 @@ impl StructureDesigner {
   pub fn new() -> Self {
 
     let node_type_registry = NodeTypeRegistry::new();
-    let network_evaluator = NetworkEvaluator::new();
+    let geo_tree_cache = GeoTreeCache::new();
+    let network_evaluator = NetworkEvaluator::new(geo_tree_cache.clone());
     let node_display_policy_resolver = NodeDisplayPolicyResolver::new();
 
     Self {
@@ -56,6 +58,7 @@ impl StructureDesigner {
       import_manager: NodeNetworksImportManager::new(),
       is_dirty: false,
       file_path: None,
+      geo_tree_cache,
     }
   }
 }

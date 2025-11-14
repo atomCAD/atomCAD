@@ -15,6 +15,7 @@ use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnionData {
@@ -40,7 +41,7 @@ impl NodeData for UnionData {
   ) -> NetworkResult {
     //let _timer = Timer::new("eval_union");
   
-    let mut shapes: Vec<GeoNode> = Vec::new();
+    let mut shapes: Vec<Rc<GeoNode>> = Vec::new();
     let mut frame_translation = DVec3::ZERO;
   
     let shapes_val = network_evaluator.evaluate_arg_required(
@@ -92,13 +93,15 @@ impl NodeData for UnionData {
   
     frame_translation /= shape_count as f64;
     
+    let geo_tree_root = context.geo_tree_cache.union3d(shapes);
+
     return NetworkResult::Geometry(GeometrySummary {
       unit_cell: first_unit_cell.clone(),
       frame_transform: Transform::new(
         frame_translation,
         DQuat::IDENTITY,
       ),
-      geo_tree_root: GeoNode::Union3D { shapes },
+      geo_tree_root,
     });
   }
 

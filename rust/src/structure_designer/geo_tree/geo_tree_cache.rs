@@ -65,4 +65,58 @@ impl GeoTreeCache {
             cache: weak_cache,
         })
     }
+
+    // --- Convenience constructors for common node variants ---
+
+    pub fn half_space(&self, normal: glam::f64::DVec3, center: glam::f64::DVec3) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::HalfSpace { normal, center })
+    }
+
+    pub fn half_plane(&self, point1: glam::f64::DVec2, point2: glam::f64::DVec2) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::HalfPlane { point1, point2 })
+    }
+
+    pub fn circle(&self, center: glam::f64::DVec2, radius: f64) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Circle { center, radius })
+    }
+
+    pub fn sphere(&self, center: glam::f64::DVec3, radius: f64) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Sphere { center, radius })
+    }
+
+    pub fn polygon(&self, vertices: Vec<glam::f64::DVec2>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Polygon { vertices })
+    }
+
+    pub fn extrude(&self, height: f64, direction: glam::f64::DVec3, shape: Rc<GeoNode>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Extrude { height, direction, shape })
+    }
+
+    pub fn transform(&self, transform: crate::util::transform::Transform, shape: Rc<GeoNode>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Transform { transform, shape })
+    }
+
+    pub fn union2d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Union2D { shapes })
+    }
+
+    pub fn union3d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Union3D { shapes })
+    }
+
+    pub fn intersection2d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Intersection2D { shapes })
+    }
+
+    pub fn intersection3d(&self, shapes: Vec<Rc<GeoNode>>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Intersection3D { shapes })
+    }
+
+    pub fn difference2d(&self, base: Rc<GeoNode>, sub: Rc<GeoNode>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Difference2D { base, sub })
+    }
+
+    pub fn difference3d(&self, base: Rc<GeoNode>, sub: Rc<GeoNode>) -> Rc<GeoNode> {
+        self.alloc_node_with_kind(GeoNodeKind::Difference3D { base, sub })
+    }
 }

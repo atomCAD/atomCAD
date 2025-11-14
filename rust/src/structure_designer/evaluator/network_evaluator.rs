@@ -17,6 +17,7 @@ use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::geo_tree::geo_tree_cache::GeoTreeCache;
 
 use super::network_result::input_missing_error;
 use super::network_result::Closure;
@@ -47,19 +48,22 @@ pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
   pub node_output_strings: HashMap<u64, String>,
   pub selected_node_eval_cache: Option<Box<dyn Any>>,
+  pub geo_tree_cache: GeoTreeCache,
 }
 
 impl NetworkEvaluationContext {
-  pub fn new() -> Self {
+  pub fn new(geo_tree_cache: GeoTreeCache) -> Self {
     Self {
       node_errors: HashMap::new(),
       node_output_strings: HashMap::new(),
       selected_node_eval_cache: None,
+      geo_tree_cache,
     }
   }
 }
 
 pub struct NetworkEvaluator {
+  pub geo_tree_cache: GeoTreeCache,
 }
 
 /*
@@ -68,9 +72,8 @@ pub struct NetworkEvaluator {
  * It delegates node related evaluation to functions in node specific modules.
  */
 impl NetworkEvaluator {
-  pub fn new() -> Self {
-    Self {
-    }
+  pub fn new(geo_tree_cache: GeoTreeCache) -> Self {
+    Self { geo_tree_cache }
   }
 
   // Creates the Scene that will be displayed for the given node by the Renderer, and is retained
@@ -90,7 +93,7 @@ impl NetworkEvaluator {
       None => return StructureDesignerScene::new(),
     };
 
-    let mut context = NetworkEvaluationContext::new();
+    let mut context = NetworkEvaluationContext::new(self.geo_tree_cache.clone());
 
     let mut network_stack = Vec::new();
     // We assign the root node network zero node id. It is not used in the evaluation.
