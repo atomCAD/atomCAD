@@ -7,3 +7,4 @@ pub mod imat3;
 pub mod mat_utils;
 pub mod path_utils;
 pub mod daabox;
+pub mod memory_bounded_lru_cache;

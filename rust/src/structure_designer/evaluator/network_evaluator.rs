@@ -83,7 +83,7 @@ impl NetworkEvaluator {
   }
 
   /// Get cache statistics
-  pub fn get_csg_cache_stats(&self) -> &crate::structure_designer::geo_tree::csg_cache::CacheStats {
+  pub fn get_csg_cache_stats(&self) -> crate::structure_designer::geo_tree::csg_cache::CacheStats {
     self.csg_conversion_cache.stats()
   }
 
