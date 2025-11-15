@@ -82,16 +82,17 @@ impl NodeData for Union2DData {
     }
     
     // All unit cells are compatible, proceed with union
-    let first_unit_cell = &geometries[0].unit_cell;
-    for geometry in &geometries {
-      shapes.push(geometry.geo_tree_root.clone()); 
+    // Take the first unit cell by value before consuming the geometries vector
+    let first_unit_cell = geometries[0].unit_cell.clone();
+    for geometry in geometries.into_iter() {
+      shapes.push(geometry.geo_tree_root);
       frame_translation += geometry.frame_transform.translation;
     }
   
     frame_translation /= shape_count as f64;
   
     return NetworkResult::Geometry2D(GeometrySummary2D { 
-      unit_cell: first_unit_cell.clone(),
+      unit_cell: first_unit_cell,
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,

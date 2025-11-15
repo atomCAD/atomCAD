@@ -83,16 +83,17 @@ impl NodeData for IntersectData {
     }
     
     // All unit cells are compatible, proceed with intersection
-    let first_unit_cell = &geometries[0].unit_cell;
-    for geometry in &geometries {
-      shapes.push(geometry.geo_tree_root.clone()); 
+    // Take the first unit cell by value before consuming the geometries vector
+    let first_unit_cell = geometries[0].unit_cell.clone();
+    for geometry in geometries.into_iter() {
+      shapes.push(geometry.geo_tree_root);
       frame_translation += geometry.frame_transform.translation;
     }
   
     frame_translation /= shape_count as f64;
   
     return NetworkResult::Geometry(GeometrySummary { 
-      unit_cell: first_unit_cell.clone(),
+      unit_cell: first_unit_cell,
       frame_transform: Transform::new(
         frame_translation,
         DQuat::IDENTITY,

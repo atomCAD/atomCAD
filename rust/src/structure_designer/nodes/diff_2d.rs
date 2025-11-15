@@ -167,8 +167,8 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   
   // All unit cells are compatible, proceed with union
   let first_unit_cell = geometries[0].unit_cell.clone();
-  for geometry in &geometries {
-    shapes.push(geometry.geo_tree_root.clone()); 
+  for geometry in geometries.into_iter() {
+    shapes.push(geometry.geo_tree_root);
     frame_translation += geometry.frame_transform.translation;
   }
 

@@ -17,6 +17,7 @@ use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::data_type::DataType;
+use crate::util::timer::Timer;
 
 use super::network_result::input_missing_error;
 use super::network_result::Closure;
@@ -102,9 +103,11 @@ impl NetworkEvaluator {
     };
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
-
-    let result = self.evaluate(&network_stack, node_id, 0, registry, from_selected_node, &mut context);
-
+    let result = {
+      let _timer = Timer::new("evaluate inside generate_scene");
+      self.evaluate(&network_stack, node_id, 0, registry, from_selected_node, &mut context)
+    };
+    
     // Get the unit cell before the result is potentially moved
     let unit_cell = result.get_unit_cell();
 
@@ -181,6 +184,7 @@ impl NetworkEvaluator {
     node_id: u64, _registry: &NodeTypeRegistry,
     _context: &mut NetworkEvaluationContext,
     geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
+      let _timer = Timer::new("generate_explicit_mesh_scene");
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
       let mut scene = StructureDesignerScene::new();
       

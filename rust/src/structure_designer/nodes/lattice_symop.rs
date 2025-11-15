@@ -179,41 +179,42 @@ impl NodeData for LatticeSymopData {
           context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
 
+        // Move fields we need by value out of the shape summary
+        let GeometrySummary { unit_cell, frame_transform: input_frame_transform, geo_tree_root } = shape;
+
         // Calculate the new frame transform
         // The resulting frame transform should only contain translation, no rotation
         let frame_transform = Transform::new(
-          shape.frame_transform.translation + real_translation,
+          input_frame_transform.translation + real_translation,
           DQuat::IDENTITY  // Frame transform should not contain rotation
         );
 
-        // Handle transform_only_frame flag
-        if transform_only_frame {
+        // Build the output geometry, moving the geo_tree_root instead of cloning it
+        let output_geo_tree_root = if transform_only_frame {
           // Only transform the reference frame, leave geometry in place
-          return NetworkResult::Geometry(GeometrySummary {
-            unit_cell: shape.unit_cell.clone(),
-            frame_transform,
-            geo_tree_root: shape.geo_tree_root.clone(),
-          });
+          geo_tree_root
         } else {
           // Transform both frame and geometry
-          // Since shape.frame_transform.rotation is always identity (deprecated), this simplifies to:
-          // 1. Undo the input translation: move geometry back by -shape.frame_transform.translation
+          // Since input_frame_transform.rotation is always identity (deprecated), this simplifies to:
+          // 1. Undo the input translation: move geometry back by -input_frame_transform.translation
           // 2. Apply the new rotation around origin
           // 3. Apply the new translation: frame_transform.translation
           let tr = Transform::new(
-            real_rotation_quat.mul_vec3(-shape.frame_transform.translation) + frame_transform.translation, 
+            real_rotation_quat.mul_vec3(-input_frame_transform.translation) + frame_transform.translation, 
             real_rotation_quat
           );
 
-          return NetworkResult::Geometry(GeometrySummary {
-            unit_cell: shape.unit_cell.clone(),
-            frame_transform,
-            geo_tree_root: GeoNode::Transform {
-              transform: tr,
-              shape: Box::new(shape.geo_tree_root),
-            },
-          });
-        }
+          GeoNode::Transform {
+            transform: tr,
+            shape: Box::new(geo_tree_root),
+          }
+        };
+
+        return NetworkResult::Geometry(GeometrySummary {
+          unit_cell,
+          frame_transform,
+          geo_tree_root: output_geo_tree_root,
+        });
       } else {
         return runtime_type_error_in_input(0);
       }

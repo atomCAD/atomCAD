@@ -10,10 +10,11 @@ use crate::common::csg_utils::dvec3_to_vector3;
 use crate::common::csg_utils::scale_to_csg;
 use csgrs::mesh::polygon::Polygon;
 use csgrs::mesh::vertex::Vertex;
+use crate::util::timer::Timer;
 
 impl GeoNode {
   pub fn to_csg_mesh(&self) -> Option<CSGMesh> {
-    //let _timer = Timer::new("GeoNode::to_csg_mesh");
+    let _timer = Timer::new("GeoNode::to_csg_mesh");
     self.internal_to_csg_mesh(true)
   }
 
