@@ -71,6 +71,7 @@ enum GeoNodeKind {
 mod csg_conversion;
 mod implicit_eval;
 pub mod batched_implicit_evaluator;
+pub mod csg_cache;
 
 impl fmt::Display for GeoNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
