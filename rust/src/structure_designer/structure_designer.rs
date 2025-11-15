@@ -1033,6 +1033,9 @@ impl StructureDesigner {
     // Apply display policy to all nodes
     self.apply_node_display_policy(None);
 
+    // Clear CSG conversion cache since we loaded a completely new file
+    self.network_evaluator.clear_csg_cache();
+
     // Clear dirty flag since we just loaded a saved state
     self.is_dirty = false;
     

@@ -18,6 +18,7 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::data_type::DataType;
 use crate::util::timer::Timer;
+use crate::structure_designer::geo_tree::csg_cache::CsgConversionCache;
 
 use super::network_result::input_missing_error;
 use super::network_result::Closure;
@@ -61,6 +62,7 @@ impl NetworkEvaluationContext {
 }
 
 pub struct NetworkEvaluator {
+  csg_conversion_cache: CsgConversionCache,
 }
 
 /*
@@ -71,13 +73,24 @@ pub struct NetworkEvaluator {
 impl NetworkEvaluator {
   pub fn new() -> Self {
     Self {
+      csg_conversion_cache: CsgConversionCache::with_defaults(),
     }
+  }
+
+  /// Clear the CSG conversion cache
+  pub fn clear_csg_cache(&mut self) {
+    self.csg_conversion_cache.clear();
+  }
+
+  /// Get cache statistics
+  pub fn get_csg_cache_stats(&self) -> &crate::structure_designer::geo_tree::csg_cache::CacheStats {
+    self.csg_conversion_cache.stats()
   }
 
   // Creates the Scene that will be displayed for the given node by the Renderer, and is retained
   // for interaction purposes
   pub fn generate_scene(
-    &self,
+    &mut self,
     network_name: &str,
     node_id: u64,
     _display_type: NodeDisplayType, //TODO: use display_type
@@ -174,11 +187,16 @@ impl NetworkEvaluator {
     // Set the unit cell based on the result
     scene.unit_cell = unit_cell;
 
+    // Print cache statistics for debugging (can be removed later)
+    if self.csg_conversion_cache.stats().total_lookups() > 0 {
+      self.csg_conversion_cache.stats().print_summary();
+    }
+
     return scene;
   }
 
   fn generate_explicit_mesh_scene<'a>(
-    &self,
+    &mut self,
     result: NetworkResult,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node_id: u64, _registry: &NodeTypeRegistry,
@@ -190,7 +208,7 @@ impl NetworkEvaluator {
       
       let poly_mesh = match &result {
         NetworkResult::Geometry(geometry_summary) => { 
-          if let Some(csg_mesh) = geometry_summary.geo_tree_root.to_csg_mesh() {
+          if let Some(csg_mesh) = geometry_summary.geo_tree_root.to_csg_mesh_cached(Some(&mut self.csg_conversion_cache)) {
             let node = network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
             let is_half_space = node.node_type_name == "half_space";
             let mut poly_mesh = convert_csg_mesh_to_poly_mesh(
@@ -216,7 +234,7 @@ impl NetworkEvaluator {
           }
         },
         NetworkResult::Geometry2D(geometry_summary_2d) => {
-          if let Some(csg_sketch) = geometry_summary_2d.geo_tree_root.to_csg_sketch() {
+          if let Some(csg_sketch) = geometry_summary_2d.geo_tree_root.to_csg_sketch_cached(Some(&mut self.csg_conversion_cache)) {
             let mut poly_mesh = convert_csg_sketch_to_poly_mesh(
               csg_sketch, 
               !geometry_visualization_preferences.wireframe_geometry,

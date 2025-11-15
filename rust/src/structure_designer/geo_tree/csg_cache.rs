@@ -37,6 +37,16 @@ impl CacheStats {
     pub fn total_lookups(&self) -> u64 {
         self.mesh_hits + self.mesh_misses + self.sketch_hits + self.sketch_misses
     }
+
+    /// Print a formatted summary of cache statistics
+    pub fn print_summary(&self) {
+        println!("=== CSG Conversion Cache Statistics ===");
+        println!("Meshes:   {} hits, {} misses ({:.1}% hit rate)", 
+            self.mesh_hits, self.mesh_misses, self.mesh_hit_rate() * 100.0);
+        println!("Sketches: {} hits, {} misses ({:.1}% hit rate)", 
+            self.sketch_hits, self.sketch_misses, self.sketch_hit_rate() * 100.0);
+        println!("Total lookups: {}", self.total_lookups());
+    }
 }
 
 /// Cache for CSG conversion results with LRU eviction policy
