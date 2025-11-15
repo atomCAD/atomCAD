@@ -16,13 +16,13 @@ use crate::util::timer::Timer;
 impl GeoNode {
   /// Convert to CSG mesh without caching
   pub fn to_csg_mesh(&self) -> Option<CSGMesh> {
-    let _timer = Timer::new("GeoNode::to_csg_mesh");
+    //let _timer = Timer::new("GeoNode::to_csg_mesh");
     self.internal_to_csg_mesh(true, None)
   }
 
   /// Convert to CSG mesh with optional caching
   pub fn to_csg_mesh_cached(&self, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
-    let _timer = Timer::new("GeoNode::to_csg_mesh_cached");
+    //let _timer = Timer::new("GeoNode::to_csg_mesh_cached");
     self.internal_to_csg_mesh(true, cache.as_deref_mut())
   }
 

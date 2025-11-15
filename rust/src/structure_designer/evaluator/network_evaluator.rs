@@ -117,7 +117,7 @@ impl NetworkEvaluator {
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
     let result = {
-      let _timer = Timer::new("evaluate inside generate_scene");
+      //let _timer = Timer::new("evaluate inside generate_scene");
       self.evaluate(&network_stack, node_id, 0, registry, from_selected_node, &mut context)
     };
     
@@ -188,9 +188,9 @@ impl NetworkEvaluator {
     scene.unit_cell = unit_cell;
 
     // Print cache statistics for debugging (can be removed later)
-    if self.csg_conversion_cache.stats().total_lookups() > 0 {
-      self.csg_conversion_cache.stats().print_summary();
-    }
+    //if self.csg_conversion_cache.stats().total_lookups() > 0 {
+    //  self.csg_conversion_cache.stats().print_summary();
+    //}
 
     return scene;
   }
@@ -202,7 +202,7 @@ impl NetworkEvaluator {
     node_id: u64, _registry: &NodeTypeRegistry,
     _context: &mut NetworkEvaluationContext,
     geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
-      let _timer = Timer::new("generate_explicit_mesh_scene");
+      //let _timer = Timer::new("generate_explicit_mesh_scene");
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
       let mut scene = StructureDesignerScene::new();
       
