@@ -97,7 +97,7 @@ impl NodeData for Intersect2DData {
         frame_translation,
         0.0,
       ),
-      geo_tree_root: GeoNode::Intersection2D { shapes },
+      geo_tree_root: GeoNode::intersection_2d(shapes),
     });
   }
 

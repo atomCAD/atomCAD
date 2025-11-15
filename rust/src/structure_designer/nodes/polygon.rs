@@ -79,7 +79,7 @@ impl NodeData for PolygonData {
             DVec2::new(0.0, 0.0),
             0.0,
           ),
-          geo_tree_root: GeoNode::Polygon { vertices: real_vertices },
+          geo_tree_root: GeoNode::polygon(real_vertices),
         }
       );
     }

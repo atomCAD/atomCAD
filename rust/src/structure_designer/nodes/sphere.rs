@@ -77,10 +77,7 @@ impl NodeData for SphereData {
         real_center,
         DQuat::IDENTITY,
         ),
-        geo_tree_root: GeoNode::Sphere {
-          center: real_center,
-          radius: real_radius,
-        },
+        geo_tree_root: GeoNode::sphere(real_center, real_radius),
       });
     }
 

@@ -90,7 +90,7 @@ impl NodeData for Diff2DData {
         return unit_cell_mismatch_error();
       }
   
-      geometry = Some(GeoNode::Difference2D { base: Box::new(geometry.unwrap()), sub: Box::new(sub_geometry.unwrap()) });
+      geometry = Some(GeoNode::difference_2d(Box::new(geometry.unwrap()), Box::new(sub_geometry.unwrap())));
   
       frame_translation += sub_frame_translation;
       frame_translation *= 0.5;
@@ -173,5 +173,5 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   }
 
   frame_translation /= shape_count as f64;
-  return (Some(GeoNode::Union2D { shapes }), frame_translation, Some(first_unit_cell));
+  return (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_unit_cell));
 }

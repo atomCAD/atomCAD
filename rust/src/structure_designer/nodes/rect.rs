@@ -131,26 +131,12 @@ fn create_parallelogram_from_lattice(
   // Create 4 half-planes defining the parallelogram edges
   let mut half_planes = Vec::new();
   
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_10,
-    point2: corner_00,
-  });
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_01,
-    point2: corner_11,
-  });
+  half_planes.push(GeoNode::half_plane(corner_10, corner_00));
+  half_planes.push(GeoNode::half_plane(corner_01, corner_11));
   
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_00,
-    point2: corner_01,
-  });
-  half_planes.push(GeoNode::HalfPlane {
-    point1: corner_11,
-    point2: corner_10,
-  });
+  half_planes.push(GeoNode::half_plane(corner_00, corner_01));
+  half_planes.push(GeoNode::half_plane(corner_11, corner_10));
   
   // Return the intersection of all half-planes
-  GeoNode::Intersection2D {
-    shapes: half_planes
-  }
+  GeoNode::intersection_2d(half_planes)
 }

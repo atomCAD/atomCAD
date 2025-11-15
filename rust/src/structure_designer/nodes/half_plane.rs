@@ -87,7 +87,7 @@ impl NodeData for HalfPlaneData {
             point1,
             normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
           ),
-          geo_tree_root: GeoNode::HalfPlane { point1, point2 },
+          geo_tree_root: GeoNode::half_plane(point1, point2),
         });
     }
 

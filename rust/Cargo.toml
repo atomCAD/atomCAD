@@ -34,6 +34,8 @@ nalgebra = "^0.33"
 geo = "^0.29.3"
 # pyo3 = { version = "0.22", features = ["auto-initialize"] }
 
+ blake3 = "1.5"
+
 [build-dependencies]
 flutter_rust_bridge_codegen = "2.10.0"
 serde_with = "3.5.1"

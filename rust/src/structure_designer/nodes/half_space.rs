@@ -119,10 +119,7 @@ impl NodeData for HalfSpaceData {
           center_pos,
           DQuat::from_rotation_arc(DVec3::Y, plane_props.normal),
         ),
-        geo_tree_root: GeoNode::HalfSpace {
-            normal: plane_props.normal,
-            center: shifted_center,
-        },
+        geo_tree_root: GeoNode::half_space(plane_props.normal, shifted_center),
       });
     }
 

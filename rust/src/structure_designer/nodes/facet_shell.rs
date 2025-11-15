@@ -509,10 +509,7 @@ impl NodeData for FacetShellData {
           let shift_distance = facet.shift as f64 * plane_props.d_spacing;
           let shifted_center = center_pos + plane_props.normal * shift_distance;
 
-          GeoNode::HalfSpace {
-            normal: plane_props.normal,
-            center: shifted_center,
-          }
+          GeoNode::half_space(plane_props.normal, shifted_center)
         }).collect();
 
         return NetworkResult::Geometry(GeometrySummary {
@@ -521,7 +518,7 @@ impl NodeData for FacetShellData {
             center_pos,
             DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
           ),
-          geo_tree_root: GeoNode::Intersection3D { shapes }
+          geo_tree_root: GeoNode::intersection_3d(shapes)
         });
       }
 

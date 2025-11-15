@@ -84,11 +84,7 @@ impl NodeData for ExtrudeData {
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,
           frame_transform,
-          geo_tree_root: GeoNode::Extrude { 
-            height: height,
-            direction: direction,
-            shape: Box::new(s),
-          },
+          geo_tree_root: GeoNode::extrude(height, direction, Box::new(s))
         });
       } else {
         return runtime_type_error_in_input(0);

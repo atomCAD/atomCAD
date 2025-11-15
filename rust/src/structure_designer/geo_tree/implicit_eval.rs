@@ -1,4 +1,4 @@
-use super::GeoNode;
+use super::{GeoNode, GeoNodeKind};
 use glam::f64::{DVec2, DVec3};
 use crate::util::transform::Transform;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry2D;
@@ -20,23 +20,23 @@ impl ImplicitGeometry2D for GeoNode {
   }
 
   fn implicit_eval_2d(&self, sample_point: &DVec2) -> f64 {
-    match self {
-      GeoNode::HalfPlane { point1, point2 } => {
+    match &self.kind {
+      GeoNodeKind::HalfPlane { point1, point2 } => {
         Self::half_plane_implicit_eval(*point1, *point2, sample_point)
       }
-      GeoNode::Circle { center, radius } => {
+      GeoNodeKind::Circle { center, radius } => {
         Self::circle_implicit_eval(*center, *radius, sample_point)
       }
-      GeoNode::Polygon { vertices } => {
+      GeoNodeKind::Polygon { vertices } => {
         Self::polygon_implicit_eval(vertices, sample_point)
       }
-      GeoNode::Union2D { shapes } => {
+      GeoNodeKind::Union2D { shapes } => {
         Self::union_2d_implicit_eval(shapes, sample_point)
       }
-      GeoNode::Intersection2D { shapes } => {
+      GeoNodeKind::Intersection2D { shapes } => {
         Self::intersection_2d_implicit_eval(shapes, sample_point)
       }
-      GeoNode::Difference2D { base, sub } => {
+      GeoNodeKind::Difference2D { base, sub } => {
         Self::difference_2d_implicit_eval(base, sub, sample_point)
       }
       // 3D shapes should use implicit_eval_3d instead
@@ -45,20 +45,20 @@ impl ImplicitGeometry2D for GeoNode {
   }
 
   fn implicit_eval_2d_batch(&self, sample_points: &[DVec2; BATCH_SIZE], results: &mut [f64; BATCH_SIZE]) {
-    match self {
-      GeoNode::HalfPlane { point1, point2 } => {
+    match &self.kind {
+      GeoNodeKind::HalfPlane { point1, point2 } => {
         Self::half_plane_implicit_eval_batch(*point1, *point2, sample_points, results)
       }
-      GeoNode::Circle { center, radius } => {
+      GeoNodeKind::Circle { center, radius } => {
         Self::circle_implicit_eval_batch(*center, *radius, sample_points, results)
       }
-      GeoNode::Union2D { shapes } => {
+      GeoNodeKind::Union2D { shapes } => {
         Self::union_2d_implicit_eval_batch(shapes, sample_points, results)
       }
-      GeoNode::Intersection2D { shapes } => {
+      GeoNodeKind::Intersection2D { shapes } => {
         Self::intersection_2d_implicit_eval_batch(shapes, sample_points, results)
       }
-      GeoNode::Difference2D { base, sub } => {
+      GeoNodeKind::Difference2D { base, sub } => {
         Self::difference_2d_implicit_eval_batch(base, sub, sample_points, results)
       }
       // For all other node types, use naive implementation for now
@@ -71,13 +71,13 @@ impl ImplicitGeometry2D for GeoNode {
   }
 
   fn is2d(&self) -> bool {
-    match self {
-      GeoNode::HalfPlane { .. } => true,
-      GeoNode::Circle { .. } => true,
-      GeoNode::Polygon { .. } => true,
-      GeoNode::Union2D { .. } => true,
-      GeoNode::Intersection2D { .. } => true,
-      GeoNode::Difference2D { .. } => true,
+    match &self.kind {
+      GeoNodeKind::HalfPlane { .. } => true,
+      GeoNodeKind::Circle { .. } => true,
+      GeoNodeKind::Polygon { .. } => true,
+      GeoNodeKind::Union2D { .. } => true,
+      GeoNodeKind::Intersection2D { .. } => true,
+      GeoNodeKind::Difference2D { .. } => true,
       _ => false
     }
   }
@@ -103,26 +103,26 @@ impl ImplicitGeometry3D for GeoNode {
   }
 
   fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64 {
-    match self {
-      GeoNode::HalfSpace { normal, center} => {
+    match &self.kind {
+      GeoNodeKind::HalfSpace { normal, center} => {
         Self::half_space_implicit_eval(*normal, *center, sample_point)
       }
-      GeoNode::Sphere { center, radius } => {
+      GeoNodeKind::Sphere { center, radius } => {
         Self::sphere_implicit_eval(*center, *radius, sample_point)
       }
-      GeoNode::Extrude { height, direction, shape } => {
+      GeoNodeKind::Extrude { height, direction, shape } => {
         Self::extrude_implicit_eval(*height, *direction, shape, sample_point)
       }
-      GeoNode::Transform { transform, shape } => {
+      GeoNodeKind::Transform { transform, shape } => {
         Self::transform_implicit_eval(transform, shape, sample_point)
       }
-      GeoNode::Union3D { shapes } => {
+      GeoNodeKind::Union3D { shapes } => {
         Self::union_3d_implicit_eval(shapes, sample_point)
       }
-      GeoNode::Intersection3D { shapes } => {
+      GeoNodeKind::Intersection3D { shapes } => {
         Self::intersection_3d_implicit_eval(shapes, sample_point)
       }
-      GeoNode::Difference3D { base, sub } => {
+      GeoNodeKind::Difference3D { base, sub } => {
         Self::difference_3d_implicit_eval(base, sub, sample_point)
       }
       // 2D shapes should use implicit_eval_2d instead
@@ -131,26 +131,26 @@ impl ImplicitGeometry3D for GeoNode {
   }
 
   fn implicit_eval_3d_batch(&self, sample_points: &[DVec3; BATCH_SIZE], results: &mut [f64; BATCH_SIZE]) {
-    match self {
-      GeoNode::HalfSpace { normal, center } => {
+    match &self.kind {
+      GeoNodeKind::HalfSpace { normal, center } => {
         Self::half_space_implicit_eval_batch(*normal, *center, sample_points, results)
       }
-      GeoNode::Sphere { center, radius } => {
+      GeoNodeKind::Sphere { center, radius } => {
         Self::sphere_implicit_eval_batch(*center, *radius, sample_points, results)
       }
-      GeoNode::Extrude { height, direction, shape } => {
+      GeoNodeKind::Extrude { height, direction, shape } => {
         Self::extrude_implicit_eval_batch(*height, *direction, shape, sample_points, results)
       }
-      GeoNode::Transform { transform, shape } => {
+      GeoNodeKind::Transform { transform, shape } => {
         Self::transform_implicit_eval_batch(transform, shape, sample_points, results)
       }
-      GeoNode::Union3D { shapes } => {
+      GeoNodeKind::Union3D { shapes } => {
         Self::union_3d_implicit_eval_batch(shapes, sample_points, results)
       }
-      GeoNode::Intersection3D { shapes } => {
+      GeoNodeKind::Intersection3D { shapes } => {
         Self::intersection_3d_implicit_eval_batch(shapes, sample_points, results)
       }
-      GeoNode::Difference3D { base, sub } => {
+      GeoNodeKind::Difference3D { base, sub } => {
         Self::difference_3d_implicit_eval_batch(base, sub, sample_points, results)
       }
       // For all other node types, use naive implementation for now
@@ -163,14 +163,14 @@ impl ImplicitGeometry3D for GeoNode {
   }
 
   fn is3d(&self) -> bool {
-    match self {
-      GeoNode::HalfSpace { .. } => true,
-      GeoNode::Sphere { .. } => true,
-      GeoNode::Extrude { .. } => true,
-      GeoNode::Transform { .. } => true,
-      GeoNode::Union3D { .. } => true,
-      GeoNode::Intersection3D { .. } => true,
-      GeoNode::Difference3D { .. } => true,
+    match &self.kind {
+      GeoNodeKind::HalfSpace { .. } => true,
+      GeoNodeKind::Sphere { .. } => true,
+      GeoNodeKind::Extrude { .. } => true,
+      GeoNodeKind::Transform { .. } => true,
+      GeoNodeKind::Union3D { .. } => true,
+      GeoNodeKind::Intersection3D { .. } => true,
+      GeoNodeKind::Difference3D { .. } => true,
       _ => false
     }
   }

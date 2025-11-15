@@ -88,10 +88,7 @@ impl NodeData for LatticeMoveData {
         return NetworkResult::Geometry(GeometrySummary {
           unit_cell: shape.unit_cell.clone(),
           frame_transform: Transform::default(),
-          geo_tree_root: GeoNode::Transform {
-            transform: Transform::new(real_translation, DQuat::IDENTITY),
-            shape: Box::new(shape.geo_tree_root),
-          },
+          geo_tree_root: GeoNode::transform(Transform::new(real_translation, DQuat::IDENTITY), Box::new(shape.geo_tree_root)),
         });
 
       } else {

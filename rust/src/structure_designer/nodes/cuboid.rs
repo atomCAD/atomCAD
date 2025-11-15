@@ -152,14 +152,8 @@ fn create_parallelepiped_from_lattice(
   let max_face_center_a = min_corner_real + extent_lattice.x * basis_a + 
     (extent_lattice.y * basis_b + extent_lattice.z * basis_c) / 2.0;
   
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: -normal_a,
-    center: min_face_center_a,
-  });
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: normal_a,
-    center: max_face_center_a,
-  });
+  half_spaces.push(GeoNode::half_space(-normal_a, min_face_center_a));
+  half_spaces.push(GeoNode::half_space(normal_a, max_face_center_a));
   
   // Face pair perpendicular to the plane containing basis_c and basis_a (B-direction faces)
   let normal_b = (basis_c.cross(basis_a)).normalize();
@@ -169,14 +163,8 @@ fn create_parallelepiped_from_lattice(
   let max_face_center_b = min_corner_real + extent_lattice.y * basis_b + 
     (extent_lattice.x * basis_a + extent_lattice.z * basis_c) / 2.0;
   
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: -normal_b,
-    center: min_face_center_b,
-  });
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: normal_b,
-    center: max_face_center_b,
-  });
+  half_spaces.push(GeoNode::half_space(-normal_b, min_face_center_b));
+  half_spaces.push(GeoNode::half_space(normal_b, max_face_center_b));
   
   // Face pair perpendicular to the plane containing basis_a and basis_b (C-direction faces)
   let normal_c = (basis_a.cross(basis_b)).normalize();
@@ -186,19 +174,11 @@ fn create_parallelepiped_from_lattice(
   let max_face_center_c = min_corner_real + extent_lattice.z * basis_c + 
     (extent_lattice.x * basis_a + extent_lattice.y * basis_b) / 2.0;
   
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: -normal_c,
-    center: min_face_center_c,
-  });
-  half_spaces.push(GeoNode::HalfSpace {
-    normal: normal_c,
-    center: max_face_center_c,
-  });
+  half_spaces.push(GeoNode::half_space(-normal_c, min_face_center_c));
+  half_spaces.push(GeoNode::half_space(normal_c, max_face_center_c));
   
 
   
   // Return the intersection of all half-spaces
-  GeoNode::Intersection3D {
-    shapes: half_spaces
-  }
+  GeoNode::intersection_3d(half_spaces)
 }

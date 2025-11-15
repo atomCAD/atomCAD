@@ -98,7 +98,7 @@ impl NodeData for IntersectData {
         frame_translation,
         DQuat::IDENTITY,
       ),
-      geo_tree_root: GeoNode::Intersection3D { shapes },
+      geo_tree_root: GeoNode::intersection_3d(shapes),
     });
   }
 

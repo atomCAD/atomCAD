@@ -150,10 +150,7 @@ impl NodeData for LatticeRotData {
         return NetworkResult::Geometry(GeometrySummary {
           unit_cell: shape.unit_cell.clone(),
           frame_transform: Transform::default(),
-          geo_tree_root: GeoNode::Transform {
-            transform: tr,
-            shape: Box::new(shape.geo_tree_root),
-          },
+          geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
         });
       } else {
         return runtime_type_error_in_input(0);

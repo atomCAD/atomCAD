@@ -91,7 +91,7 @@ impl NodeData for DiffData {
         return unit_cell_mismatch_error();
       }
   
-      geometry = Some(GeoNode::Difference3D { base: Box::new(geometry.unwrap()), sub: Box::new(sub_geometry.unwrap()) });
+      geometry = Some(GeoNode::difference_3d(Box::new(geometry.unwrap()), Box::new(sub_geometry.unwrap())));
   
       frame_translation += sub_frame_translation;
       frame_translation *= 0.5;
@@ -177,5 +177,5 @@ fn helper_union<'a>(
 
   frame_translation /= shape_count as f64;
 
-  return (Some(GeoNode::Union3D { shapes }), frame_translation, Some(first_unit_cell));
+  return (Some(GeoNode::union_3d(shapes)), frame_translation, Some(first_unit_cell));
 }

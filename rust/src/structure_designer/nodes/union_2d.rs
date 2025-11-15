@@ -97,7 +97,7 @@ impl NodeData for Union2DData {
         frame_translation,
         0.0,
       ),
-      geo_tree_root: GeoNode::Union2D { shapes },
+      geo_tree_root: GeoNode::union_2d(shapes),
     });
   }
 

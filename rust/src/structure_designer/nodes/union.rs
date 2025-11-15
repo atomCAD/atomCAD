@@ -99,7 +99,7 @@ impl NodeData for UnionData {
         frame_translation,
         DQuat::IDENTITY,
       ),
-      geo_tree_root: GeoNode::Union3D { shapes },
+      geo_tree_root: GeoNode::union_3d(shapes),
     });
   }
 

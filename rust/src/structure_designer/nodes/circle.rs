@@ -77,10 +77,7 @@ impl NodeData for CircleData {
             real_center,
             0.0,
           ),
-          geo_tree_root: GeoNode::Circle {
-            center: real_center,
-            radius: real_radius,
-          },
+          geo_tree_root: GeoNode::circle(real_center, real_radius),
       });
     }
 

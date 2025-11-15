@@ -204,10 +204,7 @@ impl NodeData for LatticeSymopData {
             real_rotation_quat
           );
 
-          GeoNode::Transform {
-            transform: tr,
-            shape: Box::new(geo_tree_root),
-          }
+          GeoNode::transform(tr, Box::new(geo_tree_root))
         };
 
         return NetworkResult::Geometry(GeometrySummary {

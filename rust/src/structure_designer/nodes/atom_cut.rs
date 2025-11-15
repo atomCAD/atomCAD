@@ -84,7 +84,7 @@ impl NodeData for AtomCutData {
         }
       }
     
-      let cutter_geo_tree_root = GeoNode::Intersection3D { shapes: shapes };
+      let cutter_geo_tree_root = GeoNode::intersection_3d(shapes);
   
       cut_atomic_structure(&mut atomic_structure, &cutter_geo_tree_root, self.cut_sdf_value, self.unit_cell_size);
   

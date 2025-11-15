@@ -3,7 +3,7 @@ use glam::f64::{DVec2, DVec3, DQuat};
 use nalgebra::{Point3, Vector3};
 use crate::common::csg_types::CSGMesh;
 use crate::common::csg_types::CSGSketch;
-use super::GeoNode;
+use super::{GeoNode, GeoNodeKind};
 use crate::util::transform::Transform;
 use crate::common::csg_utils::dvec3_to_point3;
 use crate::common::csg_utils::dvec3_to_vector3;
@@ -19,23 +19,23 @@ impl GeoNode {
   }
 
   pub fn to_csg_sketch(&self) -> Option<CSGSketch> {
-    match self {
-      GeoNode::HalfPlane { point1, point2 } => {
+    match &self.kind {
+      GeoNodeKind::HalfPlane { point1, point2 } => {
         Some(Self::half_plane_to_csg(*point1, *point2))
       }
-      GeoNode::Circle { center, radius } => {
+      GeoNodeKind::Circle { center, radius } => {
         Some(Self::circle_to_csg(*center, *radius))
       }
-      GeoNode::Polygon { vertices } => {
+      GeoNodeKind::Polygon { vertices } => {
         Some(Self::polygon_to_csg(vertices))
       }
-      GeoNode::Union2D { shapes } => {
+      GeoNodeKind::Union2D { shapes } => {
         Self::union_2d_to_csg(shapes)
       }
-      GeoNode::Intersection2D { shapes } => {
+      GeoNodeKind::Intersection2D { shapes } => {
         Self::intersection_2d_to_csg(shapes)
       }
-      GeoNode::Difference2D { base, sub } => {
+      GeoNodeKind::Difference2D { base, sub } => {
         Self::difference_2d_to_csg(base, sub)
       }
       _ => None
@@ -43,26 +43,26 @@ impl GeoNode {
   }
 
   fn internal_to_csg_mesh(&self, is_root: bool) -> Option<CSGMesh> {
-    match self {
-      GeoNode::HalfSpace { normal, center} => {
+    match &self.kind {
+      GeoNodeKind::HalfSpace { normal, center} => {
         Some(Self::half_space_to_csg(*normal, *center, is_root))
       }
-      GeoNode::Sphere { center, radius } => {
+      GeoNodeKind::Sphere { center, radius } => {
         Some(Self::sphere_to_csg(*center, *radius))
       }
-      GeoNode::Extrude { height, direction, shape } => {
+      GeoNodeKind::Extrude { height, direction, shape } => {
         Self::extrude_to_csg(*height, *direction, shape)
       }
-      GeoNode::Transform { transform, shape } => {
+      GeoNodeKind::Transform { transform, shape } => {
         Self::transform_to_csg(transform, shape)
       }
-      GeoNode::Union3D { shapes } => {
+      GeoNodeKind::Union3D { shapes } => {
         Self::union_3d_to_csg(shapes)
       }
-      GeoNode::Intersection3D { shapes } => {
+      GeoNodeKind::Intersection3D { shapes } => {
         Self::intersection_3d_to_csg(shapes)
       }
-      GeoNode::Difference3D { base, sub } => {
+      GeoNodeKind::Difference3D { base, sub } => {
         Self::difference_3d_to_csg(base, sub)
       }
       _ => None
