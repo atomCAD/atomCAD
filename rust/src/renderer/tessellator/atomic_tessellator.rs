@@ -1,7 +1,7 @@
 use crate::renderer::tessellator::tessellator::{self, OccluderSphere};
 use crate::common::atomic_structure::{Atom, AtomicStructure, AtomDisplayState, Bond};
 use crate::common::common_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
-use crate::common::scene::Scene;
+// Scene trait removed - is_atom_marked was deprecated and always returned false
 use crate::renderer::mesh::{Mesh, Material};
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
@@ -49,7 +49,7 @@ fn should_cull_atom(atom: &Atom, atomic_viz_prefs: &AtomicStructureVisualization
   }
 }
 
-pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, scene: &S, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
+pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
   let _timer = Timer::new("Atomic tessellation");
 
   // Pre-allocate mesh capacity for worst-case scenario (no compression)
@@ -89,7 +89,7 @@ pub fn tessellate_atomic_structure<'a, S: Scene<'a>>(output_mesh: &mut Mesh, sel
   
   for (id, atom) in atomic_structure.atoms.iter() {
     // Get effective display state (considering scene markers)
-    let display_state = get_atom_display_state(*id, atomic_structure, scene);
+    let display_state = get_atom_display_state(*id, atomic_structure);
     
     // Apply depth culling if enabled
     if should_cull_atom(atom, atomic_viz_prefs) {
@@ -164,23 +164,11 @@ fn get_bond_color(bond: &Bond) -> Vec3 {
   }
 }
 
-/// Shared helper to get the effective display state of an atom (considering scene markers)
-fn get_atom_display_state<'a, S: Scene<'a>>(
-  atom_id: u64,
-  atomic_structure: &AtomicStructure,
-  scene: &S
-) -> AtomDisplayState {
-  // Get base display state from the decorator
-  let mut display_state = atomic_structure.decorator.get_atom_display_state(atom_id);
-  
-  // Override with scene markers (scene markers take precedence)
-  if scene.is_atom_marked(atom_id) {
-    display_state = AtomDisplayState::Marked;
-  } else if scene.is_atom_secondary_marked(atom_id) {
-    display_state = AtomDisplayState::SecondaryMarked;
-  }
-  
-  display_state
+/// Shared helper to get the effective display state for an atom
+/// Gets display state from the atomic structure's decorator
+/// (Scene markers were deprecated and always returned false)
+fn get_atom_display_state(atom_id: u64, atomic_structure: &AtomicStructure) -> AtomDisplayState {
+  atomic_structure.decorator.get_atom_display_state(atom_id)
 }
 
 /// Maximum number of bonds per atom (reasonable upper bound)
@@ -378,11 +366,10 @@ pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
 // ============================================================================
 
 /// Main entry point for impostor-based atomic structure tessellation
-pub fn tessellate_atomic_structure_impostors<'a, S: Scene<'a>>(
+pub fn tessellate_atomic_structure_impostors(
   atom_impostor_mesh: &mut AtomImpostorMesh, 
   bond_impostor_mesh: &mut BondImpostorMesh, 
   atomic_structure: &AtomicStructure, 
-  scene: &S, 
   atomic_viz_prefs: &AtomicStructureVisualizationPreferences
 ) {
   let _timer = Timer::new("Atomic impostor tessellation");
@@ -402,8 +389,8 @@ pub fn tessellate_atomic_structure_impostors<'a, S: Scene<'a>>(
   
   // Tessellate atoms
   for (id, atom) in atomic_structure.atoms.iter() {
-    // Get effective display state (considering scene markers)
-    let display_state = get_atom_display_state(*id, atomic_structure, scene);
+    // Get effective display state from decorator
+    let display_state = get_atom_display_state(*id, atomic_structure);
     
     // Apply depth culling if enabled
     if should_cull_atom(atom, atomic_viz_prefs) {

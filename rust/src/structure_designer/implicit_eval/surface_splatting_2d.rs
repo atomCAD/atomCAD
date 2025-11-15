@@ -10,11 +10,11 @@ use crate::util::box_subdivision::subdivide_rect;
 use crate::common::surface_point_cloud::SurfacePoint2D;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
-pub fn generate_2d_point_cloud_scene(
+pub fn generate_2d_point_cloud(
   geometry: &dyn ImplicitGeometry2D,
   context: &mut NetworkEvaluationContext,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
-) -> StructureDesignerScene {
+) -> SurfacePointCloud2D {
   let mut point_cloud = SurfacePointCloud2D::new();
   let cache_size = common_constants::MAX_EVAL_CACHE_SIZE;
 
@@ -28,13 +28,7 @@ pub fn generate_2d_point_cloud_scene(
       &mut point_cloud,
       geometry_visualization_preferences);
 
-  let mut scene = StructureDesignerScene::new();
-  scene.surface_point_cloud_2ds.push(point_cloud);
-  
-  // Copy any collected errors to the scene
-  scene.node_errors = context.node_errors.clone();
-
-  scene
+  point_cloud
 }
 
 fn process_rect_for_point_cloud(

@@ -1,7 +1,7 @@
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::nodes::facet_shell::Facet;
 use crate::structure_designer::nodes::facet_shell;
-use crate::api::api_common::refresh_renderer;
+use crate::api::api_common::refresh_structure_designer;
 use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::to_api_ivec3;
 use crate::api::api_common::from_api_vec3;
@@ -70,7 +70,7 @@ pub fn set_facet_shell_center(node_id: u64, center: APIIVec3, max_miller_index: 
         facet_shell_data.max_miller_index = max_miller_index;
         facet_shell_data.ensure_cached_facets();
         
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         true
       },
       false
@@ -103,7 +103,7 @@ pub fn add_facet(node_id: u64, facet: APIFacet) -> bool {
         });
         facet_shell_data.ensure_cached_facets();
         
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         true
       },
       false
@@ -140,7 +140,7 @@ pub fn update_facet(node_id: u64, index: usize, facet: APIFacet) -> bool {
         };
         facet_shell_data.ensure_cached_facets();
 
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         true
       },
       false
@@ -172,7 +172,7 @@ pub fn remove_facet(node_id: u64, index: usize) -> bool {
         facet_shell_data.facets.remove(index);
         facet_shell_data.ensure_cached_facets();
 
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         true
       },
       false
@@ -200,7 +200,7 @@ pub fn clear_facets(node_id: u64) -> bool {
         facet_shell_data.facets.clear();
         facet_shell_data.ensure_cached_facets();
 
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         true
       },
       false
@@ -235,7 +235,7 @@ pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
         facet_shell_data.selected_facet_index = index;
         // No need to regenerate cached_facets since only selection changed
 
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         true
       },
       false
@@ -250,7 +250,7 @@ pub fn select_facet_by_ray(ray_start: APIVec3, ray_dir: APIVec3) {
       let ray_start_dvec3 = from_api_vec3(&ray_start);
       let ray_dir_dvec3 = from_api_vec3(&ray_dir);
       if facet_shell::select_facet_by_ray(&mut instance.structure_designer, &ray_start_dvec3, &ray_dir_dvec3) {
-        refresh_renderer(instance, false);
+        refresh_structure_designer(instance, false);
       }
     });
   }
@@ -276,7 +276,7 @@ pub fn split_symmetry_members(node_id: u64, facet_index: usize) -> bool {
         
         // Refresh renderer as the facets have changed
         if result {
-          refresh_renderer(cad_instance, false);
+          refresh_structure_designer(cad_instance, false);
         }
         
         result

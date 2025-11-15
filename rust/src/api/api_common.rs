@@ -249,6 +249,3 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
     );
   }
 
-  pub fn refresh_renderer(cad_instance: &mut CADInstance, lightweight: bool) {
-      refresh_structure_designer(cad_instance, lightweight);
-  }

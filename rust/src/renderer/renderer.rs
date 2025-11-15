@@ -656,13 +656,13 @@ impl Renderer {
         self.device.poll(Maintain::Wait);
     }
 
-    pub fn refresh<'a, S: Scene<'a>>(
+    pub fn refresh(
         &mut self,
-        scene: &S,
+        scene: &crate::structure_designer::structure_designer_scene::StructureDesignerScene,
         lightweight: bool,
         preferences: &StructureDesignerPreferences
     ) {
-        // Tessellate all scene content using the dedicated scene tessellator
+        // Tessellate using the new node_data HashMap structure
         let (lightweight_mesh, main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
             crate::renderer::tessellator::scene_tessellator::tessellate_scene_content(
                 scene, 
@@ -684,7 +684,7 @@ impl Renderer {
 
         // Refresh the background coordinate system (only when not lightweight)
         if !lightweight {
-            self.refresh_background(scene.get_unit_cell(), &preferences.background_preferences);
+            self.refresh_background(scene.unit_cell.as_ref(), &preferences.background_preferences);
         }
     }
 

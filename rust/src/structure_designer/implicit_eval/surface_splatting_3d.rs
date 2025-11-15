@@ -9,10 +9,10 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
-pub fn generate_point_cloud_scene(
+pub fn generate_point_cloud(
   geometry: &dyn ImplicitGeometry3D,
   context: &mut NetworkEvaluationContext,
-  geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
+  geometry_visualization_preferences: &GeometryVisualizationPreferences) -> SurfacePointCloud {
   let mut point_cloud = SurfacePointCloud::new();
   let cache_size = common_constants::MAX_EVAL_CACHE_SIZE;
 
@@ -26,13 +26,7 @@ pub fn generate_point_cloud_scene(
       &mut point_cloud,
       geometry_visualization_preferences);
 
-  let mut scene = StructureDesignerScene::new();
-  scene.surface_point_clouds.push(point_cloud);
-  
-  // Copy any collected errors to the scene
-  scene.node_errors = context.node_errors.clone();
-  
-  scene
+  point_cloud
 }
 
 fn process_box_for_point_cloud(

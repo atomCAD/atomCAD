@@ -1,6 +1,6 @@
 use crate::api::api_common::from_api_ivec2;
 use crate::api::api_common::from_api_vec3;
-use crate::api::api_common::refresh_renderer;
+use crate::api::api_common::refresh_structure_designer;
 use crate::api::api_common::to_api_ivec2;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::with_mut_cad_instance;
@@ -210,7 +210,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
           
           // Only add evaluation errors if there are no validation errors in the entire network
           if node_network.validation_errors.is_empty() {
-            if let Some(eval_error) = cad_instance.structure_designer.last_generated_structure_designer_scene.node_errors.get(&node.id) {
+            if let Some(eval_error) = cad_instance.structure_designer.last_generated_structure_designer_scene.get_all_node_errors().get(&node.id) {
               error_messages.push(eval_error.clone());
             }
           }
@@ -222,7 +222,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             Some(error_messages.join("\n"))
           };
 
-          let output_string = cad_instance.structure_designer.last_generated_structure_designer_scene.node_output_strings.get(&node.id).cloned();
+          let output_string = cad_instance.structure_designer.last_generated_structure_designer_scene.get_all_node_output_strings().get(&node.id).cloned();
 
           // Collect connected input pin names for subtitle generation
           let mut connected_input_pins = std::collections::HashSet::new();
@@ -295,7 +295,7 @@ pub fn add_node(node_type_name: &str, position: APIVec2) -> u64 {
     with_mut_cad_instance_or(
       |cad_instance| {
         let ret = cad_instance.structure_designer.add_node(node_type_name, from_api_vec2(&position));
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         ret
       },
       0 // Default value if CAD_INSTANCE is None
@@ -309,7 +309,7 @@ pub fn duplicate_node(node_id: u64) -> u64 {
     with_mut_cad_instance_or(
       |cad_instance| {
         let ret = cad_instance.structure_designer.duplicate_node(node_id);
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         ret
       },
       0 // Default value if CAD_INSTANCE is None
@@ -334,7 +334,7 @@ pub fn connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_nod
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.structure_designer.connect_nodes(source_node_id, source_output_pin_index, dest_node_id, dest_param_index);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -389,7 +389,7 @@ pub fn set_active_node_network(node_network_name: &str) {
   unsafe {
     with_mut_cad_instance(|instance| {
       instance.structure_designer.set_active_node_network_name(Some(node_network_name.to_string()));
-      refresh_renderer(instance, false);
+      refresh_structure_designer(instance, false);
     });
   }
 }
@@ -400,7 +400,7 @@ pub fn rename_node_network(old_name: &str, new_name: &str) -> bool {
     with_mut_cad_instance_or(
       |instance| {
         let result = instance.structure_designer.rename_node_network(old_name, new_name);
-        refresh_renderer(instance, false);
+        refresh_structure_designer(instance, false);
         result
       },
       false
@@ -414,7 +414,7 @@ pub fn delete_node_network(network_name: &str) -> APIResult {
     with_mut_cad_instance_or(
       |instance| {
         let result = instance.structure_designer.delete_node_network(network_name);
-        refresh_renderer(instance, false);
+        refresh_structure_designer(instance, false);
         
         match result {
           Ok(_) => APIResult {
@@ -440,7 +440,7 @@ pub fn set_node_display(node_id: u64, is_displayed: bool) {
   unsafe {
     with_mut_cad_instance(|instance| {
       instance.structure_designer.set_node_display(node_id, is_displayed);
-      refresh_renderer(instance, false);
+      refresh_structure_designer(instance, false);
     });
   }
 }
@@ -451,7 +451,7 @@ pub fn select_node(node_id: u64) -> bool {
     with_mut_cad_instance_or(
       |instance| {
         let result = instance.structure_designer.select_node(node_id);
-        refresh_renderer(instance, false);
+        refresh_structure_designer(instance, false);
         result
       },
       false
@@ -465,7 +465,7 @@ pub fn select_wire(source_node_id: u64, source_output_pin_index: i32, destinatio
     with_mut_cad_instance_or(
       |instance| {
         let result = instance.structure_designer.select_wire(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
-        refresh_renderer(instance, false);
+        refresh_structure_designer(instance, false);
         result
       },
       false
@@ -478,7 +478,7 @@ pub fn clear_selection() {
   unsafe {
     with_mut_cad_instance(|instance| {
       instance.structure_designer.clear_selection();
-      refresh_renderer(instance, false);
+      refresh_structure_designer(instance, false);
     });
   }
 }
@@ -1136,7 +1136,7 @@ pub fn set_geo_to_atom_data(node_id: u64, data: APIGeoToAtomData) -> bool {
         geo_to_atom_data.primary_atomic_number = data.primary_atomic_number;
         geo_to_atom_data.secondary_atomic_number = data.secondary_atomic_number;
         geo_to_atom_data.hydrogen_passivation = data.hydrogen_passivation;
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         true
       },
       false
@@ -1354,7 +1354,7 @@ pub fn set_int_data(node_id: u64, data: APIIntData) {
         value: data.value,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, int_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1367,7 +1367,7 @@ pub fn set_string_data(node_id: u64, data: APIStringData) {
         value: data.value,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, string_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1380,7 +1380,7 @@ pub fn set_bool_data(node_id: u64, data: APIBoolData) {
         value: data.value,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, bool_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1393,7 +1393,7 @@ pub fn set_float_data(node_id: u64, data: APIFloatData) {
         value: data.value,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, float_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1406,7 +1406,7 @@ pub fn set_vec2_data(node_id: u64, data: APIVec2Data) {
         value: from_api_vec2(&data.value),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, vec2_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1419,7 +1419,7 @@ pub fn set_vec3_data(node_id: u64, data: APIVec3Data) {
         value: from_api_vec3(&data.value),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, vec3_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1432,7 +1432,7 @@ pub fn set_ivec2_data(node_id: u64, data: APIIVec2Data) {
         value: from_api_ivec2(&data.value),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, ivec2_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1445,7 +1445,7 @@ pub fn set_ivec3_data(node_id: u64, data: APIIVec3Data) {
         value: from_api_ivec3(&data.value),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, ivec3_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1460,7 +1460,7 @@ pub fn set_range_data(node_id: u64, data: APIRangeData) {
         count: data.count,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, range_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1474,7 +1474,7 @@ pub fn set_rect_data(node_id: u64, data: APIRectData) {
         extent: from_api_ivec2(&data.extent),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, rect_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1487,7 +1487,7 @@ pub fn set_reg_poly_data(node_id: u64, data: APIRegPolyData) {
         if let Some(reg_poly_data) = node_data.as_any_mut().downcast_mut::<RegPolyData>() {
           reg_poly_data.num_sides = data.num_sides;
           reg_poly_data.radius = data.radius;
-          refresh_renderer(cad_instance, false);
+          refresh_structure_designer(cad_instance, false);
         }
       }
     });
@@ -1503,7 +1503,7 @@ pub fn set_circle_data(node_id: u64, data: APICircleData) {
         radius: data.radius,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, circle_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1519,7 +1519,7 @@ pub fn set_half_plane_data(node_id: u64, data: APIHalfPlaneData) {
         point2: from_api_ivec2(&data.point2),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, half_plane_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1532,7 +1532,7 @@ pub fn set_extrude_data(node_id: u64, data: APIExtrudeData) {
         height: data.height,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, extrude_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1546,7 +1546,7 @@ pub fn set_cuboid_data(node_id: u64, data: APICuboidData) {
         extent: from_api_ivec3(&data.extent),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, cuboid_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1560,7 +1560,7 @@ pub fn set_sphere_data(node_id: u64, data: APISphereData) {
         radius: data.radius,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, sphere_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1576,7 +1576,7 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
         shift: data.shift,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, half_space_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1591,7 +1591,7 @@ pub fn set_geo_trans_data(node_id: u64, data: APIGeoTransData) {
         rotation: from_api_ivec3(&data.rotation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, geo_trans_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1607,7 +1607,7 @@ pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
         transform_only_frame: data.transform_only_frame,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, lattice_symop_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1620,7 +1620,7 @@ pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
         translation: from_api_ivec3(&data.translation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, lattice_move_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1635,7 +1635,7 @@ pub fn set_lattice_rot_data(node_id: u64, data: APILatticeRotData) {
         pivot_point: from_api_ivec3(&data.pivot_point),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, lattice_rot_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1649,7 +1649,7 @@ pub fn set_atom_trans_data(node_id: u64, data: APIAtomTransData) {
         rotation: from_api_vec3(&data.rotation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, atom_trans_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1663,7 +1663,7 @@ pub fn set_atom_cut_data(node_id: u64, data: APIAtomCutData) {
         unit_cell_size: data.unit_cell_size,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, atom_cut_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1677,7 +1677,7 @@ pub fn set_import_xyz_data(node_id: u64, data: APIImportXYZData) {
         atomic_structure: None,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, import_xyz_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1690,7 +1690,7 @@ pub fn set_export_xyz_data(node_id: u64, data: APIExportXYZData) {
         file_name: data.file_name.clone(),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, export_xyz_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1719,7 +1719,7 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
             });
 
             cad_instance.structure_designer.set_node_network_data(node_id, parameter_data);
-            refresh_renderer(cad_instance, false);
+            refresh_structure_designer(cad_instance, false);
         });
     }
 }
@@ -1744,7 +1744,7 @@ pub fn set_map_data(node_id: u64, data: APIMapData) {
             });
 
             cad_instance.structure_designer.set_node_network_data(node_id, map_data);
-            refresh_renderer(cad_instance, false);
+            refresh_structure_designer(cad_instance, false);
         });
     }
 }
@@ -1792,7 +1792,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
                 });
 
                 cad_instance.structure_designer.set_node_network_data(node_id, expr_data);
-                refresh_renderer(cad_instance, false);
+                refresh_structure_designer(cad_instance, false);
 
                 APIResult { success: true, error_message: String::new() }
             },
@@ -1817,7 +1817,7 @@ pub fn set_motif_data(node_id: u64, data: APIMotifData) -> APIResult {
                 });
                 motif_data.parse_and_validate(node_id);
                 cad_instance.structure_designer.set_node_network_data(node_id, motif_data);
-                refresh_renderer(cad_instance, false);
+                refresh_structure_designer(cad_instance, false);
 
                 APIResult { success: true, error_message: String::new() }
             },
@@ -1863,7 +1863,7 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                 });
                 atom_fill_data.parse_and_validate(node_id);
                 cad_instance.structure_designer.set_node_network_data(node_id, atom_fill_data);
-                refresh_renderer(cad_instance, false);
+                refresh_structure_designer(cad_instance, false);
 
                 APIResult { success: true, error_message: String::new() }
             },
@@ -1880,7 +1880,7 @@ pub fn delete_selected() {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.structure_designer.delete_selected();
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -1891,7 +1891,7 @@ pub fn set_return_node_id(node_id: Option<u64>) -> bool {
     with_mut_cad_instance_or(
       |cad_instance| {
         let result = cad_instance.structure_designer.set_return_node_id(node_id);
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         result
       },
       false
@@ -1967,7 +1967,7 @@ pub fn load_node_networks(file_path: String) -> APIResult {
         print!("Result: {:?}", result);
 
         // Refresh the renderer to reflect any loaded structures (even if there was an error)
-        refresh_renderer(cad_instance, false);
+        refresh_structure_designer(cad_instance, false);
         
         match result {
           Ok(_) => APIResult {
@@ -2020,7 +2020,7 @@ pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferen
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.structure_designer.set_preferences(preferences);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }
@@ -2096,7 +2096,7 @@ pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
         cell_angle_gamma: data.cell_angle_gamma,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, unit_cell_data);
-      refresh_renderer(cad_instance, false);
+      refresh_structure_designer(cad_instance, false);
     });
   }
 }

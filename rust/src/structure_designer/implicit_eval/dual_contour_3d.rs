@@ -56,18 +56,15 @@ const CELLS_AROUND_EDGES: [[(i32, i32, i32); 4]; 3] = [
 /// Treat [–EPS, +∞) as “positive”
 const SDF_ZERO_TOLERANCE: f64 = 1e-9;
 
-pub fn generate_dual_contour_3d_scene(
+pub fn generate_dual_contour_3d(
   geometry: &dyn ImplicitGeometry3D,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
-) -> StructureDesignerScene {
+) -> PolyMesh {
   let mut cells = generate_cells(geometry, geometry_visualization_preferences);
 
   let mesh = generate_mesh(&mut cells, geometry, geometry_visualization_preferences);
 
-  let mut scene = StructureDesignerScene::new();
-  scene.poly_meshes.push(mesh);
-
-  scene
+  mesh
 }
 
 fn generate_cells(geometry: &dyn ImplicitGeometry3D, geometry_visualization_preferences: &GeometryVisualizationPreferences) -> HashMap<(i32, i32, i32), DCCell> {

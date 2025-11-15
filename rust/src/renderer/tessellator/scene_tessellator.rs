@@ -1,4 +1,6 @@
-use crate::common::scene::Scene;
+// Direct tessellation from StructureDesignerScene (no Scene trait needed)
+
+use crate::structure_designer::structure_designer_scene::{StructureDesignerScene, NodeOutput};
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicRenderingMethod};
 use crate::renderer::mesh::{Mesh, Material};
 use crate::renderer::line_mesh::LineMesh;
@@ -12,16 +14,15 @@ use crate::renderer::camera::Camera;
 use glam::f32::Vec3;
 use glam::f64::{DVec3, DQuat};
 
-/// Tessellates all scene content and returns CPU mesh data for GPU upload.
-/// This is the main entry point for scene tessellation, handling both lightweight and full tessellation.
-pub fn tessellate_scene_content<'a, S: Scene<'a>>(
-    scene: &S,
+/// Tessellates all scene content using the new node_data HashMap structure
+/// This is the main entry point for scene tessellation
+pub fn tessellate_scene_content(
+    scene: &StructureDesignerScene,
     camera: &Camera,
     lightweight: bool,
     preferences: &StructureDesignerPreferences
 ) -> (Mesh, Mesh, LineMesh, Mesh, AtomImpostorMesh, BondImpostorMesh) {
-    //let _timer = Timer::new("tessellate_scene_content");
-
+    
     // ===== 1. TESSELLATE LIGHTWEIGHT CONTENT (always) =====
     let lightweight_mesh = tessellate_lightweight_content(scene, camera, preferences);
 
@@ -33,151 +34,135 @@ pub fn tessellate_scene_content<'a, S: Scene<'a>>(
             // Return empty meshes when in lightweight mode
             (Mesh::new(), LineMesh::new(), Mesh::new(), AtomImpostorMesh::new(), BondImpostorMesh::new())
         };
-
-    //println!("tessellate_scene_content took: {:?}", start_time.elapsed());
     
     (lightweight_mesh, main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh)
 }
 
-/// Tessellates lightweight content that is always rendered (tessellatable objects, camera pivot).
-/// This content is rendered on top of everything else and is always updated regardless of lightweight mode.
-pub fn tessellate_lightweight_content<'a, S: Scene<'a>>(
-    scene: &S,
+/// Tessellates lightweight content (gadget, camera pivot)
+fn tessellate_lightweight_content(
+    scene: &StructureDesignerScene,
     camera: &Camera,
     preferences: &StructureDesignerPreferences
 ) -> Mesh {
-        let mut lightweight_mesh = Mesh::new();
-        
-        // Tessellate extra tessellatable data
-        if let Some(tessellatable) = scene.tessellatable() {
-            tessellatable.tessellate(&mut lightweight_mesh);
-        }
-        
-        // Tessellate camera pivot point cube if enabled
-        if preferences.geometry_visualization_preferences.display_camera_target {
-            let red_material = Material::new(
-                &Vec3::new(1.0, 0.0, 0.0), // Red color
-                0.5, // roughness
-                0.0, // metallic
-            );
-            tessellate_cuboid(
-                &mut lightweight_mesh,
-                &camera.pivot_point,
-                &DVec3::new(0.4, 0.4, 0.4),
-                &DQuat::IDENTITY,
-                &red_material,
-                &red_material,
-                &red_material,
-            );
-        }
-
-        //println!("lightweight tessellated {} vertices and {} indices", 
-        //         lightweight_mesh.vertices.len(), lightweight_mesh.indices.len());
-
-        lightweight_mesh
+    let mut lightweight_mesh = Mesh::new();
+    
+    // Tessellate gadget (tessellatable)
+    if let Some(tessellatable) = &scene.tessellatable {
+        tessellatable.tessellate(&mut lightweight_mesh);
+    }
+    
+    // Tessellate camera pivot point cube if enabled
+    if preferences.geometry_visualization_preferences.display_camera_target {
+        let red_material = Material::new(
+            &Vec3::new(1.0, 0.0, 0.0), // Red color
+            0.5, // roughness
+            0.0, // metallic
+        );
+        tessellate_cuboid(
+            &mut lightweight_mesh,
+            &camera.pivot_point,
+            &DVec3::new(0.4, 0.4, 0.4),
+            &DQuat::IDENTITY,
+            &red_material,
+            &red_material,
+            &red_material,
+        );
     }
 
-/// Tessellates non-lightweight scene content based on rendering method preferences.
-/// This includes atomic structures (triangle mesh or impostors), surface point clouds, and poly meshes.
-/// Only executed when not in lightweight mode.
-pub fn tessellate_non_lightweight_content<'a, S: Scene<'a>>(
-    scene: &S,
+    lightweight_mesh
+}
+
+/// Tessellates non-lightweight content by iterating over node_data HashMap
+fn tessellate_non_lightweight_content(
+    scene: &StructureDesignerScene,
     preferences: &StructureDesignerPreferences
 ) -> (Mesh, LineMesh, Mesh, AtomImpostorMesh, BondImpostorMesh) {
-        let mut main_mesh = Mesh::new();
-        let mut wireframe_mesh = LineMesh::new();
-        let mut selected_clusters_mesh = Mesh::new();
-        let mut atom_impostor_mesh = AtomImpostorMesh::new();
-        let mut bond_impostor_mesh = BondImpostorMesh::new();
+    let mut main_mesh = Mesh::new();
+    let mut wireframe_mesh = LineMesh::new();
+    let mut selected_clusters_mesh = Mesh::new();
+    let mut atom_impostor_mesh = AtomImpostorMesh::new();
+    let mut bond_impostor_mesh = BondImpostorMesh::new();
 
-        let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
-            ball_and_stick_sphere_horizontal_divisions: 12,  // Ball-and-stick: lower resolution
-            ball_and_stick_sphere_vertical_divisions: 6,     // Ball-and-stick: lower resolution
-            space_filling_sphere_horizontal_divisions: 36,   // Space-filling: higher resolution for Van der Waals
-            space_filling_sphere_vertical_divisions: 18,     // Space-filling: higher resolution for Van der Waals
-            cylinder_divisions: 12,
-        };
+    let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
+        ball_and_stick_sphere_horizontal_divisions: 12,
+        ball_and_stick_sphere_vertical_divisions: 6,
+        space_filling_sphere_horizontal_divisions: 36,
+        space_filling_sphere_vertical_divisions: 18,
+        cylinder_divisions: 12,
+    };
 
-        // Tessellate atomic structures based on rendering method
-        match preferences.atomic_structure_visualization_preferences.rendering_method {
-            AtomicRenderingMethod::TriangleMesh => {
-                // Traditional triangle mesh tessellation
-                for atomic_structure in scene.atomic_structures() {
-                    atomic_tessellator::tessellate_atomic_structure(
-                        &mut main_mesh, 
-                        &mut selected_clusters_mesh, 
-                        atomic_structure, 
-                        &atomic_tessellation_params, 
-                        scene, 
-                        &preferences.atomic_structure_visualization_preferences
-                    );
+    // Iterate over all node data and tessellate based on output type
+    for (_node_id, node_data) in &scene.node_data {
+        match &node_data.output {
+            NodeOutput::Atomic(atomic_structure) => {
+                // Tessellate atomic structures based on rendering method
+                match preferences.atomic_structure_visualization_preferences.rendering_method {
+                    AtomicRenderingMethod::TriangleMesh => {
+                        atomic_tessellator::tessellate_atomic_structure(
+                            &mut main_mesh,
+                            &mut selected_clusters_mesh,
+                            atomic_structure,
+                            &atomic_tessellation_params,
+                            &preferences.atomic_structure_visualization_preferences
+                        );
+                    },
+                    AtomicRenderingMethod::Impostors => {
+                        atomic_tessellator::tessellate_atomic_structure_impostors(
+                            &mut atom_impostor_mesh,
+                            &mut bond_impostor_mesh,
+                            atomic_structure,
+                            &preferences.atomic_structure_visualization_preferences
+                        );
+                    }
                 }
-                // Note: atom_impostor_mesh and bond_impostor_mesh remain empty (will be cleared in GPU update)
             },
-            AtomicRenderingMethod::Impostors => {
-                // Impostor tessellation
-                for atomic_structure in scene.atomic_structures() {
-                    atomic_tessellator::tessellate_atomic_structure_impostors(
-                        &mut atom_impostor_mesh, 
-                        &mut bond_impostor_mesh, 
-                        atomic_structure, 
-                        scene, 
-                        &preferences.atomic_structure_visualization_preferences
+            
+            NodeOutput::SurfacePointCloud(point_cloud) => {
+                surface_point_tessellator::tessellate_surface_point_cloud(&mut main_mesh, point_cloud);
+            },
+            
+            NodeOutput::SurfacePointCloud2D(point_cloud_2d) => {
+                surface_point_tessellator::tessellate_surface_point_cloud_2d(&mut main_mesh, point_cloud_2d);
+            },
+            
+            NodeOutput::PolyMesh(poly_mesh) => {
+                if preferences.geometry_visualization_preferences.wireframe_geometry {
+                    tessellate_poly_mesh_to_line_mesh(
+                        poly_mesh,
+                        &mut wireframe_mesh,
+                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(),
+                        Vec3::new(0.0, 0.0, 0.0).to_array(),
+                        Vec3::new(0.0, 0.0, 0.0).to_array()
+                    );
+                } else {
+                    tessellate_poly_mesh(
+                        poly_mesh,
+                        &mut main_mesh,
+                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(),
+                        &Material::new(
+                            &Vec3::new(0.0, 1.0, 0.0),
+                            1.0,
+                            0.0
+                        ),
+                        Some(&Material::new(
+                            &Vec3::new(1.0, 0.0, 0.0),
+                            1.0,
+                            0.0
+                        )),
+                        Some(&Material::new(
+                            &Vec3::new(0.0, 0.0, 1.0),
+                            1.0,
+                            0.0
+                        )),
                     );
                 }
-                // Note: main_mesh and selected_clusters_mesh remain empty for atomic content
+            },
+            
+            NodeOutput::None => {
+                // No renderable output for this node
             }
         }
-
-        // Tessellate surface point clouds (always to triangle mesh)
-        for surface_point_cloud in scene.surface_point_cloud_2ds() {
-            surface_point_tessellator::tessellate_surface_point_cloud_2d(&mut main_mesh, surface_point_cloud);
-        }
-
-        for surface_point_cloud in scene.surface_point_clouds() {
-            surface_point_tessellator::tessellate_surface_point_cloud(&mut main_mesh, surface_point_cloud);
-        }
-
-        // Tessellate poly meshes (always to triangle/line mesh)
-        for poly_mesh in scene.poly_meshes() {
-            if preferences.geometry_visualization_preferences.wireframe_geometry {
-                tessellate_poly_mesh_to_line_mesh(
-                    &poly_mesh,
-                    &mut wireframe_mesh, 
-                    preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
-                    Vec3::new(0.0, 0.0, 0.0).to_array(),
-                    // normally normal_edge_color should be Vec3::new(0.4, 0.4, 0.4), but we do not show the difference here
-                    // as csgrs sometimes creates non-manifold edges (false sharp edges) where it should not.
-                    // Fortunatelly csgrs only do this on edges on a plane, so it does not matter for the
-                    // solid visualization. 
-                    Vec3::new(0.0, 0.0, 0.0).to_array()
-                ); 
-            } else {
-                tessellate_poly_mesh(
-                    &poly_mesh,
-                    &mut main_mesh, 
-                    preferences.geometry_visualization_preferences.mesh_smoothing.clone(), 
-                    &Material::new(
-                        &Vec3::new(0.0, 1.0, 0.0), 
-                        1.0, 
-                        0.0
-                    ),
-                    Some(&Material::new(
-                        &Vec3::new(1.0, 0.0, 0.0), 
-                        1.0, 
-                        0.0
-                    )),
-                    Some(&Material::new(
-                        &Vec3::new(0.0, 0.0, 1.0), 
-                        1.0, 
-                        0.0
-                    )),
-                );
-            }
-        }
-
-        //println!("main buffers tessellated {} vertices and {} indices, {} bytes", 
-        //         main_mesh.vertices.len(), main_mesh.indices.len(), main_mesh.memory_usage_bytes());
-
-        (main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh)
     }
+
+    (main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh)
+}

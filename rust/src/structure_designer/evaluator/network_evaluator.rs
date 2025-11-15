@@ -3,11 +3,11 @@ use std::any::Any;
 
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
+use crate::structure_designer::structure_designer_scene::{NodeSceneData, NodeOutput};
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
-use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud_scene;
-use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud_scene;
-use crate::structure_designer::implicit_eval::dual_contour_3d::generate_dual_contour_3d_scene;
+use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud;
+use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
+use crate::structure_designer::implicit_eval::dual_contour_3d::generate_dual_contour_3d;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::common::csg_utils::convert_csg_mesh_to_poly_mesh;
@@ -17,8 +17,8 @@ use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::data_type::DataType;
-use crate::util::timer::Timer;
 use crate::structure_designer::geo_tree::csg_cache::CsgConversionCache;
+use crate::structure_designer::geo_tree::GeoNode;
 
 use super::network_result::input_missing_error;
 use super::network_result::Closure;
@@ -96,12 +96,12 @@ impl NetworkEvaluator {
     _display_type: NodeDisplayType, //TODO: use display_type
     registry: &NodeTypeRegistry,
     geometry_visualization_preferences: &GeometryVisualizationPreferences,
-  ) -> StructureDesignerScene {
+  ) -> NodeSceneData {
     //let _timer = Timer::new("generate_scene");
-
+    
     let network = match registry.node_networks.get(network_name) {
       Some(network) => network,
-      None => return StructureDesignerScene::new(),
+      None => return NodeSceneData::new(NodeOutput::None),
     };
 
     let mut context = NetworkEvaluationContext::new();
@@ -112,7 +112,7 @@ impl NetworkEvaluator {
 
     let node = match network.nodes.get(&node_id) {
       Some(node) => node,
-      None => return StructureDesignerScene::new(),
+      None => return NodeSceneData::new(NodeOutput::None),
     };
 
     let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
@@ -124,87 +124,77 @@ impl NetworkEvaluator {
     // Get the unit cell before the result is potentially moved
     let unit_cell = result.get_unit_cell();
 
-    let mut scene = 
+    // Determine output and geo_tree based on node type and visualization preferences
+    let (output, geo_tree) = 
     if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
          geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
-          let mut ret = generate_2d_point_cloud_scene(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences);
-          ret.geo_trees.push(geometry_summary_2d.geo_tree_root);
-          ret
+          let point_cloud = generate_2d_point_cloud(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences);
+          (NodeOutput::SurfacePointCloud2D(point_cloud), Some(geometry_summary_2d.geo_tree_root))
         } else {
-          StructureDesignerScene::new()
+          (NodeOutput::None, None)
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
-        self.generate_explicit_mesh_scene(result, &network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
+        self.generate_explicit_mesh_output(result, &network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
       } else {
-        StructureDesignerScene::new()
+        (NodeOutput::None, None)
       }
     }
     else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting {
         if let NetworkResult::Geometry(geometry_summary) = result {
-          let mut ret = generate_point_cloud_scene(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences);
-          ret.geo_trees.push(geometry_summary.geo_tree_root);
-          ret
+          let point_cloud = generate_point_cloud(&geometry_summary.geo_tree_root, &mut context, geometry_visualization_preferences);
+          (NodeOutput::SurfacePointCloud(point_cloud), Some(geometry_summary.geo_tree_root))
         } else {
-          StructureDesignerScene::new()
+          (NodeOutput::None, None)
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
         if let NetworkResult::Geometry(geometry_summary) = result {
-          let mut ret = generate_dual_contour_3d_scene(&geometry_summary.geo_tree_root, geometry_visualization_preferences);
-          ret.geo_trees.push(geometry_summary.geo_tree_root);
-          ret
+          let poly_mesh = generate_dual_contour_3d(&geometry_summary.geo_tree_root, geometry_visualization_preferences);
+          (NodeOutput::PolyMesh(poly_mesh), Some(geometry_summary.geo_tree_root))
         } else {
-          StructureDesignerScene::new()
+          (NodeOutput::None, None)
         }
       } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
-        self.generate_explicit_mesh_scene(result, &network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
+        self.generate_explicit_mesh_output(result, &network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
       } else {
-        StructureDesignerScene::new()
+        (NodeOutput::None, None)
       }
     }
     else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Atomic {
-      //let atomic_structure = self.generate_atomic_structure(network, node, registry);
-
-      let mut scene = StructureDesignerScene::new();
-
       if let NetworkResult::Atomic(atomic_structure) = result {
         let mut cloned_atomic_structure = atomic_structure.clone();
         cloned_atomic_structure.from_selected_node = from_selected_node;
-        scene.atomic_structures.push(cloned_atomic_structure);
-      };
-      scene
+        (NodeOutput::Atomic(cloned_atomic_structure), None)
+      } else {
+        (NodeOutput::None, None)
+      }
     } else {
-      StructureDesignerScene::new()
+      (NodeOutput::None, None)
     };
 
-    // Copy the collected errors and output strings to the scene
-    scene.node_errors = context.node_errors.clone();
-    scene.node_output_strings = context.node_output_strings.clone();
-    scene.selected_node_eval_cache = context.selected_node_eval_cache.take();
+    // Build NodeSceneData
+    let mut node_data = NodeSceneData {
+      output,
+      geo_tree,
+      node_errors: context.node_errors.clone(),
+      node_output_strings: context.node_output_strings.clone(),
+      unit_cell,
+    };
 
-    // Set the unit cell based on the result
-    scene.unit_cell = unit_cell;
-
-    // Print cache statistics for debugging (can be removed later)
-    //if self.csg_conversion_cache.stats().total_lookups() > 0 {
-    //  self.csg_conversion_cache.stats().print_summary();
-    //}
-
-    return scene;
+    return node_data;
   }
 
-  fn generate_explicit_mesh_scene<'a>(
+  fn generate_explicit_mesh_output<'a>(
     &mut self,
     result: NetworkResult,
     network_stack: &Vec<NetworkStackElement<'a>>,
     node_id: u64, _registry: &NodeTypeRegistry,
     _context: &mut NetworkEvaluationContext,
-    geometry_visualization_preferences: &GeometryVisualizationPreferences) -> StructureDesignerScene {
-      //let _timer = Timer::new("generate_explicit_mesh_scene");
+    geometry_visualization_preferences: &GeometryVisualizationPreferences) -> (NodeOutput, Option<GeoNode>) {
+      //let _timer = Timer::new("generate_explicit_mesh_output");
       let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
-      let mut scene = StructureDesignerScene::new();
       
       let poly_mesh = match &result {
         NetworkResult::Geometry(geometry_summary) => { 
@@ -251,24 +241,21 @@ impl NetworkEvaluator {
         _ => None,
       };
 
-      if let Some(poly_mesh) = poly_mesh {
-        scene.poly_meshes.push(poly_mesh);
-      }
-      
       // Extract geo_tree_root from the result based on its type
-      match result {
-        NetworkResult::Geometry(geometry_summary) => {
-          scene.geo_trees.push(geometry_summary.geo_tree_root);
-        },
-        NetworkResult::Geometry2D(geometry_summary_2d) => {
-          scene.geo_trees.push(geometry_summary_2d.geo_tree_root);
-        },
-        _ => {
-          // No geo_tree_root for other result types
-        }
-      }
+      let geo_tree = match result {
+        NetworkResult::Geometry(geometry_summary) => Some(geometry_summary.geo_tree_root),
+        NetworkResult::Geometry2D(geometry_summary_2d) => Some(geometry_summary_2d.geo_tree_root),
+        _ => None,
+      };
       
-      return scene;
+      // Return output and geo_tree
+      let output = if let Some(mesh) = poly_mesh {
+        NodeOutput::PolyMesh(mesh)
+      } else {
+        NodeOutput::None
+      };
+      
+      return (output, geo_tree);
   }
 
 

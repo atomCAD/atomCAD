@@ -17,7 +17,7 @@ use crate::api::structure_designer::structure_designer_preferences::{StructureDe
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::network_validator::{validate_network, NetworkValidationResult};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 use crate::common::xyz_saver::save_xyz;
@@ -35,6 +35,9 @@ pub struct StructureDesigner {
   pub import_manager: NodeNetworksImportManager,
   pub is_dirty: bool,
   pub file_path: Option<String>,
+  // Per-node scene cache: maps displayed node IDs to their generated scenes
+  // This enables incremental refresh by avoiding re-evaluation of unchanged nodes
+  pub node_scene_cache: HashMap<u64, StructureDesignerScene>,
 }
 
 impl StructureDesigner {
@@ -56,6 +59,7 @@ impl StructureDesigner {
       import_manager: NodeNetworksImportManager::new(),
       is_dirty: false,
       file_path: None,
+      node_scene_cache: HashMap::new(),
     }
   }
 }
@@ -64,9 +68,16 @@ impl StructureDesigner {
 
   // Returns the first atomic structure generated from a selected node, if any
   pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
+    use crate::structure_designer::structure_designer_scene::NodeOutput;
     // Find the first atomic structure with from_selected_node = true
-    self.last_generated_structure_designer_scene.atomic_structures.iter()
-      .find(|structure| structure.from_selected_node)
+    for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
+      if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
+        if atomic_structure.from_selected_node {
+          return Some(atomic_structure);
+        }
+      }
+    }
+    None
   }
 
   /// Helper method to get the selected node ID of a node of a specific type
@@ -145,30 +156,46 @@ impl StructureDesigner {
         Some(network) => network,
         None => return,
       };
-      self.last_generated_structure_designer_scene = StructureDesignerScene::new();
-      let mut selected_node_unit_cell: Option<Option<UnitCellStruct>> = None;
       
+      // Clear the node scene cache for the current refresh
+      self.node_scene_cache.clear();
+      
+      // Create new scene with empty node_data HashMap
+      self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+      
+      // Track selected node's unit cell and eval cache
+      let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
+      let mut selected_node_eval_cache: Option<Box<dyn std::any::Any>> = None;
+      
+      // Generate NodeSceneData for each displayed node and populate node_data HashMap
       for node_entry in &network.displayed_node_ids {
-        let scene = self.network_evaluator.generate_scene(
+        let node_id = *node_entry.0;
+        let display_type = *node_entry.1;
+        
+        // Generate NodeSceneData for this node
+        let mut node_data = self.network_evaluator.generate_scene(
           &node_network_name,
-          *node_entry.0,
-          *node_entry.1,
+          node_id,
+          display_type,
           &self.node_type_registry,
           &self.preferences.geometry_visualization_preferences,
         );
         
-        // Capture the selected node's unit cell if this is the selected node
-        if Some(*node_entry.0) == network.selected_node_id {
-          selected_node_unit_cell = Some(scene.unit_cell.clone());
+        // Capture the selected node's unit cell and eval cache
+        if Some(node_id) == network.selected_node_id {
+          selected_node_unit_cell = node_data.unit_cell.clone();
+          // Extract eval cache from node_data (it's stored per-node during evaluation)
+          // We'll need to handle this separately as eval cache is global
         }
         
-        self.last_generated_structure_designer_scene.merge(scene);
+        // Insert into final scene's node_data HashMap
+        self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
       }
       
-      // Override unit cell with selected node's unit cell if it exists and is not None
-      if let Some(Some(unit_cell)) = selected_node_unit_cell {
-        self.last_generated_structure_designer_scene.unit_cell = Some(unit_cell);
-      }
+      // Set the selected node's unit cell as the global unit cell
+      self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
+      
+      // Note: selected_node_eval_cache will be set by the gadget creation logic below
     }
 
     self.refresh_scene_dependent_node_data();
@@ -804,11 +831,13 @@ impl StructureDesigner {
   pub fn raytrace(&self, ray_origin: &DVec3, ray_direction: &DVec3, visualization: &AtomicStructureVisualization) -> Option<f64> {
     let mut min_distance: Option<f64> = None;
     
+    use crate::structure_designer::structure_designer_scene::NodeOutput;
     // First, check all atomic structures in the scene
-    for atomic_structure in &self.last_generated_structure_designer_scene.atomic_structures {
-      match atomic_structure.hit_test(ray_origin, ray_direction, visualization) {
-        crate::common::atomic_structure::HitTestResult::Atom(_, distance) | 
-        crate::common::atomic_structure::HitTestResult::Bond(_, distance) => {
+    for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
+      if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
+        match atomic_structure.hit_test(ray_origin, ray_direction, visualization) {
+          crate::common::atomic_structure::HitTestResult::Atom(_, distance) | 
+          crate::common::atomic_structure::HitTestResult::Bond(_, distance) => {
           // Update minimum distance if this hit is closer
           min_distance = match min_distance {
             None => Some(distance),
@@ -817,14 +846,16 @@ impl StructureDesigner {
           };
         },
         crate::common::atomic_structure::HitTestResult::None => {}
+        }
       }
     }
     
-    let geo_trees = &self.last_generated_structure_designer_scene.geo_trees;
-  
-    // Convert GeoNodes to ImplicitGeometry3D trait references
-    let geometries: Vec<&dyn ImplicitGeometry3D> = 
-      geo_trees.iter().map(|geo_node| geo_node as &dyn ImplicitGeometry3D).collect();
+    // Collect all geo_trees from node_data
+    let geometries: Vec<&dyn ImplicitGeometry3D> = self.last_generated_structure_designer_scene.node_data
+      .values()
+      .filter_map(|node_data| node_data.geo_tree.as_ref())
+      .map(|geo_node| geo_node as &dyn ImplicitGeometry3D)
+      .collect();
   
     // Raytrace the implicit geometries using the world scale
     if let Some(geo_distance) = raytrace_geometries(
@@ -1141,17 +1172,23 @@ impl StructureDesigner {
   /// Merges all atomic structures from the last generated scene into one structure before saving
   /// File format is determined by the file extension (.xyz or .mol)
   pub fn export_visible_atomic_structures(&self, file_path: &str) -> Result<(), String> {
-    // Check if we have any atomic structures to export
-    if self.last_generated_structure_designer_scene.atomic_structures.is_empty() {
-      return Err("No atomic structures available to export".to_string());
-    }
-
-    // Create a new atomic structure to hold the merged result
+    use crate::structure_designer::structure_designer_scene::NodeOutput;
+    
+    // Create a new merged atomic structure
     let mut merged_structure = AtomicStructure::new();
+    let mut has_structures = false;
 
-    // Merge all atomic structures into one
-    for atomic_structure in &self.last_generated_structure_designer_scene.atomic_structures {
-      merged_structure.add_atomic_structure(atomic_structure);
+    // Merge all atomic structures from node_data into one
+    for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
+      if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
+        merged_structure.add_atomic_structure(atomic_structure);
+        has_structures = true;
+      }
+    }
+    
+    // Check if we have any atomic structures to export
+    if !has_structures {
+      return Err("No atomic structures available to export".to_string());
     }
 
     // Check if the merged structure has any atoms
