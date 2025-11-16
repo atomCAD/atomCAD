@@ -181,6 +181,7 @@ impl NetworkEvaluator {
       node_errors: context.node_errors.clone(),
       node_output_strings: context.node_output_strings.clone(),
       unit_cell,
+      selected_node_eval_cache: context.selected_node_eval_cache,
     };
 
     return node_data;

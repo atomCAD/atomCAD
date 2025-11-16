@@ -184,18 +184,18 @@ impl StructureDesigner {
         // Capture the selected node's unit cell and eval cache
         if Some(node_id) == network.selected_node_id {
           selected_node_unit_cell = node_data.unit_cell.clone();
-          // Extract eval cache from node_data (it's stored per-node during evaluation)
-          // We'll need to handle this separately as eval cache is global
+          // Take the eval cache from the selected node's data
+          // We use take() to move it out without cloning (eval cache may not be cloneable)
+          selected_node_eval_cache = node_data.selected_node_eval_cache.take();
         }
         
         // Insert into final scene's node_data HashMap
         self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
       }
       
-      // Set the selected node's unit cell as the global unit cell
+      // Set the selected node's unit cell and eval cache as global scene properties
       self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
-      
-      // Note: selected_node_eval_cache will be set by the gadget creation logic below
+      self.last_generated_structure_designer_scene.selected_node_eval_cache = selected_node_eval_cache;
     }
 
     self.refresh_scene_dependent_node_data();
