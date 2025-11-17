@@ -25,6 +25,7 @@ use crate::common::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use super::structure_designer_changes::{StructureDesignerChanges, RefreshMode};
+use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -201,10 +202,7 @@ impl StructureDesigner {
       
       RefreshMode::Partial => {
         // Partial refresh - use tracked changes
-        // For now, do full refresh (Phase 1 implementation)
-        // TODO: Implement optimized partial refresh using changes.visibility_changed, 
-        // changes.data_changed, and changes.selection_changed
-        self.refresh_full(&node_network_name);
+        self.refresh_partial(&node_network_name, changes);
       }
     }
   }
@@ -263,7 +261,113 @@ impl StructureDesigner {
     if let Some(gadget) = &self.gadget {
       self.last_generated_structure_designer_scene.tessellatable = Some(gadget.as_tessellatable());
     }
-  }    
+  }
+  
+  // Partial refresh implementation - only re-evaluates affected nodes
+  fn refresh_partial(&mut self, node_network_name: &str, changes: &StructureDesignerChanges) {
+    let network = match self.node_type_registry.node_networks.get(node_network_name) {
+      Some(network) => network,
+      None => return,
+    };
+    
+    // Compute the set of nodes that need to be re-evaluated
+    let nodes_to_evaluate = self.compute_nodes_to_evaluate(network, changes);
+    
+    // If no nodes need evaluation, just update scene-dependent data and return
+    if nodes_to_evaluate.is_empty() {
+      self.refresh_scene_dependent_node_data();
+      return;
+    }
+    
+    // Clone necessary data before mutable borrows to avoid borrow checker issues
+    let selected_node_id = network.selected_node_id;
+    
+    // Track selected node's unit cell and eval cache
+    let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
+    let mut selected_node_eval_cache: Option<Box<dyn std::any::Any>> = None;
+    
+    // Re-evaluate only the affected nodes
+    for &node_id in &nodes_to_evaluate {
+      // Get the display type for this node (it must be displayed if it's in nodes_to_evaluate)
+      let display_type = {
+        let network = match self.node_type_registry.node_networks.get(node_network_name) {
+          Some(network) => network,
+          None => continue,
+        };
+        match network.displayed_node_ids.get(&node_id) {
+          Some(&display_type) => display_type,
+          None => continue, // Skip if not displayed (shouldn't happen)
+        }
+      };
+      
+      // Generate NodeSceneData for this node
+      let mut node_data = self.network_evaluator.generate_scene(
+        node_network_name,
+        node_id,
+        display_type,
+        &self.node_type_registry,
+        &self.preferences.geometry_visualization_preferences,
+      );
+      
+      // Capture the selected node's unit cell and eval cache
+      if Some(node_id) == selected_node_id {
+        selected_node_unit_cell = node_data.unit_cell.clone();
+        selected_node_eval_cache = node_data.selected_node_eval_cache.take();
+      }
+      
+      // Update or insert into scene's node_data HashMap
+      self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
+    }
+    
+    // Update the selected node's unit cell and eval cache if they were re-evaluated
+    if selected_node_unit_cell.is_some() {
+      self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
+    }
+    if selected_node_eval_cache.is_some() {
+      self.last_generated_structure_designer_scene.selected_node_eval_cache = selected_node_eval_cache;
+    }
+    
+    self.refresh_scene_dependent_node_data();
+    
+    // Recreate the gadget if the selected node was re-evaluated
+    if let Some(selected_id) = selected_node_id {
+      if nodes_to_evaluate.contains(&selected_id) {
+        if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
+          self.gadget = network.provide_gadget(&self);
+          if let Some(gadget) = &self.gadget {
+            self.last_generated_structure_designer_scene.tessellatable = Some(gadget.as_tessellatable());
+          }
+        }
+      }
+    }
+  }
+  
+  // Computes the set of visible nodes that need to be re-evaluated based on changes
+  fn compute_nodes_to_evaluate(&self, network: &NodeNetwork, changes: &StructureDesignerChanges) -> HashSet<u64> {
+    let mut nodes_to_evaluate = HashSet::new();
+    
+    // 1. Add nodes whose visibility changed (and are now visible)
+    for &node_id in &changes.visibility_changed {
+      if network.displayed_node_ids.contains_key(&node_id) {
+        nodes_to_evaluate.insert(node_id);
+      }
+    }
+    
+    // 2. Add visible nodes that transitively depend on nodes whose data changed
+    if !changes.data_changed.is_empty() {
+      // Compute all downstream dependents (including the changed nodes themselves)
+      let affected_nodes = compute_downstream_dependents(network, &changes.data_changed);
+      
+      // Only include nodes that are currently visible
+      for &node_id in &affected_nodes {
+        if network.displayed_node_ids.contains_key(&node_id) {
+          nodes_to_evaluate.insert(node_id);
+        }
+      }
+    }
+    
+    nodes_to_evaluate
+  }
 
   // node network methods
 
