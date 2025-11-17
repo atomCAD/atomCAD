@@ -270,6 +270,14 @@ impl StructureDesigner {
       None => return,
     };
     
+    // Remove nodes that became invisible from the scene
+    for &node_id in &changes.visibility_changed {
+      // If the node is not in displayed_node_ids, it became invisible - remove it
+      if !network.displayed_node_ids.contains_key(&node_id) {
+        self.last_generated_structure_designer_scene.node_data.remove(&node_id);
+      }
+    }
+    
     // Compute the set of nodes that need to be re-evaluated
     let nodes_to_evaluate = self.compute_nodes_to_evaluate(network, changes);
     

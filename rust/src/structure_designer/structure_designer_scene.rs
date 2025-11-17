@@ -7,6 +7,7 @@ use std::any::Any;
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::util::memory_size_estimator::MemorySizeEstimator;
 
 /// The explicit geometric/data output of a single node evaluation
 /// This represents the tessellatable/renderable output
@@ -112,5 +113,79 @@ impl StructureDesignerScene {
             all_strings.extend(node_data.node_output_strings.clone());
         }
         all_strings
+    }
+}
+
+// Memory size estimation implementations
+
+impl MemorySizeEstimator for NodeOutput {
+    fn estimate_memory_bytes(&self) -> usize {
+        let base_size = std::mem::size_of::<NodeOutput>();
+        
+        let variant_size = match self {
+            NodeOutput::Atomic(atomic_structure) => atomic_structure.estimate_memory_bytes(),
+            NodeOutput::SurfacePointCloud(point_cloud) => point_cloud.estimate_memory_bytes(),
+            NodeOutput::SurfacePointCloud2D(point_cloud_2d) => point_cloud_2d.estimate_memory_bytes(),
+            NodeOutput::PolyMesh(poly_mesh) => poly_mesh.estimate_memory_bytes(),
+            NodeOutput::None => 0,
+        };
+        
+        base_size + variant_size
+    }
+}
+
+impl MemorySizeEstimator for NodeSceneData {
+    fn estimate_memory_bytes(&self) -> usize {
+        let base_size = std::mem::size_of::<NodeSceneData>();
+        
+        // Estimate output
+        let output_size = self.output.estimate_memory_bytes();
+        
+        // Estimate geo_tree (if present)
+        let geo_tree_size = self.geo_tree.as_ref()
+            .map(|tree| tree.estimate_memory_bytes())
+            .unwrap_or(0);
+        
+        // Estimate node_errors HashMap
+        let node_errors_size = self.node_errors.iter()
+            .map(|(_key, value)| {
+                std::mem::size_of::<u64>() 
+                    + std::mem::size_of::<String>() 
+                    + value.capacity()
+            })
+            .sum::<usize>();
+        
+        // Estimate node_output_strings HashMap
+        let node_output_strings_size = self.node_output_strings.iter()
+            .map(|(_key, value)| {
+                std::mem::size_of::<u64>() 
+                    + std::mem::size_of::<String>() 
+                    + value.capacity()
+            })
+            .sum::<usize>();
+        
+        // Estimate unit_cell (if present)
+        // UnitCellStruct is a simple struct with a few f64 fields, estimate conservatively
+        let unit_cell_size = if self.unit_cell.is_some() {
+            std::mem::size_of::<UnitCellStruct>()
+        } else {
+            0
+        };
+        
+        // selected_node_eval_cache is a Box<dyn Any> - we can't know its size
+        // Estimate conservatively as the size of the Box pointer
+        let eval_cache_size = if self.selected_node_eval_cache.is_some() {
+            std::mem::size_of::<Box<dyn Any>>()
+        } else {
+            0
+        };
+        
+        base_size 
+            + output_size 
+            + geo_tree_size 
+            + node_errors_size 
+            + node_output_strings_size 
+            + unit_cell_size 
+            + eval_cache_size
     }
 }

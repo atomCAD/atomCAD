@@ -2,6 +2,7 @@ use glam::f64::DVec2;
 use glam::f64::DVec3;
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
+use crate::util::memory_size_estimator::MemorySizeEstimator;
 
 pub struct SurfacePoint {
   pub position: DVec3,
@@ -40,5 +41,21 @@ impl SurfacePointCloud2D {
       frame_transform: Transform2D::default(),
       points: Vec::new(),
     }
+  }
+}
+
+// Memory size estimation implementations
+
+impl MemorySizeEstimator for SurfacePointCloud {
+  fn estimate_memory_bytes(&self) -> usize {
+    std::mem::size_of::<SurfacePointCloud>()
+      + self.points.len() * std::mem::size_of::<SurfacePoint>()
+  }
+}
+
+impl MemorySizeEstimator for SurfacePointCloud2D {
+  fn estimate_memory_bytes(&self) -> usize {
+    std::mem::size_of::<SurfacePointCloud2D>()
+      + self.points.len() * std::mem::size_of::<SurfacePoint2D>()
   }
 }

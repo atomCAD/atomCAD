@@ -1,5 +1,6 @@
 use glam::DVec3;
 use std::collections::{HashMap, HashSet};
+use crate::util::memory_size_estimator::MemorySizeEstimator;
 
 /// Represents a face in the PolyMesh
 pub struct Face {
@@ -325,5 +326,34 @@ impl PolyMesh {
     /// Helper method to add a quad face (4 vertices) for backward compatibility
     pub fn add_quad(&mut self, v0: u32, v1: u32, v2: u32, v3: u32) -> u32 {
         self.add_face(vec![v0, v1, v2, v3])
+    }
+}
+
+// Memory size estimation implementations
+
+impl MemorySizeEstimator for PolyMesh {
+    fn estimate_memory_bytes(&self) -> usize {
+        let base_size = std::mem::size_of::<PolyMesh>();
+        
+        // Accurately estimate vertices Vec by traversing
+        let vertices_size = self.vertices.iter()
+            .map(|v| std::mem::size_of::<Vertex>() + v.face_indices.capacity() * std::mem::size_of::<u32>())
+            .sum::<usize>();
+        
+        // Accurately estimate faces Vec by traversing
+        let faces_size = self.faces.iter()
+            .map(|f| std::mem::size_of::<Face>() + f.vertices.capacity() * std::mem::size_of::<u32>())
+            .sum::<usize>();
+        
+        // Accurately estimate edges HashMap by traversing
+        let edges_size = self.edges.iter()
+            .map(|(_key, edge)| {
+                std::mem::size_of::<(u32, u32)>() 
+                    + std::mem::size_of::<Edge>() 
+                    + edge.face_indices.capacity() * std::mem::size_of::<u32>()
+            })
+            .sum::<usize>();
+        
+        base_size + vertices_size + faces_size + edges_size
     }
 }

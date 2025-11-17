@@ -13,6 +13,7 @@ use crate::api::common_api_types::SelectModifier;
 use std::hash::{Hash, Hasher};
 use serde::{Serialize, Deserialize};
 use crate::common::crystal_utils::ZincBlendeAtomType;
+use crate::util::memory_size_estimator::MemorySizeEstimator;
 
 // Bigger than most realistically possible bonds, so a neighbouring atom will be in the same cell
 // or in a neighbouring cell most of the time. This is important for performance reasons.
@@ -1109,5 +1110,69 @@ impl AtomicStructure {
     
     // Return the ID mappings
     (atom_id_map, bond_id_map, cluster_id_map)
+  }
+}
+
+// Memory size estimation implementations
+
+impl Atom {
+  /// Returns the average memory size of an Atom
+  /// Assumes typical case of 4 bonds per atom
+  const fn average_memory_bytes() -> usize {
+    std::mem::size_of::<Atom>()
+      + 4 * std::mem::size_of::<u64>() // Average 4 bonds per atom
+  }
+}
+
+impl Bond {
+  /// Returns the exact memory size of a Bond (no heap allocations)
+  const fn average_memory_bytes() -> usize {
+    std::mem::size_of::<Bond>()
+  }
+}
+
+
+impl MemorySizeEstimator for AtomicStructure {
+  fn estimate_memory_bytes(&self) -> usize {
+    let base_size = std::mem::size_of::<AtomicStructure>();
+    
+    // Fast estimation using average sizes - no iteration through collections
+    // Estimate atoms HashMap using average atom size
+    let atoms_size = self.atoms.len() * (std::mem::size_of::<u64>() + Atom::average_memory_bytes());
+    
+    // Estimate grid HashMap (sparse grid of atom IDs)
+    // Assume average of 2 atoms per occupied grid cell
+    let grid_size = self.grid.len() * (std::mem::size_of::<(i32, i32, i32)>() + std::mem::size_of::<Vec<u64>>() + 2 * std::mem::size_of::<u64>());
+    
+    // Estimate bonds HashMap using average bond size
+    let bonds_size = self.bonds.len() * (std::mem::size_of::<u64>() + Bond::average_memory_bytes());
+    
+    // Estimate dirty_atom_ids HashSet
+    let dirty_atoms_size = self.dirty_atom_ids.len() * std::mem::size_of::<u64>();
+    
+    // Estimate clusters BTreeMap
+    // Assume average cluster name length of 20 chars and 10 atoms per cluster
+    let avg_cluster_size = std::mem::size_of::<Cluster>() + 20 + 10 * std::mem::size_of::<u64>();
+    let clusters_size = self.clusters.len() * (std::mem::size_of::<u64>() + avg_cluster_size);
+    
+    // Estimate deleted_atom_ids HashSet
+    let deleted_atoms_size = self.deleted_atom_ids.len() * std::mem::size_of::<u64>();
+    
+    // Estimate decorator - assume 10% of atoms have custom display states
+    let decorator_size = std::mem::size_of::<AtomicStructureDecorator>()
+      + (self.atoms.len() / 10) * (std::mem::size_of::<u64>() + std::mem::size_of::<AtomDisplayState>());
+    
+    // Estimate crystal_meta_data
+    let crystal_meta_size = std::mem::size_of::<CrystalMetaData>();
+    
+    base_size 
+      + atoms_size 
+      + grid_size 
+      + bonds_size 
+      + dirty_atoms_size 
+      + clusters_size 
+      + deleted_atoms_size 
+      + decorator_size 
+      + crystal_meta_size
   }
 }

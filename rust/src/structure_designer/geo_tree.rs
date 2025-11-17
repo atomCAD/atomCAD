@@ -3,6 +3,7 @@ use glam::f64::DVec2;
 use crate::util::transform::Transform;
 use std::fmt;
 use blake3;
+use crate::util::memory_size_estimator::MemorySizeEstimator;
 
 /*
  * geo_tree is a simple geometry expression tree implementation.
@@ -374,5 +375,72 @@ fn format_f64(f: &f64) -> String {
 fn format_transform(transform: &Transform) -> String {
     // Simplified transform display - you might want to expand this based on Transform's structure
     format!("translation: {}", format_vec3(&transform.translation))
+}
+
+// Memory size estimation implementation
+
+impl MemorySizeEstimator for GeoNode {
+    fn estimate_memory_bytes(&self) -> usize {
+        let base_size = std::mem::size_of::<GeoNode>();
+        
+        // Recursively estimate the size of the GeoNodeKind
+        let kind_size = match &self.kind {
+            // Leaf nodes - just their stack size
+            GeoNodeKind::HalfSpace { .. } => std::mem::size_of::<DVec3>() * 2,
+            GeoNodeKind::HalfPlane { .. } => std::mem::size_of::<DVec2>() * 2,
+            GeoNodeKind::Circle { .. } => std::mem::size_of::<DVec2>() + std::mem::size_of::<f64>(),
+            GeoNodeKind::Sphere { .. } => std::mem::size_of::<DVec3>() + std::mem::size_of::<f64>(),
+            
+            // Polygon - has a Vec of vertices
+            GeoNodeKind::Polygon { vertices } => {
+                std::mem::size_of::<Vec<DVec2>>() + vertices.capacity() * std::mem::size_of::<DVec2>()
+            },
+            
+            // Single child nodes - recursive
+            GeoNodeKind::Extrude { shape, .. } => {
+                std::mem::size_of::<f64>() 
+                    + std::mem::size_of::<DVec3>() 
+                    + std::mem::size_of::<Box<GeoNode>>()
+                    + shape.estimate_memory_bytes()
+            },
+            GeoNodeKind::Transform { shape, .. } => {
+                std::mem::size_of::<Transform>() 
+                    + std::mem::size_of::<Box<GeoNode>>()
+                    + shape.estimate_memory_bytes()
+            },
+            
+            // Multiple children nodes - recursive
+            GeoNodeKind::Union2D { shapes } => {
+                std::mem::size_of::<Vec<GeoNode>>()
+                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
+            },
+            GeoNodeKind::Union3D { shapes } => {
+                std::mem::size_of::<Vec<GeoNode>>()
+                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
+            },
+            GeoNodeKind::Intersection2D { shapes } => {
+                std::mem::size_of::<Vec<GeoNode>>()
+                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
+            },
+            GeoNodeKind::Intersection3D { shapes } => {
+                std::mem::size_of::<Vec<GeoNode>>()
+                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
+            },
+            
+            // Two children nodes - recursive
+            GeoNodeKind::Difference2D { base, sub } => {
+                std::mem::size_of::<Box<GeoNode>>() * 2
+                    + base.estimate_memory_bytes()
+                    + sub.estimate_memory_bytes()
+            },
+            GeoNodeKind::Difference3D { base, sub } => {
+                std::mem::size_of::<Box<GeoNode>>() * 2
+                    + base.estimate_memory_bytes()
+                    + sub.estimate_memory_bytes()
+            },
+        };
+        
+        base_size + kind_size
+    }
 }
 
