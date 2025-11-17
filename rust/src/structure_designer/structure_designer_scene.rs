@@ -83,10 +83,6 @@ pub struct StructureDesignerScene {
     /// Gadget for the currently selected node (if any)
     /// Created after evaluation, not part of node evaluation output
     pub tessellatable: Option<Box<dyn Tessellatable>>,
-
-    /// Eval cache for the selected node (used to create gadgets)
-    /// Stored separately because gadgets need it across refresh cycles
-    pub selected_node_eval_cache: Option<Box<dyn Any>>,
     
     /// Unit cell from the selected node (used for background rendering)
     /// Overrides individual node unit cells for global scene context
@@ -105,7 +101,6 @@ impl StructureDesignerScene {
                 |node_data: &NodeSceneData| node_data.estimate_memory_bytes()
             ),
             tessellatable: None,
-            selected_node_eval_cache: None,
             unit_cell: None,
         }
     }
@@ -171,6 +166,12 @@ impl StructureDesignerScene {
     /// Returns the current memory usage of the invisible cache in bytes
     pub fn cached_memory_bytes(&self) -> usize {
         self.invisible_node_cache.current_memory_bytes()
+    }
+    
+    /// Gets the eval cache for a specific node (typically the selected node)
+    /// Returns None if the node doesn't exist or has no eval cache
+    pub fn get_node_eval_cache(&self, node_id: u64) -> Option<&Box<dyn Any>> {
+        self.node_data.get(&node_id)?.selected_node_eval_cache.as_ref()
     }
 }
 

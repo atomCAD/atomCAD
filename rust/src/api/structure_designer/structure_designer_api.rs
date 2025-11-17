@@ -989,7 +989,7 @@ pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
         };
         
         // Try to get the evaluation cache to access unit cell and compute symmetries and crystal system
-        let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance.structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
+        let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance.structure_designer.get_selected_node_eval_cache() {
           if let Some(lattice_symop_cache) = eval_cache.downcast_ref::<LatticeSymopEvalCache>() {
             // Analyze unit cell symmetries and crystal system
             let (crystal_system, symmetries) = analyze_unit_cell_complete(&lattice_symop_cache.unit_cell);
@@ -1062,7 +1062,7 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
         };
         
         // Try to get the evaluation cache to access unit cell and compute symmetries and crystal system
-        let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance.structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
+        let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance.structure_designer.get_selected_node_eval_cache() {
           if let Some(lattice_rot_cache) = eval_cache.downcast_ref::<LatticeRotEvalCache>() {
             // Analyze unit cell symmetries and crystal system
             let (crystal_system, symmetries) = analyze_unit_cell_complete(&lattice_rot_cache.unit_cell);

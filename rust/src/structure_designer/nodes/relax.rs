@@ -48,8 +48,9 @@ impl NodeData for RelaxData {
   
       match minimize_energy(&mut atomic_structure) {
         Ok(result) => {
-          // Store evaluation cache for selected node
-          if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+          // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
+          // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+          if network_stack.len() == 1 {
             let eval_cache = RelaxEvalCache {
               relax_message: result.message.clone(),
             };

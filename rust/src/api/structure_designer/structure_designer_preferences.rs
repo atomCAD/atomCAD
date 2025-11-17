@@ -118,7 +118,7 @@ impl StructureDesignerPreferences {
         display_camera_target: false,
       },
       node_display_preferences: NodeDisplayPreferences {
-        display_policy: NodeDisplayPolicy::PreferSelected,
+        display_policy: NodeDisplayPolicy::Manual,
       },
       atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences {
         visualization: AtomicStructureVisualization::BallAndStick,

@@ -41,7 +41,7 @@ pub struct GeoTransData {
 
 impl NodeData for GeoTransData {
     fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-        let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+        let eval_cache = structure_designer.get_selected_node_eval_cache()?;
         let geo_trans_cache = eval_cache.downcast_ref::<GeoTransEvalCache>()?;
         
         let gadget = GeoTransGadget::new(
@@ -108,8 +108,9 @@ impl NodeData for GeoTransData {
     
         let frame_transform = shape.frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
     
-        // Store evaluation cache for selected node
-        if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+        // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
+        // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+        if network_stack.len() == 1 {
           let eval_cache = GeoTransEvalCache {
             input_frame_transform: shape.frame_transform.clone(),
             unit_cell: shape.unit_cell.clone(),

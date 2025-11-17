@@ -37,7 +37,7 @@ pub struct LatticeMoveData {
 
 impl NodeData for LatticeMoveData {
     fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-        let eval_cache = structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref()?;
+        let eval_cache = structure_designer.get_selected_node_eval_cache()?;
         let lattice_move_cache = eval_cache.downcast_ref::<LatticeMoveEvalCache>()?;   
         let gadget = LatticeMoveGadget::new(
             self.translation,
@@ -77,8 +77,9 @@ impl NodeData for LatticeMoveData {
 
         let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
 
-        // Store evaluation cache for selected node
-        if NetworkStackElement::is_node_selected_in_root_network(network_stack, node_id) {
+        // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
+        // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+        if network_stack.len() == 1 {
           let eval_cache = LatticeMoveEvalCache {
             unit_cell: shape.unit_cell.clone(),
           };

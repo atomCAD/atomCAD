@@ -82,6 +82,15 @@ impl StructureDesigner {
     None
   }
 
+  /// Gets the eval cache for the currently selected node (used for gadget creation)
+  /// Returns None if no node is selected or the selected node has no eval cache
+  pub fn get_selected_node_eval_cache(&self) -> Option<&Box<dyn std::any::Any>> {
+    let network_name = self.active_node_network_name.as_ref()?;
+    let network = self.node_type_registry.node_networks.get(network_name)?;
+    let selected_node_id = network.selected_node_id?;
+    self.last_generated_structure_designer_scene.get_node_eval_cache(selected_node_id)
+  }
+
   /// Helper method to get the selected node ID of a node of a specific type
   /// 
   /// Returns None if:
@@ -214,12 +223,11 @@ impl StructureDesigner {
       None => return,
     };
     
-    // Create new scene with empty node_data HashMap
+    // Create new scene with empty node_data HashMap and invisibility cache.
     self.last_generated_structure_designer_scene = StructureDesignerScene::new();
     
-    // Track selected node's unit cell and eval cache
+    // Track selected node's unit cell
     let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
-    let mut selected_node_eval_cache: Option<Box<dyn std::any::Any>> = None;
     
     // Generate NodeSceneData for each displayed node and populate node_data HashMap
     for node_entry in &network.displayed_node_ids {
@@ -227,7 +235,7 @@ impl StructureDesigner {
       let display_type = *node_entry.1;
       
       // Generate NodeSceneData for this node
-      let mut node_data = self.network_evaluator.generate_scene(
+      let node_data = self.network_evaluator.generate_scene(
         node_network_name,
         node_id,
         display_type,
@@ -235,21 +243,18 @@ impl StructureDesigner {
         &self.preferences.geometry_visualization_preferences,
       );
       
-      // Capture the selected node's unit cell and eval cache
+      // Capture the selected node's unit cell
       if Some(node_id) == network.selected_node_id {
         selected_node_unit_cell = node_data.unit_cell.clone();
-        // Take the eval cache from the selected node's data
-        // We use take() to move it out without cloning (eval cache may not be cloneable)
-        selected_node_eval_cache = node_data.selected_node_eval_cache.take();
       }
       
       // Insert into final scene's node_data HashMap
       self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
     }
     
-    // Set the selected node's unit cell and eval cache as global scene properties
+    // Set the selected node's unit cell as global scene property
+    // Note: eval_cache is now accessed directly from node_data via get_selected_node_eval_cache()
     self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
-    self.last_generated_structure_designer_scene.selected_node_eval_cache = selected_node_eval_cache;
 
     self.refresh_scene_dependent_node_data();
     
@@ -266,10 +271,7 @@ impl StructureDesigner {
   // Partial refresh implementation - only re-evaluates affected nodes
   // Uses invisible node caching for ultra-fast visibility changes
   fn refresh_partial(&mut self, node_network_name: &str, changes: &StructureDesignerChanges) {
-    // Debug: Print what changes are being processed
-    println!("DEBUG refresh_partial: visibility_changed={:?}, data_changed={:?}", 
-             changes.visibility_changed, changes.data_changed);
-    
+
     let network = match self.node_type_registry.node_networks.get(node_network_name) {
       Some(network) => network,
       None => return,
@@ -282,7 +284,6 @@ impl StructureDesigner {
     for &node_id in &changes.visibility_changed {
       if !network.displayed_node_ids.contains_key(&node_id) {
         // Node became invisible - move to cache for potential future restoration
-        println!("DEBUG refresh_partial: Caching invisible node_id={}", node_id);
         self.last_generated_structure_designer_scene.move_to_cache(node_id);
       }
     }
@@ -290,7 +291,6 @@ impl StructureDesigner {
     // Step 2: Compute transitive dependencies of data changes and invalidate cache
     let affected_by_data_changes = if !changes.data_changed.is_empty() {
       let affected = compute_downstream_dependents(network, &changes.data_changed);
-      println!("DEBUG refresh_partial: affected_by_data_changes={:?}", affected);
       self.last_generated_structure_designer_scene.invalidate_cached_nodes(&affected);
       affected
     } else {
@@ -305,12 +305,13 @@ impl StructureDesigner {
       if network.displayed_node_ids.contains_key(&node_id) {
         // Node became visible - try to restore from cache (ultra-fast path)
         let restored = self.last_generated_structure_designer_scene.restore_from_cache(node_id);
-        println!("DEBUG refresh_partial: node_id={}, restored={}", node_id, restored);
-        
+  
         if !restored {
           // Not in cache (or was invalidated) - needs re-evaluation
           nodes_needing_evaluation.insert(node_id);
         }
+        // Note: If restored successfully, eval_cache is preserved in node_data
+        // and accessible via get_selected_node_eval_cache() for gadget creation
       }
     }
     
@@ -320,73 +321,65 @@ impl StructureDesigner {
         nodes_needing_evaluation.insert(node_id);
       }
     }
-    
-    // Debug: Print nodes needing evaluation
-    println!("DEBUG refresh_partial: nodes_needing_evaluation={:?}", nodes_needing_evaluation);
-    
-    // If no nodes need evaluation, just update scene-dependent data and return
-    if nodes_needing_evaluation.is_empty() {
-      self.refresh_scene_dependent_node_data();
-      return;
-    }
-    
-    // Track selected node's unit cell and eval cache
+      
+    // Track selected node's unit cell
     let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
-    let mut selected_node_eval_cache: Option<Box<dyn std::any::Any>> = None;
     
-    // Step 5: Re-evaluate nodes that need it
-    for &node_id in &nodes_needing_evaluation {
-      println!("DEBUG refresh_partial: Evaluating node_id={}", node_id);
-      // Get the display type for this node (it must be displayed if it's in nodes_needing_evaluation)
-      let display_type = {
-        let network = match self.node_type_registry.node_networks.get(node_network_name) {
-          Some(network) => network,
-          None => continue,
+    // Step 5: Re-evaluate nodes that need it (skip if empty)
+    if !nodes_needing_evaluation.is_empty() {
+      for &node_id in &nodes_needing_evaluation {
+        // Get the display type for this node (it must be displayed if it's in nodes_needing_evaluation)
+        let display_type = {
+          let network = match self.node_type_registry.node_networks.get(node_network_name) {
+            Some(network) => network,
+            None => continue,
+          };
+          match network.displayed_node_ids.get(&node_id) {
+            Some(&display_type) => display_type,
+            None => continue, // Skip if not displayed (shouldn't happen)
+          }
         };
-        match network.displayed_node_ids.get(&node_id) {
-          Some(&display_type) => display_type,
-          None => continue, // Skip if not displayed (shouldn't happen)
+        
+        // Generate NodeSceneData for this node
+        let node_data = self.network_evaluator.generate_scene(
+          node_network_name,
+          node_id,
+          display_type,
+          &self.node_type_registry,
+          &self.preferences.geometry_visualization_preferences,
+        );
+        
+        // Capture the selected node's unit cell
+        if Some(node_id) == selected_node_id {
+          selected_node_unit_cell = node_data.unit_cell.clone();
         }
-      };
-      
-      // Generate NodeSceneData for this node
-      let mut node_data = self.network_evaluator.generate_scene(
-        node_network_name,
-        node_id,
-        display_type,
-        &self.node_type_registry,
-        &self.preferences.geometry_visualization_preferences,
-      );
-      
-      // Capture the selected node's unit cell and eval cache
-      if Some(node_id) == selected_node_id {
-        selected_node_unit_cell = node_data.unit_cell.clone();
-        selected_node_eval_cache = node_data.selected_node_eval_cache.take();
+        
+        // Update or insert into scene's node_data HashMap
+        self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
       }
       
-      // Update or insert into scene's node_data HashMap
-      self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
-    }
-    
-    // Update the selected node's unit cell and eval cache if they were re-evaluated
-    if selected_node_unit_cell.is_some() {
-      self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
-    }
-    if selected_node_eval_cache.is_some() {
-      self.last_generated_structure_designer_scene.selected_node_eval_cache = selected_node_eval_cache;
+      // Update the selected node's unit cell if it was re-evaluated
+      // Note: eval_cache is now accessed directly from node_data via get_selected_node_eval_cache()
+      if selected_node_unit_cell.is_some() {
+        self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
+      }
     }
     
     self.refresh_scene_dependent_node_data();
     
-    // Recreate the gadget if the selected node was re-evaluated
-    if let Some(selected_id) = selected_node_id {
-      if nodes_needing_evaluation.contains(&selected_id) {
-        if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
-          self.gadget = network.provide_gadget(&self);
-          if let Some(gadget) = &self.gadget {
-            self.last_generated_structure_designer_scene.tessellatable = Some(gadget.as_tessellatable());
-          }
-        }
+    // Always refresh the gadget (simplest approach - handles all cases)
+    // This ensures gadget is updated when:
+    // - Selected node was re-evaluated
+    // - Selected node was restored from cache
+    // - Selection changed
+    // - Node with gadget becomes node without gadget (gadget disappears)
+    if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
+      self.gadget = network.provide_gadget(&self);
+      if let Some(gadget) = &self.gadget {
+        self.last_generated_structure_designer_scene.tessellatable = Some(gadget.as_tessellatable());
+      } else {
+        // No gadget for selected node - clear tessellatable
+        self.last_generated_structure_designer_scene.tessellatable = None;
       }
     }
   }

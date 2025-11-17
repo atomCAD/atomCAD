@@ -9,7 +9,7 @@ pub fn get_relax_message() -> String {
         // Check if the selected node is a relax node
         if let Some(_node_id) = cad_instance.structure_designer.get_selected_node_id_with_type("relax") {
           // Try to get the evaluation cache and downcast it to RelaxEvalCache
-          if let Some(eval_cache) = cad_instance.structure_designer.last_generated_structure_designer_scene.selected_node_eval_cache.as_ref() {
+          if let Some(eval_cache) = cad_instance.structure_designer.get_selected_node_eval_cache() {
             if let Some(relax_cache) = eval_cache.downcast_ref::<RelaxEvalCache>() {
               return relax_cache.relax_message.clone();
             }
