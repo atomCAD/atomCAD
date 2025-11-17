@@ -5,6 +5,7 @@ use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::DQuat;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
 use crate::renderer::renderer::Renderer;
 use crate::util::transform::Transform;
 
@@ -239,13 +240,24 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.add_node("cuboid", DVec2::new(30.0, 30.0));
 }
 
-  pub fn refresh_structure_designer(cad_instance: &mut CADInstance, lightweight: bool) {
-    //let _timer = Timer::new(&format!("refresh_structure_designer lightweight: {}", lightweight));
-    cad_instance.structure_designer.refresh(lightweight);
+  pub fn refresh_structure_designer(cad_instance: &mut CADInstance, changes: &StructureDesignerChanges) {
+    //let _timer = Timer::new(&format!("refresh_structure_designer changes: {:?}", changes.mode));
+    
+    cad_instance.structure_designer.refresh(changes);
+    
+    // Get lightweight flag from the changes for renderer
+    let renderer_lightweight = changes.is_lightweight();
     cad_instance.renderer.refresh(
       &cad_instance.structure_designer.last_generated_structure_designer_scene,
-      lightweight,
+      renderer_lightweight,
       &cad_instance.structure_designer.preferences
     );
+  }
+
+  /// Convenience wrapper that gets pending changes and refreshes both StructureDesigner and Renderer
+  /// This is the standard way to refresh after any StructureDesigner operation
+  pub fn refresh_structure_designer_auto(cad_instance: &mut CADInstance) {
+    let changes = cad_instance.structure_designer.get_pending_changes();
+    refresh_structure_designer(cad_instance, &changes);
   }
 

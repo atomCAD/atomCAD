@@ -24,6 +24,8 @@ use crate::common::xyz_saver::save_xyz;
 use crate::common::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use super::structure_designer_changes::{StructureDesignerChanges, RefreshMode};
+
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
   pub network_evaluator: NetworkEvaluator,
@@ -38,6 +40,8 @@ pub struct StructureDesigner {
   // Per-node scene cache: maps displayed node IDs to their generated scenes
   // This enables incremental refresh by avoiding re-evaluation of unchanged nodes
   pub node_scene_cache: HashMap<u64, StructureDesignerScene>,
+  // Tracks pending changes since last refresh to determine what needs to be refreshed
+  pending_changes: StructureDesignerChanges,
 }
 
 impl StructureDesigner {
@@ -60,6 +64,7 @@ impl StructureDesigner {
       is_dirty: false,
       file_path: None,
       node_scene_cache: HashMap::new(),
+      pending_changes: StructureDesignerChanges::default(),
     }
   }
 }
@@ -142,8 +147,40 @@ impl StructureDesigner {
     node_type_name == needed_node_type_name
   }
 
+  /// Returns a clone of the pending changes to determine what needs to be refreshed
+  pub fn get_pending_changes(&self) -> StructureDesignerChanges {
+    self.pending_changes.clone()
+  }
+
+  /// Returns true if the pending refresh is lightweight (for Renderer)
+  pub fn is_pending_refresh_lightweight(&self) -> bool {
+    self.pending_changes.is_lightweight()
+  }
+
+  /// Marks a node's data as changed
+  pub fn mark_node_data_changed(&mut self, node_id: u64) {
+    self.pending_changes.mark_node_data_changed(node_id);
+  }
+
+  /// Marks that a full refresh is needed (for complex/unknown changes)
+  pub fn mark_full_refresh(&mut self) {
+    self.pending_changes.set_mode(RefreshMode::Full);
+  }
+
+  /// Marks that a lightweight refresh is needed (gadget tessellation only)
+  pub fn mark_lightweight_refresh(&mut self) {
+    self.pending_changes.set_mode(RefreshMode::Lightweight);
+  }
+
+  /// Marks that selection changed
+  pub fn mark_selection_changed(&mut self, previous_selection: Option<u64>, current_selection: Option<u64>) {
+    self.pending_changes.mark_selection_changed(previous_selection, current_selection);
+  }
+
   // Generates the scene to be rendered according to the displayed nodes of the active node network
-  pub fn refresh(&mut self, lightweight: bool) {
+  pub fn refresh(&mut self, changes: &StructureDesignerChanges) {
+    // Clear pending changes at the start of refresh
+    self.pending_changes.clear();
 
     // Check if node_network_name exists and clone it to avoid borrow conflicts
     let node_network_name = match &self.active_node_network_name {
@@ -151,61 +188,83 @@ impl StructureDesigner {
       None => return, // Return if node_network_name is None
     };
 
-    if !lightweight {
-      let network = match self.node_type_registry.node_networks.get(&node_network_name) {
-        Some(network) => network,
-        None => return,
-      };
-      
-      // Clear the node scene cache for the current refresh
-      self.node_scene_cache.clear();
-      
-      // Create new scene with empty node_data HashMap
-      self.last_generated_structure_designer_scene = StructureDesignerScene::new();
-      
-      // Track selected node's unit cell and eval cache
-      let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
-      let mut selected_node_eval_cache: Option<Box<dyn std::any::Any>> = None;
-      
-      // Generate NodeSceneData for each displayed node and populate node_data HashMap
-      for node_entry in &network.displayed_node_ids {
-        let node_id = *node_entry.0;
-        let display_type = *node_entry.1;
-        
-        // Generate NodeSceneData for this node
-        let mut node_data = self.network_evaluator.generate_scene(
-          &node_network_name,
-          node_id,
-          display_type,
-          &self.node_type_registry,
-          &self.preferences.geometry_visualization_preferences,
-        );
-        
-        // Capture the selected node's unit cell and eval cache
-        if Some(node_id) == network.selected_node_id {
-          selected_node_unit_cell = node_data.unit_cell.clone();
-          // Take the eval cache from the selected node's data
-          // We use take() to move it out without cloning (eval cache may not be cloneable)
-          selected_node_eval_cache = node_data.selected_node_eval_cache.take();
+    match changes.mode {
+      RefreshMode::Lightweight => {
+        // Lightweight refresh - only update gadget tessellation without re-evaluation
+        // The gadget is already active and should not be recreated
+        self.refresh_scene_dependent_node_data();
+        if let Some(gadget) = &self.gadget {
+          self.last_generated_structure_designer_scene.tessellatable = Some(gadget.as_tessellatable());
         }
-        
-        // Insert into final scene's node_data HashMap
-        self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
       }
       
-      // Set the selected node's unit cell and eval cache as global scene properties
-      self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
-      self.last_generated_structure_designer_scene.selected_node_eval_cache = selected_node_eval_cache;
+      RefreshMode::Full => {
+        // Full refresh - re-evaluate everything
+        self.refresh_full(&node_network_name);
+      }
+      
+      RefreshMode::Partial => {
+        // Partial refresh - use tracked changes
+        // For now, do full refresh (Phase 1 implementation)
+        // TODO: Implement optimized partial refresh using changes.visibility_changed, 
+        // changes.data_changed, and changes.selection_changed
+        self.refresh_full(&node_network_name);
+      }
     }
+  }
+  
+  // Full refresh implementation - re-evaluates all displayed nodes
+  fn refresh_full(&mut self, node_network_name: &str) {
+    let network = match self.node_type_registry.node_networks.get(node_network_name) {
+      Some(network) => network,
+      None => return,
+    };
+    
+    // Clear the node scene cache for the current refresh
+    self.node_scene_cache.clear();
+    
+    // Create new scene with empty node_data HashMap
+    self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+    
+    // Track selected node's unit cell and eval cache
+    let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
+    let mut selected_node_eval_cache: Option<Box<dyn std::any::Any>> = None;
+    
+    // Generate NodeSceneData for each displayed node and populate node_data HashMap
+    for node_entry in &network.displayed_node_ids {
+      let node_id = *node_entry.0;
+      let display_type = *node_entry.1;
+      
+      // Generate NodeSceneData for this node
+      let mut node_data = self.network_evaluator.generate_scene(
+        node_network_name,
+        node_id,
+        display_type,
+        &self.node_type_registry,
+        &self.preferences.geometry_visualization_preferences,
+      );
+      
+      // Capture the selected node's unit cell and eval cache
+      if Some(node_id) == network.selected_node_id {
+        selected_node_unit_cell = node_data.unit_cell.clone();
+        // Take the eval cache from the selected node's data
+        // We use take() to move it out without cloning (eval cache may not be cloneable)
+        selected_node_eval_cache = node_data.selected_node_eval_cache.take();
+      }
+      
+      // Insert into final scene's node_data HashMap
+      self.last_generated_structure_designer_scene.node_data.insert(node_id, node_data);
+    }
+    
+    // Set the selected node's unit cell and eval cache as global scene properties
+    self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
+    self.last_generated_structure_designer_scene.selected_node_eval_cache = selected_node_eval_cache;
 
     self.refresh_scene_dependent_node_data();
-    // Recreates the gadget if this in not a lightweight refresh
-    // in case a lightweight refresh the gasget is in action and should not be recreated.
-    if !lightweight {
-      // Use immutable access to avoid borrow conflicts with provide_gadget
-      if let Some(network) = self.node_type_registry.node_networks.get(&node_network_name) {
-        self.gadget = network.provide_gadget(&self);
-      }
+    
+    // Recreate the gadget for the selected node
+    if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
+      self.gadget = network.provide_gadget(&self);
     }
 
     if let Some(gadget) = &self.gadget {
@@ -226,6 +285,8 @@ impl StructureDesigner {
     self.add_node_network(&name);
     // Mark design as dirty since we added a new network
     self.set_dirty(true);
+    // Adding a network is a structural change requiring full refresh
+    self.mark_full_refresh();
   }
   
   pub fn add_node_network(&mut self, node_network_name: &str) {
@@ -286,6 +347,8 @@ impl StructureDesigner {
 
     // Mark design as dirty since we renamed a network
     self.set_dirty(true);
+    // Renaming a network is a structural change requiring full refresh
+    self.mark_full_refresh();
     true
   }
 
@@ -328,6 +391,8 @@ impl StructureDesigner {
 
     // Mark design as dirty since we deleted a network
     self.set_dirty(true);
+    // Deleting a network requires full refresh (complex change)
+    self.mark_full_refresh();
     Ok(())
   }
 
@@ -428,6 +493,8 @@ impl StructureDesigner {
       // Apply display policy considering only this node as dirty
       self.apply_node_display_policy(Some(&dirty_nodes));
     }
+
+    self.mark_node_data_changed(node_id);
     
     new_node_id
   }
@@ -506,6 +573,8 @@ impl StructureDesigner {
       
       // Mark design as dirty since we connected nodes
       self.set_dirty(true);
+      // Mark the destination node as having data changed (new input connection)
+      self.mark_node_data_changed(dest_node_id);
       
       // Create a HashSet with the source and destination nodes marked as dirty
       let mut dirty_nodes = HashSet::new();
@@ -547,6 +616,8 @@ impl StructureDesigner {
       network.set_node_network_data(node_id, data);
       // Mark design as dirty since we modified node data
       self.set_dirty(true);
+      // Track that this node's data changed
+      self.mark_node_data_changed(node_id);
     }
     
     // Cache custom NodeType if needed after data is set
@@ -607,6 +678,7 @@ impl StructureDesigner {
       Some(name) => name,
       None => return None,
     };
+    self.pending_changes.mark_node_data_changed(node_id);
     self.node_type_registry
       .node_networks
       .get_mut(network_name)
@@ -617,9 +689,17 @@ impl StructureDesigner {
     &self.network_evaluator
   }
 
+  /// Returns a reference to the active node network, if any
+  pub fn get_active_node_network(&self) -> Option<&NodeNetwork> {
+    let network_name = self.active_node_network_name.as_ref()?;
+    self.node_type_registry.node_networks.get(network_name)
+  }
+
   // Sets the active node network name
   pub fn set_active_node_network_name(&mut self, node_network_name: Option<String>) {
     self.active_node_network_name = node_network_name;
+    // Switching networks requires full refresh (everything changes)
+    self.mark_full_refresh();
   }
 
   /// Returns true if the design has been modified since the last save/load
@@ -647,6 +727,8 @@ impl StructureDesigner {
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
       network.set_node_display(node_id, is_displayed);
+      // Track that this node's visibility changed
+      self.pending_changes.visibility_changed.insert(node_id);
     }
   }
 
@@ -688,6 +770,10 @@ impl StructureDesigner {
       
       // If the selection was successful, update the display policy
       if ret {
+        // Track selection change
+        let current_selection = Some(node_id);
+        self.mark_selection_changed(previously_selected_node_id, current_selection);
+        
         // Create a HashSet with the previous and newly selected node IDs
         let mut dirty_nodes = HashSet::new();
         dirty_nodes.insert(node_id); // New selection
@@ -720,14 +806,20 @@ impl StructureDesigner {
       // Update the selection
       let ret = network.select_wire(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
       
-      // If the selection was successful and there was a previously selected node
-      if ret && previously_selected_node_id.is_some() {
-        // Create a HashSet with just the previously selected node ID
-        let mut dirty_nodes = HashSet::new();
-        dirty_nodes.insert(previously_selected_node_id.unwrap());
+      // If the selection was successful
+      if ret {
+        // Track selection change (wire selection clears node selection)
+        self.mark_selection_changed(previously_selected_node_id, None);
         
-        // Apply display policy considering only the previously selected node as dirty
-        self.apply_node_display_policy(Some(&dirty_nodes));
+        // If there was a previously selected node, update display policy
+        if let Some(prev_id) = previously_selected_node_id {
+          // Create a HashSet with just the previously selected node ID
+          let mut dirty_nodes = HashSet::new();
+          dirty_nodes.insert(prev_id);
+          
+          // Apply display policy considering only the previously selected node as dirty
+          self.apply_node_display_policy(Some(&dirty_nodes));
+        }
       }
       
       ret
@@ -748,6 +840,9 @@ impl StructureDesigner {
       
       // Clear the selection
       network.clear_selection();
+
+      // Track selection change
+      self.mark_selection_changed(previously_selected_node_id, None);
 
       // If there was a previously selected node
       if let Some(prev_id) = previously_selected_node_id {
@@ -800,6 +895,10 @@ impl StructureDesigner {
       node_network.delete_selected();
       // Mark design as dirty since we deleted something
       self.set_dirty(true);
+      // TODO: we do a full refresh for now,
+      // but this can be a partial refresh with marking data changes
+      // in all nodes wired to the output node of the deleted node.
+      self.mark_full_refresh();
     }
     
     // Only apply display policy if there were dirty nodes
@@ -899,6 +998,11 @@ impl StructureDesigner {
           dirty_node_ids
         );
         
+        // Track visibility changes
+        for (node_id, _display_type) in &changes {
+          self.pending_changes.visibility_changed.insert(*node_id);
+        }
+        
         // Apply the changes to the node network
         for (node_id, display_type) in changes {
           node_network.set_node_display_type(node_id, display_type);
@@ -918,6 +1022,8 @@ impl StructureDesigner {
     // If node display preferences have changed, reapply the node display policy
     if node_display_prefs_changed {
       self.apply_node_display_policy(None);
+      // Preference changes require full refresh
+      self.mark_full_refresh();
     }
   }
 
@@ -936,18 +1042,29 @@ impl StructureDesigner {
     if let Some(gadget) = &mut self.gadget {
       gadget.start_drag(handle_index, ray_origin, ray_direction);
     }
+    self.mark_lightweight_refresh();
   }
 
   pub fn gadget_drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
     if let Some(gadget) = &mut self.gadget {
       gadget.drag(handle_index, ray_origin, ray_direction);
     }
+    // Gadget dragging only needs lightweight refresh (tessellation update)
+    self.mark_lightweight_refresh();
   }
 
   pub fn gadget_end_drag(&mut self) {
     if let Some(gadget) = &mut self.gadget {
       gadget.end_drag();
       self.sync_gadget_data();
+      // Ending drag syncs data back to the node
+      if let Some(network_name) = &self.active_node_network_name.clone() {
+        if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+          if let Some(node_id) = network.selected_node_id {
+            self.mark_node_data_changed(node_id);
+          }
+        }
+      }
     }
   }
 
@@ -1040,6 +1157,9 @@ impl StructureDesigner {
       
       // Apply display policy to newly imported networks
       self.apply_node_display_policy(None);
+      
+      // Importing networks is a structural change requiring full refresh
+      self.mark_full_refresh();
     }
     
     result
@@ -1072,6 +1192,9 @@ impl StructureDesigner {
     
     // Set the file path since we just loaded from this file
     self.file_path = Some(file_path.to_string());
+    
+    // Loading networks is a structural change requiring full refresh
+    self.mark_full_refresh();
 
     Ok(())
   }

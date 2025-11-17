@@ -1,5 +1,4 @@
-use crate::api::api_common::refresh_structure_designer;
-use crate::api::api_common::with_mut_cad_instance;
+use crate::api::api_common::{refresh_structure_designer_auto, with_mut_cad_instance};
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::api::common_api_types::APIResult;
 use crate::common::xyz_loader::load_xyz;
@@ -71,7 +70,7 @@ pub fn import_xyz(node_id: u64) -> APIResult {
           // Set the atomic structure in the import_xyz_data
           import_xyz_data.atomic_structure = Some(atomic_structure);
           
-          refresh_structure_designer(instance, false);
+          refresh_structure_designer_auto(instance);
           
           APIResult {
             success: true,

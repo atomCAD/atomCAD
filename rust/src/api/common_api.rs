@@ -12,7 +12,7 @@ use crate::api::api_common::CADInstance;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::add_sample_network;
-use crate::api::api_common::refresh_structure_designer;
+use crate::api::api_common::refresh_structure_designer_auto;
 use crate::api::structure_designer::structure_designer_preferences::{AtomicStructureVisualization, BackgroundPreferences};
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
@@ -87,7 +87,8 @@ async fn initialize_cad_instance_async() {
       cad_instance.renderer.refresh_background(None, &cad_instance.structure_designer.preferences.background_preferences);
       add_sample_network(&mut cad_instance.structure_designer);
       cad_instance.structure_designer.apply_node_display_policy(None);
-      refresh_structure_designer(cad_instance, false);
+      cad_instance.structure_designer.mark_full_refresh();
+      refresh_structure_designer_auto(cad_instance);
     }
   }
 }
@@ -193,7 +194,7 @@ pub fn gadget_start_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: 
       cad_instance.structure_designer.gadget_start_drag(handle_index, origin_vec, direction_vec);
       
       // Call refresh_renderer inside the closure to access cad_instance
-      refresh_structure_designer(cad_instance, true);
+      refresh_structure_designer_auto(cad_instance);
     });
   }
 }
@@ -205,8 +206,7 @@ pub fn gadget_drag(handle_index: i32, ray_origin: APIVec3, ray_direction: APIVec
       let origin_vec = from_api_vec3(&ray_origin);
       let direction_vec = from_api_vec3(&ray_direction);      
       instance.structure_designer.gadget_drag(handle_index, origin_vec, direction_vec);
-      // Important: Preserve the lightweight rendering flag (true) as per your memory
-      refresh_structure_designer(instance, true);
+      refresh_structure_designer_auto(instance);
     });
   }
 }
@@ -216,7 +216,7 @@ pub fn gadget_end_drag() {
   unsafe {
     with_mut_cad_instance(|instance| {
       instance.structure_designer.gadget_end_drag();
-      refresh_structure_designer(instance, false);
+      refresh_structure_designer_auto(instance);
     });
   }
 }
@@ -290,7 +290,8 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
         // Update the camera buffer
         cad_instance.renderer.update_camera_buffer();
 
-        refresh_structure_designer(cad_instance, true);    
+        cad_instance.structure_designer.mark_lightweight_refresh();
+        refresh_structure_designer_auto(cad_instance);    
         return;
       }
     });
@@ -303,7 +304,7 @@ pub fn set_camera_transform(transform: APITransform) {
     with_mut_cad_instance(|cad_instance| {
       let transform = from_api_transform(&transform);
       cad_instance.renderer.set_camera_transform(&transform);
-      refresh_structure_designer(cad_instance, false);
+      refresh_structure_designer_auto(cad_instance);
     });
   }
 }
@@ -314,7 +315,7 @@ pub fn set_orthographic_mode(orthographic: bool) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_orthographic_mode(orthographic);
-      refresh_structure_designer(cad_instance, false);
+      refresh_structure_designer_auto(cad_instance);
     });
   }
 }
@@ -336,7 +337,7 @@ pub fn set_ortho_half_height(half_height: f64) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_ortho_half_height(half_height);
-      refresh_structure_designer(cad_instance, false);
+      refresh_structure_designer_auto(cad_instance);
     });
   }
 }
@@ -373,7 +374,7 @@ pub fn set_camera_canonical_view(view: APICameraCanonicalView) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_camera_canonical_view(view);
-      refresh_structure_designer(cad_instance, false);
+      refresh_structure_designer_auto(cad_instance);
     });
   }
 }

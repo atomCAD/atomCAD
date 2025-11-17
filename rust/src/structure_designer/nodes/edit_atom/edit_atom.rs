@@ -458,6 +458,9 @@ pub fn get_active_edit_atom_data(structure_designer: &StructureDesigner) -> Opti
 
 /// Gets the EditAtomData for the currently selected edit_atom node (mutable)
 /// 
+/// This method automatically marks the node data as changed since it's only called
+/// when the caller intends to modify the EditAtomData.
+/// 
 /// Returns None if:
 /// - There is no active node network
 /// - No node is selected in the active network
@@ -465,6 +468,9 @@ pub fn get_active_edit_atom_data(structure_designer: &StructureDesigner) -> Opti
 /// - The EditAtomData cannot be retrieved or cast
 pub fn get_selected_edit_atom_data_mut(structure_designer: &mut StructureDesigner) -> Option<&mut EditAtomData> {
   let selected_node_id = structure_designer.get_selected_node_id_with_type("edit_atom")?;
+
+  // Mark that this node's data will be changed (since this method is only called for mutations)
+  structure_designer.mark_node_data_changed(selected_node_id);
 
   // Get the node data and cast it to EditAtomData
   let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;

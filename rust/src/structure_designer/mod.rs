@@ -1,5 +1,5 @@
 pub mod structure_designer;
-pub mod structure_designer_refresh_mode;
+pub mod structure_designer_changes;
 pub mod common_constants;
 pub mod data_type;
 pub mod node_type;
