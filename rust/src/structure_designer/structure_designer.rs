@@ -37,9 +37,6 @@ pub struct StructureDesigner {
   pub import_manager: NodeNetworksImportManager,
   pub is_dirty: bool,
   pub file_path: Option<String>,
-  // Per-node scene cache: maps displayed node IDs to their generated scenes
-  // This enables incremental refresh by avoiding re-evaluation of unchanged nodes
-  pub node_scene_cache: HashMap<u64, StructureDesignerScene>,
   // Tracks pending changes since last refresh to determine what needs to be refreshed
   pending_changes: StructureDesignerChanges,
 }
@@ -63,7 +60,6 @@ impl StructureDesigner {
       import_manager: NodeNetworksImportManager::new(),
       is_dirty: false,
       file_path: None,
-      node_scene_cache: HashMap::new(),
       pending_changes: StructureDesignerChanges::default(),
     }
   }
@@ -219,9 +215,6 @@ impl StructureDesigner {
       Some(network) => network,
       None => return,
     };
-    
-    // Clear the node scene cache for the current refresh
-    self.node_scene_cache.clear();
     
     // Create new scene with empty node_data HashMap
     self.last_generated_structure_designer_scene = StructureDesignerScene::new();

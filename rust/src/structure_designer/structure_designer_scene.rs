@@ -8,8 +8,6 @@ use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
-// ===== NEW ARCHITECTURE FOR PER-NODE SCENE CACHING =====
-
 /// The explicit geometric/data output of a single node evaluation
 /// This represents the tessellatable/renderable output
 pub enum NodeOutput {
@@ -69,8 +67,6 @@ impl NodeSceneData {
     }
 }
 
-// ===== END NEW ARCHITECTURE =====
-
 // StructureDesignerScene is a struct that holds the scene to be rendered in the structure designer.
 pub struct StructureDesignerScene {
     /// Per-node scene data, keyed by node ID
@@ -118,6 +114,3 @@ impl StructureDesignerScene {
         all_strings
     }
 }
-
-// Scene trait implementation removed - we now use StructureDesignerScene directly
-// The new tessellator iterates over node_data HashMap instead of using the trait
