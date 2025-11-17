@@ -2,12 +2,13 @@ use crate::common::atomic_structure::AtomicStructure;
 use crate::common::surface_point_cloud::SurfacePointCloud;
 use crate::common::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::any::Any;
 use crate::common::poly_mesh::PolyMesh;
 use crate::structure_designer::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
+use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 
 /// The explicit geometric/data output of a single node evaluation
 /// This represents the tessellatable/renderable output
@@ -70,9 +71,14 @@ impl NodeSceneData {
 
 // StructureDesignerScene is a struct that holds the scene to be rendered in the structure designer.
 pub struct StructureDesignerScene {
-    /// Per-node scene data, keyed by node ID
+    /// Per-node scene data, keyed by node ID (for visible nodes)
     /// Each entry contains the node's output, geo_tree (if applicable), and evaluation metadata
     pub node_data: HashMap<u64, NodeSceneData>,
+    
+    /// LRU cache for invisible node scene data
+    /// Retains recently invisible nodes to enable ultra-fast visibility restoration
+    /// Memory-bounded to prevent excessive memory usage
+    invisible_node_cache: MemoryBoundedLruCache<u64, NodeSceneData>,
     
     /// Gadget for the currently selected node (if any)
     /// Created after evaluation, not part of node evaluation output
@@ -88,9 +94,16 @@ pub struct StructureDesignerScene {
 }
 
 impl StructureDesignerScene {
+    /// Default cache size: 256 MB for invisible nodes
+    const DEFAULT_INVISIBLE_CACHE_SIZE_BYTES: usize = 256 * 1024 * 1024;
+    
     pub fn new() -> Self {
         Self {
             node_data: HashMap::new(),
+            invisible_node_cache: MemoryBoundedLruCache::new(
+                Self::DEFAULT_INVISIBLE_CACHE_SIZE_BYTES,
+                |node_data: &NodeSceneData| node_data.estimate_memory_bytes()
+            ),
             tessellatable: None,
             selected_node_eval_cache: None,
             unit_cell: None,
@@ -113,6 +126,51 @@ impl StructureDesignerScene {
             all_strings.extend(node_data.node_output_strings.clone());
         }
         all_strings
+    }
+    
+    // Cache management methods for invisible nodes
+    
+    /// Moves a node from visible (node_data) to invisible (cache)
+    /// Returns true if the node was found and moved, false otherwise
+    pub fn move_to_cache(&mut self, node_id: u64) -> bool {
+        if let Some(node_data) = self.node_data.remove(&node_id) {
+            self.invisible_node_cache.insert(node_id, node_data);
+            true
+        } else {
+            false
+        }
+    }
+    
+    /// Restores a node from invisible cache to visible node_data
+    /// Returns true if the node was found in cache and restored, false otherwise
+    pub fn restore_from_cache(&mut self, node_id: u64) -> bool {
+        if let Some(node_data) = self.invisible_node_cache.pop(&node_id) {
+            self.node_data.insert(node_id, node_data);
+            true
+        } else {
+            false
+        }
+    }
+    
+    /// Invalidates (removes) cached nodes that are affected by data changes
+    /// This ensures stale cached data is not restored when nodes become visible again
+    /// 
+    /// # Arguments
+    /// * `node_ids` - Set of node IDs to invalidate from the cache
+    pub fn invalidate_cached_nodes(&mut self, node_ids: &HashSet<u64>) {
+        for &node_id in node_ids {
+            self.invisible_node_cache.pop(&node_id);
+        }
+    }
+    
+    /// Returns the number of nodes currently in the invisible cache
+    pub fn cached_node_count(&self) -> usize {
+        self.invisible_node_cache.len()
+    }
+    
+    /// Returns the current memory usage of the invisible cache in bytes
+    pub fn cached_memory_bytes(&self) -> usize {
+        self.invisible_node_cache.current_memory_bytes()
     }
 }
 

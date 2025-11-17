@@ -264,39 +264,80 @@ impl StructureDesigner {
   }
   
   // Partial refresh implementation - only re-evaluates affected nodes
+  // Uses invisible node caching for ultra-fast visibility changes
   fn refresh_partial(&mut self, node_network_name: &str, changes: &StructureDesignerChanges) {
+    // Debug: Print what changes are being processed
+    println!("DEBUG refresh_partial: visibility_changed={:?}, data_changed={:?}", 
+             changes.visibility_changed, changes.data_changed);
+    
     let network = match self.node_type_registry.node_networks.get(node_network_name) {
       Some(network) => network,
       None => return,
     };
     
-    // Remove nodes that became invisible from the scene
+    // Clone necessary data before mutable borrows to avoid borrow checker issues
+    let selected_node_id = network.selected_node_id;
+    
+    // Step 1: Cache nodes that became invisible
     for &node_id in &changes.visibility_changed {
-      // If the node is not in displayed_node_ids, it became invisible - remove it
       if !network.displayed_node_ids.contains_key(&node_id) {
-        self.last_generated_structure_designer_scene.node_data.remove(&node_id);
+        // Node became invisible - move to cache for potential future restoration
+        println!("DEBUG refresh_partial: Caching invisible node_id={}", node_id);
+        self.last_generated_structure_designer_scene.move_to_cache(node_id);
       }
     }
     
-    // Compute the set of nodes that need to be re-evaluated
-    let nodes_to_evaluate = self.compute_nodes_to_evaluate(network, changes);
+    // Step 2: Compute transitive dependencies of data changes and invalidate cache
+    let affected_by_data_changes = if !changes.data_changed.is_empty() {
+      let affected = compute_downstream_dependents(network, &changes.data_changed);
+      println!("DEBUG refresh_partial: affected_by_data_changes={:?}", affected);
+      self.last_generated_structure_designer_scene.invalidate_cached_nodes(&affected);
+      affected
+    } else {
+      HashSet::new()
+    };
+    
+    // Step 3: Restore nodes that became visible from cache (if possible)
+    // (At this point we have data in the cache that actually can be restored.)
+    let mut nodes_needing_evaluation = HashSet::new();
+    
+    for &node_id in &changes.visibility_changed {
+      if network.displayed_node_ids.contains_key(&node_id) {
+        // Node became visible - try to restore from cache (ultra-fast path)
+        let restored = self.last_generated_structure_designer_scene.restore_from_cache(node_id);
+        println!("DEBUG refresh_partial: node_id={}, restored={}", node_id, restored);
+        
+        if !restored {
+          // Not in cache (or was invalidated) - needs re-evaluation
+          nodes_needing_evaluation.insert(node_id);
+        }
+      }
+    }
+    
+    // Step 4: Add visible nodes affected by data changes to evaluation set
+    for &node_id in &affected_by_data_changes {
+      if network.displayed_node_ids.contains_key(&node_id) {
+        nodes_needing_evaluation.insert(node_id);
+      }
+    }
+    
+    // Debug: Print nodes needing evaluation
+    println!("DEBUG refresh_partial: nodes_needing_evaluation={:?}", nodes_needing_evaluation);
     
     // If no nodes need evaluation, just update scene-dependent data and return
-    if nodes_to_evaluate.is_empty() {
+    if nodes_needing_evaluation.is_empty() {
       self.refresh_scene_dependent_node_data();
       return;
     }
-    
-    // Clone necessary data before mutable borrows to avoid borrow checker issues
-    let selected_node_id = network.selected_node_id;
     
     // Track selected node's unit cell and eval cache
     let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
     let mut selected_node_eval_cache: Option<Box<dyn std::any::Any>> = None;
     
-    // Re-evaluate only the affected nodes
-    for &node_id in &nodes_to_evaluate {
-      // Get the display type for this node (it must be displayed if it's in nodes_to_evaluate)
+    // Step 5: Re-evaluate nodes that need it
+    for &node_id in &nodes_needing_evaluation {
+      println!("DEBUG refresh_partial: Evaluating node_id={}", node_id);
+      // Get the display type for this node (it must be displayed if it's in nodes_needing_evaluation)
       let display_type = {
         let network = match self.node_type_registry.node_networks.get(node_network_name) {
           Some(network) => network,
@@ -339,7 +380,7 @@ impl StructureDesigner {
     
     // Recreate the gadget if the selected node was re-evaluated
     if let Some(selected_id) = selected_node_id {
-      if nodes_to_evaluate.contains(&selected_id) {
+      if nodes_needing_evaluation.contains(&selected_id) {
         if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
           self.gadget = network.provide_gadget(&self);
           if let Some(gadget) = &self.gadget {
@@ -348,33 +389,6 @@ impl StructureDesigner {
         }
       }
     }
-  }
-  
-  // Computes the set of visible nodes that need to be re-evaluated based on changes
-  fn compute_nodes_to_evaluate(&self, network: &NodeNetwork, changes: &StructureDesignerChanges) -> HashSet<u64> {
-    let mut nodes_to_evaluate = HashSet::new();
-    
-    // 1. Add nodes whose visibility changed (and are now visible)
-    for &node_id in &changes.visibility_changed {
-      if network.displayed_node_ids.contains_key(&node_id) {
-        nodes_to_evaluate.insert(node_id);
-      }
-    }
-    
-    // 2. Add visible nodes that transitively depend on nodes whose data changed
-    if !changes.data_changed.is_empty() {
-      // Compute all downstream dependents (including the changed nodes themselves)
-      let affected_nodes = compute_downstream_dependents(network, &changes.data_changed);
-      
-      // Only include nodes that are currently visible
-      for &node_id in &affected_nodes {
-        if network.displayed_node_ids.contains_key(&node_id) {
-          nodes_to_evaluate.insert(node_id);
-        }
-      }
-    }
-    
-    nodes_to_evaluate
   }
 
   // node network methods
