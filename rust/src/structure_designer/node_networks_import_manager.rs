@@ -114,14 +114,19 @@ impl NodeNetworksImportManager {
     /// The UI should warn users about potential overwrites before calling this method.
     /// 
     /// # Examples
-    /// ```
+    /// ```no_run
+    /// # use rust_lib_flutter_cad::structure_designer::node_networks_import_manager::NodeNetworksImportManager;
+    /// # use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+    /// # let mut manager = NodeNetworksImportManager::new();
+    /// # let mut registry = NodeTypeRegistry::new();
     /// // Import with all dependencies - if "physics" depends on "math" and "utils":
-    /// manager.import_networks_and_clear(&["physics"], &mut registry, None)?;
+    /// manager.import_networks_and_clear(&["physics".to_string()], &mut registry, None)?;
     /// // Result: "physics", "math", "utils" all imported
     /// 
     /// // Import with prefix and dependencies:
-    /// manager.import_networks_and_clear(&["physics"], &mut registry, Some("lib::"))?;
+    /// manager.import_networks_and_clear(&["physics".to_string()], &mut registry, Some("lib::"))?;
     /// // Result: "lib::physics", "lib::math", "lib::utils" all imported
+    /// # Ok::<(), String>(())
     /// ```
     pub fn import_networks_and_clear(
         &mut self, 

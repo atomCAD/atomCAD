@@ -149,6 +149,38 @@ pub struct NodeNetwork {
 }
 
 impl NodeNetwork {
+  /// Builds a reverse dependency map (downstream connections)
+  /// 
+  /// For each node, this returns the set of nodes that depend on it
+  /// (i.e., nodes that have this node as an input in their arguments)
+  /// 
+  /// # Returns
+  /// A HashMap where:
+  /// - Key: source node ID
+  /// - Value: HashSet of node IDs that have the key node as an input
+  /// 
+  /// # Example
+  /// If node B depends on node A (A → B), then the map will contain:
+  /// - Key: A, Value: {B}
+  pub fn build_reverse_dependency_map(&self) -> HashMap<u64, HashSet<u64>> {
+    let mut reverse_map: HashMap<u64, HashSet<u64>> = HashMap::new();
+    
+    for (&node_id, node) in &self.nodes {
+      for arg in &node.arguments {
+        for (&source_node_id, &_output_pin_index) in &arg.argument_output_pins {
+          // node_id depends on source_node_id
+          // So source_node_id has node_id as a downstream dependent
+          reverse_map
+            .entry(source_node_id)
+            .or_insert_with(HashSet::new)
+            .insert(node_id);
+        }
+      }
+    }
+    
+    reverse_map
+  }
+
   /// Returns a HashSet of all node IDs that are directly connected to the given node
   /// This includes both nodes that provide input to this node and nodes that receive output from this node
   pub fn get_connected_node_ids(&self, node_id: u64) -> HashSet<u64> {

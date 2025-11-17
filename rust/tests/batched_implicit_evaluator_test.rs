@@ -6,10 +6,7 @@ use glam::f64::{DVec2, DVec3};
 #[test]
 fn test_batched_evaluator_basic() {
     // Create a simple sphere for testing
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
     
     let mut evaluator = BatchedImplicitEvaluator::new(&sphere);
     
@@ -32,10 +29,7 @@ fn test_batched_evaluator_basic() {
 
 #[test]
 fn test_immediate_evaluation() {
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
     
     let evaluator = BatchedImplicitEvaluator::new(&sphere);
     
@@ -45,10 +39,7 @@ fn test_immediate_evaluation() {
 
 #[test]
 fn test_empty_flush() {
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
     
     let mut evaluator = BatchedImplicitEvaluator::new(&sphere);
     let results = evaluator.flush();
@@ -58,10 +49,7 @@ fn test_empty_flush() {
 
 #[test]
 fn test_large_batch() {
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
     
     let mut evaluator = BatchedImplicitEvaluator::new(&sphere);
     
@@ -92,10 +80,7 @@ fn test_large_batch() {
 
 #[test]
 fn test_utility_methods() {
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
     
     let mut evaluator = BatchedImplicitEvaluator::new(&sphere);
     
@@ -119,10 +104,7 @@ fn test_utility_methods() {
 
 #[test]
 fn test_direct_2d_batch() {
-    let circle = GeoNode::Circle {
-        center: DVec2::ZERO,
-        radius: 1.0,
-    };
+    let circle = GeoNode::circle(DVec2::ZERO, 1.0);
     
     // Test direct 2D batch evaluation
     let mut batch_points = [DVec2::ZERO; BATCH_SIZE];
@@ -146,10 +128,7 @@ fn test_direct_2d_batch() {
 
 #[test]
 fn test_direct_inplace_batch() {
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
     
     // Test direct inplace batch evaluation
     let mut batch_points = [DVec3::ZERO; BATCH_SIZE];

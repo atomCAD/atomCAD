@@ -5,10 +5,7 @@ use glam::f64::DVec3;
 #[test]
 fn test_multi_threaded_evaluation() {
     // Create a simple sphere for testing
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
 
     // Create evaluators with different threading configurations
     let mut single_threaded = BatchedImplicitEvaluator::new(&sphere);
@@ -43,10 +40,7 @@ fn test_multi_threaded_evaluation() {
 
 #[test]
 fn test_threading_configuration() {
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
 
     // Test single-threaded by default
     let single_threaded = BatchedImplicitEvaluator::new(&sphere);
@@ -62,10 +56,7 @@ fn test_threading_configuration() {
 
 #[test]
 fn test_fallback_to_single_threaded() {
-    let sphere = GeoNode::Sphere {
-        center: DVec3::ZERO,
-        radius: 1.0,
-    };
+    let sphere = GeoNode::sphere(DVec3::ZERO, 1.0);
 
     // Create multi-threaded evaluator but with small workload
     let mut evaluator = BatchedImplicitEvaluator::new_with_threading(&sphere, true);
@@ -90,19 +81,11 @@ fn test_fallback_to_single_threaded() {
 #[test]
 fn test_complex_geometry_multi_threaded() {
     // Create a more complex geometry tree
-    let sphere1 = Box::new(GeoNode::Sphere {
-        center: DVec3::new(-0.5, 0.0, 0.0),
-        radius: 0.8,
-    });
+    let sphere1 = Box::new(GeoNode::sphere(DVec3::new(-0.5, 0.0, 0.0), 0.8));
     
-    let sphere2 = Box::new(GeoNode::Sphere {
-        center: DVec3::new(0.5, 0.0, 0.0),
-        radius: 0.8,
-    });
+    let sphere2 = Box::new(GeoNode::sphere(DVec3::new(0.5, 0.0, 0.0), 0.8));
 
-    let union = GeoNode::Union3D {
-        shapes: vec![*sphere1, *sphere2],
-    };
+    let union = GeoNode::union_3d(vec![*sphere1, *sphere2]);
 
     // Test with both single and multi-threaded evaluation
     let mut single_threaded = BatchedImplicitEvaluator::new(&union);

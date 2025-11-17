@@ -65,32 +65,6 @@ impl NodeDisplayPolicyResolver {
     }
   }
   
-  /// Calculates a map of reverse connections in the node network
-  /// 
-  /// # Parameters
-  /// * `node_network` - The node network to analyze
-  /// 
-  /// # Returns
-  /// A HashMap where keys are node IDs and values are sets of node IDs that connect to the key node
-  fn calculate_reverse_connections(&self, node_network: &NodeNetwork) -> HashMap<u64, HashSet<u64>> {
-    let mut reverse_connections: HashMap<u64, HashSet<u64>> = HashMap::new();
-    
-    // Build the reverse connection map
-    for (&node_id, node) in &node_network.nodes {
-      for arg in &node.arguments {
-        for (&target_node_id, &_output_pin_index) in &arg.argument_output_pins {
-          // Add an entry that node_id connects to target_node_id
-          reverse_connections
-            .entry(target_node_id)
-            .or_insert_with(HashSet::new)
-            .insert(node_id);
-        }
-      }
-    }
-    
-    reverse_connections
-  }
-  
   /// Finds all node islands in the network that contain any of the specified dirty nodes
   /// 
   /// # Parameters
@@ -182,7 +156,7 @@ impl NodeDisplayPolicyResolver {
     }
     
     // Calculate reverse connections for traversal
-    let reverse_connections = self.calculate_reverse_connections(node_network);
+    let reverse_connections = node_network.build_reverse_dependency_map();
     
     // If dirty_node_ids is None, consider all nodes as dirty
     // Create an owned HashSet for all nodes if needed
