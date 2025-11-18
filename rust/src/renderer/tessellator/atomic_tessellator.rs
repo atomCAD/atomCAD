@@ -165,7 +165,7 @@ fn get_bond_color(bond: &Bond) -> Vec3 {
 /// Shared helper to get the effective display state for an atom
 /// Gets display state from the atomic structure's decorator
 /// (Scene markers were deprecated and always returned false)
-fn get_atom_display_state(atom_id: u64, atomic_structure: &AtomicStructure) -> AtomDisplayState {
+fn get_atom_display_state(atom_id: u32, atomic_structure: &AtomicStructure) -> AtomDisplayState {
   atomic_structure.decorator.get_atom_display_state(atom_id)
 }
 

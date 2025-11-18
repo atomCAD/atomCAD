@@ -44,7 +44,7 @@ const SECONDARY_DIRECTIONS: [DVec3; 4] = [
 /// 
 pub fn hydrogen_passivate_diamond(structure: &mut AtomicStructure) {
     // Collect all atom IDs to avoid borrowing issues during modification
-    let atom_ids: Vec<u64> = structure.atoms.keys().cloned().collect();
+    let atom_ids: Vec<u32> = structure.atoms.keys().cloned().collect();
     
     for &atom_id in &atom_ids {
         if let Some(atom) = structure.get_atom(atom_id) {
@@ -75,7 +75,7 @@ pub fn hydrogen_passivate_diamond(structure: &mut AtomicStructure) {
 }
 
 /// Gets the normalized directions of all bonds from a given atom
-fn get_existing_bond_directions(structure: &AtomicStructure, atom_id: u64) -> Vec<DVec3> {
+fn get_existing_bond_directions(structure: &AtomicStructure, atom_id: u32) -> Vec<DVec3> {
     let mut directions = Vec::new();
     
     if let Some(atom) = structure.get_atom(atom_id) {

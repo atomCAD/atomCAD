@@ -48,46 +48,46 @@ lazy_static! {
     ];
 }
 
-/// Converts a crystal lattice position to a unique 64-bit ID.
+/// Converts a crystal lattice position to a unique 32-bit ID.
 /// Format:
-/// - lower 16 bits: signed X position
-/// - next 16 bits: signed Y position
-/// - next 16 bits: signed Z position
-/// - most significant bit (bit 63) set to 1, signifying that this is special id with this format
-pub fn in_crystal_pos_to_id(pos: &IVec3) -> u64 {
-    // Extract the components
-    let x = pos.x as i16;
-    let y = pos.y as i16;
-    let z = pos.z as i16;
+/// - lower 10 bits: signed X position (-512 to 511)
+/// - next 10 bits: signed Y position (-512 to 511)
+/// - next 10 bits: signed Z position (-512 to 511)
+/// - most significant bit (bit 31) set to 1, signifying that this is special id with this format
+pub fn in_crystal_pos_to_id(pos: &IVec3) -> u32 {
+    // Extract the components (clamped to 10-bit range: -512 to 511)
+    let x = pos.x.clamp(-512, 511) as i16;
+    let y = pos.y.clamp(-512, 511) as i16;
+    let z = pos.z.clamp(-512, 511) as i16;
     
-    // Convert to unsigned for bit manipulation
-    let x_bits = (x as u16) as u64;
-    let y_bits = (y as u16) as u64;
-    let z_bits = (z as u16) as u64;
+    // Convert to unsigned for bit manipulation (mask to 10 bits)
+    let x_bits = (x as u16 & 0x3FF) as u32;
+    let y_bits = (y as u16 & 0x3FF) as u32;
+    let z_bits = (z as u16 & 0x3FF) as u32;
     
     // Construct the ID
-    let mut id: u64 = 0;
-    id |= x_bits;                  // Bits 0-15: X position
-    id |= y_bits << 16;          // Bits 16-31: Y position
-    id |= z_bits << 32;          // Bits 32-47: Z position
-    id |= 1u64 << 63;            // Bit 63: Set to 1 to indicate crystal atom ID
+    let mut id: u32 = 0;
+    id |= x_bits;                  // Bits 0-9: X position
+    id |= y_bits << 10;            // Bits 10-19: Y position
+    id |= z_bits << 20;            // Bits 20-29: Z position
+    id |= 1u32 << 31;              // Bit 31: Set to 1 to indicate crystal atom ID
     
     id
 }
 
-/// Checks if the given ID represents a crystal atom (has bit 63 set).
-pub fn is_crystal_atom_id(id: u64) -> bool {
-    (id & (1u64 << 63)) != 0
+/// Checks if the given ID represents a crystal atom (has bit 31 set).
+pub fn is_crystal_atom_id(id: u32) -> bool {
+    (id & (1u32 << 31)) != 0
 }
 
 /// Extracts the crystal lattice position from a crystal atom ID.
 /// WARNING: This function assumes the ID is a valid crystal atom ID.
 /// Use is_crystal_atom_id() to check before calling this function.
-pub fn id_to_in_crystal_pos(id: u64) -> IVec3 {
-    // Extract each 16-bit component and convert to signed integers
-    let x = ((id & 0xFFFF) as u16) as i16;
-    let y = (((id >> 16) & 0xFFFF) as u16) as i16;
-    let z = (((id >> 32) & 0xFFFF) as u16) as i16;
+pub fn id_to_in_crystal_pos(id: u32) -> IVec3 {
+    // Extract each 10-bit component and convert to signed integers
+    let x = ((id & 0x3FF) as u16) as i16;
+    let y = (((id >> 10) & 0x3FF) as u16) as i16;
+    let z = (((id >> 20) & 0x3FF) as u16) as i16;
     
     IVec3::new(x as i32, y as i32, z as i32)
 }

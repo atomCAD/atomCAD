@@ -117,7 +117,7 @@ impl NodeData for GeoToAtomData {
       //atomic_structure.frame_transform = mesh.frame_transform.scale(common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
 
       // id:0 means there is no atom there
-      let mut atom_pos_to_id: HashMap<IVec3, u64> = HashMap::new();
+      let mut atom_pos_to_id: HashMap<IVec3, u32> = HashMap::new();
 
       atomic_structure.crystal_meta_data = CrystalMetaData {
         primary_atomic_number: self.primary_atomic_number,
@@ -159,7 +159,7 @@ fn process_box_for_atomic<'a>(
   geo_to_atom_data: &GeoToAtomData,
   start_pos: &IVec3,
   size: &IVec3,
-  atom_pos_to_id: &mut HashMap<IVec3, u64>,
+  atom_pos_to_id: &mut HashMap<IVec3, u32>,
   atomic_structure: &mut AtomicStructure) {
 
   let epsilon: f64 = 0.001;
@@ -236,12 +236,12 @@ fn process_cell_for_atomic<'a>(
   geo_tree_root: &GeoNode,
   geo_to_atom_data: &GeoToAtomData,
   int_pos: &IVec3,
-  atom_pos_to_id: &mut HashMap<IVec3, u64>,
+  atom_pos_to_id: &mut HashMap<IVec3, u32>,
   atomic_structure: &mut AtomicStructure,
   filled: bool,) {
     let cell_start_position = int_pos * 4;
 
-    let mut atom_ids = Vec::new();
+    let mut atom_ids: Vec<u32> = Vec::new();
     for i in 0..IN_CELL_ATOM_POSITIONS.len() {
       let pos = &IN_CELL_ATOM_POSITIONS[i];
       let atom_type = &IN_CELL_ZINCBLENDE_TYPES[i];
@@ -294,7 +294,7 @@ fn process_cell_for_atomic<'a>(
 
 fn add_bond(
   atomic_structure: &mut AtomicStructure,
-  atom_ids: &Vec<u64>,
+  atom_ids: &Vec<u32>,
   atom_index_1: usize,
   atom_index_2: usize) {
     if atom_ids[atom_index_1] == 0 || atom_ids[atom_index_2] == 0 { return; }

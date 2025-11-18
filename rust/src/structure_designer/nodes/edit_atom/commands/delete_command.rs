@@ -20,7 +20,7 @@ impl DeleteCommand {
 impl EditAtomCommand for DeleteCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     // First, collect all selected bond IDs
-    let selected_bond_ids: Vec<u64> = model.bonds
+    let selected_bond_ids: Vec<u32> = model.bonds
       .iter()
       .filter(|(_, bond)| bond.selected)
       .map(|(id, _)| *id)
@@ -32,7 +32,7 @@ impl EditAtomCommand for DeleteCommand {
     }
 
     // Now collect all selected atom IDs
-    let selected_atom_ids: Vec<u64> = model.atoms
+    let selected_atom_ids: Vec<u32> = model.atoms
       .iter()
       .filter(|(_, atom)| atom.selected)
       .map(|(id, _)| *id)

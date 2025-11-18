@@ -34,7 +34,7 @@ pub struct AddAtomToolState {
 
 #[derive(Debug)]
 pub struct AddBondToolState {
-  pub last_atom_id: Option<u64>,
+  pub last_atom_id: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -507,7 +507,7 @@ fn select_bond_by_reference(structure_designer: &mut StructureDesigner, bond_ref
 }
 
 // Selects an atom by its ID using the active edit_atom node
-fn select_atom_by_id(structure_designer: &mut StructureDesigner, atom_id: u64, select_modifier: SelectModifier) {
+fn select_atom_by_id(structure_designer: &mut StructureDesigner, atom_id: u32, select_modifier: SelectModifier) {
   // Get the EditAtomData from the active edit_atom node
   let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,

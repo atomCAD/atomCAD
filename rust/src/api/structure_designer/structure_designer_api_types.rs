@@ -211,7 +211,7 @@ pub struct InputPinView {
     pub active_tool: APIEditAtomTool,
     pub can_undo: bool,
     pub can_redo: bool,
-    pub bond_tool_last_atom_id: Option<u64>,
+    pub bond_tool_last_atom_id: Option<u32>,
     pub replacement_atomic_number: Option<i32>,
     pub add_atom_tool_atomic_number: Option<i32>,
     pub has_selected_atoms: bool,

@@ -28,6 +28,7 @@ use crate::common::common_constants::ATOM_INFO;
 use crate::structure_designer::evaluator::motif::SiteSpecifier;
 use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
+use crate::util::memory_size_estimator::MemorySizeEstimator;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -115,7 +116,7 @@ impl AtomFillStatistics {
 #[derive(Debug, Clone)]
 pub struct PlacedAtomTracker {
   // Primary storage: maps (motif_space_pos, site_index) -> atom_id
-  atom_map: IndexMap<(IVec3, usize), u64>,
+  atom_map: IndexMap<(IVec3, usize), u32>,
 }
 
 impl PlacedAtomTracker {
@@ -126,12 +127,12 @@ impl PlacedAtomTracker {
   }
   
   /// Records that an atom was placed at the given motif space position and site index
-  pub fn record_atom(&mut self, motif_space_pos: IVec3, site_index: usize, atom_id: u64) {
+  pub fn record_atom(&mut self, motif_space_pos: IVec3, site_index: usize, atom_id: u32) {
     self.atom_map.insert((motif_space_pos, site_index), atom_id);
   }
   
   /// Looks up the atom ID for a given motif space position and site index
-  pub fn get_atom_id(&self, motif_space_pos: IVec3, site_index: usize) -> Option<u64> {
+  pub fn get_atom_id(&self, motif_space_pos: IVec3, site_index: usize) -> Option<u32> {
     self.atom_map.get(&(motif_space_pos, site_index)).copied()
   }
   
@@ -140,13 +141,13 @@ impl PlacedAtomTracker {
     &self, 
     base_motif_space_pos: IVec3, 
     site_specifier: &crate::structure_designer::evaluator::motif::SiteSpecifier
-  ) -> Option<u64> {
+  ) -> Option<u32> {
     let target_motif_space_pos = base_motif_space_pos + site_specifier.relative_cell;
     self.get_atom_id(target_motif_space_pos, site_specifier.site_index)
   }
   
   /// Returns an iterator over all placed atoms: (lattice_pos, site_index, atom_id)
-  pub fn iter_atoms(&self) -> impl Iterator<Item = (IVec3, usize, u64)> + '_ {
+  pub fn iter_atoms(&self) -> impl Iterator<Item = (IVec3, usize, u32)> + '_ {
     self.atom_map.iter().map(|((motif_space_pos, site_index), &atom_id)| (*motif_space_pos, *site_index, atom_id))
   }
 }
@@ -335,6 +336,12 @@ impl NodeData for AtomFillData {
 
       // TODO: Log or use statistics for debugging/optimization
       statistics.log_statistics();
+
+      // Print estimated memory size of atomic structure
+      let estimated_bytes = atomic_structure.estimate_memory_bytes();
+      println!("AtomicStructure estimated memory: {} bytes ({:.2} MB)", 
+               estimated_bytes, 
+               estimated_bytes as f64 / (1024.0 * 1024.0));
 
       NetworkResult::Atomic(atomic_structure)
     }
@@ -671,7 +678,7 @@ impl AtomFillData {
     motif: &Motif,
     found_site: &SiteSpecifier,
     not_found_site: &SiteSpecifier,
-    found_atom_id: u64,
+    found_atom_id: u32,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics
   ) {

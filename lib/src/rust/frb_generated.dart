@@ -4813,7 +4813,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       activeTool: dco_decode_api_edit_atom_tool(arr[0]),
       canUndo: dco_decode_bool(arr[1]),
       canRedo: dco_decode_bool(arr[2]),
-      bondToolLastAtomId: dco_decode_opt_box_autoadd_u_64(arr[3]),
+      bondToolLastAtomId: dco_decode_opt_box_autoadd_u_32(arr[3]),
       replacementAtomicNumber: dco_decode_opt_box_autoadd_i_32(arr[4]),
       addAtomToolAtomicNumber: dco_decode_opt_box_autoadd_i_32(arr[5]),
       hasSelectedAtoms: dco_decode_bool(arr[6]),
@@ -5619,6 +5619,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_u_64(raw);
@@ -6112,6 +6118,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
@@ -6371,7 +6383,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_activeTool = sse_decode_api_edit_atom_tool(deserializer);
     var var_canUndo = sse_decode_bool(deserializer);
     var var_canRedo = sse_decode_bool(deserializer);
-    var var_bondToolLastAtomId = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_bondToolLastAtomId = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_replacementAtomicNumber =
         sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_addAtomToolAtomicNumber =
@@ -7143,6 +7155,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_structure_designer_preferences(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
   }
 
   @protected
@@ -7941,6 +7959,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -8189,7 +8218,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_edit_atom_tool(self.activeTool, serializer);
     sse_encode_bool(self.canUndo, serializer);
     sse_encode_bool(self.canRedo, serializer);
-    sse_encode_opt_box_autoadd_u_64(self.bondToolLastAtomId, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.bondToolLastAtomId, serializer);
     sse_encode_opt_box_autoadd_i_32(self.replacementAtomicNumber, serializer);
     sse_encode_opt_box_autoadd_i_32(self.addAtomToolAtomicNumber, serializer);
     sse_encode_bool(self.hasSelectedAtoms, serializer);
@@ -8862,6 +8891,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       StructureDesignerPreferences self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_structure_designer_preferences(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
   }
 
   @protected
@@ -9554,6 +9589,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_structure_designer_preferences(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
     }
   }
 

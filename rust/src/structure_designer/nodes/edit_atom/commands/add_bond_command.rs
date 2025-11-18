@@ -7,13 +7,13 @@ use serde::{Serialize, Deserialize};
  */
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddBondCommand {
-  pub atom_id1: u64,
-  pub atom_id2: u64,
+  pub atom_id1: u32,
+  pub atom_id2: u32,
   pub multiplicity: i32,
 }
 
 impl AddBondCommand {
-  pub fn new(atom_id1: u64, atom_id2: u64, multiplicity: i32) -> Self {
+  pub fn new(atom_id1: u32, atom_id2: u32, multiplicity: i32) -> Self {
       Self { atom_id1, atom_id2, multiplicity }
   }
 }

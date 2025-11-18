@@ -222,7 +222,7 @@ class APIEditAtomData {
   final APIEditAtomTool activeTool;
   final bool canUndo;
   final bool canRedo;
-  final BigInt? bondToolLastAtomId;
+  final int? bondToolLastAtomId;
   final int? replacementAtomicNumber;
   final int? addAtomToolAtomicNumber;
   final bool hasSelectedAtoms;

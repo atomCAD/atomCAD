@@ -10,13 +10,13 @@ use crate::common::atomic_structure_utils::calc_selection_transform;
  */
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SelectCommand {
-  pub atom_ids: Vec<u64>,
+  pub atom_ids: Vec<u32>,
   pub bond_references: Vec<BondReference>,
   pub select_modifier: SelectModifier,
 }
 
 impl SelectCommand {
-  pub fn new(atom_ids: Vec<u64>, bond_references: Vec<BondReference>, select_modifier: SelectModifier) -> Self {
+  pub fn new(atom_ids: Vec<u32>, bond_references: Vec<BondReference>, select_modifier: SelectModifier) -> Self {
       Self {
         atom_ids,
         bond_references,

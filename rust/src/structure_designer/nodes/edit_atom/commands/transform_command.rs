@@ -22,7 +22,7 @@ impl TransformCommand {
 impl EditAtomCommand for TransformCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     // Get all selected atom IDs
-    let selected_atoms: Vec<u64> = model.atoms
+    let selected_atoms: Vec<u32> = model.atoms
       .iter()
       .filter(|(_, atom)| atom.selected)
       .map(|(id, _)| *id)

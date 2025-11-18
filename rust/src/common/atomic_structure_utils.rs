@@ -11,9 +11,9 @@ const BOND_DISTANCE_MULTIPLIER: f64 = 1.15;
 
 pub fn auto_create_bonds(structure: &mut AtomicStructure) {
     // Track bonds we've already created to avoid duplicates
-    let mut processed_pairs: HashSet<(u64, u64)> = HashSet::new();
+    let mut processed_pairs: HashSet<(u32, u32)> = HashSet::new();
 
-    let atom_ids: Vec<u64> = structure.atoms.keys().cloned().collect();
+    let atom_ids: Vec<u32> = structure.atoms.keys().cloned().collect();
     
     let mut max_atom_radius = 0.0;
     for &atom_id in &atom_ids {
@@ -101,7 +101,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
 ///
 pub fn calc_selection_transform(structure: &AtomicStructure) -> Option<Transform> {
     // Get selected atom IDs
-    let selected_atom_ids: Vec<u64> = structure.atoms.iter()
+    let selected_atom_ids: Vec<u32> = structure.atoms.iter()
         .filter(|(_, atom)| atom.selected)
         .map(|(id, _)| *id)
         .collect();
@@ -198,7 +198,7 @@ pub fn print_atom_info(structure: &AtomicStructure) {
     println!();
     
     // Collect atom IDs for consistent ordering
-    let mut atom_ids: Vec<u64> = structure.atoms.keys().cloned().collect();
+    let mut atom_ids: Vec<u32> = structure.atoms.keys().cloned().collect();
     atom_ids.sort(); // Sort for consistent output
     
     println!("{:<6} {:<8} {:<12} {:<10}", "Index", "Atom ID", "Atomic Num", "Bond Count");
