@@ -1,91 +1,38 @@
 {
   "node_networks": [
     [
-      "lib_irod_xyz_hex⬡{110}s_centered",
+      "lib_test-by-sphere-cut",
       {
-        "next_node_id": 22,
+        "next_node_id": 14,
         "node_type": {
-          "name": "lib_irod_xyz_hex⬡{110}s_centered",
+          "name": "lib_test-by-sphere-cut",
           "parameters": [
             {
-              "name": "half_thickness",
+              "name": "igeom_to_test",
+              "data_type": "Geometry"
+            },
+            {
+              "name": "radius",
               "data_type": "Int"
             },
             {
               "name": "unit_cell",
               "data_type": "UnitCell"
+            },
+            {
+              "name": "param3",
+              "data_type": "Motif"
             }
           ],
           "output_type": "Geometry"
         },
         "nodes": [
           {
-            "id": 13,
-            "node_type_name": "lib_iwall_centered",
-            "position": [
-              408.5,
-              146.89999999999998
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "16": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "6": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "15": 0
-                }
-              }
-            ],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
             "id": 7,
-            "node_type_name": "int",
-            "position": [
-              -20.5,
-              293.2
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 1
-            }
-          },
-          {
-            "id": 20,
-            "node_type_name": "geo_to_atom",
-            "position": [
-              1293.5,
-              79.41159667968748
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "21": 0
-                }
-              }
-            ],
-            "data_type": "geo_to_atom",
-            "data": {
-              "hydrogen_passivation": true,
-              "primary_atomic_number": 6,
-              "secondary_atomic_number": 6
-            }
-          },
-          {
-            "id": 3,
             "node_type_name": "unit_cell",
             "position": [
-              -22.5,
-              380.7
+              -217.0,
+              235.21159667968757
             ],
             "arguments": [
               {
@@ -109,166 +56,11 @@
             }
           },
           {
-            "id": 16,
-            "node_type_name": "ivec3",
-            "position": [
-              167.5,
-              48.39999999999998
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
-                -1,
-                1,
-                0
-              ]
-            }
-          },
-          {
-            "id": 14,
-            "node_type_name": "lib_iwall_centered",
-            "position": [
-              407.5,
-              265.4
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "17": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "6": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "15": 0
-                }
-              }
-            ],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 17,
-            "node_type_name": "ivec3",
-            "position": [
-              165.0,
-              182.9
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
-                0,
-                -1,
-                1
-              ]
-            }
-          },
-          {
-            "id": 21,
-            "node_type_name": "lib_test-by-sphere-cut",
-            "position": [
-              1105.0,
-              45.411596679687534
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "10": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 12,
-            "node_type_name": "lib_iwall_centered",
-            "position": [
-              409.0,
-              28.399999999999977
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "4": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "6": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "15": 0
-                }
-              }
-            ],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 4,
-            "node_type_name": "ivec3",
-            "position": [
-              167.0,
-              -86.80000000000001
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
-                1,
-                0,
-                -1
-              ]
-            }
-          },
-          {
-            "id": 6,
+            "id": 11,
             "node_type_name": "parameter",
             "position": [
-              164.0,
-              339.2
+              165.0,
+              273.4115966796876
             ],
             "arguments": [
               {
@@ -279,94 +71,42 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Int",
+              "data_type": "UnitCell",
               "data_type_str": null,
-              "param_index": 0,
-              "param_name": "half_thickness",
-              "sort_order": 0
+              "param_index": 2,
+              "param_name": "unit_cell",
+              "sort_order": 2
             }
           },
           {
-            "id": 15,
+            "id": 2,
             "node_type_name": "parameter",
             "position": [
-              162.5,
-              418.9
+              175.5,
+              399.71159667968755
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "3": 0
+                  "9": 0
                 }
               }
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "Geometry",
               "data_type_str": null,
-              "param_index": 1,
-              "param_name": "unit_cell",
-              "sort_order": 1
+              "param_index": 0,
+              "param_name": "igeom_to_test",
+              "sort_order": 0
             }
           },
-          {
-            "id": 10,
-            "node_type_name": "intersect",
-            "position": [
-              638.0,
-              106.2
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "13": 0,
-                  "12": 0,
-                  "14": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          }
-        ],
-        "return_node_id": 10,
-        "displayed_node_ids": [
-          [
-            20,
-            "Normal"
-          ],
-          [
-            21,
-            "Normal"
-          ]
-        ]
-      }
-    ],
-    [
-      "lib_test-by-sphere-cut",
-      {
-        "next_node_id": 10,
-        "node_type": {
-          "name": "lib_test-by-sphere-cut",
-          "parameters": [
-            {
-              "name": "igeom_to_test",
-              "data_type": "Geometry"
-            },
-            {
-              "name": "radius",
-              "data_type": "Int"
-            }
-          ],
-          "output_type": "Geometry"
-        },
-        "nodes": [
           {
             "id": 5,
             "node_type_name": "parameter",
             "position": [
-              173.5,
-              156.71159667968757
+              170.0,
+              152.71159667968757
             ],
             "arguments": [
               {
@@ -382,19 +122,6 @@
               "param_index": 1,
               "param_name": "radius",
               "sort_order": 1
-            }
-          },
-          {
-            "id": 8,
-            "node_type_name": "int",
-            "position": [
-              -10.0,
-              152.71159667968757
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 3
             }
           },
           {
@@ -416,141 +143,44 @@
             "data": {}
           },
           {
-            "id": 2,
-            "node_type_name": "parameter",
+            "id": 8,
+            "node_type_name": "int",
             "position": [
-              418.0,
-              375.71159667968755
+              -227.5,
+              117.71159667968756
             ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "9": 0
-                }
-              }
-            ],
-            "data_type": "parameter",
+            "arguments": [],
+            "data_type": "int",
             "data": {
-              "data_type": "Geometry",
-              "data_type_str": null,
-              "param_index": 0,
-              "param_name": "igeom_to_test",
-              "sort_order": 0
+              "value": 3
             }
           },
           {
-            "id": 9,
-            "node_type_name": "cuboid",
+            "id": 10,
+            "node_type_name": "atom_fill",
             "position": [
-              166.5,
-              371.71159667968755
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "cuboid",
-            "data": {
-              "extent": [
-                4,
-                4,
-                4
-              ],
-              "min_corner": [
-                -2,
-                -2,
-                -2
-              ]
-            }
-          },
-          {
-            "id": 7,
-            "node_type_name": "unit_cell",
-            "position": [
-              175.0,
-              242.71159667968757
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "unit_cell",
-            "data": {
-              "cell_angle_alpha": 90.0,
-              "cell_angle_beta": 90.0,
-              "cell_angle_gamma": 90.0,
-              "cell_length_a": 3.567,
-              "cell_length_b": 3.567,
-              "cell_length_c": 3.567
-            }
-          },
-          {
-            "id": 4,
-            "node_type_name": "geo_to_atom",
-            "position": [
-              803.5,
-              194.21159667968757
+              834.0,
+              151.4115966796876
             ],
             "arguments": [
               {
                 "argument_output_pins": {
                   "3": 0
                 }
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "geo_to_atom",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
-              "primary_atomic_number": 6,
-              "secondary_atomic_number": 6
-            }
-          },
-          {
-            "id": 1,
-            "node_type_name": "sphere",
-            "position": [
-              404.0,
-              89.21159667968755
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "6": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "5": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "7": 0
-                }
-              }
-            ],
-            "data_type": "sphere",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
               ],
-              "radius": 1
+              "parameter_element_value_definition": ""
             }
           },
           {
@@ -579,6 +209,107 @@
                 0
               ]
             }
+          },
+          {
+            "id": 9,
+            "node_type_name": "cuboid",
+            "position": [
+              -239.5,
+              376.21159667968755
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                4
+              ],
+              "min_corner": [
+                -2,
+                -2,
+                -2
+              ]
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "sphere",
+            "position": [
+              404.0,
+              89.21159667968755
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              }
+            ],
+            "data_type": "sphere",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "radius": 1
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "motif",
+            "position": [
+              -218.0,
+              534.4115966796876
+            ],
+            "arguments": [],
+            "data_type": "motif",
+            "data": {
+              "definition": "",
+              "name": null
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "parameter",
+            "position": [
+              177.5,
+              518.4115966796876
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Motif",
+              "data_type_str": null,
+              "param_index": 3,
+              "param_name": "param3",
+              "sort_order": 3
+            }
           }
         ],
         "return_node_id": 3,
@@ -588,11 +319,1572 @@
             "Normal"
           ],
           [
-            4,
+            6,
             "Normal"
           ],
           [
-            6,
+            10,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "demo_rhombicuboctahedron",
+      {
+        "next_node_id": 25,
+        "node_type": {
+          "name": "demo_rhombicuboctahedron",
+          "parameters": [
+            {
+              "name": "unit_cell",
+              "data_type": "UnitCell"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 22,
+            "node_type_name": "expr",
+            "position": [
+              1535.4197998046875,
+              655.4129394531251
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "23": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "21": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "if flag then x else y",
+              "parameters": [
+                {
+                  "data_type": "Geometry",
+                  "data_type_str": null,
+                  "name": "x"
+                },
+                {
+                  "data_type": "Geometry",
+                  "data_type_str": null,
+                  "name": "y"
+                },
+                {
+                  "data_type": "Bool",
+                  "data_type_str": null,
+                  "name": "flag"
+                }
+              ]
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "motif_zinkbkende_point-origin",
+            "position": [
+              1757.257568359375,
+              512.8382934570313
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "int",
+            "position": [
+              252.5,
+              270.4000000000001
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 3
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "diff",
+            "position": [
+              1571.8749389648438,
+              381.5213378906251
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              }
+            ],
+            "data_type": "diff",
+            "data": {}
+          },
+          {
+            "id": 24,
+            "node_type_name": "int",
+            "position": [
+              1333.9197998046875,
+              868.9129394531251
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 0
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "union",
+            "position": [
+              1342.2576293945312,
+              590.8382324218751
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "17": 0,
+                  "16": 0,
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 5,
+            "node_type_name": "lib_basepoly_cube_centered",
+            "position": [
+              464.0,
+              273.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 21,
+            "node_type_name": "bool",
+            "position": [
+              1332.757568359375,
+              681.3382324218751
+            ],
+            "arguments": [],
+            "data_type": "bool",
+            "data": {
+              "value": false
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "int",
+            "position": [
+              256.0,
+              406.4000000000001
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 6
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "facet_shell",
+            "position": [
+              439.0,
+              129.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "facet_shell",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "facets": [
+                {
+                  "miller_index": [
+                    0,
+                    1,
+                    0
+                  ],
+                  "shift": 2,
+                  "symmetrize": true,
+                  "visible": true
+                }
+              ],
+              "max_miller_index": 2,
+              "selected_facet_index": null
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "lib_basepoly_rdodecahedron_centered",
+            "position": [
+              466.0,
+              554.4000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 14,
+            "node_type_name": "int",
+            "position": [
+              584.375,
+              846.0213378906251
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 1
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "intersect",
+            "position": [
+              754.0,
+              420.4000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0,
+                  "7": 0,
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 23,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              1335.4197998046875,
+              762.4129394531251
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 11,
+            "node_type_name": "int",
+            "position": [
+              238.5,
+              560.4000000000001
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "geo_trans",
+            "position": [
+              1069.875,
+              810.0213378906251
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "geo_trans",
+            "data": {
+              "rotation": [
+                0,
+                0,
+                1
+              ],
+              "transform_only_frame": false,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "geo_trans",
+            "position": [
+              1069.875,
+              654.0213378906251
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "geo_trans",
+            "data": {
+              "rotation": [
+                0,
+                1,
+                0
+              ],
+              "transform_only_frame": false,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "parameter",
+            "position": [
+              218.5,
+              737.4000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "unit_cell",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
+            "position": [
+              864.375,
+              577.0213378906251
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 18,
+            "node_type_name": "atom_fill_halfshift",
+            "position": [
+              1822.2576293945312,
+              381.83829345703134
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 6,
+            "node_type_name": "lib_basepoly_octahedron_centered",
+            "position": [
+              466.0,
+              414.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "unit_cell",
+            "position": [
+              18.0,
+              748.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "ivec3",
+            "position": [
+              221.5,
+              100.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": 12,
+        "displayed_node_ids": [
+          [
+            18,
+            "Normal"
+          ],
+          [
+            12,
+            "Normal"
+          ],
+          [
+            21,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "lib_iwall_centered",
+      {
+        "next_node_id": 25,
+        "node_type": {
+          "name": "lib_iwall_centered",
+          "parameters": [
+            {
+              "name": "m_index",
+              "data_type": "IVec3"
+            },
+            {
+              "name": "half_thickness",
+              "data_type": "Int"
+            },
+            {
+              "name": "unit_cell",
+              "data_type": "UnitCell"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 15,
+            "node_type_name": "int",
+            "position": [
+              -21.0,
+              300.2
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 1
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "sphere",
+            "position": [
+              835.0,
+              277.4115966796875
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "sphere",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "radius": 2
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "half_space",
+            "position": [
+              405.5,
+              102.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                1,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "intersect",
+            "position": [
+              592.0,
+              213.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0,
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 12,
+            "node_type_name": "ivec3",
+            "position": [
+              189.0,
+              525.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 14,
+            "node_type_name": "parameter",
+            "position": [
+              19.0,
+              59.19999999999999
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "17": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "m_index",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "ivec3",
+            "position": [
+              -165.0,
+              58.19999999999999
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "parameter",
+            "position": [
+              187.0,
+              431.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "unit_cell",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "parameter",
+            "position": [
+              189.0,
+              311.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "half_thickness",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 24,
+            "node_type_name": "atom_fill",
+            "position": [
+              1349.5,
+              337.40000000000003
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "unit_cell",
+            "position": [
+              -21.5,
+              407.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "expr",
+            "position": [
+              182.0,
+              164.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "x*(-1)",
+              "parameters": [
+                {
+                  "data_type": "IVec3",
+                  "data_type_str": null,
+                  "name": "x"
+                }
+              ]
+            }
+          },
+          {
+            "id": 23,
+            "node_type_name": "atom_fill_halfshift",
+            "position": [
+              1341.0,
+              215.90000000000003
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 19,
+            "node_type_name": "intersect",
+            "position": [
+              1074.0,
+              206.41159667968748
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "18": 0,
+                  "9": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 22,
+            "node_type_name": "motif",
+            "position": [
+              1108.5,
+              332.4
+            ],
+            "arguments": [],
+            "data_type": "motif",
+            "data": {
+              "definition": "# cubic zincblende motif\n\nPARAM PRIMARY C\nPARAM SECONDARY C\n\nSITE CORNER PRIMARY 0 0 0\n\nSITE FACE_Z PRIMARY 0.5 0.5 0\nSITE FACE_Y PRIMARY 0.5 0 0.5\nSITE FACE_X PRIMARY 0 0.5 0.5\n\nSITE INTERIOR1 SECONDARY 0.25 0.25 0.25\nSITE INTERIOR2 SECONDARY 0.25 0.75 0.75\nSITE INTERIOR3 SECONDARY 0.75 0.25 0.75\nSITE INTERIOR4 SECONDARY 0.75 0.75 0.25\n\nBOND INTERIOR1 ...CORNER\nBOND INTERIOR1 ...FACE_Z\nBOND INTERIOR1 ...FACE_Y\nBOND INTERIOR1 ...FACE_X\n\nBOND INTERIOR2 .++CORNER\nBOND INTERIOR2 ..+FACE_Z\nBOND INTERIOR2 .+.FACE_Y\nBOND INTERIOR2 ...FACE_X\n\nBOND INTERIOR3 +.+CORNER\nBOND INTERIOR3 ..+FACE_Z\nBOND INTERIOR3 ...FACE_Y\nBOND INTERIOR3 +..FACE_X\n\nBOND INTERIOR4 ++.CORNER\nBOND INTERIOR4 ...FACE_Z\nBOND INTERIOR4 .+.FACE_Y\nBOND INTERIOR4 +..FACE_X",
+              "name": null
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "half_space",
+            "position": [
+              407.0,
+              262.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                1,
+                0
+              ],
+              "shift": 0
+            }
+          }
+        ],
+        "return_node_id": 9,
+        "displayed_node_ids": [
+          [
+            24,
+            "Normal"
+          ],
+          [
+            23,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "lib_basepoly_octahedron_centered",
+      {
+        "next_node_id": 23,
+        "node_type": {
+          "name": "lib_basepoly_octahedron_centered",
+          "parameters": [
+            {
+              "name": "half_size",
+              "data_type": "Int"
+            },
+            {
+              "name": "positon",
+              "data_type": "IVec3"
+            },
+            {
+              "name": "rotation_lattice",
+              "data_type": "IVec3"
+            },
+            {
+              "name": "unit_cell",
+              "data_type": "UnitCell"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 7,
+            "node_type_name": "intersect",
+            "position": [
+              698.5,
+              268.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0,
+                  "13": 0,
+                  "8": 0,
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 6,
+            "node_type_name": "ivec3",
+            "position": [
+              195.5,
+              227.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "ivec3",
+            "position": [
+              200.5,
+              369.7000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -1,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "parameter",
+            "position": [
+              195.0,
+              -30.799999999999955
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 3,
+              "param_name": "unit_cell",
+              "sort_order": 3
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "unit_cell",
+            "position": [
+              -14.0,
+              -70.79999999999995
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "parameter",
+            "position": [
+              896.875,
+              19.40000000000009
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "positon",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "ivec3",
+            "position": [
+              710.375,
+              -30.59999999999991
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "ivec3",
+            "position": [
+              204.0,
+              508.7000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                -1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "atom_fill",
+            "position": [
+              1344.0,
+              332.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "parameter",
+            "position": [
+              182.5,
+              100.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "half_size",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "int",
+            "position": [
+              -26.5,
+              89.70000000000005
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 1
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "ivec3",
+            "position": [
+              682.875,
+              111.40000000000008
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 14,
+            "node_type_name": "geo_trans",
+            "position": [
+              1100.375,
+              222.4000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "17": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              }
+            ],
+            "data_type": "geo_trans",
+            "data": {
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "transform_only_frame": false,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              467.0,
+              380.7000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              465.5,
+              513.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 19,
+            "node_type_name": "parameter",
+            "position": [
+              891.375,
+              142.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "rotation_lattice",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              470.5,
+              251.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 12,
+            "node_type_name": "ivec3",
+            "position": [
+              203.5,
+              657.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                1,
+                -1
+              ]
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              467.5,
+              660.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 22,
+            "node_type_name": "atom_fill_halfshift",
+            "position": [
+              1336.5,
+              206.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          }
+        ],
+        "return_node_id": 14,
+        "displayed_node_ids": [
+          [
+            22,
             "Normal"
           ]
         ]
@@ -601,7 +1893,7 @@
     [
       "lib_iwall_positive",
       {
-        "next_node_id": 26,
+        "next_node_id": 28,
         "node_type": {
           "name": "lib_iwall_positive",
           "parameters": [
@@ -621,6 +1913,198 @@
           "output_type": "Geometry"
         },
         "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "half_space",
+            "position": [
+              477.5,
+              292.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                1,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "parameter",
+            "position": [
+              256.4999694824219,
+              410.2000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "thickness",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "ivec3",
+            "position": [
+              -130.49996948242188,
+              199.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 27,
+            "node_type_name": "atom_fill_halfshift",
+            "position": [
+              1443.000030517578,
+              246.90000000000003
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 25,
+            "node_type_name": "lib_test-by-sphere-cut",
+            "position": [
+              1193.000030517578,
+              244.91159667968753
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "parameter",
+            "position": [
+              251.0,
+              -50.80000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "unit_cell",
+              "sort_order": 3
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "unit_cell",
+            "position": [
+              52.500030517578125,
+              -33.30000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
           {
             "id": 15,
             "node_type_name": "ivec3",
@@ -649,73 +2133,11 @@
             }
           },
           {
-            "id": 6,
-            "node_type_name": "intersect",
-            "position": [
-              663.5,
-              248.7
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "2": 0,
-                  "3": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          },
-          {
-            "id": 24,
-            "node_type_name": "geo_to_atom",
-            "position": [
-              1384.500030517578,
-              286.4115966796875
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "25": 0
-                }
-              }
-            ],
-            "data_type": "geo_to_atom",
-            "data": {
-              "hydrogen_passivation": true,
-              "primary_atomic_number": 6,
-              "secondary_atomic_number": 6
-            }
-          },
-          {
-            "id": 8,
-            "node_type_name": "parameter",
-            "position": [
-              256.4999694824219,
-              410.2000000000001
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "19": 0
-                }
-              }
-            ],
-            "data_type": "parameter",
-            "data": {
-              "data_type": "Int",
-              "data_type_str": null,
-              "param_index": 1,
-              "param_name": "thickness",
-              "sort_order": 2
-            }
-          },
-          {
-            "id": 3,
+            "id": 2,
             "node_type_name": "half_space",
             "position": [
-              477.5,
-              292.2
+              477.0,
+              148.2
             ],
             "arguments": [
               {
@@ -725,7 +2147,7 @@
               },
               {
                 "argument_output_pins": {
-                  "5": 0
+                  "4": 0
                 }
               },
               {
@@ -735,7 +2157,7 @@
               },
               {
                 "argument_output_pins": {
-                  "8": 0
+                  "18": 0
                 }
               }
             ],
@@ -795,46 +2217,49 @@
             }
           },
           {
-            "id": 9,
-            "node_type_name": "parameter",
+            "id": 26,
+            "node_type_name": "atom_fill",
             "position": [
-              251.0,
-              -50.80000000000001
+              1447.000030517578,
+              348.40000000000003
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "16": 0
-                }
-              }
-            ],
-            "data_type": "parameter",
-            "data": {
-              "data_type": "UnitCell",
-              "data_type_str": null,
-              "param_index": 2,
-              "param_name": "unit_cell",
-              "sort_order": 3
-            }
-          },
-          {
-            "id": 25,
-            "node_type_name": "lib_test-by-sphere-cut",
-            "position": [
-              1193.000030517578,
-              244.91159667968753
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "6": 0
+                  "25": 0
                 }
               },
               {
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "no_data",
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "intersect",
+            "position": [
+              663.5,
+              248.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0,
+                  "2": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
             "data": {}
           },
           {
@@ -861,79 +2286,6 @@
             }
           },
           {
-            "id": 16,
-            "node_type_name": "unit_cell",
-            "position": [
-              52.500030517578125,
-              -33.30000000000001
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "unit_cell",
-            "data": {
-              "cell_angle_alpha": 90.0,
-              "cell_angle_beta": 90.0,
-              "cell_angle_gamma": 90.0,
-              "cell_length_a": 3.567,
-              "cell_length_b": 3.567,
-              "cell_length_c": 3.567
-            }
-          },
-          {
-            "id": 2,
-            "node_type_name": "half_space",
-            "position": [
-              477.0,
-              148.2
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "9": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "4": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "15": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "18": 0
-                }
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                0,
-                1,
-                0
-              ],
-              "shift": 0
-            }
-          },
-          {
             "id": 18,
             "node_type_name": "int",
             "position": [
@@ -945,33 +2297,6 @@
             "data": {
               "value": 0
             }
-          },
-          {
-            "id": 20,
-            "node_type_name": "ivec3",
-            "position": [
-              -130.49996948242188,
-              199.2
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
-                1,
-                0,
-                0
-              ]
-            }
           }
         ],
         "return_node_id": 6,
@@ -981,160 +2306,262 @@
             "Normal"
           ],
           [
-            24,
+            27,
             "Normal"
           ]
         ]
       }
     ],
     [
-      "lib_iwall_centered",
+      "motif_zinkbkende_point-origin",
       {
-        "next_node_id": 23,
+        "next_node_id": 5,
         "node_type": {
-          "name": "lib_iwall_centered",
-          "parameters": [
-            {
-              "name": "m_index",
-              "data_type": "IVec3"
-            },
-            {
-              "name": "half_thickness",
-              "data_type": "Int"
-            },
-            {
-              "name": "unit_cell",
-              "data_type": "UnitCell"
-            }
-          ],
-          "output_type": "Geometry"
+          "name": "motif_zinkbkende_point-origin",
+          "parameters": [],
+          "output_type": "Motif"
         },
         "nodes": [
           {
-            "id": 15,
-            "node_type_name": "int",
+            "id": 4,
+            "node_type_name": "atom_fill_halfshift",
             "position": [
-              -21.0,
-              300.2
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 1
-            }
-          },
-          {
-            "id": 16,
-            "node_type_name": "expr",
-            "position": [
-              182.0,
-              164.7
+              647.0,
+              226.9000000000001
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "14": 0
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
                 }
               }
             ],
-            "data_type": "expr",
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 1,
+            "node_type_name": "motif",
+            "position": [
+              188.0,
+              116.20000000000005
+            ],
+            "arguments": [],
+            "data_type": "motif",
             "data": {
-              "expression": "x*(-1)",
-              "parameters": [
-                {
-                  "data_type": "IVec3",
-                  "data_type_str": null,
-                  "name": "x"
-                }
+              "definition": "# cubic zincblende motif\n\nPARAM PRIMARY Zn\nPARAM SECONDARY S\n\nSITE CORNER PRIMARY 0 0 0\n\nSITE FACE_Z PRIMARY 0.5 0.5 0\nSITE FACE_Y PRIMARY 0.5 0 0.5\nSITE FACE_X PRIMARY 0 0.5 0.5\n\nSITE INTERIOR1 SECONDARY 0.25 0.25 0.25\nSITE INTERIOR2 SECONDARY 0.25 0.75 0.75\nSITE INTERIOR3 SECONDARY 0.75 0.25 0.75\nSITE INTERIOR4 SECONDARY 0.75 0.75 0.25\n\nBOND INTERIOR1 ...CORNER\nBOND INTERIOR1 ...FACE_Z\nBOND INTERIOR1 ...FACE_Y\nBOND INTERIOR1 ...FACE_X\n\nBOND INTERIOR2 .++CORNER\nBOND INTERIOR2 ..+FACE_Z\nBOND INTERIOR2 .+.FACE_Y\nBOND INTERIOR2 ...FACE_X\n\nBOND INTERIOR3 +.+CORNER\nBOND INTERIOR3 ..+FACE_Z\nBOND INTERIOR3 ...FACE_Y\nBOND INTERIOR3 +..FACE_X\n\nBOND INTERIOR4 ++.CORNER\nBOND INTERIOR4 ...FACE_Z\nBOND INTERIOR4 .+.FACE_Y\nBOND INTERIOR4 +..FACE_X",
+              "name": null
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "cuboid",
+            "position": [
+              423.5,
+              242.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
               ]
             }
           },
           {
-            "id": 19,
-            "node_type_name": "intersect",
+            "id": 3,
+            "node_type_name": "atom_fill",
             "position": [
-              1074.0,
-              206.41159667968748
+              644.5,
+              126.40000000000008
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "9": 0,
-                  "18": 0
+                  "2": 0
                 }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          },
-          {
-            "id": 20,
-            "node_type_name": "geo_to_atom",
-            "position": [
-              1272.5,
-              220.41159667968748
-            ],
-            "arguments": [
+              },
               {
                 "argument_output_pins": {
-                  "19": 0
+                  "1": 0
                 }
               }
             ],
-            "data_type": "geo_to_atom",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
-              "primary_atomic_number": 6,
-              "secondary_atomic_number": 6
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
             }
-          },
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            3,
+            "Normal"
+          ],
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "atom_fill_halfshift",
+      {
+        "next_node_id": 14,
+        "node_type": {
+          "name": "atom_fill_halfshift",
+          "parameters": [
+            {
+              "name": "geometry",
+              "data_type": "Geometry"
+            },
+            {
+              "name": "motif",
+              "data_type": "Motif"
+            }
+          ],
+          "output_type": "Atomic"
+        },
+        "nodes": [
           {
-            "id": 9,
-            "node_type_name": "intersect",
-            "position": [
-              592.0,
-              213.2
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "7": 0,
-                  "8": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          },
-          {
-            "id": 11,
+            "id": 3,
             "node_type_name": "parameter",
             "position": [
-              187.0,
-              431.2
+              418.0,
+              259.2580322265625
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "10": 0
+                  "11": 0
                 }
               }
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "Geometry",
               "data_type_str": null,
-              "param_index": 2,
-              "param_name": "unit_cell",
-              "sort_order": 2
+              "param_index": 0,
+              "param_name": "geometry",
+              "sort_order": 0
             }
           },
           {
-            "id": 22,
+            "id": 2,
+            "node_type_name": "atom_fill",
+            "position": [
+              606.5,
+              299.2580322265625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "parameter",
+            "position": [
+              415.0,
+              354.0790161132813
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Motif",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "motif",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "vec3",
+            "position": [
+              607.5,
+              380.45806274414065
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "vec3",
+            "data": {
+              "value": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            }
+          },
+          {
+            "id": 1,
             "node_type_name": "motif",
             "position": [
-              1037.0,
-              440.4
+              201.0,
+              435.8790161132813
             ],
             "arguments": [],
             "data_type": "motif",
@@ -1144,113 +2571,26 @@
             }
           },
           {
-            "id": 7,
-            "node_type_name": "half_space",
+            "id": 11,
+            "node_type_name": "demo_rhombicuboctahedron",
             "position": [
-              405.5,
-              102.2
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "11": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "14": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "12": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "13": 0
-                }
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                0,
-                1,
-                0
-              ],
-              "shift": 0
-            }
-          },
-          {
-            "id": 12,
-            "node_type_name": "ivec3",
-            "position": [
-              189.0,
-              525.2
+              198.0,
+              233.45806274414065
             ],
             "arguments": [
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
-                0,
-                0,
-                0
-              ]
-            }
-          },
-          {
-            "id": 21,
-            "node_type_name": "atom_fill",
-            "position": [
-              1273.0,
-              345.40000000000003
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "19": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "22": 0
-                }
-              }
-            ],
-            "data_type": "atom_fill",
-            "data": {
-              "hydrogen_passivation": true,
-              "motif_offset": [
-                0.25,
-                0.25,
-                0.25
-              ],
-              "parameter_element_value_definition": ""
-            }
+            "data_type": "no_data",
+            "data": {}
           },
           {
             "id": 10,
-            "node_type_name": "unit_cell",
+            "node_type_name": "facet_shell",
             "position": [
-              -21.5,
-              407.7
+              197.5,
+              297.95803222656247
             ],
             "arguments": [
               {
@@ -1258,176 +2598,68 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
-            "data": {
-              "cell_angle_alpha": 90.0,
-              "cell_angle_beta": 90.0,
-              "cell_angle_gamma": 90.0,
-              "cell_length_a": 3.567,
-              "cell_length_b": 3.567,
-              "cell_length_c": 3.567
-            }
-          },
-          {
-            "id": 18,
-            "node_type_name": "sphere",
-            "position": [
-              835.0,
-              277.4115966796875
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "sphere",
+            "data_type": "facet_shell",
             "data": {
               "center": [
                 0,
                 0,
                 0
               ],
-              "radius": 2
-            }
-          },
-          {
-            "id": 13,
-            "node_type_name": "parameter",
-            "position": [
-              189.0,
-              311.2
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "15": 0
+              "facets": [
+                {
+                  "miller_index": [
+                    -1,
+                    1,
+                    1
+                  ],
+                  "shift": 4,
+                  "symmetrize": true,
+                  "visible": true
+                },
+                {
+                  "miller_index": [
+                    1,
+                    0,
+                    0
+                  ],
+                  "shift": 2,
+                  "symmetrize": true,
+                  "visible": true
+                },
+                {
+                  "miller_index": [
+                    1,
+                    1,
+                    0
+                  ],
+                  "shift": 3,
+                  "symmetrize": true,
+                  "visible": true
                 }
-              }
-            ],
-            "data_type": "parameter",
-            "data": {
-              "data_type": "Int",
-              "data_type_str": null,
-              "param_index": 1,
-              "param_name": "half_thickness",
-              "sort_order": 1
-            }
-          },
-          {
-            "id": 17,
-            "node_type_name": "ivec3",
-            "position": [
-              -165.0,
-              58.19999999999999
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
-                1,
-                1,
-                1
-              ]
-            }
-          },
-          {
-            "id": 8,
-            "node_type_name": "half_space",
-            "position": [
-              407.0,
-              262.7
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "11": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "16": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "12": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "13": 0
-                }
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
               ],
               "max_miller_index": 2,
-              "miller_index": [
-                0,
-                1,
-                0
-              ],
-              "shift": 0
-            }
-          },
-          {
-            "id": 14,
-            "node_type_name": "parameter",
-            "position": [
-              19.0,
-              59.19999999999999
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "17": 0
-                }
-              }
-            ],
-            "data_type": "parameter",
-            "data": {
-              "data_type": "IVec3",
-              "data_type_str": null,
-              "param_index": 0,
-              "param_name": "m_index",
-              "sort_order": 0
+              "selected_facet_index": 0
             }
           }
         ],
-        "return_node_id": 9,
+        "return_node_id": 2,
         "displayed_node_ids": [
           [
-            20,
+            3,
             "Normal"
           ],
           [
-            21,
+            10,
+            "Normal"
+          ],
+          [
+            12,
+            "Normal"
+          ],
+          [
+            2,
             "Normal"
           ]
         ]
@@ -1436,13 +2668,57 @@
     [
       "nut bolt",
       {
-        "next_node_id": 38,
+        "next_node_id": 43,
         "node_type": {
           "name": "nut bolt",
           "parameters": [],
           "output_type": "None"
         },
         "nodes": [
+          {
+            "id": 14,
+            "node_type_name": "intersect",
+            "position": [
+              1436.6897583007812,
+              328.4227050781251
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "15": 0,
+                  "16": 0,
+                  "42": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 10,
+            "node_type_name": "intersect",
+            "position": [
+              893.3523559570312,
+              453.60612792968755
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0,
+                  "29": 0,
+                  "34": 0,
+                  "31": 0,
+                  "11": 0,
+                  "33": 0,
+                  "32": 0,
+                  "28": 0,
+                  "40": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
           {
             "id": 35,
             "node_type_name": "int",
@@ -1457,95 +2733,16 @@
             }
           },
           {
-            "id": 24,
-            "node_type_name": "int",
+            "id": 40,
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
             "position": [
-              1701.9206848144531,
-              447.72696533203134
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 5
-            }
-          },
-          {
-            "id": 18,
-            "node_type_name": "intersect",
-            "position": [
-              1769.9386291503906,
-              154.5921386718751
+              496.7771301269547,
+              564.3911450195365
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "17": 0,
-                  "27": 0,
-                  "15": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          },
-          {
-            "id": 20,
-            "node_type_name": "diff",
-            "position": [
-              1836.0954895019531,
-              269.18863525390634
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "14": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "18": 0
-                }
-              }
-            ],
-            "data_type": "diff",
-            "data": {}
-          },
-          {
-            "id": 10,
-            "node_type_name": "intersect",
-            "position": [
-              893.3523559570312,
-              453.60612792968755
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "34": 0,
-                  "11": 0,
-                  "8": 0,
-                  "29": 0,
-                  "6": 0,
-                  "33": 0,
-                  "32": 0,
-                  "28": 0,
-                  "31": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          },
-          {
-            "id": 17,
-            "node_type_name": "lib_irod_xyz_hex⬡{110}s_centered",
-            "position": [
-              1547.2904357910156,
-              91.01083984375008
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "19": 0
+                  "9": 0
                 }
               },
               {
@@ -1556,24 +2753,11 @@
             "data": {}
           },
           {
-            "id": 9,
-            "node_type_name": "int",
-            "position": [
-              229.1993408203125,
-              526.5941650390625
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 3
-            }
-          },
-          {
-            "id": 28,
+            "id": 31,
             "node_type_name": "half_space",
             "position": [
-              1048.944580078125,
-              636.5237792968751
+              901.93017578125,
+              1058.0058837890626
             ],
             "arguments": [
               {
@@ -1596,111 +2780,17 @@
             "data_type": "half_space",
             "data": {
               "center": [
-                8,
-                8,
-                8
+                0,
+                0,
+                0
               ],
               "max_miller_index": 2,
               "miller_index": [
+                1,
                 2,
-                0,
-                1
+                0
               ],
               "shift": 0
-            }
-          },
-          {
-            "id": 13,
-            "node_type_name": "lib_irod_xyz_hex⬡{110}s_centered",
-            "position": [
-              1235.1666870117188,
-              225.21390380859384
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "4": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 3,
-            "node_type_name": "half_space",
-            "position": [
-              340.3551025390625,
-              299.74589843750005
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                1,
-                1,
-                1
-              ],
-              "shift": 6
-            }
-          },
-          {
-            "id": 11,
-            "node_type_name": "half_space",
-            "position": [
-              818.2201538085938,
-              650.0788452148438
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                1,
-                1,
-                1
-              ],
-              "shift": 23
             }
           },
           {
@@ -1745,30 +2835,24 @@
             }
           },
           {
-            "id": 5,
-            "node_type_name": "intersect",
+            "id": 4,
+            "node_type_name": "int",
             "position": [
-              713.8204345703125,
-              190.60478515625005
+              132.77713012695312,
+              169.4123413085938
             ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "1": 0,
-                  "6": 0,
-                  "3": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 7
+            }
           },
           {
-            "id": 15,
+            "id": 11,
             "node_type_name": "half_space",
             "position": [
-              1244.3624877929688,
-              384.4531005859376
+              818.2201538085938,
+              650.0788452148438
             ],
             "arguments": [
               {
@@ -1793,99 +2877,11 @@
               ],
               "max_miller_index": 2,
               "miller_index": [
-                -1,
-                -1,
-                -1
-              ],
-              "shift": 0
-            }
-          },
-          {
-            "id": 8,
-            "node_type_name": "lib_irod_xyz_hex⬡{110}s_centered",
-            "position": [
-              480.42529296875,
-              604.1380493164063
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "9": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 32,
-            "node_type_name": "half_space",
-            "position": [
-              1081.93017578125,
-              1058.0058837890626
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "30": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "35": 0
-                }
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                0,
-                2,
-                1
-              ],
-              "shift": 0
-            }
-          },
-          {
-            "id": 23,
-            "node_type_name": "ivec3",
-            "position": [
-              1743.467254638672,
-              549.2534545898438
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
                 1,
                 1,
                 1
-              ]
+              ],
+              "shift": 23
             }
           },
           {
@@ -1917,162 +2913,11 @@
             }
           },
           {
-            "id": 30,
-            "node_type_name": "ivec3",
+            "id": 42,
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
             "position": [
-              687.6981201171875,
-              851.3888793945314
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "ivec3",
-            "data": {
-              "value": [
-                8,
-                8,
-                8
-              ]
-            }
-          },
-          {
-            "id": 25,
-            "node_type_name": "atom_fill",
-            "position": [
-              2439.2892150878906,
-              250.7134765625001
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "37": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "atom_fill",
-            "data": {
-              "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
-              "parameter_element_value_definition": ""
-            }
-          },
-          {
-            "id": 16,
-            "node_type_name": "half_space",
-            "position": [
-              1366.0790405273438,
-              556.5453857421876
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                1,
-                1,
-                1
-              ],
-              "shift": 6
-            }
-          },
-          {
-            "id": 12,
-            "node_type_name": "union",
-            "position": [
-              958.6580810546876,
-              341.5698120117188
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "10": 0,
-                  "5": 0
-                }
-              }
-            ],
-            "data_type": "union",
-            "data": {}
-          },
-          {
-            "id": 29,
-            "node_type_name": "half_space",
-            "position": [
-              964.4413452148438,
-              871.6496826171876
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "30": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "35": 0
-                }
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                2,
-                1,
-                0
-              ],
-              "shift": 0
-            }
-          },
-          {
-            "id": 1,
-            "node_type_name": "lib_irod_xyz_hex⬡{110}s_centered",
-            "position": [
-              380.0457153320313,
-              126.12675781250005
+              1167.9771301269566,
+              187.591145019532
             ],
             "arguments": [
               {
@@ -2125,11 +2970,11 @@
             }
           },
           {
-            "id": 31,
+            "id": 29,
             "node_type_name": "half_space",
             "position": [
-              901.93017578125,
-              1058.0058837890626
+              964.4413452148438,
+              871.6496826171876
             ],
             "arguments": [
               {
@@ -2158,120 +3003,11 @@
               ],
               "max_miller_index": 2,
               "miller_index": [
-                1,
                 2,
+                1,
                 0
               ],
               "shift": 0
-            }
-          },
-          {
-            "id": 19,
-            "node_type_name": "int",
-            "position": [
-              1332.6820373535156,
-              72.51114501953134
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 5
-            }
-          },
-          {
-            "id": 14,
-            "node_type_name": "intersect",
-            "position": [
-              1436.6897583007812,
-              328.4227050781251
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "16": 0,
-                  "13": 0,
-                  "15": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          },
-          {
-            "id": 4,
-            "node_type_name": "int",
-            "position": [
-              132.77713012695312,
-              169.4123413085938
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 7
-            }
-          },
-          {
-            "id": 7,
-            "node_type_name": "atom_fill",
-            "position": [
-              969.5770263671876,
-              147.2822143554688
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "12": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "atom_fill",
-            "data": {
-              "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
-              "parameter_element_value_definition": ""
-            }
-          },
-          {
-            "id": 22,
-            "node_type_name": "expr",
-            "position": [
-              1954.256378173828,
-              467.9888671875001
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "23": 0
-                }
-              },
-              {
-                "argument_output_pins": {
-                  "24": 0
-                }
-              }
-            ],
-            "data_type": "expr",
-            "data": {
-              "expression": "y*x",
-              "parameters": [
-                {
-                  "data_type": "IVec3",
-                  "data_type_str": null,
-                  "name": "x"
-                },
-                {
-                  "data_type": "Int",
-                  "data_type_str": null,
-                  "name": "y"
-                }
-              ]
             }
           },
           {
@@ -2316,6 +3052,238 @@
             }
           },
           {
+            "id": 3,
+            "node_type_name": "half_space",
+            "position": [
+              340.3551025390625,
+              299.74589843750005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                1,
+                1
+              ],
+              "shift": 6
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "atom_fill",
+            "position": [
+              969.5770263671876,
+              147.2822143554688
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 28,
+            "node_type_name": "half_space",
+            "position": [
+              1048.944580078125,
+              636.5237792968751
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "30": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "35": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                8,
+                8,
+                8
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                2,
+                0,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 25,
+            "node_type_name": "atom_fill",
+            "position": [
+              2439.2892150878906,
+              250.7134765625001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "int",
+            "position": [
+              1332.6820373535156,
+              72.51114501953134
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "diff",
+            "position": [
+              1836.0954895019531,
+              269.18863525390634
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "18": 0
+                }
+              }
+            ],
+            "data_type": "diff",
+            "data": {}
+          },
+          {
+            "id": 22,
+            "node_type_name": "expr",
+            "position": [
+              1954.256378173828,
+              467.9888671875001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "23": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "y*x",
+              "parameters": [
+                {
+                  "data_type": "IVec3",
+                  "data_type_str": null,
+                  "name": "x"
+                },
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "y"
+                }
+              ]
+            }
+          },
+          {
+            "id": 30,
+            "node_type_name": "ivec3",
+            "position": [
+              687.6981201171875,
+              851.3888793945314
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                8,
+                8,
+                8
+              ]
+            }
+          },
+          {
             "id": 27,
             "node_type_name": "half_space",
             "position": [
@@ -2351,6 +3319,290 @@
               ],
               "shift": 7
             }
+          },
+          {
+            "id": 32,
+            "node_type_name": "half_space",
+            "position": [
+              1081.93017578125,
+              1058.0058837890626
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "30": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "35": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                0,
+                2,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "half_space",
+            "position": [
+              1244.3624877929688,
+              384.4531005859376
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                -1,
+                -1,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "int",
+            "position": [
+              229.1993408203125,
+              526.5941650390625
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 3
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "union",
+            "position": [
+              958.6580810546876,
+              341.5698120117188
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0,
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 39,
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
+            "position": [
+              344.7771301269556,
+              21.191145019533792
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 5,
+            "node_type_name": "intersect",
+            "position": [
+              713.8204345703125,
+              190.60478515625005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "39": 0,
+                  "6": 0,
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 24,
+            "node_type_name": "int",
+            "position": [
+              1701.9206848144531,
+              447.72696533203134
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 23,
+            "node_type_name": "ivec3",
+            "position": [
+              1743.467254638672,
+              549.2534545898438
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "half_space",
+            "position": [
+              1366.0790405273438,
+              556.5453857421876
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                1,
+                1
+              ],
+              "shift": 6
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "intersect",
+            "position": [
+              1769.9386291503906,
+              154.5921386718751
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "27": 0,
+                  "15": 0,
+                  "38": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 38,
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
+            "position": [
+              1531.9771301269568,
+              -9.14885498046641
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 41,
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
+            "position": [
+              504.7771301269558,
+              694.7911450195347
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
           }
         ],
         "return_node_id": null,
@@ -2360,15 +3612,1849 @@
             "Normal"
           ],
           [
+            7,
+            "Normal"
+          ],
+          [
             37,
             "Normal"
           ],
           [
             25,
             "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "lib_irod_xyz_hex⬡{110}_centered",
+      {
+        "next_node_id": 23,
+        "node_type": {
+          "name": "lib_irod_xyz_hex⬡{110}_centered",
+          "parameters": [
+            {
+              "name": "half_thickness",
+              "data_type": "Int"
+            },
+            {
+              "name": "unit_cell",
+              "data_type": "UnitCell"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 17,
+            "node_type_name": "ivec3",
+            "position": [
+              165.0,
+              182.9
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                -1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "ivec3",
+            "position": [
+              167.5,
+              48.39999999999998
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -1,
+                1,
+                0
+              ]
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "parameter",
+            "position": [
+              162.5,
+              418.9
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "unit_cell",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 21,
+            "node_type_name": "lib_test-by-sphere-cut",
+            "position": [
+              1105.0,
+              45.411596679687534
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "int",
+            "position": [
+              -20.5,
+              293.2
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 14,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              407.5,
+              265.4
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "17": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 6,
+            "node_type_name": "parameter",
+            "position": [
+              164.0,
+              339.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "half_thickness",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "intersect",
+            "position": [
+              638.0,
+              106.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "12": 0,
+                  "13": 0,
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 3,
+            "node_type_name": "unit_cell",
+            "position": [
+              -22.5,
+              380.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
+          {
+            "id": 22,
+            "node_type_name": "atom_fill",
+            "position": [
+              1342.0,
+              94.40000000000003
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "21": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              409.0,
+              28.399999999999977
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 13,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              408.5,
+              146.89999999999998
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "ivec3",
+            "position": [
+              167.0,
+              -86.80000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                0,
+                -1
+              ]
+            }
+          }
+        ],
+        "return_node_id": 10,
+        "displayed_node_ids": [
+          [
+            22,
+            "Normal"
+          ],
+          [
+            21,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "lib_irod_x_rect◇{110}_centered",
+      {
+        "next_node_id": 17,
+        "node_type": {
+          "name": "lib_irod_x_rect◇{110}_centered",
+          "parameters": [
+            {
+              "name": "half_width_pp",
+              "data_type": "Int"
+            },
+            {
+              "name": "half_width_pn",
+              "data_type": "Int"
+            },
+            {
+              "name": "unit_cell",
+              "data_type": "UnitCell"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 14,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              301.0,
+              318.2000152587891
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 6,
+            "node_type_name": "intersect",
+            "position": [
+              532.5,
+              275.50001525878906
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0,
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "lib_test-by-sphere-cut",
+            "position": [
+              950.5,
+              284.00001525878906
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "ivec3",
+            "position": [
+              60.0,
+              1.0000152587890625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "parameter",
+            "position": [
+              52.0,
+              398.7000152587891
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "half_width_pn",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "parameter",
+            "position": [
+              91.0,
+              549.2000152587891
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "unit_cell",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              296.0,
+              199.50001525878903
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 11,
+            "node_type_name": "int",
+            "position": [
+              -161.0,
+              124.20001525878912
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 1
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "int",
+            "position": [
+              713.5,
+              387.20001525878905
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 6
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "unit_cell",
+            "position": [
+              -128.5,
+              538.5000152587891
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "int",
+            "position": [
+              -161.5,
+              388.2000152587891
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "parameter",
+            "position": [
+              60.0,
+              137.2000152587891
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "half_width_pp",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "atom_fill",
+            "position": [
+              1166.5,
+              324.7000152587891
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "ivec3",
+            "position": [
+              69.0,
+              261.00001525878906
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                1,
+                -1
+              ]
+            }
+          }
+        ],
+        "return_node_id": 6,
+        "displayed_node_ids": [
+          [
+            16,
+            "Normal"
           ],
           [
             7,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "lib_basepoly_cube_centered",
+      {
+        "next_node_id": 24,
+        "node_type": {
+          "name": "lib_basepoly_cube_centered",
+          "parameters": [
+            {
+              "name": "half_size",
+              "data_type": "Int"
+            },
+            {
+              "name": "position",
+              "data_type": "IVec3"
+            },
+            {
+              "name": "unit_cell",
+              "data_type": "UnitCell"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 14,
+            "node_type_name": "ivec3",
+            "position": [
+              549.875,
+              -135.0999999999999
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "atom_fill",
+            "position": [
+              1346.0,
+              230.10000000000016
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "21": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 23,
+            "node_type_name": "atom_fill_halfshift",
+            "position": [
+              1351.0,
+              131.10000000000014
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "21": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 3,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              397.5,
+              268.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 11,
+            "node_type_name": "int",
+            "position": [
+              -57.0,
+              -34.299999999999955
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 1
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "ivec3",
+            "position": [
+              72.5,
+              247.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                1,
+                0
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              398.5,
+              384.2000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 22,
+            "node_type_name": "lattice_rot",
+            "position": [
+              861.0,
+              207.10000000000016
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": null,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 0
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "intersect",
+            "position": [
+              639.5,
+              269.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0,
+                  "4": 0,
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 16,
+            "node_type_name": "parameter",
+            "position": [
+              758.375,
+              -81.59999999999991
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "position",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "unit_cell",
+            "position": [
+              -30.5,
+              567.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "parameter",
+            "position": [
+              143.0,
+              -15.299999999999956
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "half_size",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 21,
+            "node_type_name": "lattice_move",
+            "position": [
+              1086.0,
+              185.10000000000016
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "ivec3",
+            "position": [
+              72.5,
+              385.7000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "ivec3",
+            "position": [
+              76.5,
+              108.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              397.0,
+              153.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 12,
+            "node_type_name": "parameter",
+            "position": [
+              165.5,
+              547.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "unit_cell",
+              "sort_order": 3
+            }
+          }
+        ],
+        "return_node_id": 21,
+        "displayed_node_ids": [
+          [
+            23,
+            "Normal"
+          ],
+          [
+            18,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "lib_basepoly_rdodecahedron_centered",
+      {
+        "next_node_id": 26,
+        "node_type": {
+          "name": "lib_basepoly_rdodecahedron_centered",
+          "parameters": [
+            {
+              "name": "half_size",
+              "data_type": "Int"
+            },
+            {
+              "name": "position",
+              "data_type": "IVec3"
+            },
+            {
+              "name": "rotation_lattice",
+              "data_type": "IVec3"
+            },
+            {
+              "name": "unit_cell",
+              "data_type": "UnitCell"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 15,
+            "node_type_name": "ivec3",
+            "position": [
+              106.0,
+              537.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                1,
+                -1
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "parameter",
+            "position": [
+              106.0,
+              -37.299999999999955
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "17": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "half_size",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "ivec3",
+            "position": [
+              102.0,
+              107.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                1,
+                0
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              400.5,
+              728.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "unit_cell",
+            "position": [
+              -118.0,
+              789.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "ivec3",
+            "position": [
+              -71.0,
+              218.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "intersect",
+            "position": [
+              626.0,
+              400.7000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0,
+                  "6": 0,
+                  "2": 0,
+                  "3": 0,
+                  "5": 0,
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 17,
+            "node_type_name": "int",
+            "position": [
+              -122.5,
+              -19.59999999999991
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 1
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              397.0,
+              257.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 13,
+            "node_type_name": "ivec3",
+            "position": [
+              111.5,
+              321.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "ivec3",
+            "position": [
+              698.875,
+              15.400000000000093
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "ivec3",
+            "position": [
+              -83.0,
+              616.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                1,
+                -1,
+                0
+              ]
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "parameter",
+            "position": [
+              892.375,
+              58.40000000000009
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "position",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "parameter",
+            "position": [
+              84.0,
+              798.2
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_index": 3,
+              "param_name": "unit_cell",
+              "sort_order": 3
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              406.0,
+              611.7
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 21,
+            "node_type_name": "ivec3",
+            "position": [
+              698.875,
+              152.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "geo_trans",
+            "position": [
+              1108.375,
+              340.4000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              }
+            ],
+            "data_type": "geo_trans",
+            "data": {
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "transform_only_frame": false,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              402.0,
+              488.7000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 22,
+            "node_type_name": "parameter",
+            "position": [
+              886.875,
+              191.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "21": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "IVec3",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "rotation_lattice",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 25,
+            "node_type_name": "atom_fill_halfshift",
+            "position": [
+              1355.5,
+              318.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "18": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 14,
+            "node_type_name": "ivec3",
+            "position": [
+              -71.0,
+              453.2000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -1,
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "id": 24,
+            "node_type_name": "atom_fill",
+            "position": [
+              1353.0,
+              417.9000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "18": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              398.0,
+              139.70000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 3,
+            "node_type_name": "lib_iwall_centered",
+            "position": [
+              400.0,
+              373.7000000000001
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          }
+        ],
+        "return_node_id": 18,
+        "displayed_node_ids": [
+          [
+            18,
+            "Normal"
+          ],
+          [
+            25,
             "Normal"
           ]
         ]
