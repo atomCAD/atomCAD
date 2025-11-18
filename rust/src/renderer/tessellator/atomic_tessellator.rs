@@ -49,7 +49,7 @@ fn should_cull_atom(atom: &Atom, atomic_viz_prefs: &AtomicStructureVisualization
   }
 }
 
-pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
+pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &AtomicStructure, params: &AtomicTessellatorParams, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) {
   let _timer = Timer::new("Atomic tessellation");
 
   // Pre-allocate mesh capacity for worst-case scenario (no compression)
@@ -77,8 +77,6 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, selected_clusters_mes
   
   output_mesh.vertices.reserve(estimated_vertices);
   output_mesh.indices.reserve(estimated_indices);
-  selected_clusters_mesh.vertices.reserve(estimated_vertices / 10); // Assume 10% selected
-  selected_clusters_mesh.indices.reserve(estimated_indices / 10);
 
   // Create reusable data structures for all sphere tessellations
   let mut reusable_occludable_mesh = tessellator::OccludableMesh::new();
@@ -99,14 +97,14 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, selected_clusters_mes
     }
     
     tessellated_count += 1;
-    tessellate_atom(output_mesh, selected_clusters_mesh, atomic_structure, &atom, params, display_state, &atomic_viz_prefs.visualization, &mut reusable_occludable_mesh, &mut reusable_occluder_array);
+    tessellate_atom(output_mesh, atomic_structure, &atom, params, display_state, &atomic_viz_prefs.visualization, &mut reusable_occludable_mesh, &mut reusable_occluder_array);
   }
   
   // Only tessellate bonds for ball-and-stick visualization
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
     for (_id, bond) in atomic_structure.bonds.iter() {
       if should_render_bond(bond, atomic_structure, atomic_viz_prefs) {
-        tessellate_bond(output_mesh, selected_clusters_mesh, atomic_structure, &bond, params);
+        tessellate_bond(output_mesh, atomic_structure, &bond, params);
       }
     }
   }
@@ -236,15 +234,13 @@ fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, v
   }
 }
 
-pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization, reusable_occludable_mesh: &mut tessellator::OccludableMesh, reusable_occluder_array: &mut OccluderArray) {
+pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization, reusable_occludable_mesh: &mut tessellator::OccludableMesh, reusable_occluder_array: &mut OccluderArray) {
   let atom_info = ATOM_INFO.get(&atom.atomic_number)
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
   //if atom.atomic_number == 1 {
   //  return; // Temporarily test without Hydrogen
   //}
-
-  let cluster_selected = _model.get_cluster(atom.cluster_id).is_some() && _model.get_cluster(atom.cluster_id).unwrap().selected;
 
   // Use shared helper for color and material calculation
   let (atom_color, roughness, metallic) = get_atom_color_and_material(atom);
@@ -267,7 +263,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   // Render the atom sphere with occlusion culling if in space-filling mode
   if *visualization == AtomicStructureVisualization::SpaceFilling && reusable_occluder_array.count > 0 {
     tessellator::tessellate_sphere_with_occlusion(
-      if cluster_selected { selected_clusters_mesh } else { output_mesh },
+      output_mesh,
       reusable_occludable_mesh,
       &atom.position,
       get_displayed_atom_radius(atom, visualization),
@@ -282,7 +278,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
   } else {
     // Use regular tessellation for ball-and-stick or when no occlusion
     tessellator::tessellate_sphere(
-      if cluster_selected { selected_clusters_mesh } else { output_mesh },
+      output_mesh,
       &atom.position,
       get_displayed_atom_radius(atom, visualization),
       horizontal_divisions,
@@ -311,7 +307,7 @@ pub fn tessellate_atom(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh
 
       // Render the crosshair
       tessellator::tessellate_crosshair_3d(
-        if cluster_selected { selected_clusters_mesh } else { output_mesh },
+        output_mesh,
         &DVec3::new(atom.position.x, atom.position.y, atom.position.z),
         half_length,
         crosshair_radius,
@@ -330,23 +326,17 @@ fn to_selected_color(_color: &Vec3) -> Vec3 {
   Vec3::new(1.0, 0.2, 1.0) // Bright magenta for selected atoms
 }
 
-pub fn tessellate_bond(output_mesh: &mut Mesh, selected_clusters_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
+pub fn tessellate_bond(output_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
   let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
   let atom_pos2 = model.get_atom(bond.atom_id2).unwrap().position;
 
-  let cluster_id1 = model.get_atom(bond.atom_id1).unwrap().cluster_id;
-  let cluster_id2 = model.get_atom(bond.atom_id2).unwrap().cluster_id;
-
-  let cluster_selected1 = model.get_cluster(cluster_id1).is_some() && model.get_cluster(cluster_id1).unwrap().selected;
-  let cluster_selected2 = model.get_cluster(cluster_id2).is_some() && model.get_cluster(cluster_id2).unwrap().selected;
-
-  let selected = bond.selected || cluster_selected1 || cluster_selected2;
+  let selected = bond.selected;
 
   // Use shared helper for bond color calculation
   let color = get_bond_color(bond);
 
   tessellator::tessellate_cylinder(
-    if cluster_selected1 && cluster_selected2 { selected_clusters_mesh } else { output_mesh },
+    output_mesh,
     &atom_pos2,
     &atom_pos1,
     BAS_STICK_RADIUS,

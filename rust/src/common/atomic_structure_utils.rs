@@ -81,67 +81,6 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
     }
 }
 
-/// Detects bonded substructures (connected components) in an AtomicStructure and organizes them into clusters.
-/// Each connected component of atoms (where atoms are connected by bonds) will be placed in its own cluster.
-///
-/// # Parameters
-///
-/// * `structure` - The atomic structure to analyze and modify
-///
-pub fn detect_bonded_substructures(structure: &mut AtomicStructure) {
-
-    let mut visited: HashSet<u64> = HashSet::new();
-    
-    let all_atom_ids: Vec<u64> = structure.atoms.keys().cloned().collect();
-    
-    // For each atom that hasn't been visited yet
-    for &start_atom_id in &all_atom_ids {
-        if visited.contains(&start_atom_id) {
-            continue;
-        }
-
-        // Create a new cluster for this connected component if necessary
-        let mut cluster_id: u64 = 1;
-        if structure.clusters.len() == 1 && structure.clusters.values().next().unwrap().name == "default" {
-            structure.clusters.values_mut().next().unwrap().name = format!("Cluster_1");
-        } else {
-            cluster_id = structure.obtain_next_cluster_id();
-            structure.add_cluster_with_id(cluster_id, &format!("Cluster_{}", cluster_id));
-        }
-        
-        // Perform depth-first search to find all connected atoms
-        let mut stack: Vec<u64> = vec![start_atom_id];
-        
-        while let Some(atom_id) = stack.pop() {
-            if visited.contains(&atom_id) {
-                continue;
-            }
-            visited.insert(atom_id);
-            structure.move_atom_to_cluster(atom_id, cluster_id);
-            
-            // Get the atom to access its bonds
-            if let Some(atom) = structure.atoms.get(&atom_id) {
-                // For each bond of the current atom
-                for &bond_id in &atom.bond_ids {
-                    if let Some(bond) = structure.bonds.get(&bond_id) {
-                        let connected_atom_id = if bond.atom_id1 == atom_id {
-                            bond.atom_id2
-                        } else {
-                            bond.atom_id1
-                        };
-
-                        if !visited.contains(&connected_atom_id) {
-                            stack.push(connected_atom_id);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    structure.remove_empty_clusters();
-    structure.calculate_all_clusters_default_frame_transforms();
-}
 
 /// Calculates a transform that represents a local coordinate system aligned to selected atoms.
 /// This transform can be used as a basis for translation/rotation gadgets.

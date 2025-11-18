@@ -126,32 +126,20 @@ pub struct Atom {
   pub position: DVec3,
   pub bond_ids: Vec<u64>,
   pub selected: bool,
-  pub cluster_id: u64,
   pub in_crystal_depth: f32,
 }
 
-#[derive(Debug, Clone)]
-pub struct Cluster {
-  pub id: u64,
-  pub name: String,
-  pub atom_ids: HashSet<u64>,
-  pub selected: bool,
-  pub frame_transform: Transform,
-  pub frame_locked_to_atoms: bool,
-}
 
 #[derive(Debug, Clone)]
 pub struct AtomicStructure {
   pub frame_transform: Transform,
   pub next_atom_id: u64,
   pub next_bond_id: u64,
-  pub next_cluster_id: u64,
   pub atoms: HashMap<u64, Atom>,
   // Sparse grid of atoms
   pub grid: HashMap<(i32, i32, i32), Vec<u64>>,
   pub bonds: HashMap<u64, Bond>,
   pub dirty_atom_ids: HashSet<u64>,
-  pub clusters: BTreeMap<u64, Cluster>,
   pub from_selected_node: bool,
   pub selection_transform: Option<Transform>,
   pub anchor_position: Option<IVec3>,
@@ -184,25 +172,21 @@ impl AtomicStructure {
   }
 
   pub fn new() -> Self {
-    let mut ret = Self {
+    Self {
       frame_transform: Transform::default(),
       next_atom_id: 1,
       next_bond_id: 1,
-      next_cluster_id: 1,
       atoms: HashMap::new(),
       grid: HashMap::new(),
       bonds: HashMap::new(),
       dirty_atom_ids: HashSet::new(),
-      clusters: BTreeMap::new(),
       from_selected_node: false,
       selection_transform: None,
       anchor_position: None,
       deleted_atom_ids: HashSet::new(),
       decorator: AtomicStructureDecorator::new(),
       crystal_meta_data: CrystalMetaData::new(),
-    };
-    ret.add_cluster("default");
-    ret
+    }
   }
 
   pub fn get_num_of_atoms(&self) -> usize {
@@ -283,150 +267,23 @@ impl AtomicStructure {
     return ret;
   }
 
-  pub fn obtain_next_cluster_id(&mut self) -> u64 {
-    let ret = self.next_cluster_id;
-    self.next_cluster_id += 1;
-    return ret;
-  }
-
-  pub fn add_cluster(&mut self, name: &str) -> u64 {
-    let id = self.obtain_next_cluster_id();
-    self.add_cluster_with_id(id, name);
-    id
-  }
-
-  pub fn add_cluster_with_id(&mut self, id: u64, name: &str) {
-    self.clusters.insert(id, Cluster {
-      id,
-      name: name.to_string(),
-      atom_ids: HashSet::new(),
-      selected: false,
-      frame_transform: Transform::default(),
-      frame_locked_to_atoms: true,
-    });
-  }
-
-  pub fn get_cluster(&self, cluster_id: u64) -> Option<&Cluster> {
-    self.clusters.get(&cluster_id)
-  }
-
-  pub fn select_cluster(&mut self, cluster_id: u64, select_modifier: SelectModifier) -> HashSet<u64> {
-    let mut inverted_cluster_ids = HashSet::new();
-    
-    match select_modifier {
-      SelectModifier::Replace => {
-        // Track currently selected clusters that will be deselected
-        for (id, cluster) in self.clusters.iter() {
-          if cluster.selected {
-            inverted_cluster_ids.insert(*id);
-          }
-        }
-        
-        // Deselect all clusters
-        for (_, cluster) in self.clusters.iter_mut() {
-          cluster.selected = false;
-        }
-        
-        // Select the specified cluster if it exists
-        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
-          // Check if it was previously unselected (will be inverted)
-          if !cluster.selected {
-            inverted_cluster_ids.insert(cluster_id);
-          } else {
-            // If it was previously selected, it's not actually inverted
-            // (deselected then selected again)
-            inverted_cluster_ids.remove(&cluster_id);
-          }
-          cluster.selected = true;
-        }
-      },
-      SelectModifier::Toggle => {
-        // Toggle selection state of the specified cluster
-        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
-          cluster.selected = !cluster.selected;
-          // Add this cluster to the inverted set
-          inverted_cluster_ids.insert(cluster_id);
-        }
-      },
-      SelectModifier::Expand => {
-        // Add the specified cluster to the selection
-        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
-          // Only track as inverted if we're changing its state from unselected to selected
-          if !cluster.selected {
-            inverted_cluster_ids.insert(cluster_id);
-          }
-          cluster.selected = true;
-        }
-      }
-    }
-    
-    inverted_cluster_ids
-  }
-
-  pub fn invert_cluster_selections(&mut self, inverted_cluster_ids: &HashSet<u64>) {
-    for cluster_id in inverted_cluster_ids {
-      if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
-        cluster.selected = !cluster.selected;
-      }
-    }
-  }
-
-  pub fn rename_cluster(&mut self, cluster_id: u64, new_name: &str) {
-    if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
-      cluster.name = new_name.to_string();
-    }
-  }
-
-  /// Removes all clusters that have no atoms (empty atom_ids sets)
-  /// 
-  /// # Returns
-  /// 
-  /// A vector containing the IDs of the removed clusters
-  /// 
-  /// A vector containing the IDs of the removed clusters
-  pub fn remove_empty_clusters(&mut self) -> Vec<u64> {
-    let mut empty_cluster_ids = Vec::new();
-    
-    // Find all empty clusters
-    for (cluster_id, cluster) in &self.clusters {
-      if cluster.atom_ids.is_empty() {
-        empty_cluster_ids.push(*cluster_id);
-      }
-    }
-    
-    // Remove the empty clusters
-    for cluster_id in &empty_cluster_ids {
-      self.clusters.remove(cluster_id);
-    }
-    
-    empty_cluster_ids
-  }
-
-  pub fn add_atom(&mut self, atomic_number: i32, position: DVec3, cluster_id: u64) -> u64 {
+  pub fn add_atom(&mut self, atomic_number: i32, position: DVec3) -> u64 {
     let id = self.obtain_next_atom_id();
-    self.add_atom_with_id(id, atomic_number, position, cluster_id);
+    self.add_atom_with_id(id, atomic_number, position);
     id
   }
 
-  pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: DVec3, cluster_id: u64) {
-
+  pub fn add_atom_with_id(&mut self, id: u64, atomic_number: i32, position: DVec3) {
     self.atoms.insert(id, Atom {
       id,
       atomic_number,
       position,
       bond_ids: Vec::new(),
       selected: false,
-      cluster_id,
       in_crystal_depth: 0.0,
     });
 
     self.add_atom_to_grid(id, &position);
-
-    // Add atom ID to the cluster's atom_ids HashSet if the cluster exists
-    if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
-      cluster.atom_ids.insert(id);
-    }
-    
     self.make_atom_dirty(id);
   }
 
@@ -453,10 +310,6 @@ impl AtomicStructure {
   pub fn delete_atom(&mut self, id: u64, remember_deleted_atom: bool) {
     // Get the atom and collect its bond IDs before removing it
     let (pos, bond_ids) = if let Some(atom) = self.atoms.get(&id) {
-      // Remove atom ID from its cluster's atom_ids HashSet if the cluster exists
-      if let Some(cluster) = self.clusters.get_mut(&atom.cluster_id) {
-        cluster.atom_ids.remove(&id);
-      }
       // Clone the bond IDs to avoid borrow issues when deleting bonds
       let bond_ids = atom.bond_ids.clone();
       (Some(atom.position), bond_ids)
@@ -479,34 +332,6 @@ impl AtomicStructure {
   
     if remember_deleted_atom {
       self.deleted_atom_ids.insert(id);
-    }
-  }
-
-  pub fn move_atom_to_cluster(&mut self, atom_id: u64, new_cluster_id: u64) {
-    // Get the atom and its current cluster_id
-    if let Some(atom) = self.atoms.get_mut(&atom_id) {
-      let old_cluster_id = atom.cluster_id;
-      
-      // Skip if the atom is already in the target cluster
-      if old_cluster_id == new_cluster_id {
-        return;
-      }
-      
-      // Update the atom's cluster_id
-      atom.cluster_id = new_cluster_id;
-      
-      // Remove atom_id from the old cluster's atom_ids
-      if let Some(old_cluster) = self.clusters.get_mut(&old_cluster_id) {
-        old_cluster.atom_ids.remove(&atom_id);
-      }
-      
-      // Add atom_id to the new cluster's atom_ids
-      if let Some(new_cluster) = self.clusters.get_mut(&new_cluster_id) {
-        new_cluster.atom_ids.insert(atom_id);
-      }
-      
-      // Mark the atom as dirty since it's been modified
-      self.make_atom_dirty(atom_id);
     }
   }
 
@@ -1000,75 +825,10 @@ impl AtomicStructure {
     result
   }
 
-  /// Calculates the default frame_transform for a specific cluster.
-  /// The translation is set to the average position of all atoms in the cluster,
-  /// and the rotation is set to identity.
-  ///
-  /// # Arguments
-  ///
-  /// * `cluster_id` - The ID of the cluster to calculate the frame_transform for
-  ///
-  /// # Returns
-  ///
-  /// `true` if the cluster exists and has atoms, `false` otherwise
-  pub fn calculate_cluster_default_frame_transform(&mut self, cluster_id: u64) -> bool {
-    if let Some(cluster) = self.clusters.get(&cluster_id) {
-      if cluster.atom_ids.is_empty() {
-        return false;
-      }
-      
-      // Calculate the average position of all atoms in the cluster
-      let mut total_position = DVec3::ZERO;
-      let mut atom_count = 0;
-      
-      for atom_id in &cluster.atom_ids {
-        if let Some(atom) = self.atoms.get(atom_id) {
-          total_position += atom.position;
-          atom_count += 1;
-        }
-      }
-      
-      if atom_count > 0 {
-        // Calculate average position
-        let avg_position = total_position / atom_count as f64;
-        
-        // Update the cluster's frame_transform
-        if let Some(cluster) = self.clusters.get_mut(&cluster_id) {
-          cluster.frame_transform = Transform::new(avg_position, DQuat::IDENTITY);
-        }
-        
-        return true;
-      }
-    }
-    
-    false
-  }
-
-  /// Calculates the default frame_transform for all clusters in the atomic structure.
-  ///
-  /// # Returns
-  ///
-  /// A vector of cluster IDs for which the frame_transform was successfully calculated
-  pub fn calculate_all_clusters_default_frame_transforms(&mut self) -> Vec<u64> {
-    let cluster_ids: Vec<u64> = self.clusters.keys().cloned().collect();
-    let mut updated_clusters = Vec::new();
-    
-    for cluster_id in cluster_ids {
-      if self.calculate_cluster_default_frame_transform(cluster_id) {
-        updated_clusters.push(cluster_id);
-      }
-    }
-    
-    updated_clusters
-  }
-
   /// Adds another atomic structure to this one, ensuring all IDs remain distinct.
   /// 
-  /// This method copies atoms, bonds, and clusters from the other structure into this one,
-  /// assigning new IDs to all elements to avoid conflicts. Clusters remain separate -
-  /// atoms from the other structure will remain in their original clusters, but with new cluster IDs.
-  /// 
-  /// If a cluster's name follows the pattern 'Cluster_{id}', it will be updated to use the new cluster ID.
+  /// This method copies atoms and bonds from the other structure into this one,
+  /// assigning new IDs to all elements to avoid conflicts.
   ///
   /// # Arguments
   ///
@@ -1076,49 +836,21 @@ impl AtomicStructure {
   ///
   /// # Returns
   ///
-  /// A mapping of old IDs to new IDs for atoms, bonds, and clusters
-  pub fn add_atomic_structure(&mut self, other: &AtomicStructure) -> (HashMap<u64, u64>, HashMap<u64, u64>, HashMap<u64, u64>) {
+  /// A mapping of old IDs to new IDs for atoms and bonds
+  pub fn add_atomic_structure(&mut self, other: &AtomicStructure) -> (HashMap<u64, u64>, HashMap<u64, u64>) {
     let mut atom_id_map: HashMap<u64, u64> = HashMap::new();
     let mut bond_id_map: HashMap<u64, u64> = HashMap::new();
-    let mut cluster_id_map: HashMap<u64, u64> = HashMap::new();
-    
-    // First, create new clusters with new IDs
-    for (old_cluster_id, cluster) in &other.clusters {
-      let new_cluster_id = self.obtain_next_cluster_id();
-      cluster_id_map.insert(*old_cluster_id, new_cluster_id);
-      
-      // Create the new cluster
-      let mut new_name = cluster.name.clone();
-      
-      // Update name if it follows the 'Cluster_{id}' pattern
-      if let Some(_captures) = regex::Regex::new(r"^Cluster_(\d+)$").unwrap().captures(&cluster.name) {
-        new_name = format!("Cluster_{}", new_cluster_id);
-      }
-      
-      self.clusters.insert(new_cluster_id, Cluster {
-        id: new_cluster_id,
-        name: new_name,
-        atom_ids: HashSet::new(), // Will be populated when adding atoms
-        selected: cluster.selected,
-        frame_transform: cluster.frame_transform.clone(),
-        frame_locked_to_atoms: cluster.frame_locked_to_atoms,
-      });
-    }
     
     // Add atoms with new IDs
     for (old_atom_id, atom) in &other.atoms {
       let new_atom_id = self.obtain_next_atom_id();
       atom_id_map.insert(*old_atom_id, new_atom_id);
       
-      // Get the new cluster ID for this atom
-      let new_cluster_id = *cluster_id_map.get(&atom.cluster_id).unwrap_or(&1); // Default to first cluster if mapping not found
-      
-      // Add the atom with the new ID and cluster ID
+      // Add the atom with the new ID
       self.add_atom_with_id(
         new_atom_id,
         atom.atomic_number,
-        atom.position,
-        new_cluster_id
+        atom.position
       );
       
       // Preserve the depth value
@@ -1155,7 +887,7 @@ impl AtomicStructure {
     }
     
     // Return the ID mappings
-    (atom_id_map, bond_id_map, cluster_id_map)
+    (atom_id_map, bond_id_map)
   }
 }
 
@@ -1196,11 +928,6 @@ impl MemorySizeEstimator for AtomicStructure {
     // Estimate dirty_atom_ids HashSet
     let dirty_atoms_size = self.dirty_atom_ids.len() * std::mem::size_of::<u64>();
     
-    // Estimate clusters BTreeMap
-    // Assume average cluster name length of 20 chars and 10 atoms per cluster
-    let avg_cluster_size = std::mem::size_of::<Cluster>() + 20 + 10 * std::mem::size_of::<u64>();
-    let clusters_size = self.clusters.len() * (std::mem::size_of::<u64>() + avg_cluster_size);
-    
     // Estimate deleted_atom_ids HashSet
     let deleted_atoms_size = self.deleted_atom_ids.len() * std::mem::size_of::<u64>();
     
@@ -1216,7 +943,6 @@ impl MemorySizeEstimator for AtomicStructure {
       + grid_size 
       + bonds_size 
       + dirty_atoms_size 
-      + clusters_size 
       + deleted_atoms_size 
       + decorator_size 
       + crystal_meta_size

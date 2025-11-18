@@ -296,7 +296,7 @@ impl NodeData for AtomFillData {
           
           // Add atom if we are within the geometry
           if sdf_value <= CRYSTAL_SAMPLE_THRESHOLD {
-            let atom_id = atomic_structure.add_atom(atom_data.atomic_number, atom_data.position, 0);
+            let atom_id = atomic_structure.add_atom(atom_data.atomic_number, atom_data.position);
             
             // Set the depth value based on SDF (negative SDF means inside the geometry)
             // Convert to f32 for memory efficiency and negate to make depth positive inside geometry
@@ -494,7 +494,7 @@ impl AtomFillData {
             
             // Commented out for testing - can be uncommented anytime
             // let cell_center = cell_real_pos + (unit_cell.a + unit_cell.b + unit_cell.c) / 2.0;
-            // atomic_structure.add_atom(6, cell_center, 0);
+            // atomic_structure.add_atom(6, cell_center);
           }
         }
       }
@@ -708,7 +708,7 @@ impl AtomFillData {
       let hydrogen_pos = found_atom.position + normalized_direction * bond_length;
 
       // Add hydrogen atom (atomic number 1) - depth remains 0.0 by default
-      let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos, 0);
+      let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos);
       
       // Update depth statistics for hydrogen (depth = 0.0)
       statistics.total_depth += 0.0;

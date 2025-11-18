@@ -88,7 +88,6 @@ pub struct Renderer  {
     bond_impostor_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
-    selected_clusters_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
     background_mesh: GPUMesh,
     atom_impostor_mesh: GPUMesh,
@@ -102,7 +101,6 @@ pub struct Renderer  {
     pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    pub selected_clusters_transform: crate::util::transform::Transform,
     render_mutex: Mutex<()>,
 }
 
@@ -176,7 +174,6 @@ impl Renderer {
         // Initialize meshes with the model_bind_group_layout
         let main_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
         let wireframe_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
-        let selected_clusters_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
         
         let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
         let background_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
@@ -335,7 +332,6 @@ impl Renderer {
           bond_impostor_pipeline,
           main_mesh,
           wireframe_mesh,
-          selected_clusters_mesh,
           lightweight_mesh,
           background_mesh,
           atom_impostor_mesh,
@@ -349,7 +345,6 @@ impl Renderer {
           camera,
           camera_buffer,
           camera_bind_group,
-          selected_clusters_transform: crate::util::transform::Transform::default(),
           render_mutex: Mutex::new(()),
         };
 
@@ -663,7 +658,7 @@ impl Renderer {
         preferences: &StructureDesignerPreferences
     ) {
         // Tessellate using the new node_data HashMap structure
-        let (lightweight_mesh, main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
+        let (lightweight_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
             crate::renderer::tessellator::scene_tessellator::tessellate_scene_content(
                 scene, 
                 &self.camera, 
@@ -671,12 +666,11 @@ impl Renderer {
                 preferences
             );
 
-        // Update all GPU meshes with the tessellated data
+        // Update all GPU meshes
         self.update_all_gpu_meshes(
             &lightweight_mesh,
             &main_mesh,
             &wireframe_mesh,
-            &selected_clusters_mesh,
             &atom_impostor_mesh,
             &bond_impostor_mesh,
             !lightweight
@@ -694,7 +688,6 @@ impl Renderer {
         lightweight_mesh: &Mesh,
         main_mesh: &Mesh,
         wireframe_mesh: &LineMesh,
-        selected_clusters_mesh: &Mesh,
         atom_impostor_mesh: &AtomImpostorMesh,
         bond_impostor_mesh: &BondImpostorMesh,
         update_non_lightweight: bool
@@ -708,7 +701,6 @@ impl Renderer {
             // Update triangle meshes
             self.main_mesh.update_from_mesh(&self.device, main_mesh, "Main");
             self.wireframe_mesh.update_from_line_mesh(&self.device, wireframe_mesh, "Wireframe");
-            self.selected_clusters_mesh.update_from_mesh(&self.device, selected_clusters_mesh, "Selected Clusters");
             
             // Update impostor meshes (always update both - empty ones will clear previous data)
             self.atom_impostor_mesh.update_from_atom_impostor_mesh(&self.device, atom_impostor_mesh, "Atom Impostors");
@@ -717,7 +709,6 @@ impl Renderer {
             // Set transforms for triangle meshes
             self.main_mesh.set_identity_transform(&self.queue);
             self.wireframe_mesh.set_identity_transform(&self.queue);
-            self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
             
             // Set transforms for impostor meshes
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
@@ -799,11 +790,6 @@ impl Renderer {
             self.main_mesh.set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.triangle_pipeline);
             self.render_mesh(&mut render_pass, &self.main_mesh);
-
-            // Update selected clusters mesh with its transform and render it
-            self.selected_clusters_mesh.update_transform(&self.queue, &self.selected_clusters_transform);
-            render_pass.set_pipeline(&self.triangle_pipeline);
-            self.render_mesh(&mut render_pass, &self.selected_clusters_mesh);
 
             // Render impostor meshes (if they have data)
             // Note: Impostor meshes are only populated when AtomicRenderingMethod::Impostors is selected
@@ -999,15 +985,6 @@ impl Renderer {
     }
 
 
-    /// Update the transform used for the selected clusters mesh
-    pub fn set_selected_clusters_transform(&mut self, transform: &crate::util::transform::Transform) {
-        // This should be thread-safe as it's just updating a field value
-        // The actual GPU update happens in the render method which is protected by the render_mutex
-        self.selected_clusters_transform = transform.clone();
-        
-        // For immediate visual feedback, we could update the mesh's transform buffer here too
-        // But we'll keep it in the render method for consistency and to avoid race conditions
-    }
 
     /// Set the camera from a transform representation
     /// 

@@ -263,7 +263,7 @@ fn process_cell_for_atomic<'a>(
             ZincBlendeAtomType::Secondary => geo_to_atom_data.secondary_atomic_number,
           };
           let unit_cell_size = get_unit_cell_size(geo_to_atom_data.primary_atomic_number, geo_to_atom_data.secondary_atomic_number);
-          atomic_structure.add_atom_with_id(id, atomic_number, crystal_space_pos * unit_cell_size, 1);
+          atomic_structure.add_atom_with_id(id, atomic_number, crystal_space_pos * unit_cell_size);
           atom_pos_to_id.insert(absolute_pos, id);
           id
         } else { 0 };

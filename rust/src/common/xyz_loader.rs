@@ -54,7 +54,7 @@ pub fn load_xyz(file_path: &str, create_bonds: bool) -> Result<AtomicStructure, 
         let y: f64 = parts[2].parse()?;
         let z: f64 = parts[3].parse()?;
 
-        atomic_structure.add_atom(*atomic_number, DVec3::new(x, y, z), 1);
+        atomic_structure.add_atom(*atomic_number, DVec3::new(x, y, z));
     }
 
     if atomic_structure.get_num_of_atoms() != num_atoms {

@@ -54,7 +54,6 @@ pub fn hydrogen_passivate_diamond(structure: &mut AtomicStructure) {
             }
             
             let atom_position = atom.position;
-            let cluster_id = atom.cluster_id;
             
             // Get existing bond directions
             let existing_directions = get_existing_bond_directions(structure, atom_id);
@@ -68,7 +67,7 @@ pub fn hydrogen_passivate_diamond(structure: &mut AtomicStructure) {
             // Add hydrogen atoms in missing directions
             for direction in missing_directions {
                 let hydrogen_position = atom_position + direction.normalize() * C_H_BOND_LENGTH;
-                let hydrogen_id = structure.add_atom(1, hydrogen_position, cluster_id); // Atomic number 1 = Hydrogen
+                let hydrogen_id = structure.add_atom(1, hydrogen_position); // Atomic number 1 = Hydrogen
                 structure.add_bond(atom_id, hydrogen_id, 1); // Single bond
             }
         }

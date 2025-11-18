@@ -21,21 +21,21 @@ pub fn tessellate_scene_content(
     camera: &Camera,
     lightweight: bool,
     preferences: &StructureDesignerPreferences
-) -> (Mesh, Mesh, LineMesh, Mesh, AtomImpostorMesh, BondImpostorMesh) {
+) -> (Mesh, Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
     
     // ===== 1. TESSELLATE LIGHTWEIGHT CONTENT (always) =====
     let lightweight_mesh = tessellate_lightweight_content(scene, camera, preferences);
 
     // ===== 2. TESSELLATE NON-LIGHTWEIGHT CONTENT (when !lightweight) =====
-    let (main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
+    let (main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
         if !lightweight {
             tessellate_non_lightweight_content(scene, preferences)
         } else {
-            // Return empty meshes when in lightweight mode
-            (Mesh::new(), LineMesh::new(), Mesh::new(), AtomImpostorMesh::new(), BondImpostorMesh::new())
+            // Return empty meshes for non-lightweight content
+            (Mesh::new(), LineMesh::new(), AtomImpostorMesh::new(), BondImpostorMesh::new())
         };
     
-    (lightweight_mesh, main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh)
+    (lightweight_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh)
 }
 
 /// Tessellates lightweight content (gadget, camera pivot)
@@ -76,10 +76,9 @@ fn tessellate_lightweight_content(
 fn tessellate_non_lightweight_content(
     scene: &StructureDesignerScene,
     preferences: &StructureDesignerPreferences
-) -> (Mesh, LineMesh, Mesh, AtomImpostorMesh, BondImpostorMesh) {
+) -> (Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
     let mut main_mesh = Mesh::new();
     let mut wireframe_mesh = LineMesh::new();
-    let mut selected_clusters_mesh = Mesh::new();
     let mut atom_impostor_mesh = AtomImpostorMesh::new();
     let mut bond_impostor_mesh = BondImpostorMesh::new();
 
@@ -100,7 +99,6 @@ fn tessellate_non_lightweight_content(
                     AtomicRenderingMethod::TriangleMesh => {
                         atomic_tessellator::tessellate_atomic_structure(
                             &mut main_mesh,
-                            &mut selected_clusters_mesh,
                             atomic_structure,
                             &atomic_tessellation_params,
                             &preferences.atomic_structure_visualization_preferences
@@ -164,5 +162,5 @@ fn tessellate_non_lightweight_content(
         }
     }
 
-    (main_mesh, wireframe_mesh, selected_clusters_mesh, atom_impostor_mesh, bond_impostor_mesh)
+    (main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh)
 }
