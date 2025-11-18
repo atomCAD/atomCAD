@@ -572,6 +572,52 @@ impl AtomicStructure {
     self.make_atom_dirty(atom_id2);
     id
   }
+
+  /// Fast bond creation for bulk operations where preconditions are guaranteed
+  ///
+  /// This method skips all validation checks for maximum performance.
+  /// Use this ONLY when you can guarantee:
+  /// - Both atoms exist in the structure
+  /// - No bond already exists between these atoms
+  /// - You're creating a new bond (not updating an existing one)
+  ///
+  /// Typical use case: atom_fill operations where bonds are created in bulk
+  /// and the above conditions are known to be true.
+  ///
+  /// # Arguments
+  ///
+  /// * `atom_id1` - The ID of the first atom (must exist)
+  /// * `atom_id2` - The ID of the second atom (must exist)
+  /// * `multiplicity` - The bond multiplicity
+  ///
+  /// # Returns
+  ///
+  /// The ID of the newly created bond
+  ///
+  /// # Safety
+  ///
+  /// This method uses `unwrap()` and will panic if the atoms don't exist.
+  /// Only use when preconditions are guaranteed.
+  pub fn add_bond_fast(&mut self, atom_id1: u64, atom_id2: u64, multiplicity: i32) -> u64 {
+    // Obtain a new bond ID
+    let id = self.obtain_next_bond_id();
+    
+    // Create the bond directly without any checks
+    self.bonds.insert(id, Bond {
+      id,
+      atom_id1,
+      atom_id2,
+      multiplicity,
+      selected: false,
+    });
+    
+    // Add bond ID to both atoms (will panic if atoms don't exist - this is intentional)
+    self.atoms.get_mut(&atom_id1).unwrap().bond_ids.push(id);
+    self.atoms.get_mut(&atom_id2).unwrap().bond_ids.push(id);
+    self.make_atom_dirty(atom_id1);
+    self.make_atom_dirty(atom_id2);
+    id
+  }
   
   /// Finds the ID of a bond between two atoms, if it exists
   ///

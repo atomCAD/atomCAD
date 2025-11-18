@@ -572,21 +572,24 @@ impl AtomFillData {
   ) {
     // Iterate through all placed atoms
     for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
-      // For each atom, check all bonds in the motif to see if this atom is involved
-      for bond in &motif.bonds {
-        // Check if this atom matches the first site of the bond
-        // (assuming first site is always in relative cell (0,0,0))
-        if bond.site_1.site_index == site_index && bond.site_1.relative_cell == IVec3::ZERO {
-          // This atom is the first site of the bond, try to find the second site
-          let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
-          
-          if let Some(id2) = atom_id_2 {
-            // Both atoms exist, create the bond
-            atomic_structure.add_bond(atom_id, id2, bond.multiplicity);
-            statistics.bonds += 1;
-          }
-          // If second atom doesn't exist, skip the bond (will be handled by hydrogen passivation if enabled)
+      // Use precomputed bonds_by_site1_index to only check bonds that start from this site
+      // This is O(k) where k is the number of bonds per site, instead of O(N) where N is total bonds
+      for &bond_index in &motif.bonds_by_site1_index[site_index] {
+        let bond = &motif.bonds[bond_index];
+        
+        // This atom is the first site of the bond, try to find the second site
+        let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
+        
+        if let Some(id2) = atom_id_2 {
+          // Both atoms exist, create the bond using fast method
+          // We can use add_bond_fast because:
+          // - Both atoms are guaranteed to exist (we just got their IDs from atom_tracker)
+          // - No bond exists yet (this is the initial bond creation phase)
+          // - We're creating new bonds, not updating existing ones
+          atomic_structure.add_bond_fast(atom_id, id2, bond.multiplicity);
+          statistics.bonds += 1;
         }
+        // If second atom doesn't exist, skip the bond (will be handled by hydrogen passivation if enabled)
       }
     }
   }
@@ -605,51 +608,54 @@ impl AtomFillData {
 
     // Iterate through all placed atoms
     for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
-      // For each atom, check all bonds in the motif to see if this atom is involved
-      for bond in &motif.bonds {
-        // Case 1: Check if this atom matches the first site of the bond
-        // (assuming first site is always in relative cell (0,0,0))
-        if bond.site_1.site_index == site_index && bond.site_1.relative_cell == IVec3::ZERO {
-          // This atom is the first site of the bond, try to find the second site
-          let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
-          
-          if atom_id_2.is_none() {
-            // Second atom doesn't exist - this is a dangling bond that needs to be passivated
-            //println!("dangling bond found (first site exists, second doesn't)");
-            
-            self.hydrogen_passivate_dangling_bond(
-              unit_cell,
-              motif,
-              &bond.site_1,
-              &bond.site_2,
-              atom_id,
-              atomic_structure,
-              statistics
-            );
-          }
-        }
+      // Case 1: Check bonds where this atom is the first site (optimized with precomputed index)
+      // Use precomputed bonds_by_site1_index to only check bonds that start from this site
+      for &bond_index in &motif.bonds_by_site1_index[site_index] {
+        let bond = &motif.bonds[bond_index];
         
-        // Case 2: Check if this atom matches the second site of the bond
+        // This atom is the first site of the bond, try to find the second site
+        let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
+        
+        if atom_id_2.is_none() {
+          // Second atom doesn't exist - this is a dangling bond that needs to be passivated
+          //println!("dangling bond found (first site exists, second doesn't)");
+          
+          self.hydrogen_passivate_dangling_bond(
+            unit_cell,
+            motif,
+            &bond.site_1,
+            &bond.site_2,
+            atom_id,
+            atomic_structure,
+            statistics
+          );
+        }
+      }
+      
+      // Case 2: Check bonds where this atom is the second site (optimized with precomputed index)
+      // Use precomputed bonds_by_site2_index to only check bonds that end at this site
+      for &bond_index in &motif.bonds_by_site2_index[site_index] {
+        let bond = &motif.bonds[bond_index];
+        
         // We need to calculate where this atom would be if it were the second site
         let second_site_base_pos = lattice_pos - bond.site_2.relative_cell;
-        if bond.site_2.site_index == site_index {
-          // This atom is the second site of the bond, try to find the first site
-          let atom_id_1 = atom_tracker.get_atom_id_for_specifier(second_site_base_pos, &bond.site_1);
+        
+        // This atom is the second site of the bond, try to find the first site
+        let atom_id_1 = atom_tracker.get_atom_id_for_specifier(second_site_base_pos, &bond.site_1);
+        
+        if atom_id_1.is_none() {
+          // First atom doesn't exist - this is a dangling bond that needs to be passivated
+          //println!("dangling bond found (second site exists, first doesn't)");
           
-          if atom_id_1.is_none() {
-            // First atom doesn't exist - this is a dangling bond that needs to be passivated
-            //println!("dangling bond found (second site exists, first doesn't)");
-            
-            self.hydrogen_passivate_dangling_bond(
-              unit_cell,
-              motif,
-              &bond.site_2,
-              &bond.site_1,
-              atom_id,
-              atomic_structure,
-              statistics
-            );
-          }
+          self.hydrogen_passivate_dangling_bond(
+            unit_cell,
+            motif,
+            &bond.site_2,
+            &bond.site_1,
+            atom_id,
+            atomic_structure,
+            statistics
+          );
         }
       }
     }
@@ -709,7 +715,7 @@ impl AtomFillData {
       // Note: max_depth doesn't need updating since hydrogen depth is 0.0
       
       // Create bond between original atom and hydrogen
-      atomic_structure.add_bond(found_atom_id, hydrogen_id, 1); // Single bond
+      atomic_structure.add_bond_fast(found_atom_id, hydrogen_id, 1); // Single bond
       
       statistics.bonds += 1;
       statistics.atoms += 1; // Count the hydrogen atom

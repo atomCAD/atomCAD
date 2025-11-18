@@ -33,7 +33,13 @@ pub struct MotifBond {
 pub struct Motif {
   pub parameters: Vec<ParameterElement>,
   pub sites: Vec<Site>,
-  pub bonds: Vec<MotifBond>,  
+  pub bonds: Vec<MotifBond>,
+  /// Precomputed mapping: for each site index, stores indices of bonds where that site is site_1
+  /// This optimizes bond creation by avoiding iteration through all bonds for each atom
+  pub bonds_by_site1_index: Vec<Vec<usize>>,
+  /// Precomputed mapping: for each site index, stores indices of bonds where that site is site_2
+  /// This optimizes hydrogen passivation Case 2 by avoiding iteration through all bonds
+  pub bonds_by_site2_index: Vec<Vec<usize>>,
 }
 
 impl Motif {

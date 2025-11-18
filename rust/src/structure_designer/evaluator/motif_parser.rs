@@ -360,10 +360,24 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
         }
     }
 
+    // Precompute bonds_by_site1_index and bonds_by_site2_index for optimization
+    let num_sites = sites.len();
+    let mut bonds_by_site1_index: Vec<Vec<usize>> = vec![Vec::new(); num_sites];
+    let mut bonds_by_site2_index: Vec<Vec<usize>> = vec![Vec::new(); num_sites];
+    
+    for (bond_index, bond) in bonds.iter().enumerate() {
+        // Store bond index for site_1 (always at relative cell (0,0,0))
+        bonds_by_site1_index[bond.site_1.site_index].push(bond_index);
+        // Store bond index for site_2 (may have relative cell offset)
+        bonds_by_site2_index[bond.site_2.site_index].push(bond_index);
+    }
+    
     Ok(Motif {
         parameters,
         sites,
         bonds,
+        bonds_by_site1_index,
+        bonds_by_site2_index,
     })
 }
 
