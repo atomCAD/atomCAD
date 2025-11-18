@@ -40,7 +40,7 @@ impl EditAtomCommand for DeleteCommand {
 
     // Delete all selected atoms
     for atom_id in selected_atom_ids {
-      model.delete_atom(atom_id, true);
+      model.delete_atom(atom_id);
     }
 
     model.selection_transform = calc_selection_transform(model);

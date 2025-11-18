@@ -131,6 +131,6 @@ fn cut_atomic_structure(atomic_structure: &mut AtomicStructure, cutter_geo_tree_
   // Delete all atoms that are outside the geometry
   // The delete_atom method will also handle removing associated bonds
   for atom_id in atoms_to_delete {
-    atomic_structure.delete_atom(atom_id, false);
+    atomic_structure.delete_atom(atom_id);
   }
 }

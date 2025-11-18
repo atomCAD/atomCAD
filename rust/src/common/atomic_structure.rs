@@ -2,7 +2,6 @@ use crate::util::transform::Transform;
 use glam::f64::DVec3;
 use glam::f64::DQuat;
 use glam::IVec3;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::util::hit_test_utils;
@@ -139,11 +138,9 @@ pub struct AtomicStructure {
   // Sparse grid of atoms
   pub grid: HashMap<(i32, i32, i32), Vec<u64>>,
   pub bonds: HashMap<u64, Bond>,
-  pub dirty_atom_ids: HashSet<u64>,
   pub from_selected_node: bool,
   pub selection_transform: Option<Transform>,
   pub anchor_position: Option<IVec3>,
-  pub deleted_atom_ids: HashSet<u64>,
   pub decorator: AtomicStructureDecorator,
   pub crystal_meta_data: CrystalMetaData,
 }
@@ -179,11 +176,9 @@ impl AtomicStructure {
       atoms: HashMap::new(),
       grid: HashMap::new(),
       bonds: HashMap::new(),
-      dirty_atom_ids: HashSet::new(),
       from_selected_node: false,
       selection_transform: None,
       anchor_position: None,
-      deleted_atom_ids: HashSet::new(),
       decorator: AtomicStructureDecorator::new(),
       crystal_meta_data: CrystalMetaData::new(),
     }
@@ -247,13 +242,6 @@ impl AtomicStructure {
       .and_then(move |bond_id| self.bonds.get_mut(&bond_id))
   }
 
-  pub fn clean(&mut self) {
-    self.dirty_atom_ids.clear();
-  }
-
-  fn make_atom_dirty(&mut self, atom_id: u64) {
-    self.dirty_atom_ids.insert(atom_id);
-  }
 
   pub fn obtain_next_atom_id(&mut self) -> u64 {
     let ret = self.next_atom_id;
@@ -284,7 +272,6 @@ impl AtomicStructure {
     });
 
     self.add_atom_to_grid(id, &position);
-    self.make_atom_dirty(id);
   }
 
   /// Sets the in_crystal_depth value for an atom
@@ -300,14 +287,13 @@ impl AtomicStructure {
   pub fn set_atom_depth(&mut self, atom_id: u64, depth: f32) -> bool {
     if let Some(atom) = self.atoms.get_mut(&atom_id) {
       atom.in_crystal_depth = depth;
-      self.make_atom_dirty(atom_id);
       true
     } else {
       false
     }
   }
 
-  pub fn delete_atom(&mut self, id: u64, remember_deleted_atom: bool) {
+  pub fn delete_atom(&mut self, id: u64) {
     // Get the atom and collect its bond IDs before removing it
     let (pos, bond_ids) = if let Some(atom) = self.atoms.get(&id) {
       // Clone the bond IDs to avoid borrow issues when deleting bonds
@@ -328,11 +314,6 @@ impl AtomicStructure {
     }
 
     self.atoms.remove(&id);
-    self.make_atom_dirty(id);
-  
-    if remember_deleted_atom {
-      self.deleted_atom_ids.insert(id);
-    }
   }
 
   pub fn add_bond(&mut self, atom_id1: u64, atom_id2: u64, multiplicity: i32) -> u64 {
@@ -369,8 +350,6 @@ impl AtomicStructure {
       if let Some(bond) = self.bonds.get_mut(&existing_bond_id) {
         bond.multiplicity = multiplicity;
       }
-      self.make_atom_dirty(atom_id1);
-      self.make_atom_dirty(atom_id2);
       return existing_bond_id;
     }
     
@@ -393,8 +372,6 @@ impl AtomicStructure {
     // Both atoms are guaranteed to exist at this point
     self.atoms.get_mut(&atom_id1).unwrap().bond_ids.push(id);
     self.atoms.get_mut(&atom_id2).unwrap().bond_ids.push(id);
-    self.make_atom_dirty(atom_id1);
-    self.make_atom_dirty(atom_id2);
     id
   }
 
@@ -439,8 +416,6 @@ impl AtomicStructure {
     // Add bond ID to both atoms (will panic if atoms don't exist - this is intentional)
     self.atoms.get_mut(&atom_id1).unwrap().bond_ids.push(id);
     self.atoms.get_mut(&atom_id2).unwrap().bond_ids.push(id);
-    self.make_atom_dirty(atom_id1);
-    self.make_atom_dirty(atom_id2);
     id
   }
   
@@ -511,9 +486,6 @@ impl AtomicStructure {
 
     self.remove_from_bond_arr(atom_id1, id);
     self.remove_from_bond_arr(atom_id2, id);
-
-    self.make_atom_dirty(atom_id1);
-    self.make_atom_dirty(atom_id2);
 
     self.bonds.remove(&id);
   }
@@ -653,7 +625,7 @@ impl AtomicStructure {
   }
   
   /// Sets the position of an atom directly.
-  /// Updates the atom position in the grid and marks it as dirty.
+  /// Updates the atom position in the grid.
   ///
   /// # Arguments
   ///
@@ -688,7 +660,6 @@ impl AtomicStructure {
     if let Some((old_position, new_position)) = positions {
       self.remove_atom_from_grid(atom_id, &old_position);
       self.add_atom_to_grid(atom_id, &new_position);
-      self.make_atom_dirty(atom_id);
       true
     } else {
       false
@@ -696,7 +667,7 @@ impl AtomicStructure {
   }
 
   /// Transform a single atom by applying rotation and translation.
-  /// Updates the atom position in the grid and marks it as dirty.
+  /// Updates the atom position in the grid.
   ///
   /// # Arguments
   ///
@@ -734,7 +705,7 @@ impl AtomicStructure {
       .collect();
     
     for atom_id in lone_atoms {
-      self.delete_atom(atom_id, false);
+      self.delete_atom(atom_id);
     }
   }
 
@@ -751,7 +722,6 @@ impl AtomicStructure {
   pub fn replace_atom(&mut self, atom_id: u64, atomic_number: i32) -> bool {
     if let Some(atom) = self.atoms.get_mut(&atom_id) {
       atom.atomic_number = atomic_number;
-      self.make_atom_dirty(atom_id);
       true
     } else {
       false
@@ -925,12 +895,6 @@ impl MemorySizeEstimator for AtomicStructure {
     // Estimate bonds HashMap using average bond size
     let bonds_size = self.bonds.len() * (std::mem::size_of::<u64>() + Bond::average_memory_bytes());
     
-    // Estimate dirty_atom_ids HashSet
-    let dirty_atoms_size = self.dirty_atom_ids.len() * std::mem::size_of::<u64>();
-    
-    // Estimate deleted_atom_ids HashSet
-    let deleted_atoms_size = self.deleted_atom_ids.len() * std::mem::size_of::<u64>();
-    
     // Estimate decorator - assume 10% of atoms have custom display states
     let decorator_size = std::mem::size_of::<AtomicStructureDecorator>()
       + (self.atoms.len() / 10) * (std::mem::size_of::<u64>() + std::mem::size_of::<AtomDisplayState>());
@@ -942,8 +906,6 @@ impl MemorySizeEstimator for AtomicStructure {
       + atoms_size 
       + grid_size 
       + bonds_size 
-      + dirty_atoms_size 
-      + deleted_atoms_size 
       + decorator_size 
       + crystal_meta_size
   }
