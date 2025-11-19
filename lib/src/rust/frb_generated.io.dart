@@ -7,7 +7,6 @@ import 'api/common_api.dart';
 import 'api/common_api_types.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
-import 'api/structure_designer/geo_to_atom_api.dart';
 import 'api/structure_designer/import_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/relax_api.dart';
@@ -59,9 +58,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICircleData dco_decode_api_circle_data(dynamic raw);
 
   @protected
-  APICrystalTypeInfo dco_decode_api_crystal_type_info(dynamic raw);
-
-  @protected
   APICuboidData dco_decode_api_cuboid_data(dynamic raw);
 
   @protected
@@ -96,9 +92,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFloatData dco_decode_api_float_data(dynamic raw);
-
-  @protected
-  APIGeoToAtomData dco_decode_api_geo_to_atom_data(dynamic raw);
 
   @protected
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
@@ -254,9 +247,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFloatData dco_decode_box_autoadd_api_float_data(dynamic raw);
 
   @protected
-  APIGeoToAtomData dco_decode_box_autoadd_api_geo_to_atom_data(dynamic raw);
-
-  @protected
   APIGeoTransData dco_decode_box_autoadd_api_geo_trans_data(dynamic raw);
 
   @protected
@@ -377,9 +367,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
-  List<APICrystalTypeInfo> dco_decode_list_api_crystal_type_info(dynamic raw);
-
-  @protected
   List<APIExprParameter> dco_decode_list_api_expr_parameter(dynamic raw);
 
   @protected
@@ -471,10 +458,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFloatData? dco_decode_opt_box_autoadd_api_float_data(dynamic raw);
-
-  @protected
-  APIGeoToAtomData? dco_decode_opt_box_autoadd_api_geo_to_atom_data(
-      dynamic raw);
 
   @protected
   APIGeoTransData? dco_decode_opt_box_autoadd_api_geo_trans_data(dynamic raw);
@@ -638,10 +621,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
 
   @protected
-  APICrystalTypeInfo sse_decode_api_crystal_type_info(
-      SseDeserializer deserializer);
-
-  @protected
   APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer);
 
   @protected
@@ -677,10 +656,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFloatData sse_decode_api_float_data(SseDeserializer deserializer);
-
-  @protected
-  APIGeoToAtomData sse_decode_api_geo_to_atom_data(
-      SseDeserializer deserializer);
 
   @protected
   APIGeoTransData sse_decode_api_geo_trans_data(SseDeserializer deserializer);
@@ -857,10 +832,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APIGeoToAtomData sse_decode_box_autoadd_api_geo_to_atom_data(
-      SseDeserializer deserializer);
-
-  @protected
   APIGeoTransData sse_decode_box_autoadd_api_geo_trans_data(
       SseDeserializer deserializer);
 
@@ -1004,10 +975,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
-  List<APICrystalTypeInfo> sse_decode_list_api_crystal_type_info(
-      SseDeserializer deserializer);
-
-  @protected
   List<APIExprParameter> sse_decode_list_api_expr_parameter(
       SseDeserializer deserializer);
 
@@ -1119,10 +1086,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFloatData? sse_decode_opt_box_autoadd_api_float_data(
-      SseDeserializer deserializer);
-
-  @protected
-  APIGeoToAtomData? sse_decode_opt_box_autoadd_api_geo_to_atom_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1313,10 +1276,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_api_crystal_type_info(
-      APICrystalTypeInfo self, SseSerializer serializer);
-
-  @protected
   void sse_encode_api_cuboid_data(APICuboidData self, SseSerializer serializer);
 
   @protected
@@ -1358,10 +1317,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_float_data(APIFloatData self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_api_geo_to_atom_data(
-      APIGeoToAtomData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_geo_trans_data(
@@ -1546,10 +1501,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIFloatData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_api_geo_to_atom_data(
-      APIGeoToAtomData self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_api_geo_trans_data(
       APIGeoTransData self, SseSerializer serializer);
 
@@ -1695,10 +1646,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_api_crystal_type_info(
-      List<APICrystalTypeInfo> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_list_api_expr_parameter(
       List<APIExprParameter> self, SseSerializer serializer);
 
@@ -1812,10 +1759,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_float_data(
       APIFloatData? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_api_geo_to_atom_data(
-      APIGeoToAtomData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_geo_trans_data(

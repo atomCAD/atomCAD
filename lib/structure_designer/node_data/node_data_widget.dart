@@ -13,7 +13,6 @@ import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_symop_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_rot_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/geo_to_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
@@ -169,17 +168,6 @@ class NodeDataWidget extends StatelessWidget {
           data: atomTransData,
           model: model,
         );
-      case 'geo_to_atom':
-        // Fetch the geo to atom data here in the parent widget
-        final geoToAtomData = getGeoToAtomData(
-          nodeId: selectedNode.id,
-        );
-
-        return GeoToAtomEditor(
-          nodeId: selectedNode.id,
-          data: geoToAtomData,
-        );
-
       case 'edit_atom':
         // Fetch the edit atom data here in the parent widget
         final editAtomData = getEditAtomData(

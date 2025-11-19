@@ -196,12 +196,6 @@ pub struct InputPinView {
     pub crystal_system: String,
   }
 
-  pub struct APIGeoToAtomData {
-    pub primary_atomic_number: i32,
-    pub secondary_atomic_number: i32,
-    pub hydrogen_passivation: bool,
-  }
-
   pub struct APIAtomTransData {
     pub translation: APIVec3,
     pub rotation: APIVec3, // intrinsic euler angles in radians
@@ -222,14 +216,6 @@ pub struct InputPinView {
   pub struct APIRegPolyData {
     pub num_sides: i32,
     pub radius: i32,
-  }
-
-  #[derive(Clone, Debug)]
-  pub struct APICrystalTypeInfo {
-    pub primary_atomic_number: i32,
-    pub secondary_atomic_number: i32,
-    pub unit_cell_size: f64,
-    pub name: String,
   }
 
   pub struct APIParameterData {

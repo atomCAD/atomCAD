@@ -10,7 +10,6 @@ use crate::renderer::tessellator::atomic_tessellator::BAS_STICK_RADIUS;
 use crate::api::common_api_types::SelectModifier;
 use std::hash::{Hash, Hasher};
 use serde::{Serialize, Deserialize};
-use crate::common::crystal_utils::ZincBlendeAtomType;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 
 // Bigger than most realistically possible bonds, so a neighbouring atom will be in the same cell
@@ -22,10 +21,6 @@ pub struct CrystalMetaData {
   pub primary_atomic_number: i32,
   pub secondary_atomic_number: i32,
   pub unit_cell_size: f64,
-  // If this crystal is the output of a stamp node, this is the stamp's anchor atom type
-  // This is used to restrict stamp placement to only allow placement on atoms of the same type
-  // in case of zinc blende crystals
-  pub stamped_by_anchor_atom_type: Option<ZincBlendeAtomType>,
 }
 
 #[derive(Debug, Clone)]
@@ -152,7 +147,6 @@ impl CrystalMetaData {
       primary_atomic_number: 6,
       secondary_atomic_number: 6,
       unit_cell_size: 3.567,
-      stamped_by_anchor_atom_type: None,
     }
   }
 }

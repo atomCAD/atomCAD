@@ -22,7 +22,6 @@ use crate::structure_designer::nodes::ivec3::IVec3Data;
 use crate::structure_designer::nodes::range::RangeData;
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
-use crate::structure_designer::nodes::geo_to_atom::GeoToAtomData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::rect::RectData;
@@ -46,7 +45,6 @@ use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceDa
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
-use crate::api::structure_designer::structure_designer_api_types::APIGeoToAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIUnitCellData;
 use crate::api::structure_designer::structure_designer_api_types::{APILatticeSymopData, APILatticeMoveData, APILatticeRotData, APIRotationalSymmetry};
@@ -1096,55 +1094,6 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
   }
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_geo_to_atom_data(node_id: u64) -> Option<APIGeoToAtomData> {
-  unsafe {
-    with_cad_instance_or(
-      |cad_instance| {
-        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
-          Some(data) => data,
-          None => return None,
-        };
-        let geo_to_atom_data = match node_data.as_any_ref().downcast_ref::<GeoToAtomData>() {
-          Some(data) => data,
-          None => return None,
-        };
-        Some(APIGeoToAtomData {
-          primary_atomic_number: geo_to_atom_data.primary_atomic_number,
-          secondary_atomic_number: geo_to_atom_data.secondary_atomic_number,
-          hydrogen_passivation: geo_to_atom_data.hydrogen_passivation,
-        })
-      },
-      None
-    )
-  }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn set_geo_to_atom_data(node_id: u64, data: APIGeoToAtomData) -> bool {
-  unsafe {
-    with_mut_cad_instance_or(
-      |cad_instance| {
-        let node_data = match cad_instance.structure_designer.get_node_network_data_mut(node_id) {
-          Some(data) => data,
-          None => return false,
-        };
-        
-        let geo_to_atom_data = match node_data.as_any_mut().downcast_mut::<GeoToAtomData>() {
-          Some(data) => data,
-          None => return false,
-        };
-        
-        geo_to_atom_data.primary_atomic_number = data.primary_atomic_number;
-        geo_to_atom_data.secondary_atomic_number = data.secondary_atomic_number;
-        geo_to_atom_data.hydrogen_passivation = data.hydrogen_passivation;
-        refresh_structure_designer_auto(cad_instance);
-        true
-      },
-      false
-    )
-  }
-}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_atom_trans_data(node_id: u64) -> Option<APIAtomTransData> {

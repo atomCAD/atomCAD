@@ -191,17 +191,6 @@ APILatticeRotData? getLatticeRotData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetLatticeRotData(
             nodeId: nodeId);
 
-APIGeoToAtomData? getGeoToAtomData({required BigInt nodeId}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerStructureDesignerApiGetGeoToAtomData(
-        nodeId: nodeId);
-
-bool setGeoToAtomData(
-        {required BigInt nodeId, required APIGeoToAtomData data}) =>
-    RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetGeoToAtomData(
-            nodeId: nodeId, data: data);
-
 APIAtomTransData? getAtomTransData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetAtomTransData(
