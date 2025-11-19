@@ -633,6 +633,12 @@ impl AtomFillData {
 
     // Iterate through all placed atoms
     for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
+      // Check if this atom actually exists in the atomic structure
+      // (it might have been removed by remove_single_bond_atoms)
+      if atomic_structure.get_atom(atom_id).is_none() {
+        continue; // Early exit - atom was removed, skip it
+      }
+      
       // Case 1: Check bonds where this atom is the first site (optimized with precomputed index)
       // Use precomputed bonds_by_site1_index to only check bonds that start from this site
       for &bond_index in &motif.bonds_by_site1_index[site_index] {
@@ -641,7 +647,13 @@ impl AtomFillData {
         // This atom is the first site of the bond, try to find the second site
         let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
         
-        if atom_id_2.is_none() {
+        // Check if second atom is missing (not in tracker OR in tracker but removed from structure)
+        let is_dangling = match atom_id_2 {
+          None => true, // Not in tracker - definitely dangling
+          Some(id) => atomic_structure.get_atom(id).is_none(), // In tracker but removed from structure
+        };
+        
+        if is_dangling {
           // Second atom doesn't exist - this is a dangling bond that needs to be passivated
           //println!("dangling bond found (first site exists, second doesn't)");
           
@@ -668,7 +680,13 @@ impl AtomFillData {
         // This atom is the second site of the bond, try to find the first site
         let atom_id_1 = atom_tracker.get_atom_id_for_specifier(second_site_base_pos, &bond.site_1);
         
-        if atom_id_1.is_none() {
+        // Check if first atom is missing (not in tracker OR in tracker but removed from structure)
+        let is_dangling = match atom_id_1 {
+          None => true, // Not in tracker - definitely dangling
+          Some(id) => atomic_structure.get_atom(id).is_none(), // In tracker but removed from structure
+        };
+        
+        if is_dangling {
           // First atom doesn't exist - this is a dangling bond that needs to be passivated
           //println!("dangling bond found (second site exists, first doesn't)");
           
