@@ -67,6 +67,57 @@ fn apply_select_modifier(in_selected: bool, select_modifier: &SelectModifier) ->
   }
 }
 
+/// Compact inline bond representation - 8 bytes total
+/// Stores bond information directly in the atom's SmallVec for cache efficiency
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InlineBond {
+  /// ID of the other atom this bond connects to
+  pub other_atom_id: u32,
+  /// Packed data: 30 bits for multiplicity, 1 bit for selected flag, 1 spare bit
+  packed_data: u32,
+}
+
+impl InlineBond {
+  /// Creates a new inline bond
+  pub fn new(other_atom_id: u32, multiplicity: i32, selected: bool) -> Self {
+    let mult_bits = (multiplicity as u32) & 0x3FFFFFFF;  // Lower 30 bits
+    let selected_bit = if selected { 1 << 30 } else { 0 };
+    Self {
+      other_atom_id,
+      packed_data: mult_bits | selected_bit,
+    }
+  }
+  
+  /// Gets the bond multiplicity (1=single, 2=double, 3=triple, etc.)
+  #[inline]
+  pub fn get_multiplicity(&self) -> i32 {
+    (self.packed_data & 0x3FFFFFFF) as i32
+  }
+  
+  /// Checks if this bond is selected
+  #[inline]
+  pub fn is_selected(&self) -> bool {
+    (self.packed_data & (1 << 30)) != 0
+  }
+  
+  /// Sets the bond multiplicity
+  #[inline]
+  pub fn set_multiplicity(&mut self, multiplicity: i32) {
+    let mult_bits = (multiplicity as u32) & 0x3FFFFFFF;
+    self.packed_data = (self.packed_data & !0x3FFFFFFF) | mult_bits;
+  }
+  
+  /// Sets the selected state of this bond
+  #[inline]
+  pub fn set_selected(&mut self, selected: bool) {
+    if selected {
+      self.packed_data |= 1 << 30;
+    } else {
+      self.packed_data &= !(1 << 30);
+    }
+  }
+}
+
 // A reference to a bond, used for commands
 #[derive(Clone,Debug, Serialize, Deserialize)]
 pub struct BondReference {
@@ -99,20 +150,11 @@ impl Hash for BondReference {
 }
 
 #[derive(Debug, Clone)]
-pub struct Bond {
-  pub id: u32,
-  pub atom_id1: u32,
-  pub atom_id2: u32,
-  pub multiplicity: i32,
-  pub selected: bool,
-}
-
-#[derive(Debug, Clone)]
 pub struct Atom {
   pub id: u32,
   pub atomic_number: i32,
   pub position: DVec3,
-  pub bond_ids: SmallVec<[u32; 4]>,
+  pub bonds: SmallVec<[InlineBond; 4]>,  // Inline bonds for cache efficiency
   pub selected: bool,
   pub in_crystal_depth: f32,
 }
@@ -122,13 +164,10 @@ pub struct Atom {
 pub struct AtomicStructure {
   pub frame_transform: Transform,
   pub next_atom_id: u32,
-  pub next_bond_id: u32,
   pub check_atom_id_collision: bool,
-  pub check_bond_id_collision: bool,
   pub atoms: FxHashMap<u32, Atom>,
   // Sparse grid of atoms
   pub grid: FxHashMap<(i32, i32, i32), Vec<u32>>,
-  pub bonds: FxHashMap<u32, Bond>,
   pub from_selected_node: bool,
   pub selection_transform: Option<Transform>,
   pub anchor_position: Option<IVec3>,
@@ -144,19 +183,22 @@ impl AtomicStructure {
 
   // Checks if there is any selection (atoms or bonds) in the structure
   pub fn has_selection(&self) -> bool {
-    self.has_selected_atoms() || self.bonds.values().any(|bond| bond.selected)
+    if self.has_selected_atoms() {
+      return true;
+    }
+    // Check if any atom has a selected bond
+    self.atoms.values().any(|atom| {
+      atom.bonds.iter().any(|bond| bond.is_selected())
+    })
   }
 
   pub fn new() -> Self {
     Self {
       frame_transform: Transform::default(),
       next_atom_id: 1,
-      next_bond_id: 1,
       check_atom_id_collision: false,
-      check_bond_id_collision: false,
       atoms: FxHashMap::default(),
       grid: FxHashMap::default(),
-      bonds: FxHashMap::default(),
       from_selected_node: false,
       selection_transform: None,
       anchor_position: None,
@@ -178,7 +220,8 @@ impl AtomicStructure {
   }
 
   pub fn get_num_of_bonds(&self) -> usize {
-    self.bonds.len()
+    // Each bond is stored in both atoms, so divide by 2
+    self.atoms.values().map(|atom| atom.bonds.len()).sum::<usize>() / 2
   }
 
   pub fn get_bond(&self, bond_id: u32) -> Option<&Bond> {
@@ -242,24 +285,6 @@ impl AtomicStructure {
     id
   }
 
-  pub fn obtain_next_bond_id(&mut self) -> u32 {
-    let mut id = self.next_bond_id;
-    
-    // Check for collision only if we've wrapped around
-    if self.check_bond_id_collision {
-      while self.bonds.contains_key(&id) {
-        id = if id == u32::MAX { 1 } else { id + 1 };
-      }
-    }
-    
-    // Update next_bond_id and check for wraparound
-    self.next_bond_id = if id == u32::MAX { 1 } else { id + 1 };
-    if self.next_bond_id == 1 {
-      self.check_bond_id_collision = true;
-    }
-    
-    id
-  }
 
   pub fn add_atom(&mut self, atomic_number: i32, position: DVec3) -> u32 {
     let id = self.obtain_next_atom_id();
@@ -272,7 +297,7 @@ impl AtomicStructure {
       id,
       atomic_number,
       position,
-      bond_ids: SmallVec::new(),
+      bonds: SmallVec::new(),
       selected: false,
       in_crystal_depth: 0.0,
     });
@@ -300,18 +325,22 @@ impl AtomicStructure {
   }
 
   pub fn delete_atom(&mut self, id: u32) {
-    // Get the atom and collect its bond IDs before removing it
-    let (pos, bond_ids) = if let Some(atom) = self.atoms.get(&id) {
-      // Clone the bond IDs to avoid borrow issues when deleting bonds
-      let bond_ids = atom.bond_ids.clone();
-      (Some(atom.position), bond_ids)
+    // Get the atom and collect its connected atom IDs before removing it
+    let (pos, connected_atoms) = if let Some(atom) = self.atoms.get(&id) {
+      // Clone the connected atom IDs from inline bonds
+      let connected: SmallVec<[u32; 4]> = atom.bonds.iter()
+        .map(|bond| bond.other_atom_id)
+        .collect();
+      (Some(atom.position), connected)
     } else {
       (None, SmallVec::new())
     };
 
-    // Delete all bonds connected to this atom
-    for bond_id in bond_ids {
-      self.delete_bond(bond_id);
+    // Remove this atom's bonds from all connected atoms
+    for other_atom_id in connected_atoms {
+      if let Some(other_atom) = self.atoms.get_mut(&other_atom_id) {
+        other_atom.bonds.retain(|bond| bond.other_atom_id != id);
+      }
     }
     
     // Remove from the grid cell
@@ -331,64 +360,57 @@ impl AtomicStructure {
     self.atoms.remove(&id);
   }
 
-  pub fn add_bond_checked(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
-    // Check if a bond already exists before obtaining a new ID
-    if let Some(existing_bond_id) = self.find_bond_id_between(atom_id1, atom_id2) {
-      return self.add_bond_with_id_checked(existing_bond_id, atom_id1, atom_id2, multiplicity);
-    }
-    
-    // No existing bond, obtain a new ID and create the bond
-    let id = self.obtain_next_bond_id();
-    self.add_bond_with_id_checked(id, atom_id1, atom_id2, multiplicity)
-  }
-
-  /// Adds a bond with a specific ID between two atoms, or updates an existing bond's multiplicity
+  /// Safe bond creation that checks for existing bonds and validates atoms
   ///
-  /// If a bond already exists between the atoms, its multiplicity will be updated
-  /// and the provided ID will be ignored (the existing bond ID is preserved).
-  /// If no bond exists, a new bond will be created with the provided ID.
+  /// This method:
+  /// - Verifies both atoms exist
+  /// - Checks if a bond already exists between the atoms
+  /// - If bond exists, updates its multiplicity
+  /// - If bond doesn't exist, creates a new one
   ///
   /// # Arguments
   ///
-  /// * `id` - The ID to use for the bond if no bond exists between the atoms
   /// * `atom_id1` - The ID of the first atom
   /// * `atom_id2` - The ID of the second atom
   /// * `multiplicity` - The bond multiplicity to set
   ///
   /// # Returns
   ///
-  /// The ID of the bond (either the existing bond ID or the provided ID for new bonds)
-  pub fn add_bond_with_id_checked(&mut self, id: u32, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
-    // Check if a bond already exists between these atoms
-    if let Some(existing_bond_id) = self.find_bond_id_between(atom_id1, atom_id2) {
-      // Update the multiplicity of the existing bond
-      if let Some(bond) = self.bonds.get_mut(&existing_bond_id) {
-        bond.multiplicity = multiplicity;
-      }
-      return existing_bond_id;
-    }
-    
-    // Verify both atoms exist before creating a bond
+  /// `true` if successful, `false` if either atom doesn't exist
+  pub fn add_bond_checked(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> bool {
+    // Verify both atoms exist
     if !self.atoms.contains_key(&atom_id1) || !self.atoms.contains_key(&atom_id2) {
-      // Return the provided ID without creating a bond if either atom doesn't exist
-      // This prevents panics but maintains the ID allocation for consistency
-      return id;
+      return false;
     }
     
-    // No existing bond, create a new one
-    self.bonds.insert(id, Bond {
-      id,
-      atom_id1,
-      atom_id2,
-      multiplicity,
-      selected: false,
-    });
+    // Check if bond already exists by looking in atom1's bonds
+    let bond_exists = self.atoms[&atom_id1].bonds.iter()
+      .any(|bond| bond.other_atom_id == atom_id2);
     
-    // Both atoms are guaranteed to exist at this point
-    self.atoms.get_mut(&atom_id1).unwrap().bond_ids.push(id);
-    self.atoms.get_mut(&atom_id2).unwrap().bond_ids.push(id);
-    id
+    if bond_exists {
+      // Update multiplicity in both atoms
+      if let Some(atom) = self.atoms.get_mut(&atom_id1) {
+        if let Some(bond) = atom.bonds.iter_mut().find(|b| b.other_atom_id == atom_id2) {
+          bond.set_multiplicity(multiplicity);
+        }
+      }
+      if let Some(atom) = self.atoms.get_mut(&atom_id2) {
+        if let Some(bond) = atom.bonds.iter_mut().find(|b| b.other_atom_id == atom_id1) {
+          bond.set_multiplicity(multiplicity);
+        }
+      }
+    } else {
+      // Create new bond in both atoms
+      let bond1 = InlineBond::new(atom_id2, multiplicity, false);
+      self.atoms.get_mut(&atom_id1).unwrap().bonds.push(bond1);
+      
+      let bond2 = InlineBond::new(atom_id1, multiplicity, false);
+      self.atoms.get_mut(&atom_id2).unwrap().bonds.push(bond2);
+    }
+    
+    true
   }
+
 
   /// Fast bond creation for bulk operations where preconditions are guaranteed
   ///
@@ -407,31 +429,19 @@ impl AtomicStructure {
   /// * `atom_id2` - The ID of the second atom (must exist)
   /// * `multiplicity` - The bond multiplicity
   ///
-  /// # Returns
-  ///
-  /// The ID of the newly created bond
-  ///
   /// # Safety
   ///
   /// This method uses `unwrap()` and will panic if the atoms don't exist.
   /// Only use when preconditions are guaranteed.
-  pub fn add_bond(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
-    // Obtain a new bond ID
-    let id = self.obtain_next_bond_id();
+  pub fn add_bond(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) {
+    // Create inline bonds directly without any checks
+    // Add bond to atom1 pointing to atom2
+    let bond1 = InlineBond::new(atom_id2, multiplicity, false);
+    self.atoms.get_mut(&atom_id1).unwrap().bonds.push(bond1);
     
-    // Create the bond directly without any checks
-    self.bonds.insert(id, Bond {
-      id,
-      atom_id1,
-      atom_id2,
-      multiplicity,
-      selected: false,
-    });
-    
-    // Add bond ID to both atoms (will panic if atoms don't exist - this is intentional)
-    self.atoms.get_mut(&atom_id1).unwrap().bond_ids.push(id);
-    self.atoms.get_mut(&atom_id2).unwrap().bond_ids.push(id);
-    id
+    // Add bond to atom2 pointing to atom1 (symmetric)
+    let bond2 = InlineBond::new(atom_id1, multiplicity, false);
+    self.atoms.get_mut(&atom_id2).unwrap().bonds.push(bond2);
   }
   
   /// Finds the ID of a bond between two atoms, if it exists
@@ -868,18 +878,11 @@ impl AtomicStructure {
 // Memory size estimation implementations
 
 impl Atom {
-  /// Returns the average memory size of an Atom
-  /// With SmallVec<[u32; 4]>, atoms with ≤4 bonds have zero heap allocation
+  /// Returns the average memory size of an Atom with inline bonds
+  /// With SmallVec<[InlineBond; 4]>, atoms with ≤4 bonds have zero heap allocation
   /// Assumes typical case of 4 bonds per atom (all inline, no heap)
   const fn average_memory_bytes() -> usize {
-    std::mem::size_of::<Atom>() // SmallVec with 4 u32s is stored inline
-  }
-}
-
-impl Bond {
-  /// Returns the exact memory size of a Bond (no heap allocations)
-  const fn average_memory_bytes() -> usize {
-    std::mem::size_of::<Bond>()
+    std::mem::size_of::<Atom>() // SmallVec with 4 InlineBonds (8 bytes each) stored inline
   }
 }
 
@@ -889,24 +892,23 @@ impl MemorySizeEstimator for AtomicStructure {
     let base_size = std::mem::size_of::<AtomicStructure>();
     
     // Fast estimation using average sizes - no iteration through collections
-    // Estimate atoms HashMap using average atom size (now with u32 keys)
+    // Estimate atoms HashMap - bonds are now inline within Atom struct
     let atoms_size = self.atoms.len() * (std::mem::size_of::<u32>() + Atom::average_memory_bytes());
     
-    // Estimate grid HashMap (sparse grid of atom IDs, now u32)
+    // Estimate grid HashMap (sparse grid of atom IDs)
     // Assume average of 2 atoms per occupied grid cell
     let grid_size = self.grid.len() * (std::mem::size_of::<(i32, i32, i32)>() + std::mem::size_of::<Vec<u32>>() + 2 * std::mem::size_of::<u32>());
     
-    // Estimate bonds HashMap using average bond size (now with u32 keys)
-    let bonds_size = self.bonds.len() * (std::mem::size_of::<u32>() + Bond::average_memory_bytes());
+    // No separate bonds HashMap - bonds are inline in atoms now!
+    // This is the major memory savings of this optimization
     
-    // Estimate decorator - assume 10% of atoms have custom display states (now with u32 keys)
+    // Estimate decorator - assume 10% of atoms have custom display states
     let decorator_size = std::mem::size_of::<AtomicStructureDecorator>()
       + (self.atoms.len() / 10) * (std::mem::size_of::<u32>() + std::mem::size_of::<AtomDisplayState>());
 
     base_size 
       + atoms_size 
       + grid_size 
-      + bonds_size 
-      + decorator_size
+      + decorator_size  // Note: no bonds_size - they're inline!
   }
 }
