@@ -354,7 +354,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       // Open file picker for saving structure files
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Export visible structures',
-        fileName: 'structure.xyz',
+        fileName: 'structure',
         type: FileType.custom,
         allowedExtensions: ['xyz', 'mol'],
       );
