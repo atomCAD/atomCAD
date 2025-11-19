@@ -713,17 +713,6 @@ impl AtomicStructure {
     }
   }
 
-  pub fn remove_lone_atoms(&mut self) {
-    let lone_atoms: Vec<u32> = self.atoms.values()
-      .filter(|atom| atom.bond_ids.is_empty())
-      .map(|atom| atom.id)
-      .collect();
-    
-    for atom_id in lone_atoms {
-      self.delete_lone_atom(atom_id);
-    }
-  }
-
   /// Replaces the atomic number of an atom with a new value
   ///
   /// # Arguments

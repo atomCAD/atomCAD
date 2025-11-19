@@ -30,6 +30,7 @@ use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use rustc_hash::FxBuildHasher;
+use crate::common::atomic_structure_utils::remove_lone_atoms;
 
 type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
@@ -329,7 +330,7 @@ impl NodeData for AtomFillData {
       {
         let _cleanup_timer = Timer::new("AtomFill cleanup and passivation");
         // Remove lone atoms before hydrogen passivation (passivation will bond them)
-        atomic_structure.remove_lone_atoms();
+        remove_lone_atoms(&mut atomic_structure);
         
         // Apply hydrogen passivation after bonds are created and lone atoms removed
         if self.hydrogen_passivation {

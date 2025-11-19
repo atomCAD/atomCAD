@@ -238,3 +238,13 @@ pub fn print_atom_info(structure: &AtomicStructure) {
     println!("=============================");
 }
 
+pub fn remove_lone_atoms(structure: &mut AtomicStructure) {
+    let lone_atoms: Vec<u32> = structure.atoms.values()
+      .filter(|atom| atom.bond_ids.is_empty())
+      .map(|atom| atom.id)
+      .collect();
+
+    for atom_id in lone_atoms {
+      structure.delete_lone_atom(atom_id);
+    }
+}
