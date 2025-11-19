@@ -589,11 +589,11 @@ impl AtomFillData {
         
         if let Some(id2) = atom_id_2 {
           // Both atoms exist, create the bond using fast method
-          // We can use add_bond_fast because:
+          // We can use add_bond vs. add_bond_checked because:
           // - Both atoms are guaranteed to exist (we just got their IDs from atom_tracker)
           // - No bond exists yet (this is the initial bond creation phase)
           // - We're creating new bonds, not updating existing ones
-          atomic_structure.add_bond_fast(atom_id, id2, bond.multiplicity);
+          atomic_structure.add_bond(atom_id, id2, bond.multiplicity);
           statistics.bonds += 1;
         }
         // If second atom doesn't exist, skip the bond (will be handled by hydrogen passivation if enabled)
@@ -722,7 +722,7 @@ impl AtomFillData {
       // Note: max_depth doesn't need updating since hydrogen depth is 0.0
       
       // Create bond between original atom and hydrogen
-      atomic_structure.add_bond_fast(found_atom_id, hydrogen_id, 1); // Single bond
+      atomic_structure.add_bond(found_atom_id, hydrogen_id, 1); // Single bond
       
       statistics.bonds += 1;
       statistics.atoms += 1; // Count the hydrogen atom

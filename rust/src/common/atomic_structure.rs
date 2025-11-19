@@ -327,15 +327,15 @@ impl AtomicStructure {
     self.atoms.remove(&id);
   }
 
-  pub fn add_bond(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
+  pub fn add_bond_checked(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
     // Check if a bond already exists before obtaining a new ID
     if let Some(existing_bond_id) = self.find_bond_id_between(atom_id1, atom_id2) {
-      return self.add_bond_with_id(existing_bond_id, atom_id1, atom_id2, multiplicity);
+      return self.add_bond_with_id_checked(existing_bond_id, atom_id1, atom_id2, multiplicity);
     }
     
     // No existing bond, obtain a new ID and create the bond
     let id = self.obtain_next_bond_id();
-    self.add_bond_with_id(id, atom_id1, atom_id2, multiplicity)
+    self.add_bond_with_id_checked(id, atom_id1, atom_id2, multiplicity)
   }
 
   /// Adds a bond with a specific ID between two atoms, or updates an existing bond's multiplicity
@@ -354,7 +354,7 @@ impl AtomicStructure {
   /// # Returns
   ///
   /// The ID of the bond (either the existing bond ID or the provided ID for new bonds)
-  pub fn add_bond_with_id(&mut self, id: u32, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
+  pub fn add_bond_with_id_checked(&mut self, id: u32, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
     // Check if a bond already exists between these atoms
     if let Some(existing_bond_id) = self.find_bond_id_between(atom_id1, atom_id2) {
       // Update the multiplicity of the existing bond
@@ -411,7 +411,7 @@ impl AtomicStructure {
   ///
   /// This method uses `unwrap()` and will panic if the atoms don't exist.
   /// Only use when preconditions are guaranteed.
-  pub fn add_bond_fast(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
+  pub fn add_bond(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
     // Obtain a new bond ID
     let id = self.obtain_next_bond_id();
     
@@ -853,7 +853,7 @@ impl AtomicStructure {
         bond_id_map.insert(*old_bond_id, new_bond_id);
         
         // Add the bond with the new IDs
-        self.add_bond_with_id(
+        self.add_bond_with_id_checked(
           new_bond_id,
           new_atom_id1,
           new_atom_id2,

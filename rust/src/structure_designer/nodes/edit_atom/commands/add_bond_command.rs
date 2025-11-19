@@ -21,7 +21,7 @@ impl AddBondCommand {
 impl EditAtomCommand for AddBondCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     let bond_id = model.obtain_next_bond_id();
-    model.add_bond_with_id(bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
+    model.add_bond_with_id_checked(bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
   }
 
   fn clone_box(&self) -> Box<dyn EditAtomCommand> {

@@ -10,15 +10,15 @@ fn test_save_mol_v3000_simple_molecule() {
     let mut structure = AtomicStructure::new();
     
     // Add oxygen atom at origin
-    let oxygen_id = structure.add_atom(8, DVec3::new(0.0, 0.0, 0.0), 1); // Oxygen (atomic number 8)
+    let oxygen_id = structure.add_atom(8, DVec3::new(0.0, 0.0, 0.0)); // Oxygen (atomic number 8)
     
     // Add two hydrogen atoms
-    let hydrogen1_id = structure.add_atom(1, DVec3::new(0.757, 0.586, 0.0), 1); // Hydrogen (atomic number 1)
-    let hydrogen2_id = structure.add_atom(1, DVec3::new(-0.757, 0.586, 0.0), 1); // Hydrogen (atomic number 1)
+    let hydrogen1_id = structure.add_atom(1, DVec3::new(0.757, 0.586, 0.0)); // Hydrogen (atomic number 1)
+    let hydrogen2_id = structure.add_atom(1, DVec3::new(-0.757, 0.586, 0.0)); // Hydrogen (atomic number 1)
     
     // Add bonds (single bonds, multiplicity = 1)
-    structure.add_bond(oxygen_id, hydrogen1_id, 1);
-    structure.add_bond(oxygen_id, hydrogen2_id, 1);
+    structure.add_bond_checked(oxygen_id, hydrogen1_id, 1);
+    structure.add_bond_checked(oxygen_id, hydrogen2_id, 1);
     
     // Save to a temporary file
     let test_file = "test_water.mol";
@@ -111,17 +111,17 @@ fn test_save_mol_v3000_ethane_molecule() {
     let h6_id = structure.add_atom(1, DVec3::new(1.53, 0.0, -1.09), 1);
     
     // Add C-C bond
-    structure.add_bond(carbon1_id, carbon2_id, 1);
+    structure.add_bond_checked(carbon1_id, carbon2_id, 1);
     
     // Add C-H bonds for first carbon
-    structure.add_bond(carbon1_id, h1_id, 1);
-    structure.add_bond(carbon1_id, h2_id, 1);
-    structure.add_bond(carbon1_id, h3_id, 1);
+    structure.add_bond_checked(carbon1_id, h1_id, 1);
+    structure.add_bond_checked(carbon1_id, h2_id, 1);
+    structure.add_bond_checked(carbon1_id, h3_id, 1);
     
     // Add C-H bonds for second carbon
-    structure.add_bond(carbon2_id, h4_id, 1);
-    structure.add_bond(carbon2_id, h5_id, 1);
-    structure.add_bond(carbon2_id, h6_id, 1);
+    structure.add_bond_checked(carbon2_id, h4_id, 1);
+    structure.add_bond_checked(carbon2_id, h5_id, 1);
+    structure.add_bond_checked(carbon2_id, h6_id, 1);
     
     // Save to a temporary file
     let test_file = "test_ethane.mol";
@@ -166,13 +166,13 @@ fn test_save_mol_v3000_with_double_bond() {
     let h4_id = structure.add_atom(1, DVec3::new(1.90, -0.93, 0.0), 1);
     
     // Add double bond between carbons (multiplicity = 2)
-    structure.add_bond(carbon1_id, carbon2_id, 2);
+    structure.add_bond_checked(carbon1_id, carbon2_id, 2);
     
     // Add single bonds to hydrogens
-    structure.add_bond(carbon1_id, h1_id, 1);
-    structure.add_bond(carbon1_id, h2_id, 1);
-    structure.add_bond(carbon2_id, h3_id, 1);
-    structure.add_bond(carbon2_id, h4_id, 1);
+    structure.add_bond_checked(carbon1_id, h1_id, 1);
+    structure.add_bond_checked(carbon1_id, h2_id, 1);
+    structure.add_bond_checked(carbon2_id, h3_id, 1);
+    structure.add_bond_checked(carbon2_id, h4_id, 1);
     
     // Save to a temporary file
     let test_file = "test_ethylene.mol";
