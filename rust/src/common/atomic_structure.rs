@@ -19,13 +19,6 @@ use crate::util::memory_size_estimator::MemorySizeEstimator;
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
 
 #[derive(Debug, Clone)]
-pub struct CrystalMetaData {
-  pub primary_atomic_number: i32,
-  pub secondary_atomic_number: i32,
-  pub unit_cell_size: f64,
-}
-
-#[derive(Debug, Clone)]
 pub enum AtomDisplayState {
     Normal,
     Marked,
@@ -911,15 +904,11 @@ impl MemorySizeEstimator for AtomicStructure {
     // Estimate decorator - assume 10% of atoms have custom display states (now with u32 keys)
     let decorator_size = std::mem::size_of::<AtomicStructureDecorator>()
       + (self.atoms.len() / 10) * (std::mem::size_of::<u32>() + std::mem::size_of::<AtomDisplayState>());
-    
-    // Estimate crystal_meta_data
-    let crystal_meta_size = std::mem::size_of::<CrystalMetaData>();
-    
+
     base_size 
       + atoms_size 
       + grid_size 
       + bonds_size 
-      + decorator_size 
-      + crystal_meta_size
+      + decorator_size
   }
 }
