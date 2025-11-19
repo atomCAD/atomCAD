@@ -322,6 +322,15 @@ impl AtomicStructure {
     self.atoms.remove(&id);
   }
 
+  // Optimized version of deleting an atom: can only be used on guaranteedly lone atoms
+  // that guaranteedly exist.
+  pub fn delete_lone_atom(&mut self, id: u32) {
+    // Remove from the grid cell
+    let pos = self.atoms.get(&id).unwrap().position;
+    self.remove_atom_from_grid(id, &pos);
+    self.atoms.remove(&id);
+  }
+
   pub fn add_bond_checked(&mut self, atom_id1: u32, atom_id2: u32, multiplicity: i32) -> u32 {
     // Check if a bond already exists before obtaining a new ID
     if let Some(existing_bond_id) = self.find_bond_id_between(atom_id1, atom_id2) {
@@ -711,7 +720,7 @@ impl AtomicStructure {
       .collect();
     
     for atom_id in lone_atoms {
-      self.delete_atom(atom_id);
+      self.delete_lone_atom(atom_id);
     }
   }
 
