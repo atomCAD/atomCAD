@@ -3,6 +3,8 @@ use glam::f64::DVec3;
 use glam::f64::DQuat;
 use glam::IVec3;
 use std::collections::HashMap;
+use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 use crate::util::hit_test_utils;
 use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
@@ -32,13 +34,13 @@ pub enum AtomDisplayState {
 
 #[derive(Debug, Clone)]
 pub struct AtomicStructureDecorator {
-    pub atom_display_states: HashMap<u32, AtomDisplayState>,
+    pub atom_display_states: FxHashMap<u32, AtomDisplayState>,
 }
 
 impl AtomicStructureDecorator {
     pub fn new() -> Self {
         Self {
-            atom_display_states: HashMap::new(),
+            atom_display_states: FxHashMap::default(),
         }
     }
     
@@ -117,7 +119,7 @@ pub struct Atom {
   pub id: u32,
   pub atomic_number: i32,
   pub position: DVec3,
-  pub bond_ids: Vec<u32>,
+  pub bond_ids: SmallVec<[u32; 4]>,
   pub selected: bool,
   pub in_crystal_depth: f32,
 }
@@ -130,10 +132,10 @@ pub struct AtomicStructure {
   pub next_bond_id: u32,
   pub check_atom_id_collision: bool,
   pub check_bond_id_collision: bool,
-  pub atoms: HashMap<u32, Atom>,
+  pub atoms: FxHashMap<u32, Atom>,
   // Sparse grid of atoms
-  pub grid: HashMap<(i32, i32, i32), Vec<u32>>,
-  pub bonds: HashMap<u32, Bond>,
+  pub grid: FxHashMap<(i32, i32, i32), Vec<u32>>,
+  pub bonds: FxHashMap<u32, Bond>,
   pub from_selected_node: bool,
   pub selection_transform: Option<Transform>,
   pub anchor_position: Option<IVec3>,
@@ -159,9 +161,9 @@ impl AtomicStructure {
       next_bond_id: 1,
       check_atom_id_collision: false,
       check_bond_id_collision: false,
-      atoms: HashMap::new(),
-      grid: HashMap::new(),
-      bonds: HashMap::new(),
+      atoms: FxHashMap::default(),
+      grid: FxHashMap::default(),
+      bonds: FxHashMap::default(),
       from_selected_node: false,
       selection_transform: None,
       anchor_position: None,
@@ -277,7 +279,7 @@ impl AtomicStructure {
       id,
       atomic_number,
       position,
-      bond_ids: Vec::new(),
+      bond_ids: SmallVec::new(),
       selected: false,
       in_crystal_depth: 0.0,
     });
@@ -311,7 +313,7 @@ impl AtomicStructure {
       let bond_ids = atom.bond_ids.clone();
       (Some(atom.position), bond_ids)
     } else {
-      (None, Vec::new())
+      (None, SmallVec::new())
     };
 
     // Delete all bonds connected to this atom
@@ -818,9 +820,9 @@ impl AtomicStructure {
   /// # Returns
   ///
   /// A mapping of old IDs to new IDs for atoms and bonds
-  pub fn add_atomic_structure(&mut self, other: &AtomicStructure) -> (HashMap<u32, u32>, HashMap<u32, u32>) {
-    let mut atom_id_map: HashMap<u32, u32> = HashMap::new();
-    let mut bond_id_map: HashMap<u32, u32> = HashMap::new();
+  pub fn add_atomic_structure(&mut self, other: &AtomicStructure) -> (FxHashMap<u32, u32>, FxHashMap<u32, u32>) {
+    let mut atom_id_map: FxHashMap<u32, u32> = FxHashMap::default();
+    let mut bond_id_map: FxHashMap<u32, u32> = FxHashMap::default();
     
     // Add atoms with new IDs
     for (old_atom_id, atom) in &other.atoms {
@@ -876,10 +878,10 @@ impl AtomicStructure {
 
 impl Atom {
   /// Returns the average memory size of an Atom
-  /// Assumes typical case of 4 bonds per atom
+  /// With SmallVec<[u32; 4]>, atoms with ≤4 bonds have zero heap allocation
+  /// Assumes typical case of 4 bonds per atom (all inline, no heap)
   const fn average_memory_bytes() -> usize {
-    std::mem::size_of::<Atom>()
-      + 4 * std::mem::size_of::<u64>() // Average 4 bonds per atom
+    std::mem::size_of::<Atom>() // SmallVec with 4 u32s is stored inline
   }
 }
 

@@ -11,7 +11,7 @@ use indexmap::IndexMap;
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::util::box_subdivision::{subdivide_box_float, subdivide_daabox};
+use crate::util::box_subdivision::subdivide_daabox;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::geo_tree::GeoNode;
@@ -29,6 +29,9 @@ use crate::structure_designer::evaluator::motif::SiteSpecifier;
 use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
+use rustc_hash::FxBuildHasher;
+
+type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -116,13 +119,13 @@ impl AtomFillStatistics {
 #[derive(Debug, Clone)]
 pub struct PlacedAtomTracker {
   // Primary storage: maps (motif_space_pos, site_index) -> atom_id
-  atom_map: IndexMap<(IVec3, usize), u32>,
+  atom_map: FxIndexMap<(IVec3, usize), u32>,
 }
 
 impl PlacedAtomTracker {
   pub fn new() -> Self {
     PlacedAtomTracker {
-      atom_map: IndexMap::new(),
+      atom_map: FxIndexMap::default(),
     }
   }
   
