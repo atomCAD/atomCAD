@@ -30,7 +30,7 @@ use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use rustc_hash::FxBuildHasher;
-use crate::common::atomic_structure_utils::remove_lone_atoms;
+use crate::common::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
 
 type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
@@ -162,6 +162,8 @@ pub struct AtomFillData {
   #[serde(with = "dvec3_serializer")]
   pub motif_offset: DVec3,
   pub hydrogen_passivation: bool,
+  #[serde(default)]
+  pub remove_single_bond_atoms_before_passivation: bool,
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
@@ -331,6 +333,12 @@ impl NodeData for AtomFillData {
         let _cleanup_timer = Timer::new("AtomFill cleanup and passivation");
         // Remove lone atoms before hydrogen passivation (passivation will bond them)
         remove_lone_atoms(&mut atomic_structure);
+        
+        // Remove single bond atoms before hydrogen passivation if enabled
+        // This is useful for removing methyl groups on crystal surfaces
+        if self.remove_single_bond_atoms_before_passivation {
+          remove_single_bond_atoms(&mut atomic_structure);
+        }
         
         // Apply hydrogen passivation after bonds are created and lone atoms removed
         if self.hydrogen_passivation {

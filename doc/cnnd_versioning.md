@@ -34,11 +34,10 @@ In case you need to insert an input pin not to the end of the input pins, or del
 
 ### Use case: add new property to built-in node data
 
+Safe to do if the field is annotated with #[serde(default)].
 
-
-
-
-
+- Old code reads struct saved with new code safely.
+- New code reads struct saved with old code if #[serde(default)] is used.
 
 ## New file format version and migartion
 

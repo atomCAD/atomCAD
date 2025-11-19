@@ -28,6 +28,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   late FocusNode _definitionFocusNode;
   late APIVec3 _motifOffset;
   late bool _hydrogenPassivation;
+  late bool _removeSingleBondAtomsBeforePassivation;
 
   @override
   void initState() {
@@ -39,19 +40,30 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     _definitionFocusNode = FocusNode();
     _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
+    _removeSingleBondAtomsBeforePassivation =
+        widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
   }
 
   @override
   void didUpdateWidget(AtomFillEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.data?.parameterElementValueDefinition != widget.data?.parameterElementValueDefinition) {
-      _definitionController.text = widget.data?.parameterElementValueDefinition ?? '';
+    if (oldWidget.data?.parameterElementValueDefinition !=
+        widget.data?.parameterElementValueDefinition) {
+      _definitionController.text =
+          widget.data?.parameterElementValueDefinition ?? '';
     }
     if (oldWidget.data?.motifOffset != widget.data?.motifOffset) {
-      _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
+      _motifOffset =
+          widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     }
-    if (oldWidget.data?.hydrogenPassivation != widget.data?.hydrogenPassivation) {
+    if (oldWidget.data?.hydrogenPassivation !=
+        widget.data?.hydrogenPassivation) {
       _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
+    }
+    if (oldWidget.data?.removeSingleBondAtomsBeforePassivation !=
+        widget.data?.removeSingleBondAtomsBeforePassivation) {
+      _removeSingleBondAtomsBeforePassivation =
+          widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
     }
   }
 
@@ -69,6 +81,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
         parameterElementValueDefinition: _definitionController.text,
         motifOffset: _motifOffset,
         hydrogenPassivation: _hydrogenPassivation,
+        removeSingleBondAtomsBeforePassivation:
+            _removeSingleBondAtomsBeforePassivation,
         error: null, // This will be set by the backend after parsing
       ),
     );
@@ -101,7 +115,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                 // Label
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceVariant,
                     borderRadius: const BorderRadius.only(
@@ -112,8 +127,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                   child: Text(
                     'Parameter Element Value Definition',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                 ),
                 // Code field
@@ -127,7 +142,12 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                         focusNode: _definitionFocusNode,
                         textStyle: const TextStyle(
                           fontFamily: 'Courier New',
-                          fontFamilyFallback: ['Consolas', 'Monaco', 'Menlo', 'monospace'],
+                          fontFamilyFallback: [
+                            'Consolas',
+                            'Monaco',
+                            'Menlo',
+                            'monospace'
+                          ],
                           fontSize: 14.0,
                         ),
                         expands: false,
@@ -155,10 +175,25 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
 
           const SizedBox(height: 8),
 
+          // Remove single-bond atoms checkbox
+          CheckboxListTile(
+            title: const Text('Remove single-bond atoms'),
+            value: _removeSingleBondAtomsBeforePassivation,
+            onChanged: (value) {
+              setState(() {
+                _removeSingleBondAtomsBeforePassivation = value ?? false;
+              });
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+
+          const SizedBox(height: 8),
+
           // Hydrogen Passivation checkbox
           CheckboxListTile(
             title: const Text('Hydrogen Passivation'),
-            subtitle: const Text('Add hydrogen atoms to passivate dangling bonds'),
+            subtitle:
+                const Text('Add hydrogen atoms to passivate dangling bonds'),
             value: _hydrogenPassivation,
             onChanged: (value) {
               setState(() {

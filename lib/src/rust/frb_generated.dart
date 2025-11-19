@@ -4534,13 +4534,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIAtomFillData dco_decode_api_atom_fill_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return APIAtomFillData(
       parameterElementValueDefinition: dco_decode_String(arr[0]),
       motifOffset: dco_decode_api_vec_3(arr[1]),
       hydrogenPassivation: dco_decode_bool(arr[2]),
-      error: dco_decode_opt_String(arr[3]),
+      removeSingleBondAtomsBeforePassivation: dco_decode_bool(arr[3]),
+      error: dco_decode_opt_String(arr[4]),
     );
   }
 
@@ -6065,11 +6066,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_parameterElementValueDefinition = sse_decode_String(deserializer);
     var var_motifOffset = sse_decode_api_vec_3(deserializer);
     var var_hydrogenPassivation = sse_decode_bool(deserializer);
+    var var_removeSingleBondAtomsBeforePassivation =
+        sse_decode_bool(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
     return APIAtomFillData(
         parameterElementValueDefinition: var_parameterElementValueDefinition,
         motifOffset: var_motifOffset,
         hydrogenPassivation: var_hydrogenPassivation,
+        removeSingleBondAtomsBeforePassivation:
+            var_removeSingleBondAtomsBeforePassivation,
         error: var_error);
   }
 
@@ -7868,6 +7873,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.parameterElementValueDefinition, serializer);
     sse_encode_api_vec_3(self.motifOffset, serializer);
     sse_encode_bool(self.hydrogenPassivation, serializer);
+    sse_encode_bool(self.removeSingleBondAtomsBeforePassivation, serializer);
     sse_encode_opt_String(self.error, serializer);
   }
 
