@@ -392,7 +392,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       // Open file picker for saving structure files with the selected format
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Export visible structures',
-        fileName: 'structure.$selectedFormat',
+        fileName: 'structure',
         type: FileType.custom,
         allowedExtensions: [selectedFormat],
       );
