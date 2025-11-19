@@ -249,16 +249,71 @@ pub fn remove_lone_atoms(structure: &mut AtomicStructure) {
     }
 }
 
-pub fn remove_single_bond_atoms(structure: &mut AtomicStructure) -> usize {
-    let single_bond_atoms: Vec<u32> = structure.atoms.values()
-      .filter(|atom| atom.bond_ids.len() == 1)
-      .map(|atom| atom.id)
-      .collect();
-
-    let count = single_bond_atoms.len();
-    for atom_id in single_bond_atoms {
-      structure.delete_atom(atom_id);
+/// Helper function that deletes a batch of atoms with at most one bond
+/// and returns the neighbors that need to be checked in the next iteration.
+/// 
+/// IMPORTANT: Atoms in the list are assumed to have ≤1 bond at the START of this call.
+/// During deletion, some atoms might go from 1 bond to 0 bonds, but they still get deleted.
+/// This is why we do NOT re-check bond counts inside this function.
+/// 
+/// Returns: list of neighbor IDs to check next
+fn delete_atoms_with_at_most_one_bond(
+    structure: &mut AtomicStructure,
+    atoms_to_delete: Vec<u32>,
+) -> Vec<u32> {
+    let mut all_neighbors = Vec::new();
+    
+    for atom_id in atoms_to_delete {
+        // Get the atom
+        let Some(atom) = structure.get_atom(atom_id) else {
+            continue;
+        };
+        
+        // Collect neighbor IDs before deletion
+        for &bond_id in &atom.bond_ids {
+            if let Some(bond) = structure.get_bond(bond_id) {
+                let neighbor_id = if bond.atom_id1 == atom_id {
+                    bond.atom_id2
+                } else {
+                    bond.atom_id1
+                };
+                all_neighbors.push(neighbor_id);
+            }
+        }
+        
+        // Delete the atom (this also removes all its bonds)
+        structure.delete_atom(atom_id);
     }
     
-    count
+    all_neighbors
+}
+
+pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool) {
+    // First iteration: find ALL atoms with at most one bond (0 or 1 bonds)
+    let mut atoms_with_at_most_one_bond: Vec<u32> = structure.atoms.values()
+        .filter(|atom| atom.bond_ids.len() <= 1)
+        .map(|atom| atom.id)
+        .collect();
+    
+    while !atoms_with_at_most_one_bond.is_empty() {
+        // Delete the batch and get neighbors to check
+        let all_neighbors = delete_atoms_with_at_most_one_bond(
+            structure,
+            atoms_with_at_most_one_bond,
+        );
+        
+        // If not recursive, stop after first iteration
+        if !recursive {
+            break;
+        }
+        
+        // For next iteration: check which neighbors now have at most one bond
+        atoms_with_at_most_one_bond = all_neighbors.into_iter()
+            .filter(|&neighbor_id| {
+                structure.get_atom(neighbor_id)
+                    .map(|atom| atom.bond_ids.len() <= 1)
+                    .unwrap_or(false)
+            })
+            .collect();
+    }
 }

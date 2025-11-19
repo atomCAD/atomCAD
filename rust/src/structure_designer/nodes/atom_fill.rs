@@ -336,14 +336,9 @@ impl NodeData for AtomFillData {
         
         // Remove single bond atoms before hydrogen passivation if enabled
         // This is useful for removing methyl groups on crystal surfaces
-        // Apply repeatedly until no more single-bond atoms are found (cascading removal)
+        // Recursive removal: keeps removing until no more single-bond atoms exist
         if self.remove_single_bond_atoms_before_passivation {
-          loop {
-            let removed_count = remove_single_bond_atoms(&mut atomic_structure);
-            if removed_count == 0 {
-              break;
-            }
-          }
+          remove_single_bond_atoms(&mut atomic_structure, true);
         }
         
         // Apply hydrogen passivation after bonds are created and lone atoms removed
