@@ -1,0 +1,185 @@
+name: Release atomCAD
+
+# Manual trigger - you specify the version when running
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.2.0)'
+        required: true
+        type: string
+
+jobs:
+  # Build for Windows
+  build-windows:
+    name: Build Windows Release
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+      
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      
+      - name: Run Windows build script
+        run: .\build_windows_release.ps1 -Version "${{ inputs.version }}"
+        shell: powershell
+      
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomCAD-windows-v${{ inputs.version }}
+          path: dist/atomCAD-windows-v${{ inputs.version }}.zip
+          if-no-files-found: error
+
+  # Build for Linux
+  build-linux:
+    name: Build Linux Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            libgtk-3-dev \
+            libblkid-dev \
+            liblzma-dev \
+            libglu1-mesa-dev \
+            libgl1-mesa-dev
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+      
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      
+      - name: Make build script executable
+        run: chmod +x build_linux_release.sh
+      
+      - name: Run Linux build script
+        run: ./build_linux_release.sh --version "${{ inputs.version }}"
+      
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomCAD-linux-v${{ inputs.version }}
+          path: dist/atomCAD-linux-v${{ inputs.version }}.tar.gz
+          if-no-files-found: error
+
+  # Build for macOS
+  build-macos:
+    name: Build macOS Release
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+      
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      
+      - name: Make build script executable
+        run: chmod +x build_macos_release.sh
+      
+      - name: Run macOS build script
+        run: ./build_macos_release.sh --version "${{ inputs.version }}"
+      
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomCAD-macos-v${{ inputs.version }}
+          path: dist/atomCAD-macos-v${{ inputs.version }}.zip
+          if-no-files-found: error
+
+  # Create GitHub Release with all artifacts
+  create-release:
+    name: Create GitHub Release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Display artifact structure
+        run: ls -R artifacts
+      
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: atomCAD v${{ inputs.version }}
+          draft: true
+          prerelease: false
+          body: |
+            ## atomCAD v${{ inputs.version }}
+            
+            ### Downloads
+            
+            - **Windows**: atomCAD-windows-v${{ inputs.version }}.zip
+            - **Linux**: atomCAD-linux-v${{ inputs.version }}.tar.gz
+            - **macOS**: atomCAD-macos-v${{ inputs.version }}.zip
+            
+            ### Installation Instructions
+            
+            **Windows:**
+            1. Download `atomCAD-windows-v${{ inputs.version }}.zip`
+            2. Extract the zip file
+            3. Run `atomCAD.exe`
+            
+            **Linux:**
+            1. Download `atomCAD-linux-v${{ inputs.version }}.tar.gz`
+            2. Extract: `tar -xzf atomCAD-linux-v${{ inputs.version }}.tar.gz`
+            3. Run: `cd bundle && ./atomCAD`
+            
+            **macOS:**
+            1. Download `atomCAD-macos-v${{ inputs.version }}.zip`
+            2. Extract the zip file
+            3. Right-click `atomCAD.app` and select "Open" (first time only)
+            
+            ---
+            
+            *Add your release notes here before publishing*
+          files: |
+            artifacts/atomCAD-windows-v${{ inputs.version }}/atomCAD-windows-v${{ inputs.version }}.zip
+            artifacts/atomCAD-linux-v${{ inputs.version }}/atomCAD-linux-v${{ inputs.version }}.tar.gz
+            artifacts/atomCAD-macos-v${{ inputs.version }}/atomCAD-macos-v${{ inputs.version }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
