@@ -356,7 +356,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
         dialogTitle: 'Export visible structures',
         fileName: 'structure',
         type: FileType.custom,
-        allowedExtensions: ['xyz', 'mol'],
+        allowedExtensions: ['mol', 'xyz'],
       );
 
       if (outputFile != null) {
