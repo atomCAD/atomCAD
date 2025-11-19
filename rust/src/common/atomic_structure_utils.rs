@@ -249,13 +249,16 @@ pub fn remove_lone_atoms(structure: &mut AtomicStructure) {
     }
 }
 
-pub fn remove_single_bond_atoms(structure: &mut AtomicStructure) {
+pub fn remove_single_bond_atoms(structure: &mut AtomicStructure) -> usize {
     let single_bond_atoms: Vec<u32> = structure.atoms.values()
       .filter(|atom| atom.bond_ids.len() == 1)
       .map(|atom| atom.id)
       .collect();
 
+    let count = single_bond_atoms.len();
     for atom_id in single_bond_atoms {
       structure.delete_atom(atom_id);
     }
+    
+    count
 }
