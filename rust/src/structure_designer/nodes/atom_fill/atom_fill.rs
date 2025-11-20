@@ -305,7 +305,8 @@ impl NodeData for AtomFillData {
         // Apply surface reconstruction if enabled (before hydrogen passivation)
         if self.surface_reconstruction {
           reconstruct_surface(
-            &mut atomic_structure, 
+            &mut atomic_structure,
+            &atom_tracker,
             &motif, 
             &mesh.unit_cell, 
             &self.parameter_element_values,

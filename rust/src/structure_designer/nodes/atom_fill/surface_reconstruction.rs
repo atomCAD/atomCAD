@@ -7,8 +7,10 @@ use crate::common::common_constants::{
   DEBUG_CARBON_GRAY, DEBUG_CARBON_RED, DEBUG_CARBON_GREEN, DEBUG_CARBON_BLUE,
   DEBUG_CARBON_YELLOW, DEBUG_CARBON_MAGENTA, DEBUG_CARBON_CYAN, DEBUG_CARBON_ORANGE
 };
+use crate::structure_designer::nodes::atom_fill::placed_atom_tracker::PlacedAtomTracker;
 use std::collections::HashMap;
 use rustc_hash::FxHashMap;
+use glam::IVec3;
 
 /// Surface orientation classification for atoms.
 /// 
@@ -142,49 +144,168 @@ fn classify_atom_surface_orientation(
   SurfaceOrientation::Unknown
 }
 
-/// Classifies surface orientations for all atoms in the structure.
+/// A dimer pair candidate for surface reconstruction.
 /// 
-/// This function iterates through all atoms and determines their surface
-/// orientation category, returning a map from atom ID to classification.
-/// 
-/// # Arguments
-/// * `structure` - The atomic structure to analyze
-/// 
-/// # Returns
-/// * HashMap mapping atom IDs to their surface orientation classifications
-fn classify_all_surface_orientations(
-  structure: &AtomicStructure
-) -> FxHashMap<u32, SurfaceOrientation> {
-  let mut orientations: FxHashMap<u32, SurfaceOrientation> = FxHashMap::default();
-
-  // Iterate through all atoms and classify each one
-  for (&atom_id, atom) in &structure.atoms {
-    let orientation = classify_atom_surface_orientation(atom, structure);
-    orientations.insert(atom_id, orientation);
-  }
-
-  orientations
+/// This represents a primary atom and its potential dimer partner.
+/// The partner orientation has not been validated yet.
+#[derive(Debug, Clone, Copy)]
+struct DimerPair {
+  /// Atom ID of the primary dimer atom
+  primary_atom_id: u32,
+  
+  /// Atom ID of the dimer partner
+  partner_atom_id: u32,
+  
+  /// Surface orientation of the primary atom
+  primary_orientation: SurfaceOrientation,
 }
 
-/// Applies visual debugging by replacing atom atomic numbers with colored elements.
+/// Results from processing atoms for dimer reconstruction.
 /// 
-/// This function modifies the atomic structure to display surface orientations
-/// as different colored elements in the 3D viewer. Each orientation category
-/// gets a distinct element/color for easy visual inspection.
+/// This struct contains the dimer candidates and orientation data needed
+/// for validating and applying surface reconstruction.
+#[derive(Debug)]
+struct DimerCandidateData {
+  /// Map of potential dimer partner atom IDs to their surface orientations.
+  /// Only includes atoms that are not primary dimer atoms (i.e., potential partners).
+  /// Excludes bulk and unknown orientation atoms.
+  partner_orientations: FxHashMap<u32, SurfaceOrientation>,
+  
+  /// Vector of dimer pair candidates.
+  /// The partner orientation has not been validated yet - validation happens later.
+  dimer_pairs: Vec<DimerPair>,
+}
+
+/// Determines if an atom at the given lattice position is a primary dimer atom.
+/// 
+/// A primary dimer atom is the designated "first" atom in a dimer pair.
+/// Each dimer has exactly one primary atom to avoid double-counting.
+/// 
+/// # Arguments
+/// * `lattice_coords` - Lattice coordinates (motif space position) of the atom
+/// * `basis_index` - Basis index (site index) within the unit cell
+/// * `orientation` - Surface orientation of the atom
+/// 
+/// # Returns
+/// * `true` if this is a primary dimer atom, `false` otherwise
+fn is_primary_dimer_atom(
+  _lattice_coords: IVec3,
+  _basis_index: usize,
+  _orientation: SurfaceOrientation
+) -> bool {
+  // TODO: Implement pattern matching for primary atoms based on phase
+  false
+}
+
+/// Computes the lattice address of the dimer partner for a primary atom.
+/// 
+/// Given a primary dimer atom, this function calculates the crystallographic
+/// address of its dimer partner.
+/// 
+/// # Arguments
+/// * `lattice_coords` - Lattice coordinates of the primary atom
+/// * `basis_index` - Basis index of the primary atom
+/// * `orientation` - Surface orientation of the primary atom
+/// 
+/// # Returns
+/// * `Some((partner_lattice_coords, partner_basis_index))` if a partner exists
+/// * `None` if no partner pattern is defined for this configuration
+fn get_dimer_partner(
+  _lattice_coords: IVec3,
+  _basis_index: usize,
+  _orientation: SurfaceOrientation
+) -> Option<(IVec3, usize)> {
+  // TODO: Implement partner offset calculation based on surface orientation and phase
+  None
+}
+
+/// Processes all atoms to classify orientations and identify dimer pair candidates.
+/// 
+/// This function iterates through the PlacedAtomTracker (which has lattice coordinates)
+/// and performs all necessary processing in a single efficient pass:
+/// - Classifies surface orientation
+/// - Applies debug visualization if enabled
+/// - Identifies primary dimer atoms
+/// - Finds dimer partner candidates
+/// 
+/// # Arguments
+/// * `structure` - The atomic structure (mutable for debug visualization)
+/// * `atom_tracker` - Tracker with lattice coordinate mappings
+/// 
+/// # Returns
+/// * `DimerCandidateData` containing partner orientations and dimer pair candidates
+fn process_atoms(
+  structure: &mut AtomicStructure,
+  atom_tracker: &PlacedAtomTracker
+) -> DimerCandidateData {
+  let mut partner_orientations: FxHashMap<u32, SurfaceOrientation> = FxHashMap::default();
+  let mut dimer_pairs: Vec<DimerPair> = Vec::new();
+
+  // Iterate through all placed atoms (which have lattice coordinates)
+  for (lattice_coords, basis_index, atom_id) in atom_tracker.iter_atoms() {
+    // Get the atom from the structure
+    let atom = match structure.atoms.get(&atom_id) {
+      Some(a) => a,
+      None => continue, // Atom doesn't exist in structure, skip
+    };
+
+    // Classify surface orientation
+    let orientation = classify_atom_surface_orientation(atom, structure);
+    
+    // Apply debug visualization if enabled
+    if DEBUG_SURFACE_ORIENTATION {
+      if let Some(atom_mut) = structure.atoms.get_mut(&atom_id) {
+        atom_mut.atomic_number = get_debug_atomic_number(orientation);
+      }
+    }
+
+    // Skip bulk and unknown atoms - we only care about potential dimer candidates
+    if orientation == SurfaceOrientation::Bulk || orientation == SurfaceOrientation::Unknown {
+      continue;
+    }
+
+    // Check if this is a primary dimer atom
+    if is_primary_dimer_atom(lattice_coords, basis_index, orientation) {
+      // Get the dimer partner location
+      if let Some((partner_lattice, partner_basis)) = get_dimer_partner(lattice_coords, basis_index, orientation) {
+        // Look up the partner atom ID
+        if let Some(partner_atom_id) = atom_tracker.get_atom_id(partner_lattice, partner_basis) {
+          // Add to dimer candidates (partner orientation not validated yet)
+          dimer_pairs.push(DimerPair {
+            primary_atom_id: atom_id,
+            partner_atom_id,
+            primary_orientation: orientation,
+          });
+        }
+      }
+    } else {
+      partner_orientations.insert(atom_id, orientation);
+    }
+
+  }
+
+  DimerCandidateData {
+    partner_orientations,
+    dimer_pairs,
+  }
+}
+
+/// Applies surface reconstruction to a validated dimer pair.
+/// 
+/// This function performs the actual reconstruction on a pair of atoms that
+/// have been validated to be proper dimer partners on the same surface facet.
 /// 
 /// # Arguments
 /// * `structure` - The atomic structure to modify
-/// * `orientations` - Map of atom IDs to their surface orientations
-fn apply_debug_visualization(
-  structure: &mut AtomicStructure,
-  orientations: &FxHashMap<u32, SurfaceOrientation>
+/// * `dimer_pair` - The validated dimer pair to reconstruct
+fn apply_dimer_reconstruction(
+  _structure: &mut AtomicStructure,
+  _dimer_pair: &DimerPair
 ) {
-  // Replace each atom's atomic number based on its classification
-  for (&atom_id, &orientation) in orientations {
-    if let Some(atom) = structure.atoms.get_mut(&atom_id) {
-      atom.atomic_number = get_debug_atomic_number(orientation);
-    }
-  }
+  // TODO: Implement the actual reconstruction:
+  // - Create a bond between the two atoms
+  // - Adjust atom positions to form the dimer
+  // - Update any other structural properties
 }
 
 /// Determines if the current structure is cubic diamond suitable for (100) reconstruction.
@@ -243,12 +364,14 @@ pub fn is_cubic_diamond(
 /// 
 /// # Arguments
 /// * `structure` - The atomic structure to apply reconstruction to
+/// * `atom_tracker` - Tracker with lattice coordinate mappings for all placed atoms
 /// * `_motif` - The motif defining the crystal structure
 /// * `_unit_cell` - The unit cell defining the lattice
 /// * `_parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
 pub fn reconstruct_surface_100_diamond(
   structure: &mut AtomicStructure,
+  atom_tracker: &PlacedAtomTracker,
   _motif: &Motif,
   _unit_cell: &UnitCellStruct,
   _parameter_element_values: &HashMap<String, i32>,
@@ -260,17 +383,20 @@ pub fn reconstruct_surface_100_diamond(
     remove_single_bond_atoms(structure, true);
   }
   
-  // Step 1: Classify surface orientation for each atom
-  let surface_orientations = classify_all_surface_orientations(structure);
-  
-  // Debug mode: visualize classifications and return early
-  if DEBUG_SURFACE_ORIENTATION {
-    apply_debug_visualization(structure, &surface_orientations);
-    return;
+  // Step 1: Process atoms - classify orientations and identify dimer candidates
+  // Debug visualization is applied during processing if DEBUG_SURFACE_ORIENTATION is true
+  let candidate_data = process_atoms(structure, atom_tracker);
+
+  // Step 2: Process dimer candidates - validate and apply reconstruction
+  for dimer_pair in &candidate_data.dimer_pairs {
+    // Validate: check that the partner has the same orientation as the primary
+    if let Some(&partner_orientation) = candidate_data.partner_orientations.get(&dimer_pair.partner_atom_id) {
+      // Only reconstruct if both atoms have the same surface orientation
+      if partner_orientation == dimer_pair.primary_orientation {
+        apply_dimer_reconstruction(structure, dimer_pair);
+      }
+    }
   }
-  
-  // TODO: Step 2 - Identify dimer pairs efficiently
-  // TODO: Step 3 - Apply reconstruction to dimer pairs
 }
 
 /// Performs surface reconstruction on the atomic structure.
@@ -280,12 +406,14 @@ pub fn reconstruct_surface_100_diamond(
 /// 
 /// # Arguments
 /// * `structure` - The atomic structure to apply reconstruction to
+/// * `atom_tracker` - Tracker with lattice coordinate mappings for all placed atoms
 /// * `motif` - The motif defining the crystal structure
 /// * `unit_cell` - The unit cell defining the lattice
 /// * `parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
 pub fn reconstruct_surface(
   structure: &mut AtomicStructure,
+  atom_tracker: &PlacedAtomTracker,
   motif: &Motif,
   unit_cell: &UnitCellStruct,
   parameter_element_values: &HashMap<String, i32>,
@@ -297,5 +425,5 @@ pub fn reconstruct_surface(
   }
 
   // Perform (100) 2×1 dimer reconstruction for cubic diamond
-  reconstruct_surface_100_diamond(structure, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed);
+  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed);
 }
