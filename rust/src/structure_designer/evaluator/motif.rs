@@ -62,4 +62,56 @@ impl Motif {
     
     effective_values
   }
+
+  /// Compares two motifs for structural equality.
+  /// 
+  /// This method compares the essential structural components of two motifs:
+  /// - Parameter elements (name and default atomic number)
+  /// - Sites (atomic number and position)
+  /// - Bonds (site specifiers and multiplicity)
+  /// 
+  /// The precomputed bond index mappings are NOT compared as they are derived
+  /// from the bonds themselves.
+  /// 
+  /// # Arguments
+  /// * `other` - The other motif to compare with
+  /// 
+  /// # Returns
+  /// * `true` if the motifs are structurally identical
+  /// * `false` otherwise
+  pub fn is_structurally_equal(&self, other: &Motif) -> bool {
+    // Quick size checks first
+    if self.parameters.len() != other.parameters.len() ||
+       self.sites.len() != other.sites.len() ||
+       self.bonds.len() != other.bonds.len() {
+      return false;
+    }
+
+    // Compare parameter elements
+    for (p1, p2) in self.parameters.iter().zip(other.parameters.iter()) {
+      if p1.name != p2.name || p1.default_atomic_number != p2.default_atomic_number {
+        return false;
+      }
+    }
+
+    // Compare sites
+    for (s1, s2) in self.sites.iter().zip(other.sites.iter()) {
+      if s1.atomic_number != s2.atomic_number || s1.position != s2.position {
+        return false;
+      }
+    }
+
+    // Compare bonds
+    for (b1, b2) in self.bonds.iter().zip(other.bonds.iter()) {
+      if b1.site_1.site_index != b2.site_1.site_index ||
+         b1.site_1.relative_cell != b2.site_1.relative_cell ||
+         b1.site_2.site_index != b2.site_2.site_index ||
+         b1.site_2.relative_cell != b2.site_2.relative_cell ||
+         b1.multiplicity != b2.multiplicity {
+        return false;
+      }
+    }
+
+    true
+  }
 }
