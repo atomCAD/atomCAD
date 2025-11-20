@@ -3,6 +3,10 @@ use crate::structure_designer::evaluator::motif::Motif;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::common_constants::{DEFAULT_ZINCBLENDE_MOTIF, DIAMOND_UNIT_CELL_SIZE_ANGSTROM};
 use crate::common::atomic_structure_utils::remove_single_bond_atoms;
+use crate::common::common_constants::{
+  DEBUG_CARBON_GRAY, DEBUG_CARBON_RED, DEBUG_CARBON_GREEN, DEBUG_CARBON_BLUE,
+  DEBUG_CARBON_YELLOW, DEBUG_CARBON_MAGENTA, DEBUG_CARBON_CYAN, DEBUG_CARBON_ORANGE
+};
 use std::collections::HashMap;
 use rustc_hash::FxHashMap;
 
@@ -38,18 +42,18 @@ const AXIS_ALIGNMENT_THRESHOLD: f64 = 0.5;
 const DEBUG_SURFACE_ORIENTATION: bool = true;
 
 /// Maps each surface orientation to an atomic number for visual debugging.
-/// Uses custom debug carbon elements (1000-1009) with carbon radii but distinct colors.
+/// Uses custom debug carbon elements with carbon radii but distinct colors.
 /// All atoms will have the same size for consistent visualization.
 fn get_debug_atomic_number(orientation: SurfaceOrientation) -> i32 {
   match orientation {
-    SurfaceOrientation::Bulk => 1000,        // DebugCarbon0 - dark gray
-    SurfaceOrientation::Unknown => 1004,     // DebugCarbon4 - yellow
-    SurfaceOrientation::Surface100 => 1001,  // DebugCarbon1 - red
-    SurfaceOrientation::SurfaceNeg100 => 1002, // DebugCarbon2 - green
-    SurfaceOrientation::Surface010 => 1003,  // DebugCarbon3 - blue
-    SurfaceOrientation::SurfaceNeg010 => 1007, // DebugCarbon7 - orange
-    SurfaceOrientation::Surface001 => 1006,  // DebugCarbon6 - cyan
-    SurfaceOrientation::SurfaceNeg001 => 1005, // DebugCarbon5 - magenta
+    SurfaceOrientation::Bulk => DEBUG_CARBON_GRAY,
+    SurfaceOrientation::Unknown => DEBUG_CARBON_YELLOW,
+    SurfaceOrientation::Surface100 => DEBUG_CARBON_RED,
+    SurfaceOrientation::SurfaceNeg100 => DEBUG_CARBON_GREEN,
+    SurfaceOrientation::Surface010 => DEBUG_CARBON_BLUE,
+    SurfaceOrientation::SurfaceNeg010 => DEBUG_CARBON_ORANGE,
+    SurfaceOrientation::Surface001 => DEBUG_CARBON_CYAN,
+    SurfaceOrientation::SurfaceNeg001 => DEBUG_CARBON_MAGENTA,
   }
 }
 

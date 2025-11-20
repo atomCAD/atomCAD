@@ -2,6 +2,18 @@ use std::collections::HashMap;
 use glam::f32::Vec3;
 use lazy_static::lazy_static;
 
+// Debug visualization atomic numbers - custom elements with carbon radii for consistent visualization
+pub const DEBUG_CARBON_GRAY: i32 = 1000;
+pub const DEBUG_CARBON_RED: i32 = 1001;
+pub const DEBUG_CARBON_GREEN: i32 = 1002;
+pub const DEBUG_CARBON_BLUE: i32 = 1003;
+pub const DEBUG_CARBON_YELLOW: i32 = 1004;
+pub const DEBUG_CARBON_MAGENTA: i32 = 1005;
+pub const DEBUG_CARBON_CYAN: i32 = 1006;
+pub const DEBUG_CARBON_ORANGE: i32 = 1007;
+pub const DEBUG_CARBON_PURPLE: i32 = 1008;
+pub const DEBUG_CARBON_TEAL: i32 = 1009;
+
 #[derive(Clone)]
 pub struct AtomInfo {
     pub symbol: String,
@@ -157,15 +169,15 @@ fn get_all_elements() -> Vec<AtomInfo> {
         create_atom_info(96, "Cm", "Curium", 1.69, 3.05, Vec3::new(0.47, 0.36, 0.89)),
         
         // Debug visualization elements (1000-1009) - all have carbon radii for consistent visualization
-        create_atom_info(1000, "DC0", "DebugCarbon0", 0.76, 1.77, Vec3::new(0.18, 0.18, 0.18)),  // Dark gray (bulk)
-        create_atom_info(1001, "DC1", "DebugCarbon1", 0.76, 1.77, Vec3::new(1.0, 0.0, 0.0)),     // Red
-        create_atom_info(1002, "DC2", "DebugCarbon2", 0.76, 1.77, Vec3::new(0.0, 1.0, 0.0)),     // Green
-        create_atom_info(1003, "DC3", "DebugCarbon3", 0.76, 1.77, Vec3::new(0.0, 0.0, 1.0)),     // Blue
-        create_atom_info(1004, "DC4", "DebugCarbon4", 0.76, 1.77, Vec3::new(1.0, 1.0, 0.0)),     // Yellow
-        create_atom_info(1005, "DC5", "DebugCarbon5", 0.76, 1.77, Vec3::new(1.0, 0.0, 1.0)),     // Magenta
-        create_atom_info(1006, "DC6", "DebugCarbon6", 0.76, 1.77, Vec3::new(0.0, 1.0, 1.0)),     // Cyan
-        create_atom_info(1007, "DC7", "DebugCarbon7", 0.76, 1.77, Vec3::new(1.0, 0.5, 0.0)),     // Orange
-        create_atom_info(1008, "DC8", "DebugCarbon8", 0.76, 1.77, Vec3::new(0.5, 0.0, 1.0)),     // Purple
-        create_atom_info(1009, "DC9", "DebugCarbon9", 0.76, 1.77, Vec3::new(0.0, 0.8, 0.5)),     // Teal
+        create_atom_info(DEBUG_CARBON_GRAY, "DCGray", "DebugCarbonGray", 0.76, 1.77, Vec3::new(0.18, 0.18, 0.18)),
+        create_atom_info(DEBUG_CARBON_RED, "DCRed", "DebugCarbonRed", 0.76, 1.77, Vec3::new(1.0, 0.0, 0.0)),
+        create_atom_info(DEBUG_CARBON_GREEN, "DCGreen", "DebugCarbonGreen", 0.76, 1.77, Vec3::new(0.0, 1.0, 0.0)),
+        create_atom_info(DEBUG_CARBON_BLUE, "DCBlue", "DebugCarbonBlue", 0.76, 1.77, Vec3::new(0.0, 0.0, 1.0)),
+        create_atom_info(DEBUG_CARBON_YELLOW, "DCYellow", "DebugCarbonYellow", 0.76, 1.77, Vec3::new(1.0, 1.0, 0.0)),
+        create_atom_info(DEBUG_CARBON_MAGENTA, "DCMagenta", "DebugCarbonMagenta", 0.76, 1.77, Vec3::new(1.0, 0.0, 1.0)),
+        create_atom_info(DEBUG_CARBON_CYAN, "DCCyan", "DebugCarbonCyan", 0.76, 1.77, Vec3::new(0.0, 1.0, 1.0)),
+        create_atom_info(DEBUG_CARBON_ORANGE, "DCOrange", "DebugCarbonOrange", 0.76, 1.77, Vec3::new(1.0, 0.5, 0.0)),
+        create_atom_info(DEBUG_CARBON_PURPLE, "DCPurple", "DebugCarbonPurple", 0.76, 1.77, Vec3::new(0.5, 0.0, 1.0)),
+        create_atom_info(DEBUG_CARBON_TEAL, "DCTeal", "DebugCarbonTeal", 0.76, 1.77, Vec3::new(0.0, 0.8, 0.5)),
     ]
 }
