@@ -155,5 +155,17 @@ fn get_all_elements() -> Vec<AtomInfo> {
         create_atom_info(94, "Pu", "Plutonium", 1.87, 2.81, Vec3::new(0.00, 0.42, 1.00)),
         create_atom_info(95, "Am", "Americium", 1.8, 2.83, Vec3::new(0.33, 0.36, 0.95)),
         create_atom_info(96, "Cm", "Curium", 1.69, 3.05, Vec3::new(0.47, 0.36, 0.89)),
+        
+        // Debug visualization elements (1000-1009) - all have carbon radii for consistent visualization
+        create_atom_info(1000, "DC0", "DebugCarbon0", 0.76, 1.77, Vec3::new(0.18, 0.18, 0.18)),  // Dark gray (bulk)
+        create_atom_info(1001, "DC1", "DebugCarbon1", 0.76, 1.77, Vec3::new(1.0, 0.0, 0.0)),     // Red
+        create_atom_info(1002, "DC2", "DebugCarbon2", 0.76, 1.77, Vec3::new(0.0, 1.0, 0.0)),     // Green
+        create_atom_info(1003, "DC3", "DebugCarbon3", 0.76, 1.77, Vec3::new(0.0, 0.0, 1.0)),     // Blue
+        create_atom_info(1004, "DC4", "DebugCarbon4", 0.76, 1.77, Vec3::new(1.0, 1.0, 0.0)),     // Yellow
+        create_atom_info(1005, "DC5", "DebugCarbon5", 0.76, 1.77, Vec3::new(1.0, 0.0, 1.0)),     // Magenta
+        create_atom_info(1006, "DC6", "DebugCarbon6", 0.76, 1.77, Vec3::new(0.0, 1.0, 1.0)),     // Cyan
+        create_atom_info(1007, "DC7", "DebugCarbon7", 0.76, 1.77, Vec3::new(1.0, 0.5, 0.0)),     // Orange
+        create_atom_info(1008, "DC8", "DebugCarbon8", 0.76, 1.77, Vec3::new(0.5, 0.0, 1.0)),     // Purple
+        create_atom_info(1009, "DC9", "DebugCarbon9", 0.76, 1.77, Vec3::new(0.0, 0.8, 0.5)),     // Teal
     ]
 }

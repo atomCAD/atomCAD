@@ -1,6 +1,6 @@
 # Efficient Algorithm for (100) 2×1 Dimer Surface Reconstruction in Cubic Diamond
 
-Surface reconstruction is a crucial step in simulating the behavior of crystals, but it can be computationally challenging when dealing with large systems. To address this, we focus on developing an efficient algorithm for a specific case, the (100) 2×1 dimer surface reconstruction in cubic diamond, with the goal of generalizing our approach to other surface reconstructions.
+Doing surface reconstruction efficiently in crystals with hundreds of thousands of atoms is hard. We tackle the problem-space by solving a special case (the (100) 2×1 dimer surface reconstruction in cubic diamond) efficiently and try to generalize from the learnings and the developed tools to be able to do other surface reconstructions efficiently later.
 
 ## Current atom_fill Algorithm
 
@@ -32,15 +32,16 @@ Surface reconstruction is inserted between steps 4 and 5 of the atom_fill algori
 
 ### Step 1: Classify Surface Orientation for Each Atom
 
-For each atom, we determine whether it lies on a {100} facet and identify its specific surface normal. Each carbon atom is classified into one of seven categories:
+For each atom, we determine whether it lies on a {100} facet and identify its specific surface normal. Each carbon atom is classified into one of eight categories:
 
 * **Bulk** (no reconstruction)
+* **Unknown** (no reconstruction)
 * **(100)** surface
-* **(1̄00)** or **(-100)** surface
+* **(-100)** surface
 * **(010)** surface
-* **(01̄0)** or **(0-10)** surface
+* **(0-10)** surface
 * **(001)** surface
-* **(001̄)** or **(00-1)** surface
+* **(00-1)** surface
 
 The category indicates the surface normal direction. Fortunately, classification can be somewhat approximate: dimers form only when both constituent atoms share the same surface orientation, so misclassification requires two neighboring atoms to be incorrectly categorized simultaneously. We could even assign atoms to multiple categories using 6 **bit flags** for overlapping surface regions.
 
@@ -56,10 +57,10 @@ The category indicates the surface normal direction. Fortunately, classification
 
 The 2×1 dimer pattern on an unreconstructed (bulk-terminated) (100) diamond surface has two distinct registry phases—all other arrangements are periodic translations. We label these **Phase A** and **Phase B**.
 
- ![Mapping A](/api/attachments.redirect?id=ec2d23a2-e9a6-4018-a35a-bea5e72703a0 " =780x741")
+ ![Phase A](/api/attachments.redirect?id=ec2d23a2-e9a6-4018-a35a-bea5e72703a0 " =780x741")
 
 
- ![Mapping B](/api/attachments.redirect?id=6adfd7bd-2f27-4e01-8aac-1e1698b2f3cc " =780x741")
+ ![Phase B](/api/attachments.redirect?id=6adfd7bd-2f27-4e01-8aac-1e1698b2f3cc " =780x741")
 
 
 **Phase selection:** Different surface domains (terraces) could use different phases, but for simplicity we initially use a single global phase for each infinite plane. Phase selection can be hardcoded initially and refined later to handle domain boundaries. 
