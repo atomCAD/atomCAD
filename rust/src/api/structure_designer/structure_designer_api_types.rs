@@ -283,5 +283,6 @@ pub struct APIAtomFillData {
   pub motif_offset: APIVec3, // Offset in fractional lattice coordinates
   pub hydrogen_passivation: bool, // Whether to apply hydrogen passivation
   pub remove_single_bond_atoms_before_passivation: bool, // Whether to remove atoms with exactly one bond before passivation
+  pub surface_reconstruction: bool, // Whether to apply surface reconstruction
   pub error: Option<String>, // Optional error message from parsing
 }

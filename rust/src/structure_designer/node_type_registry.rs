@@ -836,6 +836,7 @@ impl NodeTypeRegistry {
         motif_offset: DVec3::ZERO,
         hydrogen_passivation: true,
         remove_single_bond_atoms_before_passivation: false,
+        surface_reconstruction: false,
         error: None,
         parameter_element_values: HashMap::new(),
       }),

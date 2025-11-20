@@ -31,6 +31,7 @@ use crate::util::daabox::DAABox;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use rustc_hash::FxBuildHasher;
 use crate::common::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
+use super::surface_reconstruction::reconstruct_surface;
 
 type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
@@ -164,6 +165,8 @@ pub struct AtomFillData {
   pub hydrogen_passivation: bool,
   #[serde(default)]
   pub remove_single_bond_atoms_before_passivation: bool,
+  #[serde(default)]
+  pub surface_reconstruction: bool,
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
@@ -339,6 +342,11 @@ impl NodeData for AtomFillData {
         // Recursive removal: keeps removing until no more single-bond atoms exist
         if self.remove_single_bond_atoms_before_passivation {
           remove_single_bond_atoms(&mut atomic_structure, true);
+        }
+        
+        // Apply surface reconstruction if enabled (before hydrogen passivation)
+        if self.surface_reconstruction {
+          reconstruct_surface(&mut atomic_structure);
         }
         
         // Apply hydrogen passivation after bonds are created and lone atoms removed
