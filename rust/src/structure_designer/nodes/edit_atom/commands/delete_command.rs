@@ -34,7 +34,7 @@ impl EditAtomCommand for DeleteCommand {
     // Now collect all selected atom IDs
     let selected_atom_ids: Vec<u32> = model.atoms
       .iter()
-      .filter(|(_, atom)| atom.selected)
+      .filter(|(_, atom)| atom.is_selected())
       .map(|(id, _)| *id)
       .collect();
 

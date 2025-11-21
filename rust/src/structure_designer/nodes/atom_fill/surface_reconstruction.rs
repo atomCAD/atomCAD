@@ -47,19 +47,49 @@ const AXIS_ALIGNMENT_THRESHOLD: f64 = 0.5;
 /// Set to false for normal reconstruction operation.
 const DEBUG_SURFACE_ORIENTATION: bool = true;
 
+// ============================================================================
+// Diamond (100) 2×1 Dimer Reconstruction Geometric Constants
+// ============================================================================
+
+/// Target dimer bond length for clean (unpassivated) diamond (100) surface in Ångströms.
+/// Literature value: ~1.42 Å
+const DIMER_BOND_LENGTH_CLEAN: f64 = 1.42;
+
+/// Target dimer bond length for hydrogen-passivated diamond (100) surface in Ångströms.
+/// Passivation weakens the π-bond, lengthening the dimer.
+/// Literature value: ~1.6 Å
+const DIMER_BOND_LENGTH_PASSIVATED: f64 = 1.6;
+
+/// Vertical displacement (downward) for clean surface reconstruction in Ångströms.
+/// Atoms move closer to the second layer.
+/// Delta from original: -0.205 Å
+const VERTICAL_DISPLACEMENT_CLEAN: f64 = -0.205;
+
+/// Vertical displacement (downward) for passivated surface reconstruction in Ångströms.
+/// Weaker reconstruction than clean surface.
+/// Delta from original: -0.076 Å
+const VERTICAL_DISPLACEMENT_PASSIVATED: f64 = -0.076;
+
+/// C-H bond length for hydrogen passivation in Ångströms.
+const C_H_BOND_LENGTH: f64 = 1.09;
+
+/// Angle (in degrees) of C-H bond from surface normal.
+/// Hydrogen points away from the dimer partner.
+const C_H_ANGLE_FROM_NORMAL_DEGREES: f64 = 24.0;
+
 /// Maps each surface orientation to an atomic number for visual debugging.
 /// Uses custom debug carbon elements with carbon radii but distinct colors.
 /// All atoms will have the same size for consistent visualization.
-fn get_debug_atomic_number(orientation: SurfaceOrientation) -> i32 {
+fn get_debug_atomic_number(orientation: SurfaceOrientation) -> i16 {
   match orientation {
-    SurfaceOrientation::Bulk => DEBUG_CARBON_GRAY,
-    SurfaceOrientation::Unknown => DEBUG_CARBON_YELLOW,
-    SurfaceOrientation::Surface100 => DEBUG_CARBON_RED,
-    SurfaceOrientation::SurfaceNeg100 => DEBUG_CARBON_GREEN,
-    SurfaceOrientation::Surface010 => DEBUG_CARBON_BLUE,
-    SurfaceOrientation::SurfaceNeg010 => DEBUG_CARBON_ORANGE,
-    SurfaceOrientation::Surface001 => DEBUG_CARBON_CYAN,
-    SurfaceOrientation::SurfaceNeg001 => DEBUG_CARBON_MAGENTA,
+    SurfaceOrientation::Bulk => DEBUG_CARBON_GRAY as i16,
+    SurfaceOrientation::Unknown => DEBUG_CARBON_YELLOW as i16,
+    SurfaceOrientation::Surface100 => DEBUG_CARBON_RED as i16,
+    SurfaceOrientation::SurfaceNeg100 => DEBUG_CARBON_GREEN as i16,
+    SurfaceOrientation::Surface010 => DEBUG_CARBON_BLUE as i16,
+    SurfaceOrientation::SurfaceNeg010 => DEBUG_CARBON_ORANGE as i16,
+    SurfaceOrientation::Surface001 => DEBUG_CARBON_CYAN as i16,
+    SurfaceOrientation::SurfaceNeg001 => DEBUG_CARBON_MAGENTA as i16,
   }
 }
 
@@ -539,14 +569,74 @@ fn process_atoms(
 /// This function performs the actual reconstruction on a pair of atoms that
 /// have been validated to be proper dimer partners on the same surface facet.
 /// 
+/// Implements diamond (100) 2×1 dimer reconstruction:
+/// 1. Creates dimer bond between surface atoms
+/// 2. Moves atoms symmetrically toward each other (in-plane)
+/// 3. Moves atoms down toward second layer (perpendicular to surface)
+/// 4. Optionally adds hydrogen passivation
+/// 
 /// # Arguments
 /// * `structure` - The atomic structure to modify
 /// * `dimer_pair` - The validated dimer pair to reconstruct
+/// * `hydrogen_passivation` - Whether to add hydrogen passivation to this dimer
 fn apply_dimer_reconstruction(
   structure: &mut AtomicStructure,
-  dimer_pair: &DimerPair
+  dimer_pair: &DimerPair,
+  hydrogen_passivation: bool
 ) {
-  // Create a single bond between the dimer pair
+  // Select geometry parameters based on passivation setting
+  let target_bond_length = if hydrogen_passivation {
+    DIMER_BOND_LENGTH_PASSIVATED
+  } else {
+    DIMER_BOND_LENGTH_CLEAN
+  };
+  
+  let vertical_displacement = if hydrogen_passivation {
+    VERTICAL_DISPLACEMENT_PASSIVATED
+  } else {
+    VERTICAL_DISPLACEMENT_CLEAN
+  };
+  
+  // Get the two atoms
+  let atom1 = structure.atoms.get(&dimer_pair.primary_atom_id);
+  let atom2 = structure.atoms.get(&dimer_pair.partner_atom_id);
+  
+  if atom1.is_none() || atom2.is_none() {
+    return; // Safety check
+  }
+  
+  let pos1 = atom1.unwrap().position;
+  let pos2 = atom2.unwrap().position;
+  
+  // Calculate current distance
+  let current_vec = pos2 - pos1;
+  let current_distance = current_vec.length();
+  
+  if current_distance < 0.01 {
+    return; // Safety check for coincident atoms
+  }
+  
+  // Calculate in-plane direction (normalized vector from atom1 to atom2)
+  let in_plane_direction = current_vec.normalize();
+  
+  // Calculate how much to move each atom toward the midpoint to achieve target bond length
+  // Each atom moves half the distance change
+  let distance_change = current_distance - target_bond_length;
+  let move_distance = distance_change * 0.5;
+  
+  let surface_normal = get_surface_normal_direction(dimer_pair.primary_orientation);
+  
+  // Calculate new positions:
+  // 1. Move toward midpoint (symmetric in-plane displacement)
+  // 2. Move down perpendicular to surface (vertical displacement)
+  let new_pos1 = pos1 + in_plane_direction * move_distance + surface_normal * vertical_displacement;
+  let new_pos2 = pos2 - in_plane_direction * move_distance + surface_normal * vertical_displacement;
+  
+  // Apply position changes
+  structure.set_atom_position(dimer_pair.primary_atom_id, new_pos1);
+  structure.set_atom_position(dimer_pair.partner_atom_id, new_pos2);
+  
+  // Create the dimer bond
   let bond_id = structure.add_bond(
     dimer_pair.primary_atom_id,
     dimer_pair.partner_atom_id,
@@ -558,9 +648,86 @@ fn apply_dimer_reconstruction(
     bond.selected = true;
   }
   
-  // TODO: Future enhancements:
-  // - Adjust atom positions to form proper dimer geometry
-  // - Update any other structural properties as needed
+  // Add hydrogen passivation if enabled
+  if hydrogen_passivation {
+    add_hydrogen_passivation(structure, dimer_pair, &new_pos1, &new_pos2, &in_plane_direction, &surface_normal);
+  }
+}
+
+/// Returns the outward surface normal direction for a given surface orientation.
+/// 
+/// # Arguments
+/// * `orientation` - The surface orientation
+/// 
+/// # Returns
+/// * A unit vector pointing outward from the surface (into vacuum)
+fn get_surface_normal_direction(orientation: SurfaceOrientation) -> glam::DVec3 {
+  use glam::DVec3;
+  
+  match orientation {
+    SurfaceOrientation::Surface100 => DVec3::new(1.0, 0.0, 0.0),      // +X
+    SurfaceOrientation::SurfaceNeg100 => DVec3::new(-1.0, 0.0, 0.0),  // -X
+    SurfaceOrientation::Surface010 => DVec3::new(0.0, 1.0, 0.0),      // +Y
+    SurfaceOrientation::SurfaceNeg010 => DVec3::new(0.0, -1.0, 0.0),  // -Y
+    SurfaceOrientation::Surface001 => DVec3::new(0.0, 0.0, 1.0),      // +Z
+    SurfaceOrientation::SurfaceNeg001 => DVec3::new(0.0, 0.0, -1.0),  // -Z
+    _ => DVec3::new(0.0, 0.0, 1.0), // Default fallback
+  }
+}
+
+/// Adds hydrogen passivation atoms to a reconstructed dimer pair.
+/// 
+/// For each carbon atom in the dimer, places a hydrogen atom:
+/// - C-H bond length: 1.09 Å
+/// - C-H direction: 24° from surface normal, pointing away from dimer partner
+/// 
+/// # Arguments
+/// * `structure` - The atomic structure to modify
+/// * `dimer_pair` - The dimer pair information
+/// * `pos1` - Position of first carbon atom
+/// * `pos2` - Position of second carbon atom
+/// * `in_plane_direction` - Unit vector from atom1 to atom2 (in-plane)
+/// * `surface_normal` - Unit vector pointing outward from surface
+fn add_hydrogen_passivation(
+  structure: &mut AtomicStructure,
+  dimer_pair: &DimerPair,
+  pos1: &glam::DVec3,
+  pos2: &glam::DVec3,
+  in_plane_direction: &glam::DVec3,
+  surface_normal: &glam::DVec3
+) {
+  use glam::DVec3;
+  use std::f64::consts::PI;
+  
+  let angle_rad = C_H_ANGLE_FROM_NORMAL_DEGREES * PI / 180.0;
+  let cos_angle = angle_rad.cos();
+  let sin_angle = angle_rad.sin();
+  
+  // For atom 1: hydrogen points away from atom 2
+  // Direction: tilt from surface normal toward -in_plane_direction
+  let h1_direction = (*surface_normal * cos_angle - *in_plane_direction * sin_angle).normalize();
+  let h1_pos = pos1 + h1_direction * C_H_BOND_LENGTH;
+  
+  // For atom 2: hydrogen points away from atom 1
+  // Direction: tilt from surface normal toward +in_plane_direction
+  let h2_direction = (*surface_normal * cos_angle + *in_plane_direction * sin_angle).normalize();
+  let h2_pos = pos2 + h2_direction * C_H_BOND_LENGTH;
+  
+  // Add hydrogen atoms (atomic number 1) using add_atom to update internal data structures
+  let h1_id = structure.add_atom(1, h1_pos);
+  let h2_id = structure.add_atom(1, h2_pos);
+  
+  // Create C-H bonds
+  structure.add_bond(dimer_pair.primary_atom_id, h1_id, 1);
+  structure.add_bond(dimer_pair.partner_atom_id, h2_id, 1);
+  
+  // Flag the carbon atoms as hydrogen passivated
+  if let Some(atom) = structure.atoms.get_mut(&dimer_pair.primary_atom_id) {
+    atom.set_hydrogen_passivation(true);
+  }
+  if let Some(atom) = structure.atoms.get_mut(&dimer_pair.partner_atom_id) {
+    atom.set_hydrogen_passivation(true);
+  }
 }
 
 /// Determines if the current structure is cubic diamond suitable for (100) reconstruction.
@@ -582,7 +749,7 @@ fn apply_dimer_reconstruction(
 pub fn is_cubic_diamond(
   motif: &Motif,
   unit_cell: &UnitCellStruct,
-  parameter_element_values: &HashMap<String, i32>
+  parameter_element_values: &HashMap<String, i16>
 ) -> bool {
   // Check if motif matches the built-in zincblende motif
   if !motif.is_structurally_equal(&DEFAULT_ZINCBLENDE_MOTIF) {
@@ -605,7 +772,7 @@ pub fn is_cubic_diamond(
   let effective_params = motif.get_effective_parameter_element_values(parameter_element_values);
 
   // Check if both PRIMARY and SECONDARY are set to carbon (atomic number 6)
-  const CARBON_ATOMIC_NUMBER: i32 = 6;
+  const CARBON_ATOMIC_NUMBER: i16 = 6;
   let primary_is_carbon = effective_params.get("PRIMARY") == Some(&CARBON_ATOMIC_NUMBER);
   let secondary_is_carbon = effective_params.get("SECONDARY") == Some(&CARBON_ATOMIC_NUMBER);
 
@@ -624,13 +791,15 @@ pub fn is_cubic_diamond(
 /// * `_unit_cell` - The unit cell defining the lattice
 /// * `_parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
+/// * `hydrogen_passivation` - Whether to add hydrogen passivation to reconstructed dimers
 pub fn reconstruct_surface_100_diamond(
   structure: &mut AtomicStructure,
   atom_tracker: &PlacedAtomTracker,
   _motif: &Motif,
   _unit_cell: &UnitCellStruct,
-  _parameter_element_values: &HashMap<String, i32>,
-  single_bond_atoms_already_removed: bool
+  _parameter_element_values: &HashMap<String, i16>,
+  single_bond_atoms_already_removed: bool,
+  hydrogen_passivation: bool
 ) {
   // Remove single-bond atoms if they haven't been removed yet
   // This is necessary for proper surface reconstruction
@@ -648,7 +817,7 @@ pub fn reconstruct_surface_100_diamond(
     if let Some(&partner_orientation) = candidate_data.partner_orientations.get(&dimer_pair.partner_atom_id) {
       // Only reconstruct if both atoms have the same surface orientation
       if partner_orientation == dimer_pair.primary_orientation {
-        apply_dimer_reconstruction(structure, dimer_pair);
+        apply_dimer_reconstruction(structure, dimer_pair, hydrogen_passivation);
       }
     }
   }
@@ -666,13 +835,15 @@ pub fn reconstruct_surface_100_diamond(
 /// * `unit_cell` - The unit cell defining the lattice
 /// * `parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
+/// * `hydrogen_passivation` - Whether to add hydrogen passivation to reconstructed dimers
 pub fn reconstruct_surface(
   structure: &mut AtomicStructure,
   atom_tracker: &PlacedAtomTracker,
   motif: &Motif,
   unit_cell: &UnitCellStruct,
-  parameter_element_values: &HashMap<String, i32>,
-  single_bond_atoms_already_removed: bool
+  parameter_element_values: &HashMap<String, i16>,
+  single_bond_atoms_already_removed: bool,
+  hydrogen_passivation: bool
 ) {
   // Check if we're dealing with cubic diamond - if not, do nothing for now
   if !is_cubic_diamond(motif, unit_cell, parameter_element_values) {
@@ -680,5 +851,5 @@ pub fn reconstruct_surface(
   }
 
   // Perform (100) 2×1 dimer reconstruction for cubic diamond
-  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed);
+  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation);
 }

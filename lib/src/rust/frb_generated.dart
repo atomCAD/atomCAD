@@ -547,7 +547,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_i_32(atomicNumber, serializer);
+        sse_encode_i_16(atomicNumber, serializer);
         sse_encode_box_autoadd_api_vec_3(planeNormal, serializer);
         sse_encode_box_autoadd_api_vec_3(rayStart, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDir, serializer);
@@ -2893,7 +2893,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_i_32(atomicNumber, serializer);
+        sse_encode_i_16(atomicNumber, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89)!;
       },
       codec: SseCodec(
@@ -3399,7 +3399,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_i_32(atomicNumber, serializer);
+        sse_encode_i_16(atomicNumber, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 107)!;
       },
       codec: SseCodec(
@@ -3426,7 +3426,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_i_32(replacementAtomicNumber, serializer);
+        sse_encode_i_16(replacementAtomicNumber, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 108)!;
       },
       codec: SseCodec(
@@ -4649,8 +4649,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       canUndo: dco_decode_bool(arr[1]),
       canRedo: dco_decode_bool(arr[2]),
       bondToolLastAtomId: dco_decode_opt_box_autoadd_u_32(arr[3]),
-      replacementAtomicNumber: dco_decode_opt_box_autoadd_i_32(arr[4]),
-      addAtomToolAtomicNumber: dco_decode_opt_box_autoadd_i_32(arr[5]),
+      replacementAtomicNumber: dco_decode_opt_box_autoadd_i_16(arr[4]),
+      addAtomToolAtomicNumber: dco_decode_opt_box_autoadd_i_16(arr[5]),
       hasSelectedAtoms: dco_decode_bool(arr[6]),
       hasSelection: dco_decode_bool(arr[7]),
       selectionTransform: dco_decode_opt_box_autoadd_api_transform(arr[8]),
@@ -5416,6 +5416,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_box_autoadd_i_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   int dco_decode_box_autoadd_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -5459,7 +5465,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return ElementSummary(
-      atomicNumber: dco_decode_i_32(arr[0]),
+      atomicNumber: dco_decode_i_16(arr[0]),
       elementName: dco_decode_String(arr[1]),
     );
   }
@@ -5491,6 +5497,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       meshSmoothing: dco_decode_mesh_smoothing(arr[4]),
       displayCameraTarget: dco_decode_bool(arr[5]),
     );
+  }
+
+  @protected
+  int dco_decode_i_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -5896,6 +5908,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? dco_decode_opt_box_autoadd_i_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_i_16(raw);
+  }
+
+  @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_i_32(raw);
@@ -6175,9 +6193,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_canRedo = sse_decode_bool(deserializer);
     var var_bondToolLastAtomId = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_replacementAtomicNumber =
-        sse_decode_opt_box_autoadd_i_32(deserializer);
+        sse_decode_opt_box_autoadd_i_16(deserializer);
     var var_addAtomToolAtomicNumber =
-        sse_decode_opt_box_autoadd_i_32(deserializer);
+        sse_decode_opt_box_autoadd_i_16(deserializer);
     var var_hasSelectedAtoms = sse_decode_bool(deserializer);
     var var_hasSelection = sse_decode_bool(deserializer);
     var var_selectionTransform =
@@ -6907,6 +6925,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_box_autoadd_i_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_i_16(deserializer));
+  }
+
+  @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_32(deserializer));
@@ -6948,7 +6972,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   ElementSummary sse_decode_element_summary(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_atomicNumber = sse_decode_i_32(deserializer);
+    var var_atomicNumber = sse_decode_i_16(deserializer);
     var var_elementName = sse_decode_String(deserializer);
     return ElementSummary(
         atomicNumber: var_atomicNumber, elementName: var_elementName);
@@ -6987,6 +7011,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sharpnessAngleThresholdDegree: var_sharpnessAngleThresholdDegree,
         meshSmoothing: var_meshSmoothing,
         displayCameraTarget: var_displayCameraTarget);
+  }
+
+  @protected
+  int sse_decode_i_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt16();
   }
 
   @protected
@@ -7667,6 +7697,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? sse_decode_opt_box_autoadd_i_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_i_16(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -7956,8 +7997,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.canUndo, serializer);
     sse_encode_bool(self.canRedo, serializer);
     sse_encode_opt_box_autoadd_u_32(self.bondToolLastAtomId, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.replacementAtomicNumber, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.addAtomToolAtomicNumber, serializer);
+    sse_encode_opt_box_autoadd_i_16(self.replacementAtomicNumber, serializer);
+    sse_encode_opt_box_autoadd_i_16(self.addAtomToolAtomicNumber, serializer);
     sse_encode_bool(self.hasSelectedAtoms, serializer);
     sse_encode_bool(self.hasSelection, serializer);
     sse_encode_opt_box_autoadd_api_transform(
@@ -8595,6 +8636,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_i_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_16(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self, serializer);
@@ -8636,7 +8683,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_element_summary(
       ElementSummary self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.atomicNumber, serializer);
+    sse_encode_i_16(self.atomicNumber, serializer);
     sse_encode_String(self.elementName, serializer);
   }
 
@@ -8663,6 +8710,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.sharpnessAngleThresholdDegree, serializer);
     sse_encode_mesh_smoothing(self.meshSmoothing, serializer);
     sse_encode_bool(self.displayCameraTarget, serializer);
+  }
+
+  @protected
+  void sse_encode_i_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt16(self);
   }
 
   @protected
@@ -9257,6 +9310,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_16(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_i_16(self, serializer);
     }
   }
 

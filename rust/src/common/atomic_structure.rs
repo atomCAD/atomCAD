@@ -110,11 +110,49 @@ pub struct Bond {
 #[derive(Debug, Clone)]
 pub struct Atom {
   pub id: u32,
-  pub atomic_number: i32,
+  pub atomic_number: i16,
   pub position: DVec3,
   pub bond_ids: SmallVec<[u32; 4]>,
-  pub selected: bool,
+  pub flags: u16,  // Bit 0: selected, Bit 1: hydrogen passivation, other bits available for algorithms
   pub in_crystal_depth: f32,
+}
+
+// Bit flags for Atom.flags
+const ATOM_FLAG_SELECTED: u16 = 1 << 0;            // Bit 0: Atom is selected
+const ATOM_FLAG_HYDROGEN_PASSIVATION: u16 = 1 << 1; // Bit 1: Atom is hydrogen passivation
+
+impl Atom {
+  /// Returns whether this atom is selected
+  #[inline]
+  pub fn is_selected(&self) -> bool {
+    (self.flags & ATOM_FLAG_SELECTED) != 0
+  }
+  
+  /// Sets the selected state of this atom
+  #[inline]
+  pub fn set_selected(&mut self, selected: bool) {
+    if selected {
+      self.flags |= ATOM_FLAG_SELECTED;
+    } else {
+      self.flags &= !ATOM_FLAG_SELECTED;
+    }
+  }
+  
+  /// Returns whether this atom is a hydrogen passivation atom
+  #[inline]
+  pub fn is_hydrogen_passivation(&self) -> bool {
+    (self.flags & ATOM_FLAG_HYDROGEN_PASSIVATION) != 0
+  }
+  
+  /// Sets the hydrogen passivation flag for this atom
+  #[inline]
+  pub fn set_hydrogen_passivation(&mut self, is_passivation: bool) {
+    if is_passivation {
+      self.flags |= ATOM_FLAG_HYDROGEN_PASSIVATION;
+    } else {
+      self.flags &= !ATOM_FLAG_HYDROGEN_PASSIVATION;
+    }
+  }
 }
 
 
@@ -139,7 +177,7 @@ impl AtomicStructure {
 
   // Checks if there are any selected atoms in the structure
   pub fn has_selected_atoms(&self) -> bool {
-    self.atoms.values().any(|atom| atom.selected)
+    self.atoms.values().any(|atom| atom.is_selected())
   }
 
   // Checks if there is any selection (atoms or bonds) in the structure
@@ -261,19 +299,19 @@ impl AtomicStructure {
     id
   }
 
-  pub fn add_atom(&mut self, atomic_number: i32, position: DVec3) -> u32 {
+  pub fn add_atom(&mut self, atomic_number: i16, position: DVec3) -> u32 {
     let id = self.obtain_next_atom_id();
     self.add_atom_with_id(id, atomic_number, position);
     id
   }
 
-  pub fn add_atom_with_id(&mut self, id: u32, atomic_number: i32, position: DVec3) {
+  pub fn add_atom_with_id(&mut self, id: u32, atomic_number: i16, position: DVec3) {
     self.atoms.insert(id, Atom {
       id,
       atomic_number,
       position,
       bond_ids: SmallVec::new(),
-      selected: false,
+      flags: 0,  // All flags cleared (including selected)
       in_crystal_depth: 0.0,
     });
 
@@ -510,7 +548,7 @@ impl AtomicStructure {
     // If select_modifier is Replace, first unselect all the currently selected atoms and bonds
     if select_modifier == SelectModifier::Replace {
       for atom in self.atoms.values_mut() {
-        atom.selected = false;
+        atom.set_selected(false);
       }
       for bond in self.bonds.values_mut() {
         bond.selected = false;
@@ -519,7 +557,7 @@ impl AtomicStructure {
 
     for atom_id in atom_ids {
       if let Some(atom) = self.atoms.get_mut(atom_id) {
-        atom.selected = apply_select_modifier(atom.selected, &select_modifier);
+        atom.set_selected(apply_select_modifier(atom.is_selected(), &select_modifier));
       }
     }
     for bond_reference in bond_references {
@@ -532,7 +570,7 @@ impl AtomicStructure {
   pub fn select_by_maps(&mut self, atom_selections: &HashMap<u32, bool>, bond_selections: &HashMap<BondReference, bool>) {
     for (key, value) in atom_selections {
       if let Some(atom) = self.atoms.get_mut(key) {
-        atom.selected = *value;
+        atom.set_selected(*value);
       }
     }
     for (key, value) in bond_selections {
@@ -723,7 +761,7 @@ impl AtomicStructure {
   /// # Returns
   ///
   /// `true` if the atom was found and updated, `false` otherwise
-  pub fn replace_atom(&mut self, atom_id: u32, atomic_number: i32) -> bool {
+  pub fn replace_atom(&mut self, atom_id: u32, atomic_number: i16) -> bool {
     if let Some(atom) = self.atoms.get_mut(&atom_id) {
       atom.atomic_number = atomic_number;
       true
@@ -832,7 +870,7 @@ impl AtomicStructure {
       
       // Copy selected state
       if let Some(new_atom) = self.atoms.get_mut(&new_atom_id) {
-        new_atom.selected = atom.selected;
+        new_atom.set_selected(atom.is_selected());
       }
     }
     

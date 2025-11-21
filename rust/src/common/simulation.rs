@@ -162,7 +162,7 @@ fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>,
         if let Some(atom) = structure.get_atom(atom_id) {
             atom_id_to_index.insert(atom_id, index);
             atoms_data.push(AtomData {
-                atomic_number: atom.atomic_number,
+                atomic_number: atom.atomic_number as i32,
                 position: [atom.position.x, atom.position.y, atom.position.z],
                 formal_charge: 0, // Default to 0, could be enhanced later
             });

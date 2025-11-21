@@ -10,7 +10,7 @@ pub enum XyzSaveError {
     Io(#[from] io::Error),
     
     #[error("Element not found for atomic number: {0}")]
-    ElementNotFound(i32),
+    ElementNotFound(i16),
 }
 
 /// Saves an AtomicStructure to an XYZ file
@@ -40,7 +40,7 @@ pub fn save_xyz(atomic_structure: &AtomicStructure, file_path: &str) -> Result<(
     for (_, atom) in &atomic_structure.atoms {
         // Get element symbol from atomic number
         let atom_info = ATOM_INFO
-            .get(&atom.atomic_number)
+            .get(&(atom.atomic_number as i32))
             .ok_or_else(|| XyzSaveError::ElementNotFound(atom.atomic_number))?;
         
         // Write element and position

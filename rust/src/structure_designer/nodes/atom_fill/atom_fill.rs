@@ -42,7 +42,7 @@ struct PendingAtomData {
     /// The 3D position where SDF will be evaluated
     position: DVec3,
     /// Effective atomic number for this site
-    atomic_number: i32,
+    atomic_number: i16,
     /// Motif position in lattice coordinates
     motif_pos: IVec3,
     /// Site index within the motif
@@ -128,7 +128,7 @@ pub struct AtomFillData {
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
-  pub parameter_element_values: HashMap<String, i32>,
+  pub parameter_element_values: HashMap<String, i16>,
 }
 
 impl AtomFillData {
@@ -310,7 +310,8 @@ impl NodeData for AtomFillData {
             &motif, 
             &mesh.unit_cell, 
             &self.parameter_element_values,
-            self.remove_single_bond_atoms_before_passivation
+            self.remove_single_bond_atoms_before_passivation,
+            self.hydrogen_passivation
           );
         }
         
@@ -352,7 +353,7 @@ impl AtomFillData {
     box_to_fill: &DAABox,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>,
+    parameter_element_values: &HashMap<String, i16>,
     atom_tracker: &mut PlacedAtomTracker,
     processed_cells: &mut HashSet<IVec3>,
     batched_evaluator: &mut BatchedImplicitEvaluator,
@@ -437,7 +438,7 @@ impl AtomFillData {
     box_to_fill: &DAABox,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>,
+    parameter_element_values: &HashMap<String, i16>,
     atom_tracker: &mut PlacedAtomTracker,
     processed_cells: &mut HashSet<IVec3>,
     batched_evaluator: &mut BatchedImplicitEvaluator,
@@ -504,7 +505,7 @@ impl AtomFillData {
     _cell_real_pos: &DVec3,
     _atomic_structure: &mut AtomicStructure,
     _statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>,
+    parameter_element_values: &HashMap<String, i16>,
     _atom_tracker: &mut PlacedAtomTracker,
     batched_evaluator: &mut BatchedImplicitEvaluator,
     pending_atoms: &mut Vec<PendingAtomData>
@@ -613,6 +614,14 @@ impl AtomFillData {
         continue; // Early exit - atom was removed, skip it
       }
       
+      // Check if this atom is already hydrogen passivated (e.g., by surface reconstruction)
+      // If so, skip all dangling bond processing for this atom
+      if let Some(atom) = atomic_structure.get_atom(atom_id) {
+        if atom.is_hydrogen_passivation() {
+          continue; // Skip - atom already passivated by surface reconstruction
+        }
+      }
+      
       // Case 1: Check bonds where this atom is the first site (optimized with precomputed index)
       // Use precomputed bonds_by_site1_index to only check bonds that start from this site
       for &bond_index in &motif.bonds_by_site1_index[site_index] {
@@ -675,6 +684,12 @@ impl AtomFillData {
           );
         }
       }
+      
+      // After processing all dangling bonds for this atom, flag it as passivated
+      // This prevents the general passivation from running again on this atom
+      if let Some(atom) = atomic_structure.atoms.get_mut(&atom_id) {
+        atom.set_hydrogen_passivation(true);
+      }
     }
   }
 
@@ -711,7 +726,7 @@ impl AtomFillData {
         C_H_BOND_LENGTH
       } else {
         // General case: sum of covalent radii
-        let atom_1_radius = ATOM_INFO.get(&found_atom.atomic_number)
+        let atom_1_radius = ATOM_INFO.get(&(found_atom.atomic_number as i32))
           .map(|info| info.covalent_radius)
           .unwrap_or(0.7); // Default radius if not found
         let hydrogen_radius = ATOM_INFO.get(&1)

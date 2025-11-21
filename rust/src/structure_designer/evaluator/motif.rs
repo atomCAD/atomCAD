@@ -5,13 +5,13 @@ use glam::i32::IVec3;
 #[derive(Debug, Clone)]
 pub struct ParameterElement {
   pub name: String,
-  pub default_atomic_number: i32,
+  pub default_atomic_number: i16,
 }
 
 #[derive(Debug, Clone)]
 pub struct Site {
   // negative numbers are parameter elements (first is represented by -1)
-  pub atomic_number: i32,
+  pub atomic_number: i16,
   // Fractional lattice coordinates
   pub position: DVec3,
 }
@@ -47,8 +47,8 @@ impl Motif {
   /// for any parameter elements that are not specified in the input map.
   pub fn get_effective_parameter_element_values(
     &self,
-    parameter_element_values: &HashMap<String, i32>
-  ) -> HashMap<String, i32> {
+    parameter_element_values: &HashMap<String, i16>
+  ) -> HashMap<String, i16> {
     let mut effective_values = HashMap::new();
     
     // Iterate through all parameter elements defined in the motif

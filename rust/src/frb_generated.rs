@@ -66,7 +66,7 @@ fn wire__crate__api__structure_designer__edit_atom_api__add_atom_by_ray_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_atomic_number = <i32>::sse_decode(&mut deserializer);
+            let api_atomic_number = <i16>::sse_decode(&mut deserializer);
             let api_plane_normal =
                 <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
             let api_ray_start =
@@ -2895,7 +2895,7 @@ fn wire__crate__api__structure_designer__edit_atom_api__replace_selected_atoms_i
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_atomic_number = <i32>::sse_decode(&mut deserializer);
+            let api_atomic_number = <i16>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
@@ -3381,7 +3381,7 @@ fn wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_add_atom_d
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_atomic_number = <i32>::sse_decode(&mut deserializer);
+            let api_atomic_number = <i16>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
@@ -3415,7 +3415,7 @@ fn wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_default_da
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_replacement_atomic_number = <i32>::sse_decode(&mut deserializer);
+            let api_replacement_atomic_number = <i16>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
@@ -4334,8 +4334,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_canUndo = <bool>::sse_decode(deserializer);
         let mut var_canRedo = <bool>::sse_decode(deserializer);
         let mut var_bondToolLastAtomId = <Option<u32>>::sse_decode(deserializer);
-        let mut var_replacementAtomicNumber = <Option<i32>>::sse_decode(deserializer);
-        let mut var_addAtomToolAtomicNumber = <Option<i32>>::sse_decode(deserializer);
+        let mut var_replacementAtomicNumber = <Option<i16>>::sse_decode(deserializer);
+        let mut var_addAtomToolAtomicNumber = <Option<i16>>::sse_decode(deserializer);
         let mut var_hasSelectedAtoms = <bool>::sse_decode(deserializer);
         let mut var_hasSelection = <bool>::sse_decode(deserializer);
         let mut var_selectionTransform =
@@ -4920,7 +4920,7 @@ impl SseDecode for bool {
 impl SseDecode for crate::api::common_api_types::ElementSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_atomicNumber = <i32>::sse_decode(deserializer);
+        let mut var_atomicNumber = <i16>::sse_decode(deserializer);
         let mut var_elementName = <String>::sse_decode(deserializer);
         return crate::api::common_api_types::ElementSummary {
             atomic_number: var_atomicNumber,
@@ -4961,6 +4961,13 @@ let mut var_meshSmoothing = <crate::api::structure_designer::structure_designer_
 let mut var_displayCameraTarget = <bool>::sse_decode(deserializer);
 return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing, display_camera_target: var_displayCameraTarget};}
                 }
+
+impl SseDecode for i16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i16::<NativeEndian>().unwrap()
+    }
+}
 
 impl SseDecode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -5714,6 +5721,17 @@ impl SseDecode for Option<f64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<f64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<i16> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<i16>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -7910,8 +7928,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.can_undo, serializer);
         <bool>::sse_encode(self.can_redo, serializer);
         <Option<u32>>::sse_encode(self.bond_tool_last_atom_id, serializer);
-        <Option<i32>>::sse_encode(self.replacement_atomic_number, serializer);
-        <Option<i32>>::sse_encode(self.add_atom_tool_atomic_number, serializer);
+        <Option<i16>>::sse_encode(self.replacement_atomic_number, serializer);
+        <Option<i16>>::sse_encode(self.add_atom_tool_atomic_number, serializer);
         <bool>::sse_encode(self.has_selected_atoms, serializer);
         <bool>::sse_encode(self.has_selection, serializer);
         <Option<crate::api::common_api_types::APITransform>>::sse_encode(
@@ -8312,7 +8330,7 @@ impl SseEncode for bool {
 impl SseEncode for crate::api::common_api_types::ElementSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.atomic_number, serializer);
+        <i16>::sse_encode(self.atomic_number, serializer);
         <String>::sse_encode(self.element_name, serializer);
     }
 }
@@ -8345,6 +8363,13 @@ impl SseEncode for crate::api::structure_designer::structure_designer_preference
 <crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_encode(self.mesh_smoothing, serializer);
 <bool>::sse_encode(self.display_camera_target, serializer);}
                 }
+
+impl SseEncode for i16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i16::<NativeEndian>(self).unwrap();
+    }
+}
 
 impl SseEncode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9019,6 +9044,16 @@ impl SseEncode for Option<f64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <f64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<i16> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <i16>::sse_encode(value, serializer);
         }
     }
 }

@@ -24,12 +24,12 @@ use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug)]
 pub struct DefaultToolState {
-  pub replacement_atomic_number: i32,
+  pub replacement_atomic_number: i16,
 }
 
 #[derive(Debug)]
 pub struct AddAtomToolState {
-  pub atomic_number: i32,
+  pub atomic_number: i16,
 }
 
 #[derive(Debug)]
@@ -146,7 +146,7 @@ impl EditAtomData {
         }
     }
     
-    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i32) -> bool {
+    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i16) -> bool {
         match &mut self.active_tool {
             EditAtomTool::Default(state) => {
                 state.replacement_atomic_number = replacement_atomic_number;
@@ -156,7 +156,7 @@ impl EditAtomData {
         }
     }
     
-    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i32) -> bool {
+    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i16) -> bool {
         match &mut self.active_tool {
             EditAtomTool::AddAtom(state) => {
                 state.atomic_number = atomic_number;
@@ -275,7 +275,7 @@ pub fn delete_selected_atoms_and_bonds(structure_designer: &mut StructureDesigne
   edit_atom_data.add_command(delete_command);
 }
 
-pub fn add_atom_by_ray(structure_designer: &mut StructureDesigner, atomic_number: i32, plane_normal: &DVec3, ray_start: &DVec3, ray_dir: &DVec3) {
+pub fn add_atom_by_ray(structure_designer: &mut StructureDesigner, atomic_number: i16, plane_normal: &DVec3, ray_start: &DVec3, ray_dir: &DVec3) {
   // Get the atomic structure from the selected node
   let atomic_structure = match structure_designer.get_atomic_structure_from_selected_node() {
     Some(structure) => structure,
@@ -368,7 +368,7 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
 }  
 
 // Replaces all selected atoms with the specified atomic number
-pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic_number: i32) {
+pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic_number: i16) {
   let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
@@ -479,7 +479,7 @@ pub fn get_selected_edit_atom_data_mut(structure_designer: &mut StructureDesigne
   node_data.as_any_mut().downcast_mut::<EditAtomData>()
 }
 
-fn add_atom(structure_designer: &mut StructureDesigner, atomic_number: i32, position: DVec3) {
+fn add_atom(structure_designer: &mut StructureDesigner, atomic_number: i16, position: DVec3) {
   let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,

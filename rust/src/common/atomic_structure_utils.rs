@@ -18,7 +18,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
     let mut max_atom_radius = 0.0;
     for &atom_id in &atom_ids {
         if let Some(atom) = structure.get_atom(atom_id) {
-            let atom_radius = ATOM_INFO.get(&atom.atomic_number)
+            let atom_radius = ATOM_INFO.get(&(atom.atomic_number as i32))
                 .unwrap_or(&DEFAULT_ATOM_INFO)
                 .covalent_radius;
             
@@ -31,7 +31,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
     for &atom_id in &atom_ids {
         if let Some(atom) = structure.get_atom(atom_id) {
             let atom_pos = atom.position;
-            let atom_radius = ATOM_INFO.get(&atom.atomic_number)
+            let atom_radius = ATOM_INFO.get(&(atom.atomic_number as i32))
                 .unwrap_or(&DEFAULT_ATOM_INFO)
                 .covalent_radius;
             
@@ -63,7 +63,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
                 
                 // Process the nearby atom
                 if let Some(nearby_atom) = structure.get_atom(nearby_atom_id) {
-                    let nearby_atom_radius = ATOM_INFO.get(&nearby_atom.atomic_number)
+                    let nearby_atom_radius = ATOM_INFO.get(&(nearby_atom.atomic_number as i32))
                         .unwrap_or(&DEFAULT_ATOM_INFO)
                         .covalent_radius;
                     
@@ -102,7 +102,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
 pub fn calc_selection_transform(structure: &AtomicStructure) -> Option<Transform> {
     // Get selected atom IDs
     let selected_atom_ids: Vec<u32> = structure.atoms.iter()
-        .filter(|(_, atom)| atom.selected)
+        .filter(|(_, atom)| atom.is_selected())
         .map(|(id, _)| *id)
         .collect();
 

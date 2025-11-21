@@ -93,15 +93,25 @@ Once both dimer atoms are identified, reconstruction proceeds independently for 
 
 **Geometric reconstruction:**
 
-
 1. **Create dimer bond**: Form a C-C bond between the two surface atoms
-2. **Symmetric displacement**: Move both atoms symmetrically toward each other to achieve the characteristic dimer bond length (\~1.4 Å, shorter than bulk C-C bonds) *(some downward movement too?)*
+2. **Symmetric displacement**: Move both atoms symmetrically toward each other to achieve the characteristic dimer bond length
+
+   
+   1. \~1.42 Å, (compared to 2.52 Å for bulk C-C bonds) in case of no passivation.
+   2. \~1.6 Å in case of H passivation
+3. Vertical down-movement:
+
+   
+   1. distance to second layer becomes 0.686 Å in case of no passivation (original distance: 0.891 Å downward delta: 0.205 Å)
+   2. distance to second layer becomes 0.815 Å in case of H passivation (original distance: 0.891 Å downward delta: 0.076 Å)
 
 **Hydrogen termination** (if passivation enabled):
 
 For each atom in a reconstructed dimer, place hydrogen at a predetermined position based on the surface orientation. These atoms are flagged as **passivated** so the generic passivation algorithm in step 5 skips them.
 
 This approach ensures dimer atoms receive proper sp²-like hydrogen termination appropriate for the reconstructed geometry, rather than sp³ termination for bulk-like dangling bonds.
+
+The predetermined position of the Hydrogen is so that the C-H bond length is 1.09 Å, and the angle from the surface normal is 24 degree in the direction **away** from  the bonded pair.
 
  ![](/api/attachments.redirect?id=56a6426d-5678-4aca-bf06-d805e0217cec)
 
