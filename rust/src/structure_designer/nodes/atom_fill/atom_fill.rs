@@ -64,6 +64,7 @@ pub struct AtomFillStatistics {
   pub max_depth: f64,
   pub non_batched_evaluations: i32,
   pub batched_evaluations: i32,
+  pub surface_reconstructions: i32,
 }
 
 impl AtomFillStatistics {
@@ -79,6 +80,7 @@ impl AtomFillStatistics {
       max_depth: f64::NEG_INFINITY,
       non_batched_evaluations: 0,
       batched_evaluations: 0,
+      surface_reconstructions: 0,
     }
   }
 
@@ -107,6 +109,9 @@ impl AtomFillStatistics {
     println!("  motif cells processed: {}", self.motif_cells_processed);
     println!("  atoms added: {}", self.atoms);
     println!("  bonds created: {}", self.bonds);
+    if self.surface_reconstructions > 0 {
+      println!("  surface reconstructions: {}", self.surface_reconstructions);
+    }
     println!("  evaluations: {} non-batched, {} batched", self.non_batched_evaluations, self.batched_evaluations);
     if self.atoms > 0 {
       println!("  average depth: {:.3} Å", self.get_average_depth());
@@ -304,7 +309,8 @@ impl NodeData for AtomFillData {
         
         // Apply surface reconstruction if enabled (before hydrogen passivation)
         if self.surface_reconstruction {
-          reconstruct_surface(
+          let _reconstruction_timer = Timer::new("AtomFill surface reconstruction");
+          let reconstruction_count = reconstruct_surface(
             &mut atomic_structure,
             &atom_tracker,
             &motif, 
@@ -313,6 +319,7 @@ impl NodeData for AtomFillData {
             self.remove_single_bond_atoms_before_passivation,
             self.hydrogen_passivation
           );
+          statistics.surface_reconstructions = reconstruction_count as i32;
         }
         
         // Apply hydrogen passivation after bonds are created and lone atoms removed

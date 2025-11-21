@@ -851,6 +851,9 @@ pub fn is_cubic_diamond(
 /// * `_parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
 /// * `hydrogen_passivation` - Whether to add hydrogen passivation to reconstructed dimers
+/// 
+/// # Returns
+/// * The number of dimers reconstructed
 pub fn reconstruct_surface_100_diamond(
   structure: &mut AtomicStructure,
   atom_tracker: &PlacedAtomTracker,
@@ -859,7 +862,7 @@ pub fn reconstruct_surface_100_diamond(
   _parameter_element_values: &HashMap<String, i16>,
   single_bond_atoms_already_removed: bool,
   hydrogen_passivation: bool
-) {
+) -> usize {
   // Remove single-bond atoms if they haven't been removed yet
   // This is necessary for proper surface reconstruction
   if !single_bond_atoms_already_removed {
@@ -867,19 +870,23 @@ pub fn reconstruct_surface_100_diamond(
   }
   
   // Step 1: Process atoms - classify orientations and identify dimer candidates
-  // Debug visualization is applied during processing if DEBUG_SURFACE_ORIENTATION is true
+  // Debug visualization is applied during processing if SURFACE_RECONSTRUCTION_VISUAL_DEBUG is true
   let candidate_data = process_atoms(structure, atom_tracker);
 
   // Step 2: Process dimer candidates - validate and apply reconstruction
+  let mut dimer_count = 0;
   for dimer_pair in &candidate_data.dimer_pairs {
     // Validate: check that the partner has the same orientation as the primary
     if let Some(&partner_orientation) = candidate_data.partner_orientations.get(&dimer_pair.partner_atom_id) {
       // Only reconstruct if both atoms have the same surface orientation
       if partner_orientation == dimer_pair.primary_orientation {
         apply_dimer_reconstruction(structure, dimer_pair, hydrogen_passivation);
+        dimer_count += 1;
       }
     }
   }
+  
+  dimer_count
 }
 
 /// Performs surface reconstruction on the atomic structure.
@@ -895,6 +902,9 @@ pub fn reconstruct_surface_100_diamond(
 /// * `parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
 /// * `hydrogen_passivation` - Whether to add hydrogen passivation to reconstructed dimers
+/// 
+/// # Returns
+/// * The number of surface reconstructions performed (e.g., number of dimers for (100) reconstruction)
 pub fn reconstruct_surface(
   structure: &mut AtomicStructure,
   atom_tracker: &PlacedAtomTracker,
@@ -903,12 +913,12 @@ pub fn reconstruct_surface(
   parameter_element_values: &HashMap<String, i16>,
   single_bond_atoms_already_removed: bool,
   hydrogen_passivation: bool
-) {
+) -> usize {
   // Check if we're dealing with cubic diamond - if not, do nothing for now
   if !is_cubic_diamond(motif, unit_cell, parameter_element_values) {
-    return;
+    return 0;
   }
 
   // Perform (100) 2×1 dimer reconstruction for cubic diamond
-  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation);
+  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation)
 }
