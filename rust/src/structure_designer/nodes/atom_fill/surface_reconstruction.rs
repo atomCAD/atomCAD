@@ -433,15 +433,15 @@ fn is_primary_dimer_atom(
   let c2 = address.motif_space_pos[in_plane_idx_2];
   
   // Calculate parity based on the precomputed formula choice
-  // Special case for -Z surface (surf_idx = 5): use truth table lookup
-  // Truth table ensures proper dimer partner opposition based on actual DIMER_PARTNER_OFFSETS
-  let parity = if surf_idx == 5 {
-    // Truth table: [c1%2][c2%2][in_surface_idx]
-    // Ensures: FACE_Z(c1,c2) and CORNER(c1+1,c2) have opposite parities (dimer partners)
-    //          CORNER(c1,c2) and FACE_Z(c1,c2-1) have opposite parities (dimer partners)
-    const Z_NEG_TABLE: [[[bool; 2]; 2]; 2] = [
+  // Special cases for negative surfaces: use truth table lookups
+  // Truth tables ensure proper dimer partner opposition based on actual DIMER_PARTNER_OFFSETS
+  let parity = if surf_idx == 1 {
+    // -X surface: IN_PLANE_AXES = (Y, Z), primary sites are CORNER(0) and FACE_X(3)
+    // Ensures: CORNER(c1,c2) and FACE_X(c1,c2-1) have opposite parities
+    //          FACE_X(c1,c2) and CORNER(c1+1,c2) have opposite parities
+    const X_NEG_TABLE: [[[bool; 2]; 2]; 2] = [
       [ // c1%2 = 0
-        [false, false], // c2%2 = 0
+        [false, false], // c2%2 = 0: [CORNER, FACE_X]
         [true , true ],  // c2%2 = 1
       ],
       [ // c1%2 = 1
@@ -449,7 +449,51 @@ fn is_primary_dimer_atom(
         [false, false], // c2%2 = 1
       ],
     ];
-    let c1_mod = ((c1 % 2 + 2) % 2) as usize; // Handle negative modulo
+    let c1_mod = ((c1 % 2 + 2) % 2) as usize;
+    let c2_mod = ((c2 % 2 + 2) % 2) as usize;
+    let site_idx = if address.site_index == 3 { 1 } else { 0 }; // FACE_X=1, CORNER=0
+    if X_NEG_TABLE[c1_mod][c2_mod][site_idx] {
+      0 // primary
+    } else {
+      1 // secondary
+    }
+  } else if surf_idx == 3 {
+    // -Y surface: IN_PLANE_AXES = (X, Z), primary sites are CORNER(0) and FACE_Y(2)
+    // Ensures: CORNER(c1,c2) and FACE_Y(c1,c2-1) have opposite parities
+    //          FACE_Y(c1,c2) and CORNER(c1+1,c2) have opposite parities
+    const Y_NEG_TABLE: [[[bool; 2]; 2]; 2] = [
+      [ // c1%2 = 0
+        [false, false], // c2%2 = 0: [CORNER, FACE_Y]
+        [true , true ],  // c2%2 = 1
+      ],
+      [ // c1%2 = 1
+        [true , true ],  // c2%2 = 0
+        [false, false], // c2%2 = 1
+      ],
+    ];
+    let c1_mod = ((c1 % 2 + 2) % 2) as usize;
+    let c2_mod = ((c2 % 2 + 2) % 2) as usize;
+    let site_idx = if address.site_index == 2 { 1 } else { 0 }; // FACE_Y=1, CORNER=0
+    if Y_NEG_TABLE[c1_mod][c2_mod][site_idx] {
+      0 // primary
+    } else {
+      1 // secondary
+    }
+  } else if surf_idx == 5 {
+    // -Z surface: IN_PLANE_AXES = (X, Y), primary sites are CORNER(0) and FACE_Z(1)
+    // Ensures: FACE_Z(c1,c2) and CORNER(c1+1,c2) have opposite parities
+    //          CORNER(c1,c2) and FACE_Z(c1,c2-1) have opposite parities
+    const Z_NEG_TABLE: [[[bool; 2]; 2]; 2] = [
+      [ // c1%2 = 0
+        [false, false], // c2%2 = 0: [CORNER, FACE_Z]
+        [true , true ],  // c2%2 = 1
+      ],
+      [ // c1%2 = 1
+        [true , true ],  // c2%2 = 0
+        [false, false], // c2%2 = 1
+      ],
+    ];
+    let c1_mod = ((c1 % 2 + 2) % 2) as usize;
     let c2_mod = ((c2 % 2 + 2) % 2) as usize;
     if Z_NEG_TABLE[c1_mod][c2_mod][in_surface_idx as usize] {
       0 // primary
@@ -468,16 +512,7 @@ fn is_primary_dimer_atom(
   let final_parity = parity ^ (phase_flip as usize);
   
   // Primary atoms have parity 0
-  let result = final_parity == 0;
-  
-  // Debug output for -Z surface
-  if surf_idx == 5 {
-    println!("DEBUG -Z: pos=({},{},{}), site={}, c1={}, c2={}, in_idx={}, parity={}, flip={}, final={}, primary={}",
-      address.motif_space_pos[0], address.motif_space_pos[1], address.motif_space_pos[2],
-      address.site_index, c1, c2, in_surface_idx, parity, phase_flip, final_parity, result);
-  }
-  
-  result
+  final_parity == 0
 }
 
 /// Computes the crystallographic address of the dimer partner for a primary atom.
@@ -574,13 +609,6 @@ fn process_atoms(
     if is_primary_dimer_atom(&address, orientation) {
       // Get the dimer partner crystallographic address
       if let Some(partner_address) = get_dimer_partner(&address, orientation) {
-        // Debug output for -Z surface
-        if orientation == SurfaceOrientation::SurfaceNeg001 {
-          println!("DEBUG -Z: Found partner for primary atom {} at ({},{},{}), partner at ({},{},{})",
-            atom_id, address.motif_space_pos[0], address.motif_space_pos[1], address.motif_space_pos[2],
-            partner_address.motif_space_pos[0], partner_address.motif_space_pos[1], partner_address.motif_space_pos[2]);
-        }
-        
         // Look up the partner atom ID
         if let Some(partner_atom_id) = atom_tracker.get_atom_id_by_address(&partner_address) {
           // Add to dimer candidates (partner orientation not validated yet)
@@ -589,17 +617,7 @@ fn process_atoms(
             partner_atom_id,
             primary_orientation: orientation,
           });
-          
-          // Debug output for -Z surface
-          if orientation == SurfaceOrientation::SurfaceNeg001 {
-            println!("DEBUG -Z: Created dimer pair: primary={}, partner={}", atom_id, partner_atom_id);
-          }
-        } else if orientation == SurfaceOrientation::SurfaceNeg001 {
-          println!("DEBUG -Z: Partner atom not found in tracker for primary atom {}", atom_id);
         }
-      } else if orientation == SurfaceOrientation::SurfaceNeg001 {
-        println!("DEBUG -Z: get_dimer_partner returned None for primary atom {} at ({},{},{})",
-          atom_id, address.motif_space_pos[0], address.motif_space_pos[1], address.motif_space_pos[2]);
       }
     } else {
       partner_orientations.insert(atom_id, orientation);
@@ -862,34 +880,12 @@ pub fn reconstruct_surface_100_diamond(
 
   // Step 2: Process dimer candidates - validate and apply reconstruction
   for dimer_pair in &candidate_data.dimer_pairs {
-    // Debug output for -Z surface before getting partner orientation
-    if dimer_pair.primary_orientation == SurfaceOrientation::SurfaceNeg001 {
-      println!("DEBUG -Z: Processing dimer pair: primary={}, partner={}, primary_orientation={:?}", 
-        dimer_pair.primary_atom_id, dimer_pair.partner_atom_id, dimer_pair.primary_orientation);
-    }
-    
     // Validate: check that the partner has the same orientation as the primary
     if let Some(&partner_orientation) = candidate_data.partner_orientations.get(&dimer_pair.partner_atom_id) {
-      // Debug output for -Z surface after getting partner orientation
-      if dimer_pair.primary_orientation == SurfaceOrientation::SurfaceNeg001 {
-        println!("DEBUG -Z: Partner orientation found: partner_orientation={:?}", partner_orientation);
-      }
-      
       // Only reconstruct if both atoms have the same surface orientation
       if partner_orientation == dimer_pair.primary_orientation {
-        // Debug output for -Z surface
-        if dimer_pair.primary_orientation == SurfaceOrientation::SurfaceNeg001 {
-          println!("DEBUG -Z: Orientations match! Applying dimer reconstruction for pair: primary={}, partner={}", 
-            dimer_pair.primary_atom_id, dimer_pair.partner_atom_id);
-        }
-        
         apply_dimer_reconstruction(structure, dimer_pair, hydrogen_passivation);
-      } else if dimer_pair.primary_orientation == SurfaceOrientation::SurfaceNeg001 {
-        println!("DEBUG -Z: Orientations DON'T match! primary={:?}, partner={:?}", 
-          dimer_pair.primary_orientation, partner_orientation);
       }
-    } else if dimer_pair.primary_orientation == SurfaceOrientation::SurfaceNeg001 {
-      println!("DEBUG -Z: Partner orientation NOT found for partner_atom_id={}", dimer_pair.partner_atom_id);
     }
   }
 }
