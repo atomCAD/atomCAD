@@ -42,10 +42,11 @@ const BULK_DEPTH_THRESHOLD: f32 = 0.5;
 /// Components below this threshold are considered insignificant.
 const AXIS_ALIGNMENT_THRESHOLD: f64 = 0.5;
 
-/// Debug flag: when true, replaces atoms with colored elements based on surface orientation.
-/// This allows visual inspection of the classification in the 3D viewer.
+/// Visual debug flag: when true, enables visual debugging features:
+/// - Replaces atoms with colored elements based on surface orientation
+/// - Highlights reconstructed dimer bonds by selecting them
 /// Set to false for normal reconstruction operation.
-const DEBUG_SURFACE_ORIENTATION: bool = true;
+const SURFACE_RECONSTRUCTION_VISUAL_DEBUG: bool = false;
 
 // ============================================================================
 // Diamond (100) 2×1 Dimer Reconstruction Geometric Constants
@@ -329,23 +330,23 @@ const DIMER_PARTNER_OFFSETS: [[CrystallographicAddress; 6]; 8] = [
   ],
 ];
 
-/// Precomputed parity data for all (surface_orientation, site_index) combinations.
-/// Each entry: (use_sum_formula: bool, in_surface_idx: u8, depth_index: u8)
-/// Indexed as: PARITY_DATA[surface_orientation_idx][site_index]
+/// Site layer mapping: maps (surface_orientation, site_index) to (in_surface_idx, depth_index)
+/// This tells us which layer a site belongs to and its index within that layer.
+/// Indexed as: SITE_LAYER_MAP[surface_orientation_idx][site_index]
 /// Surface order: [+X, -X, +Y, -Y, +Z, -Z]
-const PARITY_DATA: [[(bool, u8, u8); 8]; 6] = [
+const SITE_LAYER_MAP: [[(u8, u8); 8]; 6] = [
   // +X
-  [(true , 0, 0), (false, 0, 2), (false, 1, 2), (true , 1, 0), (false, 0, 1), (false, 1, 1), (true , 0, 3), (true , 1, 3)],
+  [(0, 0), (0, 2), (1, 2), (1, 0), (0, 1), (1, 1), (0, 3), (1, 3)],
   // -X
-  [(false, 0, 0), (true , 0, 2), (true , 1, 2), (false, 1, 0), (true , 0, 1), (true , 1, 1), (false, 0, 3), (false, 1, 3)],
+  [(0, 0), (0, 2), (1, 2), (1, 0), (0, 1), (1, 1), (0, 3), (1, 3)],
   // +Y
-  [(true , 0, 0), (false, 0, 2), (true , 1, 0), (false, 1, 2), (false, 0, 1), (true , 0, 3), (false, 1, 1), (true , 1, 3)],
+  [(0, 0), (0, 2), (1, 0), (1, 2), (0, 1), (0, 3), (1, 1), (1, 3)],
   // -Y
-  [(false, 0, 0), (true , 0, 2), (false, 1, 0), (true , 1, 2), (true , 0, 1), (false, 0, 3), (true , 1, 1), (false, 1, 3)],
+  [(0, 0), (0, 2), (1, 0), (1, 2), (0, 1), (0, 3), (1, 1), (1, 3)],
   // +Z
-  [(true , 0, 0), (true , 1, 0), (false, 0, 2), (false, 1, 2), (false, 0, 1), (true , 0, 3), (true , 1, 3), (false, 1, 1)],
+  [(0, 0), (1, 0), (0, 2), (1, 2), (0, 1), (0, 3), (1, 3), (1, 1)],
   // -Z
-  [(false, 0, 0), (false, 1, 0), (true , 0, 2), (true , 1, 2), (true , 0, 1), (false, 0, 3), (false, 1, 3), (true , 1, 1)],
+  [(0, 0), (1, 0), (0, 2), (1, 2), (0, 1), (0, 3), (1, 3), (1, 1)],
 ];
 
 /// Per-layer phase control: 24 booleans (6 surfaces × 4 depths).
@@ -361,6 +362,63 @@ const PHASE_FLIP: [bool; 24] = [
   false, false, false, false, // -Y: depths 0.00, 0.25, 0.50, 0.75
   false, false, false, false, // +Z: depths 0.00, 0.25, 0.50, 0.75
   false, false, false, false, // -Z: depths 0.00, 0.25, 0.50, 0.75
+];
+
+/// Ultimate truth tables for ALL surfaces and ALL depth layers.
+/// Indexed as: TRUTH_TABLES[surf_idx * 4 + depth_idx][c1%2][c2%2][in_surface_idx]
+/// Guarantees that all dimer partners have opposite parities, including:
+/// - Different lattice position partners (e.g., CORNER ↔ FACE_X/Y/Z)
+/// - Same lattice position partners (e.g., INTERIOR1 ↔ INTERIOR4)
+/// - All fractional surface cuts through any layer
+const TRUTH_TABLES: [[[[bool; 2]; 2]; 2]; 24] = [
+  // +X Layer 0 (index 0) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // +X Layer 1 (index 1) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +X Layer 2 (index 2) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +X Layer 3 (index 3) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -X Layer 0 (index 4) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // -X Layer 1 (index 5) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -X Layer 2 (index 6) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -X Layer 3 (index 7) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +Y Layer 0 (index 8) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // +Y Layer 1 (index 9) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +Y Layer 2 (index 10) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +Y Layer 3 (index 11) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -Y Layer 0 (index 12) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // -Y Layer 1 (index 13) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -Y Layer 2 (index 14) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -Y Layer 3 (index 15) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +Z Layer 0 (index 16) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // +Z Layer 1 (index 17) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +Z Layer 2 (index 18) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // +Z Layer 3 (index 19) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -Z Layer 0 (index 20) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
+  // -Z Layer 1 (index 21) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -Z Layer 2 (index 22) - CHECKERBOARD
+  [[[true , false], [false, true ]], [[false, true ], [true , false]]],
+  // -Z Layer 3 (index 23) - CHECKERBOARD
+  [[[false, false], [true , true ]], [[true , true ], [false, false]]],
 ];
 
 /// Precomputed in-plane axis indices for each surface orientation.
@@ -391,17 +449,18 @@ fn surface_orientation_to_index(orientation: SurfaceOrientation) -> Option<usize
 
 /// Determines if an atom at the given crystallographic address is a primary dimer atom.
 /// 
-/// This function encodes the **phase selection** by implementing a per-layer checkerboard
-/// pattern. Each of the 24 layers (6 surfaces × 4 depths) uses one of two parity formulas
-/// to designate which atoms are "primary". Primary atoms initiate dimer formation with their
-/// (geometrically determined) partner.
+/// This function encodes the **phase selection** using comprehensive truth tables for all
+/// 24 surface-layer combinations (6 surfaces × 4 depth layers). Each truth table implements
+/// a checkerboard pattern that guarantees dimer partners have opposite parities.
 /// 
-/// The two formulas are:
-/// - **Sum formula**: `(c1 + c2 + in_surface_idx) % 2 == 0`
-/// - **Index-only formula**: `in_surface_idx % 2 == 0`
+/// The truth tables are indexed by:
+/// - `surf_idx`: Surface orientation (0-5 for +X, -X, +Y, -Y, +Z, -Z)
+/// - `depth_index`: Depth layer (0-3 for 0.00, 0.25, 0.50, 0.75 Å)
+/// - `c1%2, c2%2`: In-plane lattice coordinates (modulo 2)
+/// - `in_surface_idx`: Site index within layer (0 or 1)
 /// 
-/// Where c1, c2 are the two in-plane lattice coordinates, and in_surface_idx is 0 for the
-/// lower site index in each layer, 1 for the higher.
+/// Each surface-layer has exactly TWO valid solutions (Phase A and Phase B), which are
+/// inverses of each other. Phase selection is controlled by the PHASE_FLIP array.
 /// 
 /// # Arguments
 /// * `address` - Crystallographic address of the atom (motif space position + site index)
@@ -424,40 +483,31 @@ fn is_primary_dimer_atom(
     return false;
   }
   
-  // Look up precomputed parity data
-  let (use_sum_formula, in_surface_idx, depth_index) = PARITY_DATA[surf_idx][address.site_index];
+  // Look up which layer this site belongs to
+  let (in_surface_idx, depth_index) = SITE_LAYER_MAP[surf_idx][address.site_index];
   
   // Get in-plane coordinates using precomputed axes
   let (in_plane_idx_1, in_plane_idx_2) = IN_PLANE_AXES[surf_idx];
   let c1 = address.motif_space_pos[in_plane_idx_1];
   let c2 = address.motif_space_pos[in_plane_idx_2];
   
-  // Calculate parity based on the precomputed formula choice
-  // Special cases for negative surfaces: use simplified truth table lookups
-  // Parity only depends on (c1%2, c2%2), NOT on site_idx, because dimer partners
-  // are at different lattice positions which naturally gives them opposite parities
-  let parity = if surf_idx == 1 || surf_idx == 3 || surf_idx == 5 {
-    // All negative surfaces (-X, -Y, -Z) use the same truth table pattern
-    const NEG_SURFACE_TABLE: [[bool; 2]; 2] = [
-      [false, true ],  // c1%2 = 0
-      [true , false],  // c1%2 = 1
-    ];
-    let c1_mod = ((c1 % 2 + 2) % 2) as usize;
-    let c2_mod = ((c2 % 2 + 2) % 2) as usize;
-    if NEG_SURFACE_TABLE[c1_mod][c2_mod] {
-      0 // primary
-    } else {
-      1 // secondary
-    }
-  } else if use_sum_formula {
-    ((c1 + c2 + in_surface_idx as i32) % 2) as usize
+  // Calculate parity using comprehensive truth tables
+  // Truth tables are indexed by (surface_idx, depth_index, c1%2, c2%2, in_surface_idx)
+  // This guarantees correct dimer formation for:
+  // - All surface orientations (+X, -X, +Y, -Y, +Z, -Z)
+  // - All depth layers (0, 1, 2, 3) including fractional surface cuts
+  // - Both different-position and same-position dimer partners
+  let table_idx = surf_idx * 4 + depth_index as usize;
+  let c1_mod = ((c1 % 2 + 2) % 2) as usize;  // Handle negative modulo
+  let c2_mod = ((c2 % 2 + 2) % 2) as usize;
+  let parity = if TRUTH_TABLES[table_idx][c1_mod][c2_mod][in_surface_idx as usize] {
+    0  // primary
   } else {
-    (in_surface_idx % 2) as usize
+    1  // secondary
   };
   
-  // Apply per-layer phase flip
-  let layer_idx = surf_idx * 4 + depth_index as usize;
-  let phase_flip = PHASE_FLIP[layer_idx];
+  // Apply per-layer phase flip (reuse table_idx since it's the same calculation)
+  let phase_flip = PHASE_FLIP[table_idx];
   let final_parity = parity ^ (phase_flip as usize);
   
   // Primary atoms have parity 0
@@ -483,16 +533,7 @@ fn get_dimer_partner(
   orientation: SurfaceOrientation
 ) -> Option<CrystallographicAddress> {
   // Map orientation to surface index for lookup table
-  let surface_index = match orientation {
-    SurfaceOrientation::Surface100 => 0,
-    SurfaceOrientation::SurfaceNeg100 => 1,
-    SurfaceOrientation::Surface010 => 2,
-    SurfaceOrientation::SurfaceNeg010 => 3,
-    SurfaceOrientation::Surface001 => 4,
-    SurfaceOrientation::SurfaceNeg001 => 5,
-    // Bulk and Unknown atoms don't participate in dimer reconstruction
-    SurfaceOrientation::Bulk | SurfaceOrientation::Unknown => return None,
-  };
+  let surface_index = surface_orientation_to_index(orientation)?;
   
   // Bounds check the basis index (should be 0-7 for zincblende)
   if primary_address.site_index >= 8 {
@@ -543,7 +584,7 @@ fn process_atoms(
     let orientation = classify_atom_surface_orientation(atom, structure);
     
     // Apply debug visualization if enabled
-    if DEBUG_SURFACE_ORIENTATION {
+    if SURFACE_RECONSTRUCTION_VISUAL_DEBUG {
       if let Some(atom_mut) = structure.atoms.get_mut(&atom_id) {
         atom_mut.atomic_number = get_debug_atomic_number(orientation);
       }
@@ -659,9 +700,11 @@ fn apply_dimer_reconstruction(
     1  // Single bond multiplicity
   );
   
-  // Make the newly created bond selected for visualization
-  if let Some(bond) = structure.bonds.get_mut(&bond_id) {
-    bond.selected = true;
+  // Make the newly created bond selected for visualization (only in debug mode)
+  if SURFACE_RECONSTRUCTION_VISUAL_DEBUG {
+    if let Some(bond) = structure.bonds.get_mut(&bond_id) {
+      bond.selected = true;
+    }
   }
   
   // Add hydrogen passivation if enabled
