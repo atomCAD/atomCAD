@@ -564,7 +564,10 @@ impl AtomFillData {
     statistics: &mut AtomFillStatistics
   ) {
     // Iterate through all placed atoms
-    for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
+    for (address, atom_id) in atom_tracker.iter_atoms() {
+      let lattice_pos = address.motif_space_pos;
+      let site_index = address.site_index;
+      
       // Use precomputed bonds_by_site1_index to only check bonds that start from this site
       // This is O(k) where k is the number of bonds per site, instead of O(N) where N is total bonds
       for &bond_index in &motif.bonds_by_site1_index[site_index] {
@@ -600,7 +603,10 @@ impl AtomFillData {
     //println!("hydrogen_passivate called");
 
     // Iterate through all placed atoms
-    for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
+    for (address, atom_id) in atom_tracker.iter_atoms() {
+      let lattice_pos = address.motif_space_pos;
+      let site_index = address.site_index;
+      
       // Check if this atom actually exists in the atomic structure
       // (it might have been removed by remove_single_bond_atoms)
       if atomic_structure.get_atom(atom_id).is_none() {

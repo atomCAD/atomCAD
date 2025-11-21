@@ -62,32 +62,26 @@ The 2×1 dimer pattern on an unreconstructed (bulk-terminated) (100) diamond sur
  ![Phase B](/api/attachments.redirect?id=6adfd7bd-2f27-4e01-8aac-1e1698b2f3cc " =780x741")
 
 
-**Phase selection:** Different surface terraces could use different phases, but for simplicity we initially use a single global phase for each infinite plane. Phase selection can be hardcoded initially and refined later to handle terrace boundaries.
+**Separation of geometry and phase:**
 
-Side-note idea: 
-Using separate cutting geometry that is not used for crystal cutting 
-but instead used to define patches (here meaning 2D crstal domains) 
-of alternate surface reconstruction. 
+The dimer pairing algorithm separates two independent concerns:
 
-**Efficient lookup using lattice coordinates:**
+1. **Geometric partner selection (deterministic):** For each `(surface_orientation, basis_index)` pair, the crystal structure determines exactly 2 neighboring sites where dimer partners can be. We establish a **crystallographic convention** to always select the partner in the positive direction along the lowest-indexed in-plane axis. This is phase-independent and purely geometric.
 
-The `atom_fill` process maintains a `PlacedAtomTracker` data structure:
+2. **Phase selection (arbitrary):** Phase A vs. Phase B is encoded by choosing which atoms are designated "primary" in a checkerboard pattern. Primary atoms initiate dimer formation with their (geometrically determined) partner. Different phases create the same 2×1 rows, rotated 90° relative to each other.
 
-```rust
-pub struct PlacedAtomTracker {
-  // (lattice_coords, basis_index) -> atom_id
-  atom_map: FxIndexMap<(IVec3, usize), u32>,
-}
-```
+For simplicity, we initially use a single global phase for all facets. Phase selection can be refined later to handle terrace boundaries or use separate cutting geometry to define reconstruction domains.
 
-Here `lattice_coords` (internally called `motif_space_pos`) specifies the unit cell position in integer lattice coordinates, while `basis_index` (internally `site_index`) identifies which basis atom within that unit cell. This maps each physical atom to its crystallographic address.
+**Efficient lookup using crystallographic addresses:**
+
+The `atom_fill` process maintains a `PlacedAtomTracker` data structure mapping crystallographic addresses to atom IDs. Here `motif_space_pos` specifies the unit cell position in integer coordinates, while `site_index` identifies which basis atom within that unit cell.
 
 **Dimer pairing algorithm:**
 
-For each dimer, we designate one atom as the **primary atom** and compute its **dimer partner** location. Given a lattice address `(lattice_coords, basis_index)`, we can efficiently determine (via lookup table):
+For each surface atom at crystallographic address `(motif_space_pos, site_index)`:
 
-* Whether this atom is a primary dimer atom for the selected phase
-* If yes, the lattice address of its dimer partner
+* `is_primary_dimer_atom()`: Determines if this atom is primary based on the selected phase pattern
+* `get_dimer_partner()`: Returns the crystallographic address of the dimer partner in the conventional positive direction (phase-independent)
 
 > **CRITICAL CONSTRAINT**: A dimer is only created if both atoms share the same surface orientation classification. This prevents incorrect dimer formation across surface edges or on different facets.
 

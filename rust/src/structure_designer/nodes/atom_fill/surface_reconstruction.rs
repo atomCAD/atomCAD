@@ -1,13 +1,17 @@
 use crate::common::atomic_structure::{AtomicStructure, Atom};
 use crate::structure_designer::evaluator::motif::Motif;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
-use crate::structure_designer::common_constants::{DEFAULT_ZINCBLENDE_MOTIF, DIAMOND_UNIT_CELL_SIZE_ANGSTROM};
+use crate::structure_designer::common_constants::{
+  DEFAULT_ZINCBLENDE_MOTIF, DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+  ZINCBLENDE_SITE_CORNER, ZINCBLENDE_SITE_FACE_Z, ZINCBLENDE_SITE_FACE_Y, ZINCBLENDE_SITE_FACE_X,
+  ZINCBLENDE_SITE_INTERIOR1, ZINCBLENDE_SITE_INTERIOR2, ZINCBLENDE_SITE_INTERIOR3, ZINCBLENDE_SITE_INTERIOR4
+};
 use crate::common::atomic_structure_utils::remove_single_bond_atoms;
 use crate::common::common_constants::{
   DEBUG_CARBON_GRAY, DEBUG_CARBON_RED, DEBUG_CARBON_GREEN, DEBUG_CARBON_BLUE,
   DEBUG_CARBON_YELLOW, DEBUG_CARBON_MAGENTA, DEBUG_CARBON_CYAN, DEBUG_CARBON_ORANGE
 };
-use crate::structure_designer::nodes::atom_fill::placed_atom_tracker::PlacedAtomTracker;
+use crate::structure_designer::nodes::atom_fill::placed_atom_tracker::{PlacedAtomTracker, CrystallographicAddress};
 use std::collections::HashMap;
 use rustc_hash::FxHashMap;
 use glam::IVec3;
@@ -176,46 +180,47 @@ struct DimerCandidateData {
   dimer_pairs: Vec<DimerPair>,
 }
 
-/// Determines if an atom at the given lattice position is a primary dimer atom.
+/// Determines if an atom at the given crystallographic address is a primary dimer atom.
 /// 
-/// A primary dimer atom is the designated "first" atom in a dimer pair.
-/// Each dimer has exactly one primary atom to avoid double-counting.
+/// This function encodes the **phase selection** (A vs. B) by implementing a checkerboard
+/// pattern that designates which atoms are "primary". Primary atoms initiate dimer formation
+/// with their (geometrically determined) partner. This is phase-dependent.
 /// 
 /// # Arguments
-/// * `lattice_coords` - Lattice coordinates (motif space position) of the atom
-/// * `basis_index` - Basis index (site index) within the unit cell
+/// * `address` - Crystallographic address of the atom (motif space position + site index)
 /// * `orientation` - Surface orientation of the atom
 /// 
 /// # Returns
-/// * `true` if this is a primary dimer atom, `false` otherwise
+/// * `true` if this is a primary dimer atom for the selected phase, `false` otherwise
 fn is_primary_dimer_atom(
-  _lattice_coords: IVec3,
-  _basis_index: usize,
+  _address: &CrystallographicAddress,
   _orientation: SurfaceOrientation
 ) -> bool {
-  // TODO: Implement pattern matching for primary atoms based on phase
+  // TODO: Implement checkerboard pattern for phase selection
+  // For now, return false (no reconstruction)
   false
 }
 
-/// Computes the lattice address of the dimer partner for a primary atom.
+/// Computes the crystallographic address of the dimer partner for a primary atom.
 /// 
-/// Given a primary dimer atom, this function calculates the crystallographic
-/// address of its dimer partner.
+/// This function performs **geometric partner selection**, which is phase-independent and
+/// purely determined by crystal structure. For each (surface_orientation, basis_index) pair,
+/// the partner is always in the conventional positive direction along the lowest-indexed
+/// in-plane axis. This ensures deterministic, unambiguous partner selection.
 /// 
 /// # Arguments
-/// * `lattice_coords` - Lattice coordinates of the primary atom
-/// * `basis_index` - Basis index of the primary atom
+/// * `primary_address` - Crystallographic address of the primary atom
 /// * `orientation` - Surface orientation of the primary atom
 /// 
 /// # Returns
-/// * `Some((partner_lattice_coords, partner_basis_index))` if a partner exists
-/// * `None` if no partner pattern is defined for this configuration
+/// * `Some(partner_address)` if a partner exists for this surface orientation
+/// * `None` if this surface orientation doesn't support dimer reconstruction
 fn get_dimer_partner(
-  _lattice_coords: IVec3,
-  _basis_index: usize,
+  _primary_address: &CrystallographicAddress,
   _orientation: SurfaceOrientation
-) -> Option<(IVec3, usize)> {
-  // TODO: Implement partner offset calculation based on surface orientation and phase
+) -> Option<CrystallographicAddress> {
+  // TODO: Implement geometric partner offset calculation
+  // Convention: select partner in +direction of lowest-indexed in-plane axis
   None
 }
 
@@ -241,8 +246,8 @@ fn process_atoms(
   let mut partner_orientations: FxHashMap<u32, SurfaceOrientation> = FxHashMap::default();
   let mut dimer_pairs: Vec<DimerPair> = Vec::new();
 
-  // Iterate through all placed atoms (which have lattice coordinates)
-  for (lattice_coords, basis_index, atom_id) in atom_tracker.iter_atoms() {
+  // Iterate through all placed atoms
+  for (address, atom_id) in atom_tracker.iter_atoms() {
     // Get the atom from the structure
     let atom = match structure.atoms.get(&atom_id) {
       Some(a) => a,
@@ -265,11 +270,11 @@ fn process_atoms(
     }
 
     // Check if this is a primary dimer atom
-    if is_primary_dimer_atom(lattice_coords, basis_index, orientation) {
-      // Get the dimer partner location
-      if let Some((partner_lattice, partner_basis)) = get_dimer_partner(lattice_coords, basis_index, orientation) {
+    if is_primary_dimer_atom(&address, orientation) {
+      // Get the dimer partner crystallographic address
+      if let Some(partner_address) = get_dimer_partner(&address, orientation) {
         // Look up the partner atom ID
-        if let Some(partner_atom_id) = atom_tracker.get_atom_id(partner_lattice, partner_basis) {
+        if let Some(partner_atom_id) = atom_tracker.get_atom_id_by_address(&partner_address) {
           // Add to dimer candidates (partner orientation not validated yet)
           dimer_pairs.push(DimerPair {
             primary_atom_id: atom_id,
