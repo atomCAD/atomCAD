@@ -120,27 +120,27 @@ fn classify_atom_surface_orientation(
   // X-axis check
   if dir1.x.abs() > AXIS_ALIGNMENT_THRESHOLD && dir2.x.abs() > AXIS_ALIGNMENT_THRESHOLD {
     if dir1.x > 0.0 && dir2.x > 0.0 {
-      return SurfaceOrientation::Surface100; // Both bonds point +X, surface normal is -X
+      return SurfaceOrientation::SurfaceNeg100; // Both bonds point +X, surface normal is -X
     } else if dir1.x < 0.0 && dir2.x < 0.0 {
-      return SurfaceOrientation::SurfaceNeg100; // Both bonds point -X, surface normal is +X
+      return SurfaceOrientation::Surface100; // Both bonds point -X, surface normal is +X
     }
   }
   
   // Y-axis check
   if dir1.y.abs() > AXIS_ALIGNMENT_THRESHOLD && dir2.y.abs() > AXIS_ALIGNMENT_THRESHOLD {
     if dir1.y > 0.0 && dir2.y > 0.0 {
-      return SurfaceOrientation::Surface010;
+      return SurfaceOrientation::SurfaceNeg010; // Both bonds point +Y, surface normal is -Y
     } else if dir1.y < 0.0 && dir2.y < 0.0 {
-      return SurfaceOrientation::SurfaceNeg010;
+      return SurfaceOrientation::Surface010; // Both bonds point -Y, surface normal is +Y
     }
   }
   
   // Z-axis check
   if dir1.z.abs() > AXIS_ALIGNMENT_THRESHOLD && dir2.z.abs() > AXIS_ALIGNMENT_THRESHOLD {
     if dir1.z > 0.0 && dir2.z > 0.0 {
-      return SurfaceOrientation::Surface001;
+      return SurfaceOrientation::SurfaceNeg001; // Both bonds point +Z, surface normal is -Z
     } else if dir1.z < 0.0 && dir2.z < 0.0 {
-      return SurfaceOrientation::SurfaceNeg001;
+      return SurfaceOrientation::Surface001; // Both bonds point -Z, surface normal is +Z
     }
   }
   
@@ -180,25 +180,242 @@ struct DimerCandidateData {
   dimer_pairs: Vec<DimerPair>,
 }
 
+/// Helper function to parse lattice offset notation into IVec3.
+/// 
+/// Parses strings like "..+", "+.-", ".+-" where:
+/// - '.' = 0 (no offset)
+/// - '+' = +1 unit cell
+/// - '-' = -1 unit cell
+const fn parse_lattice_offset(s: &str) -> IVec3 {
+  let bytes = s.as_bytes();
+  IVec3::new(
+    match bytes[0] {
+      b'.' => 0,
+      b'+' => 1,
+      b'-' => -1,
+      _ => panic!("Invalid offset character"),
+    },
+    match bytes[1] {
+      b'.' => 0,
+      b'+' => 1,
+      b'-' => -1,
+      _ => panic!("Invalid offset character"),
+    },
+    match bytes[2] {
+      b'.' => 0,
+      b'+' => 1,
+      b'-' => -1,
+      _ => panic!("Invalid offset character"),
+    },
+  )
+}
+
+/// Helper to create a dimer partner offset pattern.
+const fn partner_offset(offset_str: &str, partner_basis_index: usize) -> CrystallographicAddress {
+  CrystallographicAddress {
+    motif_space_pos: parse_lattice_offset(offset_str),
+    site_index: partner_basis_index,
+  }
+}
+
+/// Lookup table for dimer partner offsets.
+/// 
+/// Indexed by [basis_index][surface_index] where surface_index corresponds to:
+/// 0 = Surface100, 1 = SurfaceNeg100, 2 = Surface010, 3 = SurfaceNeg010, 4 = Surface001, 5 = SurfaceNeg001
+/// 
+/// Each entry contains the offset to add to the primary atom's crystallographic address.
+const DIMER_PARTNER_OFFSETS: [[CrystallographicAddress; 6]; 8] = [
+  // CORNER (index 0) - PRIMARY site at (0, 0, 0)
+  [
+    partner_offset("...", ZINCBLENDE_SITE_FACE_X),  // +X -> ...FACE_X
+    partner_offset("..-", ZINCBLENDE_SITE_FACE_X),  // -X -> ..-FACE_X
+    partner_offset("...", ZINCBLENDE_SITE_FACE_Y),  // +Y -> ...FACE_Y
+    partner_offset("..-", ZINCBLENDE_SITE_FACE_Y),  // -Y -> ..-FACE_Y
+    partner_offset("...", ZINCBLENDE_SITE_FACE_Z),  // +Z -> ...FACE_Z
+    partner_offset(".-.", ZINCBLENDE_SITE_FACE_Z),  // -Z -> .-.FACE_Z
+  ],
+  // FACE_Z (index 1) - PRIMARY site at (0.5, 0.5, 0)
+  [
+    partner_offset(".+.", ZINCBLENDE_SITE_FACE_Y),  // +X -> .+.FACE_Y
+    partner_offset(".+-", ZINCBLENDE_SITE_FACE_Y),  // -X -> .+-FACE_Y
+    partner_offset("+..", ZINCBLENDE_SITE_FACE_X),  // +Y -> +..FACE_X
+    partner_offset("+.-", ZINCBLENDE_SITE_FACE_X),  // -Y -> +.-FACE_X
+    partner_offset("++.", ZINCBLENDE_SITE_CORNER),  // +Z -> ++.CORNER
+    partner_offset("+..", ZINCBLENDE_SITE_CORNER),  // -Z -> +..CORNER
+  ],
+  // FACE_Y (index 2) - PRIMARY site at (0.5, 0, 0.5)
+  [
+    partner_offset("..+", ZINCBLENDE_SITE_FACE_Z),  // +X -> ..+FACE_Z
+    partner_offset("...", ZINCBLENDE_SITE_FACE_Z),  // -X -> ...FACE_Z
+    partner_offset("+.+", ZINCBLENDE_SITE_CORNER),  // +Y -> +.+CORNER
+    partner_offset("+..", ZINCBLENDE_SITE_CORNER),  // -Y -> +..CORNER
+    partner_offset("+..", ZINCBLENDE_SITE_FACE_X),  // +Z -> +..FACE_X
+    partner_offset("+-.", ZINCBLENDE_SITE_FACE_X),  // -Z -> +-.FACE_X
+  ],
+  // FACE_X (index 3) - PRIMARY site at (0, 0.5, 0.5)
+  [
+    partner_offset(".++", ZINCBLENDE_SITE_CORNER),  // +X -> .++CORNER
+    partner_offset(".+.", ZINCBLENDE_SITE_CORNER),  // -X -> .+.CORNER
+    partner_offset("..+", ZINCBLENDE_SITE_FACE_Z),  // +Y -> ..+FACE_Z
+    partner_offset("...", ZINCBLENDE_SITE_FACE_Z),  // -Y -> ...FACE_Z
+    partner_offset(".+.", ZINCBLENDE_SITE_FACE_Y),  // +Z -> .+.FACE_Y
+    partner_offset("...", ZINCBLENDE_SITE_FACE_Y),  // -Z -> ...FACE_Y
+  ],
+  // INTERIOR1 (index 4) - SECONDARY site at (0.25, 0.25, 0.25)
+  [
+    partner_offset("..-", ZINCBLENDE_SITE_INTERIOR2),  // +X -> ..-INTERIOR2
+    partner_offset("...", ZINCBLENDE_SITE_INTERIOR2),  // -X -> ...INTERIOR2
+    partner_offset("..-", ZINCBLENDE_SITE_INTERIOR3),  // +Y -> ..-INTERIOR3
+    partner_offset("...", ZINCBLENDE_SITE_INTERIOR3),  // -Y -> ...INTERIOR3
+    partner_offset(".-.", ZINCBLENDE_SITE_INTERIOR4),  // +Z -> .-.INTERIOR4
+    partner_offset("...", ZINCBLENDE_SITE_INTERIOR4),  // -Z -> ...INTERIOR4
+  ],
+  // INTERIOR2 (index 5) - SECONDARY site at (0.25, 0.75, 0.75)
+  [
+    partner_offset(".+.", ZINCBLENDE_SITE_INTERIOR1),  // +X -> .+.INTERIOR1
+    partner_offset(".++", ZINCBLENDE_SITE_INTERIOR1),  // -X -> .++INTERIOR1
+    partner_offset("...", ZINCBLENDE_SITE_INTERIOR4),  // +Y -> ...INTERIOR4
+    partner_offset("..+", ZINCBLENDE_SITE_INTERIOR4),  // -Y -> ..+INTERIOR4
+    partner_offset("...", ZINCBLENDE_SITE_INTERIOR3),  // +Z -> ...INTERIOR3
+    partner_offset(".+.", ZINCBLENDE_SITE_INTERIOR3),  // -Z -> .+.INTERIOR3
+  ],
+  // INTERIOR3 (index 6) - SECONDARY site at (0.75, 0.25, 0.75)
+  [
+    partner_offset("...", ZINCBLENDE_SITE_INTERIOR4),  // +X -> ...INTERIOR4
+    partner_offset("..+", ZINCBLENDE_SITE_INTERIOR4),  // -X -> ..+INTERIOR4
+    partner_offset("+..", ZINCBLENDE_SITE_INTERIOR1),  // +Y -> +..INTERIOR1
+    partner_offset("+.+", ZINCBLENDE_SITE_INTERIOR1),  // -Y -> +.+INTERIOR1
+    partner_offset("+-.", ZINCBLENDE_SITE_INTERIOR2),  // +Z -> +-.INTERIOR2
+    partner_offset("+..", ZINCBLENDE_SITE_INTERIOR2),  // -Z -> +..INTERIOR2
+  ],
+  // INTERIOR4 (index 7) - SECONDARY site at (0.75, 0.75, 0.25)
+  [
+    partner_offset(".+-", ZINCBLENDE_SITE_INTERIOR3),  // +X -> .+-INTERIOR3
+    partner_offset(".+.", ZINCBLENDE_SITE_INTERIOR3),  // -X -> .+.INTERIOR3
+    partner_offset("+.-", ZINCBLENDE_SITE_INTERIOR2),  // +Y -> +.-INTERIOR2
+    partner_offset("+..", ZINCBLENDE_SITE_INTERIOR2),  // -Y -> +..INTERIOR2
+    partner_offset("+..", ZINCBLENDE_SITE_INTERIOR1),  // +Z -> +..INTERIOR1
+    partner_offset("++.", ZINCBLENDE_SITE_INTERIOR1),  // -Z -> ++.INTERIOR1
+  ],
+];
+
+/// Precomputed parity data for all (surface_orientation, site_index) combinations.
+/// Each entry: (use_sum_formula: bool, in_surface_idx: u8, depth_index: u8)
+/// Indexed as: PARITY_DATA[surface_orientation_idx][site_index]
+/// Surface order: [+X, -X, +Y, -Y, +Z, -Z]
+const PARITY_DATA: [[(bool, u8, u8); 8]; 6] = [
+  // +X
+  [(true , 0, 0), (false, 0, 2), (false, 1, 2), (true , 1, 0), (false, 0, 1), (false, 1, 1), (true , 0, 3), (true , 1, 3)],
+  // -X
+  [(false, 0, 0), (true , 0, 2), (true , 1, 2), (false, 1, 0), (true , 0, 1), (true , 1, 1), (false, 0, 3), (false, 1, 3)],
+  // +Y
+  [(true , 0, 0), (false, 0, 2), (true , 1, 0), (false, 1, 2), (false, 0, 1), (true , 0, 3), (false, 1, 1), (true , 1, 3)],
+  // -Y
+  [(false, 0, 0), (true , 0, 2), (false, 1, 0), (true , 1, 2), (true , 0, 1), (false, 0, 3), (true , 1, 1), (false, 1, 3)],
+  // +Z
+  [(true , 0, 0), (true , 1, 0), (false, 0, 2), (false, 1, 2), (false, 0, 1), (true , 0, 3), (true , 1, 3), (false, 1, 1)],
+  // -Z
+  [(false, 0, 0), (false, 1, 0), (true , 0, 2), (true , 1, 2), (true , 0, 1), (false, 0, 3), (false, 1, 3), (true , 1, 1)],
+];
+
+/// Per-layer phase control: 24 booleans (6 surfaces × 4 depths).
+/// Set to true to flip phase for that layer.
+/// Indexed as: PHASE_FLIP[surface_idx * 4 + depth_idx]
+/// Order: +X(0,0.25,0.5,0.75), -X(0,0.25,0.5,0.75), +Y(...), -Y(...), +Z(...), -Z(...)
+/// 
+/// All false = Phase A (default). Flip individual layers to customize phase pattern.
+const PHASE_FLIP: [bool; 24] = [
+  false, false, false, false, // +X: depths 0.00, 0.25, 0.50, 0.75
+  false, false, false, false, // -X: depths 0.00, 0.25, 0.50, 0.75
+  false, false, false, false, // +Y: depths 0.00, 0.25, 0.50, 0.75
+  false, false, false, false, // -Y: depths 0.00, 0.25, 0.50, 0.75
+  false, false, false, false, // +Z: depths 0.00, 0.25, 0.50, 0.75
+  false, false, false, false, // -Z: depths 0.00, 0.25, 0.50, 0.75
+];
+
+/// Precomputed in-plane axis indices for each surface orientation.
+/// Each entry: (in_plane_idx_1, in_plane_idx_2)
+/// Surface order: [+X, -X, +Y, -Y, +Z, -Z]
+const IN_PLANE_AXES: [(usize, usize); 6] = [
+  (1, 2), // +X: YZ plane
+  (1, 2), // -X: YZ plane
+  (0, 2), // +Y: XZ plane
+  (0, 2), // -Y: XZ plane
+  (0, 1), // +Z: XY plane
+  (0, 1), // -Z: XY plane
+];
+
+/// Maps SurfaceOrientation to index for lookup tables.
+#[inline]
+fn surface_orientation_to_index(orientation: SurfaceOrientation) -> Option<usize> {
+  match orientation {
+    SurfaceOrientation::Surface100 => Some(0),    // +X
+    SurfaceOrientation::SurfaceNeg100 => Some(1), // -X
+    SurfaceOrientation::Surface010 => Some(2),    // +Y
+    SurfaceOrientation::SurfaceNeg010 => Some(3), // -Y
+    SurfaceOrientation::Surface001 => Some(4),    // +Z
+    SurfaceOrientation::SurfaceNeg001 => Some(5), // -Z
+    _ => None,
+  }
+}
+
 /// Determines if an atom at the given crystallographic address is a primary dimer atom.
 /// 
-/// This function encodes the **phase selection** (A vs. B) by implementing a checkerboard
-/// pattern that designates which atoms are "primary". Primary atoms initiate dimer formation
-/// with their (geometrically determined) partner. This is phase-dependent.
+/// This function encodes the **phase selection** by implementing a per-layer checkerboard
+/// pattern. Each of the 24 layers (6 surfaces × 4 depths) uses one of two parity formulas
+/// to designate which atoms are "primary". Primary atoms initiate dimer formation with their
+/// (geometrically determined) partner.
+/// 
+/// The two formulas are:
+/// - **Sum formula**: `(c1 + c2 + in_surface_idx) % 2 == 0`
+/// - **Index-only formula**: `in_surface_idx % 2 == 0`
+/// 
+/// Where c1, c2 are the two in-plane lattice coordinates, and in_surface_idx is 0 for the
+/// lower site index in each layer, 1 for the higher.
 /// 
 /// # Arguments
 /// * `address` - Crystallographic address of the atom (motif space position + site index)
 /// * `orientation` - Surface orientation of the atom
 /// 
 /// # Returns
-/// * `true` if this is a primary dimer atom for the selected phase, `false` otherwise
+/// * `true` if this is a primary dimer atom for the current phase, `false` otherwise
 fn is_primary_dimer_atom(
-  _address: &CrystallographicAddress,
-  _orientation: SurfaceOrientation
+  address: &CrystallographicAddress,
+  orientation: SurfaceOrientation
 ) -> bool {
-  // TODO: Implement checkerboard pattern for phase selection
-  // For now, return false (no reconstruction)
-  false
+  // Map orientation to index for lookup tables
+  let surf_idx = match surface_orientation_to_index(orientation) {
+    Some(idx) => idx,
+    None => return false, // Bulk or Unknown
+  };
+  
+  // Bounds check site_index
+  if address.site_index >= 8 {
+    return false;
+  }
+  
+  // Look up precomputed parity data
+  let (use_sum_formula, in_surface_idx, depth_index) = PARITY_DATA[surf_idx][address.site_index];
+  
+  // Get in-plane coordinates using precomputed axes
+  let (in_plane_idx_1, in_plane_idx_2) = IN_PLANE_AXES[surf_idx];
+  let c1 = address.motif_space_pos[in_plane_idx_1];
+  let c2 = address.motif_space_pos[in_plane_idx_2];
+  
+  // Calculate parity based on the precomputed formula choice
+  let parity = if use_sum_formula {
+    ((c1 + c2 + in_surface_idx as i32) % 2) as usize
+  } else {
+    (in_surface_idx % 2) as usize
+  };
+  
+  // Apply per-layer phase flip
+  let layer_idx = surf_idx * 4 + depth_index as usize;
+  let phase_flip = PHASE_FLIP[layer_idx];
+  let final_parity = parity ^ (phase_flip as usize);
+  
+  // Primary atoms have parity 0
+  final_parity == 0
 }
 
 /// Computes the crystallographic address of the dimer partner for a primary atom.
@@ -216,12 +433,34 @@ fn is_primary_dimer_atom(
 /// * `Some(partner_address)` if a partner exists for this surface orientation
 /// * `None` if this surface orientation doesn't support dimer reconstruction
 fn get_dimer_partner(
-  _primary_address: &CrystallographicAddress,
-  _orientation: SurfaceOrientation
+  primary_address: &CrystallographicAddress,
+  orientation: SurfaceOrientation
 ) -> Option<CrystallographicAddress> {
-  // TODO: Implement geometric partner offset calculation
-  // Convention: select partner in +direction of lowest-indexed in-plane axis
-  None
+  // Map orientation to surface index for lookup table
+  let surface_index = match orientation {
+    SurfaceOrientation::Surface100 => 0,
+    SurfaceOrientation::SurfaceNeg100 => 1,
+    SurfaceOrientation::Surface010 => 2,
+    SurfaceOrientation::SurfaceNeg010 => 3,
+    SurfaceOrientation::Surface001 => 4,
+    SurfaceOrientation::SurfaceNeg001 => 5,
+    // Bulk and Unknown atoms don't participate in dimer reconstruction
+    SurfaceOrientation::Bulk | SurfaceOrientation::Unknown => return None,
+  };
+  
+  // Bounds check the basis index (should be 0-7 for zincblende)
+  if primary_address.site_index >= 8 {
+    return None;
+  }
+  
+  // Look up the partner offset pattern from the table
+  let offset = DIMER_PARTNER_OFFSETS[primary_address.site_index][surface_index];
+  
+  // Add the offset to get the partner's crystallographic address
+  Some(CrystallographicAddress {
+    motif_space_pos: primary_address.motif_space_pos + offset.motif_space_pos,
+    site_index: offset.site_index,
+  })
 }
 
 /// Processes all atoms to classify orientations and identify dimer pair candidates.
@@ -304,13 +543,24 @@ fn process_atoms(
 /// * `structure` - The atomic structure to modify
 /// * `dimer_pair` - The validated dimer pair to reconstruct
 fn apply_dimer_reconstruction(
-  _structure: &mut AtomicStructure,
-  _dimer_pair: &DimerPair
+  structure: &mut AtomicStructure,
+  dimer_pair: &DimerPair
 ) {
-  // TODO: Implement the actual reconstruction:
-  // - Create a bond between the two atoms
-  // - Adjust atom positions to form the dimer
-  // - Update any other structural properties
+  // Create a single bond between the dimer pair
+  let bond_id = structure.add_bond(
+    dimer_pair.primary_atom_id,
+    dimer_pair.partner_atom_id,
+    1  // Single bond multiplicity
+  );
+  
+  // Make the newly created bond selected for visualization
+  if let Some(bond) = structure.bonds.get_mut(&bond_id) {
+    bond.selected = true;
+  }
+  
+  // TODO: Future enhancements:
+  // - Adjust atom positions to form proper dimer geometry
+  // - Update any other structural properties as needed
 }
 
 /// Determines if the current structure is cubic diamond suitable for (100) reconstruction.
