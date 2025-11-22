@@ -74,7 +74,7 @@ impl StructureDesigner {
     // Find the first atomic structure with from_selected_node = true
     for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-        if atomic_structure.from_selected_node {
+        if atomic_structure.decorator().from_selected_node {
           return Some(atomic_structure);
         }
       }

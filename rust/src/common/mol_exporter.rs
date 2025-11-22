@@ -55,7 +55,7 @@ pub fn save_mol_v3000(atomic_structure: &AtomicStructure, file_path: &str) -> Re
     let mut index = 1;
     
     // Sort atoms by ID for consistent output
-    let mut sorted_atoms: Vec<_> = atomic_structure.atoms.iter().collect();
+    let mut sorted_atoms: Vec<_> = atomic_structure.iter_atoms().collect();
     sorted_atoms.sort_by_key(|(id, _)| *id);
     
     for (atom_id, atom) in sorted_atoms {
@@ -88,7 +88,7 @@ pub fn save_mol_v3000(atomic_structure: &AtomicStructure, file_path: &str) -> Re
     
     // Collect bonds from inline data, avoiding duplicates
     let mut bonds_to_write = Vec::new();
-    for atom in atomic_structure.atoms.values() {
+    for atom in atomic_structure.atoms_values() {
         for bond in &atom.bonds {
             let other_atom_id = bond.other_atom_id();
             // Only include each bond once (check atom ID ordering)

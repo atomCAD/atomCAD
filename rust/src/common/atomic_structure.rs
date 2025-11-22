@@ -8,6 +8,21 @@
 //! - Bonds stored bidirectionally in both atoms' SmallVec
 //! - For diamond structures with 2 bonds/atom average: saving 4 bytes per bond = 8 bytes total per bond pair
 //! - Supports up to 536M atoms and 8 bond types
+//! 
+//! Other optimization ideas for the future:
+//! - Encapsulation and extensive testing before doing further optimizations
+//! - Lazy-initialization of the grid. IT might not be needed in certain usecases and
+//! even if needed eventually it is useful to have faster processing until it is needed
+//! (e.g atom fill)
+//! - Use fixed-point IVec3 for position instead of DVec3 (one unit can be 0.001 Angstrom)
+//! - store atoms as arrray (Vec) instead of map?
+//! - Structure of arrays for atoms?
+//! - Long term: lazy-storing atomic representations in crystals: only compute and store atomic
+//! representation of a region if something needs to be changed. The non-changed regions might be
+//! represented as octree nodes or just use the existing grid. This can be part of
+//! a bigger stramable LOD system in atomCAD. Needs to be carefully planned before implemented though
+//! and maybe the crystal representation should be introduced only on a higher level
+//! which just uses AtomicStructure.
 //!
 
 use crate::util::transform::Transform;
@@ -37,8 +52,10 @@ pub enum AtomDisplayState {
 
 #[derive(Debug, Clone)]
 pub struct AtomicStructureDecorator {
-    pub atom_display_states: FxHashMap<u32, AtomDisplayState>,
-    pub selected_bonds: std::collections::HashSet<BondReference>,
+    atom_display_states: FxHashMap<u32, AtomDisplayState>,
+    selected_bonds: std::collections::HashSet<BondReference>,
+    pub from_selected_node: bool,
+    pub selection_transform: Option<Transform>,
 }
 
 impl AtomicStructureDecorator {
@@ -46,15 +63,43 @@ impl AtomicStructureDecorator {
         Self {
             atom_display_states: FxHashMap::default(),
             selected_bonds: std::collections::HashSet::new(),
+            from_selected_node: false,
+            selection_transform: None,
         }
     }
     
+    // Atom display state methods
     pub fn set_atom_display_state(&mut self, atom_id: u32, state: AtomDisplayState) {
         self.atom_display_states.insert(atom_id, state);
     }
     
     pub fn get_atom_display_state(&self, atom_id: u32) -> AtomDisplayState {
         self.atom_display_states.get(&atom_id).cloned().unwrap_or(AtomDisplayState::Normal)
+    }
+    
+    // Bond selection methods
+    pub fn is_bond_selected(&self, bond_ref: &BondReference) -> bool {
+        self.selected_bonds.contains(bond_ref)
+    }
+    
+    pub fn select_bond(&mut self, bond_ref: &BondReference) {
+        self.selected_bonds.insert(bond_ref.clone());
+    }
+    
+    pub fn deselect_bond(&mut self, bond_ref: &BondReference) {
+        self.selected_bonds.remove(bond_ref);
+    }
+    
+    pub fn clear_bond_selection(&mut self) {
+        self.selected_bonds.clear();
+    }
+    
+    pub fn has_selected_bonds(&self) -> bool {
+        !self.selected_bonds.is_empty()
+    }
+    
+    pub fn iter_selected_bonds(&self) -> impl Iterator<Item = &BondReference> {
+        self.selected_bonds.iter()
     }
 }
 
@@ -204,20 +249,71 @@ impl Atom {
 
 #[derive(Debug, Clone)]
 pub struct AtomicStructure {
-  pub frame_transform: Transform,
-  pub next_atom_id: u32,
-  pub check_atom_id_collision: bool,
-  pub atoms: FxHashMap<u32, Atom>,
+  frame_transform: Transform,
+  next_atom_id: u32,
+  check_atom_id_collision: bool,
+  atoms: FxHashMap<u32, Atom>,
   // Spatial acceleration: sparse spatial grid of atoms
   // TODO: consider SmallVac here instead of Vec
   // also consider lazily creating this: might not be needed in a lot of usecases
-  pub grid: FxHashMap<(i32, i32, i32), Vec<u32>>,
-  pub from_selected_node: bool, // TODO: clean this up: it does not belong here
-  pub selection_transform: Option<Transform>,
-  pub decorator: AtomicStructureDecorator,
+  grid: FxHashMap<(i32, i32, i32), Vec<u32>>,
+  decorator: AtomicStructureDecorator,
 }
 
 impl AtomicStructure {
+  // Decorator access
+  pub fn decorator(&self) -> &AtomicStructureDecorator {
+    &self.decorator
+  }
+  
+  pub fn decorator_mut(&mut self) -> &mut AtomicStructureDecorator {
+    &mut self.decorator
+  }
+
+  // Frame transform access
+  pub fn frame_transform(&self) -> &Transform {
+    &self.frame_transform
+  }
+  
+  pub fn set_frame_transform(&mut self, transform: Transform) {
+    self.frame_transform = transform;
+  }
+
+  // Atom access methods
+  fn get_atom_mut(&mut self, id: u32) -> Option<&mut Atom> {
+    self.atoms.get_mut(&id)
+  }
+  
+  pub fn iter_atoms(&self) -> impl Iterator<Item = (&u32, &Atom)> {
+    self.atoms.iter()
+  }
+  
+  pub fn atoms_values(&self) -> impl Iterator<Item = &Atom> {
+    self.atoms.values()
+  }
+  
+  pub fn atom_ids(&self) -> impl Iterator<Item = &u32> {
+    self.atoms.keys()
+  }
+
+  // Atom field setters
+  pub fn set_atom_atomic_number(&mut self, atom_id: u32, atomic_number: i16) {
+    if let Some(atom) = self.get_atom_mut(atom_id) {
+      atom.atomic_number = atomic_number;
+    }
+  }
+  
+  pub fn set_atom_in_crystal_depth(&mut self, atom_id: u32, depth: f32) {
+    if let Some(atom) = self.get_atom_mut(atom_id) {
+      atom.in_crystal_depth = depth;
+    }
+  }
+  
+  pub fn set_atom_hydrogen_passivation(&mut self, atom_id: u32, passivated: bool) {
+    if let Some(atom) = self.get_atom_mut(atom_id) {
+      atom.set_hydrogen_passivation(passivated);
+    }
+  }
 
   pub fn has_selected_atoms(&self) -> bool {
     self.atoms.values().any(|atom| atom.is_selected())
@@ -225,7 +321,7 @@ impl AtomicStructure {
 
   // Checks if there is any selection (atoms or bonds) in the structure
   pub fn has_selection(&self) -> bool {
-    self.has_selected_atoms() || !self.decorator.selected_bonds.is_empty()
+    self.has_selected_atoms() || self.decorator.has_selected_bonds()
   }
 
   pub fn new() -> Self {
@@ -235,8 +331,6 @@ impl AtomicStructure {
       check_atom_id_collision: false,
       atoms: FxHashMap::default(),
       grid: FxHashMap::default(),
-      from_selected_node: false,
-      selection_transform: None,
       decorator: AtomicStructureDecorator::new(),
     }
   }
@@ -399,7 +493,7 @@ impl AtomicStructure {
     }
     
     // Remove from selected bonds
-    self.decorator.selected_bonds.remove(bond_ref);
+    self.decorator.deselect_bond(bond_ref);
   }
 
   pub fn select(&mut self, atom_ids: &Vec<u32>, bond_references: &Vec<BondReference>, select_modifier: SelectModifier) {
@@ -407,7 +501,7 @@ impl AtomicStructure {
       for atom in self.atoms.values_mut() {
         atom.set_selected(false);
       }
-      self.decorator.selected_bonds.clear();
+      self.decorator.clear_bond_selection();
     }
 
     for atom_id in atom_ids {
@@ -417,20 +511,20 @@ impl AtomicStructure {
     }
     
     for bond_reference in bond_references {
-      let is_selected = self.decorator.selected_bonds.contains(bond_reference);
+      let is_selected = self.decorator.is_bond_selected(bond_reference);
       let new_selection = apply_select_modifier(is_selected, &select_modifier);
       
       if new_selection {
-        self.decorator.selected_bonds.insert(bond_reference.clone());
+        self.decorator.select_bond(bond_reference);
       } else {
-        self.decorator.selected_bonds.remove(bond_reference);
+        self.decorator.deselect_bond(bond_reference);
       }
     }
   }
 
   /// Simple bond selection - adds bond to selected set
   pub fn select_bond(&mut self, bond_ref: &BondReference) {
-    self.decorator.selected_bonds.insert(bond_ref.clone());
+    self.decorator.select_bond(bond_ref);
   }
 
   pub fn select_by_maps(&mut self, atom_selections: &HashMap<u32, bool>, bond_selections: &HashMap<BondReference, bool>) {
@@ -442,9 +536,9 @@ impl AtomicStructure {
     
     for (bond_ref, selected) in bond_selections {
       if *selected {
-        self.decorator.selected_bonds.insert(bond_ref.clone());
+        self.decorator.select_bond(bond_ref);
       } else {
-        self.decorator.selected_bonds.remove(bond_ref);
+        self.decorator.deselect_bond(bond_ref);
       }
     }
   }
@@ -703,14 +797,14 @@ impl AtomicStructure {
     }
     
     // Merge bond selections from decorator
-    for bond_ref in &other.decorator.selected_bonds {
+    for bond_ref in other.decorator.iter_selected_bonds() {
       if let (Some(&new_id1), Some(&new_id2)) = 
           (atom_id_map.get(&bond_ref.atom_id1), atom_id_map.get(&bond_ref.atom_id2)) {
         let new_bond_ref = BondReference {
           atom_id1: new_id1,
           atom_id2: new_id2,
         };
-        self.decorator.selected_bonds.insert(new_bond_ref);
+        self.decorator.select_bond(&new_bond_ref);
       }
     }
     

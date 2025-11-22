@@ -694,9 +694,7 @@ impl AtomFillData {
       
       // After processing all dangling bonds for this atom, flag it as passivated
       // This prevents the general passivation from running again on this atom
-      if let Some(atom) = atomic_structure.atoms.get_mut(&atom_id) {
-        atom.set_hydrogen_passivation(true);
-      }
+      atomic_structure.set_atom_hydrogen_passivation(atom_id, true);
     }
   }
 

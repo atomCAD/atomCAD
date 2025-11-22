@@ -116,7 +116,7 @@ fn cut_atomic_structure(atomic_structure: &mut AtomicStructure, cutter_geo_tree_
   let mut atoms_to_delete = Vec::new();
   
   // Iterate over all atoms and check if they are outside the geometry
-  for (atom_id, atom) in &atomic_structure.atoms {
+  for (atom_id, atom) in atomic_structure.iter_atoms() {
     // Evaluate the atom's position against the cutter geometry
     let sdf_value = cutter_geo_tree_root.implicit_eval_3d(&(atom.position / unit_cell_size));
     

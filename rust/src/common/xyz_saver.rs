@@ -37,7 +37,7 @@ pub fn save_xyz(atomic_structure: &AtomicStructure, file_path: &str) -> Result<(
     writeln!(file, "{}", title)?;
     
     // Write atom data
-    for (_, atom) in &atomic_structure.atoms {
+    for (_, atom) in atomic_structure.iter_atoms() {
         // Get element symbol from atomic number
         let atom_info = ATOM_INFO
             .get(&(atom.atomic_number as i32))

@@ -165,7 +165,7 @@ impl NetworkEvaluator {
     else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Atomic {
       if let NetworkResult::Atomic(atomic_structure) = result {
         let mut cloned_atomic_structure = atomic_structure.clone();
-        cloned_atomic_structure.from_selected_node = from_selected_node;
+        cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
         (NodeOutput::Atomic(cloned_atomic_structure), None)
       } else {
         (NodeOutput::None, None)

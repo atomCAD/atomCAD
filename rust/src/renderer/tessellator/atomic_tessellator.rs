@@ -53,7 +53,7 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
   let _timer = Timer::new("Atomic tessellation");
 
   // Pre-allocate mesh capacity for worst-case scenario (no compression)
-  let total_atoms = atomic_structure.atoms.len();
+  let total_atoms = atomic_structure.get_num_of_atoms();
   let (h_div, v_div) = match atomic_viz_prefs.visualization {
     AtomicStructureVisualization::BallAndStick => (
       params.ball_and_stick_sphere_horizontal_divisions,
@@ -85,7 +85,7 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
   let mut culled_count = 0;
   let mut tessellated_count = 0;
   
-  for (id, atom) in atomic_structure.atoms.iter() {
+  for (id, atom) in atomic_structure.iter_atoms() {
     // Get effective display state (considering scene markers)
     let display_state = get_atom_display_state(*id, atomic_structure);
     
@@ -103,12 +103,12 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
   // Only tessellate bonds for ball-and-stick visualization
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
     // Iterate inline bonds - each bond only once using atom ID ordering
-    for atom in atomic_structure.atoms.values() {
+    for atom in atomic_structure.atoms_values() {
       for bond in &atom.bonds {
         let other_atom_id = bond.other_atom_id();
         // Only tessellate each bond once
         if atom.id < other_atom_id {
-          if let Some(other_atom) = atomic_structure.atoms.get(&other_atom_id) {
+          if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
             tessellate_bond_inline(output_mesh, atomic_structure, atom, other_atom, bond.bond_order(), params);
           }
         }
@@ -151,7 +151,7 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
 fn get_bond_color_inline(atom_id1: u32, atom_id2: u32, atomic_structure: &AtomicStructure) -> Vec3 {
   let base_color = Vec3::new(0.8, 0.8, 0.8);
   let bond_ref = BondReference { atom_id1, atom_id2 };
-  if atomic_structure.decorator.selected_bonds.contains(&bond_ref) {
+  if atomic_structure.decorator().is_bond_selected(&bond_ref) {
     to_selected_color(&base_color)
   } else {
     base_color
@@ -162,7 +162,7 @@ fn get_bond_color_inline(atom_id1: u32, atom_id2: u32, atomic_structure: &Atomic
 /// Gets display state from the atomic structure's decorator
 /// (Scene markers were deprecated and always returned false)
 fn get_atom_display_state(atom_id: u32, atomic_structure: &AtomicStructure) -> AtomDisplayState {
-  atomic_structure.decorator.get_atom_display_state(atom_id)
+  atomic_structure.decorator().get_atom_display_state(atom_id)
 }
 
 /// Maximum number of bonds per atom (reasonable upper bound)
@@ -212,7 +212,7 @@ fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, v
   for bond in &atom.bonds {
     let neighbor_atom_id = bond.other_atom_id();
     
-    if let Some(neighbor) = atomic_structure.atoms.get(&neighbor_atom_id) {
+    if let Some(neighbor) = atomic_structure.get_atom(neighbor_atom_id) {
       let neighbor_radius = get_displayed_atom_radius(neighbor, visualization);
       
       occluder_array.push(OccluderSphere {
@@ -318,7 +318,7 @@ fn to_selected_color(_color: &Vec3) -> Vec3 {
 /// Tessellate bond using inline bond data
 fn tessellate_bond_inline(output_mesh: &mut Mesh, atomic_structure: &AtomicStructure, atom1: &Atom, atom2: &Atom, _bond_order: u8, params: &AtomicTessellatorParams) {
   let bond_ref = BondReference { atom_id1: atom1.id, atom_id2: atom2.id };
-  let selected = atomic_structure.decorator.selected_bonds.contains(&bond_ref);
+  let selected = atomic_structure.decorator().is_bond_selected(&bond_ref);
   let color = get_bond_color_inline(atom1.id, atom2.id, atomic_structure);
 
   tessellator::tessellate_cylinder(
@@ -351,7 +351,7 @@ pub fn tessellate_atomic_structure_impostors(
   let _timer = Timer::new("Atomic impostor tessellation");
 
   // Pre-allocate impostor mesh capacity (much smaller than triangle tessellation)
-  let total_atoms = atomic_structure.atoms.len();
+  let total_atoms = atomic_structure.get_num_of_atoms();
   let total_bonds = atomic_structure.get_num_of_bonds();
   
   // Each atom = 4 vertices + 6 indices, each bond = 4 vertices + 6 indices
@@ -364,7 +364,7 @@ pub fn tessellate_atomic_structure_impostors(
   let mut tessellated_count = 0;
   
   // Tessellate atoms
-  for (id, atom) in atomic_structure.atoms.iter() {
+  for (id, atom) in atomic_structure.iter_atoms() {
     // Get effective display state from decorator
     let display_state = get_atom_display_state(*id, atomic_structure);
     
@@ -381,12 +381,12 @@ pub fn tessellate_atomic_structure_impostors(
   // Only tessellate bonds for ball-and-stick visualization
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
     // Iterate inline bonds - each bond only once using atom ID ordering
-    for atom in atomic_structure.atoms.values() {
+    for atom in atomic_structure.atoms_values() {
       for bond in &atom.bonds {
         let other_atom_id = bond.other_atom_id();
         // Only tessellate each bond once
         if atom.id < other_atom_id {
-          if let Some(other_atom) = atomic_structure.atoms.get(&other_atom_id) {
+          if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
             tessellate_bond_impostor_inline(bond_impostor_mesh, atom, other_atom, bond.bond_order());
           }
         }

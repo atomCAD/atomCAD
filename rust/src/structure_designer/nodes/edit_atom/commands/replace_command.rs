@@ -21,8 +21,7 @@ impl ReplaceCommand {
 impl EditAtomCommand for ReplaceCommand {
     fn execute(&self, model: &mut AtomicStructure) {
         // Collect all selected atom IDs
-        let selected_atom_ids: Vec<u32> = model.atoms
-            .iter()
+        let selected_atom_ids: Vec<u32> = model.iter_atoms()
             .filter(|(_, atom)| atom.is_selected())
             .map(|(id, _)| *id)
             .collect();

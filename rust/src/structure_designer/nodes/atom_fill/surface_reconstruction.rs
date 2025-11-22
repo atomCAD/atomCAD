@@ -123,8 +123,8 @@ fn classify_atom_surface_orientation(
   let neighbor1_id = atom.bonds[0].other_atom_id();
   let neighbor2_id = atom.bonds[1].other_atom_id();
   
-  let neighbor1 = structure.atoms.get(&neighbor1_id);
-  let neighbor2 = structure.atoms.get(&neighbor2_id);
+  let neighbor1 = structure.get_atom(neighbor1_id);
+  let neighbor2 = structure.get_atom(neighbor2_id);
   
   if neighbor1.is_none() || neighbor2.is_none() {
     return SurfaceOrientation::Unknown;
@@ -564,7 +564,7 @@ fn process_atoms(
   // Iterate through all placed atoms
   for (address, atom_id) in atom_tracker.iter_atoms() {
     // Get the atom from the structure
-    let atom = match structure.atoms.get(&atom_id) {
+    let atom = match structure.get_atom(atom_id) {
       Some(a) => a,
       None => continue, // Atom doesn't exist in structure, skip
     };
@@ -574,9 +574,7 @@ fn process_atoms(
     
     // Apply debug visualization if enabled
     if SURFACE_RECONSTRUCTION_VISUAL_DEBUG {
-      if let Some(atom_mut) = structure.atoms.get_mut(&atom_id) {
-        atom_mut.atomic_number = get_debug_atomic_number(orientation);
-      }
+      structure.set_atom_atomic_number(atom_id, get_debug_atomic_number(orientation));
     }
 
     // Skip bulk and unknown atoms - we only care about potential dimer candidates
@@ -644,8 +642,8 @@ fn apply_dimer_reconstruction(
   };
   
   // Get the two atoms
-  let atom1 = structure.atoms.get(&dimer_pair.primary_atom_id);
-  let atom2 = structure.atoms.get(&dimer_pair.partner_atom_id);
+  let atom1 = structure.get_atom(dimer_pair.primary_atom_id);
+  let atom2 = structure.get_atom(dimer_pair.partner_atom_id);
   
   if atom1.is_none() || atom2.is_none() {
     return; // Safety check
@@ -772,12 +770,8 @@ fn add_hydrogen_passivation(
   structure.add_bond(dimer_pair.partner_atom_id, h2_id, 1);
   
   // Flag the carbon atoms as hydrogen passivated
-  if let Some(atom) = structure.atoms.get_mut(&dimer_pair.primary_atom_id) {
-    atom.set_hydrogen_passivation(true);
-  }
-  if let Some(atom) = structure.atoms.get_mut(&dimer_pair.partner_atom_id) {
-    atom.set_hydrogen_passivation(true);
-  }
+  structure.set_atom_hydrogen_passivation(dimer_pair.primary_atom_id, true);
+  structure.set_atom_hydrogen_passivation(dimer_pair.partner_atom_id, true);
 }
 
 /// Determines if the current structure is cubic diamond suitable for (100) reconstruction.

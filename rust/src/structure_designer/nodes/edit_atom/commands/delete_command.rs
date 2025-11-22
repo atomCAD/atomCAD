@@ -20,7 +20,7 @@ impl DeleteCommand {
 impl EditAtomCommand for DeleteCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     // Collect all selected bond references from decorator
-    let selected_bond_refs: Vec<_> = model.decorator.selected_bonds.iter().cloned().collect();
+    let selected_bond_refs: Vec<_> = model.decorator().iter_selected_bonds().cloned().collect();
 
     // Delete all selected bonds
     for bond_ref in &selected_bond_refs {
@@ -28,8 +28,7 @@ impl EditAtomCommand for DeleteCommand {
     }
 
     // Now collect all selected atom IDs
-    let selected_atom_ids: Vec<u32> = model.atoms
-      .iter()
+    let selected_atom_ids: Vec<u32> = model.iter_atoms()
       .filter(|(_, atom)| atom.is_selected())
       .map(|(id, _)| *id)
       .collect();
@@ -39,7 +38,7 @@ impl EditAtomCommand for DeleteCommand {
       model.delete_atom(atom_id);
     }
 
-    model.selection_transform = calc_selection_transform(model);
+    model.decorator_mut().selection_transform = calc_selection_transform(model);
   }
 
   fn clone_box(&self) -> Box<dyn EditAtomCommand> {

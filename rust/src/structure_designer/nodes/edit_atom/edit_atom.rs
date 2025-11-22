@@ -78,7 +78,7 @@ impl EditAtomData {
       if decorate {
         if let EditAtomTool::AddBond(state) = &self.active_tool {
           if let Some(atom_id) = state.last_atom_id {
-            atomic_structure.decorator.set_atom_display_state(atom_id, AtomDisplayState::Marked);
+            atomic_structure.decorator_mut().set_atom_display_state(atom_id, AtomDisplayState::Marked);
           }
         }
       }
@@ -387,7 +387,7 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
     // Get the current atomic structure
     if let Some(structure) = structure_designer.get_atomic_structure_from_selected_node() {
       // Clone the transform if it exists
-      structure.selection_transform.clone()
+      structure.decorator().selection_transform.clone()
     } else {
       return; // No atomic structure, exit early
     }

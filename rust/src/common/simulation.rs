@@ -156,7 +156,7 @@ fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>,
     let mut atom_id_to_index = std::collections::HashMap::new();
     
     // Collect atom IDs to ensure consistent ordering
-    let atom_ids: Vec<u32> = structure.atoms.keys().cloned().collect();
+    let atom_ids: Vec<u32> = structure.atom_ids().cloned().collect();
     
     for (index, &atom_id) in atom_ids.iter().enumerate() {
         if let Some(atom) = structure.get_atom(atom_id) {
@@ -171,7 +171,7 @@ fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>,
     
     // Create bond data - iterate inline bonds, avoiding duplicates
     let mut bonds_data = Vec::new();
-    for atom in structure.atoms.values() {
+    for atom in structure.atoms_values() {
         for bond in &atom.bonds {
             let other_atom_id = bond.other_atom_id();
             // Only include each bond once
@@ -196,7 +196,7 @@ fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>,
 /// Updates atom positions in AtomicStructure with minimized coordinates
 fn update_atom_positions(structure: &mut AtomicStructure, positions: &[Vec<f64>]) -> Result<(), String> {
     // Get atom IDs in the same order as we extracted them
-    let atom_ids: Vec<u32> = structure.atoms.keys().cloned().collect();
+    let atom_ids: Vec<u32> = structure.atom_ids().cloned().collect();
     
     if atom_ids.len() != positions.len() {
         return Err(format!("Position count mismatch: {} atoms vs {} positions", 

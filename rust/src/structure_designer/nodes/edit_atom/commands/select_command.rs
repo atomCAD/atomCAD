@@ -28,7 +28,7 @@ impl SelectCommand {
 impl EditAtomCommand for SelectCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     model.select(&self.atom_ids, &self.bond_references, self.select_modifier.clone());
-    model.selection_transform = calc_selection_transform(model);
+    model.decorator_mut().selection_transform = calc_selection_transform(model);
   }
 
   fn clone_box(&self) -> Box<dyn EditAtomCommand> {
