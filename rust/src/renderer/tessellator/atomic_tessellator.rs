@@ -114,7 +114,7 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
 }
 
 pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVisualization) -> f64 {
-  let atom_info = ATOM_INFO.get(&atom.atomic_number)
+  let atom_info = ATOM_INFO.get(&(atom.atomic_number as i32))
     .unwrap_or(&DEFAULT_ATOM_INFO);
   
   match visualization {
@@ -125,16 +125,16 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
 
 /// Shared helper to get atom color and material properties based on selection state
 fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
-  let atom_info = ATOM_INFO.get(&atom.atomic_number)
+  let atom_info = ATOM_INFO.get(&(atom.atomic_number as i32))
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
-  let atom_color = if atom.selected {
+  let atom_color = if atom.is_selected() {
     to_selected_color(&atom_info.color)
   } else { 
     atom_info.color
   };
   
-  let roughness = if atom.selected { 0.15 } else { 0.25 };
+  let roughness = if atom.is_selected() { 0.15 } else { 0.25 };
   let metallic = 0.0;
   
   (atom_color, roughness, metallic)
@@ -235,7 +235,7 @@ fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, v
 }
 
 pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization, reusable_occludable_mesh: &mut tessellator::OccludableMesh, reusable_occluder_array: &mut OccluderArray) {
-  let atom_info = ATOM_INFO.get(&atom.atomic_number)
+  let atom_info = ATOM_INFO.get(&(atom.atomic_number as i32))
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
   //if atom.atomic_number == 1 {

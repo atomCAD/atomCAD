@@ -18,7 +18,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
     let mut max_atom_radius = 0.0;
     for &atom_id in &atom_ids {
         if let Some(atom) = structure.get_atom(atom_id) {
-            let atom_radius = ATOM_INFO.get(&atom.atomic_number)
+            let atom_radius = ATOM_INFO.get(&(atom.atomic_number as i32))
                 .unwrap_or(&DEFAULT_ATOM_INFO)
                 .covalent_radius;
             
@@ -31,7 +31,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
     for &atom_id in &atom_ids {
         if let Some(atom) = structure.get_atom(atom_id) {
             let atom_pos = atom.position;
-            let atom_radius = ATOM_INFO.get(&atom.atomic_number)
+            let atom_radius = ATOM_INFO.get(&(atom.atomic_number as i32))
                 .unwrap_or(&DEFAULT_ATOM_INFO)
                 .covalent_radius;
             
@@ -63,7 +63,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
                 
                 // Process the nearby atom
                 if let Some(nearby_atom) = structure.get_atom(nearby_atom_id) {
-                    let nearby_atom_radius = ATOM_INFO.get(&nearby_atom.atomic_number)
+                    let nearby_atom_radius = ATOM_INFO.get(&(nearby_atom.atomic_number as i32))
                         .unwrap_or(&DEFAULT_ATOM_INFO)
                         .covalent_radius;
                     
@@ -102,7 +102,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
 pub fn calc_selection_transform(structure: &AtomicStructure) -> Option<Transform> {
     // Get selected atom IDs
     let selected_atom_ids: Vec<u32> = structure.atoms.iter()
-        .filter(|(_, atom)| atom.selected)
+        .filter(|(_, atom)| atom.is_selected())
         .map(|(id, _)| *id)
         .collect();
 
@@ -249,13 +249,71 @@ pub fn remove_lone_atoms(structure: &mut AtomicStructure) {
     }
 }
 
-pub fn remove_single_bond_atoms(structure: &mut AtomicStructure) {
-    let single_bond_atoms: Vec<u32> = structure.atoms.values()
-      .filter(|atom| atom.bond_ids.len() == 1)
-      .map(|atom| atom.id)
-      .collect();
+/// Helper function that deletes a batch of atoms with at most one bond
+/// and returns the neighbors that need to be checked in the next iteration.
+/// 
+/// IMPORTANT: Atoms in the list are assumed to have ≤1 bond at the START of this call.
+/// During deletion, some atoms might go from 1 bond to 0 bonds, but they still get deleted.
+/// This is why we do NOT re-check bond counts inside this function.
+/// 
+/// Returns: list of neighbor IDs to check next
+fn delete_atoms_with_at_most_one_bond(
+    structure: &mut AtomicStructure,
+    atoms_to_delete: Vec<u32>,
+) -> Vec<u32> {
+    let mut all_neighbors = Vec::new();
+    
+    for atom_id in atoms_to_delete {
+        // Get the atom
+        let Some(atom) = structure.get_atom(atom_id) else {
+            continue;
+        };
+        
+        // Collect neighbor IDs before deletion
+        for &bond_id in &atom.bond_ids {
+            if let Some(bond) = structure.get_bond(bond_id) {
+                let neighbor_id = if bond.atom_id1 == atom_id {
+                    bond.atom_id2
+                } else {
+                    bond.atom_id1
+                };
+                all_neighbors.push(neighbor_id);
+            }
+        }
+        
+        // Delete the atom (this also removes all its bonds)
+        structure.delete_atom(atom_id);
+    }
+    
+    all_neighbors
+}
 
-    for atom_id in single_bond_atoms {
-      structure.delete_atom(atom_id);
+pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool) {
+    // First iteration: find ALL atoms with at most one bond (0 or 1 bonds)
+    let mut atoms_with_at_most_one_bond: Vec<u32> = structure.atoms.values()
+        .filter(|atom| atom.bond_ids.len() <= 1)
+        .map(|atom| atom.id)
+        .collect();
+    
+    while !atoms_with_at_most_one_bond.is_empty() {
+        // Delete the batch and get neighbors to check
+        let all_neighbors = delete_atoms_with_at_most_one_bond(
+            structure,
+            atoms_with_at_most_one_bond,
+        );
+        
+        // If not recursive, stop after first iteration
+        if !recursive {
+            break;
+        }
+        
+        // For next iteration: check which neighbors now have at most one bond
+        atoms_with_at_most_one_bond = all_neighbors.into_iter()
+            .filter(|&neighbor_id| {
+                structure.get_atom(neighbor_id)
+                    .map(|atom| atom.bond_ids.len() <= 1)
+                    .unwrap_or(false)
+            })
+            .collect();
     }
 }

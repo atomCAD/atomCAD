@@ -9,13 +9,13 @@ use crate::common::serialization_utils::dvec3_serializer;
  */
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddAtomCommand {
-  pub atomic_number: i32,
+  pub atomic_number: i16,
   #[serde(with = "dvec3_serializer")]
   pub position: DVec3,
 }
 
 impl AddAtomCommand {
-  pub fn new(atomic_number: i32, position: DVec3) -> Self {
+  pub fn new(atomic_number: i16, position: DVec3) -> Self {
       Self { atomic_number, position }
   }
 }

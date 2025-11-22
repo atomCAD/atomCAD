@@ -156,7 +156,7 @@ pub fn parse_param_command(tokens: &[String], line_number: usize) -> Result<Para
         // Look up the atomic number from the CHEMICAL_ELEMENTS map
         // Note: CHEMICAL_ELEMENTS uses original case (e.g., "Si", "Al"), not uppercase
         match CHEMICAL_ELEMENTS.get(element_symbol) {
-            Some(&atomic_number) => atomic_number,
+            Some(&atomic_number) => atomic_number as i16,
             None => {
                 return Err(ParseError {
                     line_number,
@@ -216,12 +216,12 @@ pub fn parse_site_command(tokens: &[String], line_number: usize, parameters: &[P
     let atomic_number = if is_valid_identifier(element_name) {
         // Check if it's a chemical element first
         match CHEMICAL_ELEMENTS.get(element_name) {
-            Some(&atomic_number) => atomic_number,
+            Some(&atomic_number) => atomic_number as i16,
             None => {
                 // Check if it's a parameter element
                 if let Some(param_index) = parameters.iter().position(|p| p.name == *element_name) {
                     // Parameter elements use negative indices (first parameter is -1, second is -2, etc.)
-                    -(param_index as i32 + 1)
+                    -(param_index as i16 + 1)
                 } else {
                     return Err(ParseError {
                         line_number,
@@ -388,8 +388,8 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
 /// SECONDARY Si
 /// # This is a comment
 /// 
-/// Returns HashMap<String, i32> mapping parameter names to atomic numbers
-pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i32>, ParseError> {
+/// Returns HashMap<String, i16> mapping parameter names to atomic numbers
+pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i16>, ParseError> {
     let mut parameter_values = HashMap::new();
     
     for (line_number, line) in text.lines().enumerate() {
@@ -421,7 +421,7 @@ pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i32>
             .ok_or_else(|| ParseError {
                 line_number,
                 message: format!("Unknown chemical element: '{}'", element_name),
-            })?;
+            })? as i16;
         
         // Check for duplicate parameter names
         if parameter_values.contains_key(parameter_name) {

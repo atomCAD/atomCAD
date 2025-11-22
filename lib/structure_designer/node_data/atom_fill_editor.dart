@@ -29,6 +29,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   late APIVec3 _motifOffset;
   late bool _hydrogenPassivation;
   late bool _removeSingleBondAtomsBeforePassivation;
+  late bool _surfaceReconstruction;
 
   @override
   void initState() {
@@ -42,6 +43,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
     _removeSingleBondAtomsBeforePassivation =
         widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
+    _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
   }
 
   @override
@@ -65,6 +67,10 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       _removeSingleBondAtomsBeforePassivation =
           widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
     }
+    if (oldWidget.data?.surfaceReconstruction !=
+        widget.data?.surfaceReconstruction) {
+      _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
+    }
   }
 
   @override
@@ -83,6 +89,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
         hydrogenPassivation: _hydrogenPassivation,
         removeSingleBondAtomsBeforePassivation:
             _removeSingleBondAtomsBeforePassivation,
+        surfaceReconstruction: _surfaceReconstruction,
         error: null, // This will be set by the backend after parsing
       ),
     );
@@ -182,6 +189,21 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
             onChanged: (value) {
               setState(() {
                 _removeSingleBondAtomsBeforePassivation = value ?? false;
+              });
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+
+          const SizedBox(height: 8),
+
+          // Surface Reconstruction checkbox
+          CheckboxListTile(
+            title: const Text('Surface Reconstruction'),
+            subtitle: const Text('Apply (100) 2×1 dimer reconstruction'),
+            value: _surfaceReconstruction,
+            onChanged: (value) {
+              setState(() {
+                _surfaceReconstruction = value ?? false;
               });
             },
             controlAffinity: ListTileControlAffinity.leading,

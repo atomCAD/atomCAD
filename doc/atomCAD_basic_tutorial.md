@@ -12,6 +12,8 @@ The upper part of the screen with the trusty cube in it is called the **viewport
 
 > **TIP**: Although it is possible to use atomCAD with a touchpad **we strongly recommend using it with a mouse**.
 
+> **TIP**: IF the cube is not visible click on the eye icon on the cuboid node to toggle the visibility of its output.
+
 When using the application, you will navigate the viewport frequently. Practice these controls to ensure you can use them effortlessly:
 
 - Hover over the cube with the mouse, press and hold the right mouse button **(RMB)** and drag: this is how you **orbit** the camera.
@@ -63,7 +65,7 @@ Right-clicking anywhere on the node network canvas opens the **Add Node** dialog
 
 ![](./tutorial_images/add_node.png)
 
-Start typing `cuboid` in the filter field. Select `cuboid` from the filtered list and a new cuboid will be placed. Select it and adjust its properties so that it overlaps with the other cuboid, but neither fully covers the other.
+Start typing `cuboid` in the filter field. Select `cuboid` from the filtered list and a new cuboid will be placed. Toggle the eye icon on it to make it visible. Select it and adjust its properties so that it overlaps with the other cuboid, but neither fully covers the other.
 
 ![](./tutorial_images/two_cuboids.png)
 
@@ -77,7 +79,7 @@ Since the cuboids are overlapping, you may not clearly see where your individual
 ![](./tutorial_images/wireframe.png)
 
 Restore the visibility of the nodes and return to solid geometry visualization.
-Right-click on the node network again and add a `diff` node.
+Right-click on the node network again and add a `diff` node. Make it visible.
 
 Left-click and drag the output pin of the first `cuboid`: drag out a wire from it and release the left mouse button at the `base` input of the `diff` node. This connects the first `cuboid`'s output pin to the `base` input pin of the `diff` node.
 
@@ -89,7 +91,7 @@ You should see something like this:
 
 ## About node visibility
 
-You may have noticed that when you select a node, it automatically becomes visible and other nodes that provide their inputs become invisible. This is the desired behavior most of the time, but not always. In the upper-left part of the window, there are buttons to set the **node display policy**. The default mode is called *Prefer Selected Nodes*. Another mode you often want is *Manual* mode: in this case, regardless of what is selected, a node will be visible or invisible only if you explicitly toggle its eye icon. You can read about the exact behavior of node display policies in the Reference Guide.
+You might find it cumbersome to toggle the eye icon on the nodes constantly. In the upper-left part of the window, there are buttons to set the **node display policy**. The default mode is *Manual*, but there are other 2 modes called *Prefer Selected Nodes* and *Prefer Frontier Nodes*. In *Prefer Selected Modes* the selected node is always visible, and you want this behavior a lot of the times, but not always. You can read about the exact behavior of node display policies in the Reference Guide.
 
 ## atom_fill node
 
@@ -97,7 +99,17 @@ Add an `atom_fill` node to your node network. Connect the output of the `diff` n
 
 ![](./tutorial_images/atom_fill.png)
 
-To see atomCAD's parametric design capabilities in action, select the *Manual* node display policy, then select one of the cuboid nodes and change its extents. Notice how the `atom_fill` node's output updates automatically—this demonstrates non-destructive editing. You can modify any node's properties at any time, and all downstream nodes will update automatically without requiring you to rebuild or redo any work.
+To see atomCAD's parametric design capabilities in action, select the *Manual* node display policy, make only the `atom_fill` node visible then select one of the cuboid nodes and change its extents. Notice how the `atom_fill` node's output updates automatically—this demonstrates non-destructive editing. You can modify any node's properties at any time, and all downstream nodes will update automatically without requiring you to rebuild or redo any work.
+
+## Visualization of atomic structures
+
+The structure we designed is displayed in *Balls and Sticks* visualization. You can see the same structure in *Space filling* visualization. In Space Filling visualization the atoms are displayed with their real Van der Waals radius.
+
+![](./tutorial_images/space_filling.png)
+
+Sometimes people like to see their designs in a way that both the geometry and the atomic representation is visible. To do this switch back to the *Balls and Sticks* visualization, and toggle the eye icon of the geometry so that bothe the geometry and the atomic structure is visible like in the following screenshot:
+
+![](./tutorial_images/balls_and_sticks_plus_geometry.png)
 
 ## Saving your design and exporting atomic structures
 
@@ -109,11 +121,12 @@ You can also export the currently visible atomic structures into .xyz or .mol fo
 
 First of all check out the [atomCAD Part Design Tutorial](./part_design_tutorial.md) which covers essential concepts that were not covered in this tutorial.
 
-Then you can check out the [atomCAD Demo Files](../samples/demo_description.md) to see some examples of what you can do with atomCAD.
+Then you can check out the [atomCAD Demo Files](../samples/demo_description.md) to see some examples of what you can do with atomCAD. 
 
 - Search for the `polygon` and `extrude` nodes in the [Reference Guide](./atomCAD_reference_guide.md): with these nodes you can create interesting geometries quickly. Also check out the `rect`, `union_2d`, `intersect_2d`, `diff_2d`, and `half_plane` nodes—these are helpful when creating 2D shapes. Always model as much as possible in 2D and use the extrude node: working in 2D is almost always easier and faster than working in 3D.
 - For most geometries, working in 2D and extruding will not be sufficient to reach the final shape. Besides the CSG operations (`union`, `intersect`, `diff`), you will need to learn to use the `half_space` node. It has a steep learning curve but is immensely powerful. As its name suggests, it represents an infinite half-space defined by the bounding plane and a direction (which side of the plane is filled). You could create any crystal geometry using only `half_space` nodes and CSG nodes. For example, it is easy to see that intersecting any geometry with a half-space is equivalent to using the boundary plane of the half-space as a cutter plane on the given geometry.
 - Learn about the `lattice_move` and `lattice_rot` nodes to transform your geometries with respect to lattice symmetries. 
 - To work with crystals other than cubic diamond, learn about the `unit_cell` and `motif` nodes. atomCAD is flexible enough that you can define your own unit cells and even your own motifs.
 - Eventually, it is worth browsing through all the information in the [Reference Guide](./atomCAD_reference_guide.md). There are capabilities we did not cover here at all, such as programming, creating subnetworks, etc.
+- To see an advanced reusable part library in action you should check out our [demolib](https://github.com/atomCAD/atomCAD/blob/main/demolib/example-lib_demo-descriptions.md). 
 - atomCAD is evolving rapidly. Check back frequently and review the release notes for new capabilities.

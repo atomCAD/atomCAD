@@ -392,7 +392,7 @@ pub fn get_all_elements() -> Vec<ElementSummary> {
   // Convert to Vec, sort by atomic_number, and map to ElementSummary
   let mut elements: Vec<ElementSummary> = ATOM_INFO.values()
     .map(|atom_info| ElementSummary {
-      atomic_number: atom_info.atomic_number,
+      atomic_number: atom_info.atomic_number as i16,
       element_name: atom_info.element_name.clone(),
     })
     .collect();

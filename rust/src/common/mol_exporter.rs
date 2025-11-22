@@ -10,7 +10,7 @@ pub enum MolSaveError {
     Io(#[from] io::Error),
     
     #[error("Element not found for atomic number: {0}")]
-    ElementNotFound(i32),
+    ElementNotFound(i16),
 }
 
 /// Saves an AtomicStructure to a MOL file in V3000 format
@@ -61,7 +61,7 @@ pub fn save_mol_v3000(atomic_structure: &AtomicStructure, file_path: &str) -> Re
     for (atom_id, atom) in sorted_atoms {
         // Get element symbol from atomic number
         let atom_info = ATOM_INFO
-            .get(&atom.atomic_number)
+            .get(&(atom.atomic_number as i32))
             .ok_or_else(|| MolSaveError::ElementNotFound(atom.atomic_number))?;
         
         // Store the mapping for bond writing

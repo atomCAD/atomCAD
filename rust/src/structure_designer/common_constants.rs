@@ -28,6 +28,17 @@ pub const LINE_RADIUS_HIT_TEST_FACTOR: f64 = 1.3;
 
 pub const CONNECTED_PIN_SYMBOL: &str = "⎆";
 
+// Zincblende motif site indexes (basis indexes)
+// These correspond to the order of SITE declarations in DEFAULT_ZINCBLENDE_MOTIF
+pub const ZINCBLENDE_SITE_CORNER: usize = 0;
+pub const ZINCBLENDE_SITE_FACE_Z: usize = 1;
+pub const ZINCBLENDE_SITE_FACE_Y: usize = 2;
+pub const ZINCBLENDE_SITE_FACE_X: usize = 3;
+pub const ZINCBLENDE_SITE_INTERIOR1: usize = 4;
+pub const ZINCBLENDE_SITE_INTERIOR2: usize = 5;
+pub const ZINCBLENDE_SITE_INTERIOR3: usize = 6;
+pub const ZINCBLENDE_SITE_INTERIOR4: usize = 7;
+
 lazy_static! {
     /// Default cubic zincblende motif used when no motif is connected to atom_fill node
     pub static ref DEFAULT_ZINCBLENDE_MOTIF: crate::structure_designer::evaluator::motif::Motif = {

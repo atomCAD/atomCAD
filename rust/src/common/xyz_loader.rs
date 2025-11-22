@@ -49,12 +49,12 @@ pub fn load_xyz(file_path: &str, create_bonds: bool) -> Result<AtomicStructure, 
         }
 
         let element = parts[0].to_string();
-        let atomic_number = CHEMICAL_ELEMENTS.get(&element).unwrap_or(&1); // TODO: error for unknown elements
+        let atomic_number = *CHEMICAL_ELEMENTS.get(&element).unwrap_or(&1) as i16; // TODO: error for unknown elements
         let x: f64 = parts[1].parse()?;
         let y: f64 = parts[2].parse()?;
         let z: f64 = parts[3].parse()?;
 
-        atomic_structure.add_atom(*atomic_number, DVec3::new(x, y, z));
+        atomic_structure.add_atom(atomic_number, DVec3::new(x, y, z));
     }
 
     if atomic_structure.get_num_of_atoms() != num_atoms {

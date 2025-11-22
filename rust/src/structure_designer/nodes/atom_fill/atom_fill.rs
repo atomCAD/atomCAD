@@ -7,7 +7,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::common::atomic_structure::AtomicStructure;
 use std::collections::{HashMap, HashSet};
-use indexmap::IndexMap;
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -29,10 +28,9 @@ use crate::structure_designer::evaluator::motif::SiteSpecifier;
 use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
-use rustc_hash::FxBuildHasher;
 use crate::common::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
-
-type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
+use super::surface_reconstruction::reconstruct_surface;
+use super::placed_atom_tracker::PlacedAtomTracker;
 
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
@@ -44,7 +42,7 @@ struct PendingAtomData {
     /// The 3D position where SDF will be evaluated
     position: DVec3,
     /// Effective atomic number for this site
-    atomic_number: i32,
+    atomic_number: i16,
     /// Motif position in lattice coordinates
     motif_pos: IVec3,
     /// Site index within the motif
@@ -66,6 +64,7 @@ pub struct AtomFillStatistics {
   pub max_depth: f64,
   pub non_batched_evaluations: i32,
   pub batched_evaluations: i32,
+  pub surface_reconstructions: i32,
 }
 
 impl AtomFillStatistics {
@@ -81,6 +80,7 @@ impl AtomFillStatistics {
       max_depth: f64::NEG_INFINITY,
       non_batched_evaluations: 0,
       batched_evaluations: 0,
+      surface_reconstructions: 0,
     }
   }
 
@@ -109,50 +109,14 @@ impl AtomFillStatistics {
     println!("  motif cells processed: {}", self.motif_cells_processed);
     println!("  atoms added: {}", self.atoms);
     println!("  bonds created: {}", self.bonds);
+    if self.surface_reconstructions > 0 {
+      println!("  surface reconstructions: {}", self.surface_reconstructions);
+    }
     println!("  evaluations: {} non-batched, {} batched", self.non_batched_evaluations, self.batched_evaluations);
     if self.atoms > 0 {
       println!("  average depth: {:.3} Å", self.get_average_depth());
       println!("  max depth: {:.3} Å", self.max_depth);
     }
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct PlacedAtomTracker {
-  // Primary storage: maps (motif_space_pos, site_index) -> atom_id
-  atom_map: FxIndexMap<(IVec3, usize), u32>,
-}
-
-impl PlacedAtomTracker {
-  pub fn new() -> Self {
-    PlacedAtomTracker {
-      atom_map: FxIndexMap::default(),
-    }
-  }
-  
-  /// Records that an atom was placed at the given motif space position and site index
-  pub fn record_atom(&mut self, motif_space_pos: IVec3, site_index: usize, atom_id: u32) {
-    self.atom_map.insert((motif_space_pos, site_index), atom_id);
-  }
-  
-  /// Looks up the atom ID for a given motif space position and site index
-  pub fn get_atom_id(&self, motif_space_pos: IVec3, site_index: usize) -> Option<u32> {
-    self.atom_map.get(&(motif_space_pos, site_index)).copied()
-  }
-  
-  /// Gets atom ID for a site specifier (handles relative cell offsets)
-  pub fn get_atom_id_for_specifier(
-    &self, 
-    base_motif_space_pos: IVec3, 
-    site_specifier: &crate::structure_designer::evaluator::motif::SiteSpecifier
-  ) -> Option<u32> {
-    let target_motif_space_pos = base_motif_space_pos + site_specifier.relative_cell;
-    self.get_atom_id(target_motif_space_pos, site_specifier.site_index)
-  }
-  
-  /// Returns an iterator over all placed atoms: (lattice_pos, site_index, atom_id)
-  pub fn iter_atoms(&self) -> impl Iterator<Item = (IVec3, usize, u32)> + '_ {
-    self.atom_map.iter().map(|((motif_space_pos, site_index), &atom_id)| (*motif_space_pos, *site_index, atom_id))
   }
 }
 
@@ -164,10 +128,12 @@ pub struct AtomFillData {
   pub hydrogen_passivation: bool,
   #[serde(default)]
   pub remove_single_bond_atoms_before_passivation: bool,
+  #[serde(default)]
+  pub surface_reconstruction: bool,
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
-  pub parameter_element_values: HashMap<String, i32>,
+  pub parameter_element_values: HashMap<String, i16>,
 }
 
 impl AtomFillData {
@@ -336,8 +302,24 @@ impl NodeData for AtomFillData {
         
         // Remove single bond atoms before hydrogen passivation if enabled
         // This is useful for removing methyl groups on crystal surfaces
+        // Recursive removal: keeps removing until no more single-bond atoms exist
         if self.remove_single_bond_atoms_before_passivation {
-          remove_single_bond_atoms(&mut atomic_structure);
+          remove_single_bond_atoms(&mut atomic_structure, true);
+        }
+        
+        // Apply surface reconstruction if enabled (before hydrogen passivation)
+        if self.surface_reconstruction {
+          let _reconstruction_timer = Timer::new("AtomFill surface reconstruction");
+          let reconstruction_count = reconstruct_surface(
+            &mut atomic_structure,
+            &atom_tracker,
+            &motif, 
+            &mesh.unit_cell, 
+            &self.parameter_element_values,
+            self.remove_single_bond_atoms_before_passivation,
+            self.hydrogen_passivation
+          );
+          statistics.surface_reconstructions = reconstruction_count as i32;
         }
         
         // Apply hydrogen passivation after bonds are created and lone atoms removed
@@ -378,7 +360,7 @@ impl AtomFillData {
     box_to_fill: &DAABox,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>,
+    parameter_element_values: &HashMap<String, i16>,
     atom_tracker: &mut PlacedAtomTracker,
     processed_cells: &mut HashSet<IVec3>,
     batched_evaluator: &mut BatchedImplicitEvaluator,
@@ -463,7 +445,7 @@ impl AtomFillData {
     box_to_fill: &DAABox,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>,
+    parameter_element_values: &HashMap<String, i16>,
     atom_tracker: &mut PlacedAtomTracker,
     processed_cells: &mut HashSet<IVec3>,
     batched_evaluator: &mut BatchedImplicitEvaluator,
@@ -530,7 +512,7 @@ impl AtomFillData {
     _cell_real_pos: &DVec3,
     _atomic_structure: &mut AtomicStructure,
     _statistics: &mut AtomFillStatistics,
-    parameter_element_values: &HashMap<String, i32>,
+    parameter_element_values: &HashMap<String, i16>,
     _atom_tracker: &mut PlacedAtomTracker,
     batched_evaluator: &mut BatchedImplicitEvaluator,
     pending_atoms: &mut Vec<PendingAtomData>
@@ -590,7 +572,10 @@ impl AtomFillData {
     statistics: &mut AtomFillStatistics
   ) {
     // Iterate through all placed atoms
-    for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
+    for (address, atom_id) in atom_tracker.iter_atoms() {
+      let lattice_pos = address.motif_space_pos;
+      let site_index = address.site_index;
+      
       // Use precomputed bonds_by_site1_index to only check bonds that start from this site
       // This is O(k) where k is the number of bonds per site, instead of O(N) where N is total bonds
       for &bond_index in &motif.bonds_by_site1_index[site_index] {
@@ -626,7 +611,24 @@ impl AtomFillData {
     //println!("hydrogen_passivate called");
 
     // Iterate through all placed atoms
-    for (lattice_pos, site_index, atom_id) in atom_tracker.iter_atoms() {
+    for (address, atom_id) in atom_tracker.iter_atoms() {
+      let lattice_pos = address.motif_space_pos;
+      let site_index = address.site_index;
+      
+      // Check if this atom actually exists in the atomic structure
+      // (it might have been removed by remove_single_bond_atoms)
+      if atomic_structure.get_atom(atom_id).is_none() {
+        continue; // Early exit - atom was removed, skip it
+      }
+      
+      // Check if this atom is already hydrogen passivated (e.g., by surface reconstruction)
+      // If so, skip all dangling bond processing for this atom
+      if let Some(atom) = atomic_structure.get_atom(atom_id) {
+        if atom.is_hydrogen_passivation() {
+          continue; // Skip - atom already passivated by surface reconstruction
+        }
+      }
+      
       // Case 1: Check bonds where this atom is the first site (optimized with precomputed index)
       // Use precomputed bonds_by_site1_index to only check bonds that start from this site
       for &bond_index in &motif.bonds_by_site1_index[site_index] {
@@ -635,7 +637,13 @@ impl AtomFillData {
         // This atom is the first site of the bond, try to find the second site
         let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
         
-        if atom_id_2.is_none() {
+        // Check if second atom is missing (not in tracker OR in tracker but removed from structure)
+        let is_dangling = match atom_id_2 {
+          None => true, // Not in tracker - definitely dangling
+          Some(id) => atomic_structure.get_atom(id).is_none(), // In tracker but removed from structure
+        };
+        
+        if is_dangling {
           // Second atom doesn't exist - this is a dangling bond that needs to be passivated
           //println!("dangling bond found (first site exists, second doesn't)");
           
@@ -662,7 +670,13 @@ impl AtomFillData {
         // This atom is the second site of the bond, try to find the first site
         let atom_id_1 = atom_tracker.get_atom_id_for_specifier(second_site_base_pos, &bond.site_1);
         
-        if atom_id_1.is_none() {
+        // Check if first atom is missing (not in tracker OR in tracker but removed from structure)
+        let is_dangling = match atom_id_1 {
+          None => true, // Not in tracker - definitely dangling
+          Some(id) => atomic_structure.get_atom(id).is_none(), // In tracker but removed from structure
+        };
+        
+        if is_dangling {
           // First atom doesn't exist - this is a dangling bond that needs to be passivated
           //println!("dangling bond found (second site exists, first doesn't)");
           
@@ -676,6 +690,12 @@ impl AtomFillData {
             statistics
           );
         }
+      }
+      
+      // After processing all dangling bonds for this atom, flag it as passivated
+      // This prevents the general passivation from running again on this atom
+      if let Some(atom) = atomic_structure.atoms.get_mut(&atom_id) {
+        atom.set_hydrogen_passivation(true);
       }
     }
   }
@@ -713,7 +733,7 @@ impl AtomFillData {
         C_H_BOND_LENGTH
       } else {
         // General case: sum of covalent radii
-        let atom_1_radius = ATOM_INFO.get(&found_atom.atomic_number)
+        let atom_1_radius = ATOM_INFO.get(&(found_atom.atomic_number as i32))
           .map(|info| info.covalent_radius)
           .unwrap_or(0.7); // Default radius if not found
         let hydrogen_radius = ATOM_INFO.get(&1)

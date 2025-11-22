@@ -35,6 +35,7 @@ class APIAtomFillData {
   final APIVec3 motifOffset;
   final bool hydrogenPassivation;
   final bool removeSingleBondAtomsBeforePassivation;
+  final bool surfaceReconstruction;
   final String? error;
 
   const APIAtomFillData({
@@ -42,6 +43,7 @@ class APIAtomFillData {
     required this.motifOffset,
     required this.hydrogenPassivation,
     required this.removeSingleBondAtomsBeforePassivation,
+    required this.surfaceReconstruction,
     this.error,
   });
 
@@ -51,6 +53,7 @@ class APIAtomFillData {
       motifOffset.hashCode ^
       hydrogenPassivation.hashCode ^
       removeSingleBondAtomsBeforePassivation.hashCode ^
+      surfaceReconstruction.hashCode ^
       error.hashCode;
 
   @override
@@ -64,6 +67,7 @@ class APIAtomFillData {
           hydrogenPassivation == other.hydrogenPassivation &&
           removeSingleBondAtomsBeforePassivation ==
               other.removeSingleBondAtomsBeforePassivation &&
+          surfaceReconstruction == other.surfaceReconstruction &&
           error == other.error;
 }
 
