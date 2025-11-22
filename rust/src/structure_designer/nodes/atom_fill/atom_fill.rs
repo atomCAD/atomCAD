@@ -5,7 +5,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::common::atomic_structure::AtomicStructure;
+use crate::common::atomic_structure::{AtomicStructure, Atom};
 use std::collections::{HashMap, HashSet};
 use glam::i32::IVec3;
 use glam::f64::DVec3;
@@ -298,12 +298,16 @@ impl NodeData for AtomFillData {
       {
         let _cleanup_timer = Timer::new("AtomFill cleanup and passivation");
         // Remove lone atoms before hydrogen passivation (passivation will bond them)
-        remove_lone_atoms(&mut atomic_structure);
-        
+        {
+          let _remove_lone_atoms_timer = Timer::new("Remove lone atoms");
+          remove_lone_atoms(&mut atomic_structure);
+        }
+
         // Remove single bond atoms before hydrogen passivation if enabled
         // This is useful for removing methyl groups on crystal surfaces
         // Recursive removal: keeps removing until no more single-bond atoms exist
         if self.remove_single_bond_atoms_before_passivation {
+          let _remove_single_bond_atoms_timer = Timer::new("Remove single bond atoms");
           remove_single_bond_atoms(&mut atomic_structure, true);
         }
         
@@ -324,6 +328,7 @@ impl NodeData for AtomFillData {
         
         // Apply hydrogen passivation after bonds are created and lone atoms removed
         if self.hydrogen_passivation {
+          let _hydrogen_passivate_timer = Timer::new("Hydrogen passivation");
           self.hydrogen_passivate(&mesh.unit_cell, &motif, &atom_tracker, &mut atomic_structure, &mut statistics);
         }
       }
@@ -615,19 +620,18 @@ impl AtomFillData {
       let lattice_pos = address.motif_space_pos;
       let site_index = address.site_index;
       
-      // Check if this atom actually exists in the atomic structure
-      // (it might have been removed by remove_single_bond_atoms)
-      if atomic_structure.get_atom(atom_id).is_none() {
-        continue; // Early exit - atom was removed, skip it
-      }
-      
-      // Check if this atom is already hydrogen passivated (e.g., by surface reconstruction)
-      // If so, skip all dangling bond processing for this atom
-      if let Some(atom) = atomic_structure.get_atom(atom_id) {
-        if atom.is_hydrogen_passivation() {
-          continue; // Skip - atom already passivated by surface reconstruction
+      // Check if this atom exists and isn't already hydrogen passivated
+      // (it might have been removed by remove_single_bond_atoms or passivated by surface reconstruction)
+      // Extract needed fields immediately to avoid borrow checker conflicts
+      let (atom_position, atom_atomic_number) = match atomic_structure.get_atom(atom_id) {
+        None => continue, // Early exit - atom was removed, skip it
+        Some(atom) => {
+          if atom.is_hydrogen_passivation() {
+            continue; // Skip - atom already passivated by surface reconstruction
+          }
+          (atom.position, atom.atomic_number)
         }
-      }
+      };
       
       // Case 1: Check bonds where this atom is the first site (optimized with precomputed index)
       // Use precomputed bonds_by_site1_index to only check bonds that start from this site
@@ -653,6 +657,8 @@ impl AtomFillData {
             &bond.site_1,
             &bond.site_2,
             atom_id,
+            atom_position,
+            atom_atomic_number,
             atomic_structure,
             statistics
           );
@@ -686,6 +692,8 @@ impl AtomFillData {
             &bond.site_2,
             &bond.site_1,
             atom_id,
+            atom_position,
+            atom_atomic_number,
             atomic_structure,
             statistics
           );
@@ -701,7 +709,9 @@ impl AtomFillData {
   // Helper method to passivate a single dangling bond with hydrogen
   // found_site: the site that exists in the crystal
   // not_found_site: the site that is missing and needs to be passivated
-  // found_atom_id: the atom ID of the existing atom
+  // found_atom_id: ID of the existing atom
+  // found_atom_position: position of the existing atom
+  // found_atom_atomic_number: atomic number of the existing atom
   fn hydrogen_passivate_dangling_bond(
     &self,
     unit_cell: &UnitCellStruct,
@@ -709,54 +719,53 @@ impl AtomFillData {
     found_site: &SiteSpecifier,
     not_found_site: &SiteSpecifier,
     found_atom_id: u32,
+    found_atom_position: DVec3,
+    found_atom_atomic_number: i16,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut AtomFillStatistics
   ) {
-    // Get the position of the found atom in real space
-    if let Some(found_atom) = atomic_structure.get_atom(found_atom_id) {
-      // Calculate the relative position of not_found_site relative to found_site in motif space
-      let found_site_pos = motif.sites[found_site.site_index].position + 
-        found_site.relative_cell.as_dvec3();
-      let not_found_site_pos = motif.sites[not_found_site.site_index].position + 
-        not_found_site.relative_cell.as_dvec3();
+    // Calculate the relative position of not_found_site relative to found_site in motif space
+    let found_site_pos = motif.sites[found_site.site_index].position + 
+      found_site.relative_cell.as_dvec3();
+    let not_found_site_pos = motif.sites[not_found_site.site_index].position + 
+      not_found_site.relative_cell.as_dvec3();
 
-      let relative_motif_pos = not_found_site_pos - found_site_pos;
-      
-      // Convert the relative position from motif space to real space direction
-      let real_space_direction = unit_cell.dvec3_lattice_to_real(&relative_motif_pos);
-      
-      // Calculate proper bond length based on atomic radii
-      let bond_length = if found_atom.atomic_number == 6 {
-        // Special case for C-H bonds
-        C_H_BOND_LENGTH
-      } else {
-        // General case: sum of covalent radii
-        let atom_1_radius = ATOM_INFO.get(&(found_atom.atomic_number as i32))
-          .map(|info| info.covalent_radius)
-          .unwrap_or(0.7); // Default radius if not found
-        let hydrogen_radius = ATOM_INFO.get(&1)
-          .map(|info| info.covalent_radius)
-          .unwrap_or(0.31); // Default hydrogen radius
-        atom_1_radius + hydrogen_radius
-      };
-      
-      // Normalize the direction and place hydrogen at proper bond length
-      let normalized_direction = real_space_direction.normalize();
-      let hydrogen_pos = found_atom.position + normalized_direction * bond_length;
+    let relative_motif_pos = not_found_site_pos - found_site_pos;
+    
+    // Convert the relative position from motif space to real space direction
+    let real_space_direction = unit_cell.dvec3_lattice_to_real(&relative_motif_pos);
+    
+    // Calculate proper bond length based on atomic radii
+    let bond_length = if found_atom_atomic_number == 6 {
+      // Special case for C-H bonds
+      C_H_BOND_LENGTH
+    } else {
+      // General case: sum of covalent radii
+      let atom_1_radius = ATOM_INFO.get(&(found_atom_atomic_number as i32))
+        .map(|info| info.covalent_radius)
+        .unwrap_or(0.7); // Default radius if not found
+      let hydrogen_radius = ATOM_INFO.get(&1)
+        .map(|info| info.covalent_radius)
+        .unwrap_or(0.31); // Default hydrogen radius
+      atom_1_radius + hydrogen_radius
+    };
+    
+    // Normalize the direction and place hydrogen at proper bond length
+    let normalized_direction = real_space_direction.normalize();
+    let hydrogen_pos = found_atom_position + normalized_direction * bond_length;
 
-      // Add hydrogen atom (atomic number 1) - depth remains 0.0 by default
-      let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos);
-      
-      // Update depth statistics for hydrogen (depth = 0.0)
-      statistics.total_depth += 0.0;
-      // Note: max_depth doesn't need updating since hydrogen depth is 0.0
-      
-      // Create bond between original atom and hydrogen
-      atomic_structure.add_bond(found_atom_id, hydrogen_id, 1); // Single bond
-      
-      statistics.bonds += 1;
-      statistics.atoms += 1; // Count the hydrogen atom
-    }
+    // Add hydrogen atom (atomic number 1) - depth remains 0.0 by default
+    let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos);
+    
+    // Update depth statistics for hydrogen (depth = 0.0)
+    statistics.total_depth += 0.0;
+    // Note: max_depth doesn't need updating since hydrogen depth is 0.0
+    
+    // Create bond between original atom and hydrogen
+    atomic_structure.add_bond(found_atom_id, hydrogen_id, 1); // Single bond
+    
+    statistics.bonds += 1;
+    statistics.atoms += 1; // Count the hydrogen atom
   }
 
   // Helper method to calculate the motif-space box that covers the real-space box
