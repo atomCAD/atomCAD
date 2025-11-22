@@ -86,24 +86,35 @@ pub fn save_mol_v3000(atomic_structure: &AtomicStructure, file_path: &str) -> Re
     // Write bonds
     writeln!(file, "M  V30 BEGIN BOND")?;
     
-    // Sort bonds by ID for consistent output
-    let mut sorted_bonds: Vec<_> = atomic_structure.bonds.iter().collect();
-    sorted_bonds.sort_by_key(|(id, _)| *id);
+    // Collect bonds from inline data, avoiding duplicates
+    let mut bonds_to_write = Vec::new();
+    for atom in atomic_structure.atoms.values() {
+        for bond in &atom.bonds {
+            let other_atom_id = bond.other_atom_id();
+            // Only include each bond once (check atom ID ordering)
+            if atom.id < other_atom_id {
+                bonds_to_write.push((atom.id, other_atom_id, bond.bond_order()));
+            }
+        }
+    }
+    
+    // Sort for consistent output
+    bonds_to_write.sort_by_key(|(id1, id2, _)| (*id1, *id2));
     
     let mut bond_index = 1;
-    for (_, bond) in sorted_bonds {
+    for (atom_id1, atom_id2, bond_order) in bonds_to_write {
         // Get 1-based indices for the atoms
-        let atom1_index = atom_id_to_index.get(&bond.atom_id1)
-            .ok_or_else(|| MolSaveError::ElementNotFound(0))?; // Using 0 as placeholder for missing atom
-        let atom2_index = atom_id_to_index.get(&bond.atom_id2)
-            .ok_or_else(|| MolSaveError::ElementNotFound(0))?; // Using 0 as placeholder for missing atom
+        let atom1_index = atom_id_to_index.get(&atom_id1)
+            .ok_or_else(|| MolSaveError::ElementNotFound(0))?;
+        let atom2_index = atom_id_to_index.get(&atom_id2)
+            .ok_or_else(|| MolSaveError::ElementNotFound(0))?;
         
         // Write bond line: M V30 <bidx> <btype> <a1> <a2>
         writeln!(
             file,
             "M  V30 {} {} {} {}",
             bond_index,
-            bond.multiplicity,
+            bond_order,
             atom1_index,
             atom2_index
         )?;

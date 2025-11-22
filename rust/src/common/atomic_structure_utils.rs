@@ -194,7 +194,7 @@ pub fn calc_selection_transform(structure: &AtomicStructure) -> Option<Transform
 pub fn print_atom_info(structure: &AtomicStructure) {
     println!("=== Atomic Structure Info ===");
     println!("Total atoms: {}", structure.atoms.len());
-    println!("Total bonds: {}", structure.bonds.len());
+    println!("Total bonds: {}", structure.get_num_of_bonds());
     println!();
     
     // Collect atom IDs for consistent ordering
@@ -206,7 +206,7 @@ pub fn print_atom_info(structure: &AtomicStructure) {
     
     for (index, &atom_id) in atom_ids.iter().enumerate() {
         if let Some(atom) = structure.get_atom(atom_id) {
-            let bond_count = atom.bond_ids.len();
+            let bond_count = atom.bonds.len();
             println!("{:<6} {:<8} {:<12} {:<10}", 
                      index, 
                      atom_id, 
@@ -221,7 +221,7 @@ pub fn print_atom_info(structure: &AtomicStructure) {
     let mut bond_count_distribution = std::collections::HashMap::new();
     for &atom_id in &atom_ids {
         if let Some(atom) = structure.get_atom(atom_id) {
-            let bond_count = atom.bond_ids.len();
+            let bond_count = atom.bonds.len();
             *bond_count_distribution.entry(bond_count).or_insert(0) += 1;
         }
     }
@@ -240,7 +240,7 @@ pub fn print_atom_info(structure: &AtomicStructure) {
 
 pub fn remove_lone_atoms(structure: &mut AtomicStructure) {
     let lone_atoms: Vec<u32> = structure.atoms.values()
-      .filter(|atom| atom.bond_ids.is_empty())
+      .filter(|atom| atom.bonds.is_empty())
       .map(|atom| atom.id)
       .collect();
 
@@ -270,15 +270,8 @@ fn delete_atoms_with_at_most_one_bond(
         };
         
         // Collect neighbor IDs before deletion
-        for &bond_id in &atom.bond_ids {
-            if let Some(bond) = structure.get_bond(bond_id) {
-                let neighbor_id = if bond.atom_id1 == atom_id {
-                    bond.atom_id2
-                } else {
-                    bond.atom_id1
-                };
-                all_neighbors.push(neighbor_id);
-            }
+        for bond in &atom.bonds {
+            all_neighbors.push(bond.other_atom_id());
         }
         
         // Delete the atom (this also removes all its bonds)
@@ -291,7 +284,7 @@ fn delete_atoms_with_at_most_one_bond(
 pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool) {
     // First iteration: find ALL atoms with at most one bond (0 or 1 bonds)
     let mut atoms_with_at_most_one_bond: Vec<u32> = structure.atoms.values()
-        .filter(|atom| atom.bond_ids.len() <= 1)
+        .filter(|atom| atom.bonds.len() <= 1)
         .map(|atom| atom.id)
         .collect();
     
@@ -311,7 +304,7 @@ pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool
         atoms_with_at_most_one_bond = all_neighbors.into_iter()
             .filter(|&neighbor_id| {
                 structure.get_atom(neighbor_id)
-                    .map(|atom| atom.bond_ids.len() <= 1)
+                    .map(|atom| atom.bonds.len() <= 1)
                     .unwrap_or(false)
             })
             .collect();

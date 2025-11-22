@@ -590,7 +590,7 @@ impl AtomFillData {
           // - Both atoms are guaranteed to exist (we just got their IDs from atom_tracker)
           // - No bond exists yet (this is the initial bond creation phase)
           // - We're creating new bonds, not updating existing ones
-          atomic_structure.add_bond(atom_id, id2, bond.multiplicity);
+          atomic_structure.add_bond(atom_id, id2, bond.multiplicity as u8);
           statistics.bonds += 1;
         }
         // If second atom doesn't exist, skip the bond (will be handled by hydrogen passivation if enabled)

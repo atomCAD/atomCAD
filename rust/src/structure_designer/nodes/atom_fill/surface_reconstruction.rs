@@ -1,4 +1,4 @@
-use crate::common::atomic_structure::{AtomicStructure, Atom};
+use crate::common::atomic_structure::{AtomicStructure, Atom, BondReference};
 use crate::structure_designer::evaluator::motif::Motif;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::common_constants::{
@@ -115,24 +115,13 @@ fn classify_atom_surface_orientation(
   }
 
   // Surface atoms on {100} facets should have exactly 2 bonds (2 bulk neighbors, 2 dangling)
-  if atom.bond_ids.len() != 2 {
+  if atom.bonds.len() != 2 {
     return SurfaceOrientation::Unknown;
   }
 
   // Get the two bonded neighbors
-  let bond1 = structure.bonds.get(&atom.bond_ids[0]);
-  let bond2 = structure.bonds.get(&atom.bond_ids[1]);
-  
-  if bond1.is_none() || bond2.is_none() {
-    return SurfaceOrientation::Unknown;
-  }
-  
-  let bond1 = bond1.unwrap();
-  let bond2 = bond2.unwrap();
-  
-  // Get neighbor atom positions
-  let neighbor1_id = if bond1.atom_id1 == atom.id { bond1.atom_id2 } else { bond1.atom_id1 };
-  let neighbor2_id = if bond2.atom_id1 == atom.id { bond2.atom_id2 } else { bond2.atom_id1 };
+  let neighbor1_id = atom.bonds[0].other_atom_id();
+  let neighbor2_id = atom.bonds[1].other_atom_id();
   
   let neighbor1 = structure.atoms.get(&neighbor1_id);
   let neighbor2 = structure.atoms.get(&neighbor2_id);
@@ -694,17 +683,19 @@ fn apply_dimer_reconstruction(
   structure.set_atom_position(dimer_pair.partner_atom_id, new_pos2);
   
   // Create the dimer bond
-  let bond_id = structure.add_bond(
+  structure.add_bond(
     dimer_pair.primary_atom_id,
     dimer_pair.partner_atom_id,
-    1  // Single bond multiplicity
+    1  // Single bond order
   );
   
   // Make the newly created bond selected for visualization (only in debug mode)
   if SURFACE_RECONSTRUCTION_VISUAL_DEBUG {
-    if let Some(bond) = structure.bonds.get_mut(&bond_id) {
-      bond.selected = true;
-    }
+    let bond_ref = BondReference {
+      atom_id1: dimer_pair.primary_atom_id,
+      atom_id2: dimer_pair.partner_atom_id,
+    };
+    structure.select_bond(&bond_ref);
   }
   
   // Add hydrogen passivation if enabled

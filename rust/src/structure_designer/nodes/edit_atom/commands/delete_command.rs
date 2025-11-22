@@ -19,16 +19,12 @@ impl DeleteCommand {
 
 impl EditAtomCommand for DeleteCommand {
   fn execute(&self, model: &mut AtomicStructure) {
-    // First, collect all selected bond IDs
-    let selected_bond_ids: Vec<u32> = model.bonds
-      .iter()
-      .filter(|(_, bond)| bond.selected)
-      .map(|(id, _)| *id)
-      .collect();
+    // Collect all selected bond references from decorator
+    let selected_bond_refs: Vec<_> = model.decorator.selected_bonds.iter().cloned().collect();
 
     // Delete all selected bonds
-    for bond_id in selected_bond_ids {
-      model.delete_bond(bond_id);
+    for bond_ref in &selected_bond_refs {
+      model.delete_bond(bond_ref);
     }
 
     // Now collect all selected atom IDs

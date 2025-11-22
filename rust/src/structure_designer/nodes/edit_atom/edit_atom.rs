@@ -250,15 +250,9 @@ pub fn select_atom_or_bond_by_ray(structure_designer: &mut StructureDesigner, ra
       select_atom_by_id(structure_designer, atom_id, select_modifier);
       true
     },
-    HitTestResult::Bond(bond_id, _distance) => {
-      // Get a proper bond reference from the bond ID
-      if let Some(bond_reference) = atomic_structure.get_bond_reference_by_id(bond_id) {
-        select_bond_by_reference(structure_designer, &bond_reference, select_modifier);
-        true
-      } else {
-        // Bond ID was valid during hit test but no longer exists
-        false
-      }
+    HitTestResult::Bond(bond_reference, _distance) => {
+      select_bond_by_reference(structure_designer, &bond_reference, select_modifier);
+      true
     },
     HitTestResult::None => false
   }

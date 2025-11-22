@@ -1,5 +1,5 @@
 use crate::renderer::tessellator::tessellator::{self, OccluderSphere};
-use crate::common::atomic_structure::{Atom, AtomicStructure, AtomDisplayState, Bond};
+use crate::common::atomic_structure::{Atom, AtomicStructure, AtomDisplayState, BondReference};
 use crate::common::common_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 // Scene trait removed - is_atom_marked was deprecated and always returned false
 use crate::renderer::mesh::{Mesh, Material};
@@ -102,9 +102,16 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
   
   // Only tessellate bonds for ball-and-stick visualization
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
-    for (_id, bond) in atomic_structure.bonds.iter() {
-      if should_render_bond(bond, atomic_structure, atomic_viz_prefs) {
-        tessellate_bond(output_mesh, atomic_structure, &bond, params);
+    // Iterate inline bonds - each bond only once using atom ID ordering
+    for atom in atomic_structure.atoms.values() {
+      for bond in &atom.bonds {
+        let other_atom_id = bond.other_atom_id();
+        // Only tessellate each bond once
+        if atom.id < other_atom_id {
+          if let Some(other_atom) = atomic_structure.atoms.get(&other_atom_id) {
+            tessellate_bond_inline(output_mesh, atomic_structure, atom, other_atom, bond.bond_order(), params);
+          }
+        }
       }
     }
   }
@@ -140,22 +147,11 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
   (atom_color, roughness, metallic)
 }
 
-/// Shared helper to determine if a bond should be rendered (both atoms not culled)
-fn should_render_bond(bond: &Bond, atomic_structure: &AtomicStructure, atomic_viz_prefs: &AtomicStructureVisualizationPreferences) -> bool {
-  let atom1 = atomic_structure.atoms.get(&bond.atom_id1);
-  let atom2 = atomic_structure.atoms.get(&bond.atom_id2);
-  
-  if let (Some(atom1), Some(atom2)) = (atom1, atom2) {
-    !should_cull_atom(atom1, atomic_viz_prefs) && !should_cull_atom(atom2, atomic_viz_prefs)
-  } else {
-    false
-  }
-}
-
-/// Shared helper to get bond color based on selection state
-fn get_bond_color(bond: &Bond) -> Vec3 {
+/// Get bond color based on selection state from decorator
+fn get_bond_color_inline(atom_id1: u32, atom_id2: u32, atomic_structure: &AtomicStructure) -> Vec3 {
   let base_color = Vec3::new(0.8, 0.8, 0.8);
-  if bond.selected {
+  let bond_ref = BondReference { atom_id1, atom_id2 };
+  if atomic_structure.decorator.selected_bonds.contains(&bond_ref) {
     to_selected_color(&base_color)
   } else {
     base_color
@@ -212,24 +208,17 @@ fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, v
     return;
   }
   
-  // Use atom's direct bond_ids vector for O(1) neighbor access
-  for &bond_id in &atom.bond_ids {
-    if let Some(bond) = atomic_structure.bonds.get(&bond_id) {
-      // Find the neighbor atom (the other atom in this bond)
-      let neighbor_atom_id = if bond.atom_id1 == atom.id {
-        bond.atom_id2
-      } else {
-        bond.atom_id1
-      };
+  // Use atom's inline bonds for neighbor access
+  for bond in &atom.bonds {
+    let neighbor_atom_id = bond.other_atom_id();
+    
+    if let Some(neighbor) = atomic_structure.atoms.get(&neighbor_atom_id) {
+      let neighbor_radius = get_displayed_atom_radius(neighbor, visualization);
       
-      if let Some(neighbor) = atomic_structure.atoms.get(&neighbor_atom_id) {
-        let neighbor_radius = get_displayed_atom_radius(neighbor, visualization);
-        
-        occluder_array.push(OccluderSphere {
-          center: neighbor.position.as_vec3(),
-          radius: neighbor_radius as f32,
-        });
-      }
+      occluder_array.push(OccluderSphere {
+        center: neighbor.position.as_vec3(),
+        radius: neighbor_radius as f32,
+      });
     }
   }
 }
@@ -326,19 +315,16 @@ fn to_selected_color(_color: &Vec3) -> Vec3 {
   Vec3::new(1.0, 0.2, 1.0) // Bright magenta for selected atoms
 }
 
-pub fn tessellate_bond(output_mesh: &mut Mesh, model: &AtomicStructure, bond: &Bond, params: &AtomicTessellatorParams) {
-  let atom_pos1 = model.get_atom(bond.atom_id1).unwrap().position;
-  let atom_pos2 = model.get_atom(bond.atom_id2).unwrap().position;
-
-  let selected = bond.selected;
-
-  // Use shared helper for bond color calculation
-  let color = get_bond_color(bond);
+/// Tessellate bond using inline bond data
+fn tessellate_bond_inline(output_mesh: &mut Mesh, atomic_structure: &AtomicStructure, atom1: &Atom, atom2: &Atom, _bond_order: u8, params: &AtomicTessellatorParams) {
+  let bond_ref = BondReference { atom_id1: atom1.id, atom_id2: atom2.id };
+  let selected = atomic_structure.decorator.selected_bonds.contains(&bond_ref);
+  let color = get_bond_color_inline(atom1.id, atom2.id, atomic_structure);
 
   tessellator::tessellate_cylinder(
     output_mesh,
-    &atom_pos2,
-    &atom_pos1,
+    &atom2.position,
+    &atom1.position,
     BAS_STICK_RADIUS,
     params.cylinder_divisions,
     &Material::new(
@@ -366,7 +352,7 @@ pub fn tessellate_atomic_structure_impostors(
 
   // Pre-allocate impostor mesh capacity (much smaller than triangle tessellation)
   let total_atoms = atomic_structure.atoms.len();
-  let total_bonds = atomic_structure.bonds.len();
+  let total_bonds = atomic_structure.get_num_of_bonds();
   
   // Each atom = 4 vertices + 6 indices, each bond = 4 vertices + 6 indices
   atom_impostor_mesh.vertices.reserve(total_atoms * 4);
@@ -394,9 +380,16 @@ pub fn tessellate_atomic_structure_impostors(
   
   // Only tessellate bonds for ball-and-stick visualization
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
-    for (_id, bond) in atomic_structure.bonds.iter() {
-      if should_render_bond(bond, atomic_structure, atomic_viz_prefs) {
-        tessellate_bond_impostor(bond_impostor_mesh, atomic_structure, bond);
+    // Iterate inline bonds - each bond only once using atom ID ordering
+    for atom in atomic_structure.atoms.values() {
+      for bond in &atom.bonds {
+        let other_atom_id = bond.other_atom_id();
+        // Only tessellate each bond once
+        if atom.id < other_atom_id {
+          if let Some(other_atom) = atomic_structure.atoms.get(&other_atom_id) {
+            tessellate_bond_impostor_inline(bond_impostor_mesh, atom, other_atom, bond.bond_order());
+          }
+        }
       }
     }
   }
@@ -437,23 +430,21 @@ pub fn tessellate_atom_impostor(
   }
 }
 
-/// Tessellate a single bond as an impostor (4 vertices, 6 indices)
-pub fn tessellate_bond_impostor(
+/// Tessellate bond impostor using inline bond data
+fn tessellate_bond_impostor_inline(
   bond_impostor_mesh: &mut BondImpostorMesh,
-  atomic_structure: &AtomicStructure,
-  bond: &Bond
+  atom1: &Atom,
+  atom2: &Atom,
+  _bond_order: u8
 ) {
-  let atom_pos1 = atomic_structure.get_atom(bond.atom_id1).unwrap().position;
-  let atom_pos2 = atomic_structure.get_atom(bond.atom_id2).unwrap().position;
+  // Note: For impostors, selection is handled in the shader
+  let base_color = Vec3::new(0.8, 0.8, 0.8);
   
-  let color = get_bond_color(bond);
-  
-  // Add the bond quad to the impostor mesh
   bond_impostor_mesh.add_bond_quad(
-    &atom_pos1.as_vec3(),
-    &atom_pos2.as_vec3(),
+    &atom1.position.as_vec3(),
+    &atom2.position.as_vec3(),
     BAS_STICK_RADIUS as f32,
-    &color.to_array()
+    &base_color.to_array()
   );
 }
 

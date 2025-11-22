@@ -169,19 +169,25 @@ fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>,
         }
     }
     
-    // Create bond data - iterate through bonds HashMap
+    // Create bond data - iterate inline bonds, avoiding duplicates
     let mut bonds_data = Vec::new();
-    for bond in structure.bonds.values() {
-        let atom1_index = atom_id_to_index.get(&bond.atom_id1)
-            .ok_or_else(|| format!("Atom ID {} not found for bond", bond.atom_id1))?;
-        let atom2_index = atom_id_to_index.get(&bond.atom_id2)
-            .ok_or_else(|| format!("Atom ID {} not found for bond", bond.atom_id2))?;
-        
-        bonds_data.push(BondData {
-            atom1: *atom1_index,
-            atom2: *atom2_index,
-            order: bond.multiplicity,
-        });
+    for atom in structure.atoms.values() {
+        for bond in &atom.bonds {
+            let other_atom_id = bond.other_atom_id();
+            // Only include each bond once
+            if atom.id < other_atom_id {
+                let atom1_index = atom_id_to_index.get(&atom.id)
+                    .ok_or_else(|| format!("Atom ID {} not found for bond", atom.id))?;
+                let atom2_index = atom_id_to_index.get(&other_atom_id)
+                    .ok_or_else(|| format!("Atom ID {} not found for bond", other_atom_id))?;
+                
+                bonds_data.push(BondData {
+                    atom1: *atom1_index,
+                    atom2: *atom2_index,
+                    order: bond.bond_order() as i32,  // Convert u8 to i32
+                });
+            }
+        }
     }
     
     Ok((atoms_data, bonds_data))
