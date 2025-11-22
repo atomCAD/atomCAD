@@ -623,15 +623,23 @@ impl AtomFillData {
       // Check if this atom exists and isn't already hydrogen passivated
       // (it might have been removed by remove_single_bond_atoms or passivated by surface reconstruction)
       // Extract needed fields immediately to avoid borrow checker conflicts
-      let (atom_position, atom_atomic_number) = match atomic_structure.get_atom(atom_id) {
+      let (atom_position, atom_atomic_number, actual_bond_count) = match atomic_structure.get_atom(atom_id) {
         None => continue, // Early exit - atom was removed, skip it
         Some(atom) => {
           if atom.is_hydrogen_passivation() {
             continue; // Skip - atom already passivated by surface reconstruction
           }
-          (atom.position, atom.atomic_number)
+          (atom.position, atom.atomic_number, atom.bonds.len())
         }
       };
+      
+      // Optimization: Check if atom has all expected bonds from motif
+      // If so, skip expensive dangling bond checking
+      let expected_bond_count = motif.bonds_by_site1_index[site_index].len() 
+                              + motif.bonds_by_site2_index[site_index].len();
+      if actual_bond_count == expected_bond_count {
+        continue; // All bonds present - no passivation needed
+      }
       
       // Case 1: Check bonds where this atom is the first site (optimized with precomputed index)
       // Use precomputed bonds_by_site1_index to only check bonds that start from this site
@@ -699,10 +707,6 @@ impl AtomFillData {
           );
         }
       }
-      
-      // After processing all dangling bonds for this atom, flag it as passivated
-      // This prevents the general passivation from running again on this atom
-      atomic_structure.set_atom_hydrogen_passivation(atom_id, true);
     }
   }
 
