@@ -10,12 +10,10 @@
 //! - Supports up to 536M atoms and 8 bond types
 //! 
 //! Other optimization ideas for the future:
-//! - Encapsulation and extensive testing before doing further optimizations
 //! - Lazy-initialization of the grid. IT might not be needed in certain usecases and
 //! even if needed eventually it is useful to have faster processing until it is needed
 //! (e.g atom fill)
 //! - Use fixed-point IVec3 for position instead of DVec3 (one unit can be 0.001 Angstrom)
-//! - store atoms as arrray (Vec) instead of map?
 //! - Structure of arrays for atoms?
 //! - Long term: lazy-storing atomic representations in crystals: only compute and store atomic
 //! representation of a region if something needs to be changed. The non-changed regions might be
@@ -250,9 +248,9 @@ impl Atom {
 #[derive(Debug, Clone)]
 pub struct AtomicStructure {
   frame_transform: Transform,
-  next_atom_id: u32,
-  check_atom_id_collision: bool,
-  atoms: FxHashMap<u32, Atom>,
+  atoms: Vec<Option<Atom>>,  // Index = atom_id - 1, next ID = atoms.len() + 1
+  num_atoms: usize,  // Count of non-None atoms
+  num_bonds: usize,  // Count of unique bonds (bidirectional storage counted once)
   // Spatial acceleration: sparse spatial grid of atoms
   // TODO: consider SmallVac here instead of Vec
   // also consider lazily creating this: might not be needed in a lot of usecases
@@ -281,19 +279,28 @@ impl AtomicStructure {
 
   // Atom access methods
   fn get_atom_mut(&mut self, id: u32) -> Option<&mut Atom> {
-    self.atoms.get_mut(&id)
+    if id == 0 {
+      return None;
+    }
+    let index = (id - 1) as usize;
+    self.atoms.get_mut(index).and_then(|slot| slot.as_mut())
   }
   
   pub fn iter_atoms(&self) -> impl Iterator<Item = (&u32, &Atom)> {
     self.atoms.iter()
+      .enumerate()
+      .filter_map(|(_idx, slot)| {
+        slot.as_ref().map(|atom| (&atom.id, atom))
+      })
   }
   
   pub fn atoms_values(&self) -> impl Iterator<Item = &Atom> {
-    self.atoms.values()
+    self.atoms.iter().filter_map(|slot| slot.as_ref())
   }
   
   pub fn atom_ids(&self) -> impl Iterator<Item = &u32> {
-    self.atoms.keys()
+    self.atoms.iter()
+      .filter_map(|slot| slot.as_ref().map(|atom| &atom.id))
   }
 
   // Atom field setters
@@ -316,7 +323,9 @@ impl AtomicStructure {
   }
 
   pub fn has_selected_atoms(&self) -> bool {
-    self.atoms.values().any(|atom| atom.is_selected())
+    self.atoms.iter()
+      .filter_map(|slot| slot.as_ref())
+      .any(|atom| atom.is_selected())
   }
 
   // Checks if there is any selection (atoms or bonds) in the structure
@@ -327,16 +336,16 @@ impl AtomicStructure {
   pub fn new() -> Self {
     Self {
       frame_transform: Transform::default(),
-      next_atom_id: 1,
-      check_atom_id_collision: false,
-      atoms: FxHashMap::default(),
+      atoms: Vec::new(),
+      num_atoms: 0,
+      num_bonds: 0,
       grid: FxHashMap::default(),
       decorator: AtomicStructureDecorator::new(),
     }
   }
 
   pub fn get_num_of_atoms(&self) -> usize {
-    self.atoms.len()
+    self.num_atoms
   }
 
   pub fn get_cell_for_pos(&self, pos: &DVec3) -> (i32, i32, i32) {
@@ -345,53 +354,41 @@ impl AtomicStructure {
   }
 
   pub fn get_atom(&self, atom_id: u32) -> Option<&Atom> {
-    self.atoms.get(&atom_id)
+    if atom_id == 0 {
+      return None;
+    }
+    let index = (atom_id - 1) as usize;
+    self.atoms.get(index).and_then(|slot| slot.as_ref())
   }
 
   pub fn get_num_of_bonds(&self) -> usize {
-    self.atoms.values().map(|atom| atom.bonds.len()).sum::<usize>() / 2  // Bidirectional storage
+    self.num_bonds
   }
 
-  pub fn obtain_next_atom_id(&mut self) -> u32 {
-    let mut id = self.next_atom_id;
-    
-    // Check for collision only if we've wrapped around
-    if self.check_atom_id_collision {
-      while self.atoms.contains_key(&id) {
-        id = if id == u32::MAX { 1 } else { id + 1 };
-      }
-    }
-    
-    // Update next_atom_id and check for wraparound
-    self.next_atom_id = if id == u32::MAX { 1 } else { id + 1 };
-    if self.next_atom_id == 1 {
-      self.check_atom_id_collision = true;
-    }
-    
-    id
-  }
-
+  /// Adds an atom to the structure and returns its ID
   pub fn add_atom(&mut self, atomic_number: i16, position: DVec3) -> u32 {
-    let id = self.obtain_next_atom_id();
-    self.add_atom_with_id(id, atomic_number, position);
-    id
-  }
-
-  pub fn add_atom_with_id(&mut self, id: u32, atomic_number: i16, position: DVec3) {
-    self.atoms.insert(id, Atom {
+    // Next ID is always: Vec length + 1 (since IDs are 1-indexed)
+    let id = (self.atoms.len() + 1) as u32;
+    
+    let atom = Atom {
       id,
       atomic_number,
       position,
       bonds: SmallVec::new(),
       flags: 0,  // All flags cleared (including selected)
       in_crystal_depth: 0.0,
-    });
-
+    };
+    
+    // Always append to end (index = id - 1 = atoms.len())
+    self.atoms.push(Some(atom));
+    self.num_atoms += 1;
     self.add_atom_to_grid(id, &position);
+    
+    id
   }
 
   pub fn set_atom_depth(&mut self, atom_id: u32, depth: f32) -> bool {
-    if let Some(atom) = self.atoms.get_mut(&atom_id) {
+    if let Some(atom) = self.get_atom_mut(atom_id) {
       atom.in_crystal_depth = depth;
       true
     } else {
@@ -400,17 +397,29 @@ impl AtomicStructure {
   }
 
   pub fn delete_atom(&mut self, id: u32) {
-    let (pos, connected_atoms) = if let Some(atom) = self.atoms.get(&id) {
+    if id == 0 {
+      return;
+    }
+    
+    let index = (id - 1) as usize;
+    if index >= self.atoms.len() {
+      return;
+    }
+    
+    let (pos, connected_atoms) = if let Some(atom) = &self.atoms[index] {
       let connected: SmallVec<[u32; 4]> = atom.bonds.iter()
         .map(|bond| bond.other_atom_id())
         .collect();
       (Some(atom.position), connected)
     } else {
-      (None, SmallVec::new())
+      return; // Already deleted
     };
 
+    // Decrement bond count for each bond being removed
+    let num_bonds_to_remove = connected_atoms.len();
+    
     for other_atom_id in connected_atoms {
-      if let Some(other_atom) = self.atoms.get_mut(&other_atom_id) {
+      if let Some(other_atom) = self.get_atom_mut(other_atom_id) {
         other_atom.bonds.retain(|bond| bond.other_atom_id() != id);
       }
     }
@@ -419,43 +428,56 @@ impl AtomicStructure {
       self.remove_atom_from_grid(id, &pos);
     }
 
-    self.atoms.remove(&id);
+    self.atoms[index] = None;
+    self.num_atoms -= 1;
+    self.num_bonds -= num_bonds_to_remove;
+    
+    // Clear from decorator
+    self.decorator.atom_display_states.remove(&id);
   }
 
   /// Fast deletion for lone atoms (no bonds, guaranteed to exist)
   pub fn delete_lone_atom(&mut self, id: u32) {
-    let pos = self.atoms.get(&id).unwrap().position;
+    if id == 0 {
+      return;
+    }
+    let index = (id - 1) as usize;
+    let pos = self.atoms[index].as_ref().unwrap().position;
     self.remove_atom_from_grid(id, &pos);
-    self.atoms.remove(&id);
+    self.atoms[index] = None;
+    self.num_atoms -= 1;
+    self.decorator.atom_display_states.remove(&id);
   }
 
   /// Safe bond creation - validates atoms exist, updates or creates bond
   /// Returns whether it was successful or not (unsuccessful if atoms do not exist)
   pub fn add_bond_checked(&mut self, atom_id1: u32, atom_id2: u32, bond_order: u8) -> bool {
-    if !self.atoms.contains_key(&atom_id1) || !self.atoms.contains_key(&atom_id2) {
+    if self.get_atom(atom_id1).is_none() || self.get_atom(atom_id2).is_none() {
       return false;
     }
     
-    let bond_exists = self.atoms[&atom_id1].bonds.iter()
+    let bond_exists = self.get_atom(atom_id1).unwrap().bonds.iter()
       .any(|bond| bond.other_atom_id() == atom_id2);
     
     if bond_exists {
-      if let Some(atom) = self.atoms.get_mut(&atom_id1) {
+      if let Some(atom) = self.get_atom_mut(atom_id1) {
         if let Some(bond) = atom.bonds.iter_mut().find(|b| b.other_atom_id() == atom_id2) {
           bond.set_bond_order(bond_order);
         }
       }
-      if let Some(atom) = self.atoms.get_mut(&atom_id2) {
+      if let Some(atom) = self.get_atom_mut(atom_id2) {
         if let Some(bond) = atom.bonds.iter_mut().find(|b| b.other_atom_id() == atom_id1) {
           bond.set_bond_order(bond_order);
         }
       }
     } else {
       let bond1 = InlineBond::new(atom_id2, bond_order);
-      self.atoms.get_mut(&atom_id1).unwrap().bonds.push(bond1);
+      self.get_atom_mut(atom_id1).unwrap().bonds.push(bond1);
       
       let bond2 = InlineBond::new(atom_id1, bond_order);
-      self.atoms.get_mut(&atom_id2).unwrap().bonds.push(bond2);
+      self.get_atom_mut(atom_id2).unwrap().bonds.push(bond2);
+      
+      self.num_bonds += 1;  // Count unique bond once (bidirectional storage)
     }
     
     true
@@ -466,14 +488,16 @@ impl AtomicStructure {
   /// no bond should exist between them
   pub fn add_bond(&mut self, atom_id1: u32, atom_id2: u32, bond_order: u8) {
     let bond1 = InlineBond::new(atom_id2, bond_order);
-    self.atoms.get_mut(&atom_id1).unwrap().bonds.push(bond1);
+    self.get_atom_mut(atom_id1).unwrap().bonds.push(bond1);
     
     let bond2 = InlineBond::new(atom_id1, bond_order);
-    self.atoms.get_mut(&atom_id2).unwrap().bonds.push(bond2);
+    self.get_atom_mut(atom_id2).unwrap().bonds.push(bond2);
+    
+    self.num_bonds += 1;  // Count unique bond once (bidirectional storage)
   }
   
   pub fn has_bond_between(&self, atom_id1: u32, atom_id2: u32) -> bool {
-    if let Some(atom) = self.atoms.get(&atom_id1) {
+    if let Some(atom) = self.get_atom(atom_id1) {
       atom.bonds.iter().any(|bond| bond.other_atom_id() == atom_id2)
     } else {
       false
@@ -483,14 +507,16 @@ impl AtomicStructure {
   /// Delete a bond by BondReference
   pub fn delete_bond(&mut self, bond_ref: &BondReference) {
     // Remove bond from first atom
-    if let Some(atom1) = self.atoms.get_mut(&bond_ref.atom_id1) {
+    if let Some(atom1) = self.get_atom_mut(bond_ref.atom_id1) {
       atom1.bonds.retain(|bond| bond.other_atom_id() != bond_ref.atom_id2);
     }
     
     // Remove bond from second atom
-    if let Some(atom2) = self.atoms.get_mut(&bond_ref.atom_id2) {
+    if let Some(atom2) = self.get_atom_mut(bond_ref.atom_id2) {
       atom2.bonds.retain(|bond| bond.other_atom_id() != bond_ref.atom_id1);
     }
+    
+    self.num_bonds -= 1;  // Decrement unique bond count
     
     // Remove from selected bonds
     self.decorator.deselect_bond(bond_ref);
@@ -498,14 +524,16 @@ impl AtomicStructure {
 
   pub fn select(&mut self, atom_ids: &Vec<u32>, bond_references: &Vec<BondReference>, select_modifier: SelectModifier) {
     if select_modifier == SelectModifier::Replace {
-      for atom in self.atoms.values_mut() {
-        atom.set_selected(false);
+      for slot in &mut self.atoms {
+        if let Some(atom) = slot {
+          atom.set_selected(false);
+        }
       }
       self.decorator.clear_bond_selection();
     }
 
     for atom_id in atom_ids {
-      if let Some(atom) = self.atoms.get_mut(atom_id) {
+      if let Some(atom) = self.get_atom_mut(*atom_id) {
         atom.set_selected(apply_select_modifier(atom.is_selected(), &select_modifier));
       }
     }
@@ -529,7 +557,7 @@ impl AtomicStructure {
 
   pub fn select_by_maps(&mut self, atom_selections: &HashMap<u32, bool>, bond_selections: &HashMap<BondReference, bool>) {
     for (key, value) in atom_selections {
-      if let Some(atom) = self.atoms.get_mut(key) {
+      if let Some(atom) = self.get_atom_mut(*key) {
         atom.set_selected(*value);
       }
     }
@@ -547,7 +575,7 @@ impl AtomicStructure {
   pub fn hit_test(&self, ray_start: &DVec3, ray_dir: &DVec3, visualization: &AtomicStructureVisualization) -> HitTestResult {
     let mut closest_hit: Option<(HitTestResult, f64)> = None;
 
-    for atom in self.atoms.values() {
+    for atom in self.atoms_values() {
       let Some(distance) = hit_test_utils::sphere_hit_test(
           &atom.position, 
           get_displayed_atom_radius(atom, visualization), 
@@ -566,7 +594,7 @@ impl AtomicStructure {
       };
     }
     
-    for atom in self.atoms.values() {
+    for atom in self.atoms_values() {
       for bond in &atom.bonds {
         let other_atom_id = bond.other_atom_id();
         
@@ -574,7 +602,7 @@ impl AtomicStructure {
           continue;
         }
         
-        let Some(other_atom) = self.atoms.get(&other_atom_id) else { continue };
+        let Some(other_atom) = self.get_atom(other_atom_id) else { continue };
         
         let Some(distance) = hit_test_utils::cylinder_hit_test(
             &atom.position,
@@ -606,7 +634,7 @@ impl AtomicStructure {
     let mut closest_distance_squared = f64::MAX;
     let mut closest_atom_position = DVec3::ZERO;
 
-    for atom in self.atoms.values() {
+    for atom in self.atoms_values() {
         let to_atom = atom.position - ray_start;
 
         // Project `to_atom` onto `ray_dir` to get the closest point on the ray.
@@ -647,7 +675,7 @@ impl AtomicStructure {
     const POSITION_EPSILON: f64 = 1e-5;
     
     // Find the atom and update its position if the change is significant
-    let positions = if let Some(atom) = self.atoms.get_mut(&atom_id) {
+    let positions = if let Some(atom) = self.get_atom_mut(atom_id) {
       let old_position = atom.position;
       
       if old_position.distance_squared(new_position) < POSITION_EPSILON * POSITION_EPSILON {
@@ -677,7 +705,7 @@ impl AtomicStructure {
   ///
   /// `true` if the atom was found and transformed, `false` otherwise
   pub fn transform_atom(&mut self, atom_id: u32, rotation: &DQuat, translation: &DVec3) -> bool {
-    if let Some(atom) = self.atoms.get(&atom_id) {
+    if let Some(atom) = self.get_atom(atom_id) {
       let new_position = rotation.mul_vec3(atom.position) + *translation;
       self.set_atom_position(atom_id, new_position)
     } else {
@@ -686,7 +714,7 @@ impl AtomicStructure {
   }
   
   pub fn transform(&mut self, rotation: &DQuat, translation: &DVec3) {
-    let atom_ids: Vec<u32> = self.atoms.keys().cloned().collect();
+    let atom_ids: Vec<u32> = self.atom_ids().cloned().collect();
     
     for atom_id in atom_ids {
       self.transform_atom(atom_id, rotation, translation);
@@ -699,7 +727,7 @@ impl AtomicStructure {
   ///
   /// `true` if the atom was found and updated, `false` otherwise
   pub fn replace_atom(&mut self, atom_id: u32, atomic_number: i16) -> bool {
-    if let Some(atom) = self.atoms.get_mut(&atom_id) {
+    if let Some(atom) = self.get_atom_mut(atom_id) {
       atom.atomic_number = atomic_number;
       true
     } else {
@@ -744,7 +772,7 @@ impl AtomicStructure {
           if let Some(cell_atoms) = self.grid.get(&current_cell) {
             // For each atom in this cell, check if it's within the radius
             for &atom_id in cell_atoms {
-              if let Some(atom) = self.atoms.get(&atom_id) {
+              if let Some(atom) = self.get_atom(atom_id) {
                 let squared_distance = position.distance_squared(atom.position);
                 
                 if squared_distance <= radius * radius {
@@ -764,25 +792,20 @@ impl AtomicStructure {
   pub fn add_atomic_structure(&mut self, other: &AtomicStructure) -> FxHashMap<u32, u32> {
     let mut atom_id_map: FxHashMap<u32, u32> = FxHashMap::default();
     
-    for (old_atom_id, atom) in &other.atoms {
-      let new_atom_id = self.obtain_next_atom_id();
+    for (old_atom_id, atom) in other.iter_atoms() {
+      let new_atom_id = self.add_atom(atom.atomic_number, atom.position);
       atom_id_map.insert(*old_atom_id, new_atom_id);
-      
-      self.add_atom_with_id(
-        new_atom_id,
-        atom.atomic_number,
-        atom.position
-      );
       
       self.set_atom_depth(new_atom_id, atom.in_crystal_depth);
       
-      if let Some(new_atom) = self.atoms.get_mut(&new_atom_id) {
-        new_atom.set_selected(atom.is_selected());
+      // Copy all flags at once (selected, hydrogen_passivation, and any future flags)
+      if let Some(new_atom) = self.get_atom_mut(new_atom_id) {
+        new_atom.flags = atom.flags;
       }
     }
     
     // Add inline bonds with remapped atom IDs
-    for (old_atom_id, atom) in &other.atoms {
+    for (old_atom_id, atom) in other.iter_atoms() {
       let new_atom_id = *atom_id_map.get(old_atom_id).unwrap();
       
       for bond in &atom.bonds {

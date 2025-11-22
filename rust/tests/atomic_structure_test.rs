@@ -622,3 +622,31 @@ fn test_invariant_no_dangling_bonds() {
         }
     }
 }
+
+#[test]
+fn test_deleted_ids_not_reused() {
+    let mut structure = AtomicStructure::new();
+    
+    // Add first atom (should get ID 1)
+    let id1 = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    assert_eq!(id1, 1, "First atom should have ID 1");
+    assert!(structure.get_atom(id1).is_some(), "Atom 1 should exist");
+    
+    // Delete first atom
+    structure.delete_atom(id1);
+    assert!(structure.get_atom(id1).is_none(), "Atom 1 should be deleted");
+    
+    // Add second atom (should get ID 2, NOT reuse ID 1)
+    let id2 = structure.add_atom(8, DVec3::new(1.0, 0.0, 0.0));
+    assert_eq!(id2, 2, "Second atom should have ID 2, not reuse ID 1");
+    
+    // Verify ID 1 is still None (deleted, not reused)
+    assert!(structure.get_atom(id1).is_none(), 
+        "Deleted atom ID 1 should remain None, not be reused");
+    
+    // Verify ID 2 exists
+    assert!(structure.get_atom(id2).is_some(), "Atom 2 should exist");
+    
+    // Verify atom count is 1 (only the second atom exists)
+    assert_eq!(structure.get_num_of_atoms(), 1, "Should have 1 atom after delete and add");
+}

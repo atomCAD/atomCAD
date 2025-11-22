@@ -22,8 +22,7 @@ impl AddAtomCommand {
 
 impl EditAtomCommand for AddAtomCommand {
   fn execute(&self, model: &mut AtomicStructure) {
-    let atom_id = model.obtain_next_atom_id();
-    model.add_atom_with_id(atom_id, self.atomic_number, self.position);
+    model.add_atom(self.atomic_number, self.position);
   }
 
   fn clone_box(&self) -> Box<dyn EditAtomCommand> {
