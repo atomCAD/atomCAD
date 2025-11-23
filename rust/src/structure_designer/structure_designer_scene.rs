@@ -5,7 +5,7 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use std::collections::{HashMap, HashSet};
 use std::any::Any;
 use crate::common::poly_mesh::PolyMesh;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;

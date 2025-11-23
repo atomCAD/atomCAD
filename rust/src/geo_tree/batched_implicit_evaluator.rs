@@ -1,6 +1,6 @@
 use glam::f64::DVec3;
 use crate::structure_designer::implicit_eval::implicit_geometry::{ImplicitGeometry3D, BATCH_SIZE};
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use rayon::prelude::*;
 
 /// Minimum number of points required to consider multi-threading

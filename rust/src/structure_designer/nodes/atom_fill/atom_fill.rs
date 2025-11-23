@@ -1,5 +1,5 @@
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
-use crate::structure_designer::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
+use crate::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
@@ -13,7 +13,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::box_subdivision::subdivide_daabox;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;

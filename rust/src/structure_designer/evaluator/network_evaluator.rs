@@ -17,8 +17,8 @@ use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::geo_tree::csg_cache::CsgConversionCache;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::csg_cache::CsgConversionCache;
+use crate::geo_tree::GeoNode;
 
 use super::network_result::input_missing_error;
 use super::network_result::Closure;
@@ -83,7 +83,7 @@ impl NetworkEvaluator {
   }
 
   /// Get cache statistics
-  pub fn get_csg_cache_stats(&self) -> crate::structure_designer::geo_tree::csg_cache::CacheStats {
+  pub fn get_csg_cache_stats(&self) -> crate::geo_tree::csg_cache::CacheStats {
     self.csg_conversion_cache.stats()
   }
 

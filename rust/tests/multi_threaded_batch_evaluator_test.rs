@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
-use rust_lib_flutter_cad::structure_designer::geo_tree::GeoNode;
+use rust_lib_flutter_cad::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
+use rust_lib_flutter_cad::geo_tree::GeoNode;
 use glam::f64::DVec3;
 
 #[test]

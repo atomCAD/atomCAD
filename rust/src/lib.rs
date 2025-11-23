@@ -4,4 +4,5 @@ pub mod common;
 pub mod structure_designer;
 pub mod renderer;
 pub mod util;
+pub mod geo_tree;
 mod frb_generated;

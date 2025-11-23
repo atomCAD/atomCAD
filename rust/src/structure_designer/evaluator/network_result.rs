@@ -5,7 +5,7 @@ use glam::f64::DVec3;
 use crate::common::atomic_structure::AtomicStructure;
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::evaluator::motif::Motif;
