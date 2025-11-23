@@ -34,72 +34,21 @@ use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::renderer::tessellator::atomic_tessellator::BAS_STICK_RADIUS;
 use crate::api::common_api_types::SelectModifier;
-use std::hash::{Hash, Hasher};
-use serde::{Serialize, Deserialize};
 use crate::util::memory_size_estimator::MemorySizeEstimator;
+
+pub mod atomic_structure_decorator;
+pub mod atom;
+pub mod inline_bond;
+pub mod bond_reference;
+
+// Re-export types for convenience
+pub use atomic_structure_decorator::{AtomicStructureDecorator, AtomDisplayState};
+pub use atom::Atom;
+pub use inline_bond::{InlineBond, BOND_SINGLE, BOND_DOUBLE, BOND_TRIPLE, BOND_QUADRUPLE, BOND_AROMATIC, BOND_DATIVE, BOND_METALLIC};
+pub use bond_reference::BondReference;
 
 // Cell size for spatial grid - larger than typical bond length for efficient neighbor lookup
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
-
-#[derive(Debug, Clone)]
-pub enum AtomDisplayState {
-    Normal,
-    Marked,
-    SecondaryMarked,
-}
-
-#[derive(Debug, Clone)]
-pub struct AtomicStructureDecorator {
-    atom_display_states: FxHashMap<u32, AtomDisplayState>,
-    selected_bonds: std::collections::HashSet<BondReference>,
-    pub from_selected_node: bool,
-    pub selection_transform: Option<Transform>,
-}
-
-impl AtomicStructureDecorator {
-    pub fn new() -> Self {
-        Self {
-            atom_display_states: FxHashMap::default(),
-            selected_bonds: std::collections::HashSet::new(),
-            from_selected_node: false,
-            selection_transform: None,
-        }
-    }
-    
-    // Atom display state methods
-    pub fn set_atom_display_state(&mut self, atom_id: u32, state: AtomDisplayState) {
-        self.atom_display_states.insert(atom_id, state);
-    }
-    
-    pub fn get_atom_display_state(&self, atom_id: u32) -> AtomDisplayState {
-        self.atom_display_states.get(&atom_id).cloned().unwrap_or(AtomDisplayState::Normal)
-    }
-    
-    // Bond selection methods
-    pub fn is_bond_selected(&self, bond_ref: &BondReference) -> bool {
-        self.selected_bonds.contains(bond_ref)
-    }
-    
-    pub fn select_bond(&mut self, bond_ref: &BondReference) {
-        self.selected_bonds.insert(bond_ref.clone());
-    }
-    
-    pub fn deselect_bond(&mut self, bond_ref: &BondReference) {
-        self.selected_bonds.remove(bond_ref);
-    }
-    
-    pub fn clear_bond_selection(&mut self) {
-        self.selected_bonds.clear();
-    }
-    
-    pub fn has_selected_bonds(&self) -> bool {
-        !self.selected_bonds.is_empty()
-    }
-    
-    pub fn iter_selected_bonds(&self) -> impl Iterator<Item = &BondReference> {
-        self.selected_bonds.iter()
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HitTestResult {
@@ -113,134 +62,6 @@ fn apply_select_modifier(in_selected: bool, select_modifier: &SelectModifier) ->
     SelectModifier::Replace => true,
     SelectModifier::Expand => true,
     SelectModifier::Toggle => !in_selected,
-  }
-}
-
-/// Ultra-compact inline bond representation - 4 bytes total
-/// Stores bond information directly in the atom's SmallVec for maximum cache efficiency
-/// 
-/// Memory layout: 29 bits atom_id (max 536M atoms) + 3 bits bond_order (8 types)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InlineBond {
-  /// Packed data: lower 29 bits = other_atom_id, upper 3 bits = bond_order
-  packed: u32,
-}
-
-impl InlineBond {
-  const ATOM_ID_MASK: u32 = 0x1FFFFFFF;      // 29 bits
-  const BOND_ORDER_SHIFT: u32 = 29;
-  const BOND_ORDER_MASK: u32 = 0x7;
-  
-  #[inline]
-  pub fn new(other_atom_id: u32, bond_order: u8) -> Self {
-    debug_assert!(other_atom_id <= Self::ATOM_ID_MASK, 
-      "Atom ID {} exceeds maximum of {}", other_atom_id, Self::ATOM_ID_MASK);
-    debug_assert!(bond_order <= Self::BOND_ORDER_MASK as u8,
-      "Bond order {} exceeds maximum of {}", bond_order, Self::BOND_ORDER_MASK);
-    
-    Self {
-      packed: other_atom_id | ((bond_order as u32) << Self::BOND_ORDER_SHIFT)
-    }
-  }
-  
-  #[inline]
-  pub fn other_atom_id(&self) -> u32 {
-    self.packed & Self::ATOM_ID_MASK
-  }
-  
-  #[inline]
-  pub fn bond_order(&self) -> u8 {
-    ((self.packed >> Self::BOND_ORDER_SHIFT) & Self::BOND_ORDER_MASK) as u8
-  }
-  
-  #[inline]
-  pub fn set_bond_order(&mut self, bond_order: u8) {
-    debug_assert!(bond_order <= Self::BOND_ORDER_MASK as u8,
-      "Bond order {} exceeds maximum of {}", bond_order, Self::BOND_ORDER_MASK);
-    self.packed = (self.packed & Self::ATOM_ID_MASK) | ((bond_order as u32) << Self::BOND_ORDER_SHIFT);
-  }
-}
-
-pub const BOND_SINGLE: u8 = 1;
-pub const BOND_DOUBLE: u8 = 2;
-pub const BOND_TRIPLE: u8 = 3;
-pub const BOND_QUADRUPLE: u8 = 4;
-pub const BOND_AROMATIC: u8 = 5;
-pub const BOND_DATIVE: u8 = 6;
-pub const BOND_METALLIC: u8 = 7;
-
-// BondReference can be used to refer to a bond globally:
-// without being in the context of an atom.
-// The order of the atoms is irrelevant: two bond references between the same two atoms are equal. 
-#[derive(Clone,Debug, Serialize, Deserialize)]
-pub struct BondReference {
-  pub atom_id1: u32,
-  pub atom_id2: u32,
-}
-
-impl PartialEq for BondReference {
-  fn eq(&self, other: &Self) -> bool {
-    // Order doesn't matter for bonds: (1,2) == (2,1)
-    (self.atom_id1 == other.atom_id1 && self.atom_id2 == other.atom_id2) ||
-    (self.atom_id1 == other.atom_id2 && self.atom_id2 == other.atom_id1)
-  }
-}
-
-impl Eq for BondReference {}
-
-impl Hash for BondReference {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    // Consistent hash regardless of atom order
-    let (smaller, larger) = if self.atom_id1 < self.atom_id2 {
-      (self.atom_id1, self.atom_id2)
-    } else {
-      (self.atom_id2, self.atom_id1)
-    };
-    smaller.hash(state);
-    larger.hash(state);
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct Atom {
-  pub position: DVec3,
-  pub bonds: SmallVec<[InlineBond; 4]>,
-  pub id: u32,
-  pub in_crystal_depth: f32,
-  pub atomic_number: i16,
-  pub flags: u16,  // Bit 0: selected, Bit 1: hydrogen passivation
-}
-
-const ATOM_FLAG_SELECTED: u16 = 1 << 0;
-const ATOM_FLAG_HYDROGEN_PASSIVATION: u16 = 1 << 1;
-
-impl Atom {
-  #[inline]
-  pub fn is_selected(&self) -> bool {
-    (self.flags & ATOM_FLAG_SELECTED) != 0
-  }
-  
-  #[inline]
-  pub fn set_selected(&mut self, selected: bool) {
-    if selected {
-      self.flags |= ATOM_FLAG_SELECTED;
-    } else {
-      self.flags &= !ATOM_FLAG_SELECTED;
-    }
-  }
-  
-  #[inline]
-  pub fn is_hydrogen_passivation(&self) -> bool {
-    (self.flags & ATOM_FLAG_HYDROGEN_PASSIVATION) != 0
-  }
-  
-  #[inline]
-  pub fn set_hydrogen_passivation(&mut self, is_passivation: bool) {
-    if is_passivation {
-      self.flags |= ATOM_FLAG_HYDROGEN_PASSIVATION;
-    } else {
-      self.flags &= !ATOM_FLAG_HYDROGEN_PASSIVATION;
-    }
   }
 }
 
