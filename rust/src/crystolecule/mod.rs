@@ -15,6 +15,7 @@ pub mod unit_cell_struct;
 pub mod unit_cell_symmetries;
 pub mod io;
 pub mod crystolecule_constants;
+pub mod lattice_fill;
 
 
 
