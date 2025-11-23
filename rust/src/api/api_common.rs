@@ -261,3 +261,7 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
     refresh_structure_designer(cad_instance, &changes);
   }
 
+
+
+
+

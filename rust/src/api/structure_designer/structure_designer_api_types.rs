@@ -286,3 +286,7 @@ pub struct APIAtomFillData {
   pub surface_reconstruction: bool, // Whether to apply surface reconstruction
   pub error: Option<String>, // Optional error message from parsing
 }
+
+
+
+

@@ -48,3 +48,7 @@ fn test_rename_node_network_existing_validations_still_work() {
     let result = designer.rename_node_network("network1", "renamed_network");
     assert_eq!(result, true, "Should allow valid rename");
 }
+
+
+
+

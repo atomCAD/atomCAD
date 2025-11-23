@@ -181,3 +181,7 @@ fn get_all_elements() -> Vec<AtomInfo> {
         create_atom_info(DEBUG_CARBON_TEAL, "DCTeal", "DebugCarbonTeal", 0.76, 1.77, Vec3::new(0.0, 0.8, 0.5)),
     ]
 }
+
+
+
+

@@ -65,3 +65,7 @@ pub fn raytrace_geometry(geometry: &dyn ImplicitGeometry3D, ray_origin: &DVec3, 
   // No intersection found within the maximum number of steps
   None
 }
+
+
+
+

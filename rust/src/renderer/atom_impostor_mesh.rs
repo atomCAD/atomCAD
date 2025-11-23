@@ -136,3 +136,7 @@ impl AtomImpostorMesh {
         vertices_bytes + indices_bytes
     }
 }
+
+
+
+

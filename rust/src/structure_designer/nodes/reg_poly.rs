@@ -16,7 +16,7 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegPolyData {
@@ -111,3 +111,6 @@ fn find_lattice_point(angle: f64, radius: i32) -> IVec2 {
 fn kth_angle(k: i32, num_sides: i32) -> f64 {
     return 2.0 * PI * (k as f64) / (num_sides as f64);
 }
+
+
+

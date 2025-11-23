@@ -149,3 +149,7 @@ fn test_direct_inplace_batch() {
                 "Point {}: expected {}, got {}", i, expected, batch_results[i]);
     }
 }
+
+
+
+

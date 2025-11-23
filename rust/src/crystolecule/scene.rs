@@ -3,7 +3,7 @@ use super::surface_point_cloud::SurfacePointCloud;
 use super::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::crystolecule::poly_mesh::PolyMesh;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 pub trait Scene<'a> {
     fn atomic_structures(&self) -> Box<dyn Iterator<Item = &AtomicStructure> + '_>;
@@ -15,3 +15,7 @@ pub trait Scene<'a> {
     fn tessellatable(&self) -> Option<Box<&dyn Tessellatable>>;
     fn get_unit_cell(&self) -> Option<&UnitCellStruct>;
 }
+
+
+
+

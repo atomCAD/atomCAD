@@ -310,3 +310,7 @@ impl GPUMesh {
         queue.write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&[model_uniform]));
     }
 }
+
+
+
+

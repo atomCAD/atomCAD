@@ -21,7 +21,7 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HalfSpaceData {
@@ -320,4 +320,8 @@ impl HalfSpaceGadget {
         };
     }
 }
+
+
+
+
 

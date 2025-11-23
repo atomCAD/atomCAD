@@ -56,8 +56,8 @@ use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::lattice_move::{LatticeMoveData, LatticeMoveEvalCache};
 use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
-use crate::structure_designer::evaluator::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem, classify_crystal_system};
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem, classify_crystal_system};
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -2055,3 +2055,7 @@ pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
     });
   }
 }
+
+
+
+

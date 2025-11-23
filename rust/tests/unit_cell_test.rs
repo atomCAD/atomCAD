@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::structure_designer::evaluator::unit_cell_struct::{UnitCellStruct, CrystalPlaneProps};
+use rust_lib_flutter_cad::crystolecule::unit_cell_struct::{UnitCellStruct, CrystalPlaneProps};
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 
@@ -288,3 +288,7 @@ fn test_numerical_precision() {
 }
 
 } // End of unit_cell_tests module
+
+
+
+

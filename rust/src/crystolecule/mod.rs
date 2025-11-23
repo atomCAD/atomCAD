@@ -13,3 +13,11 @@ pub mod csg_types;
 pub mod csg_utils;
 pub mod unique_3d_points;
 pub mod simulation;
+pub mod motif;
+pub mod motif_parser;
+pub mod unit_cell_struct;
+pub mod unit_cell_symmetries;
+
+
+
+

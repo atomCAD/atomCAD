@@ -14,7 +14,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnionData {
@@ -111,3 +111,7 @@ impl NodeData for UnionData {
       None
   }
 }
+
+
+
+

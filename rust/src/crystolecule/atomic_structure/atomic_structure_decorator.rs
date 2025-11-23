@@ -61,3 +61,7 @@ impl AtomicStructureDecorator {
         self.selected_bonds.iter()
     }
 }
+
+
+
+

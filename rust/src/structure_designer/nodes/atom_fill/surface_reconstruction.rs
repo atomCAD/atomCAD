@@ -1,6 +1,6 @@
 use crate::crystolecule::atomic_structure::{AtomicStructure, Atom, BondReference};
-use crate::structure_designer::evaluator::motif::Motif;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::motif::Motif;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::common_constants::{
   DEFAULT_ZINCBLENDE_MOTIF, DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
   ZINCBLENDE_SITE_CORNER, ZINCBLENDE_SITE_FACE_Z, ZINCBLENDE_SITE_FACE_Y, ZINCBLENDE_SITE_FACE_X,
@@ -907,3 +907,7 @@ pub fn reconstruct_surface(
   // Perform (100) 2×1 dimer reconstruction for cubic diamond
   reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation)
 }
+
+
+
+

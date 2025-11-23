@@ -21,7 +21,7 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use glam::f64::DQuat;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Facet {
@@ -720,3 +720,7 @@ impl FacetShellGadget {
         }
     }
 }
+
+
+
+

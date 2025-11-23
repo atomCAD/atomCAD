@@ -41,8 +41,8 @@ pub const ZINCBLENDE_SITE_INTERIOR4: usize = 7;
 
 lazy_static! {
     /// Default cubic zincblende motif used when no motif is connected to atom_fill node
-    pub static ref DEFAULT_ZINCBLENDE_MOTIF: crate::structure_designer::evaluator::motif::Motif = {
-        use crate::structure_designer::evaluator::motif_parser::parse_motif;
+    pub static ref DEFAULT_ZINCBLENDE_MOTIF: crate::crystolecule::motif::Motif = {
+        use crate::crystolecule::motif_parser::parse_motif;
         
         let motif_text = r#"
 # cubic zincblende motif
@@ -86,3 +86,7 @@ BOND INTERIOR4 +..FACE_X
         parse_motif(motif_text).expect("Failed to parse default zincblende motif")
     };
 }
+
+
+
+

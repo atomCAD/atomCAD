@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::structure_designer::evaluator::motif_parser::*;
+use rust_lib_flutter_cad::crystolecule::motif_parser::*;
 
 #[test]
 fn test_tokenize_line() {
@@ -134,7 +134,7 @@ fn test_parse_site_command_with_chemical_element() {
 
 #[test]
 fn test_parse_site_command_with_parameter_element() {
-    use rust_lib_flutter_cad::structure_designer::evaluator::motif::ParameterElement;
+    use rust_lib_flutter_cad::crystolecule::motif::ParameterElement;
     
     let tokens = vec!["site".to_string(), "site1".to_string(), "PRIMARY".to_string(), "0.25".to_string(), "0.25".to_string(), "0.25".to_string()];
     let parameters = vec![
@@ -153,7 +153,7 @@ fn test_parse_site_command_with_parameter_element() {
 
 #[test]
 fn test_parse_site_command_with_second_parameter() {
-    use rust_lib_flutter_cad::structure_designer::evaluator::motif::ParameterElement;
+    use rust_lib_flutter_cad::crystolecule::motif::ParameterElement;
     
     let tokens = vec!["site".to_string(), "site2".to_string(), "SECONDARY".to_string(), "0.75".to_string(), "0.75".to_string(), "0.75".to_string()];
     let parameters = vec![
@@ -435,3 +435,7 @@ bond 2 .+.1
     assert_eq!(motif.bonds[2].site_2.relative_cell.y, 1);
     assert_eq!(motif.bonds[2].site_2.relative_cell.z, 0);
 }
+
+
+
+

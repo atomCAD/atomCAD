@@ -6,8 +6,8 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::evaluator::motif::Motif;
-use crate::structure_designer::evaluator::motif_parser::parse_motif;
+use crate::crystolecule::motif::Motif;
+use crate::crystolecule::motif_parser::parse_motif;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_type::NodeType;
@@ -103,3 +103,6 @@ pub fn motif_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result
     
     Ok(Box::new(data))
 }
+
+
+

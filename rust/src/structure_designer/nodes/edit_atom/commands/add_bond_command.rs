@@ -27,3 +27,7 @@ impl EditAtomCommand for AddBondCommand {
     Box::new(self.clone())
   }
 }
+
+
+
+

@@ -71,3 +71,7 @@ pub fn load_xyz(file_path: &str, create_bonds: bool) -> Result<AtomicStructure, 
 
     Ok(atomic_structure)
 }
+
+
+
+

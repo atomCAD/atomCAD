@@ -19,7 +19,7 @@ use crate::crystolecule::scene::Scene;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, BackgroundPreferences};
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -1055,3 +1055,7 @@ impl Renderer {
         })
     }
 }
+
+
+
+

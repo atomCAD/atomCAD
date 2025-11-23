@@ -59,3 +59,7 @@ impl MemorySizeEstimator for SurfacePointCloud2D {
       + self.points.len() * std::mem::size_of::<SurfacePoint2D>()
   }
 }
+
+
+
+

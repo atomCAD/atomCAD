@@ -23,7 +23,7 @@ use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometr
 use crate::crystolecule::xyz_saver::save_xyz;
 use crate::crystolecule::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use super::structure_designer_changes::{StructureDesignerChanges, RefreshMode};
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
 
@@ -1449,3 +1449,7 @@ impl StructureDesigner {
   }
   
 }
+
+
+
+

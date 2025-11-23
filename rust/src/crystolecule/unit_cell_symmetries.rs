@@ -1,5 +1,5 @@
 use glam::f64::DVec3;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 /// Tolerance constants for crystal symmetry analysis
 /// Using minimal set of constants for easy tuning
@@ -439,8 +439,8 @@ mod symmetry_analysis {
 /// 
 /// # Example
 /// ```rust
-/// use rust_lib_flutter_cad::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
-/// use rust_lib_flutter_cad::structure_designer::evaluator::unit_cell_symmetries::analyze_unit_cell_symmetries;
+/// use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
+/// use rust_lib_flutter_cad::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
 /// 
 /// let cubic_unit_cell = UnitCellStruct::cubic_diamond();
 /// let symmetries = analyze_unit_cell_symmetries(&cubic_unit_cell);
@@ -474,3 +474,6 @@ pub fn analyze_unit_cell_complete(unit_cell: &UnitCellStruct) -> (CrystalSystem,
     let symmetries = analyze_unit_cell_symmetries(unit_cell);
     (crystal_system, symmetries)
 }
+
+
+

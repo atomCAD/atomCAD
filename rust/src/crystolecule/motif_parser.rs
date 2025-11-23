@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
-use crate::structure_designer::evaluator::motif::{Motif, ParameterElement, Site, SiteSpecifier, MotifBond};
+use crate::crystolecule::motif::{Motif, ParameterElement, Site, SiteSpecifier, MotifBond};
 use crate::crystolecule::common_constants::CHEMICAL_ELEMENTS;
 
 #[derive(Debug)]
@@ -437,4 +437,8 @@ pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i16>
     
     Ok(parameter_values)
 }
+
+
+
+
 

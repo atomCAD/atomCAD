@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::any::Any;
 use crate::crystolecule::poly_mesh::PolyMesh;
 use crate::geo_tree::GeoNode;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 
@@ -248,3 +248,7 @@ impl MemorySizeEstimator for NodeSceneData {
             + eval_cache_size
     }
 }
+
+
+
+

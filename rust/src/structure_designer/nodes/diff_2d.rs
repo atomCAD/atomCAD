@@ -15,7 +15,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diff2DData {
@@ -175,3 +175,7 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   frame_translation /= shape_count as f64;
   return (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_unit_cell));
 }
+
+
+
+

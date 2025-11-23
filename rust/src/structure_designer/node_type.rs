@@ -68,3 +68,7 @@ pub fn no_data_saver(_node_data: &mut dyn NodeData, _design_dir: Option<&str>) -
 pub fn no_data_loader(_value: &Value, _design_dir: Option<&str>) -> io::Result<Box<dyn NodeData>> {
     Ok(Box::new(crate::structure_designer::node_data::NoData {}))
 }
+
+
+
+

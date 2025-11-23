@@ -677,3 +677,7 @@ impl MemorySizeEstimator for AtomicStructure {
     base_size + atoms_size + grid_size + decorator_size
   }
 }
+
+
+
+

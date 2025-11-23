@@ -50,3 +50,7 @@ impl InlineBond {
     self.packed = (self.packed & Self::ATOM_ID_MASK) | ((bond_order as u32) << Self::BOND_ORDER_SHIFT);
   }
 }
+
+
+
+

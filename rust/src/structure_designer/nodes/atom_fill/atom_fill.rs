@@ -16,15 +16,15 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
-use crate::structure_designer::evaluator::motif::Motif;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::motif::Motif;
 use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL_IMPLICIT_VOLUME_MAX};
 use crate::structure_designer::common_constants::DEFAULT_ZINCBLENDE_MOTIF;
-use crate::structure_designer::evaluator::motif_parser::parse_parameter_element_values;
+use crate::crystolecule::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::node_network::ValidationError;
 use crate::crystolecule::serialization_utils::dvec3_serializer;
 use crate::crystolecule::common_constants::ATOM_INFO;
-use crate::structure_designer::evaluator::motif::SiteSpecifier;
+use crate::crystolecule::motif::SiteSpecifier;
 use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
@@ -860,3 +860,7 @@ impl AtomFillData {
   }
 
 }
+
+
+
+

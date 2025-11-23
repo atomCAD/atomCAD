@@ -14,7 +14,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RectData {
@@ -140,3 +140,7 @@ fn create_parallelogram_from_lattice(
   // Return the intersection of all half-planes
   GeoNode::intersection_2d(half_planes)
 }
+
+
+
+

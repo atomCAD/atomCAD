@@ -64,7 +64,7 @@ impl PlacedAtomTracker {
   pub fn get_atom_id_for_specifier(
     &self, 
     base_motif_space_pos: IVec3, 
-    site_specifier: &crate::structure_designer::evaluator::motif::SiteSpecifier
+    site_specifier: &crate::crystolecule::motif::SiteSpecifier
   ) -> Option<u32> {
     let target_motif_space_pos = base_motif_space_pos + site_specifier.relative_cell;
     self.get_atom_id(target_motif_space_pos, site_specifier.site_index)
@@ -75,3 +75,7 @@ impl PlacedAtomTracker {
     self.atom_map.iter().map(|(address, &atom_id)| (*address, atom_id))
   }
 }
+
+
+
+

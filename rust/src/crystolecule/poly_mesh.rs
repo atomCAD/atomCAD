@@ -357,3 +357,7 @@ impl MemorySizeEstimator for PolyMesh {
         base_size + vertices_size + faces_size + edges_size
     }
 }
+
+
+
+

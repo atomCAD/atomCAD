@@ -310,3 +310,6 @@ pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool
             .collect();
     }
 }
+
+
+

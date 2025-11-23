@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
-use rust_lib_flutter_cad::structure_designer::evaluator::unit_cell_symmetries::{
+use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
+use rust_lib_flutter_cad::crystolecule::unit_cell_symmetries::{
     classify_crystal_system, analyze_unit_cell_symmetries, analyze_unit_cell_complete,
     CrystalSystem, RotationalSymmetry
 };
@@ -455,3 +455,7 @@ fn test_trigonal_symmetry_validation() {
     let trigonal_cell = create_test_unit_cell(4.500, 4.500, 4.500, 75.0, 75.0, 75.0);
     validate_symmetries_preserve_lattice(&trigonal_cell, "Trigonal (Rhombohedral)");
 }
+
+
+
+

@@ -7,8 +7,8 @@ use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
-use crate::structure_designer::evaluator::motif::Motif;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::motif::Motif;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -538,3 +538,6 @@ mod tests {
     assert!(uc1.is_approximately_equal(&uc2));
   }
 }
+
+
+
