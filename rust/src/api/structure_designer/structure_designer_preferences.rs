@@ -5,7 +5,6 @@ use crate::api::common_api_types::APIIVec3;
 #[derive(PartialEq, Clone)]
 pub enum GeometryVisualization {
   SurfaceSplatting,
-  DualContouring,
   ExplicitMesh,
 }
 
