@@ -1,7 +1,7 @@
-use crate::structure_designer::expr::expr::Expr;
-use crate::structure_designer::expr::lexer::Token;
-use crate::structure_designer::expr::expr::UnOp;
-use crate::structure_designer::expr::expr::BinOp;
+use crate::expr::expr::Expr;
+use crate::expr::lexer::Token;
+use crate::expr::expr::UnOp;
+use crate::expr::expr::BinOp;
 
 // Pratt parser
 struct Parser {
@@ -175,7 +175,7 @@ impl Parser {
 
 /// Public function to parse a string input into an expression
 pub fn parse(input: &str) -> Result<Expr, String> {
-    let tokens = crate::structure_designer::expr::lexer::tokenize(input);
+    let tokens = crate::expr::lexer::tokenize(input);
     let mut parser = Parser::new(tokens);
     parser.parse()
 }

@@ -424,5 +424,6 @@ pub fn init_app() {
     */
     
     // Initialize expression function registries for better performance
-    crate::structure_designer::expr::validation::init_function_registries();
+    crate::expr::validation::init_function_registries();
 }
+

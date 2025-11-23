@@ -1,5 +1,5 @@
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::expr::validation::{FunctionSignature, EvaluationFunction};
+use crate::expr::validation::{FunctionSignature, EvaluationFunction};
 use std::collections::HashMap;
 use crate::structure_designer::data_type::DataType;
 
