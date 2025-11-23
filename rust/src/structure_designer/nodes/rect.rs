@@ -4,7 +4,7 @@ use crate::util::transform::Transform2D;
 use glam::i32::IVec2;
 use glam::f64::DVec2;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::ivec2_serializer;
+use crate::crystolecule::serialization_utils::ivec2_serializer;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;

@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::common::atomic_structure::{AtomicStructure, BondReference};
+use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use rust_lib_flutter_cad::api::common_api_types::SelectModifier;
 use glam::f64::DVec3;
 
@@ -399,7 +399,7 @@ fn test_decorator_atom_display_states() {
     let mut structure = AtomicStructure::new();
     let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
     
-    use rust_lib_flutter_cad::common::atomic_structure::AtomDisplayState;
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomDisplayState;
     
     structure.decorator_mut().set_atom_display_state(id, AtomDisplayState::Marked);
     let state = structure.decorator().get_atom_display_state(id);

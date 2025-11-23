@@ -2,9 +2,9 @@ use glam::f64::DVec3;
 use glam::f64::DVec2;
 use glam::f64::DQuat;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::dvec3_serializer;
-use crate::common::serialization_utils::dvec2_serializer;
-use crate::common::serialization_utils::dquat_serializer;
+use crate::crystolecule::serialization_utils::dvec3_serializer;
+use crate::crystolecule::serialization_utils::dvec2_serializer;
+use crate::crystolecule::serialization_utils::dquat_serializer;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transform {

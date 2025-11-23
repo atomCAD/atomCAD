@@ -1,4 +1,4 @@
-use crate::common::atomic_structure::{AtomicStructure, Atom, BondReference};
+use crate::crystolecule::atomic_structure::{AtomicStructure, Atom, BondReference};
 use crate::structure_designer::evaluator::motif::Motif;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::common_constants::{
@@ -6,8 +6,8 @@ use crate::structure_designer::common_constants::{
   ZINCBLENDE_SITE_CORNER, ZINCBLENDE_SITE_FACE_Z, ZINCBLENDE_SITE_FACE_Y, ZINCBLENDE_SITE_FACE_X,
   ZINCBLENDE_SITE_INTERIOR1, ZINCBLENDE_SITE_INTERIOR2, ZINCBLENDE_SITE_INTERIOR3, ZINCBLENDE_SITE_INTERIOR4
 };
-use crate::common::atomic_structure_utils::remove_single_bond_atoms;
-use crate::common::common_constants::{
+use crate::crystolecule::atomic_structure_utils::remove_single_bond_atoms;
+use crate::crystolecule::common_constants::{
   DEBUG_CARBON_GRAY, DEBUG_CARBON_RED, DEBUG_CARBON_GREEN, DEBUG_CARBON_BLUE,
   DEBUG_CARBON_YELLOW, DEBUG_CARBON_MAGENTA, DEBUG_CARBON_CYAN, DEBUG_CARBON_ORANGE
 };

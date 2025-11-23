@@ -2,10 +2,10 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::num::ParseFloatError;
 use thiserror::Error;
-use crate::common::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 use glam::f64::DVec3;
-use crate::common::common_constants::CHEMICAL_ELEMENTS;
-use crate::common::atomic_structure_utils::auto_create_bonds;
+use crate::crystolecule::common_constants::CHEMICAL_ELEMENTS;
+use crate::crystolecule::atomic_structure_utils::auto_create_bonds;
 
 #[derive(Debug, Error)]
 pub enum XyzError {

@@ -1,5 +1,5 @@
 pub mod api;
-pub mod common;
+pub mod crystolecule;
 #[cfg(not(frb_expand))]
 pub mod structure_designer;
 pub mod renderer;

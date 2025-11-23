@@ -5,7 +5,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::common::atomic_structure::{AtomicStructure, Atom};
+use crate::crystolecule::atomic_structure::{AtomicStructure, Atom};
 use std::collections::{HashMap, HashSet};
 use glam::i32::IVec3;
 use glam::f64::DVec3;
@@ -22,13 +22,13 @@ use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL
 use crate::structure_designer::common_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use crate::structure_designer::evaluator::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::node_network::ValidationError;
-use crate::common::serialization_utils::dvec3_serializer;
-use crate::common::common_constants::ATOM_INFO;
+use crate::crystolecule::serialization_utils::dvec3_serializer;
+use crate::crystolecule::common_constants::ATOM_INFO;
 use crate::structure_designer::evaluator::motif::SiteSpecifier;
 use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
-use crate::common::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
+use crate::crystolecule::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
 use super::surface_reconstruction::reconstruct_surface;
 use super::placed_atom_tracker::PlacedAtomTracker;
 

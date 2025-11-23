@@ -1,7 +1,7 @@
-use crate::common::csg_types::CSGMesh;
-use crate::common::csg_types::CSGSketch;
-use crate::common::poly_mesh::PolyMesh;
-use crate::common::unique_3d_points::Unique3DPoints;
+use crate::crystolecule::csg_types::CSGMesh;
+use crate::crystolecule::csg_types::CSGSketch;
+use crate::crystolecule::poly_mesh::PolyMesh;
+use crate::crystolecule::unique_3d_points::Unique3DPoints;
 use glam::DVec3;
 use csgrs::{float_types::Real, mesh::polygon::Polygon, mesh::vertex::Vertex};
 use nalgebra::{Point3, Vector3};

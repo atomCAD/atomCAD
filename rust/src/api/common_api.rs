@@ -19,7 +19,7 @@ use crate::api::api_common::from_api_transform;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::ElementSummary;
-use crate::common::common_constants::ATOM_INFO;
+use crate::crystolecule::common_constants::ATOM_INFO;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::api_common::with_mut_cad_instance_or;

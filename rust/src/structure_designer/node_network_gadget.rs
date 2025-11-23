@@ -1,5 +1,5 @@
 use crate::structure_designer::node_data::NodeData;
-use crate::common::gadget::Gadget;
+use crate::crystolecule::gadget::Gadget;
 
 pub trait NodeNetworkGadget: Gadget {
     // Syncs the gadget's state into the node data

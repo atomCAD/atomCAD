@@ -1,6 +1,6 @@
-use crate::common::atomic_structure::AtomicStructure;
-use crate::common::common_constants::ATOM_INFO;
-use crate::common::common_constants::DEFAULT_ATOM_INFO;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::common_constants::ATOM_INFO;
+use crate::crystolecule::common_constants::DEFAULT_ATOM_INFO;
 use crate::util::transform::Transform;
 
 use glam::f64::{DVec3, DQuat};

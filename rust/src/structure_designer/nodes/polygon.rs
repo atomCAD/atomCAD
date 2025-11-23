@@ -1,6 +1,6 @@
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::vec_ivec2_serializer;
+use crate::crystolecule::serialization_utils::vec_ivec2_serializer;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -15,7 +15,7 @@ use crate::structure_designer::common_constants;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
-use crate::common::gadget::Gadget;
+use crate::crystolecule::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;

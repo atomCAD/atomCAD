@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::mem;
-use crate::common::csg_types::{CSGMesh, CSGSketch};
+use crate::crystolecule::csg_types::{CSGMesh, CSGSketch};
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 
 /// Statistics for cache performance monitoring

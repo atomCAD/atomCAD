@@ -3,7 +3,7 @@ use glam::{i32::IVec3, DVec3};
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
 use crate::util::box_subdivision::subdivide_box;
 use crate::structure_designer::common_constants;
-use crate::common::poly_mesh::PolyMesh;
+use crate::crystolecule::poly_mesh::PolyMesh;
 use crate::structure_designer::implicit_eval::qef_solver;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;

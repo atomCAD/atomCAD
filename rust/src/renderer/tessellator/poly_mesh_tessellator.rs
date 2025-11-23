@@ -2,7 +2,7 @@ use crate::renderer::mesh::{Mesh, Vertex, Material};
 use crate::renderer::line_mesh::LineMesh;
 use glam::Vec3;
 use glam::DVec3;
-use crate::common::poly_mesh::PolyMesh;
+use crate::crystolecule::poly_mesh::PolyMesh;
 use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
 use crate::structure_designer::common_constants;
 

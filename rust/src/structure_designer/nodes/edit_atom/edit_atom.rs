@@ -1,14 +1,14 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
-use crate::common::atomic_structure::{AtomDisplayState, AtomicStructure};
+use crate::crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::network_result::{NetworkResult, input_missing_error, error_in_input};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::common::atomic_structure::HitTestResult;
+use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::api::common_api_types::SelectModifier;
 use glam::f64::DVec3;
 use crate::structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
@@ -17,7 +17,7 @@ use crate::structure_designer::nodes::edit_atom::commands::replace_command::Repl
 use crate::structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
 use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::AddBondCommand;
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
-use crate::common::atomic_structure::BondReference;
+use crate::crystolecule::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
 use crate::structure_designer::node_type::NodeType;

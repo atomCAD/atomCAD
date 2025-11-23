@@ -1,8 +1,8 @@
-use crate::common::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 //use pyo3::prelude::*;
 //use pyo3::types::{PyDict, PyList};
 use glam::DVec3;
-use crate::common::atomic_structure_utils::print_atom_info;
+use crate::crystolecule::atomic_structure_utils::print_atom_info;
 use crate::util::timer::Timer;
 
 /*

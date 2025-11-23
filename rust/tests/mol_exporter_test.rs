@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::common::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::common::mol_exporter::save_mol_v3000;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::mol_exporter::save_mol_v3000;
 use glam::f64::DVec3;
 use std::fs;
 use std::path::Path;

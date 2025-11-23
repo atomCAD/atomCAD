@@ -10,8 +10,8 @@ use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_poi
 use crate::structure_designer::implicit_eval::dual_contour_3d::generate_dual_contour_3d;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
-use crate::common::csg_utils::convert_csg_mesh_to_poly_mesh;
-use crate::common::csg_utils::convert_csg_sketch_to_poly_mesh;
+use crate::crystolecule::csg_utils::convert_csg_mesh_to_poly_mesh;
+use crate::crystolecule::csg_utils::convert_csg_sketch_to_poly_mesh;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;

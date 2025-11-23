@@ -2,7 +2,7 @@ use super::atomic_structure::AtomicStructure;
 use super::surface_point_cloud::SurfacePointCloud;
 use super::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::common::poly_mesh::PolyMesh;
+use crate::crystolecule::poly_mesh::PolyMesh;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 
 pub trait Scene<'a> {

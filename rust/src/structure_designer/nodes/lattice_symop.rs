@@ -1,4 +1,4 @@
-use crate::common::gadget::Gadget;
+use crate::crystolecule::gadget::Gadget;
 use crate::structure_designer::evaluator::network_evaluator::{
   NetworkEvaluationContext, NetworkEvaluator
 };
@@ -11,7 +11,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
+use crate::crystolecule::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
 use glam::f64::DVec3;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;

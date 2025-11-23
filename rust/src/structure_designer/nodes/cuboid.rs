@@ -4,7 +4,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::ivec3_serializer;
+use crate::crystolecule::serialization_utils::ivec3_serializer;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;

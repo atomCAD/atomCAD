@@ -1,10 +1,10 @@
-use crate::common::atomic_structure::AtomicStructure;
-use crate::common::surface_point_cloud::SurfacePointCloud;
-use crate::common::surface_point_cloud::SurfacePointCloud2D;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::surface_point_cloud::SurfacePointCloud;
+use crate::crystolecule::surface_point_cloud::SurfacePointCloud2D;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use std::collections::{HashMap, HashSet};
 use std::any::Any;
-use crate::common::poly_mesh::PolyMesh;
+use crate::crystolecule::poly_mesh::PolyMesh;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use crate::util::memory_size_estimator::MemorySizeEstimator;

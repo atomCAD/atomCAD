@@ -15,7 +15,7 @@ use glam::f64::DMat4;
 use glam::f64::DVec3;
 use glam::f64::DVec4;
 use glam::f64::DQuat;
-use crate::common::scene::Scene;
+use crate::crystolecule::scene::Scene;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, BackgroundPreferences};

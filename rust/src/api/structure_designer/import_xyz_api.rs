@@ -1,7 +1,7 @@
 use crate::api::api_common::{refresh_structure_designer_auto, with_mut_cad_instance};
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::api::common_api_types::APIResult;
-use crate::common::xyz_loader::load_xyz;
+use crate::crystolecule::xyz_loader::load_xyz;
 use crate::util::path_utils::{resolve_path, try_make_relative, get_parent_directory};
 
 #[flutter_rust_bridge::frb(sync)]

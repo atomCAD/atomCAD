@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use crate::structure_designer::evaluator::motif::{Motif, ParameterElement, Site, SiteSpecifier, MotifBond};
-use crate::common::common_constants::CHEMICAL_ELEMENTS;
+use crate::crystolecule::common_constants::CHEMICAL_ELEMENTS;
 
 #[derive(Debug)]
 pub struct ParseError {

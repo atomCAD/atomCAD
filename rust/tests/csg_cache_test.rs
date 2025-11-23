@@ -1,5 +1,5 @@
 use rust_lib_flutter_cad::geo_tree::csg_cache::CsgConversionCache;
-use rust_lib_flutter_cad::common::csg_types::CSGMesh;
+use rust_lib_flutter_cad::crystolecule::csg_types::CSGMesh;
 use csgrs::traits::CSG;
 
 #[test]

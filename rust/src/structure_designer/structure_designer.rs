@@ -1,5 +1,5 @@
-use crate::common::atomic_structure::AtomicStructure;
-use crate::common::atomic_structure_utils::calc_selection_transform;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
 use super::node_type_registry::NodeTypeRegistry;
@@ -20,8 +20,8 @@ use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::{HashSet, HashMap};
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
-use crate::common::xyz_saver::save_xyz;
-use crate::common::mol_exporter::save_mol_v3000;
+use crate::crystolecule::xyz_saver::save_xyz;
+use crate::crystolecule::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
 use super::structure_designer_changes::{StructureDesignerChanges, RefreshMode};
@@ -1047,8 +1047,8 @@ impl StructureDesigner {
     for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
         match atomic_structure.hit_test(ray_origin, ray_direction, visualization) {
-          crate::common::atomic_structure::HitTestResult::Atom(_, distance) | 
-          crate::common::atomic_structure::HitTestResult::Bond(_, distance) => {
+          crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance) | 
+          crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) => {
           // Update minimum distance if this hit is closer
           min_distance = match min_distance {
             None => Some(distance),
@@ -1056,7 +1056,7 @@ impl StructureDesigner {
             _ => min_distance,
           };
         },
-        crate::common::atomic_structure::HitTestResult::None => {}
+        crate::crystolecule::atomic_structure::HitTestResult::None => {}
         }
       }
     }
