@@ -69,3 +69,15 @@ pub fn raytrace_geometry(geometry: &dyn ImplicitGeometry3D, ray_origin: &DVec3, 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+

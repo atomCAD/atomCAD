@@ -1,6 +1,6 @@
 use crate::renderer::tessellator::tessellator::{self, OccluderSphere};
 use crate::crystolecule::atomic_structure::{Atom, AtomicStructure, AtomDisplayState, BondReference};
-use crate::crystolecule::common_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
+use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 // Scene trait removed - is_atom_marked was deprecated and always returned false
 use crate::renderer::mesh::{Mesh, Material};
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
@@ -447,8 +447,4 @@ fn tessellate_bond_impostor_inline(
     &base_color.to_array()
   );
 }
-
-
-
-
 

@@ -2,9 +2,9 @@ use glam::f64::DVec3;
 use glam::f64::DVec2;
 use glam::f64::DQuat;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::dvec3_serializer;
-use crate::crystolecule::serialization_utils::dvec2_serializer;
-use crate::crystolecule::serialization_utils::dquat_serializer;
+use crate::util::serialization_utils::dvec3_serializer;
+use crate::util::serialization_utils::dvec2_serializer;
+use crate::util::serialization_utils::dquat_serializer;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transform {
@@ -171,6 +171,3 @@ impl Default for Transform2D {
     Self { translation: DVec2::ZERO, rotation: 0.0 }
   }
 }
-
-
-

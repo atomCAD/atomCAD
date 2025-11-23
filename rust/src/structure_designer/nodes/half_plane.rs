@@ -5,7 +5,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::ivec2_serializer;
+use crate::util::serialization_utils::ivec2_serializer;
 use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
@@ -305,6 +305,18 @@ impl HalfPlaneGadget {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

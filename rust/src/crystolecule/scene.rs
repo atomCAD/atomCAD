@@ -15,7 +15,3 @@ pub trait Scene<'a> {
     fn tessellatable(&self) -> Option<Box<&dyn Tessellatable>>;
     fn get_unit_cell(&self) -> Option<&UnitCellStruct>;
 }
-
-
-
-

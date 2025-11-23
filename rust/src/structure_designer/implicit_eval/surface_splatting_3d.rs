@@ -157,7 +157,3 @@ fn process_cell_for_point_cloud(
         );
     }
 }
-
-
-
-

@@ -248,7 +248,3 @@ impl MemorySizeEstimator for NodeSceneData {
             + eval_cache_size
     }
 }
-
-
-
-

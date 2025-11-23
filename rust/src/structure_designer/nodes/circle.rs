@@ -2,7 +2,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::ivec2_serializer;
+use crate::util::serialization_utils::ivec2_serializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
@@ -99,9 +99,5 @@ impl NodeData for CircleData {
         }
     }
 }
-
-
-
-
 
 

@@ -19,7 +19,7 @@ use crate::api::api_common::from_api_transform;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::ElementSummary;
-use crate::crystolecule::common_constants::ATOM_INFO;
+use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::api_common::with_mut_cad_instance_or;
@@ -426,8 +426,3 @@ pub fn init_app() {
     // Initialize expression function registries for better performance
     crate::expr::validation::init_function_registries();
 }
-
-
-
-
-

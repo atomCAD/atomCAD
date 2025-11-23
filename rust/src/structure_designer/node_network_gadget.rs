@@ -8,7 +8,3 @@ pub trait NodeNetworkGadget: Gadget {
     fn sync_data(&self, data: &mut dyn NodeData);
     fn clone_box(&self) -> Box<dyn NodeNetworkGadget>;    
 }
-
-
-
-

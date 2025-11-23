@@ -4,7 +4,7 @@ use std::path::Path;
 use serde::{Serialize, Deserialize};
 use serde_json;
 use glam::f64::DVec2;
-use crate::crystolecule::serialization_utils::dvec2_serializer;
+use crate::util::serialization_utils::dvec2_serializer;
 use crate::structure_designer::data_type::DataType;
 use super::super::node_type::{NodeType, Parameter};
 use super::super::node_network::{NodeNetwork, Node, Argument};
@@ -321,7 +321,3 @@ pub fn load_node_networks_from_file(registry: &mut NodeTypeRegistry, file_path: 
     
     Ok(first_network_name)
 }
-
-
-
-

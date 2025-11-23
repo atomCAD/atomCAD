@@ -22,8 +22,8 @@ use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL
 use crate::structure_designer::common_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use crate::crystolecule::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::node_network::ValidationError;
-use crate::crystolecule::serialization_utils::dvec3_serializer;
-use crate::crystolecule::common_constants::ATOM_INFO;
+use crate::util::serialization_utils::dvec3_serializer;
+use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::crystolecule::motif::SiteSpecifier;
 use crate::util::timer::Timer;
 use crate::util::daabox::DAABox;
@@ -860,6 +860,18 @@ impl AtomFillData {
   }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

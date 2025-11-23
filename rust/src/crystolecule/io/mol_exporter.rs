@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, Write};
 use thiserror::Error;
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::common_constants::ATOM_INFO;
+use crate::crystolecule::atomic_constants::ATOM_INFO;
 
 #[derive(Debug, Error)]
 pub enum MolSaveError {
@@ -130,6 +130,3 @@ pub fn save_mol_v3000(atomic_structure: &AtomicStructure, file_path: &str) -> Re
     
     Ok(())
 }
-
-
-

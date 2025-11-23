@@ -11,7 +11,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use glam::f64::DVec3;
 use glam::i32::IVec3;
-use crate::crystolecule::serialization_utils::ivec3_serializer;
+use crate::util::serialization_utils::ivec3_serializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::DQuat;
@@ -303,7 +303,3 @@ impl LatticeRotGadget {
       }
   }
 }
-
-
-
-

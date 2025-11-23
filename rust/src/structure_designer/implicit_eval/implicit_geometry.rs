@@ -36,3 +36,15 @@ pub trait ImplicitGeometry2D {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+

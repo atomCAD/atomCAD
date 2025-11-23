@@ -11,7 +11,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
+use crate::util::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
 use glam::f64::DVec3;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -422,7 +422,3 @@ impl LatticeSymopGadget {
     self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
   }
 }
-
-
-
-

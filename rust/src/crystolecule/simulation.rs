@@ -333,7 +333,3 @@ fn call_python_minimize_energy_with_data(
     */
     Err("Not implemented yet".to_string())
 }
-
-
-
-

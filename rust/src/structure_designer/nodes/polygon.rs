@@ -1,6 +1,6 @@
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::vec_ivec2_serializer;
+use crate::util::serialization_utils::vec_ivec2_serializer;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -332,6 +332,18 @@ impl NodeNetworkGadget for PolygonGadget {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

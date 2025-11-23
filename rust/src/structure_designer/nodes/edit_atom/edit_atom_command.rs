@@ -6,7 +6,3 @@ pub trait EditAtomCommand : AsAny + Debug {
   fn execute(&self, model: &mut AtomicStructure);
   fn clone_box(&self) -> Box<dyn EditAtomCommand>;
 }
-
-
-
-

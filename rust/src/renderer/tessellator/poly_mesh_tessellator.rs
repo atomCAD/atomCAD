@@ -467,7 +467,3 @@ pub fn tessellate_quad_mesh_to_line_mesh(
 ) {
     tessellate_poly_mesh_to_line_mesh(poly_mesh, line_mesh, smoothing, sharp_edge_color, normal_edge_color)
 }
-
-
-
-

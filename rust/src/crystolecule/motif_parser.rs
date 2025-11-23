@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use crate::crystolecule::motif::{Motif, ParameterElement, Site, SiteSpecifier, MotifBond};
-use crate::crystolecule::common_constants::CHEMICAL_ELEMENTS;
+use crate::crystolecule::atomic_constants::CHEMICAL_ELEMENTS;
 
 #[derive(Debug)]
 pub struct ParseError {
@@ -437,8 +437,4 @@ pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i16>
     
     Ok(parameter_values)
 }
-
-
-
-
 

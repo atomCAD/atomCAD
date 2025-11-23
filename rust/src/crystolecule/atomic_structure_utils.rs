@@ -1,6 +1,6 @@
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::common_constants::ATOM_INFO;
-use crate::crystolecule::common_constants::DEFAULT_ATOM_INFO;
+use crate::crystolecule::atomic_constants::ATOM_INFO;
+use crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO;
 use crate::util::transform::Transform;
 
 use glam::f64::{DVec3, DQuat};
@@ -310,6 +310,3 @@ pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool
             .collect();
     }
 }
-
-
-

@@ -134,7 +134,3 @@ fn cut_atomic_structure(atomic_structure: &mut AtomicStructure, cutter_geo_tree_
     atomic_structure.delete_atom(atom_id);
   }
 }
-
-
-
-

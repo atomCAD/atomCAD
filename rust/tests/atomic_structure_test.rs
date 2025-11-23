@@ -650,7 +650,3 @@ fn test_deleted_ids_not_reused() {
     // Verify atom count is 1 (only the second atom exists)
     assert_eq!(structure.get_num_of_atoms(), 1, "Should have 1 atom after delete and add");
 }
-
-
-
-

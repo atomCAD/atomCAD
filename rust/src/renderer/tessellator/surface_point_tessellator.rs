@@ -71,7 +71,3 @@ pub fn tessellate_surface_point_2d(output_mesh: &mut Mesh, point: &SurfacePoint2
     &side_material,
   );
 }
-
-
-
-

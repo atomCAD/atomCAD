@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, Write};
 use thiserror::Error;
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::common_constants::ATOM_INFO;
+use crate::crystolecule::atomic_constants::ATOM_INFO;
 
 #[derive(Debug, Error)]
 pub enum XyzSaveError {
@@ -56,6 +56,3 @@ pub fn save_xyz(atomic_structure: &AtomicStructure, file_path: &str) -> Result<(
     
     Ok(())
 }
-
-
-

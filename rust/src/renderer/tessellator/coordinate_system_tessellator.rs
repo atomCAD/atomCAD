@@ -1,7 +1,7 @@
 use glam::f64::DVec3;
 use glam::f32::Vec3;
 use crate::renderer::line_mesh::LineMesh;
-use crate::structure_designer::common_constants;
+use crate::crystolecule::atomic_constants;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
 
@@ -108,6 +108,18 @@ fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStr
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

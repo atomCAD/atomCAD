@@ -265,3 +265,15 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+

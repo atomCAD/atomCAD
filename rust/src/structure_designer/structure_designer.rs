@@ -20,8 +20,8 @@ use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::{HashSet, HashMap};
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
-use crate::crystolecule::xyz_saver::save_xyz;
-use crate::crystolecule::mol_exporter::save_mol_v3000;
+use crate::crystolecule::io::xyz_saver::save_xyz;
+use crate::crystolecule::io::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use super::structure_designer_changes::{StructureDesignerChanges, RefreshMode};
@@ -1449,7 +1449,3 @@ impl StructureDesigner {
   }
   
 }
-
-
-
-

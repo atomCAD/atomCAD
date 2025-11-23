@@ -2,7 +2,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::dvec3_serializer;
+use crate::util::serialization_utils::dvec3_serializer;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -86,8 +86,4 @@ impl NodeData for Vec3Data {
     }
     
 }
-
-
-
-
 

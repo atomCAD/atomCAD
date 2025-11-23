@@ -36,7 +36,3 @@ impl EditAtomCommand for ReplaceCommand {
         Box::new(self.clone())
     }
 }
-
-
-
-

@@ -7,7 +7,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::crystolecule::xyz_loader::load_xyz;
+use crate::crystolecule::io::xyz_loader::load_xyz;
 use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
 use std::io;
@@ -151,7 +151,3 @@ pub fn import_xyz_data_saver(node_data: &mut dyn NodeData, design_dir: Option<&s
         Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for import_xyz"))
     }
 }
-
-
-
-

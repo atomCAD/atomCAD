@@ -527,7 +527,7 @@ Delete a vertex by dragging it onto one of its neighbour.
 
 Outputs a half plane.
 You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
-Both vertices are displayed as a triangle based prism. The direction of the half plane is indicated by the direction of the triangle.
+Both vertices are displayed as a triangle-based prism. The direction of the half plane is indicated by the direction of the triangle.
 
 ![](./atomCAD_images/half_plane_node.png)
 

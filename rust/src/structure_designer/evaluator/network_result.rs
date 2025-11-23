@@ -538,6 +538,3 @@ mod tests {
     assert!(uc1.is_approximately_equal(&uc2));
   }
 }
-
-
-

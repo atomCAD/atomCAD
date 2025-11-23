@@ -4,7 +4,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::ivec3_serializer;
+use crate::util::serialization_utils::ivec3_serializer;
 use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
 use std::collections::HashSet;
@@ -720,7 +720,3 @@ impl FacetShellGadget {
         }
     }
 }
-
-
-
-

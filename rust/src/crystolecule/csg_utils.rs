@@ -144,7 +144,3 @@ fn triangulate_csg_sketch(csg_sketch: &CSGSketch) -> Vec<Polygon<()>> {
     ret
 }
 
-
-
-
-

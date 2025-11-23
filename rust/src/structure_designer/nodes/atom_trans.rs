@@ -3,7 +3,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::dvec3_serializer;
+use crate::util::serialization_utils::dvec3_serializer;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::crystolecule::gadget::Gadget;
@@ -276,8 +276,4 @@ impl AtomTransGadget {
         self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(self.translation, rotation_quat));
     }
 }
-
-
-
-
 

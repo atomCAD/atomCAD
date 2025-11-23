@@ -2,7 +2,7 @@ use glam::f64::DVec3;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use serde::{Serialize, Deserialize};
-use crate::crystolecule::serialization_utils::dvec3_serializer;
+use crate::util::serialization_utils::dvec3_serializer;
 
 /*
  * Command to add an atom with the given atomic number and position.
@@ -29,7 +29,3 @@ impl EditAtomCommand for AddAtomCommand {
     Box::new(self.clone())
   }
 }
-
-
-
-

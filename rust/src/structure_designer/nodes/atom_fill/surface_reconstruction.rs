@@ -7,7 +7,7 @@ use crate::structure_designer::common_constants::{
   ZINCBLENDE_SITE_INTERIOR1, ZINCBLENDE_SITE_INTERIOR2, ZINCBLENDE_SITE_INTERIOR3, ZINCBLENDE_SITE_INTERIOR4
 };
 use crate::crystolecule::atomic_structure_utils::remove_single_bond_atoms;
-use crate::crystolecule::common_constants::{
+use crate::crystolecule::atomic_constants::{
   DEBUG_CARBON_GRAY, DEBUG_CARBON_RED, DEBUG_CARBON_GREEN, DEBUG_CARBON_BLUE,
   DEBUG_CARBON_YELLOW, DEBUG_CARBON_MAGENTA, DEBUG_CARBON_CYAN, DEBUG_CARBON_ORANGE
 };
@@ -907,6 +907,18 @@ pub fn reconstruct_surface(
   // Perform (100) 2×1 dimer reconstruction for cubic diamond
   reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation)
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

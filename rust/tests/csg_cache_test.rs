@@ -37,7 +37,3 @@ fn test_cache_clear() {
     assert_eq!(cache.mesh_count(), 0);
     assert_eq!(cache.stats().mesh_hits, 0);
 }
-
-
-
-

@@ -4,7 +4,7 @@ use std::num::ParseFloatError;
 use thiserror::Error;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use glam::f64::DVec3;
-use crate::crystolecule::common_constants::CHEMICAL_ELEMENTS;
+use crate::crystolecule::atomic_constants::CHEMICAL_ELEMENTS;
 use crate::crystolecule::atomic_structure_utils::auto_create_bonds;
 
 #[derive(Debug, Error)]
@@ -71,7 +71,3 @@ pub fn load_xyz(file_path: &str, create_bonds: bool) -> Result<AtomicStructure, 
 
     Ok(atomic_structure)
 }
-
-
-
-
