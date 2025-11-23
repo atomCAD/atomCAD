@@ -4,7 +4,7 @@ use glam::Vec3;
 use glam::DVec3;
 use crate::crystolecule::poly_mesh::PolyMesh;
 use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
-use crate::structure_designer::common_constants;
+use crate::crystolecule::crystolecule_constants;
 
 /// Adds a triangle to the mesh, respecting the tessellation direction
 /// 
@@ -385,7 +385,7 @@ fn tessellate_poly_mesh_one_sided(poly_mesh: &PolyMesh, mesh: &mut Mesh, smoothi
         let normals = [&normal, &normal, &normal, &normal];
         
         // Call add_hatched_quad directly
-        add_hatched_quad(mesh, tessellate_outside, positions, normals, material, common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32 * 0.5);
+        add_hatched_quad(mesh, tessellate_outside, positions, normals, material, crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM as f32 * 0.5);
         return;
     }
 

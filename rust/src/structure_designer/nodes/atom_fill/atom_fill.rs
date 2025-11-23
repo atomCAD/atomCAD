@@ -19,7 +19,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::motif::Motif;
 use crate::structure_designer::common_constants::{REAL_IMPLICIT_VOLUME_MIN, REAL_IMPLICIT_VOLUME_MAX};
-use crate::structure_designer::common_constants::DEFAULT_ZINCBLENDE_MOTIF;
+use crate::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use crate::crystolecule::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::node_network::ValidationError;
 use crate::util::serialization_utils::dvec3_serializer;

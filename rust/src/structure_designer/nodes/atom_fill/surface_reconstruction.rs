@@ -1,7 +1,7 @@
 use crate::crystolecule::atomic_structure::{AtomicStructure, Atom, BondReference};
 use crate::crystolecule::motif::Motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::structure_designer::common_constants::{
+use crate::crystolecule::crystolecule_constants::{
   DEFAULT_ZINCBLENDE_MOTIF, DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
   ZINCBLENDE_SITE_CORNER, ZINCBLENDE_SITE_FACE_Z, ZINCBLENDE_SITE_FACE_Y, ZINCBLENDE_SITE_FACE_X,
   ZINCBLENDE_SITE_INTERIOR1, ZINCBLENDE_SITE_INTERIOR2, ZINCBLENDE_SITE_INTERIOR3, ZINCBLENDE_SITE_INTERIOR4

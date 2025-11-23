@@ -1,4 +1,4 @@
-use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use glam::f64::DVec2;
