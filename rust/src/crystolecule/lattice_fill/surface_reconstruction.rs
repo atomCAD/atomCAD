@@ -11,7 +11,7 @@ use crate::crystolecule::atomic_constants::{
   DEBUG_CARBON_GRAY, DEBUG_CARBON_RED, DEBUG_CARBON_GREEN, DEBUG_CARBON_BLUE,
   DEBUG_CARBON_YELLOW, DEBUG_CARBON_MAGENTA, DEBUG_CARBON_CYAN, DEBUG_CARBON_ORANGE
 };
-use crate::structure_designer::nodes::atom_fill::placed_atom_tracker::{PlacedAtomTracker, CrystallographicAddress};
+use crate::crystolecule::lattice_fill::placed_atom_tracker::{PlacedAtomTracker, CrystallographicAddress};
 use std::collections::HashMap;
 use rustc_hash::FxHashMap;
 use glam::IVec3;
