@@ -13,136 +13,27 @@ use crate::util::box_subdivision::subdivide_daabox;
 use super::placed_atom_tracker::PlacedAtomTracker;
 
 use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
-use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::crystolecule::motif::SiteSpecifier;
 use crate::crystolecule::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
 use super::surface_reconstruction::reconstruct_surface;
+use super::hydrogen_passivation::{hydrogen_passivate};
 use crate::util::timer::Timer;
 
-// ============================================================================
-// Configuration Structures
-// ============================================================================
-
-/// Configuration for lattice filling operation.
-/// Contains all the input data needed to perform the fill.
-pub struct LatticeFillConfig {
-  /// The unit cell defining the crystal lattice
-  pub unit_cell: UnitCellStruct,
-  
-  /// The motif defining atomic positions and bonds within each unit cell
-  pub motif: Motif,
-  
-  /// Map of parameter names to atomic numbers (e.g., "PRIMARY" -> 6 for carbon)
-  pub parameter_element_values: HashMap<String, i16>,
-  
-  /// The geometry to fill with atoms (implicit surface)
-  pub geometry: GeoNode,
-  
-  /// Offset applied in motif space (fractional lattice coordinates)
-  pub motif_offset: DVec3,
-}
-
-/// Options controlling the filling behavior
-pub struct LatticeFillOptions {
-  /// Whether to add hydrogen atoms to dangling bonds
-  pub hydrogen_passivation: bool,
-  
-  /// Whether to remove single-bond atoms before passivation
-  pub remove_single_bond_atoms: bool,
-  
-  /// Whether to perform surface reconstruction (e.g., diamond (100) 2×1 dimers)
-  pub reconstruct_surface: bool,
-}
-
-/// Results from lattice filling operation
-pub struct LatticeFillResult {
-  /// The resulting atomic structure
-  pub atomic_structure: AtomicStructure,
-}
-
-#[derive(Debug, Clone)]
-pub struct LatticeFillStatistics {
-  pub fill_box_calls: i32,
-  pub do_fill_box_calls: i32,
-  pub do_fill_box_total_size: DVec3,
-  pub motif_cells_processed: i32,
-  pub atoms: i32,
-  pub bonds: i32,
-  pub total_depth: f64,
-  pub max_depth: f64,
-  pub non_batched_evaluations: i32,
-  pub batched_evaluations: i32,
-  pub surface_reconstructions: i32,
-}
-
-impl LatticeFillStatistics {
-  pub fn new() -> Self {
-    LatticeFillStatistics {
-      fill_box_calls: 0,
-      do_fill_box_calls: 0,
-      do_fill_box_total_size: DVec3::ZERO,
-      motif_cells_processed: 0,
-      atoms: 0,
-      bonds: 0,
-      total_depth: 0.0,
-      max_depth: f64::NEG_INFINITY,
-      non_batched_evaluations: 0,
-      batched_evaluations: 0,
-      surface_reconstructions: 0,
-    }
-  }
-
-  pub fn get_average_do_fill_box_size(&self) -> DVec3 {
-    if self.do_fill_box_calls > 0 {
-      self.do_fill_box_total_size / (self.do_fill_box_calls as f64)
-    } else {
-      DVec3::ZERO
-    }
-  }
-
-  pub fn get_average_depth(&self) -> f64 {
-    if self.atoms > 0 {
-      self.total_depth / (self.atoms as f64)
-    } else {
-      0.0
-    }
-  }
-
-  pub fn log_statistics(&self) {
-    println!("LatticeFill Statistics:");
-    println!("  fill_box calls: {}", self.fill_box_calls);
-    println!("  do_fill_box calls: {}", self.do_fill_box_calls);
-    let avg_size = self.get_average_do_fill_box_size();
-    println!("  average do_fill_box size: ({:.3}, {:.3}, {:.3})", avg_size.x, avg_size.y, avg_size.z);
-    println!("  motif cells processed: {}", self.motif_cells_processed);
-    println!("  atoms added: {}", self.atoms);
-    println!("  bonds created: {}", self.bonds);
-    if self.surface_reconstructions > 0 {
-      println!("  surface reconstructions: {}", self.surface_reconstructions);
-    }
-    println!("  evaluations: {} non-batched, {} batched", self.non_batched_evaluations, self.batched_evaluations);
-    if self.atoms > 0 {
-      println!("  average depth: {:.3} Å", self.get_average_depth());
-      println!("  max depth: {:.3} Å", self.max_depth);
-    }
-  }
-}
+// Import configuration types
+use super::config::{LatticeFillConfig, LatticeFillOptions, LatticeFillResult, LatticeFillStatistics};
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 /// Threshold for SDF sampling - atoms placed where SDF <= this value
-const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.0;
+const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 
 /// Conservative epsilon for numerical stability in box overlaps
-const CONSERVATIVE_EPSILON: f64 = 0.01;
+const CONSERVATIVE_EPSILON: f64 = 0.001;
 
 /// Minimum size for fill box before stopping subdivision
-const SMALLEST_FILL_BOX_SIZE: f64 = 2.0;
-
-/// Standard C-H bond length in angstroms
-const C_H_BOND_LENGTH: f64 = 1.09;
+const SMALLEST_FILL_BOX_SIZE: f64 = 4.9;
 
 // ============================================================================
 // Main Algorithm Entry Point
@@ -181,10 +72,14 @@ pub fn fill_lattice(
   {
     let _fill_timer = Timer::new("LatticeFill geometry filling");
     fill_box(
-      config,
+      &config.unit_cell,
+      &config.geometry,
+      &config.motif,
+      &config.motif_offset,
       fill_region,
       &mut atomic_structure,
       &mut statistics,
+      &config.parameter_element_values,
       &mut atom_tracker,
       &mut processed_cells,
       &mut batched_evaluator,
@@ -387,10 +282,14 @@ fn cell_overlaps_with_box(
 /// Fills the specified box with atoms using subdivision optimization.
 /// Recursively subdivides the box to avoid processing huge empty spaces.
 fn fill_box(
-  config: &LatticeFillConfig,
+  unit_cell: &UnitCellStruct,
+  geo_tree_root: &GeoNode,
+  motif: &Motif,
+  motif_offset: &DVec3,
   box_to_fill: &DAABox,
   atomic_structure: &mut AtomicStructure,
   statistics: &mut LatticeFillStatistics,
+  parameter_element_values: &HashMap<String, i16>,
   atom_tracker: &mut PlacedAtomTracker,
   processed_cells: &mut HashSet<IVec3>,
   batched_evaluator: &mut BatchedImplicitEvaluator,
@@ -401,7 +300,7 @@ fn fill_box(
   let box_center = box_to_fill.center();
 
   // Evaluate SDF at the box center
-  let sdf_value = config.geometry.implicit_eval_3d(&box_center);
+  let sdf_value = geo_tree_root.implicit_eval_3d(&box_center);
   statistics.non_batched_evaluations += 1;
 
   let box_size = box_to_fill.size();
@@ -424,10 +323,13 @@ fn fill_box(
   // we need to actually do the filling for this box
   if filled || (!should_subdivide_x && !should_subdivide_y && !should_subdivide_z) {
     do_fill_box(
-      config,
+      unit_cell,
+      motif,
+      motif_offset,
       box_to_fill,
       atomic_structure,
       statistics,
+      parameter_element_values,
       atom_tracker,
       processed_cells,
       batched_evaluator,
@@ -447,10 +349,14 @@ fn fill_box(
   // Process each subdivision recursively
   for sub_box in subdivisions {
     fill_box(
-      config,
+      unit_cell,
+      geo_tree_root,
+      motif,
+      motif_offset,
       &sub_box,
       atomic_structure,
       statistics,
+      parameter_element_values,
       atom_tracker,
       processed_cells,
       batched_evaluator,
@@ -462,10 +368,13 @@ fn fill_box(
 /// Fills the specified box with atoms.
 /// Called by fill_box. It does the actual filling by iterating through motif cells.
 fn do_fill_box(
-  config: &LatticeFillConfig,
+  unit_cell: &UnitCellStruct,
+  motif: &Motif,
+  motif_offset: &DVec3,
   box_to_fill: &DAABox,
   atomic_structure: &mut AtomicStructure,
   statistics: &mut LatticeFillStatistics,
+  parameter_element_values: &HashMap<String, i16>,
   atom_tracker: &mut PlacedAtomTracker,
   processed_cells: &mut HashSet<IVec3>,
   batched_evaluator: &mut BatchedImplicitEvaluator,
@@ -476,12 +385,7 @@ fn do_fill_box(
   statistics.do_fill_box_total_size += box_size;
   
   // Calculate the motif-space box that completely covers the real-space box
-  let (motif_min, motif_size) = calculate_motif_space_box(
-    &config.unit_cell,
-    &config.motif_offset,
-    &box_to_fill.min,
-    &box_size
-  );
+  let (motif_min, motif_size) = calculate_motif_space_box(unit_cell, motif_offset, &box_to_fill.min, &box_size);
   
   // Iterate through all motif cells in the calculated box
   for i in 0..motif_size.x {
@@ -491,10 +395,10 @@ fn do_fill_box(
         
         // Convert motif position to real space to check if this cell overlaps with our box
         let motif_pos_dvec3 = DVec3::new(motif_pos.x as f64, motif_pos.y as f64, motif_pos.z as f64);
-        let cell_real_pos = motif_to_real(&config.unit_cell, &config.motif_offset, &motif_pos_dvec3);
+        let cell_real_pos = motif_to_real(unit_cell, motif_offset, &motif_pos_dvec3);
         
         // Check if this motif cell has any overlap with the real-space box
-        if cell_overlaps_with_box(&cell_real_pos, &config.unit_cell, box_to_fill) {
+        if cell_overlaps_with_box(&cell_real_pos, unit_cell, box_to_fill) {
           // Check if this motif cell has already been processed
           if !processed_cells.contains(&motif_pos) {
             // Mark this cell as processed
@@ -503,8 +407,14 @@ fn do_fill_box(
             
             // Fill this motif cell with atoms from the motif
             fill_cell(
-              config,
+              unit_cell,
+              motif,
+              motif_offset,
               &motif_pos,
+              &cell_real_pos,
+              atomic_structure,
+              statistics,
+              parameter_element_values,
               atom_tracker,
               batched_evaluator,
               pending_atoms
@@ -519,14 +429,20 @@ fn do_fill_box(
 /// Fills a single motif cell with atoms from the motif.
 /// Adds atoms to the batched evaluator for later SDF evaluation.
 fn fill_cell(
-  config: &LatticeFillConfig,
+  unit_cell: &UnitCellStruct,
+  motif: &Motif,
+  motif_offset: &DVec3,
   motif_pos: &IVec3,
+  _cell_real_pos: &DVec3,
+  _atomic_structure: &mut AtomicStructure,
+  _statistics: &mut LatticeFillStatistics,
+  parameter_element_values: &HashMap<String, i16>,
   _atom_tracker: &mut PlacedAtomTracker,
   batched_evaluator: &mut BatchedImplicitEvaluator,
   pending_atoms: &mut Vec<PendingAtomData>,
 ) {
   // Iterate through all sites in the motif
-  for (site_index, site) in config.motif.sites.iter().enumerate() {
+  for (site_index, site) in motif.sites.iter().enumerate() {
     // Determine the effective atomic number
     let effective_atomic_number = if site.atomic_number > 0 {
       // Positive atomic number - use directly
@@ -535,14 +451,14 @@ fn fill_cell(
       // Negative atomic number - this is a parameter element
       // Find the parameter element by index (first parameter is -1, second is -2, etc.)
       let param_index = (-site.atomic_number - 1) as usize;
-      if param_index < config.motif.parameters.len() {
-        let param_name = &config.motif.parameters[param_index].name;
-        match config.parameter_element_values.get(param_name) {
+      if param_index < motif.parameters.len() {
+        let param_name = &motif.parameters[param_index].name;
+        match parameter_element_values.get(param_name) {
           Some(&atomic_number) => atomic_number,
           None => {
             // This should not happen if get_effective_parameter_element_values worked correctly
             // but use the default as fallback
-            config.motif.parameters[param_index].default_atomic_number
+            motif.parameters[param_index].default_atomic_number
           }
         }
       } else {
@@ -555,7 +471,7 @@ fn fill_cell(
     // The site position is in motif space relative to the motif cell
     let motif_pos_dvec3 = DVec3::new(motif_pos.x as f64, motif_pos.y as f64, motif_pos.z as f64);
     let site_motif_pos = motif_pos_dvec3 + site.position;
-    let absolute_real_pos = motif_to_real(&config.unit_cell, &config.motif_offset, &site_motif_pos);
+    let absolute_real_pos = motif_to_real(unit_cell, motif_offset, &site_motif_pos);
     
     // Add this point to the batch for later evaluation
     batched_evaluator.add_point(absolute_real_pos);
@@ -604,166 +520,3 @@ fn create_bonds(
       }
     }
   }
-
-// Applies hydrogen passivation to dangling bonds
-// This is called after bonds have been created
-fn hydrogen_passivate(
-  config: &LatticeFillConfig,
-  atom_tracker: &PlacedAtomTracker,
-  atomic_structure: &mut AtomicStructure,
-  statistics: &mut LatticeFillStatistics
-) {
-    //println!("hydrogen_passivate called");
-
-    // Iterate through all placed atoms
-    for (address, atom_id) in atom_tracker.iter_atoms() {
-      let lattice_pos = address.motif_space_pos;
-      let site_index = address.site_index;
-      
-      // Check if this atom exists and isn't already hydrogen passivated
-      // (it might have been removed by remove_single_bond_atoms or passivated by surface reconstruction)
-      // Extract needed fields immediately to avoid borrow checker conflicts
-      let (atom_position, atom_atomic_number, actual_bond_count) = match atomic_structure.get_atom(atom_id) {
-        None => continue, // Early exit - atom was removed, skip it
-        Some(atom) => {
-          if atom.is_hydrogen_passivation() {
-            continue; // Skip - atom already passivated by surface reconstruction
-          }
-          (atom.position, atom.atomic_number, atom.bonds.len())
-        }
-      };
-      
-      // Optimization: Check if atom has all expected bonds from motif
-      // If so, skip expensive dangling bond checking
-      let expected_bond_count = config.motif.bonds_by_site1_index[site_index].len() 
-                              + config.motif.bonds_by_site2_index[site_index].len();
-      if actual_bond_count == expected_bond_count {
-        continue; // All bonds present - no passivation needed
-      }
-      
-      // Case 1: Check bonds where this atom is the first site (optimized with precomputed index)
-      // Use precomputed bonds_by_site1_index to only check bonds that start from this site
-      for &bond_index in &config.motif.bonds_by_site1_index[site_index] {
-        let bond = &config.motif.bonds[bond_index];
-        
-        // This atom is the first site of the bond, try to find the second site
-        let atom_id_2 = atom_tracker.get_atom_id_for_specifier(lattice_pos, &bond.site_2);
-        
-        // Check if second atom is missing (not in tracker OR in tracker but removed from structure)
-        let is_dangling = match atom_id_2 {
-          None => true, // Not in tracker - definitely dangling
-          Some(id) => atomic_structure.get_atom(id).is_none(), // In tracker but removed from structure
-        };
-        
-        if is_dangling {
-          // Second atom doesn't exist - this is a dangling bond that needs to be passivated
-          //println!("dangling bond found (first site exists, second doesn't)");
-          
-          hydrogen_passivate_dangling_bond(
-            config,
-            &bond.site_1,
-            &bond.site_2,
-            atom_id,
-            atom_position,
-            atom_atomic_number,
-            atomic_structure,
-            statistics
-          );
-        }
-      }
-      
-      // Case 2: Check bonds where this atom is the second site (optimized with precomputed index)
-      // Use precomputed bonds_by_site2_index to only check bonds that end at this site
-      for &bond_index in &config.motif.bonds_by_site2_index[site_index] {
-        let bond = &config.motif.bonds[bond_index];
-        
-        // We need to calculate where this atom would be if it were the second site
-        let second_site_base_pos = lattice_pos - bond.site_2.relative_cell;
-        
-        // This atom is the second site of the bond, try to find the first site
-        let atom_id_1 = atom_tracker.get_atom_id_for_specifier(second_site_base_pos, &bond.site_1);
-        
-        // Check if first atom is missing (not in tracker OR in tracker but removed from structure)
-        let is_dangling = match atom_id_1 {
-          None => true, // Not in tracker - definitely dangling
-          Some(id) => atomic_structure.get_atom(id).is_none(), // In tracker but removed from structure
-        };
-        
-        if is_dangling {
-          // First atom doesn't exist - this is a dangling bond that needs to be passivated
-          //println!("dangling bond found (second site exists, first doesn't)");
-          
-          hydrogen_passivate_dangling_bond(
-            config,
-            &bond.site_2,
-            &bond.site_1,
-            atom_id,
-            atom_position,
-            atom_atomic_number,
-            atomic_structure,
-            statistics
-          );
-        }
-      }
-    }
-}
-
-// Helper method to passivate a single dangling bond with hydrogen
-// found_site: the site that exists in the crystal
-// not_found_site: the site that is missing and needs to be passivated
-// found_atom_id: ID of the existing atom
-// found_atom_position: position of the existing atom
-// found_atom_atomic_number: atomic number of the existing atom
-fn hydrogen_passivate_dangling_bond(
-  config: &LatticeFillConfig,
-  found_site: &SiteSpecifier,
-  not_found_site: &SiteSpecifier,
-  found_atom_id: u32,
-  found_atom_position: DVec3,
-  found_atom_atomic_number: i16,
-  atomic_structure: &mut AtomicStructure,
-  statistics: &mut LatticeFillStatistics
-) {
-    // Calculate the relative position of not_found_site relative to found_site in motif space
-    let found_site_pos = config.motif.sites[found_site.site_index].position + 
-      found_site.relative_cell.as_dvec3();
-    let not_found_site_pos = config.motif.sites[not_found_site.site_index].position + 
-      not_found_site.relative_cell.as_dvec3();
-
-    let relative_motif_pos = not_found_site_pos - found_site_pos;
-    
-    // Convert the relative position from motif space to real space direction
-    let real_space_direction = config.unit_cell.dvec3_lattice_to_real(&relative_motif_pos);
-    
-    // Calculate proper bond length based on atomic radii
-    let bond_length = if found_atom_atomic_number == 6 {
-      // Special case for C-H bonds
-      C_H_BOND_LENGTH
-    } else {
-      // General case: sum of covalent radii
-      let atom_1_radius = ATOM_INFO.get(&(found_atom_atomic_number as i32))
-        .map(|info| info.covalent_radius)
-        .unwrap_or(0.7); // Default radius if not found
-      let hydrogen_radius = ATOM_INFO.get(&1)
-        .map(|info| info.covalent_radius)
-        .unwrap_or(0.31); // Default hydrogen radius
-      atom_1_radius + hydrogen_radius
-    };
-    
-    // Normalize the direction and place hydrogen at proper bond length
-    let normalized_direction = real_space_direction.normalize();
-    let hydrogen_pos = found_atom_position + normalized_direction * bond_length;
-
-    // Add hydrogen atom (atomic number 1) - depth remains 0.0 by default
-    let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos);
-    
-    // Update depth statistics for hydrogen (depth = 0.0)
-    statistics.total_depth += 0.0;
-    // Note: max_depth doesn't need updating since hydrogen depth is 0.0
-    
-    // Create bond between original atom and hydrogen
-    atomic_structure.add_bond(found_atom_id, hydrogen_id, 1); // Single bond
-    
-    statistics.bonds += 1;
-    statistics.atoms += 1; // Count the hydrogen atom
-}
