@@ -15,7 +15,6 @@ use glam::f64::DMat4;
 use glam::f64::DVec3;
 use glam::f64::DVec4;
 use glam::f64::DQuat;
-use crate::crystolecule::scene::Scene;
 use std::sync::Mutex;
 use crate::api::common_api_types::APICameraCanonicalView;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, BackgroundPreferences};
@@ -659,7 +658,7 @@ impl Renderer {
     ) {
         // Tessellate using the new node_data HashMap structure
         let (lightweight_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
-            crate::renderer::tessellator::scene_tessellator::tessellate_scene_content(
+            crate::display::scene_tessellator::tessellate_scene_content(
                 scene, 
                 &self.camera, 
                 lightweight, 
@@ -724,7 +723,7 @@ impl Renderer {
         
         // Use the coordinate system tessellator to populate it
         let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
-        crate::renderer::tessellator::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
+        crate::display::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
         
         // Update the background mesh with the line mesh
         self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "Background");

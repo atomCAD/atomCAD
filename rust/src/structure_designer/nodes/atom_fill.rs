@@ -1,4 +1,4 @@
-﻿// Node wrapper for lattice filling algorithm
+// Node wrapper for lattice filling algorithm
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};

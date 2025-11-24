@@ -1,10 +1,10 @@
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
-use crate::crystolecule::surface_point_cloud::SurfacePoint;
-use crate::crystolecule::surface_point_cloud::SurfacePoint2D;
-use crate::crystolecule::surface_point_cloud::SurfacePointCloud;
-use crate::crystolecule::surface_point_cloud::SurfacePointCloud2D;
-use super::tessellator;
+use crate::display::surface_point_cloud::SurfacePoint;
+use crate::display::surface_point_cloud::SurfacePoint2D;
+use crate::display::surface_point_cloud::SurfacePointCloud;
+use crate::display::surface_point_cloud::SurfacePointCloud2D;
+use crate::renderer::tessellator::tessellator;
 use glam::f32::Vec3;
 use glam::f64::DQuat;
 use glam::f64::DVec3;

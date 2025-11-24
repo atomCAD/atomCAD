@@ -30,9 +30,9 @@ use std::collections::HashMap;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use crate::util::hit_test_utils;
-use crate::renderer::tessellator::atomic_tessellator::get_displayed_atom_radius;
+use crate::display::atomic_tessellator::get_displayed_atom_radius;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::renderer::tessellator::atomic_tessellator::BAS_STICK_RADIUS;
+use crate::display::atomic_tessellator::BAS_STICK_RADIUS;
 use crate::api::common_api_types::SelectModifier;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 

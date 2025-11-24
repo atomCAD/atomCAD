@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use crate::util::serialization_utils::dvec3_serializer;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::crystolecule::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use glam::f64::DQuat;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;

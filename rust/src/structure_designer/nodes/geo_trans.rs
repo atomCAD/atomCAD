@@ -18,7 +18,7 @@ use std::f64::consts::PI;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::crystolecule::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::renderer::mesh::Mesh;
 use crate::structure_designer::node_type::NodeType;

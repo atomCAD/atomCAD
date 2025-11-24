@@ -16,7 +16,7 @@ use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::crystolecule::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;

@@ -11,7 +11,7 @@ use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use std::collections::HashSet;
-use crate::crystolecule::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;

@@ -1,4 +1,4 @@
-use crate::crystolecule::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use crate::structure_designer::evaluator::network_evaluator::{
   NetworkEvaluationContext, NetworkEvaluator
 };
