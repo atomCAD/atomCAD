@@ -6,19 +6,11 @@
 - **Frontend**: Flutter (cross-platform UI)
 - **Supported Platforms**: Windows, Linux, macOS
 
-## Architecture Diagram
-
-Visual representation of the module architecture with dependencies:
-
-![Architecture Diagram](architecture_diagram.svg)
-
-[View full diagram](architecture_diagram.svg)
-
 ## Rust Backend
 
 We aim to create as independent modules as possible. Dependencies should be as few as possible and should form a DAG (Directed Acyclic Graph): no circular dependencies.
 
-We plan the following top level modules:
+Currently there are the following top-level Rust modules:
 
 - structure_designer
 - crystolecule
@@ -26,6 +18,14 @@ We plan the following top level modules:
 - display
 - expr
 - geo_tree
+
+## Architecture Diagram
+
+Visual representation of the module architecture with dependencies:
+
+![Architecture Diagram](architecture_diagram.svg)
+
+[View full diagram](architecture_diagram.svg)
 
 ## structure_designer
 

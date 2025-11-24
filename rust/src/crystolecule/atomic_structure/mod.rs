@@ -63,7 +63,6 @@ fn apply_select_modifier(in_selected: bool, select_modifier: &SelectModifier) ->
   }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct AtomicStructure {
   frame_transform: Transform,

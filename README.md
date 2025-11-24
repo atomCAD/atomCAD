@@ -63,4 +63,4 @@ Demos based on the on the demo lib [(library overview and design decisions)](./d
 ## Conribute
 
 **Interested in contributing?**  
-See our [developer documentation](./doc/for_developers.mid) to get started.
+See our [developer documentation](./doc/for_developers.md) to get started.
