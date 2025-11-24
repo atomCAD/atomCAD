@@ -6,6 +6,14 @@
 - **Frontend**: Flutter (cross-platform UI)
 - **Supported Platforms**: Windows, Linux, macOS
 
+## Architecture Diagram
+
+Visual representation of the module architecture with dependencies:
+
+![Architecture Diagram](architecture_diagram.svg)
+
+[View full diagram](architecture_diagram.svg)
+
 ## Rust Backend
 
 We aim to create as independent modules as possible. Dependencies should be as few as possible and should form a DAG (Directed Acyclic Graph): no circular dependencies.
