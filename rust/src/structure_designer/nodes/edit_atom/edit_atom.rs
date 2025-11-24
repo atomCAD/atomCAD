@@ -10,6 +10,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::api::common_api_types::SelectModifier;
+use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RADIUS};
 use glam::f64::DVec3;
 use crate::structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
 use crate::structure_designer::nodes::edit_atom::commands::delete_command::DeleteCommand;
@@ -245,7 +246,8 @@ pub fn select_atom_or_bond_by_ray(structure_designer: &mut StructureDesigner, ra
     
   // Use the unified hit_test function instead of separate atom and bond tests
   let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
-  match atomic_structure.hit_test(ray_start, ray_dir, visualization) {
+  match atomic_structure.hit_test(ray_start, ray_dir, visualization, 
+    |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
     HitTestResult::Atom(atom_id, _distance) => {
       select_atom_by_id(structure_designer, atom_id, select_modifier);
       true
@@ -320,7 +322,8 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
 
   // Find the atom along the ray, ignoring bond hits
   let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
-  let atom_id = match atomic_structure.hit_test(ray_start, ray_dir, visualization) {
+  let atom_id = match atomic_structure.hit_test(ray_start, ray_dir, visualization, 
+    |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
     HitTestResult::Atom(id, _) => id,
     _ => return,
   };

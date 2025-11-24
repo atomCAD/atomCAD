@@ -1,8 +1,8 @@
 use super::{GeoNode, GeoNodeKind};
 use glam::f64::{DVec2, DVec3};
 use crate::util::transform::Transform;
-use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry2D;
-use crate::structure_designer::implicit_eval::implicit_geometry::{ImplicitGeometry3D, BATCH_SIZE};
+use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
+use crate::geo_tree::implicit_geometry::{ImplicitGeometry3D, BATCH_SIZE};
 
 impl ImplicitGeometry2D for GeoNode {
   fn get_gradient_2d(

@@ -1,5 +1,5 @@
 use glam::f64::DVec3;
-use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
+use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 
 // traces a ray into the given implicit geometries and returns the distance of the closest intersection if any.
 pub fn raytrace_geometries(geometries: &[&dyn ImplicitGeometry3D], ray_origin: &DVec3, ray_direction: &DVec3, world_scale: f64) -> Option<f64> {  

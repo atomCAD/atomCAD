@@ -1,5 +1,5 @@
 use crate::display::surface_point_cloud::SurfacePointCloud2D;
-use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry2D;
+use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::common_constants;

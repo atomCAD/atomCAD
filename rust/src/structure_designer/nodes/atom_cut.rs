@@ -7,7 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::geo_tree::GeoNode;
 use serde::{Serialize, Deserialize};
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
+use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;

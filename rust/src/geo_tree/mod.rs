@@ -73,6 +73,9 @@ mod csg_conversion;
 mod implicit_eval;
 pub mod batched_implicit_evaluator;
 pub mod csg_cache;
+pub mod csg_types;
+pub mod csg_utils;
+pub mod implicit_geometry;
 
 impl fmt::Display for GeoNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

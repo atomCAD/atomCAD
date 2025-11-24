@@ -30,9 +30,7 @@ use std::collections::HashMap;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use crate::util::hit_test_utils;
-use crate::display::atomic_tessellator::get_displayed_atom_radius;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::display::atomic_tessellator::BAS_STICK_RADIUS;
 use crate::api::common_api_types::SelectModifier;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 
@@ -393,13 +391,18 @@ impl AtomicStructure {
   }
 
   /// Ray hit test - returns closest hit (atom/bond) or None
-  pub fn hit_test(&self, ray_start: &DVec3, ray_dir: &DVec3, visualization: &AtomicStructureVisualization) -> HitTestResult {
+  /// 
+  /// Parameters:
+  /// - atom_radius_fn: Function to get the visual radius for each atom (depends on visualization mode)
+  /// - bond_radius: Visual radius for bonds (only used in BallAndStick mode)
+  pub fn hit_test<F>(&self, ray_start: &DVec3, ray_dir: &DVec3, visualization: &AtomicStructureVisualization, atom_radius_fn: F, bond_radius: f64) -> HitTestResult 
+  where F: Fn(&Atom) -> f64 {
     let mut closest_hit: Option<(HitTestResult, f64)> = None;
 
     for atom in self.atoms_values() {
       let Some(distance) = hit_test_utils::sphere_hit_test(
           &atom.position, 
-          get_displayed_atom_radius(atom, visualization), 
+          atom_radius_fn(atom), 
           ray_start, 
           ray_dir) else { continue };
       
@@ -428,7 +431,7 @@ impl AtomicStructure {
         let Some(distance) = hit_test_utils::cylinder_hit_test(
             &atom.position,
             &other_atom.position,
-            BAS_STICK_RADIUS,
+            bond_radius,
             ray_start,
             ray_dir) else { continue };
         

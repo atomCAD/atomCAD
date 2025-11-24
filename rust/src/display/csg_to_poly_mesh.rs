@@ -1,8 +1,8 @@
-use crate::crystolecule::csg_types::CSGMesh;
-use crate::crystolecule::csg_types::CSGSketch;
+use crate::geo_tree::csg_types::CSGMesh;
+use crate::geo_tree::csg_types::CSGSketch;
 use crate::display::poly_mesh::PolyMesh;
 use crate::util::unique_3d_points::Unique3DPoints;
-use crate::crystolecule::csg_utils::{scale_to_csg, unscale_from_csg};
+use crate::geo_tree::csg_utils::{scale_to_csg, unscale_from_csg};
 use glam::DVec3;
 use csgrs::{float_types::Real, mesh::polygon::Polygon, mesh::vertex::Vertex};
 use nalgebra::Point3;

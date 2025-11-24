@@ -1,4 +1,4 @@
-﻿use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::crystolecule::motif::SiteSpecifier;
 use glam::f64::DVec3;
