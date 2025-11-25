@@ -1,5 +1,5 @@
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
-use crate::common::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 use serde::{Serialize, Deserialize};
 
 /*
@@ -20,8 +20,7 @@ impl AddBondCommand {
 
 impl EditAtomCommand for AddBondCommand {
   fn execute(&self, model: &mut AtomicStructure) {
-    let bond_id = model.obtain_next_bond_id();
-    model.add_bond_with_id_checked(bond_id, self.atom_id1, self.atom_id2, self.multiplicity);
+    model.add_bond_checked(self.atom_id1, self.atom_id2, self.multiplicity as u8);
   }
 
   fn clone_box(&self) -> Box<dyn EditAtomCommand> {

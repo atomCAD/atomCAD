@@ -1,13 +1,13 @@
-use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use serde::{Serialize, Deserialize};
-use crate::common::atomic_structure::AtomicStructure;
-use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -116,7 +116,7 @@ fn cut_atomic_structure(atomic_structure: &mut AtomicStructure, cutter_geo_tree_
   let mut atoms_to_delete = Vec::new();
   
   // Iterate over all atoms and check if they are outside the geometry
-  for (atom_id, atom) in &atomic_structure.atoms {
+  for (atom_id, atom) in atomic_structure.iter_atoms() {
     // Evaluate the atom's position against the cutter geometry
     let sdf_value = cutter_geo_tree_root.implicit_eval_3d(&(atom.position / unit_cell_size));
     

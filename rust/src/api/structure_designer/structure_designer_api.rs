@@ -56,8 +56,8 @@ use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::lattice_move::{LatticeMoveData, LatticeMoveEvalCache};
 use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
-use crate::structure_designer::evaluator::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem, classify_crystal_system};
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem, classify_crystal_system};
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -1793,6 +1793,7 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
           motif_offset: to_api_vec3(&atom_fill_data.motif_offset),
           hydrogen_passivation: atom_fill_data.hydrogen_passivation,
           remove_single_bond_atoms_before_passivation: atom_fill_data.remove_single_bond_atoms_before_passivation,
+          surface_reconstruction: atom_fill_data.surface_reconstruction,
           error: atom_fill_data.error.clone(),
         })
       },
@@ -1811,6 +1812,7 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                     motif_offset: from_api_vec3(&data.motif_offset),
                     hydrogen_passivation: data.hydrogen_passivation,
                     remove_single_bond_atoms_before_passivation: data.remove_single_bond_atoms_before_passivation,
+                    surface_reconstruction: data.surface_reconstruction,
                     error: None,
                     parameter_element_values: HashMap::new(),
                 });
@@ -2053,3 +2055,19 @@ pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
     });
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

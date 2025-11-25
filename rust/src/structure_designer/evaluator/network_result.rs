@@ -2,13 +2,13 @@ use glam::i32::IVec2;
 use glam::i32::IVec3;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
-use crate::common::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
-use crate::structure_designer::evaluator::motif::Motif;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::motif::Motif;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {

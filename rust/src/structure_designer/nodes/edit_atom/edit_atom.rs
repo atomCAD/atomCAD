@@ -1,15 +1,16 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
-use crate::common::atomic_structure::{AtomDisplayState, AtomicStructure};
+use crate::crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::util::transform::Transform;
 use crate::structure_designer::evaluator::network_result::{NetworkResult, input_missing_error, error_in_input};
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::common::atomic_structure::HitTestResult;
+use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::api::common_api_types::SelectModifier;
+use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RADIUS};
 use glam::f64::DVec3;
 use crate::structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
 use crate::structure_designer::nodes::edit_atom::commands::delete_command::DeleteCommand;
@@ -17,19 +18,19 @@ use crate::structure_designer::nodes::edit_atom::commands::replace_command::Repl
 use crate::structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
 use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::AddBondCommand;
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
-use crate::common::atomic_structure::BondReference;
+use crate::crystolecule::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
 use crate::structure_designer::node_type::NodeType;
 
 #[derive(Debug)]
 pub struct DefaultToolState {
-  pub replacement_atomic_number: i32,
+  pub replacement_atomic_number: i16,
 }
 
 #[derive(Debug)]
 pub struct AddAtomToolState {
-  pub atomic_number: i32,
+  pub atomic_number: i16,
 }
 
 #[derive(Debug)]
@@ -78,7 +79,7 @@ impl EditAtomData {
       if decorate {
         if let EditAtomTool::AddBond(state) = &self.active_tool {
           if let Some(atom_id) = state.last_atom_id {
-            atomic_structure.decorator.set_atom_display_state(atom_id, AtomDisplayState::Marked);
+            atomic_structure.decorator_mut().set_atom_display_state(atom_id, AtomDisplayState::Marked);
           }
         }
       }
@@ -146,7 +147,7 @@ impl EditAtomData {
         }
     }
     
-    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i32) -> bool {
+    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i16) -> bool {
         match &mut self.active_tool {
             EditAtomTool::Default(state) => {
                 state.replacement_atomic_number = replacement_atomic_number;
@@ -156,7 +157,7 @@ impl EditAtomData {
         }
     }
     
-    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i32) -> bool {
+    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i16) -> bool {
         match &mut self.active_tool {
             EditAtomTool::AddAtom(state) => {
                 state.atomic_number = atomic_number;
@@ -245,20 +246,15 @@ pub fn select_atom_or_bond_by_ray(structure_designer: &mut StructureDesigner, ra
     
   // Use the unified hit_test function instead of separate atom and bond tests
   let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
-  match atomic_structure.hit_test(ray_start, ray_dir, visualization) {
+  match atomic_structure.hit_test(ray_start, ray_dir, visualization, 
+    |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
     HitTestResult::Atom(atom_id, _distance) => {
       select_atom_by_id(structure_designer, atom_id, select_modifier);
       true
     },
-    HitTestResult::Bond(bond_id, _distance) => {
-      // Get a proper bond reference from the bond ID
-      if let Some(bond_reference) = atomic_structure.get_bond_reference_by_id(bond_id) {
-        select_bond_by_reference(structure_designer, &bond_reference, select_modifier);
-        true
-      } else {
-        // Bond ID was valid during hit test but no longer exists
-        false
-      }
+    HitTestResult::Bond(bond_reference, _distance) => {
+      select_bond_by_reference(structure_designer, &bond_reference, select_modifier);
+      true
     },
     HitTestResult::None => false
   }
@@ -275,7 +271,7 @@ pub fn delete_selected_atoms_and_bonds(structure_designer: &mut StructureDesigne
   edit_atom_data.add_command(delete_command);
 }
 
-pub fn add_atom_by_ray(structure_designer: &mut StructureDesigner, atomic_number: i32, plane_normal: &DVec3, ray_start: &DVec3, ray_dir: &DVec3) {
+pub fn add_atom_by_ray(structure_designer: &mut StructureDesigner, atomic_number: i16, plane_normal: &DVec3, ray_start: &DVec3, ray_dir: &DVec3) {
   // Get the atomic structure from the selected node
   let atomic_structure = match structure_designer.get_atomic_structure_from_selected_node() {
     Some(structure) => structure,
@@ -326,7 +322,8 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
 
   // Find the atom along the ray, ignoring bond hits
   let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
-  let atom_id = match atomic_structure.hit_test(ray_start, ray_dir, visualization) {
+  let atom_id = match atomic_structure.hit_test(ray_start, ray_dir, visualization, 
+    |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
     HitTestResult::Atom(id, _) => id,
     _ => return,
   };
@@ -368,7 +365,7 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
 }  
 
 // Replaces all selected atoms with the specified atomic number
-pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic_number: i32) {
+pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic_number: i16) {
   let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,
@@ -393,7 +390,7 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
     // Get the current atomic structure
     if let Some(structure) = structure_designer.get_atomic_structure_from_selected_node() {
       // Clone the transform if it exists
-      structure.selection_transform.clone()
+      structure.decorator().selection_transform.clone()
     } else {
       return; // No atomic structure, exit early
     }
@@ -479,7 +476,7 @@ pub fn get_selected_edit_atom_data_mut(structure_designer: &mut StructureDesigne
   node_data.as_any_mut().downcast_mut::<EditAtomData>()
 }
 
-fn add_atom(structure_designer: &mut StructureDesigner, atomic_number: i32, position: DVec3) {
+fn add_atom(structure_designer: &mut StructureDesigner, atomic_number: i16, position: DVec3) {
   let edit_atom_data = match get_selected_edit_atom_data_mut(structure_designer) {
     Some(data) => data,
     None => return,

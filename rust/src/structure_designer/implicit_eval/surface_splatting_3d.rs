@@ -1,10 +1,10 @@
 use glam::i32::IVec3;
 use lru::LruCache;
-use crate::common::surface_point_cloud::SurfacePointCloud;
+use crate::display::surface_point_cloud::SurfacePointCloud;
 use crate::structure_designer::common_constants;
-use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
+use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::util::box_subdivision::subdivide_box;
-use crate::common::surface_point_cloud::SurfacePoint;
+use crate::display::surface_point_cloud::SurfacePoint;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;

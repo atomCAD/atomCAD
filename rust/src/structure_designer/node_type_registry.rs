@@ -54,7 +54,7 @@ use super::node_type::{generic_node_data_saver, generic_node_data_loader};
 use crate::structure_designer::serialization::edit_atom_data_serialization::{edit_atom_data_to_serializable, serializable_to_edit_atom_data, SerializableEditAtomData};
 use glam::{IVec3, DVec3, IVec2};
 use crate::structure_designer::data_type::{DataType, FunctionType};
-use crate::structure_designer::common_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::structure_designer::node_network::Argument;
 
 
@@ -836,6 +836,7 @@ impl NodeTypeRegistry {
         motif_offset: DVec3::ZERO,
         hydrogen_passivation: true,
         remove_single_bond_atoms_before_passivation: false,
+        surface_reconstruction: false,
         error: None,
         parameter_element_values: HashMap::new(),
       }),
@@ -1203,3 +1204,19 @@ impl NodeTypeRegistry {
     visited.remove(network_name);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

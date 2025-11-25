@@ -89,7 +89,6 @@ class BackgroundPreferences {
 
 enum GeometryVisualization {
   surfaceSplatting,
-  dualContouring,
   explicitMesh,
   ;
 }

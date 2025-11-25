@@ -99,3 +99,10 @@ fn test_contains_point() {
     assert!(box1.contains_point(DVec3::new(10.0, 10.0, 10.0))); // boundary
     assert!(!box1.contains_point(DVec3::new(15.0, 5.0, 5.0)));
 }
+
+
+
+
+
+
+

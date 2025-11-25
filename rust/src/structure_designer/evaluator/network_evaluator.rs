@@ -7,18 +7,17 @@ use crate::structure_designer::structure_designer_scene::{NodeSceneData, NodeOut
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud;
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
-use crate::structure_designer::implicit_eval::dual_contour_3d::generate_dual_contour_3d;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
-use crate::common::csg_utils::convert_csg_mesh_to_poly_mesh;
-use crate::common::csg_utils::convert_csg_sketch_to_poly_mesh;
+use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
+use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::geo_tree::csg_cache::CsgConversionCache;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::csg_cache::CsgConversionCache;
+use crate::geo_tree::GeoNode;
 
 use super::network_result::input_missing_error;
 use super::network_result::Closure;
@@ -83,7 +82,7 @@ impl NetworkEvaluator {
   }
 
   /// Get cache statistics
-  pub fn get_csg_cache_stats(&self) -> crate::structure_designer::geo_tree::csg_cache::CacheStats {
+  pub fn get_csg_cache_stats(&self) -> crate::geo_tree::csg_cache::CacheStats {
     self.csg_conversion_cache.stats()
   }
 
@@ -127,8 +126,7 @@ impl NetworkEvaluator {
     // Determine output and geo_tree based on node type and visualization preferences
     let (output, geo_tree) = 
     if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D {
-      if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting ||
-         geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
+      if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting  {
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
           let point_cloud = generate_2d_point_cloud(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences);
           (NodeOutput::SurfacePointCloud2D(point_cloud), Some(geometry_summary_2d.geo_tree_root))
@@ -149,14 +147,7 @@ impl NetworkEvaluator {
         } else {
           (NodeOutput::None, None)
         }
-      } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::DualContouring {
-        if let NetworkResult::Geometry(geometry_summary) = result {
-          let poly_mesh = generate_dual_contour_3d(&geometry_summary.geo_tree_root, geometry_visualization_preferences);
-          (NodeOutput::PolyMesh(poly_mesh), Some(geometry_summary.geo_tree_root))
-        } else {
-          (NodeOutput::None, None)
-        }
-      } else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
+} else if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::ExplicitMesh {
         self.generate_explicit_mesh_output(result, &network_stack, node_id, registry, &mut context, geometry_visualization_preferences)
       } else {
         (NodeOutput::None, None)
@@ -165,7 +156,7 @@ impl NetworkEvaluator {
     else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Atomic {
       if let NetworkResult::Atomic(atomic_structure) = result {
         let mut cloned_atomic_structure = atomic_structure.clone();
-        cloned_atomic_structure.from_selected_node = from_selected_node;
+        cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
         (NodeOutput::Atomic(cloned_atomic_structure), None)
       } else {
         (NodeOutput::None, None)
@@ -486,3 +477,5 @@ impl NetworkEvaluator {
   }
 
 }
+
+

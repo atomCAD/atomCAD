@@ -314,3 +314,19 @@ fn update_network_output_type(network: &mut NodeNetwork, node_type_registry: &No
     old_output_type != new_output_type
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

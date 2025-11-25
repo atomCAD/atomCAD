@@ -1,5 +1,5 @@
-use crate::common::atomic_structure::AtomicStructure;
-use crate::common::atomic_structure_utils::calc_selection_transform;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
 use glam::f64::DVec3;
 use glam::f64::DVec2;
 use super::node_type_registry::NodeTypeRegistry;
@@ -14,16 +14,17 @@ use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicStructureVisualization};
+use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RADIUS};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::network_validator::{validate_network, NetworkValidationResult};
 use std::collections::{HashSet, HashMap};
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
-use crate::structure_designer::implicit_eval::implicit_geometry::ImplicitGeometry3D;
-use crate::common::xyz_saver::save_xyz;
-use crate::common::mol_exporter::save_mol_v3000;
+use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
+use crate::crystolecule::io::xyz_saver::save_xyz;
+use crate::crystolecule::io::mol_exporter::save_mol_v3000;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use super::structure_designer_changes::{StructureDesignerChanges, RefreshMode};
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
 
@@ -74,7 +75,7 @@ impl StructureDesigner {
     // Find the first atomic structure with from_selected_node = true
     for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-        if atomic_structure.from_selected_node {
+        if atomic_structure.decorator().from_selected_node {
           return Some(atomic_structure);
         }
       }
@@ -319,6 +320,22 @@ impl StructureDesigner {
     for &node_id in &affected_by_data_changes {
       if network.displayed_node_ids.contains_key(&node_id) {
         nodes_needing_evaluation.insert(node_id);
+      }
+    }
+    
+    // Step 4.5: Handle selection changes - re-evaluate affected nodes to update from_selected_node flag
+    if changes.selection_changed {
+      // Add previous selected node (needs from_selected_node set to false)
+      if let Some(prev_node_id) = changes.previous_selection {
+        if network.displayed_node_ids.contains_key(&prev_node_id) {
+          nodes_needing_evaluation.insert(prev_node_id);
+        }
+      }
+      // Add current selected node (needs from_selected_node set to true)
+      if let Some(curr_node_id) = changes.current_selection {
+        if network.displayed_node_ids.contains_key(&curr_node_id) {
+          nodes_needing_evaluation.insert(curr_node_id);
+        }
       }
     }
       
@@ -1046,9 +1063,10 @@ impl StructureDesigner {
     // First, check all atomic structures in the scene
     for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-        match atomic_structure.hit_test(ray_origin, ray_direction, visualization) {
-          crate::common::atomic_structure::HitTestResult::Atom(_, distance) | 
-          crate::common::atomic_structure::HitTestResult::Bond(_, distance) => {
+        match atomic_structure.hit_test(ray_origin, ray_direction, visualization, 
+          |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
+          crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance) | 
+          crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) => {
           // Update minimum distance if this hit is closer
           min_distance = match min_distance {
             None => Some(distance),
@@ -1056,7 +1074,7 @@ impl StructureDesigner {
             _ => min_distance,
           };
         },
-        crate::common::atomic_structure::HitTestResult::None => {}
+        crate::crystolecule::atomic_structure::HitTestResult::None => {}
         }
       }
     }

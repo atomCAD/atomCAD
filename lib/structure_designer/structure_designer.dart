@@ -253,8 +253,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
     // Open file picker for saving CNND files
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Save Design As',
-      fileName: 'design.cnnd',
-      // Note: allowedExtensions doesn't work properly on Windows, only on Linux/Mac
+      fileName: 'design',
+      type: FileType.custom,
       allowedExtensions: ['cnnd'],
     );
 
@@ -351,15 +351,58 @@ class _StructureDesignerState extends State<StructureDesigner> {
   /// Export visible atomic structures as XYZ or MOL file
   Future<void> _exportVisible() async {
     try {
-      // Open file picker for saving structure files
+      // First, let user select the format
+      if (!mounted) return;
+      String? selectedFormat = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Export Format'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Choose the file format for export:'),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.description),
+                title: const Text('MOL format (.mol)'),
+                subtitle:
+                    const Text('Molecular structure with bond information'),
+                onTap: () => Navigator.of(context).pop('mol'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.scatter_plot),
+                title: const Text('XYZ format (.xyz)'),
+                subtitle: const Text('Atomic coordinates only'),
+                onTap: () => Navigator.of(context).pop('xyz'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+
+      if (selectedFormat == null) return;
+
+      // Open file picker for saving structure files with the selected format
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Export visible structures',
-        fileName: 'structure.xyz',
+        fileName: 'structure',
         type: FileType.custom,
-        allowedExtensions: ['xyz', 'mol'],
+        allowedExtensions: [selectedFormat],
       );
 
       if (outputFile != null) {
+        // Ensure the file has the correct extension
+        if (!outputFile.toLowerCase().endsWith('.$selectedFormat')) {
+          outputFile = '$outputFile.$selectedFormat';
+        }
+
         // Call the export method
         final result = graphModel.exportVisibleAtomicStructures(outputFile);
 

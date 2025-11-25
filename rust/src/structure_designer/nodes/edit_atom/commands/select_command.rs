@@ -1,9 +1,9 @@
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
-use crate::common::atomic_structure::AtomicStructure;
-use crate::common::atomic_structure::BondReference;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::BondReference;
 use serde::{Serialize, Deserialize};
 use crate::api::common_api_types::SelectModifier;
-use crate::common::atomic_structure_utils::calc_selection_transform;
+use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
 
 /*
  * A selection command.
@@ -28,7 +28,7 @@ impl SelectCommand {
 impl EditAtomCommand for SelectCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     model.select(&self.atom_ids, &self.bond_references, self.select_modifier.clone());
-    model.selection_transform = calc_selection_transform(model);
+    model.decorator_mut().selection_transform = calc_selection_transform(model);
   }
 
   fn clone_box(&self) -> Box<dyn EditAtomCommand> {

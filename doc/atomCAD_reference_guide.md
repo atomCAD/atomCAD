@@ -527,7 +527,7 @@ Delete a vertex by dragging it onto one of its neighbour.
 
 Outputs a half plane.
 You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
-Both vertices are displayed as a triangle based prism. The direction of the half plane is indicated by the direction of the triangle.
+Both vertices are displayed as a triangle-based prism. The direction of the half plane is indicated by the direction of the triangle.
 
 ![](./atomCAD_images/half_plane_node.png)
 
@@ -764,6 +764,16 @@ The primary element changes from carbon to silicon:
 
 
 You can also change the fractional motif offset vector. (Each component should be between 0 and 1). This can be useful to finetune where the cuts should be made on the crystal to avoid unwanted features like the methyl groups.
+
+If the geometry cut is done such a way that an atom has no bonds that is removed automatically. (Lone atom removal.)
+
+You can switch on or off the following checkboxes:
+
+- *Remove single-bond atoms:* If turned on, atoms which only have one bond after the cut are removed. This is done recursively until there is no such atom in the atomic structure.
+- *Surface reconstruction:* Real crystalline surfaces are rarely ideal bulk terminations; instead, they typically undergo *surface reconstructions* that lower their surface energy. atomCAD will support several reconstruction types depending on the crystal structure. At present, reconstruction is implemented only for **cubic diamond** crystals and only for the most important one: the **(100) 2×1 dimer reconstruction**.
+  If reconstruction is enabled for any other crystal type, the setting has no effect.
+  The (100) 2×1 reconstruction automatically removes single-bond (dangling) atoms even if the *Remove single-bond atoms* option is not enabled. Surface reconstruction can be used together with hydrogen passivation or on its own.
+- *Hydrogen passivation:* Hydrogen atoms are added to passivate dangling bonds created by the cut.
 
 #### atom_trans
 

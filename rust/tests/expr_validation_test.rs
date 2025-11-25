@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::expr::expr::*;
-use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_signatures};
+use rust_lib_flutter_cad::expr::expr::*;
+use rust_lib_flutter_cad::expr::validation::{get_function_signatures};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use std::collections::HashMap;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
@@ -364,3 +364,10 @@ mod validation_tests {
         assert_eq!(result, Ok(DataType::Int));
     }
 }
+
+
+
+
+
+
+

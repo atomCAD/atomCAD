@@ -748,3 +748,19 @@ pub fn tessellate_equilateral_triangle_prism(
     output_mesh.add_quad(s_idx_tv2_20, s_idx_tv0_20, s_idx_bv0_20, s_idx_bv2_20);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

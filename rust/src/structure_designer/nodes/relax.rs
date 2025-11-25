@@ -2,8 +2,8 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::common::atomic_structure::AtomicStructure;
-use crate::common::simulation::minimize_energy;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::simulation::minimize_energy;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;

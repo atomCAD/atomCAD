@@ -53,27 +53,15 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
           _preferences.geometryVisualizationPreferences.wireframeGeometry =
               false;
           break;
-        case 1: // Solid (Explicit Mesh)
+        case 1: // Solid
           _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.explicitMesh;
           _preferences.geometryVisualizationPreferences.wireframeGeometry =
               false;
           break;
-        case 2: // Wireframe (Explicit Mesh)
+        case 2: // Wireframe
           _preferences.geometryVisualizationPreferences.geometryVisualization =
               GeometryVisualization.explicitMesh;
-          _preferences.geometryVisualizationPreferences.wireframeGeometry =
-              true;
-          break;
-        case 3: // Solid (Dual Contouring)
-          _preferences.geometryVisualizationPreferences.geometryVisualization =
-              GeometryVisualization.dualContouring;
-          _preferences.geometryVisualizationPreferences.wireframeGeometry =
-              false;
-          break;
-        case 4: // Wireframe (Dual Contouring)
-          _preferences.geometryVisualizationPreferences.geometryVisualization =
-              GeometryVisualization.dualContouring;
           _preferences.geometryVisualizationPreferences.wireframeGeometry =
               true;
           break;
@@ -132,12 +120,6 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
       return _preferences.geometryVisualizationPreferences.wireframeGeometry
           ? 2
           : 1;
-    } else if (_preferences
-            .geometryVisualizationPreferences.geometryVisualization ==
-        GeometryVisualization.dualContouring) {
-      return _preferences.geometryVisualizationPreferences.wireframeGeometry
-          ? 4
-          : 3;
     }
     return 0; // Default
   }
@@ -230,19 +212,11 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                   ),
                                   DropdownMenuItem(
                                     value: 1,
-                                    child: Text('Solid (explicit mesh)'),
+                                    child: Text('Solid'),
                                   ),
                                   DropdownMenuItem(
                                     value: 2,
-                                    child: Text('Wireframe (explicit mesh)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 3,
-                                    child: Text('Solid (dual contouring)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 4,
-                                    child: Text('Wireframe (dual contouring)'),
+                                    child: Text('Wireframe'),
                                   ),
                                 ],
                                 onChanged: (value) {

@@ -4,24 +4,24 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::ivec3_serializer;
+use crate::util::serialization_utils::ivec3_serializer;
 use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
 use std::collections::HashSet;
-use crate::common::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
-use crate::common::poly_mesh::PolyMesh;
+use crate::display::poly_mesh::PolyMesh;
 use crate::structure_designer::utils::half_space_utils;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use glam::f64::DQuat;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Facet {

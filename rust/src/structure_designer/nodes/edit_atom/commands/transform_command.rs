@@ -1,5 +1,5 @@
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
-use crate::common::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 use serde::{Serialize, Deserialize};
 use crate::util::transform::Transform;
 
@@ -22,9 +22,8 @@ impl TransformCommand {
 impl EditAtomCommand for TransformCommand {
   fn execute(&self, model: &mut AtomicStructure) {
     // Get all selected atom IDs
-    let selected_atoms: Vec<u32> = model.atoms
-      .iter()
-      .filter(|(_, atom)| atom.selected)
+    let selected_atoms: Vec<u32> = model.iter_atoms()
+      .filter(|(_, atom)| atom.is_selected())
       .map(|(id, _)| *id)
       .collect();
     
@@ -34,7 +33,7 @@ impl EditAtomCommand for TransformCommand {
     }
     
     // Update selection transform
-    model.selection_transform = model.selection_transform.as_ref().map(|t| t.apply_to_new(&self.relative_transform));
+    model.decorator_mut().selection_transform = model.decorator().selection_transform.as_ref().map(|t| t.apply_to_new(&self.relative_transform));
   }
 
   fn clone_box(&self) -> Box<dyn EditAtomCommand> {

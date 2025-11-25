@@ -4,14 +4,11 @@ use glam::f32::Vec3;
 use glam::f64::DVec3;
 
 use std::collections::HashMap;
-use lazy_static::lazy_static;
 
 pub const REAL_IMPLICIT_VOLUME_MIN: DVec3 = DVec3::new(-800.0, -800.0, -800.0);
 pub const REAL_IMPLICIT_VOLUME_MAX: DVec3 = DVec3::new(800.0, 800.0, 800.0);
 
 pub const MAX_EVAL_CACHE_SIZE: i32 = 1000000;
-
-pub const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f64 = 3.567;  // Size of one complete unit cell in Ångströms
 
 // Gadget constants
 pub const HANDLE_TRIANGLE_SIDE_LENGTH: f64 = 1.2;
@@ -28,50 +25,18 @@ pub const LINE_RADIUS_HIT_TEST_FACTOR: f64 = 1.3;
 
 pub const CONNECTED_PIN_SYMBOL: &str = "⎆";
 
-lazy_static! {
-    /// Default cubic zincblende motif used when no motif is connected to atom_fill node
-    pub static ref DEFAULT_ZINCBLENDE_MOTIF: crate::structure_designer::evaluator::motif::Motif = {
-        use crate::structure_designer::evaluator::motif_parser::parse_motif;
-        
-        let motif_text = r#"
-# cubic zincblende motif
 
-PARAM PRIMARY C
-PARAM SECONDARY C
 
-SITE CORNER PRIMARY 0 0 0
 
-SITE FACE_Z PRIMARY 0.5 0.5 0
-SITE FACE_Y PRIMARY 0.5 0 0.5
-SITE FACE_X PRIMARY 0 0.5 0.5
 
-SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
-SITE INTERIOR2 SECONDARY 0.25 0.75 0.75
-SITE INTERIOR3 SECONDARY 0.75 0.25 0.75
-SITE INTERIOR4 SECONDARY 0.75 0.75 0.25
 
-BOND INTERIOR1 ...CORNER
-BOND INTERIOR1 ...FACE_Z
-BOND INTERIOR1 ...FACE_Y
-BOND INTERIOR1 ...FACE_X
 
-BOND INTERIOR2 .++CORNER
-BOND INTERIOR2 ..+FACE_Z
-BOND INTERIOR2 .+.FACE_Y
-BOND INTERIOR2 ...FACE_X
 
-BOND INTERIOR3 +.+CORNER
-BOND INTERIOR3 ..+FACE_Z
-BOND INTERIOR3 ...FACE_Y
-BOND INTERIOR3 +..FACE_X
 
-BOND INTERIOR4 ++.CORNER
-BOND INTERIOR4 ...FACE_Z
-BOND INTERIOR4 .+.FACE_Y
-BOND INTERIOR4 +..FACE_X
 
-"#;
-        
-        parse_motif(motif_text).expect("Failed to parse default zincblende motif")
-    };
-}
+
+
+
+
+
+

@@ -38,7 +38,7 @@ pub fn delete_selected_atoms_and_bonds() {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_atom_by_ray(atomic_number: i32, plane_normal: APIVec3, ray_start: APIVec3, ray_dir: APIVec3) {
+pub fn add_atom_by_ray(atomic_number: i16, plane_normal: APIVec3, ray_start: APIVec3, ray_dir: APIVec3) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       let plane_normal_vec3 = from_api_vec3(&plane_normal);
@@ -51,7 +51,7 @@ pub fn add_atom_by_ray(atomic_number: i32, plane_normal: APIVec3, ray_start: API
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn replace_selected_atoms(atomic_number: i32) {
+pub fn replace_selected_atoms(atomic_number: i16) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       edit_atom::replace_selected_atoms(&mut cad_instance.structure_designer, atomic_number);
@@ -142,7 +142,7 @@ pub fn set_active_edit_atom_tool(tool: APIEditAtomTool) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_edit_atom_default_data(replacement_atomic_number: i32) -> bool {
+pub fn set_edit_atom_default_data(replacement_atomic_number: i16) -> bool {
   unsafe {
     with_mut_cad_instance_or(
       |cad_instance| {
@@ -161,7 +161,7 @@ pub fn set_edit_atom_default_data(replacement_atomic_number: i32) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_edit_atom_add_atom_data(atomic_number: i32) -> bool {
+pub fn set_edit_atom_add_atom_data(atomic_number: i16) -> bool {
   unsafe {
     with_mut_cad_instance_or(
       |cad_instance| {
@@ -178,3 +178,19 @@ pub fn set_edit_atom_add_atom_data(atomic_number: i32) -> bool {
     )
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

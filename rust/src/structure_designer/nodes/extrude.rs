@@ -12,9 +12,9 @@ use crate::structure_designer::evaluator::network_result::runtime_type_error_in_
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
@@ -99,6 +99,22 @@ impl NodeData for ExtrudeData {
         Some(format!("h: {}", self.height))
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -4,7 +4,7 @@ use glam::Vec3;
 use crate::renderer::tessellator::tessellator;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::util::hit_test_utils::{arrow_hit_test, get_closest_point_on_first_ray, cylinder_hit_test};
 
 pub const AXIS_CYLINDER_LENGTH: f64 = 10.0;
@@ -280,3 +280,19 @@ pub fn get_local_axis_direction(unit_cell: &UnitCellStruct, rotation_quat: DQuat
         _ => None, // Invalid axis index
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

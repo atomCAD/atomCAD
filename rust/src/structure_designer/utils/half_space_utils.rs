@@ -9,7 +9,7 @@ use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
 use std::collections::HashSet;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 /// Precomputed geometry values for half space operations
 /// This struct contains commonly used calculated values to avoid code duplication
@@ -400,3 +400,18 @@ pub fn generate_possible_miller_indices(max_miller_index: i32) -> HashSet<IVec3>
     // Return the set of possible miller indices
     possible_miller_indices
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

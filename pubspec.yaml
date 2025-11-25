@@ -59,6 +59,7 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   integration_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -101,3 +102,18 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Configuration for flutter_launcher_icons package
+# Run: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "atomCAD_icon/atomCAD Icon-iOS-Default-1024x1024@1x.png"
+  windows:
+    generate: true
+    image_path: "atomCAD_icon/atomCAD Icon-iOS-Default-1024x1024@1x.png"
+    icon_size: 48 # min:48, max:256, default: 48
+  macos:
+    generate: true
+    image_path: "atomCAD_icon/atomCAD Icon-iOS-Default-1024x1024@1x.png"
+  linux:
+    generate: true
+    image_path: "atomCAD_icon/atomCAD Icon-iOS-Default-1024x1024@1x.png"

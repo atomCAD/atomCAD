@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::expr::lexer::{tokenize, Token};
-use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+use rust_lib_flutter_cad::expr::lexer::{tokenize, Token};
+use rust_lib_flutter_cad::expr::parser::parse;
 
 mod lexer_tests {
     use super::*;
@@ -580,3 +580,10 @@ mod parser_tests {
         assert_eq!(expr.to_prefix_string(), "(% x (call abs_int y))");
     }
 }
+
+
+
+
+
+
+

@@ -8,6 +8,8 @@ AtomCAD is built with a **Rust backend** for high-performance CAD operations and
 - **Frontend**: Flutter (cross-platform UI)
 - **Supported Platforms**: Windows, Linux, macOS
 
+See [architecture_overview.md](architecture_overview.md) for a high-level overview of the architecture.
+
 ## Getting Started
 
 To contribute to AtomCAD, set up your development environment using the platform-specific guide:

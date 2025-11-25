@@ -1,12 +1,12 @@
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::dvec3_serializer;
+use crate::util::serialization_utils::dvec3_serializer;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
-use crate::common::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use glam::f64::DQuat;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -84,13 +84,13 @@ impl NodeData for AtomTransData {
           rotation.y, 
           rotation.z);
     
-        let frame_transform = atomic_structure.frame_transform.apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
+        let frame_transform = atomic_structure.frame_transform().apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
     
         // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
         // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
         if network_stack.len() == 1 {
             let eval_cache = AtomTransEvalCache {
-              input_frame_transform: atomic_structure.frame_transform.clone(),
+              input_frame_transform: atomic_structure.frame_transform().clone(),
             };
             context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
@@ -102,11 +102,11 @@ impl NodeData for AtomTransData {
     
         let mut result_atomic_structure = atomic_structure.clone();
     
-        let inverse_input_transform = atomic_structure.frame_transform.inverse();
+        let inverse_input_transform = atomic_structure.frame_transform().inverse();
     
         result_atomic_structure.transform(&inverse_input_transform.rotation, &inverse_input_transform.translation);
         result_atomic_structure.transform(&frame_transform.rotation, &frame_transform.translation);
-        result_atomic_structure.frame_transform = frame_transform;
+        result_atomic_structure.set_frame_transform(frame_transform);
     
         return NetworkResult::Atomic(result_atomic_structure);
       }

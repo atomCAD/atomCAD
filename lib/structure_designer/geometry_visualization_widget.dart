@@ -40,11 +40,11 @@ class GeometryVisualizationWidget extends StatelessWidget {
                 },
               ),
 
-              // Dual Contouring with Wireframe Button
+              // Wireframe Button
               _buildIconButton(
                 context,
                 Icons.grid_3x3, // Using grid to represent wireframe
-                'Geometry visualization: Wireframe (explicit mesh)',
+                'Geometry visualization: Wireframe',
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
                         GeometryVisualization.explicitMesh &&
@@ -61,11 +61,11 @@ class GeometryVisualizationWidget extends StatelessWidget {
                 },
               ),
 
-              // Dual Contouring without Wireframe Button (solid)
+              // Solid Button
               _buildIconButton(
                 context,
                 Icons.view_in_ar, // Using 3D object icon for solid
-                'Geometry visualization: Solid (explicit mesh)',
+                'Geometry visualization: Solid',
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
                         GeometryVisualization.explicitMesh &&

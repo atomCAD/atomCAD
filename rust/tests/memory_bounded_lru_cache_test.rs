@@ -108,3 +108,10 @@ fn test_oversized_value() {
     assert_eq!(cache.len(), 1);
     assert_eq!(cache.get(&"key1"), Some(&"1234567890".to_string()));
 }
+
+
+
+
+
+
+

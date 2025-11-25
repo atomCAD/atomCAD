@@ -9,14 +9,14 @@ use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use glam::f64::DQuat;
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffData {
@@ -179,3 +179,19 @@ fn helper_union<'a>(
 
   return (Some(GeoNode::union_3d(shapes)), frame_translation, Some(first_unit_cell));
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

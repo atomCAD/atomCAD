@@ -252,6 +252,7 @@ impl NodeNetwork {
     
     self.next_node_id += 1;
     self.nodes.insert(node_id, node);
+    self.set_node_display(node_id, true);
     return node_id;
   }
 
@@ -483,3 +484,19 @@ impl NodeNetwork {
     Some(new_node_id)
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

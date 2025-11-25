@@ -6,7 +6,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::common::xyz_saver::save_xyz;
+use crate::crystolecule::io::xyz_saver::save_xyz;
 use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
 use std::io;

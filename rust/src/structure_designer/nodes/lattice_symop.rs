@@ -1,17 +1,17 @@
-use crate::common::gadget::Gadget;
+use crate::display::gadget::Gadget;
 use crate::structure_designer::evaluator::network_evaluator::{
   NetworkEvaluationContext, NetworkEvaluator
 };
 use crate::structure_designer::evaluator::network_result::{
   runtime_type_error_in_input, GeometrySummary, NetworkResult, error_in_input
 };
-use crate::structure_designer::geo_tree::GeoNode;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
+use crate::util::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
 use glam::f64::DVec3;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -19,8 +19,8 @@ use glam::DQuat;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::evaluator::unit_cell_symmetries::analyze_unit_cell_symmetries;
-use crate::structure_designer::evaluator::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 

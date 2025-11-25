@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::common::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::common::mol_exporter::save_mol_v3000;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::io::mol_exporter::save_mol_v3000;
 use glam::f64::DVec3;
 use std::fs;
 use std::path::Path;
@@ -97,18 +97,18 @@ fn test_save_mol_v3000_ethane_molecule() {
     let mut structure = AtomicStructure::new();
     
     // Add two carbon atoms
-    let carbon1_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0), 1); // Carbon (atomic number 6)
-    let carbon2_id = structure.add_atom(6, DVec3::new(1.53, 0.0, 0.0), 1); // Carbon (atomic number 6)
+    let carbon1_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // Carbon (atomic number 6)
+    let carbon2_id = structure.add_atom(6, DVec3::new(1.53, 0.0, 0.0)); // Carbon (atomic number 6)
     
     // Add hydrogen atoms for first carbon
-    let h1_id = structure.add_atom(1, DVec3::new(-0.54, 0.935, 0.0), 1);
-    let h2_id = structure.add_atom(1, DVec3::new(-0.54, -0.935, 0.0), 1);
-    let h3_id = structure.add_atom(1, DVec3::new(0.0, 0.0, 1.09), 1);
+    let h1_id = structure.add_atom(1, DVec3::new(-0.54, 0.935, 0.0));
+    let h2_id = structure.add_atom(1, DVec3::new(-0.54, -0.935, 0.0));
+    let h3_id = structure.add_atom(1, DVec3::new(0.0, 0.0, 1.09));
     
     // Add hydrogen atoms for second carbon
-    let h4_id = structure.add_atom(1, DVec3::new(2.07, 0.935, 0.0), 1);
-    let h5_id = structure.add_atom(1, DVec3::new(2.07, -0.935, 0.0), 1);
-    let h6_id = structure.add_atom(1, DVec3::new(1.53, 0.0, -1.09), 1);
+    let h4_id = structure.add_atom(1, DVec3::new(2.07, 0.935, 0.0));
+    let h5_id = structure.add_atom(1, DVec3::new(2.07, -0.935, 0.0));
+    let h6_id = structure.add_atom(1, DVec3::new(1.53, 0.0, -1.09));
     
     // Add C-C bond
     structure.add_bond_checked(carbon1_id, carbon2_id, 1);
@@ -156,14 +156,14 @@ fn test_save_mol_v3000_with_double_bond() {
     let mut structure = AtomicStructure::new();
     
     // Add two carbon atoms
-    let carbon1_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0), 1);
-    let carbon2_id = structure.add_atom(6, DVec3::new(1.33, 0.0, 0.0), 1);
+    let carbon1_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let carbon2_id = structure.add_atom(6, DVec3::new(1.33, 0.0, 0.0));
     
     // Add hydrogen atoms
-    let h1_id = structure.add_atom(1, DVec3::new(-0.57, 0.93, 0.0), 1);
-    let h2_id = structure.add_atom(1, DVec3::new(-0.57, -0.93, 0.0), 1);
-    let h3_id = structure.add_atom(1, DVec3::new(1.90, 0.93, 0.0), 1);
-    let h4_id = structure.add_atom(1, DVec3::new(1.90, -0.93, 0.0), 1);
+    let h1_id = structure.add_atom(1, DVec3::new(-0.57, 0.93, 0.0));
+    let h2_id = structure.add_atom(1, DVec3::new(-0.57, -0.93, 0.0));
+    let h3_id = structure.add_atom(1, DVec3::new(1.90, 0.93, 0.0));
+    let h4_id = structure.add_atom(1, DVec3::new(1.90, -0.93, 0.0));
     
     // Add double bond between carbons (multiplicity = 2)
     structure.add_bond_checked(carbon1_id, carbon2_id, 2);

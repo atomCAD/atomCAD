@@ -2,7 +2,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec2;
 use serde::{Serialize, Deserialize};
-use crate::common::serialization_utils::dvec2_serializer;
+use crate::util::serialization_utils::dvec2_serializer;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;

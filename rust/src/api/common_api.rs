@@ -19,7 +19,7 @@ use crate::api::api_common::from_api_transform;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::ElementSummary;
-use crate::common::common_constants::ATOM_INFO;
+use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::api_common::with_mut_cad_instance_or;
@@ -392,7 +392,7 @@ pub fn get_all_elements() -> Vec<ElementSummary> {
   // Convert to Vec, sort by atomic_number, and map to ElementSummary
   let mut elements: Vec<ElementSummary> = ATOM_INFO.values()
     .map(|atom_info| ElementSummary {
-      atomic_number: atom_info.atomic_number,
+      atomic_number: atom_info.atomic_number as i16,
       element_name: atom_info.element_name.clone(),
     })
     .collect();
@@ -424,5 +424,5 @@ pub fn init_app() {
     */
     
     // Initialize expression function registries for better performance
-    crate::structure_designer::expr::validation::init_function_registries();
+    crate::expr::validation::init_function_registries();
 }

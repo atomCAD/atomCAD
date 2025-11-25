@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::expr::expr::*;
-use rust_lib_flutter_cad::structure_designer::expr::validation::{get_function_signatures, get_function_implementations};
+use rust_lib_flutter_cad::expr::expr::*;
+use rust_lib_flutter_cad::expr::validation::{get_function_signatures, get_function_implementations};
 use std::collections::HashMap;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use glam::f64::{DVec2, DVec3};
@@ -924,7 +924,7 @@ mod vector_tests {
         // the same as the vector x rather than the component of the vector x
         // This test uses string parsing to test the full pipeline
         
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let mut variables = HashMap::new();
         variables.insert("vec2_var".to_string(), DataType::Vec2);
@@ -982,7 +982,7 @@ mod vector_tests {
 
     #[test]
     fn test_tokenize_member_access() {
-        use rust_lib_flutter_cad::structure_designer::expr::lexer::{tokenize, Token};
+        use rust_lib_flutter_cad::expr::lexer::{tokenize, Token};
         
         // Test basic member access tokenization
         let tokens = tokenize("vec.x");
@@ -1016,7 +1016,7 @@ mod vector_tests {
 
     #[test]
     fn test_parse_member_access() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         // Test basic member access parsing
         let expr = parse("vec.x").unwrap();
@@ -1031,7 +1031,7 @@ mod vector_tests {
 
     #[test]
     fn test_parse_member_access_precedence() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         // Member access should have higher precedence than arithmetic
         let expr = parse("vec.x + vec.y").unwrap();
@@ -1051,7 +1051,7 @@ mod vector_tests {
 
     #[test]
     fn test_parse_member_access_with_parentheses() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         // Parentheses should work correctly with member access
         let expr = parse("(vec1 + vec2).x").unwrap();
@@ -1067,7 +1067,7 @@ mod vector_tests {
 
     #[test]
     fn test_parse_member_access_with_function_calls() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         // Member access on function call results
         let expr = parse("vec2(1.0, 2.0).x").unwrap();
@@ -1087,7 +1087,7 @@ mod vector_tests {
 
     #[test]
     fn test_parse_chained_member_access() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         // Note: This would be invalid semantically (can't access .y on a Float), 
         // but should parse correctly
@@ -1102,7 +1102,7 @@ mod vector_tests {
 
     #[test]
     fn test_evaluate_member_access_with_parsing() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let mut variables = HashMap::new();
         variables.insert("vec2_var".to_string(), NetworkResult::Vec2(DVec2::new(3.5, 7.2)));
@@ -1149,7 +1149,7 @@ mod vector_tests {
 
     #[test]
     fn test_evaluate_complex_member_access_expressions() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let mut variables = HashMap::new();
         variables.insert("pos".to_string(), NetworkResult::Vec2(DVec2::new(3.0, 4.0)));
@@ -1189,7 +1189,7 @@ mod vector_tests {
 
     #[test]
     fn test_evaluate_member_access_on_function_results() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let variables = HashMap::new();
         let functions = get_function_implementations();
@@ -1224,7 +1224,7 @@ mod vector_tests {
 
     #[test]
     fn test_evaluate_very_complex_member_access_expressions() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let mut variables = HashMap::new();
         variables.insert("a".to_string(), NetworkResult::Vec2(DVec2::new(1.0, 2.0)));
@@ -1268,7 +1268,7 @@ mod vector_tests {
 
     #[test]
     fn test_member_access_error_cases() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let mut variables = HashMap::new();
         variables.insert("float_var".to_string(), NetworkResult::Float(42.0));
@@ -1454,7 +1454,7 @@ mod vector_tests {
 
     #[test]
     fn test_integer_vector_functions_with_parsing() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let mut variables = HashMap::new();
         variables.insert("v1".to_string(), NetworkResult::IVec2(IVec2::new(3, 4)));
@@ -1497,7 +1497,7 @@ mod vector_tests {
 
     #[test]
     fn test_integer_vector_functions_with_constructors() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let variables = HashMap::new();
         let functions = get_function_implementations();
@@ -1525,7 +1525,7 @@ mod vector_tests {
 
     #[test]
     fn test_integer_vector_functions_complex_expressions() {
-        use rust_lib_flutter_cad::structure_designer::expr::parser::parse;
+        use rust_lib_flutter_cad::expr::parser::parse;
         
         let mut variables = HashMap::new();
         variables.insert("a".to_string(), NetworkResult::IVec2(IVec2::new(2, 3)));
@@ -1643,3 +1643,10 @@ mod vector_tests {
         }
     }
 }
+
+
+
+
+
+
+

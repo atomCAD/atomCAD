@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
-use rust_lib_flutter_cad::structure_designer::geo_tree::GeoNode;
+use rust_lib_flutter_cad::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
+use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::implicit_eval::implicit_geometry::{ImplicitGeometry3D, ImplicitGeometry2D, BATCH_SIZE};
 use glam::f64::{DVec2, DVec3};
 
@@ -149,3 +149,10 @@ fn test_direct_inplace_batch() {
                 "Point {}: expected {}, got {}", i, expected, batch_results[i]);
     }
 }
+
+
+
+
+
+
+
