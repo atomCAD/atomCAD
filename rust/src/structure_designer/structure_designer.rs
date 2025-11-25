@@ -322,6 +322,22 @@ impl StructureDesigner {
         nodes_needing_evaluation.insert(node_id);
       }
     }
+    
+    // Step 4.5: Handle selection changes - re-evaluate affected nodes to update from_selected_node flag
+    if changes.selection_changed {
+      // Add previous selected node (needs from_selected_node set to false)
+      if let Some(prev_node_id) = changes.previous_selection {
+        if network.displayed_node_ids.contains_key(&prev_node_id) {
+          nodes_needing_evaluation.insert(prev_node_id);
+        }
+      }
+      // Add current selected node (needs from_selected_node set to true)
+      if let Some(curr_node_id) = changes.current_selection {
+        if network.displayed_node_ids.contains_key(&curr_node_id) {
+          nodes_needing_evaluation.insert(curr_node_id);
+        }
+      }
+    }
       
     // Track selected node's unit cell
     let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
