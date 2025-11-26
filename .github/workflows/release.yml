@@ -62,16 +62,12 @@ jobs:
             libblkid-dev \
             liblzma-dev \
             libglu1-mesa-dev \
-            libgl1-mesa-dev \
-            libegl1-mesa-dev \
-            libgles2-mesa-dev \
-            mesa-common-dev \
-            xvfb
+            libgl1-mesa-dev
       
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          flutter-version: '3.27.1'
           channel: 'stable'
           cache: true
       
@@ -83,15 +79,7 @@ jobs:
       - name: Make build script executable
         run: chmod +x build_linux_release.sh
       
-      - name: Start Xvfb
-        run: |
-          Xvfb :99 -screen 0 1920x1080x24 &
-          sleep 3
-      
       - name: Run Linux build script
-        env:
-          DISPLAY: :99
-          LIBGL_ALWAYS_INDIRECT: 0
         run: ./build_linux_release.sh --version "${{ inputs.version }}"
       
       - name: Upload Linux artifact
