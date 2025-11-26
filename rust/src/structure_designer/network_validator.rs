@@ -321,6 +321,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
 }
 
 pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &mut NodeTypeRegistry, initial_errors: Option<Vec<crate::structure_designer::node_network::ValidationError>>) -> NetworkValidationResult {
+    
     // Clear previous validation state
     network.valid = true;
     network.validation_errors.clear();

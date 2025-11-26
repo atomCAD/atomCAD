@@ -102,6 +102,11 @@ impl NetworkEvaluator {
       Some(network) => network,
       None => return NodeSceneData::new(NodeOutput::None),
     };
+    
+    // Do not evaluate invalid networks
+    if !network.valid {
+      return NodeSceneData::new(NodeOutput::None);
+    }
 
     let mut context = NetworkEvaluationContext::new();
 
@@ -452,6 +457,10 @@ impl NetworkEvaluator {
       if registry.built_in_node_types.contains_key(&node.node_type_name) {
         node.data.eval(&self, network_stack, node_id, registry, decorate, context)
       } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) { // custom node{
+        // Do not evaluate invalid child networks
+        if !child_network.valid {
+          return NetworkResult::Error(format!("{} is invalid", node.node_type_name));
+        }
         let mut child_network_stack = network_stack.clone();
         child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
         if child_network.return_node_id.is_none() {
