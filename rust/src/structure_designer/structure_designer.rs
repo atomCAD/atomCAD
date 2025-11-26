@@ -1381,7 +1381,7 @@ impl StructureDesigner {
         };
         
         // Validate with the registry and initial errors
-        let result = validate_network(&mut network, &self.node_type_registry, errors_to_use);
+        let result = validate_network(&mut network, &mut self.node_type_registry, errors_to_use);
         
         // Put the network back
         self.node_type_registry.node_networks.insert(current_network_name.clone(), network);

@@ -23,6 +23,66 @@ fn compare_parameters(
         .then_with(|| node_id_a.cmp(&node_id_b))
 }
 
+/// Repairs call sites when a network's parameter interface changes.
+/// This function updates all nodes that use the given network as their type,
+/// preserving argument connections based on parameter names.
+fn repair_call_sites_for_network(
+    network_name: &str,
+    old_parameters: &[Parameter],
+    new_parameters: &[Parameter],
+    node_type_registry: &mut NodeTypeRegistry,
+) {
+    // Build mapping: parameter_name -> old_index
+    let old_param_map: HashMap<&str, usize> = old_parameters
+        .iter()
+        .enumerate()
+        .map(|(idx, param)| (param.name.as_str(), idx))
+        .collect();
+    
+    // Find all parent networks that use this network
+    let parent_network_names = node_type_registry.find_parent_networks(network_name);
+    
+    // Update each parent network's call sites
+    for parent_name in parent_network_names {
+        if let Some(parent_network) = node_type_registry.node_networks.get_mut(&parent_name) {
+            // Find all nodes in parent that use our network
+            let mut nodes_to_update: Vec<(u64, Vec<Argument>)> = Vec::new();
+            
+            for (node_id, node) in &parent_network.nodes {
+                if node.node_type_name == network_name {
+                    // This node needs argument updates
+                    let mut new_arguments = Vec::with_capacity(new_parameters.len());
+                    
+                    // For each new parameter, try to preserve old argument if parameter existed
+                    for new_param in new_parameters {
+                        if let Some(&old_idx) = old_param_map.get(new_param.name.as_str()) {
+                            // Parameter existed before - preserve its argument if within bounds
+                            if old_idx < node.arguments.len() {
+                                new_arguments.push(node.arguments[old_idx].clone());
+                            } else {
+                                // Shouldn't happen, but handle gracefully
+                                new_arguments.push(Argument::new());
+                            }
+                        } else {
+                            // New parameter - create empty argument
+                            new_arguments.push(Argument::new());
+                        }
+                    }
+                    
+                    nodes_to_update.push((*node_id, new_arguments));
+                }
+            }
+            
+            // Apply updates
+            for (node_id, new_arguments) in nodes_to_update {
+                if let Some(node) = parent_network.nodes.get_mut(&node_id) {
+                    node.arguments = new_arguments;
+                }
+            }
+        }
+    }
+}
+
 fn validate_parameters(network: &mut NodeNetwork) -> bool {
     // Collect all parameter nodes
     let mut parameter_nodes: Vec<(u64, &ParameterData)> = Vec::new();
@@ -60,8 +120,7 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     // Sort parameter nodes by sort_order (primary) and node_id (secondary)
     // This ensures deterministic ordering even when multiple parameters have the same sort_order
     parameter_nodes.sort_by(|(node_id_a, param_data_a), (node_id_b, param_data_b)| {
-        param_data_a.sort_order.cmp(&param_data_b.sort_order)
-            .then_with(|| node_id_a.cmp(node_id_b))
+        compare_parameters(*node_id_a, param_data_a, *node_id_b, param_data_b)
     });
     
     // Recreate the parameters array based on sort order
@@ -103,8 +162,7 @@ fn check_interface_changed(network: &NodeNetwork) -> bool {
     
     // Sort by sort_order (primary) and node_id (secondary) for deterministic comparison
     current_params_with_ids.sort_by(|(node_id_a, param_data_a), (node_id_b, param_data_b)| {
-        param_data_a.sort_order.cmp(&param_data_b.sort_order)
-            .then_with(|| node_id_a.cmp(node_id_b))
+        compare_parameters(*node_id_a, param_data_a, *node_id_b, param_data_b)
     });
     
     // Check if the interface changed by comparing with existing parameters
@@ -122,10 +180,41 @@ fn check_interface_changed(network: &NodeNetwork) -> bool {
     })
 }
 
-fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> bool {
-    // First pass: collect nodes that need argument count fixes
+/// Repairs argument counts in the network to match parameter counts.
+/// This ensures all nodes have the correct number of arguments for their type.
+fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) {
     let mut nodes_to_fix = Vec::new();
     
+    // Collect nodes that need argument count adjustments
+    for (dest_node_id, dest_node) in &network.nodes {
+        if let Some(dest_node_type) = node_type_registry.get_node_type_for_node(&dest_node) {
+            let expected_param_count = dest_node_type.parameters.len();
+            let current_arg_count = dest_node.arguments.len();
+            
+            if current_arg_count != expected_param_count {
+                nodes_to_fix.push((*dest_node_id, expected_param_count, current_arg_count));
+            }
+        }
+    }
+    
+    // Apply argument count fixes
+    for (node_id, expected_count, current_count) in nodes_to_fix {
+        let dest_node_mut = network.nodes.get_mut(&node_id).unwrap();
+        
+        if current_count < expected_count {
+            // Add empty arguments when too few
+            for _ in current_count..expected_count {
+                dest_node_mut.arguments.push(Argument::new());
+            }
+        } else {
+            // Remove excess arguments when too many
+            dest_node_mut.arguments.truncate(expected_count);
+        }
+    }
+}
+
+fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> bool {
+    // Validate wires - pure checking, no repairs
     for (dest_node_id, dest_node) in &network.nodes {
         // Check if this node references a node network and validate its validity
         if let Some(referenced_network) = node_type_registry.node_networks.get(&dest_node.node_type_name) {
@@ -150,37 +239,18 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
             }
         };
         
-        // Check if argument count needs fixing
-        let expected_param_count = dest_node_type.parameters.len();
-        let current_arg_count = dest_node.arguments.len();
-        
-        if current_arg_count != expected_param_count {
-            nodes_to_fix.push((*dest_node_id, expected_param_count, current_arg_count));
+        // Validate argument count matches parameter count
+        // (This should always pass after repair phase)
+        if dest_node.arguments.len() != dest_node_type.parameters.len() {
+            network.validation_errors.push(ValidationError::new(
+                format!("Node has {} arguments but type expects {} parameters",
+                    dest_node.arguments.len(), dest_node_type.parameters.len()),
+                Some(*dest_node_id)
+            ));
+            return false;
         }
-    }
-    
-    // Second pass: apply argument count fixes
-    for (node_id, expected_count, current_count) in nodes_to_fix {
-        let dest_node_mut = network.nodes.get_mut(&node_id).unwrap();
         
-        if current_count < expected_count {
-            // Add empty arguments when too few
-            for _ in current_count..expected_count {
-                dest_node_mut.arguments.push(Argument::new());
-            }
-        } else {
-            // Remove excess arguments when too many
-            dest_node_mut.arguments.truncate(expected_count);
-        }
-    }
-    
-    // Third pass: validate wires after fixes
-    for (dest_node_id, dest_node) in &network.nodes {
-        let dest_node_type = node_type_registry.get_node_type_for_node(dest_node).unwrap();
-        
-        // Now validate each argument (input pin) of the destination node
-        // Re-get the node reference after potential modification
-        let dest_node = network.nodes.get(dest_node_id).unwrap();
+        // Validate each argument (input pin) of the destination node
         for (arg_index, argument) in dest_node.arguments.iter().enumerate() {
             // Get parameter information for this argument
             let parameter = &dest_node_type.parameters[arg_index];
@@ -250,7 +320,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
     true
 }
 
-pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry, initial_errors: Option<Vec<crate::structure_designer::node_network::ValidationError>>) -> NetworkValidationResult {
+pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &mut NodeTypeRegistry, initial_errors: Option<Vec<crate::structure_designer::node_network::ValidationError>>) -> NetworkValidationResult {
     // Clear previous validation state
     network.valid = true;
     network.validation_errors.clear();
@@ -266,7 +336,10 @@ pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &NodeType
     // Check if interface changed before validation (to detect changes)
     let interface_changed = check_interface_changed(network);
     
-    // Validate parameters
+    // Store old parameters before updating them
+    let old_parameters = network.node_type.parameters.clone();
+    
+    // Validate parameters (this updates parameter order and indices)
     if !validate_parameters(network) {
         network.valid = false;
         return NetworkValidationResult {
@@ -275,7 +348,17 @@ pub fn validate_network(network: &mut NodeNetwork, node_type_registry: &NodeType
         };
     }
     
-    // Validate wires
+    // REPAIR PHASE: Update call sites if interface changed
+    if interface_changed {
+        let new_parameters = network.node_type.parameters.clone();
+        let network_name = network.node_type.name.clone();
+        repair_call_sites_for_network(&network_name, &old_parameters, &new_parameters, node_type_registry);
+    }
+    
+    // REPAIR PHASE: Ensure argument counts match parameter counts in this network
+    repair_network_arguments(network, node_type_registry);
+    
+    // VALIDATION PHASE: Check wire validity (pure checking)
     if !validate_wires(network, node_type_registry) {
         network.valid = false;
         return NetworkValidationResult {
