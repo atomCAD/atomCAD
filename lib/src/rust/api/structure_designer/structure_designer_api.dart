@@ -437,3 +437,6 @@ void setUnitCellData({required BigInt nodeId, required APIUnitCellData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetUnitCellData(
             nodeId: nodeId, data: data);
+
+void validateActiveNetwork() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiValidateActiveNetwork();

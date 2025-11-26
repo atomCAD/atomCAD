@@ -174,6 +174,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void validateActiveNetwork() {
+    structure_designer_api.validateActiveNetwork();
+    refreshFromKernel();
+  }
+
   // Called on each small update when dragging a node
   // Works only on the UI: do not update the position in the kernel
   void dragNodePosition(BigInt nodeId, Offset delta) {
@@ -715,17 +720,19 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Imports selected node networks from a .cnnd library file
-  /// 
+  ///
   /// This method handles the complete import process:
   /// 1. Loads the library file
   /// 2. Imports the selected networks with optional name prefix
   /// 3. Refreshes the UI to show the newly imported networks
-  /// 
+  ///
   /// Returns APIResult indicating success or failure
-  APIResult importFromCnndLibrary(String libraryFilePath, List<String> networkNames, String? namePrefix) {
+  APIResult importFromCnndLibrary(
+      String libraryFilePath, List<String> networkNames, String? namePrefix) {
     try {
       // Load the library file
-      final loadResult = import_api.loadImportLibrary(filePath: libraryFilePath);
+      final loadResult =
+          import_api.loadImportLibrary(filePath: libraryFilePath);
       if (!loadResult.success) {
         return loadResult;
       }
@@ -738,7 +745,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
       // Refresh the UI regardless of import result
       refreshFromKernel();
-      
+
       return importResult;
     } catch (e) {
       // Ensure UI is refreshed even on error

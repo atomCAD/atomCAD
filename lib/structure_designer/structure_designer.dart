@@ -113,6 +113,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
                   label: 'Edit',
                   menuItems: [
                     MenuItemButton(
+                      onPressed: () {
+                        widget.model.validateActiveNetwork();
+                      },
+                      child: const Text('Validate active network'),
+                    ),
+                    MenuItemButton(
                       onPressed: _showPreferences,
                       child: const Text('Preferences'),
                     ),

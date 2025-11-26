@@ -77,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => 101169906;
+  int get rustContentHash => 378681678;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -528,6 +528,8 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiStructureDesignerFacetShellApiUpdateFacet(
       {required BigInt nodeId, required BigInt index, required APIFacet facet});
+
+  void crateApiStructureDesignerStructureDesignerApiValidateActiveNetwork();
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -4496,6 +4498,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           const TaskConstMeta(
             debugName: "update_facet",
             argNames: ["nodeId", "index", "facet"],
+          );
+
+  @override
+  void crateApiStructureDesignerStructureDesignerApiValidateActiveNetwork() {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 147)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerStructureDesignerApiValidateActiveNetworkConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerStructureDesignerApiValidateActiveNetworkConstMeta =>
+          const TaskConstMeta(
+            debugName: "validate_active_network",
+            argNames: [],
           );
 
   @protected

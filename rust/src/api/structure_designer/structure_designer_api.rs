@@ -2056,7 +2056,15 @@ pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
   }
 }
 
-
+#[flutter_rust_bridge::frb(sync)]
+pub fn validate_active_network() {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      instance.structure_designer.validate_active_network();
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
 
 
 
