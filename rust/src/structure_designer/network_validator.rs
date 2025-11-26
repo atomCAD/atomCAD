@@ -4,11 +4,23 @@ use crate::structure_designer::node_type::Parameter;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use std::collections::HashMap;
 use crate::structure_designer::data_type::DataType;   
+use std::cmp::Ordering;
 
 #[derive(Debug, Clone)]
 pub struct NetworkValidationResult {
     pub valid: bool,
     pub interface_changed: bool,
+}
+
+/// Compares two parameters for deterministic sorting.
+/// Primary sort key: sort_order (ascending)
+/// Secondary sort key: node_id (ascending)
+fn compare_parameters(
+    node_id_a: u64, param_data_a: &ParameterData,
+    node_id_b: u64, param_data_b: &ParameterData
+) -> Ordering {
+    param_data_a.sort_order.cmp(&param_data_b.sort_order)
+        .then_with(|| node_id_a.cmp(&node_id_b))
 }
 
 fn validate_parameters(network: &mut NodeNetwork) -> bool {
@@ -45,23 +57,12 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
         }
     }
     
-    // Validate sort_order uniqueness
-    let mut sort_orders: HashMap<i32, u64> = HashMap::new();
-    for (node_id, param_data) in &parameter_nodes {
-        if let Some(_existing_node_id) = sort_orders.get(&param_data.sort_order) {
-            network.validation_errors.push(ValidationError::new(
-                format!("Duplicate sort order {}", 
-                    param_data.sort_order),
-                Some(*node_id)
-            ));
-            return false;
-        } else {
-            sort_orders.insert(param_data.sort_order, *node_id);
-        }
-    }
-    
-    // Sort parameter nodes by sort_order
-    parameter_nodes.sort_by_key(|(_, param_data)| param_data.sort_order);
+    // Sort parameter nodes by sort_order (primary) and node_id (secondary)
+    // This ensures deterministic ordering even when multiple parameters have the same sort_order
+    parameter_nodes.sort_by(|(node_id_a, param_data_a), (node_id_b, param_data_b)| {
+        param_data_a.sort_order.cmp(&param_data_b.sort_order)
+            .then_with(|| node_id_a.cmp(node_id_b))
+    });
     
     // Recreate the parameters array based on sort order
     network.node_type.parameters = parameter_nodes.iter().map(|(_, param_data)| {
@@ -89,26 +90,29 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
 }
 
 fn check_interface_changed(network: &NodeNetwork) -> bool {
-    // Collect current parameter nodes for comparison
-    let mut current_params: Vec<&ParameterData> = Vec::new();
+    // Collect current parameter nodes with their IDs for deterministic sorting
+    let mut current_params_with_ids: Vec<(u64, &ParameterData)> = Vec::new();
     
-    for node in network.nodes.values() {
+    for (node_id, node) in &network.nodes {
         if node.node_type_name == "parameter" {
             if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
-                current_params.push(param_data);
+                current_params_with_ids.push((*node_id, param_data));
             }
         }
     }
     
-    // Sort by sort_order for proper comparison
-    current_params.sort_by_key(|param| param.sort_order);
+    // Sort by sort_order (primary) and node_id (secondary) for deterministic comparison
+    current_params_with_ids.sort_by(|(node_id_a, param_data_a), (node_id_b, param_data_b)| {
+        param_data_a.sort_order.cmp(&param_data_b.sort_order)
+            .then_with(|| node_id_a.cmp(node_id_b))
+    });
     
     // Check if the interface changed by comparing with existing parameters
-    if network.node_type.parameters.len() != current_params.len() {
+    if network.node_type.parameters.len() != current_params_with_ids.len() {
         return true;
     }
     
-    current_params.iter().enumerate().any(|(index, param_data)| {
+    current_params_with_ids.iter().enumerate().any(|(index, (_, param_data))| {
         if let Some(existing_param) = network.node_type.parameters.get(index) {
             existing_param.name != param_data.param_name ||
             existing_param.data_type != param_data.data_type
