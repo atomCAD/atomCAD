@@ -1304,6 +1304,21 @@ impl StructureDesigner {
       file_path
     )?;
 
+    // Validate all networks in dependency order (dependencies first)
+    // This ensures call sites can be repaired before validating their parent networks
+    let networks_in_order = self.node_type_registry.get_networks_in_dependency_order();
+    for network_name in networks_in_order {
+      // Split borrows: use raw pointer access to avoid double mutable borrow
+      // This is safe because validate_network only mutates the current network and the registry,
+      // and we're iterating one network at a time
+      let registry_ptr = &mut self.node_type_registry as *mut NodeTypeRegistry;
+      unsafe {
+        if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name) {
+          validate_network(network, &mut *registry_ptr, None);
+        }
+      }
+    }
+
     // Set active node network to the first network if available, otherwise None
     if first_network_name.is_empty() {
       self.set_active_node_network_name(None);

@@ -1203,6 +1203,74 @@ impl NodeTypeRegistry {
     // (This is safe because we use the result set to track what we've already processed)
     visited.remove(network_name);
   }
+  
+  /// Returns all node network names in topological order where dependencies come first.
+  /// Networks with no dependencies appear first, networks that depend on others appear later.
+  /// This ensures that when validating in this order, dependencies are validated before their dependents.
+  /// 
+  /// # Returns
+  /// A vector of all node network names in dependency-first order
+  pub fn get_networks_in_dependency_order(&self) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut visited = HashSet::new();
+    let mut temp_mark = HashSet::new();
+    
+    // Get all network names
+    let network_names: Vec<String> = self.node_networks.keys().cloned().collect();
+    
+    // Visit each network (DFS post-order traversal)
+    for network_name in &network_names {
+      if !visited.contains(network_name) {
+        self.dfs_topological_sort(network_name, &mut result, &mut visited, &mut temp_mark);
+      }
+    }
+    
+    result
+  }
+  
+  /// DFS helper for topological sort. Uses post-order traversal to ensure dependencies come before dependents.
+  fn dfs_topological_sort(
+    &self,
+    network_name: &str,
+    result: &mut Vec<String>,
+    visited: &mut HashSet<String>,
+    temp_mark: &mut HashSet<String>,
+  ) {
+    // Detect cycles (should not happen in valid designs)
+    if temp_mark.contains(network_name) {
+      return; // Circular dependency detected, skip
+    }
+    
+    // Already processed
+    if visited.contains(network_name) {
+      return;
+    }
+    
+    // Mark as temporarily visited (for cycle detection)
+    temp_mark.insert(network_name.to_string());
+    
+    // Find dependencies and visit them first
+    if let Some(network) = self.node_networks.get(network_name) {
+      for node in network.nodes.values() {
+        let node_type_name = &node.node_type_name;
+        
+        // Check if this node references another user-defined network
+        if self.node_networks.contains_key(node_type_name) {
+          // Visit dependency first
+          self.dfs_topological_sort(node_type_name, result, visited, temp_mark);
+        }
+      }
+    }
+    
+    // Remove temporary mark
+    temp_mark.remove(network_name);
+    
+    // Mark as visited
+    visited.insert(network_name.to_string());
+    
+    // Add to result AFTER visiting all dependencies (post-order)
+    result.push(network_name.to_string());
+  }
 }
 
 
