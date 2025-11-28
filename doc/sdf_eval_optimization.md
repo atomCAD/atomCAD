@@ -342,6 +342,12 @@ Speedup: ~1.5× for this batch
 
 ---
 
+### Alternative: Lipsitz pruning of the tree based on regions
+
+This is an alternative algorithm compared to our BVH approach. It is probably faster. While the tree preparations make it slightly more complicated than our approach, at least after the tree reduction is done, the actual evaluation do not need to be modified.
+
+https://onlinelibrary.wiley.com/doi/10.1111/cgf.70057 
+
 ## Summary
 
 The SDF evaluation algorithm combines multiple optimizations working in concert:
