@@ -216,7 +216,10 @@ Point outside BV:              Point inside BV:
 sdf_BV(p) ≤ sdf_actual(p)          (BV might be closer than actual geometry)
 ```
 
-**BVH Proxy Creation:** For expensive subtrees, create an Axis-Aligned Bounding Box (AABB) from the mesh representation. Only worthwhile when subtree evaluation cost >> AABB evaluation cost.
+**BVH Proxy Creation:** For expensive subtrees, create a bounding volume proxy. Only worthwhile when subtree evaluation cost >>  BV proxy evaluation cost.
+How to do it:
+Option 1: create an Axis-Aligned Bounding Box (AABB) from the mesh representation. Drawback: the mesh itself can be expensive to create. (Although might be in our geo mesh cache)
+Option 2: Use the 'sphere carving' method described in this paper: https://dl.acm.org/doi/10.1145/3730845
 
 #### BVH-Adjusted Union
 
