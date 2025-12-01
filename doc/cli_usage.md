@@ -97,24 +97,10 @@ The CLI currently supports the following data types for parameters:
 
 The CLI exports visible atomic structures to `.mol` files (V3000 format) or `.xyz` files based on the file extension.
 
-## Error Handling
+## Performanc
 
-- If the `.cnnd` file is not found, an error is reported
-- If the specified network doesn't exist, an error is reported
-- If a parameter name is not found in the network, an error is reported
-- If a parameter value cannot be parsed, an error is reported with details
+Batch mode is faster than running atomCAD multiple times because the application is started only once and the `.cnnd` file is loaded only once per run.
 
-## Performance & Flexibility
-
-**Batch mode is significantly faster** than running atomCAD multiple times because:
-- The `.cnnd` file is loaded only once
-- Node type registry is reused across all runs
-- Only parameter values and evaluation need to change between runs
-
-**Batch mode is highly flexible** because each run can specify a different network:
-- Evaluate multiple network variants from a single `.cnnd` library
-- Compare different structural designs side-by-side
-- Generate diverse structures in one automated workflow
 
 ## Examples
 
@@ -187,24 +173,3 @@ atomcad --headless \
   -p offset="1.5,2.0,3.5" \
   -p cell="10,10,10"
 ```
-
-## Implementation Status
-
-**Current Status:** The CLI infrastructure is complete with parameter parsing and batch file support. The following steps are stubbed with `println!` statements:
-
-1. ✓ Command line argument parsing
-2. ✓ Loading `.cnnd` files
-3. ✓ Setting active network
-4. ✓ Parameter validation and parsing
-5. ⏳ **TODO:** Applying parameter values to network (creating constant nodes)
-6. ⏳ **TODO:** Network evaluation (mark_full_refresh + generate_scene)
-7. ⏳ **TODO:** Exporting to `.mol`/`.xyz` files
-
-The stubbed steps will be implemented in the next phase.
-
-## Future Enhancements
-
-- Support for more complex parameter types (UnitCell, Geometry, etc.)
-- Progress reporting for batch runs
-- Parallel execution of independent batch runs
-- Validation mode (check network without evaluation)
