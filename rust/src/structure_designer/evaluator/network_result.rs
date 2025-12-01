@@ -415,6 +415,90 @@ impl NetworkResult {
       NetworkResult::Error(_) => "Error".to_string(),
     }
   }
+
+  /// Parse a NetworkResult from a string value based on expected DataType.
+  /// Used for CLI parameter parsing.
+  pub fn from_string(value_str: &str, data_type: &DataType) -> Result<Self, String> {
+    match data_type {
+      DataType::Bool => {
+        match value_str.to_lowercase().as_str() {
+          "true" => Ok(NetworkResult::Bool(true)),
+          "false" => Ok(NetworkResult::Bool(false)),
+          _ => Err(format!("Invalid bool value '{}'. Expected 'true' or 'false'", value_str))
+        }
+      }
+      
+      DataType::Int => {
+        value_str.parse::<i32>()
+          .map(NetworkResult::Int)
+          .map_err(|_| format!("Invalid int value '{}'", value_str))
+      }
+      
+      DataType::Float => {
+        value_str.parse::<f64>()
+          .map(NetworkResult::Float)
+          .map_err(|_| format!("Invalid float value '{}'", value_str))
+      }
+      
+      DataType::String => {
+        Ok(NetworkResult::String(value_str.to_string()))
+      }
+      
+      DataType::Vec2 => {
+        let parts: Vec<&str> = value_str.split(',').map(|s| s.trim()).collect();
+        if parts.len() != 2 {
+          return Err(format!("Vec2 requires 2 comma-separated values, got '{}'", value_str));
+        }
+        let x = parts[0].parse::<f64>()
+          .map_err(|_| format!("Invalid Vec2 x component: '{}'", parts[0]))?;
+        let y = parts[1].parse::<f64>()
+          .map_err(|_| format!("Invalid Vec2 y component: '{}'", parts[1]))?;
+        Ok(NetworkResult::Vec2(DVec2::new(x, y)))
+      }
+      
+      DataType::Vec3 => {
+        let parts: Vec<&str> = value_str.split(',').map(|s| s.trim()).collect();
+        if parts.len() != 3 {
+          return Err(format!("Vec3 requires 3 comma-separated values, got '{}'", value_str));
+        }
+        let x = parts[0].parse::<f64>()
+          .map_err(|_| format!("Invalid Vec3 x component: '{}'", parts[0]))?;
+        let y = parts[1].parse::<f64>()
+          .map_err(|_| format!("Invalid Vec3 y component: '{}'", parts[1]))?;
+        let z = parts[2].parse::<f64>()
+          .map_err(|_| format!("Invalid Vec3 z component: '{}'", parts[2]))?;
+        Ok(NetworkResult::Vec3(DVec3::new(x, y, z)))
+      }
+      
+      DataType::IVec2 => {
+        let parts: Vec<&str> = value_str.split(',').map(|s| s.trim()).collect();
+        if parts.len() != 2 {
+          return Err(format!("IVec2 requires 2 comma-separated values, got '{}'", value_str));
+        }
+        let x = parts[0].parse::<i32>()
+          .map_err(|_| format!("Invalid IVec2 x component: '{}'", parts[0]))?;
+        let y = parts[1].parse::<i32>()
+          .map_err(|_| format!("Invalid IVec2 y component: '{}'", parts[1]))?;
+        Ok(NetworkResult::IVec2(IVec2::new(x, y)))
+      }
+      
+      DataType::IVec3 => {
+        let parts: Vec<&str> = value_str.split(',').map(|s| s.trim()).collect();
+        if parts.len() != 3 {
+          return Err(format!("IVec3 requires 3 comma-separated values, got '{}'", value_str));
+        }
+        let x = parts[0].parse::<i32>()
+          .map_err(|_| format!("Invalid IVec3 x component: '{}'", parts[0]))?;
+        let y = parts[1].parse::<i32>()
+          .map_err(|_| format!("Invalid IVec3 y component: '{}'", parts[1]))?;
+        let z = parts[2].parse::<i32>()
+          .map_err(|_| format!("Invalid IVec3 z component: '{}'", parts[2]))?;
+        Ok(NetworkResult::IVec3(IVec3::new(x, y, z)))
+      }
+      
+      _ => Err(format!("Unsupported CLI parameter type: {}", data_type.to_string()))
+    }
+  }
 }
 
 /// Creates a consistent error message for missing input in node evaluation

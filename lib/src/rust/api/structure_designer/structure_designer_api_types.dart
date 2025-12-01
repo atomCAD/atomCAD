@@ -969,6 +969,62 @@ class APIIVec3Data {
           value == other.value;
 }
 
+/// Configuration for batch CLI runs
+class BatchCliConfig {
+  final String cnndFile;
+  final String batchFile;
+
+  const BatchCliConfig({
+    required this.cnndFile,
+    required this.batchFile,
+  });
+
+  @override
+  int get hashCode => cnndFile.hashCode ^ batchFile.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BatchCliConfig &&
+          runtimeType == other.runtimeType &&
+          cnndFile == other.cnndFile &&
+          batchFile == other.batchFile;
+}
+
+/// Configuration for single CLI run
+class CliConfig {
+  final String cnndFile;
+  final String networkName;
+  final String outputFile;
+
+  /// Parameters as string key-value pairs (will be parsed based on parameter types)
+  final Map<String, String> parameters;
+
+  const CliConfig({
+    required this.cnndFile,
+    required this.networkName,
+    required this.outputFile,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode =>
+      cnndFile.hashCode ^
+      networkName.hashCode ^
+      outputFile.hashCode ^
+      parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CliConfig &&
+          runtimeType == other.runtimeType &&
+          cnndFile == other.cnndFile &&
+          networkName == other.networkName &&
+          outputFile == other.outputFile &&
+          parameters == other.parameters;
+}
+
 class InputPinView {
   final String name;
   final String dataType;

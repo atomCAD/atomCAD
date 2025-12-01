@@ -287,9 +287,20 @@ pub struct APIAtomFillData {
   pub error: Option<String>, // Optional error message from parsing
 }
 
+/// Configuration for single CLI run
+pub struct CliConfig {
+  pub cnnd_file: String,
+  pub network_name: String,
+  pub output_file: String,
+  /// Parameters as string key-value pairs (will be parsed based on parameter types)
+  pub parameters: HashMap<String, String>,
+}
 
-
-
+/// Configuration for batch CLI runs
+pub struct BatchCliConfig {
+  pub cnnd_file: String,
+  pub batch_file: String,
+}
 
 
 

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -5,18 +6,122 @@ import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as sd_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:flutter_window_close/flutter_window_close.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   await RustLib.init();
 
+  // Check for CLI mode
+  if (args.contains('--headless')) {
+    await runHeadlessMode(args);
+    exit(0);
+  }
+
+  // Normal GUI mode
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
   runApp(const MyApp());
+}
+
+Future<void> runHeadlessMode(List<String> args) async {
+  try {
+    if (args.contains('--batch')) {
+      // Batch mode
+      final config = _parseBatchArgs(args);
+      print('Starting batch CLI mode...\n');
+      final result = sd_api.runCliBatch(config: config);
+      if (!result.success) {
+        stderr.writeln('Error: ${result.errorMessage}');
+        exit(1);
+      }
+    } else {
+      // Single run mode
+      final config = _parseSingleArgs(args);
+      print('Starting single CLI mode...\n');
+      final result = sd_api.runCliSingle(config: config);
+      if (!result.success) {
+        stderr.writeln('Error: ${result.errorMessage}');
+        exit(1);
+      }
+    }
+  } catch (e, stackTrace) {
+    stderr.writeln('CLI Error: $e');
+    stderr.writeln(stackTrace);
+    exit(1);
+  }
+}
+
+CliConfig _parseSingleArgs(List<String> args) {
+  String? cnndFile;
+  String? networkName;
+  String? outputFile;
+  final params = <String, String>{};
+
+  for (int i = 0; i < args.length; i++) {
+    if (args[i] == '--file' || args[i] == '-f') {
+      if (i + 1 < args.length) cnndFile = args[++i];
+    } else if (args[i] == '--network' || args[i] == '-n') {
+      if (i + 1 < args.length) networkName = args[++i];
+    } else if (args[i] == '--output' || args[i] == '-o') {
+      if (i + 1 < args.length) outputFile = args[++i];
+    } else if (args[i] == '--param' || args[i] == '-p') {
+      if (i + 1 < args.length) {
+        final param = args[++i];
+        final parts = param.split('=');
+        if (parts.length == 2) {
+          params[parts[0]] = parts[1];
+        } else {
+          stderr.writeln(
+              'Invalid parameter format: $param (expected name=value)');
+          exit(1);
+        }
+      }
+    }
+  }
+
+  if (cnndFile == null || networkName == null || outputFile == null) {
+    stderr.writeln(
+        'Usage: atomcad --headless --file <path> --network <name> --output <path> [--param name=value]');
+    exit(1);
+  }
+
+  return CliConfig(
+    cnndFile: cnndFile,
+    networkName: networkName,
+    outputFile: outputFile,
+    parameters: params,
+  );
+}
+
+BatchCliConfig _parseBatchArgs(List<String> args) {
+  String? cnndFile;
+  String? batchFile;
+
+  for (int i = 0; i < args.length; i++) {
+    if (args[i] == '--file' || args[i] == '-f') {
+      if (i + 1 < args.length) cnndFile = args[++i];
+    } else if (args[i] == '--batch' || args[i] == '-b') {
+      if (i + 1 < args.length) batchFile = args[++i];
+    }
+  }
+
+  if (batchFile == null) {
+    stderr.writeln(
+        'Usage: atomcad --headless --batch <batch_file> [--file <cnnd_file>]');
+    exit(1);
+  }
+
+  return BatchCliConfig(
+    cnndFile: cnndFile ?? '',
+    batchFile: batchFile,
+  );
 }
 
 class MyApp extends StatefulWidget {

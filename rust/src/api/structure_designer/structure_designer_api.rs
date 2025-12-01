@@ -89,6 +89,7 @@ use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
+use crate::structure_designer::cli_runner;
 
 fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
     let base_type = match api_data_type.data_type_base {
@@ -2066,9 +2067,55 @@ pub fn validate_active_network() {
   }
 }
 
+/// Run atomCAD in headless CLI mode with a single configuration
+#[flutter_rust_bridge::frb(sync)]
+pub fn run_cli_single(config: super::structure_designer_api_types::CliConfig) -> APIResult {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        match cli_runner::run_cli_single_mode(&mut cad_instance.structure_designer, config) {
+          Ok(_) => APIResult {
+            success: true,
+            error_message: String::new(),
+          },
+          Err(e) => APIResult {
+            success: false,
+            error_message: e,
+          }
+        }
+      },
+      APIResult {
+        success: false,
+        error_message: "CAD instance not available".to_string(),
+      }
+    )
+  }
+}
 
-
-
+/// Run atomCAD in headless CLI batch mode
+#[flutter_rust_bridge::frb(sync)]
+pub fn run_cli_batch(config: super::structure_designer_api_types::BatchCliConfig) -> APIResult {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        match cli_runner::run_cli_batch_mode(&mut cad_instance.structure_designer, config) {
+          Ok(_) => APIResult {
+            success: true,
+            error_message: String::new(),
+          },
+          Err(e) => APIResult {
+            success: false,
+            error_message: e,
+          }
+        }
+      },
+      APIResult {
+        success: false,
+        error_message: "CAD instance not available".to_string(),
+      }
+    )
+  }
+}
 
 
 

@@ -440,3 +440,11 @@ void setUnitCellData({required BigInt nodeId, required APIUnitCellData data}) =>
 
 void validateActiveNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiValidateActiveNetwork();
+
+/// Run atomCAD in headless CLI mode with a single configuration
+APIResult runCliSingle({required CliConfig config}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiRunCliSingle(config: config);
+
+/// Run atomCAD in headless CLI batch mode
+APIResult runCliBatch({required BatchCliConfig config}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiRunCliBatch(config: config);

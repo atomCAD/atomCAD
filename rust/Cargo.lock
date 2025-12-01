@@ -2945,6 +2945,7 @@ dependencies = [
  "smallvec",
  "thiserror 2.0.12",
  "tokio",
+ "toml 0.8.23",
  "wgpu",
 ]
 
