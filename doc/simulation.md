@@ -127,6 +127,88 @@ Due to the deployment size and complexity issues, we have decided to use a **cli
 - Enables GPU acceleration without requiring user GPU hardware
 - **Open question:** Whether the server implementation will be open source or proprietary to Machine Phase Systems (developer of atomCAD)
 
+### Summary comparison of simulation models
+
+| Model | Type | Element Coverage | Reactive | Relative Speed | Relative Accuracy | Implementation |
+|-------|------|------------------|----------|----------------|-------------------|----------------|
+| **UFF** | Fix-topology | Nearly all elements | No | Very Fast | Low | From scratch or OpenBabel |
+| **OpenFF** | Fix-topology | Limited (organic molecules, some Si extensions) | No | Very Fast | Medium (better than UFF) | Custom engine from .xml |
+| **Stillinger-Weber** | Reactive | Si, C (separate params) | Yes (implicit) | Fast | Medium | From scratch |
+| **AIREBO** | Reactive | **C, H only** | Yes | Fast | Medium-High | LAMMPS library |
+| **Tersoff** | Reactive | Si or C (element-specific) | Yes | Fast | Medium-High | LAMMPS library |
+| **ReaxFF** | Reactive | Many elements (needs param sets) | Yes | Medium | High | LAMMPS library |
+| **UMA small** | ML potential | Universal (all trained elements) | Yes | Slow (CPU) / Medium-Slow (GPU) | Very High (near-DFT) | Client-server (GPU) |
+
+**Key notes:**
+- **Element coverage** is critical for atomCAD - AIREBO (C-H only) and Tersoff (element-specific) have significant limitations
+- **Reactive** means the model can handle bond breaking/formation during dynamics
+- **Speed** is relative to model complexity; actual performance depends on system size and hardware
+- **UMA** offers the best accuracy-generality tradeoff but requires server infrastructure
+- **UFF** is the simplest option for broad element coverage with fast performance
+- **Stillinger-Weber** topology changes are geometry-based, not chemically reactive in the traditional sense
+
+## Future option: UMA-matched hybrid force fields
+
+A promising future direction is to use UMA as a high-quality reference to create **fast, accurate, domain-specific force fields** that combine the speed of classical methods with UMA-level accuracy for atomCAD's specific use cases.
+
+### Concept
+
+Instead of running UMA directly (which is slow) or using generic classical force fields (which are inaccurate), we can:
+1. Generate large datasets of energies and forces from UMA for atomCAD-relevant structures (diamond, silicon, defects, surfaces)
+2. Fit specialized classical force fields to reproduce UMA's behavior
+3. Create a hybrid system that automatically blends different force fields based on the local atomic environment
+
+### Three-tier approach
+
+**1. Specialized reactive potentials (fast, production-ready)**
+- **Tersoff**: Fit to UMA for perfect diamond/silicon crystals and strained lattices (default fast option)
+- **AIREBO**: Fit to UMA for C-H surface chemistry and passivation
+- **ReaxFF**: Opt-in for heavy reactivity when true chemical reactions are needed
+- Parameters optimized via force matching against UMA reference data
+
+**2. Generic tabulated many-body fallback**
+- Flexible spline-based potentials: 2-body radial + separable 3-body angular terms
+- Covers arbitrary covalent motifs not handled by specialized potentials
+- More accurate than UFF for diverse defects, much faster than UMA
+- Can be exported to LAMMPS `table` format
+
+**3. Intelligent blending strategy**
+- **Energy-based smooth blending** (preferred): Per-atom weights based on "crystal-likeness" (coordination, local order parameters)
+- **Delta learning** (simpler): Baseline classical force field + small correction table for residuals
+- Ensures smooth transitions between different potential regions
+
+### Implementation path
+
+**Data generation:**
+- Generate diverse UMA reference data via FAIRChem/ASE
+- Cover bulk crystals (strains, temperatures), surfaces, vacancies, interstitials, defect clusters
+- Include transition/interface snapshots for blending regions
+
+**Fitting and validation:**
+- Use force matching tools (potfit or similar) to optimize parameters
+- Validate: lattice constants, elastic moduli, surface energies, defect formation energies, phonons
+- Test energy conservation (NVE stability)
+
+**Practical rollout:**
+- Provide presets: "Fast" (Tersoff-UMA), "C/H surfaces" (AIREBO-UMA), "Reactive" (ReaxFF-UMA), "Generic" (tabulated), "Hybrid" (blended)
+- Implement blending in custom LAMMPS `pair_style` or use `hybrid/overlay`
+
+### Benefits for atomCAD
+
+- **Speed**: Classical force field performance (much faster than UMA)
+- **Accuracy**: Trained on UMA, so inherits UMA-level accuracy for covered configurations
+- **Generic**: Tabulated fallback handles unexpected atomic environments
+- **No server required**: Runs locally, unlike UMA client-server
+- **Domain-optimized**: Specifically tuned for mechanical nanomachines (diamond, silicon)
+
+### When to develop this
+
+This is an advanced method requiring significant research and validation. Recommended timeline:
+1. First implement UMA client-server (reference accuracy)
+2. Gain experience with what configurations are common in user workflows
+3. Generate UMA training data for those specific patterns
+4. Develop and validate UMA-matched force fields for production use
+
 ## Simulation use cases in atomCAD and suggested solutions
 
 I can see 4 different simulation use cases in atomCAD:
@@ -180,6 +262,11 @@ This node will support multiple simulation methods:
 - Faster than UMA, more accurate than UFF.
 - Could be integrated through LAMMPS library.
 
+**Advanced future option: UMA-matched hybrid force fields**
+- Combines speed of classical methods with UMA-level accuracy.
+- Uses UMA to train domain-specific force fields for atomCAD's typical structures.
+- See dedicated section above for details.
+
 This can be several seconds for bigger atomic structures, so before implementing this we should support long running nodes by doing the node network evaluation on a separate thread.
 
 The UX difference will be the following:
@@ -211,7 +298,16 @@ We will use UMA small via the client-server architecture.
 
 Complex reactive force fields could be an option but they need a very high expertise to parameterize correctly and are still less generic than UMA small. We might consider the reactive force fields later.
 
-Another option which could be developed later: creating a faster, less accurate model based on UMA: It is not completely clear what to do here but the options are kind of either distill UMA down to something faster or export molecular simulation force field based on UMA and run that. This is also true for the energy minimization node mentioned earlier.
+**Advanced future option: UMA-matched hybrid force fields**
+
+As detailed in the dedicated section above, we could develop UMA-trained classical force fields that combine:
+- Fast performance (classical force field speed)
+- High accuracy (trained on UMA reference data)
+- Domain optimization (specifically for mechanical nanomachines)
+
+This approach would use force matching to fit Tersoff/AIREBO/ReaxFF parameters to UMA's behavior on atomCAD-relevant structures, plus tabulated many-body potentials for generic fallback. The system would intelligently blend different force fields based on local atomic environment.
+
+This would eliminate the need for server infrastructure while maintaining near-UMA accuracy for common atomCAD workflows.
 
 Important aspect: The client-server protocol must be designed to return simulation trajectories as efficiently compressed frame deltas rather than full frames, minimizing bandwidth and enabling efficient playback on the client side. 
 
