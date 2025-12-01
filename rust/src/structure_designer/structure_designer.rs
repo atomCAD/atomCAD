@@ -9,6 +9,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_data::NoData;
 use crate::structure_designer::node_type::{no_data_saver, no_data_loader};
 use super::evaluator::network_evaluator::NetworkEvaluator;
+use super::evaluator::network_result::NetworkResult;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
@@ -41,6 +42,8 @@ pub struct StructureDesigner {
   pub file_path: Option<String>,
   // Tracks pending changes since last refresh to determine what needs to be refreshed
   pending_changes: StructureDesignerChanges,
+  // Temporary storage for CLI parameters during evaluation (used in headless mode)
+  pub cli_top_level_parameters: Option<HashMap<String, NetworkResult>>,
 }
 
 impl StructureDesigner {
@@ -63,6 +66,7 @@ impl StructureDesigner {
       is_dirty: false,
       file_path: None,
       pending_changes: StructureDesignerChanges::default(),
+      cli_top_level_parameters: None,
     }
   }
 }
@@ -242,6 +246,7 @@ impl StructureDesigner {
         display_type,
         &self.node_type_registry,
         &self.preferences.geometry_visualization_preferences,
+        self.cli_top_level_parameters.clone(),
       );
       
       // Capture the selected node's unit cell
@@ -364,6 +369,7 @@ impl StructureDesigner {
           display_type,
           &self.node_type_registry,
           &self.preferences.geometry_visualization_preferences,
+          self.cli_top_level_parameters.clone(),
         );
         
         // Capture the selected node's unit cell

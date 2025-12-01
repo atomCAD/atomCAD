@@ -47,6 +47,11 @@ impl NodeData for ParameterData {
       let evaled_in_isolation = network_stack.len() < 2;
     
       if evaled_in_isolation {
+        // Check if CLI parameter is provided (has precedence over default pin)
+        if let Some(cli_value) = context.top_level_parameters.get(&self.param_name) {
+          return cli_value.clone();
+        }
+        // Fall back to default pin
         return eval_default(network_evaluator, network_stack, node_id, registry, context);
       }
     

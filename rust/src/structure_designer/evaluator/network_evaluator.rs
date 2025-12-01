@@ -48,6 +48,7 @@ pub struct NetworkEvaluationContext {
   pub node_errors: HashMap<u64, String>,
   pub node_output_strings: HashMap<u64, String>,
   pub selected_node_eval_cache: Option<Box<dyn Any>>,
+  pub top_level_parameters: HashMap<String, NetworkResult>,
 }
 
 impl NetworkEvaluationContext {
@@ -56,6 +57,7 @@ impl NetworkEvaluationContext {
       node_errors: HashMap::new(),
       node_output_strings: HashMap::new(),
       selected_node_eval_cache: None,
+      top_level_parameters: HashMap::new(),
     }
   }
 }
@@ -95,6 +97,7 @@ impl NetworkEvaluator {
     _display_type: NodeDisplayType, //TODO: use display_type
     registry: &NodeTypeRegistry,
     geometry_visualization_preferences: &GeometryVisualizationPreferences,
+    top_level_parameters: Option<HashMap<String, NetworkResult>>,
   ) -> NodeSceneData {
     //let _timer = Timer::new("generate_scene");
     
@@ -109,6 +112,9 @@ impl NetworkEvaluator {
     }
 
     let mut context = NetworkEvaluationContext::new();
+    if let Some(params) = top_level_parameters {
+      context.top_level_parameters = params;
+    }
 
     let mut network_stack = Vec::new();
     // We assign the root node network zero node id. It is not used in the evaluation.

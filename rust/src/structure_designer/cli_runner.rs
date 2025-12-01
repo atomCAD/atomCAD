@@ -44,14 +44,16 @@ pub fn run_cli_single_mode(
   designer.active_node_network_name = Some(config.network_name.clone());
   println!("✓ Active network set to: {}", config.network_name);
   
-  // 4. Apply CLI parameters (stubbed)
-  println!("\n[Step 4] Applying parameters...");
-  apply_cli_parameters(designer, &config.network_name, &config.parameters)?;
-  println!("✓ Parameters applied");
+  // 4. Parse CLI parameters
+  println!("\n[Step 4] Parsing parameters...");
+  let parsed_params = parse_cli_parameters(designer, &config.network_name, &config.parameters)?;
+  println!("✓ Parameters parsed");
   
-  // 5. Evaluate network
+  // 5. Evaluate network with parameters
   println!("\n[Step 5] Evaluating network...");
+  designer.cli_top_level_parameters = Some(parsed_params);
   evaluate_network(designer);
+  designer.cli_top_level_parameters = None; // Clear after evaluation
   println!("✓ Network evaluated");
   
   // 6. Export visible atomic structures
@@ -108,14 +110,16 @@ pub fn run_cli_batch_mode(
     designer.active_node_network_name = Some(run.network_name.clone());
     println!("  ✓ Active network set to: {}", run.network_name);
     
-    // Apply parameters for this run
-    println!("  [3.3] Applying parameters...");
-    apply_cli_parameters(designer, &run.network_name, &run.parameters)?;
-    println!("  ✓ Parameters applied");
+    // Parse parameters for this run
+    println!("  [3.3] Parsing parameters...");
+    let parsed_params = parse_cli_parameters(designer, &run.network_name, &run.parameters)?;
+    println!("  ✓ Parameters parsed");
     
-    // Evaluate
+    // Evaluate with parameters
     println!("  [3.4] Evaluating network...");
+    designer.cli_top_level_parameters = Some(parsed_params);
     evaluate_network(designer);
+    designer.cli_top_level_parameters = None; // Clear after evaluation
     println!("  ✓ Network evaluated");
     
     // Export
@@ -172,15 +176,16 @@ fn export_with_directory_creation(
   Ok(())
 }
 
-/// Apply CLI parameters by parsing and preparing values (stubbed for now)
-fn apply_cli_parameters(
+/// Parse and validate CLI parameters from strings to NetworkResult values
+/// Returns a HashMap of parameter names to NetworkResult values
+fn parse_cli_parameters(
   designer: &mut StructureDesigner,
   network_name: &str,
   parameters: &HashMap<String, String>
-) -> Result<(), String> {
+) -> Result<HashMap<String, NetworkResult>, String> {
   if parameters.is_empty() {
-    println!("  No parameters to apply");
-    return Ok(());
+    println!("  No parameters provided");
+    return Ok(HashMap::new());
   }
   
   // Get the node type for this network (network existence already validated by caller)
@@ -189,6 +194,8 @@ fn apply_cli_parameters(
     .expect("Network should exist (already validated)");
   
   println!("  Found {} parameters defined for '{}'", node_type.parameters.len(), network_name);
+  
+  let mut parsed_parameters = HashMap::new();
   
   // For each CLI parameter, validate and parse it
   for (param_name, value_str) in parameters {
@@ -206,10 +213,11 @@ fn apply_cli_parameters(
       param_def.data_type.to_string()
     );
     
-    println!("    TODO: Create constant node and wire to parameter consumers");
+    // Store the parsed value in the HashMap
+    parsed_parameters.insert(param_name.clone(), param_value);
   }
   
-  Ok(())
+  Ok(parsed_parameters)
 }
 
 /// Parse batch file (TOML format)

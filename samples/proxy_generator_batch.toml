@@ -1,0 +1,29 @@
+# Batch configuration for proxy generator
+# This file demonstrates running the same network with different parameter values
+
+cnnd_file = "samples/demolib+(111)-proxy-generator.cnnd"
+
+# Generate multiple variations with different sizes
+[[run]]
+network = "0_proxy_(100)_generator"
+output = "results/proxy_3_2_1.mol"
+[run.params]
+size1 = 3
+size2 = 2
+top_height = 1
+
+[[run]]
+network = "0_proxy_(100)_generator"
+output = "results/proxy_5_3_2.mol"
+[run.params]
+size1 = 5
+size2 = 3
+top_height = 2
+
+[[run]]
+network = "0_proxy_(100)_generator"
+output = "results/proxy_10_5_3.mol"
+[run.params]
+size1 = 10
+size2 = 5
+top_height = 3
