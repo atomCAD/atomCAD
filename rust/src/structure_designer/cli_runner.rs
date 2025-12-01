@@ -36,16 +36,8 @@ pub fn run_cli_single_mode(
   
   // 2. Validate network exists
   println!("\n[Step 2] Validating network exists...");
-  io::stdout().flush().ok();
-  
-  let available_networks = designer.node_type_registry.get_node_network_names();
-  if !available_networks.contains(&config.network_name) {
-    eprintln!("ERROR: Network '{}' not found in loaded file.", config.network_name);
-    eprintln!("Available networks: {:?}", available_networks);
-    return Err(format!("Network '{}' not found", config.network_name));
-  }
+  validate_network_exists(designer, &config.network_name)?;
   println!("✓ Network '{}' found", config.network_name);
-  io::stdout().flush().ok();
   
   // 3. Set active network
   println!("\n[Step 3] Setting active network...");
@@ -57,15 +49,15 @@ pub fn run_cli_single_mode(
   apply_cli_parameters(designer, &config.network_name, &config.parameters)?;
   println!("✓ Parameters applied");
   
-  // 5. Evaluate network (stubbed)
+  // 5. Evaluate network
   println!("\n[Step 5] Evaluating network...");
-  println!("TODO: Mark refresh and evaluate network");
-  println!("✓ Network evaluated (stubbed)");
+  evaluate_network(designer);
+  println!("✓ Network evaluated");
   
-  // 6. Export visible atomic structures (stubbed)
+  // 6. Export visible atomic structures
   println!("\n[Step 6] Exporting to {}...", config.output_file);
-  println!("TODO: Export visible atomic structures to .mol file");
-  println!("✓ Export complete (stubbed)");
+  export_with_directory_creation(designer, &config.output_file, "  ")?;
+  println!("✓ Exported to {}", config.output_file);
   
   println!("\n=== CLI Run Complete ===\n");
   Ok(())
@@ -108,16 +100,8 @@ pub fn run_cli_batch_mode(
     
     // Validate network exists
     println!("  [3.1] Validating network exists...");
-    io::stdout().flush().ok();
-    
-    let available_networks = designer.node_type_registry.get_node_network_names();
-    if !available_networks.contains(&run.network_name) {
-      eprintln!("ERROR: Network '{}' not found in loaded file.", run.network_name);
-      eprintln!("Available networks: {:?}", available_networks);
-      return Err(format!("Network '{}' not found", run.network_name));
-    }
+    validate_network_exists(designer, &run.network_name)?;
     println!("  ✓ Network '{}' found", run.network_name);
-    io::stdout().flush().ok();
     
     // Set active network for this run
     println!("  [3.2] Setting active network...");
@@ -131,16 +115,60 @@ pub fn run_cli_batch_mode(
     
     // Evaluate
     println!("  [3.4] Evaluating network...");
-    println!("  TODO: Mark refresh and evaluate network");
-    println!("  ✓ Network evaluated (stubbed)");
+    evaluate_network(designer);
+    println!("  ✓ Network evaluated");
     
     // Export
     println!("  [3.5] Exporting to {}...", run.output_file);
-    println!("  TODO: Export visible atomic structures to .mol file");
-    println!("  ✓ Export complete (stubbed)");
+    export_with_directory_creation(designer, &run.output_file, "    ")?;
+    println!("  ✓ Exported to {}", run.output_file);
   }
   
   println!("\n=== Batch Complete: {} runs finished ===\n", batch_config.runs.len());
+  Ok(())
+}
+
+/// Validate that a network exists in the registry
+fn validate_network_exists(
+  designer: &StructureDesigner,
+  network_name: &str
+) -> Result<(), String> {
+  io::stdout().flush().ok();
+  
+  let available_networks = designer.node_type_registry.get_node_network_names();
+  if !available_networks.contains(&network_name.to_string()) {
+    eprintln!("ERROR: Network '{}' not found in loaded file.", network_name);
+    eprintln!("Available networks: {:?}", available_networks);
+    return Err(format!("Network '{}' not found", network_name));
+  }
+  io::stdout().flush().ok();
+  Ok(())
+}
+
+/// Evaluate the active network by marking refresh and running evaluation
+fn evaluate_network(designer: &mut StructureDesigner) {
+  designer.mark_full_refresh();
+  let changes = designer.get_pending_changes();
+  designer.refresh(&changes);
+}
+
+/// Export atomic structures with automatic directory creation
+fn export_with_directory_creation(
+  designer: &StructureDesigner,
+  output_file: &str,
+  indent: &str
+) -> Result<(), String> {
+  // Create parent directory if it doesn't exist
+  if let Some(parent) = std::path::Path::new(output_file).parent() {
+    if !parent.exists() {
+      std::fs::create_dir_all(parent)
+        .map_err(|e| format!("Failed to create output directory '{}': {}", parent.display(), e))?;
+      println!("{}Created directory: {}", indent, parent.display());
+    }
+  }
+  
+  designer.export_visible_atomic_structures(output_file)
+    .map_err(|e| format!("Export failed: {}", e))?;
   Ok(())
 }
 

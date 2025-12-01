@@ -38,7 +38,7 @@ Future<void> runHeadlessMode(List<String> args) async {
       print('Starting batch CLI mode...\n');
       final result = sd_api.runCliBatch(config: config);
       if (!result.success) {
-        stderr.writeln('Error: ${result.errorMessage}');
+        stderr.writeln('\n❌ ERROR: ${result.errorMessage}');
         exit(1);
       }
     } else {
@@ -47,12 +47,13 @@ Future<void> runHeadlessMode(List<String> args) async {
       print('Starting single CLI mode...\n');
       final result = sd_api.runCliSingle(config: config);
       if (!result.success) {
-        stderr.writeln('Error: ${result.errorMessage}');
+        stderr.writeln('\n❌ ERROR: ${result.errorMessage}');
         exit(1);
       }
     }
   } catch (e, stackTrace) {
-    stderr.writeln('CLI Error: $e');
+    stderr.writeln('\n❌ FATAL ERROR: $e');
+    stderr.writeln('Stack trace:');
     stderr.writeln(stackTrace);
     exit(1);
   }
