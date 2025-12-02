@@ -13,6 +13,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
   final TextEditingController _filterController = TextEditingController();
   List<APINodeTypeView> _allNodes = [];
   List<APINodeTypeView> _filteredNodes = [];
+  APINodeTypeView? _hoveredNode;
 
   @override
   void initState() {
@@ -45,7 +46,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
       backgroundColor: Colors.black,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Container(
-        width: 240, // Fixed width
+        width: 480, // Wider to accommodate two panels
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -71,21 +72,95 @@ class _AddNodePopupState extends State<AddNodePopup> {
             SizedBox(height: 10),
             SizedBox(
               height: 240, // Limit height for scrollability
-              child: ListView.builder(
-                itemCount: _filteredNodes.length,
-                itemBuilder: (context, index) {
-                  final nodeView = _filteredNodes[index];
-                  return ListTile(
-                    contentPadding: EdgeInsets.symmetric(
-                        vertical: 0, horizontal: 8), // Reduce gap
-                    dense: true,
-                    visualDensity: VisualDensity(vertical: -4), // to compact
-                    title: Text(nodeView.name,
-                        style: TextStyle(
-                            color: Colors.white, fontSize: 15, height: 1.0)),
-                    onTap: () => _selectNode(nodeView),
-                  );
-                },
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left panel: Node list
+                  SizedBox(
+                    width: 200,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[800]!),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ListView.builder(
+                        itemCount: _filteredNodes.length,
+                        itemBuilder: (context, index) {
+                          final nodeView = _filteredNodes[index];
+                          return MouseRegion(
+                            onEnter: (_) => setState(() {
+                              _hoveredNode = nodeView;
+                            }),
+                            onExit: (_) => setState(() {
+                              _hoveredNode = null;
+                            }),
+                            child: ListTile(
+                              contentPadding: EdgeInsets.symmetric(
+                                  vertical: 0, horizontal: 8),
+                              dense: true,
+                              visualDensity: VisualDensity(vertical: -4),
+                              title: Text(nodeView.name,
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      height: 1.0)),
+                              onTap: () => _selectNode(nodeView),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  // Right panel: Description
+                  Expanded(
+                    child: Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[900],
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.grey[800]!),
+                      ),
+                      child: _hoveredNode != null
+                          ? SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _hoveredNode!.name,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (_hoveredNode!.description.isNotEmpty) ...[
+                                    SizedBox(height: 8),
+                                    Text(
+                                      _hoveredNode!.description,
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            )
+                          : Center(
+                              child: Text(
+                                'Hover over a node type\nto see its description',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
