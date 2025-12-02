@@ -828,6 +828,22 @@ impl NodeTypeRegistry {
               name: "motif".to_string(),
               data_type: DataType::Motif,
           },
+          Parameter {
+              name: "m_offset".to_string(),
+              data_type: DataType::Vec3,
+          },
+          Parameter {
+              name: "passivate".to_string(),
+              data_type: DataType::Bool,
+          },
+          Parameter {
+              name: "rm_single".to_string(),
+              data_type: DataType::Bool,
+          },
+          Parameter {
+              name: "surf_recon".to_string(),
+              data_type: DataType::Bool,
+          },
       ],
       output_type: DataType::Atomic,
       public: true,

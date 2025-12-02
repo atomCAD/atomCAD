@@ -109,6 +109,46 @@ impl NodeData for AtomFillData {
         Err(error) => return error,
       };
 
+      // Evaluate m_offset input (with default)
+      let motif_offset = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2,
+        self.motif_offset,
+        NetworkResult::extract_vec3
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      // Evaluate passivate input (with default)
+      let hydrogen_passivation = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 3,
+        self.hydrogen_passivation,
+        NetworkResult::extract_bool
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      // Evaluate rm_single input (with default)
+      let remove_single_bond_atoms = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 4,
+        self.remove_single_bond_atoms_before_passivation,
+        NetworkResult::extract_bool
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      // Evaluate surf_recon input (with default)
+      let surface_reconstruction = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 5,
+        self.surface_reconstruction,
+        NetworkResult::extract_bool
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       // Calculate effective parameter element values (fill in defaults for missing values)
       let effective_parameter_values = motif.get_effective_parameter_element_values(&self.parameter_element_values);
 
@@ -118,13 +158,13 @@ impl NodeData for AtomFillData {
         motif,
         parameter_element_values: effective_parameter_values,
         geometry: mesh.geo_tree_root,
-        motif_offset: self.motif_offset,
+        motif_offset,
       };
 
       let options = LatticeFillOptions {
-        hydrogen_passivation: self.hydrogen_passivation,
-        remove_single_bond_atoms: self.remove_single_bond_atoms_before_passivation,
-        reconstruct_surface: self.surface_reconstruction,
+        hydrogen_passivation,
+        remove_single_bond_atoms,
+        reconstruct_surface: surface_reconstruction,
       };
 
       // Define fill region
