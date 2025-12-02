@@ -20,6 +20,7 @@ use super::nodes::motif::{MotifData, motif_data_loader};
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
+use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::structure_designer::node_network::Node;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::facet_shell::FacetShellData;
@@ -76,6 +77,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "parameter".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "default".to_string(),
@@ -98,6 +100,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "expr".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::None, // will change based on the expression
       public: true,
@@ -120,6 +123,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "value".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::None,
       public: false,
@@ -132,6 +136,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "map".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "xs".to_string(),
@@ -157,6 +162,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "string".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::String,
       public: true,
@@ -169,6 +175,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "bool".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::Bool,
       public: true,
@@ -181,6 +188,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "int".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::Int,
       public: true,
@@ -193,6 +201,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "float".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::Float,
       public: true,
@@ -205,6 +214,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "ivec2".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -226,6 +236,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "ivec3".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -251,6 +262,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "vec2".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -272,6 +284,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "vec3".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -297,6 +310,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "range".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "start".to_string(),
@@ -324,6 +338,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "unit_cell".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "a".to_string(),
@@ -354,6 +369,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "rect".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "min_corner".to_string(),
@@ -380,6 +396,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "circle".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "center".to_string(),
@@ -406,6 +423,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "reg_poly".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -424,6 +442,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "polygon".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -445,6 +464,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "union_2d".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -460,6 +480,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "intersect_2d".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -475,6 +496,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "diff_2d".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "base".to_string(),
@@ -494,6 +516,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "half_plane".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -512,6 +535,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "extrude".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -537,6 +561,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "cuboid".to_string(),
+      description: "Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. If the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped.".to_string(),
       parameters: vec![
         Parameter {
             name: "min_corner".to_string(),
@@ -563,6 +588,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "sphere".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
             name: "center".to_string(),
@@ -589,6 +615,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "half_space".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -621,6 +648,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "facet_shell".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -640,6 +668,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "union".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -655,6 +684,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "intersect".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -670,6 +700,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "diff".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "base".to_string(),
@@ -689,6 +720,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "geo_trans".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -716,6 +748,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "lattice_symop".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -752,6 +785,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "lattice_move".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -773,6 +807,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "lattice_rot".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -804,6 +839,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "motif".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::Motif,
       public: true,
@@ -819,6 +855,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "atom_fill".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -862,6 +899,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "edit_atom".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -888,6 +926,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "atom_trans".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -914,6 +953,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "import_xyz".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "file_name".to_string(),
@@ -929,6 +969,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "export_xyz".to_string(),
+      description: "".to_string(),
       parameters: vec![
         Parameter {
           name: "molecule".to_string(),
@@ -948,6 +989,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "atom_cut".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -967,6 +1009,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "relax".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -983,23 +1026,29 @@ impl NodeTypeRegistry {
     return ret;
   }
 
-  /// Retrieves the names of all public node types available to users.
+  /// Retrieves views of all public node types available to users.
   /// Only built-in node types can be non-public; all node networks are considered public.
-  pub fn get_node_type_names(&self) -> Vec<String> {
-    let mut names: Vec<String> = self
+  pub fn get_node_type_views(&self) -> Vec<APINodeTypeView> {
+    let mut views: Vec<APINodeTypeView> = self
         .built_in_node_types
         .values()
         .filter(|node| node.public)
-        .map(|node| node.name.clone())
+        .map(|node| APINodeTypeView {
+          name: node.name.clone(),
+          description: node.description.clone(),
+        })
         .collect();
 
-    names.extend(
+    views.extend(
         self.node_networks
             .values()
-            .map(|network| network.node_type.name.clone()),
+            .map(|network| APINodeTypeView {
+              name: network.node_type.name.clone(),
+              description: network.node_type.description.clone(),
+            }),
     );
 
-    names
+    views
   }
 
   pub fn get_node_network_names(&self) -> Vec<String> {

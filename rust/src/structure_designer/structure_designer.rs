@@ -428,6 +428,7 @@ impl StructureDesigner {
     self.node_type_registry.add_node_network(NodeNetwork::new(
       NodeType {
         name: node_network_name.to_string(),
+        description: "".to_string(),
         parameters: Vec::new(),
         output_type: DataType::None,
         node_data_creator: || Box::new(NoData {}),

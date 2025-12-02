@@ -231,6 +231,11 @@ pub struct InputPinView {
     pub validation_errors: Option<String>,
   }
 
+  pub struct APINodeTypeView {
+    pub name: String,
+    pub description: String,
+  }
+
 pub struct APIExprParameter {
   pub name: String,
   pub data_type: APIDataType,

@@ -77,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -1930222786;
+  int get rustContentHash => -1669658195;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -268,7 +268,8 @@ abstract class RustLibApi extends BaseApi {
   List<APINetworkWithValidationErrors>?
       crateApiStructureDesignerStructureDesignerApiGetNodeNetworksWithValidation();
 
-  List<String>? crateApiStructureDesignerStructureDesignerApiGetNodeTypeNames();
+  List<APINodeTypeView>?
+      crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews();
 
   double crateApiCommonApiGetOrthoHalfHeight();
 
@@ -2111,28 +2112,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  List<String>?
-      crateApiStructureDesignerStructureDesignerApiGetNodeTypeNames() {
+  List<APINodeTypeView>?
+      crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_opt_list_String,
+        decodeSuccessData: sse_decode_opt_list_api_node_type_view,
         decodeErrorData: null,
       ),
       constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiGetNodeTypeNamesConstMeta,
+          kCrateApiStructureDesignerStructureDesignerApiGetNodeTypeViewsConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiGetNodeTypeNamesConstMeta =>
+      get kCrateApiStructureDesignerStructureDesignerApiGetNodeTypeViewsConstMeta =>
           const TaskConstMeta(
-            debugName: "get_node_type_names",
+            debugName: "get_node_type_views",
             argNames: [],
           );
 
@@ -4986,6 +4987,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APINodeTypeView dco_decode_api_node_type_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APINodeTypeView(
+      name: dco_decode_String(arr[0]),
+      description: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
   APIParameterData dco_decode_api_parameter_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -5684,6 +5697,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APINodeTypeView> dco_decode_list_api_node_type_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_api_node_type_view).toList();
+  }
+
+  @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -6103,6 +6122,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_list_api_network_with_validation_errors(raw);
+  }
+
+  @protected
+  List<APINodeTypeView>? dco_decode_opt_list_api_node_type_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_api_node_type_view(raw);
   }
 
   @protected
@@ -6574,6 +6599,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_validationErrors = sse_decode_opt_String(deserializer);
     return APINetworkWithValidationErrors(
         name: var_name, validationErrors: var_validationErrors);
+  }
+
+  @protected
+  APINodeTypeView sse_decode_api_node_type_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    return APINodeTypeView(name: var_name, description: var_description);
   }
 
   @protected
@@ -7276,6 +7309,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <APINetworkWithValidationErrors>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_api_network_with_validation_errors(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<APINodeTypeView> sse_decode_list_api_node_type_view(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APINodeTypeView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_node_type_view(deserializer));
     }
     return ans_;
   }
@@ -8009,6 +8055,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<APINodeTypeView>? sse_decode_opt_list_api_node_type_view(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_api_node_type_view(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   (String, String) sse_decode_record_string_string(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8385,6 +8443,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
     sse_encode_opt_String(self.validationErrors, serializer);
+  }
+
+  @protected
+  void sse_encode_api_node_type_view(
+      APINodeTypeView self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.description, serializer);
   }
 
   @protected
@@ -9023,6 +9089,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_network_with_validation_errors(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_node_type_view(
+      List<APINodeTypeView> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_node_type_view(item, serializer);
     }
   }
 
@@ -9670,6 +9746,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_list_api_network_with_validation_errors(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_list_api_node_type_view(
+      List<APINodeTypeView>? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_api_node_type_view(self, serializer);
     }
   }
 

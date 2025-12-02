@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 class AddNodePopup extends StatefulWidget {
   const AddNodePopup({super.key});
@@ -10,13 +11,13 @@ class AddNodePopup extends StatefulWidget {
 
 class _AddNodePopupState extends State<AddNodePopup> {
   final TextEditingController _filterController = TextEditingController();
-  List<String> _allNodes = [];
-  List<String> _filteredNodes = [];
+  List<APINodeTypeView> _allNodes = [];
+  List<APINodeTypeView> _filteredNodes = [];
 
   @override
   void initState() {
     super.initState();
-    final allNodes = getNodeTypeNames();
+    final allNodes = getNodeTypeViews();
     if (allNodes != null) {
       _allNodes = allNodes;
     }
@@ -28,13 +29,14 @@ class _AddNodePopupState extends State<AddNodePopup> {
     setState(() {
       String query = _filterController.text.toLowerCase();
       _filteredNodes = _allNodes
-          .where((node) => node.toLowerCase().contains(query))
+          .where((node) => node.name.toLowerCase().contains(query))
           .toList();
     });
   }
 
-  void _selectNode(String node) {
-    Navigator.of(context).pop(node); // Close popup and return the selected node
+  void _selectNode(APINodeTypeView node) {
+    Navigator.of(context)
+        .pop(node.name); // Close popup and return the selected node name
   }
 
   @override
@@ -72,15 +74,16 @@ class _AddNodePopupState extends State<AddNodePopup> {
               child: ListView.builder(
                 itemCount: _filteredNodes.length,
                 itemBuilder: (context, index) {
+                  final nodeView = _filteredNodes[index];
                   return ListTile(
                     contentPadding: EdgeInsets.symmetric(
                         vertical: 0, horizontal: 8), // Reduce gap
                     dense: true,
                     visualDensity: VisualDensity(vertical: -4), // to compact
-                    title: Text(_filteredNodes[index],
+                    title: Text(nodeView.name,
                         style: TextStyle(
                             color: Colors.white, fontSize: 15, height: 1.0)),
-                    onTap: () => _selectNode(_filteredNodes[index]),
+                    onTap: () => _selectNode(nodeView),
                   );
                 },
               ),

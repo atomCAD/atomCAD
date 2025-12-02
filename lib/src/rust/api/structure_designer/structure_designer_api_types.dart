@@ -693,6 +693,27 @@ class APINetworkWithValidationErrors {
           validationErrors == other.validationErrors;
 }
 
+class APINodeTypeView {
+  final String name;
+  final String description;
+
+  const APINodeTypeView({
+    required this.name,
+    required this.description,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ description.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeTypeView &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          description == other.description;
+}
+
 class APIParameterData {
   final BigInt paramIndex;
   final String paramName;

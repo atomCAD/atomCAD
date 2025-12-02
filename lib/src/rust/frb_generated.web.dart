@@ -133,6 +133,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APINodeTypeView dco_decode_api_node_type_view(dynamic raw);
+
+  @protected
   APIParameterData dco_decode_api_parameter_data(dynamic raw);
 
   @protected
@@ -400,6 +403,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_list_api_network_with_validation_errors(dynamic raw);
 
   @protected
+  List<APINodeTypeView> dco_decode_list_api_node_type_view(dynamic raw);
+
+  @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
       dynamic raw);
 
@@ -590,6 +596,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_opt_list_api_network_with_validation_errors(dynamic raw);
 
   @protected
+  List<APINodeTypeView>? dco_decode_opt_list_api_node_type_view(dynamic raw);
+
+  @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
@@ -729,6 +738,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
       SseDeserializer deserializer);
+
+  @protected
+  APINodeTypeView sse_decode_api_node_type_view(SseDeserializer deserializer);
 
   @protected
   APIParameterData sse_decode_api_parameter_data(SseDeserializer deserializer);
@@ -1042,6 +1054,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  List<APINodeTypeView> sse_decode_list_api_node_type_view(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIRotationalSymmetry> sse_decode_list_api_rotational_symmetry(
       SseDeserializer deserializer);
 
@@ -1274,6 +1290,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  List<APINodeTypeView>? sse_decode_opt_list_api_node_type_view(
+      SseDeserializer deserializer);
+
+  @protected
   (String, String) sse_decode_record_string_string(
       SseDeserializer deserializer);
 
@@ -1428,6 +1448,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_network_with_validation_errors(
       APINetworkWithValidationErrors self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_type_view(
+      APINodeTypeView self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_parameter_data(
@@ -1748,6 +1772,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINetworkWithValidationErrors> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_node_type_view(
+      List<APINodeTypeView> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_rotational_symmetry(
       List<APIRotationalSymmetry> self, SseSerializer serializer);
 
@@ -1979,6 +2007,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_api_network_with_validation_errors(
       List<APINetworkWithValidationErrors>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_api_node_type_view(
+      List<APINodeTypeView>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

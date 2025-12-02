@@ -10,7 +10,7 @@ use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::common_api_types::APIResult;
-use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APIDataTypeBase};
+use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APINodeTypeView, APIDataTypeBase};
 use crate::structure_designer::nodes::string::StringData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::int::IntData;
@@ -341,11 +341,11 @@ pub fn connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_nod
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_node_type_names() -> Option<Vec<String>> {
+pub fn get_node_type_views() -> Option<Vec<APINodeTypeView>> {
   unsafe {
     with_cad_instance_or(
       |cad_instance| {
-        Some(cad_instance.structure_designer.node_type_registry.get_node_type_names())
+        Some(cad_instance.structure_designer.node_type_registry.get_node_type_views())
       },
       None
     )

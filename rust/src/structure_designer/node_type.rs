@@ -14,7 +14,8 @@ pub struct Parameter {
 // A built-in or user defined node type.
 #[derive(Clone)]
 pub struct NodeType {
-  pub name: String, // name of the node type
+  pub name: String,
+  pub description: String,
   pub parameters: Vec<Parameter>,
   pub output_type: DataType,
   pub public: bool, // whether this node type is available for users to add
