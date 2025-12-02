@@ -969,3 +969,9 @@ BOND INTERIOR4 ...FACE_Z
 BOND INTERIOR4 .+.FACE_Y
 BOND INTERIOR4 +..FACE_X
 ```
+
+## Headless Mode (CLI)
+
+atomCAD can run in headless mode for batch processing and automation workflows. The CLI supports both single-run and batch-mode evaluation of node networks with parameterized inputs, exporting results to `.mol` or `.xyz` files.
+
+For detailed usage instructions, see [CLI Usage Guide](./cli_usage.md).
