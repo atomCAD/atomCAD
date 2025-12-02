@@ -84,7 +84,7 @@ impl NodeData for LatticeMoveData {
         let lattice_subdivision = match network_evaluator.evaluate_or_default(
           network_stack, node_id, registry, context, 2, 
           self.lattice_subdivision, 
-          NetworkResult::extract_i32
+          NetworkResult::extract_int
         ) {
           Ok(value) => value.max(1), // Ensure minimum value of 1
           Err(error) => return error,

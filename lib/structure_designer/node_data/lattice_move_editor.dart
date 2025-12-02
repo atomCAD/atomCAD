@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
+import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Editor widget for lattice_move nodes
@@ -36,7 +37,7 @@ class _LatticeMoveEditorState extends State<LatticeMoveEditor> {
           Text('Lattice Move Properties',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 16),
-          
+
           // Translation input
           IVec3Input(
             label: 'Translation',
@@ -46,6 +47,24 @@ class _LatticeMoveEditorState extends State<LatticeMoveEditor> {
                 widget.nodeId,
                 APILatticeMoveData(
                   translation: newValue,
+                  latticeSubdivision: widget.data!.latticeSubdivision,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Subdivision input
+          IntInput(
+            label: 'Subdivision',
+            value: widget.data!.latticeSubdivision,
+            minimumValue: 1,
+            onChanged: (newValue) {
+              widget.model.setLatticeMoveData(
+                widget.nodeId,
+                APILatticeMoveData(
+                  translation: widget.data!.translation,
+                  latticeSubdivision: newValue,
                 ),
               );
             },
