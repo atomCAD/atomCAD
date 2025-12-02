@@ -537,20 +537,23 @@ class APIIntData {
 
 class APILatticeMoveData {
   final APIIVec3 translation;
+  final int latticeSubdivision;
 
   const APILatticeMoveData({
     required this.translation,
+    required this.latticeSubdivision,
   });
 
   @override
-  int get hashCode => translation.hashCode;
+  int get hashCode => translation.hashCode ^ latticeSubdivision.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APILatticeMoveData &&
           runtimeType == other.runtimeType &&
-          translation == other.translation;
+          translation == other.translation &&
+          latticeSubdivision == other.latticeSubdivision;
 }
 
 class APILatticeRotData {

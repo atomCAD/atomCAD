@@ -1039,6 +1039,7 @@ pub fn get_lattice_move_data(node_id: u64) -> Option<APILatticeMoveData> {
         
         Some(APILatticeMoveData {
           translation: to_api_ivec3(&lattice_move_data.translation),
+          lattice_subdivision: lattice_move_data.lattice_subdivision,
         })
       },
       None
@@ -1570,6 +1571,7 @@ pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
     with_mut_cad_instance(|cad_instance| {
       let lattice_move_data = Box::new(LatticeMoveData {
         translation: from_api_ivec3(&data.translation),
+        lattice_subdivision: data.lattice_subdivision,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, lattice_move_data);
       refresh_structure_designer_auto(cad_instance);

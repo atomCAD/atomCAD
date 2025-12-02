@@ -4910,10 +4910,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APILatticeMoveData dco_decode_api_lattice_move_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APILatticeMoveData(
       translation: dco_decode_apii_vec_3(arr[0]),
+      latticeSubdivision: dco_decode_i_32(arr[1]),
     );
   }
 
@@ -6532,7 +6533,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_translation = sse_decode_apii_vec_3(deserializer);
-    return APILatticeMoveData(translation: var_translation);
+    var var_latticeSubdivision = sse_decode_i_32(deserializer);
+    return APILatticeMoveData(
+        translation: var_translation,
+        latticeSubdivision: var_latticeSubdivision);
   }
 
   @protected
@@ -8395,6 +8399,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APILatticeMoveData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_3(self.translation, serializer);
+    sse_encode_i_32(self.latticeSubdivision, serializer);
   }
 
   @protected

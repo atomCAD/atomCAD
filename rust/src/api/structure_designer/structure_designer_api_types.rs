@@ -186,6 +186,7 @@ pub struct InputPinView {
 
   pub struct APILatticeMoveData {
     pub translation: APIIVec3,
+    pub lattice_subdivision: i32,
   }
 
   pub struct APILatticeRotData {

@@ -808,11 +808,16 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
             name: "translation".to_string(),
             data_type: DataType::IVec3,
           },
+          Parameter {
+            name: "subdivision".to_string(),
+            data_type: DataType::Int,
+          },
       ],
       output_type: DataType::Geometry,
       public: true,
       node_data_creator: || Box::new(LatticeMoveData {
         translation: IVec3::new(0, 0, 0),
+        lattice_subdivision: 1,
       }),
       node_data_saver: generic_node_data_saver::<LatticeMoveData>,
       node_data_loader: generic_node_data_loader::<LatticeMoveData>,

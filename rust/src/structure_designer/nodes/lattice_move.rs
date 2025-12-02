@@ -33,6 +33,12 @@ pub struct LatticeMoveEvalCache {
 pub struct LatticeMoveData {
   #[serde(with = "ivec3_serializer")]
   pub translation: IVec3,
+  #[serde(default = "default_lattice_subdivision")]
+  pub lattice_subdivision: i32,
+}
+
+fn default_lattice_subdivision() -> i32 {
+  1
 }
 
 impl NodeData for LatticeMoveData {
@@ -75,7 +81,17 @@ impl NodeData for LatticeMoveData {
           Err(error) => return error,
         };
 
-        let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
+        let lattice_subdivision = match network_evaluator.evaluate_or_default(
+          network_stack, node_id, registry, context, 2, 
+          self.lattice_subdivision, 
+          NetworkResult::extract_i32
+        ) {
+          Ok(value) => value.max(1), // Ensure minimum value of 1
+          Err(error) => return error,
+        };
+
+        let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
+        let real_translation = shape.unit_cell.dvec3_lattice_to_real(&subdivided_translation);
 
         // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
         // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
@@ -99,12 +115,15 @@ impl NodeData for LatticeMoveData {
 
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         let show_translation = !connected_input_pins.contains("translation");
+        let show_subdivision = !connected_input_pins.contains("subdivision") && self.lattice_subdivision != 1;
 
-        if show_translation {
-            Some(format!("t: ({},{},{})", 
-                self.translation.x, self.translation.y, self.translation.z))
-        } else {
-          None
+        match (show_translation, show_subdivision) {
+            (true, true) => Some(format!("t: ({},{},{}), sub: {}", 
+                self.translation.x, self.translation.y, self.translation.z, self.lattice_subdivision)),
+            (true, false) => Some(format!("t: ({},{},{})", 
+                self.translation.x, self.translation.y, self.translation.z)),
+            (false, true) => Some(format!("sub: {}", self.lattice_subdivision)),
+            (false, false) => None,
         }
     }
 

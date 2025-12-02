@@ -4604,8 +4604,10 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_translation =
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_latticeSubdivision = <i32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APILatticeMoveData {
             translation: var_translation,
+            lattice_subdivision: var_latticeSubdivision,
         };
     }
 }
@@ -6921,7 +6923,11 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APILatticeMoveData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.translation.into_into_dart().into_dart()].into_dart()
+        [
+            self.translation.into_into_dart().into_dart(),
+            self.lattice_subdivision.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -8309,6 +8315,7 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.translation, serializer);
+        <i32>::sse_encode(self.lattice_subdivision, serializer);
     }
 }
 
