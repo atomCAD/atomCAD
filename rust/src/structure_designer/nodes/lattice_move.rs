@@ -33,6 +33,12 @@ pub struct LatticeMoveEvalCache {
 pub struct LatticeMoveData {
   #[serde(with = "ivec3_serializer")]
   pub translation: IVec3,
+  #[serde(default = "default_lattice_subdivision")]
+  pub lattice_subdivision: i32,
+}
+
+fn default_lattice_subdivision() -> i32 {
+  1
 }
 
 impl NodeData for LatticeMoveData {
@@ -41,6 +47,7 @@ impl NodeData for LatticeMoveData {
         let lattice_move_cache = eval_cache.downcast_ref::<LatticeMoveEvalCache>()?;   
         let gadget = LatticeMoveGadget::new(
             self.translation,
+            self.lattice_subdivision,
              &lattice_move_cache.unit_cell,
         );
         Some(Box::new(gadget))
@@ -75,7 +82,17 @@ impl NodeData for LatticeMoveData {
           Err(error) => return error,
         };
 
-        let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
+        let lattice_subdivision = match network_evaluator.evaluate_or_default(
+          network_stack, node_id, registry, context, 2, 
+          self.lattice_subdivision, 
+          NetworkResult::extract_int
+        ) {
+          Ok(value) => value.max(1), // Ensure minimum value of 1
+          Err(error) => return error,
+        };
+
+        let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
+        let real_translation = shape.unit_cell.dvec3_lattice_to_real(&subdivided_translation);
 
         // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
         // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
@@ -99,12 +116,15 @@ impl NodeData for LatticeMoveData {
 
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         let show_translation = !connected_input_pins.contains("translation");
+        let show_subdivision = !connected_input_pins.contains("subdivision") && self.lattice_subdivision != 1;
 
-        if show_translation {
-            Some(format!("t: ({},{},{})", 
-                self.translation.x, self.translation.y, self.translation.z))
-        } else {
-          None
+        match (show_translation, show_subdivision) {
+            (true, true) => Some(format!("t: ({},{},{}), sub: {}", 
+                self.translation.x, self.translation.y, self.translation.z, self.lattice_subdivision)),
+            (true, false) => Some(format!("t: ({},{},{})", 
+                self.translation.x, self.translation.y, self.translation.z)),
+            (false, true) => Some(format!("sub: {}", self.lattice_subdivision)),
+            (false, false) => None,
         }
     }
 
@@ -117,6 +137,7 @@ impl NodeData for LatticeMoveData {
 #[derive(Clone)]
 pub struct LatticeMoveGadget {
     pub translation: IVec3,
+    pub lattice_subdivision: i32,
     pub dragged_handle_index: Option<i32>,
     pub start_drag_offset: f64,
     pub start_drag_translation: IVec3,
@@ -129,7 +150,7 @@ impl Tessellatable for LatticeMoveGadget {
       output_mesh,
       &self.unit_cell,
       DQuat::IDENTITY,
-      &self.unit_cell.ivec3_lattice_to_real(&self.translation),
+      &self.get_real_position(),
       false
     );
   }
@@ -144,7 +165,7 @@ impl Gadget for LatticeMoveGadget {
       xyz_gadget_utils::xyz_gadget_hit_test(
           &self.unit_cell,
           DQuat::IDENTITY,
-          &self.unit_cell.ivec3_lattice_to_real(&self.translation),
+          &self.get_real_position(),
           &ray_origin,
           &ray_direction,
           false
@@ -156,7 +177,7 @@ impl Gadget for LatticeMoveGadget {
     self.start_drag_offset = xyz_gadget_utils::get_dragged_axis_offset(
         &self.unit_cell,
         DQuat::IDENTITY,
-        &self.unit_cell.ivec3_lattice_to_real(&self.translation),
+        &self.get_real_position(),
         handle_index,
         &ray_origin,
         &ray_direction
@@ -168,7 +189,7 @@ impl Gadget for LatticeMoveGadget {
     let current_offset = xyz_gadget_utils::get_dragged_axis_offset(
         &self.unit_cell,
         DQuat::IDENTITY,
-        &self.unit_cell.ivec3_lattice_to_real(&self.translation),
+        &self.get_real_position(),
         handle_index,
         &ray_origin,
         &ray_direction
@@ -197,9 +218,10 @@ impl NodeNetworkGadget for LatticeMoveGadget {
 }
 
 impl LatticeMoveGadget {
-  pub fn new(translation: IVec3, unit_cell: &UnitCellStruct) -> Self {
+  pub fn new(translation: IVec3, lattice_subdivision: i32, unit_cell: &UnitCellStruct) -> Self {
       let ret = Self {
           translation,
+          lattice_subdivision,
           dragged_handle_index: None,
           start_drag_offset: 0.0,
           start_drag_translation: translation,
@@ -208,10 +230,17 @@ impl LatticeMoveGadget {
       return ret;
   }
 
+  // Helper method to get the real space position accounting for subdivision
+  fn get_real_position(&self) -> DVec3 {
+    let subdivided_pos = self.translation.as_dvec3() / self.lattice_subdivision as f64;
+    self.unit_cell.dvec3_lattice_to_real(&subdivided_pos)
+  }
+
   // Returns whether the application of the drag offset was successful and the drag start should be reset
   fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
     let axis_basis_vector = self.unit_cell.get_basis_vector(axis_index);
-    let rounded_delta = (offset_delta / axis_basis_vector.length()).round();
+    // Multiply by subdivision to allow fractional lattice steps
+    let rounded_delta = (offset_delta / axis_basis_vector.length() * self.lattice_subdivision as f64).round();
 
     // Early return if no movement
     if rounded_delta == 0.0 {

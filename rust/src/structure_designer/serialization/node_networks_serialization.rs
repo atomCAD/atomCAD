@@ -27,6 +27,8 @@ pub struct SerializableParameter {
 #[derive(Serialize, Deserialize)]
 pub struct SerializableNodeType {
     pub name: String,
+    #[serde(default)]
+    pub description: String,
     pub parameters: Vec<SerializableParameter>,
     pub output_type: String,
 }
@@ -73,6 +75,7 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
     
     SerializableNodeType {
         name: node_type.name.clone(),
+        description: node_type.description.clone(),
         parameters: serializable_parameters,
         output_type: node_type.output_type.to_string(),
     }
@@ -105,6 +108,7 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
     // Create the NodeType with a default node_data_creator
     Ok(NodeType {
         name: serializable.name.clone(),
+        description: serializable.description.clone(),
         parameters,
         output_type,
         node_data_creator: || Box::new(NoData {}), // Default, will be replaced with actual data

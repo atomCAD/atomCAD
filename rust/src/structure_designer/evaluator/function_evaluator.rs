@@ -40,6 +40,7 @@ impl FunctionEvaluator {
     let mut ret = Self {
       node_network: NodeNetwork::new(NodeType {
         name: "_tmp_".to_string(),
+        description: "".to_string(),
         parameters: Vec::new(),
         output_type: DataType::None,
         node_data_creator: || Box::new(NoData {}),

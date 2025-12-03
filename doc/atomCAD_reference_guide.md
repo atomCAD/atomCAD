@@ -463,7 +463,7 @@ Creates an array of integers starting from an integer value and having a specifi
 
 #### map
 
-Takes an array of values (`xs`) applies the supplied `f` function on all of them and produces an array of the output values.
+Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.
 
 ![](./atomCAD_images/map_node_props_viewport.png)
 

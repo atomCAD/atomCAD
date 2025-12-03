@@ -20,6 +20,7 @@ use super::nodes::motif::{MotifData, motif_data_loader};
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
+use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::structure_designer::node_network::Node;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::facet_shell::FacetShellData;
@@ -76,6 +77,8 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "parameter".to_string(),
+      description: "To set up an input pin (parameter) of your custom node you need to use a parameter node in your subnetwork.
+The sort order property of a parameter determines the order of the parameters in the resulting custom node.".to_string(),
       parameters: vec![
           Parameter {
               name: "default".to_string(),
@@ -98,6 +101,10 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "expr".to_string(),
+      description: "You can type in a mathematical expression and it will be evaluated on its output pin.
+The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
+
+The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions. See the atomCAD reference guide for more details.".to_string(),
       parameters: vec![],
       output_type: DataType::None, // will change based on the expression
       public: true,
@@ -120,6 +127,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "value".to_string(),
+      description: "".to_string(),
       parameters: vec![],
       output_type: DataType::None,
       public: false,
@@ -132,6 +140,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "map".to_string(),
+      description: "Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.".to_string(),
       parameters: vec![
         Parameter {
           name: "xs".to_string(),
@@ -157,6 +166,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "string".to_string(),
+      description: "Outputs a string value.".to_string(),
       parameters: vec![],
       output_type: DataType::String,
       public: true,
@@ -169,6 +179,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "bool".to_string(),
+      description: "Outputs a bool value.".to_string(),
       parameters: vec![],
       output_type: DataType::Bool,
       public: true,
@@ -181,6 +192,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "int".to_string(),
+      description: "Outputs an integer value.".to_string(),
       parameters: vec![],
       output_type: DataType::Int,
       public: true,
@@ -193,6 +205,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "float".to_string(),
+      description: "Outputs a float value.".to_string(),
       parameters: vec![],
       output_type: DataType::Float,
       public: true,
@@ -205,6 +218,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "ivec2".to_string(),
+      description: "Outputs an IVec2 value.".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -226,6 +240,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "ivec3".to_string(),
+      description: "Outputs an IVec3 value.".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -251,6 +266,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "vec2".to_string(),
+      description: "Outputs an Vec2 value.".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -272,6 +288,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "vec3".to_string(),
+      description: "Outputs an Vec3 value.".to_string(),
       parameters: vec![
         Parameter {
             name: "x".to_string(),
@@ -297,6 +314,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "range".to_string(),
+      description: "Creates an array of integers starting from an integer value and having a specified step between them. The number of integers in the array can also be specified (count).".to_string(),
       parameters: vec![
         Parameter {
             name: "start".to_string(),
@@ -324,6 +342,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "unit_cell".to_string(),
+      description: "Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.".to_string(),
       parameters: vec![
         Parameter {
             name: "a".to_string(),
@@ -354,6 +373,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "rect".to_string(),
+      description: "Outputs a rectangle with integer minimum corner coordinates and integer width and height.".to_string(),
       parameters: vec![
         Parameter {
             name: "min_corner".to_string(),
@@ -380,6 +400,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "circle".to_string(),
+      description: "Outputs a circle with integer center coordinates and integer radius.".to_string(),
       parameters: vec![
         Parameter {
             name: "center".to_string(),
@@ -406,6 +427,8 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "reg_poly".to_string(),
+      description: "Outputs a regular polygon with integer radius. The number of sides is a property too.
+Now that we have general polygon node this node is less used.".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -424,6 +447,10 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "polygon".to_string(),
+      description: "Outputs a general polygon with integer coordinate vertices. Both convex and concave polygons can be created with this node.
+The vertices can be freely dragged.
+You can create a new vertex by dragging an edge.
+Delete a vertex by dragging it onto one of its neighbour.".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -445,6 +472,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "union_2d".to_string(),
+      description: "Computes the Boolean union of any number of 2D geometries. The `shapes` input accepts an array of `Geometry2D` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -460,6 +488,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "intersect_2d".to_string(),
+      description: "Computes the Boolean intersection of any number of 2D geometries. The `shapes` input pin accepts an array of `Geometry2D` values.".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -475,6 +504,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "diff_2d".to_string(),
+      description: "Computes the Boolean difference of two 2D geometries.".to_string(),
       parameters: vec![
           Parameter {
               name: "base".to_string(),
@@ -494,6 +524,9 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "half_plane".to_string(),
+      description: "Outputs a half plane.
+You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
+Both vertices are displayed as a triangle-based prism. The direction of the half plane is indicated by the direction of the triangle.".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -512,6 +545,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "extrude".to_string(),
+      description: "Extrudes a 2D geometry to a 3D geometry.".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -537,6 +571,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "cuboid".to_string(),
+      description: "Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. If the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped.".to_string(),
       parameters: vec![
         Parameter {
             name: "min_corner".to_string(),
@@ -563,6 +598,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "sphere".to_string(),
+      description: "Outputs a sphere with integer center coordinates and integer radius.".to_string(),
       parameters: vec![
         Parameter {
             name: "center".to_string(),
@@ -589,6 +625,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "half_space".to_string(),
+      description: "Outputs a half-space (the region on one side of an infinite plane).".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -606,6 +643,10 @@ impl NodeTypeRegistry {
           name: "shift".to_string(),
           data_type: DataType::Int,
         },
+        Parameter {
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
       ],
       output_type: DataType::Geometry,
       public: true,
@@ -614,6 +655,7 @@ impl NodeTypeRegistry {
         miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis
         center: IVec3::new(0, 0, 0),
         shift: 0,
+        subdivision: 1,
       }),
       node_data_saver: generic_node_data_saver::<HalfSpaceData>,
       node_data_loader: generic_node_data_loader::<HalfSpaceData>,
@@ -621,6 +663,8 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "facet_shell".to_string(),
+      description: "Builds a finite polyhedral shell by clipping an infinite lattice with a user‑supplied set of half‑spaces.
+See the atomCAD reference guide for more details.".to_string(),
       parameters: vec![
         Parameter {
           name: "unit_cell".to_string(),
@@ -640,6 +684,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "union".to_string(),
+      description: "Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -655,6 +700,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "intersect".to_string(),
+      description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values. Use this to cut geometries with a half-space.".to_string(),
       parameters: vec![
           Parameter {
               name: "shapes".to_string(),
@@ -670,6 +716,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "diff".to_string(),
+      description: "Computes the Boolean difference of two 3D geometries.".to_string(),
       parameters: vec![
           Parameter {
               name: "base".to_string(),
@@ -689,6 +736,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "geo_trans".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -716,6 +764,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "lattice_symop".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -752,6 +801,9 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "lattice_move".to_string(),
+      description: "Moves the geometry in the discrete lattice space with a relative vector.
+Continuous transformation in the lattice space is not allowed (for continuous transformations use the `atom_trans` node which is only available for atomic structures).
+You can directly enter the translation vector or drag the axes of the gadget.".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -761,11 +813,16 @@ impl NodeTypeRegistry {
             name: "translation".to_string(),
             data_type: DataType::IVec3,
           },
+          Parameter {
+            name: "subdivision".to_string(),
+            data_type: DataType::Int,
+          },
       ],
       output_type: DataType::Geometry,
       public: true,
       node_data_creator: || Box::new(LatticeMoveData {
         translation: IVec3::new(0, 0, 0),
+        lattice_subdivision: 1,
       }),
       node_data_saver: generic_node_data_saver::<LatticeMoveData>,
       node_data_loader: generic_node_data_loader::<LatticeMoveData>,
@@ -773,6 +830,9 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "lattice_rot".to_string(),
+      description: "Rotates geometry in lattice space.
+Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
+You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -804,6 +864,10 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "motif".to_string(),
+      description: "The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.
+The motif is defined textually using atomCAD's motif definition language.
+The features of the language are basically parameterized fractional atom sites, explicit & periodic bond definitions.
+See the atomCAD reference guide for details on the motif definition language.".to_string(),
       parameters: vec![],
       output_type: DataType::Motif,
       public: true,
@@ -819,6 +883,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "atom_fill".to_string(),
+      description: "Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its `shape` input.".to_string(),
       parameters: vec![
           Parameter {
               name: "shape".to_string(),
@@ -862,6 +927,8 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "edit_atom".to_string(),
+      description: "Note: The `edit_atom` node will be more usable when we will support atomic structure relaxations.
+This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom_nodes at their will.".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -888,6 +955,8 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "atom_trans".to_string(),
+      description: "The atom_trans node transforms atomic structures. The transformation happens not in integer lattice space but in continuous space (real-space) where one unit is one angstrom.
+  By dragging the gadget axes you can move the structure. By dragging the thicker end of the gadget axes you can rotate the structure.  ".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -914,6 +983,8 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "import_xyz".to_string(),
+      description: "Imports an atomic structure from an xyz file.
+It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.".to_string(),
       parameters: vec![
         Parameter {
           name: "file_name".to_string(),
@@ -929,6 +1000,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "export_xyz".to_string(),
+      description: "Exports atomic structure on its `molecule` input into an XYZ file.".to_string(),
       parameters: vec![
         Parameter {
           name: "molecule".to_string(),
@@ -948,6 +1020,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "atom_cut".to_string(),
+      description: "Cuts an atomic structure using cutter geometries.".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -967,6 +1040,7 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(NodeType {
       name: "relax".to_string(),
+      description: "".to_string(),
       parameters: vec![
           Parameter {
               name: "molecule".to_string(),
@@ -983,23 +1057,29 @@ impl NodeTypeRegistry {
     return ret;
   }
 
-  /// Retrieves the names of all public node types available to users.
+  /// Retrieves views of all public node types available to users.
   /// Only built-in node types can be non-public; all node networks are considered public.
-  pub fn get_node_type_names(&self) -> Vec<String> {
-    let mut names: Vec<String> = self
+  pub fn get_node_type_views(&self) -> Vec<APINodeTypeView> {
+    let mut views: Vec<APINodeTypeView> = self
         .built_in_node_types
         .values()
         .filter(|node| node.public)
-        .map(|node| node.name.clone())
+        .map(|node| APINodeTypeView {
+          name: node.name.clone(),
+          description: node.description.clone(),
+        })
         .collect();
 
-    names.extend(
+    views.extend(
         self.node_networks
             .values()
-            .map(|network| network.node_type.name.clone()),
+            .map(|network| APINodeTypeView {
+              name: network.node_type.name.clone(),
+              description: network.node_type.description.clone(),
+            }),
     );
 
-    names
+    views
   }
 
   pub fn get_node_network_names(&self) -> Vec<String> {

@@ -473,12 +473,14 @@ class APIHalfSpaceData {
   final APIIVec3 millerIndex;
   final APIIVec3 center;
   final int shift;
+  final int subdivision;
 
   const APIHalfSpaceData({
     required this.maxMillerIndex,
     required this.millerIndex,
     required this.center,
     required this.shift,
+    required this.subdivision,
   });
 
   @override
@@ -486,7 +488,8 @@ class APIHalfSpaceData {
       maxMillerIndex.hashCode ^
       millerIndex.hashCode ^
       center.hashCode ^
-      shift.hashCode;
+      shift.hashCode ^
+      subdivision.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -496,7 +499,8 @@ class APIHalfSpaceData {
           maxMillerIndex == other.maxMillerIndex &&
           millerIndex == other.millerIndex &&
           center == other.center &&
-          shift == other.shift;
+          shift == other.shift &&
+          subdivision == other.subdivision;
 }
 
 class APIImportXYZData {
@@ -537,20 +541,23 @@ class APIIntData {
 
 class APILatticeMoveData {
   final APIIVec3 translation;
+  final int latticeSubdivision;
 
   const APILatticeMoveData({
     required this.translation,
+    required this.latticeSubdivision,
   });
 
   @override
-  int get hashCode => translation.hashCode;
+  int get hashCode => translation.hashCode ^ latticeSubdivision.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APILatticeMoveData &&
           runtimeType == other.runtimeType &&
-          translation == other.translation;
+          translation == other.translation &&
+          latticeSubdivision == other.latticeSubdivision;
 }
 
 class APILatticeRotData {
@@ -691,6 +698,27 @@ class APINetworkWithValidationErrors {
           runtimeType == other.runtimeType &&
           name == other.name &&
           validationErrors == other.validationErrors;
+}
+
+class APINodeTypeView {
+  final String name;
+  final String description;
+
+  const APINodeTypeView({
+    required this.name,
+    required this.description,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ description.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeTypeView &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          description == other.description;
 }
 
 class APIParameterData {

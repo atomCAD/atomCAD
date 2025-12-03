@@ -54,6 +54,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   millerIndex: widget.data!.millerIndex,
                   center: widget.data!.center,
                   shift: widget.data!.shift,
+                  subdivision: widget.data!.subdivision,
                 ),
               );
             },
@@ -71,6 +72,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   millerIndex: newValue,
                   center: widget.data!.center,
                   shift: widget.data!.shift,
+                  subdivision: widget.data!.subdivision,
                 ),
               );
             },
@@ -103,6 +105,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   millerIndex: newValue,
                   center: widget.data!.center,
                   shift: widget.data!.shift,
+                  subdivision: widget.data!.subdivision,
                 ),
               );
             },
@@ -119,6 +122,7 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   millerIndex: widget.data!.millerIndex,
                   center: newValue,
                   shift: widget.data!.shift,
+                  subdivision: widget.data!.subdivision,
                 ),
               );
             },
@@ -135,6 +139,27 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
                   millerIndex: widget.data!.millerIndex,
                   center: widget.data!.center,
                   shift: newValue,
+                  subdivision: widget.data!.subdivision,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+
+          // Subdivision input
+          IntInput(
+            label: 'Subdivision',
+            value: widget.data!.subdivision,
+            minimumValue: 1,
+            onChanged: (newValue) {
+              widget.model.setHalfSpaceData(
+                widget.nodeId,
+                APIHalfSpaceData(
+                  maxMillerIndex: widget.data!.maxMillerIndex,
+                  millerIndex: widget.data!.millerIndex,
+                  center: widget.data!.center,
+                  shift: widget.data!.shift,
+                  subdivision: newValue,
                 ),
               );
             },

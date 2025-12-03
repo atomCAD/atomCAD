@@ -31,6 +31,12 @@ pub struct HalfSpaceData {
   #[serde(with = "ivec3_serializer")]
   pub center: IVec3,
   pub shift: i32,
+  #[serde(default = "default_subdivision")]
+  pub subdivision: i32,
+}
+
+fn default_subdivision() -> i32 {
+  1
 }
 
 impl NodeData for HalfSpaceData {
@@ -44,6 +50,7 @@ impl NodeData for HalfSpaceData {
         &self.miller_index,
         self.center,
         self.shift,
+        self.subdivision,
         &half_space_cache.unit_cell)));
     }
   
@@ -97,6 +104,15 @@ impl NodeData for HalfSpaceData {
         Err(error) => return error,
       };
 
+      let subdivision = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 4, 
+        self.subdivision,
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value.max(1), // Ensure minimum value of 1
+        Err(error) => return error,
+      };
+
       // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
       // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
       if network_stack.len() == 1 {
@@ -110,8 +126,9 @@ impl NodeData for HalfSpaceData {
       let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index);
       let center_pos = unit_cell.ivec3_lattice_to_real(&center);
 
-      // Calculate shift distance as multiples of d-spacing
-      let shift_distance = shift as f64 * plane_props.d_spacing;
+      // Calculate shift distance as multiples of d-spacing, divided by subdivision
+      // This allows fractional d-spacing shifts (e.g., shift=5, subdivision=2 → 2.5 d-spacings)
+      let shift_distance = (shift as f64 / subdivision as f64) * plane_props.d_spacing;
       let shifted_center = center_pos + plane_props.normal * shift_distance;
 
       return NetworkResult::Geometry(GeometrySummary {
@@ -132,8 +149,9 @@ impl NodeData for HalfSpaceData {
         let center_connected = connected_input_pins.contains("center");
         let m_index_connected = connected_input_pins.contains("m_index");
         let shift_connected = connected_input_pins.contains("shift");
+        let subdivision_connected = connected_input_pins.contains("subdivision");
         
-        if center_connected && m_index_connected && shift_connected {
+        if center_connected && m_index_connected && shift_connected && subdivision_connected {
             None
         } else {
             let mut parts = Vec::new();
@@ -150,6 +168,10 @@ impl NodeData for HalfSpaceData {
             
             if !shift_connected {
                 parts.push(format!("s: {}", self.shift));
+            }
+            
+            if !subdivision_connected && self.subdivision != 1 {
+                parts.push(format!("sub: {}", self.subdivision));
             }
             
             if parts.is_empty() {
@@ -173,6 +195,7 @@ pub struct HalfSpaceGadget {
     pub center: IVec3,
     pub dragged_shift: f64, // this is rounded into 'shift'
     pub shift: i32,
+    pub subdivision: i32,
     pub dragged_handle_index: Option<i32>,
     pub possible_miller_indices: HashSet<IVec3>,
     pub unit_cell: UnitCellStruct,
@@ -189,7 +212,8 @@ impl Tessellatable for HalfSpaceGadget {
             &self.center,
             &self.miller_index,
             self.dragged_shift,
-            &self.unit_cell);
+            &self.unit_cell,
+            self.subdivision);
         
         // If we are dragging any handle, show the plane grid for visual reference
         if self.dragged_handle_index.is_some() {
@@ -198,7 +222,8 @@ impl Tessellatable for HalfSpaceGadget {
                 &self.center,
                 &self.miller_index,
                 self.shift,
-                &self.unit_cell);
+                &self.unit_cell,
+                self.subdivision);
         }
 
         // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
@@ -240,7 +265,8 @@ impl Gadget for HalfSpaceGadget {
             &self.miller_index,
             self.shift as f64,
             &ray_origin,
-            &ray_direction
+            &ray_direction,
+            self.subdivision,
         ) {
             return Some(1); // Shift handle hit
         }
@@ -279,7 +305,8 @@ impl Gadget for HalfSpaceGadget {
                 &self.center,
                 &ray_origin,
                 &ray_direction, 
-                half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET
+                half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET,
+                self.subdivision,
             );
             self.shift = self.dragged_shift.round() as i32;
         }
@@ -307,13 +334,14 @@ impl NodeNetworkGadget for HalfSpaceGadget {
 
 impl HalfSpaceGadget {
 
-    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32, unit_cell: &UnitCellStruct) -> Self {        
+    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32, subdivision: i32, unit_cell: &UnitCellStruct) -> Self {        
         return Self {
             max_miller_index,
             miller_index: *miller_index,
             center,
             dragged_shift: shift as f64,
             shift,
+            subdivision,
             dragged_handle_index: None,
             possible_miller_indices: half_space_utils::generate_possible_miller_indices(max_miller_index),
             unit_cell: unit_cell.clone(),

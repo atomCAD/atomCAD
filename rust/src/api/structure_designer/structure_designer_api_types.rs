@@ -147,6 +147,7 @@ pub struct InputPinView {
     pub miller_index: APIIVec3,
     pub center: APIIVec3,
     pub shift: i32,
+    pub subdivision: i32,
   }
 
   pub struct APIFacet {
@@ -186,6 +187,7 @@ pub struct InputPinView {
 
   pub struct APILatticeMoveData {
     pub translation: APIIVec3,
+    pub lattice_subdivision: i32,
   }
 
   pub struct APILatticeRotData {
@@ -229,6 +231,11 @@ pub struct InputPinView {
   pub struct APINetworkWithValidationErrors {
     pub name: String,
     pub validation_errors: Option<String>,
+  }
+
+  pub struct APINodeTypeView {
+    pub name: String,
+    pub description: String,
   }
 
 pub struct APIExprParameter {

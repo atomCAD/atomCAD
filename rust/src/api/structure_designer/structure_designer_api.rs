@@ -10,7 +10,7 @@ use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::common_api_types::APIResult;
-use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APIDataTypeBase};
+use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APINodeTypeView, APIDataTypeBase};
 use crate::structure_designer::nodes::string::StringData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::int::IntData;
@@ -341,11 +341,11 @@ pub fn connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_nod
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_node_type_names() -> Option<Vec<String>> {
+pub fn get_node_type_views() -> Option<Vec<APINodeTypeView>> {
   unsafe {
     with_cad_instance_or(
       |cad_instance| {
-        Some(cad_instance.structure_designer.node_type_registry.get_node_type_names())
+        Some(cad_instance.structure_designer.node_type_registry.get_node_type_views())
       },
       None
     )
@@ -929,6 +929,7 @@ pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
           miller_index: to_api_ivec3(&half_space_data.miller_index),
           center: to_api_ivec3(&half_space_data.center),
           shift: half_space_data.shift,
+          subdivision: half_space_data.subdivision,
         })
       },
       None
@@ -1039,6 +1040,7 @@ pub fn get_lattice_move_data(node_id: u64) -> Option<APILatticeMoveData> {
         
         Some(APILatticeMoveData {
           translation: to_api_ivec3(&lattice_move_data.translation),
+          lattice_subdivision: lattice_move_data.lattice_subdivision,
         })
       },
       None
@@ -1526,6 +1528,7 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
         miller_index: from_api_ivec3(&data.miller_index),
         center: from_api_ivec3(&data.center),
         shift: data.shift,
+        subdivision: data.subdivision,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, half_space_data);
       refresh_structure_designer_auto(cad_instance);
@@ -1570,6 +1573,7 @@ pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
     with_mut_cad_instance(|cad_instance| {
       let lattice_move_data = Box::new(LatticeMoveData {
         translation: from_api_ivec3(&data.translation),
+        lattice_subdivision: data.lattice_subdivision,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, lattice_move_data);
       refresh_structure_designer_auto(cad_instance);
