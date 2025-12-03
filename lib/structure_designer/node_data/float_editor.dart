@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for float nodes
 class FloatEditor extends StatefulWidget {
@@ -34,8 +35,10 @@ class FloatEditorState extends State<FloatEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Float Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Float Properties',
+            nodeTypeName: 'float',
+          ),
           const SizedBox(height: 8),
           FloatInput(
             label: 'Value',

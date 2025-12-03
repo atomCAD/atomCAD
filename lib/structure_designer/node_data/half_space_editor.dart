@@ -5,6 +5,7 @@ import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/miller_index_map.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for half_space nodes
 class HalfSpaceEditor extends StatefulWidget {
@@ -37,8 +38,10 @@ class HalfSpaceEditorState extends State<HalfSpaceEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Half Space Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Half Space Properties',
+            nodeTypeName: 'half_space',
+          ),
           const SizedBox(height: 8),
           // Max Miller Index input
           IntInput(

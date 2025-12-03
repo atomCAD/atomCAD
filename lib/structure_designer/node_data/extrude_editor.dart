@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for extrude nodes
 class ExtrudeEditor extends StatefulWidget {
@@ -34,8 +35,10 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Extrude Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Extrude Properties',
+            nodeTypeName: 'extrude',
+          ),
           const SizedBox(height: 8),
           IntInput(
             label: 'Height',

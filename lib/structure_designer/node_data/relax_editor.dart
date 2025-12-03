@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart';
 
 /// Editor widget for relax nodes - displays energy minimization results
@@ -24,7 +25,7 @@ class _RelaxEditorState extends State<RelaxEditor> {
   void initState() {
     super.initState();
     _updateRelaxMessage();
-    
+
     // Listen to model changes to update the message
     widget.model.addListener(_updateRelaxMessage);
   }
@@ -51,8 +52,10 @@ class _RelaxEditorState extends State<RelaxEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Energy Minimization',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Energy Minimization',
+            nodeTypeName: 'relax',
+          ),
           const SizedBox(height: 16),
           Card(
             elevation: 1,
@@ -72,12 +75,12 @@ class _RelaxEditorState extends State<RelaxEditor> {
                       borderRadius: BorderRadius.circular(4.0),
                     ),
                     child: Text(
-                      _relaxMessage.isEmpty 
+                      _relaxMessage.isEmpty
                           ? 'No energy minimization result available'
                           : _relaxMessage,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontFamily: 'monospace',
-                      ),
+                            fontFamily: 'monospace',
+                          ),
                     ),
                   ),
                 ],

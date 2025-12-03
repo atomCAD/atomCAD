@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/crystal_system_display.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
@@ -96,8 +97,10 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Lattice Rotation Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Lattice Rotation Properties',
+            nodeTypeName: 'lattice_rot',
+          ),
           const SizedBox(height: 16),
           
           // Crystal system display

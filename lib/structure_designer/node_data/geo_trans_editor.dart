@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for geo_trans nodes
 class GeoTransEditor extends StatefulWidget {
@@ -34,8 +35,10 @@ class GeoTransEditorState extends State<GeoTransEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Geo Transformation Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Geo Transformation Properties',
+            nodeTypeName: 'geo_trans',
+          ),
           const SizedBox(height: 8),
           IVec3Input(
             label: 'Translation',

@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/inputs/ivec2_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for circle nodes
 class CircleEditor extends StatefulWidget {
@@ -33,8 +34,10 @@ class CircleEditorState extends State<CircleEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Circle Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Circle Properties',
+            nodeTypeName: 'circle',
+          ),
           const SizedBox(height: 8),
           IVec2Input(
             label: 'Center',

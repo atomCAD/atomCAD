@@ -55,6 +55,22 @@ List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
 
+/// Gets the description of the active node network
+String? getActiveNetworkDescription() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetActiveNetworkDescription();
+
+/// Sets the description of the active node network
+void setActiveNetworkDescription({required String description}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiSetActiveNetworkDescription(
+        description: description);
+
+/// Gets the description of a specific node network
+String? getNetworkDescription({required String networkName}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetNetworkDescription(
+        networkName: networkName);
+
 List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworksWithValidation();

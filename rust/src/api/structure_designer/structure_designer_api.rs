@@ -364,6 +364,47 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
   }
 }
 
+/// Gets the description of the active node network
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_active_network_description() -> Option<String> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.get_active_network_description()
+      },
+      None
+    )
+  }
+}
+
+/// Sets the description of the active node network
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_network_description(description: String) -> Result<(), String> {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.set_active_network_description(description)
+      },
+      Err("CAD instance not available".to_string())
+    )
+  }
+}
+
+/// Gets the description of a specific node network
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_network_description(network_name: String) -> Option<String> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer
+          .get_network_description(&network_name)
+          .map(|(_name, description)| description)
+      },
+      None
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_networks_with_validation() -> Option<Vec<APINetworkWithValidationErrors>> {
   unsafe {

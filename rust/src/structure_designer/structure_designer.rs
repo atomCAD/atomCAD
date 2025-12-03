@@ -832,6 +832,41 @@ impl StructureDesigner {
     self.node_type_registry.node_networks.get(network_name)
   }
 
+  /// Gets the description of the active node network
+  pub fn get_active_network_description(&self) -> Option<String> {
+    let network = self.get_active_node_network()?;
+    Some(network.node_type.description.clone())
+  }
+
+  /// Sets the description of the active node network
+  pub fn set_active_network_description(&mut self, description: String) -> Result<(), String> {
+    let network_name = self.active_node_network_name.as_ref()
+      .ok_or("No active node network")?;
+    
+    let network = self.node_type_registry.node_networks.get_mut(network_name)
+      .ok_or("Active network not found")?;
+    
+    network.node_type.description = description;
+    self.set_dirty(true);
+    Ok(())
+  }
+
+  /// Gets the name and description of a specific node type (built-in or custom network)
+  /// Returns (name, description) tuple
+  pub fn get_network_description(&self, network_name: &str) -> Option<(String, String)> {
+    // First check built-in node types
+    if let Some(node_type) = self.node_type_registry.built_in_node_types.get(network_name) {
+      return Some((node_type.name.clone(), node_type.description.clone()));
+    }
+    
+    // Then check custom node networks
+    if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+      return Some((network.node_type.name.clone(), network.node_type.description.clone()));
+    }
+    
+    None
+  }
+
   // Sets the active node network name
   pub fn set_active_node_network_name(&mut self, node_network_name: Option<String>) {
     self.active_node_network_name = node_network_name;

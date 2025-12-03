@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for cuboid nodes
 class CuboidEditor extends StatefulWidget {
@@ -35,8 +36,10 @@ class CuboidEditorState extends State<CuboidEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Cuboid Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Cuboid Properties',
+            nodeTypeName: 'cuboid',
+          ),
           const SizedBox(height: 8),
           IVec3Input(
             label: 'Min Corner',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
 import 'package:flutter_cad/common/select_element_widget.dart';
 import 'package:flutter_cad/common/transform_control_widget.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
@@ -61,12 +62,18 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with title and undo/redo buttons
+          // Header with title, info button, and undo/redo buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Edit Atom Tools',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Row(
+                children: [
+                  Text('Edit Atom Tools',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(width: 8),
+                  const NodeDescriptionButton(nodeTypeName: 'edit_atom'),
+                ],
+              ),
               // Undo/Redo buttons
               Row(
                 children: [

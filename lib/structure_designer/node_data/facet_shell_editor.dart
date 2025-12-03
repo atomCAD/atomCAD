@@ -5,6 +5,7 @@ import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/table_column_header.dart';
 import 'package:provider/provider.dart';
 
@@ -59,8 +60,10 @@ class FacetShellEditorState extends State<FacetShellEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Facet Shell Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Facet Shell Properties',
+            nodeTypeName: 'facet_shell',
+          ),
           const SizedBox(height: 8),
           // Max Miller Index input
           IntInput(

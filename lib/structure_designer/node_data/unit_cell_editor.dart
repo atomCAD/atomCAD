@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/crystal_system_display.dart';
 
 /// Editor widget for unit_cell nodes
@@ -44,8 +45,10 @@ class UnitCellEditorState extends State<UnitCellEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unit Cell Properties',
-                style: Theme.of(context).textTheme.titleMedium),
+            const NodeEditorHeader(
+            title: 'Unit Cell Properties',
+            nodeTypeName: 'unit_cell',
+          ),
             const SizedBox(height: 8),
 
 
