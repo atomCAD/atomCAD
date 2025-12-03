@@ -58,14 +58,16 @@ pub fn calculate_half_space_geometry(
     center: &IVec3,
     miller_index: &IVec3,
     shift: f64,
+    subdivision: i32,
 ) -> HalfSpaceGeometry {
     let center_pos = unit_cell.ivec3_lattice_to_real(center);
     
     // Get crystallographically correct plane properties (normal and d-spacing)
     let plane_props = unit_cell.ivec3_miller_index_to_plane_props(miller_index);
     
-    // Calculate shift distance as multiples of d-spacing
-    let shift_distance = shift * plane_props.d_spacing;
+    // Calculate shift distance as multiples of d-spacing, divided by subdivision
+    // When subdivision=1, this is identical to the original: (shift / 1) * d_spacing = shift * d_spacing
+    let shift_distance = (shift / subdivision as f64) * plane_props.d_spacing;
     let shifted_center = center_pos + plane_props.normal * shift_distance;
     let handle_position = shifted_center + plane_props.normal * SHIFT_HANDLE_ACCESSIBILITY_OFFSET;
 
@@ -80,7 +82,8 @@ pub fn calculate_half_space_geometry(
 // Calculate the continuous shift value of a half space based on its centerm miller index and
 // a mouse ray. The handle offset is the distance from the plane center to the handle.
 // Useful dragging a half plane shift handle.
-pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, center: &IVec3, ray_origin: &DVec3, ray_direction: &DVec3, handle_offset: f64) -> f64 {
+// Returns shift in integer units (before division by subdivision)
+pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, center: &IVec3, ray_origin: &DVec3, ray_direction: &DVec3, handle_offset: f64, subdivision: i32) -> f64 {
     let center_pos = unit_cell.ivec3_lattice_to_real(center);
     
     // Get crystallographically correct plane properties (normal and d-spacing)
@@ -97,7 +100,9 @@ pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, cente
     let real_space_distance = distance_along_normal - handle_offset;
 
     // Convert the real space distance to shift units (multiples of d-spacing)
-    return real_space_distance / plane_props.d_spacing;
+    // Then multiply by subdivision to get the integer shift value
+    // When subdivision=1, this is identical to the original: (distance / d_spacing) * 1 = distance / d_spacing
+    return (real_space_distance / plane_props.d_spacing) * subdivision as f64;
 }
 
 pub fn tessellate_center_sphere(output_mesh: &mut Mesh, center_pos: &DVec3) {
@@ -115,8 +120,9 @@ pub fn tessellate_shift_drag_handle(
     center: &IVec3,
     miller_index: &IVec3,
     dragged_shift: f64,
-    unit_cell: &UnitCellStruct) {
-    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, dragged_shift);
+    unit_cell: &UnitCellStruct,
+    subdivision: i32) {
+    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, dragged_shift, subdivision);
 
     // Define materials
     let axis_material = Material::new(&Vec3::new(0.7, 0.7, 0.7), 1.0, 0.0); // Neutral gray
@@ -159,8 +165,9 @@ pub fn tessellate_plane_grid(
     miller_index: &IVec3,
     shift: i32,
     unit_cell: &UnitCellStruct,
+    subdivision: i32,
 ) {
-    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, shift as f64);
+    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, shift as f64, subdivision);
     let plane_rotator = DQuat::from_rotation_arc(DVec3::Y, geometry.plane_normal);
 
     let roughness: f32 = 1.0;
@@ -309,9 +316,10 @@ pub fn hit_test_shift_handle(
     miller_index: &IVec3,
     shift: f64,
     ray_origin: &DVec3,
-    ray_direction: &DVec3
+    ray_direction: &DVec3,
+    subdivision: i32,
 ) -> Option<f64> {
-    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, shift);
+    let geometry = calculate_half_space_geometry(unit_cell, center, miller_index, shift, subdivision);
     
     // Calculate handle cylinder start and end points
     let handle_start = geometry.handle_position - geometry.plane_normal * (SHIFT_HANDLE_CYLINDER_LENGTH / 2.0);

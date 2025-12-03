@@ -575,7 +575,8 @@ impl Tessellatable for FacetShellGadget {
                   &self.center,
                   miller_index,
                   self.dragged_shift,
-                  &self.unit_cell);
+                  &self.unit_cell,
+                  1); // subdivision=1 for facet_shell (no subdivision support)
           }
       } else {
           // Log error and skip tessellation if Vec appears corrupted
@@ -589,7 +590,8 @@ impl Tessellatable for FacetShellGadget {
             &self.center,
             &self.get_dragged_miller_index(),
             self.shift,
-            &self.unit_cell);
+            &self.unit_cell,
+            1); // subdivision=1 for facet_shell (no subdivision support)
       }
 
       // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
@@ -634,7 +636,8 @@ impl Gadget for FacetShellGadget {
                   miller_index_variant,
                   self.shift as f64,
                   &ray_origin,
-                  &ray_direction
+                  &ray_direction,
+                  1, // subdivision=1 for facet_shell (no subdivision support)
               ) {
                   return Some(1 + variant_index as i32); // Shift handle hit for this variant
               }
@@ -677,7 +680,8 @@ impl Gadget for FacetShellGadget {
               &self.center,
               &ray_origin,
               &ray_direction, 
-              half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET
+              half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET,
+              1, // subdivision=1 for facet_shell (no subdivision support)
           );
           self.shift = self.dragged_shift.round() as i32;
       }
