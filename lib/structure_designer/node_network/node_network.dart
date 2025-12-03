@@ -83,8 +83,8 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
   const NodeNetworkInteractionLayer(
       {super.key, required this.model, required this.panOffset});
 
-  /// Handles tap on wires for selection
-  void _handleWireTapDown(TapDownDetails details) {
+  /// Handles tap on wires for selection, or clears selection if clicking empty space
+  void _handleWireTap(TapUpDetails details) {
     final painter = NodeNetworkPainter(model, panOffset: panOffset);
     final hit = painter.findWireAtPosition(details.localPosition);
     if (hit != null) {
@@ -94,6 +94,9 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
         hit.destNodeId,
         hit.destParamIndex,
       );
+    } else {
+      // Clicked on empty space - clear selection
+      model.clearSelection();
     }
   }
 
@@ -103,7 +106,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
       painter: NodeNetworkPainter(model, panOffset: panOffset),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTapDown: _handleWireTapDown,
+        onTapUp: _handleWireTap,
         child: Container(),
       ),
     );
@@ -253,7 +256,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (HardwareKeyboard.instance.isShiftPressed) {
       return;
     }
-    
+
     // Only show add node popup if clicked on empty space (not on a node)
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
@@ -295,8 +298,8 @@ class NodeNetworkState extends State<NodeNetwork> {
       });
     }
     // Check for Shift + right mouse button
-    else if (event.buttons == kSecondaryMouseButton && 
-             HardwareKeyboard.instance.isShiftPressed) {
+    else if (event.buttons == kSecondaryMouseButton &&
+        HardwareKeyboard.instance.isShiftPressed) {
       setState(() {
         _isShiftRightMousePanning = true;
         _lastPanPosition = event.position;
@@ -306,7 +309,8 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle pointer move event for panning (middle mouse or Shift + right mouse)
   void _handlePointerMove(PointerMoveEvent event) {
-    if ((_isMiddleMousePanning || _isShiftRightMousePanning) && _lastPanPosition != null) {
+    if ((_isMiddleMousePanning || _isShiftRightMousePanning) &&
+        _lastPanPosition != null) {
       setState(() {
         _panOffset += event.position - _lastPanPosition!;
         _lastPanPosition = event.position;
@@ -333,7 +337,7 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Handle trackpad/Magic Mouse pan-zoom updates for panning
   void _handlePointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
     // Only handle panning when Shift is pressed
-    if (HardwareKeyboard.instance.isShiftPressed && 
+    if (HardwareKeyboard.instance.isShiftPressed &&
         (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
       setState(() {
         _panOffset += event.panDelta;
