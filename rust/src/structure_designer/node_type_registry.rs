@@ -643,6 +643,10 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
           name: "shift".to_string(),
           data_type: DataType::Int,
         },
+        Parameter {
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
       ],
       output_type: DataType::Geometry,
       public: true,
@@ -651,6 +655,7 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
         miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis
         center: IVec3::new(0, 0, 0),
         shift: 0,
+        subdivision: 1,
       }),
       node_data_saver: generic_node_data_saver::<HalfSpaceData>,
       node_data_loader: generic_node_data_loader::<HalfSpaceData>,

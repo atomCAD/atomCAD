@@ -147,6 +147,7 @@ pub struct InputPinView {
     pub miller_index: APIIVec3,
     pub center: APIIVec3,
     pub shift: i32,
+    pub subdivision: i32,
   }
 
   pub struct APIFacet {

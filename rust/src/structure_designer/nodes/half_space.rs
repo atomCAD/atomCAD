@@ -31,6 +31,12 @@ pub struct HalfSpaceData {
   #[serde(with = "ivec3_serializer")]
   pub center: IVec3,
   pub shift: i32,
+  #[serde(default = "default_subdivision")]
+  pub subdivision: i32,
+}
+
+fn default_subdivision() -> i32 {
+  1
 }
 
 impl NodeData for HalfSpaceData {
@@ -97,6 +103,15 @@ impl NodeData for HalfSpaceData {
         Err(error) => return error,
       };
 
+      let subdivision = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 4, 
+        self.subdivision,
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value.max(1), // Ensure minimum value of 1
+        Err(error) => return error,
+      };
+
       // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
       // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
       if network_stack.len() == 1 {
@@ -110,8 +125,9 @@ impl NodeData for HalfSpaceData {
       let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index);
       let center_pos = unit_cell.ivec3_lattice_to_real(&center);
 
-      // Calculate shift distance as multiples of d-spacing
-      let shift_distance = shift as f64 * plane_props.d_spacing;
+      // Calculate shift distance as multiples of d-spacing, divided by subdivision
+      // This allows fractional d-spacing shifts (e.g., shift=5, subdivision=2 → 2.5 d-spacings)
+      let shift_distance = (shift as f64 / subdivision as f64) * plane_props.d_spacing;
       let shifted_center = center_pos + plane_props.normal * shift_distance;
 
       return NetworkResult::Geometry(GeometrySummary {
@@ -132,8 +148,9 @@ impl NodeData for HalfSpaceData {
         let center_connected = connected_input_pins.contains("center");
         let m_index_connected = connected_input_pins.contains("m_index");
         let shift_connected = connected_input_pins.contains("shift");
+        let subdivision_connected = connected_input_pins.contains("subdivision");
         
-        if center_connected && m_index_connected && shift_connected {
+        if center_connected && m_index_connected && shift_connected && subdivision_connected {
             None
         } else {
             let mut parts = Vec::new();
@@ -150,6 +167,10 @@ impl NodeData for HalfSpaceData {
             
             if !shift_connected {
                 parts.push(format!("s: {}", self.shift));
+            }
+            
+            if !subdivision_connected && self.subdivision != 1 {
+                parts.push(format!("sub: {}", self.subdivision));
             }
             
             if parts.is_empty() {

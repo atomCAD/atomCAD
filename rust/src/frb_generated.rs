@@ -4568,11 +4568,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_center = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_shift = <i32>::sse_decode(deserializer);
+        let mut var_subdivision = <i32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData {
             max_miller_index: var_maxMillerIndex,
             miller_index: var_millerIndex,
             center: var_center,
             shift: var_shift,
+            subdivision: var_subdivision,
         };
     }
 }
@@ -6853,6 +6855,7 @@ impl flutter_rust_bridge::IntoDart
             self.miller_index.into_into_dart().into_dart(),
             self.center.into_into_dart().into_dart(),
             self.shift.into_into_dart().into_dart(),
+            self.subdivision.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8292,6 +8295,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.miller_index, serializer);
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.center, serializer);
         <i32>::sse_encode(self.shift, serializer);
+        <i32>::sse_encode(self.subdivision, serializer);
     }
 }
 

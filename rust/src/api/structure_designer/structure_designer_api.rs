@@ -929,6 +929,7 @@ pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
           miller_index: to_api_ivec3(&half_space_data.miller_index),
           center: to_api_ivec3(&half_space_data.center),
           shift: half_space_data.shift,
+          subdivision: half_space_data.subdivision,
         })
       },
       None
@@ -1527,6 +1528,7 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
         miller_index: from_api_ivec3(&data.miller_index),
         center: from_api_ivec3(&data.center),
         shift: data.shift,
+        subdivision: data.subdivision,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, half_space_data);
       refresh_structure_designer_auto(cad_instance);
