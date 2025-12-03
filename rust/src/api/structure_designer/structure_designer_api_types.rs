@@ -233,9 +233,52 @@ pub struct InputPinView {
     pub validation_errors: Option<String>,
   }
 
+  #[frb]
+  #[derive(PartialEq, Eq, Hash, Clone, Debug)]
+  pub enum NodeTypeCategory {
+    MathAndProgramming,
+    Geometry2D,
+    Geometry3D,
+    AtomicStructure,
+    OtherBuiltin,
+    Custom,
+  }
+
+  impl NodeTypeCategory {
+    pub fn order(&self) -> u8 {
+      match self {
+        Self::MathAndProgramming => 0,
+        Self::Geometry2D => 1,
+        Self::Geometry3D => 2,
+        Self::AtomicStructure => 3,
+        Self::OtherBuiltin => 4,
+        Self::Custom => 5,
+      }
+    }
+
+    pub fn display_name(&self) -> &str {
+      match self {
+        Self::MathAndProgramming => "Math and Programming",
+        Self::Geometry2D => "2D Geometry",
+        Self::Geometry3D => "3D Geometry",
+        Self::AtomicStructure => "Atomic Structure",
+        Self::OtherBuiltin => "Other",
+        Self::Custom => "Custom",
+      }
+    }
+  }
+
+  #[derive(Clone)]
   pub struct APINodeTypeView {
     pub name: String,
     pub description: String,
+    pub category: NodeTypeCategory,
+  }
+
+  #[derive(Clone)]
+  pub struct APINodeCategoryView {
+    pub category: NodeTypeCategory,
+    pub nodes: Vec<APINodeTypeView>,
   }
 
 pub struct APIExprParameter {

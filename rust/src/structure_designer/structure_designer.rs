@@ -429,6 +429,7 @@ impl StructureDesigner {
       NodeType {
         name: node_network_name.to_string(),
         description: "".to_string(),
+        category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
         parameters: Vec::new(),
         output_type: DataType::None,
         node_data_creator: || Box::new(NoData {}),

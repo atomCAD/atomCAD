@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `eq`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -700,17 +700,40 @@ class APINetworkWithValidationErrors {
           validationErrors == other.validationErrors;
 }
 
+class APINodeCategoryView {
+  final NodeTypeCategory category;
+  final List<APINodeTypeView> nodes;
+
+  const APINodeCategoryView({
+    required this.category,
+    required this.nodes,
+  });
+
+  @override
+  int get hashCode => category.hashCode ^ nodes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeCategoryView &&
+          runtimeType == other.runtimeType &&
+          category == other.category &&
+          nodes == other.nodes;
+}
+
 class APINodeTypeView {
   final String name;
   final String description;
+  final NodeTypeCategory category;
 
   const APINodeTypeView({
     required this.name,
     required this.description,
+    required this.category,
   });
 
   @override
-  int get hashCode => name.hashCode ^ description.hashCode;
+  int get hashCode => name.hashCode ^ description.hashCode ^ category.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -718,7 +741,8 @@ class APINodeTypeView {
       other is APINodeTypeView &&
           runtimeType == other.runtimeType &&
           name == other.name &&
-          description == other.description;
+          description == other.description &&
+          category == other.category;
 }
 
 class APIParameterData {
@@ -1099,6 +1123,26 @@ class NodeNetworkView {
           name == other.name &&
           nodes == other.nodes &&
           wires == other.wires;
+}
+
+enum NodeTypeCategory {
+  mathAndProgramming,
+  geometry2D,
+  geometry3D,
+  atomicStructure,
+  otherBuiltin,
+  custom,
+  ;
+
+  Future<void> displayName() => RustLib.instance.api
+          .crateApiStructureDesignerStructureDesignerApiTypesNodeTypeCategoryDisplayName(
+        that: this,
+      );
+
+  Future<int> order() => RustLib.instance.api
+          .crateApiStructureDesignerStructureDesignerApiTypesNodeTypeCategoryOrder(
+        that: this,
+      );
 }
 
 class NodeView {

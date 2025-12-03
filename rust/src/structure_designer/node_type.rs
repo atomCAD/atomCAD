@@ -4,6 +4,7 @@ use std::io;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 
 #[derive(Clone)]
 pub struct Parameter {
@@ -16,6 +17,7 @@ pub struct Parameter {
 pub struct NodeType {
   pub name: String,
   pub description: String,
+  pub category: NodeTypeCategory,
   pub parameters: Vec<Parameter>,
   pub output_type: DataType,
   pub public: bool, // whether this node type is available for users to add

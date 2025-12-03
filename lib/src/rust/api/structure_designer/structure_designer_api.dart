@@ -49,7 +49,7 @@ void connectNodes(
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
-List<APINodeTypeView>? getNodeTypeViews() => RustLib.instance.api
+List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews();
 
 List<String>? getNodeNetworkNames() => RustLib.instance.api
