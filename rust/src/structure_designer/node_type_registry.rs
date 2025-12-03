@@ -358,7 +358,7 @@ The expr node supports scalar arithmetic, vector operations, conditional express
     ret.add_node_type(NodeType {
       name: "unit_cell".to_string(),
       description: "Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
+      category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![
         Parameter {
             name: "a".to_string(),
@@ -904,7 +904,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
 The motif is defined textually using atomCAD's motif definition language.
 The features of the language are basically parameterized fractional atom sites, explicit & periodic bond definitions.
 See the atomCAD reference guide for details on the motif definition language.".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
+      category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],
       output_type: DataType::Motif,
       public: true,
