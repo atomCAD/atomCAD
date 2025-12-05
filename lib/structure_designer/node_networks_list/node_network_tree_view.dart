@@ -94,6 +94,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   late TreeController<_NodeNetworkTreeNode> _treeController;
   final Set<String> _expandedNamespaces = {}; // Track expanded namespace paths
   List<String>? _lastNetworkNames; // For change detection
+  String? _lastActiveNetwork; // Track last active network for auto-expansion
 
   @override
   bool get wantKeepAlive => true; // Keep widget alive when switching tabs
@@ -108,9 +109,18 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   void didUpdateWidget(NodeNetworkTreeView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Only rebuild if network list actually changed
     final currentNames =
         widget.model.nodeNetworkNames.map((n) => n.name).toList();
+    final currentActiveNetwork = widget.model.nodeNetworkView?.name;
+
+    // Check if active network changed - expand ancestors if so
+    if (currentActiveNetwork != _lastActiveNetwork &&
+        currentActiveNetwork != null) {
+      _expandAncestorsOf(currentActiveNetwork);
+      _lastActiveNetwork = currentActiveNetwork;
+    }
+
+    // Only rebuild if network list actually changed
     if (_lastNetworkNames != null &&
         _listsEqual(_lastNetworkNames!, currentNames)) {
       return; // Skip rebuild - just a selection change
@@ -141,6 +151,13 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
     // Restore expansion state for existing namespaces
     _restoreExpansionState(roots);
+
+    // If there's an active network, ensure its ancestors are expanded
+    final activeNetwork = widget.model.nodeNetworkView?.name;
+    if (activeNetwork != null) {
+      _expandAncestorsOf(activeNetwork);
+      _lastActiveNetwork = activeNetwork;
+    }
   }
 
   void _restoreExpansionState(List<_NodeNetworkTreeNode> roots) {
@@ -170,6 +187,40 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
     // Clean up: remove namespaces that no longer exist
     _expandedNamespaces.retainAll(validNamespaces);
+  }
+
+  void _expandAncestorsOf(String qualifiedName) {
+    final segments = getSegments(qualifiedName);
+
+    // If it's a root-level node, nothing to expand
+    if (segments.length <= 1) return;
+
+    // Compute all ancestor namespace paths and add to expansion set
+    for (int i = 1; i < segments.length; i++) {
+      final namespacePath = segments.sublist(0, i).join('.');
+      _expandedNamespaces.add(namespacePath);
+    }
+
+    // Find and expand the actual tree nodes
+    void expandInTree(List<_NodeNetworkTreeNode> nodes, String parentPath) {
+      for (final node in nodes) {
+        if (!node.isLeaf) {
+          final namespacePath =
+              parentPath.isEmpty ? node.label : '$parentPath.${node.label}';
+
+          if (_expandedNamespaces.contains(namespacePath)) {
+            _treeController.expand(node);
+
+            // Continue traversing children
+            if (node.children.isNotEmpty) {
+              expandInTree(node.children, namespacePath);
+            }
+          }
+        }
+      }
+    }
+
+    expandInTree(_treeController.roots.toList(), '');
   }
 
   void _onFolderToggled(_NodeNetworkTreeNode node) {
