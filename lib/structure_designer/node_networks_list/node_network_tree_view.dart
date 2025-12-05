@@ -7,7 +7,8 @@ import 'package:flutter_cad/common/ui_common.dart';
 /// Tree node representing either a namespace (folder) or a node network (leaf).
 class _NodeNetworkTreeNode {
   final String label; // Simple name (last segment)
-  final String? fullName; // Qualified name (null for namespace nodes)
+  final String?
+      fullName; // Qualified name for leafs, namespace path for namespaces
   final List<_NodeNetworkTreeNode> children;
   final bool isLeaf; // True if this is an actual node network
 
@@ -38,7 +39,8 @@ List<_NodeNetworkTreeNode> _buildTreeFromNames(List<String> qualifiedNames) {
       if (!namespaceNodes.containsKey(namespacePath)) {
         final namespaceNode = _NodeNetworkTreeNode(
           label: segments[i],
-          fullName: null,
+          fullName:
+              namespacePath, // Store namespace path for expansion tracking
           children: [],
           isLeaf: false,
         );
@@ -89,6 +91,8 @@ class NodeNetworkTreeView extends StatefulWidget {
 
 class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
   late TreeController<_NodeNetworkTreeNode> _treeController;
+  final Set<String> _expandedNamespaces = {}; // Track expanded namespace paths
+  List<String>? _lastNetworkNames; // For change detection
 
   @override
   void initState() {
@@ -99,18 +103,81 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
   @override
   void didUpdateWidget(NodeNetworkTreeView oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Only rebuild if network list actually changed
+    final currentNames =
+        widget.model.nodeNetworkNames.map((n) => n.name).toList();
+    if (_lastNetworkNames != null &&
+        _listsEqual(_lastNetworkNames!, currentNames)) {
+      return; // Skip rebuild - just a selection change
+    }
+
     _updateTree();
+  }
+
+  bool _listsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _updateTree() {
     final qualifiedNames =
         widget.model.nodeNetworkNames.map((n) => n.name).toList();
+    _lastNetworkNames = List.from(qualifiedNames);
+
     final roots = _buildTreeFromNames(qualifiedNames);
 
     _treeController = TreeController<_NodeNetworkTreeNode>(
       roots: roots,
       childrenProvider: (node) => node.children,
     );
+
+    // Restore expansion state for existing namespaces
+    _restoreExpansionState(roots);
+  }
+
+  void _restoreExpansionState(List<_NodeNetworkTreeNode> roots) {
+    // Traverse tree and expand nodes whose path is in _expandedNamespaces
+    final validNamespaces = <String>{};
+
+    void traverse(List<_NodeNetworkTreeNode> nodes, String parentPath) {
+      for (final node in nodes) {
+        if (!node.isLeaf) {
+          final namespacePath =
+              parentPath.isEmpty ? node.label : '$parentPath.${node.label}';
+
+          validNamespaces.add(namespacePath);
+
+          if (_expandedNamespaces.contains(namespacePath)) {
+            _treeController.expand(node);
+          }
+
+          if (node.children.isNotEmpty) {
+            traverse(node.children, namespacePath);
+          }
+        }
+      }
+    }
+
+    traverse(roots, '');
+
+    // Clean up: remove namespaces that no longer exist
+    _expandedNamespaces.retainAll(validNamespaces);
+  }
+
+  void _onFolderToggled(_NodeNetworkTreeNode node) {
+    _treeController.toggleExpansion(node);
+
+    // Update tracking set (namespace path is stored in node.fullName)
+    final namespacePath = node.fullName!;
+    if (_treeController.getExpansionState(node)) {
+      _expandedNamespaces.add(namespacePath);
+    } else {
+      _expandedNamespaces.remove(namespacePath);
+    }
   }
 
   @override
@@ -142,8 +209,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
               // Leaf node - activate the network
               widget.model.setActiveNodeNetwork(node.fullName!);
             } else {
-              // Namespace node - toggle expansion
-              _treeController.toggleExpansion(node);
+              // Namespace node - toggle expansion (with state tracking)
+              _onFolderToggled(node);
             }
           },
           child: TreeIndentation(
@@ -159,7 +226,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
                       isOpen: entry.hasChildren
                           ? _treeController.getExpansionState(node)
                           : false,
-                      onPressed: () => _treeController.toggleExpansion(node),
+                      onPressed: () => _onFolderToggled(node),
                     ),
                   // Label (with icon for leaf nodes)
                   Expanded(
