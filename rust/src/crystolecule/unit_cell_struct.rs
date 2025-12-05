@@ -28,6 +28,53 @@ pub struct CrystalPlaneProps {
 }
 
 impl UnitCellStruct {
+  /// Creates a UnitCellStruct from three basis vectors.
+  /// 
+  /// Calculates the crystallographic parameters (lengths and angles) from the basis vectors:
+  /// - cell_length_a, cell_length_b, cell_length_c: lengths of the basis vectors
+  /// - cell_angle_alpha: angle between b and c (in degrees)
+  /// - cell_angle_beta: angle between a and c (in degrees)
+  /// - cell_angle_gamma: angle between a and b (in degrees)
+  /// 
+  /// # Arguments
+  /// * `a` - First basis vector
+  /// * `b` - Second basis vector
+  /// * `c` - Third basis vector
+  /// 
+  /// # Returns
+  /// * A UnitCellStruct with both basis vectors and calculated crystallographic parameters
+  pub fn new(a: DVec3, b: DVec3, c: DVec3) -> Self {
+    // Calculate lengths
+    let cell_length_a = a.length();
+    let cell_length_b = b.length();
+    let cell_length_c = c.length();
+    
+    // Calculate angles between vectors using dot product: cos(θ) = (u·v)/(|u||v|)
+    // Alpha is angle between b and c
+    let cos_alpha = b.dot(c) / (cell_length_b * cell_length_c);
+    let cell_angle_alpha = cos_alpha.acos().to_degrees();
+    
+    // Beta is angle between a and c
+    let cos_beta = a.dot(c) / (cell_length_a * cell_length_c);
+    let cell_angle_beta = cos_beta.acos().to_degrees();
+    
+    // Gamma is angle between a and b
+    let cos_gamma = a.dot(b) / (cell_length_a * cell_length_b);
+    let cell_angle_gamma = cos_gamma.acos().to_degrees();
+    
+    UnitCellStruct {
+      a,
+      b,
+      c,
+      cell_length_a,
+      cell_length_b,
+      cell_length_c,
+      cell_angle_alpha,
+      cell_angle_beta,
+      cell_angle_gamma,
+    }
+  }
+
   /// Creates a cubic diamond unit cell using the standard diamond lattice parameter
   /// 
   /// Returns a UnitCellStruct with orthogonal basis vectors aligned with the coordinate axes,
