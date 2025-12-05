@@ -364,6 +364,20 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
   }
 }
 
+/// Checks if a node type name corresponds to a custom node (i.e., a user-defined node network).
+/// Returns false if the CAD instance is not available.
+#[flutter_rust_bridge::frb(sync)]
+pub fn is_custom_node_type(node_type_name: String) -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.node_type_registry.is_custom_node_type(&node_type_name)
+      },
+      false
+    )
+  }
+}
+
 /// Gets the description of the active node network
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_active_network_description() -> Option<String> {

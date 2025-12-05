@@ -1179,6 +1179,11 @@ It converts file paths to relative paths whenever possible (if the file is in th
     names
   }
 
+  /// Checks if a node type name corresponds to a custom node (i.e., a user-defined node network).
+  pub fn is_custom_node_type(&self, node_type_name: &str) -> bool {
+    self.node_networks.contains_key(node_type_name)
+  }
+
   pub fn get_node_networks_with_validation(&self) -> Vec<APINetworkWithValidationErrors> {
     let mut networks: Vec<APINetworkWithValidationErrors> = self.node_networks
       .values()

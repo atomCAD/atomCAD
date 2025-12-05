@@ -55,6 +55,12 @@ List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
 
+/// Checks if a node type name corresponds to a custom node (i.e., a user-defined node network).
+/// Returns false if the CAD instance is not available.
+bool isCustomNodeType({required String nodeTypeName}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiIsCustomNodeType(
+        nodeTypeName: nodeTypeName);
+
 /// Gets the description of the active node network
 String? getActiveNetworkDescription() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetActiveNetworkDescription();

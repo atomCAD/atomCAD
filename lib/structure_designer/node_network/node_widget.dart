@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 
@@ -204,10 +205,19 @@ class NodeWidget extends StatelessWidget {
               Offset.zero & overlay.size,
             );
 
+            // Check if this is a custom node
+            final bool isCustomNode =
+                isCustomNodeType(nodeTypeName: node.nodeTypeName);
+
             showMenu(
               context: context,
               position: position,
               items: [
+                if (isCustomNode)
+                  PopupMenuItem(
+                    value: 'go_to_definition',
+                    child: Text('Go to Definition'),
+                  ),
                 PopupMenuItem(
                   value: 'return',
                   child: Text(node.returnNode
@@ -220,7 +230,11 @@ class NodeWidget extends StatelessWidget {
                 ),
               ],
             ).then((value) {
-              if (value == 'return') {
+              if (value == 'go_to_definition') {
+                final model =
+                    Provider.of<StructureDesignerModel>(context, listen: false);
+                model.setActiveNodeNetwork(node.nodeTypeName);
+              } else if (value == 'return') {
                 final model =
                     Provider.of<StructureDesignerModel>(context, listen: false);
                 if (node.returnNode) {
