@@ -148,7 +148,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
           },
           child: TreeIndentation(
             entry: entry,
-            guide: const IndentGuide.connectingLines(indent: 40),
+            guide: const IndentGuide.connectingLines(indent: 20),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: Row(
@@ -160,41 +160,47 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
                           ? _treeController.getExpansionState(node)
                           : false,
                       onPressed: () => _treeController.toggleExpansion(node),
-                    )
-                  else
-                    const SizedBox(width: 24), // Spacing for leaf nodes
-
-                  const SizedBox(width: 4),
-
-                  // Icon: folder for namespaces, file for leafs
-                  Icon(
-                    node.isLeaf ? Icons.description : Icons.folder,
-                    size: 16,
-                    color:
-                        isActive ? AppColors.selectionForeground : Colors.grey,
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  // Label
+                    ),
+                  // Label (with icon for leaf nodes)
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                      padding: EdgeInsets.fromLTRB(
+                        node.isLeaf ? 6 : 0,
+                        4,
+                        8,
+                        4,
+                      ),
                       decoration: isActive
                           ? BoxDecoration(
                               color: AppColors.selectionBackground,
                               borderRadius: BorderRadius.circular(4),
                             )
                           : null,
-                      child: Text(
-                        node.label,
-                        style: AppTextStyles.regular.copyWith(
-                          color:
-                              isActive ? AppColors.selectionForeground : null,
-                          fontWeight:
-                              node.isLeaf ? FontWeight.normal : FontWeight.w500,
-                        ),
+                      child: Row(
+                        children: [
+                          // Icon for leaf nodes (inside the selection container)
+                          if (node.isLeaf) ...[
+                            Icon(
+                              Icons.account_tree,
+                              size: 16,
+                              color: isActive
+                                  ? AppColors.selectionForeground
+                                  : Colors.grey,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            node.label,
+                            style: AppTextStyles.regular.copyWith(
+                              color: isActive
+                                  ? AppColors.selectionForeground
+                                  : null,
+                              fontWeight: node.isLeaf
+                                  ? FontWeight.normal
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
