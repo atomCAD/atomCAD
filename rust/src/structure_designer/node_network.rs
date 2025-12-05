@@ -1,5 +1,6 @@
 use glam::f64::DVec2;
 use serde::{Serialize, Deserialize};
+use std::cmp::max;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::structure_designer::node_type::NodeType;
@@ -465,9 +466,9 @@ impl NodeNetwork {
     // Clone the arguments (connections)
     let cloned_arguments = original_node.arguments.clone();
     
-    // Calculate new position (180 units to the right)
-    let new_position = DVec2::new(original_node.position.x + 180.0, original_node.position.y);
-    
+    let vert_offset = 73.0 + max(cloned_arguments.len(), 1) as f64 * 22.0;
+    let new_position = DVec2::new(original_node.position.x, original_node.position.y + vert_offset);
+
     // Create the duplicated node
     let duplicated_node = Node {
       id: new_node_id,
