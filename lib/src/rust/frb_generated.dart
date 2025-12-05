@@ -5422,14 +5422,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BackgroundPreferences dco_decode_background_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return BackgroundPreferences(
       backgroundColor: dco_decode_apii_vec_3(arr[0]),
       showGrid: dco_decode_bool(arr[1]),
       gridSize: dco_decode_i_32(arr[2]),
       gridColor: dco_decode_apii_vec_3(arr[3]),
       gridStrongColor: dco_decode_apii_vec_3(arr[4]),
+      showLatticeAxes: dco_decode_bool(arr[5]),
+      showLatticeGrid: dco_decode_bool(arr[6]),
+      latticeGridColor: dco_decode_apii_vec_3(arr[7]),
+      latticeGridStrongColor: dco_decode_apii_vec_3(arr[8]),
     );
   }
 
@@ -7018,12 +7022,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_gridSize = sse_decode_i_32(deserializer);
     var var_gridColor = sse_decode_apii_vec_3(deserializer);
     var var_gridStrongColor = sse_decode_apii_vec_3(deserializer);
+    var var_showLatticeAxes = sse_decode_bool(deserializer);
+    var var_showLatticeGrid = sse_decode_bool(deserializer);
+    var var_latticeGridColor = sse_decode_apii_vec_3(deserializer);
+    var var_latticeGridStrongColor = sse_decode_apii_vec_3(deserializer);
     return BackgroundPreferences(
         backgroundColor: var_backgroundColor,
         showGrid: var_showGrid,
         gridSize: var_gridSize,
         gridColor: var_gridColor,
-        gridStrongColor: var_gridStrongColor);
+        gridStrongColor: var_gridStrongColor,
+        showLatticeAxes: var_showLatticeAxes,
+        showLatticeGrid: var_showLatticeGrid,
+        latticeGridColor: var_latticeGridColor,
+        latticeGridStrongColor: var_latticeGridStrongColor);
   }
 
   @protected
@@ -8857,6 +8869,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.gridSize, serializer);
     sse_encode_apii_vec_3(self.gridColor, serializer);
     sse_encode_apii_vec_3(self.gridStrongColor, serializer);
+    sse_encode_bool(self.showLatticeAxes, serializer);
+    sse_encode_bool(self.showLatticeGrid, serializer);
+    sse_encode_apii_vec_3(self.latticeGridColor, serializer);
+    sse_encode_apii_vec_3(self.latticeGridStrongColor, serializer);
   }
 
   @protected

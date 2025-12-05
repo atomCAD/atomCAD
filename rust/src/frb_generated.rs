@@ -5096,7 +5096,13 @@ impl SseDecode
         let mut var_gridColor = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_gridStrongColor =
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences{background_color: var_backgroundColor, show_grid: var_showGrid, grid_size: var_gridSize, grid_color: var_gridColor, grid_strong_color: var_gridStrongColor};
+        let mut var_showLatticeAxes = <bool>::sse_decode(deserializer);
+        let mut var_showLatticeGrid = <bool>::sse_decode(deserializer);
+        let mut var_latticeGridColor =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_latticeGridStrongColor =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences{background_color: var_backgroundColor, show_grid: var_showGrid, grid_size: var_gridSize, grid_color: var_gridColor, grid_strong_color: var_gridStrongColor, show_lattice_axes: var_showLatticeAxes, show_lattice_grid: var_showLatticeGrid, lattice_grid_color: var_latticeGridColor, lattice_grid_strong_color: var_latticeGridStrongColor};
     }
 }
 
@@ -7802,6 +7808,10 @@ impl flutter_rust_bridge::IntoDart
             self.grid_size.into_into_dart().into_dart(),
             self.grid_color.into_into_dart().into_dart(),
             self.grid_strong_color.into_into_dart().into_dart(),
+            self.show_lattice_axes.into_into_dart().into_dart(),
+            self.show_lattice_grid.into_into_dart().into_dart(),
+            self.lattice_grid_color.into_into_dart().into_dart(),
+            self.lattice_grid_strong_color.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8799,6 +8809,13 @@ impl SseEncode
         <i32>::sse_encode(self.grid_size, serializer);
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.grid_color, serializer);
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.grid_strong_color, serializer);
+        <bool>::sse_encode(self.show_lattice_axes, serializer);
+        <bool>::sse_encode(self.show_lattice_grid, serializer);
+        <crate::api::common_api_types::APIIVec3>::sse_encode(self.lattice_grid_color, serializer);
+        <crate::api::common_api_types::APIIVec3>::sse_encode(
+            self.lattice_grid_strong_color,
+            serializer,
+        );
     }
 }
 

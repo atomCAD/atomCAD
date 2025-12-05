@@ -561,7 +561,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 },
                               ),
                               const SizedBox(width: 8),
-                              const Text('Show grid'),
+                              const Text('Show axes and grids'),
                             ],
                           ),
                           const SizedBox(height: AppSpacing.medium),
@@ -607,6 +607,92 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               setState(() {
                                 _preferences.backgroundPreferences
                                     .gridStrongColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Show lattice axes checkbox
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _preferences
+                                    .backgroundPreferences.showLatticeAxes,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.backgroundPreferences
+                                          .showLatticeAxes = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                    'Show lattice axes (dotted lines for non-Cartesian lattices)'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Show lattice grid checkbox
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _preferences
+                                    .backgroundPreferences.showLatticeGrid,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.backgroundPreferences
+                                          .showLatticeGrid = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                    'Show lattice grid (secondary grid for non-Cartesian lattices)'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Lattice grid color
+                          IVec3Input(
+                            label: 'Lattice grid color (RGB)',
+                            value: _preferences
+                                .backgroundPreferences.latticeGridColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences
+                                    .latticeGridColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Lattice grid strong color
+                          IVec3Input(
+                            label: 'Lattice grid strong color (RGB)',
+                            value: _preferences
+                                .backgroundPreferences.latticeGridStrongColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences
+                                    .latticeGridStrongColor = value;
                               });
                               _applyPreferences();
                             },

@@ -1,7 +1,6 @@
 use glam::f64::DVec3;
 use glam::f32::Vec3;
 use crate::renderer::line_mesh::LineMesh;
-use crate::crystolecule::atomic_constants;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
@@ -15,10 +14,6 @@ pub const Z_AXIS_COLOR: [f32; 3] = [0.0, 0.0, 1.0]; // Blue for Z-axis
 pub const LATTICE_A_COLOR: [f32; 3] = [0.0, 1.0, 1.0]; // Cyan for a-vector
 pub const LATTICE_B_COLOR: [f32; 3] = [1.0, 0.0, 1.0]; // Magenta for b-vector
 pub const LATTICE_C_COLOR: [f32; 3] = [1.0, 1.0, 0.0]; // Yellow for c-vector
-
-// Secondary grid colors (for lattice grid when Cartesian grid is also displayed)
-const LATTICE_GRID_PRIMARY_COLOR: [f32; 3] = [0.4, 0.6, 0.6]; // Muted cyan
-const LATTICE_GRID_SECONDARY_COLOR: [f32; 3] = [0.3, 0.5, 0.5]; // Darker cyan
 
 // Dotted line parameters for lattice axes
 const DOT_LENGTH: f32 = 0.5; // Length of each dot in Angstroms
@@ -38,10 +33,6 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
         return;
     }
     
-    // Local variables to control display (will be moved to preferences later)
-    let show_lattice_axes = true;
-    let show_lattice_grid = true; // Secondary lattice grid when in dual-grid mode
-    
     // Origin point
     let origin = DVec3::new(0.0, 0.0, 0.0);
     let cs_size = background_preferences.grid_size as f64;
@@ -56,7 +47,7 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
     add_axis_line(output_mesh, &origin, &z_axis_end, &Z_AXIS_COLOR);
     
     // Lattice basis vectors (only if not aligned with Cartesian axes)
-    if show_lattice_axes {
+    if background_preferences.show_lattice_axes {
         add_lattice_axes_if_non_cartesian(output_mesh, unit_cell, cs_size);
     }
     
@@ -86,14 +77,14 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
         );
         
         // Optionally display lattice grid with secondary colors
-        if show_lattice_grid {
+        if background_preferences.show_lattice_grid {
             tessellate_grid(
                 output_mesh,
                 &unit_cell.a,
                 &unit_cell.b,
                 background_preferences.grid_size,
-                &LATTICE_GRID_PRIMARY_COLOR,
-                &LATTICE_GRID_SECONDARY_COLOR,
+                &get_lattice_grid_primary_color(background_preferences),
+                &get_lattice_grid_secondary_color(background_preferences),
             );
         }
     }
@@ -193,6 +184,24 @@ fn get_grid_secondary_color(background_preferences: &BackgroundPreferences) -> [
         background_preferences.grid_strong_color.x as f32 / 255.0,
         background_preferences.grid_strong_color.y as f32 / 255.0,
         background_preferences.grid_strong_color.z as f32 / 255.0,
+    ]
+}
+
+/// Helper to convert lattice grid color to [f32; 3]
+fn get_lattice_grid_primary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
+    [
+        background_preferences.lattice_grid_color.x as f32 / 255.0,
+        background_preferences.lattice_grid_color.y as f32 / 255.0,
+        background_preferences.lattice_grid_color.z as f32 / 255.0,
+    ]
+}
+
+/// Helper to convert lattice strong grid color to [f32; 3]
+fn get_lattice_grid_secondary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
+    [
+        background_preferences.lattice_grid_strong_color.x as f32 / 255.0,
+        background_preferences.lattice_grid_strong_color.y as f32 / 255.0,
+        background_preferences.lattice_grid_strong_color.z as f32 / 255.0,
     ]
 }
 
