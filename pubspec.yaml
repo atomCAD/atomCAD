@@ -46,6 +46,7 @@ dependencies:
   flutter_resizable_container: ^4.2.0
   code_text_field: ^1.1.0
   flutter_window_close: ^1.0.0
+  flutter_fancy_tree_view: ^1.5.0
 
 dev_dependencies:
   flutter_test:
