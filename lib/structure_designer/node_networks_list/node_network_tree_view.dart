@@ -89,10 +89,14 @@ class NodeNetworkTreeView extends StatefulWidget {
   State<NodeNetworkTreeView> createState() => _NodeNetworkTreeViewState();
 }
 
-class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
+class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
+    with AutomaticKeepAliveClientMixin {
   late TreeController<_NodeNetworkTreeNode> _treeController;
   final Set<String> _expandedNamespaces = {}; // Track expanded namespace paths
   List<String>? _lastNetworkNames; // For change detection
+
+  @override
+  bool get wantKeepAlive => true; // Keep widget alive when switching tabs
 
   @override
   void initState() {
@@ -188,6 +192,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     final nodeNetworks = widget.model.nodeNetworkNames;
 
     if (nodeNetworks.isEmpty) {

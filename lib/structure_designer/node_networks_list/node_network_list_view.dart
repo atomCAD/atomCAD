@@ -13,11 +13,15 @@ class NodeNetworkListView extends StatefulWidget {
   State<NodeNetworkListView> createState() => _NodeNetworkListViewState();
 }
 
-class _NodeNetworkListViewState extends State<NodeNetworkListView> {
+class _NodeNetworkListViewState extends State<NodeNetworkListView>
+    with AutomaticKeepAliveClientMixin {
   // Track which node network is being renamed (if any)
   String? _editingNetworkName;
   final TextEditingController _renameController = TextEditingController();
   final FocusNode _renameFocusNode = FocusNode();
+
+  @override
+  bool get wantKeepAlive => true; // Keep widget alive when switching tabs
 
   @override
   void initState() {
@@ -41,6 +45,8 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     final nodeNetworks = widget.model.nodeNetworkNames;
     final activeNetworkName = widget.model.nodeNetworkView?.name;
 
