@@ -8,7 +8,7 @@ import 'node_network/node_network.dart';
 import 'atomic_structure_visualization_widget.dart';
 import 'geometry_visualization_widget.dart';
 import 'import_cnnd_library_dialog.dart';
-import 'node_networks_list_panel.dart';
+import 'node_networks_list/node_networks_panel.dart';
 import 'node_display_widget.dart';
 import 'camera_control_widget.dart';
 import 'preferences_window.dart';
@@ -196,7 +196,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                         flex: 5,
                         child: Section(
                           title: 'Node networks',
-                          content: NodeNetworksListPanel(model: graphModel),
+                          content: NodeNetworksPanel(model: graphModel),
                           expand: true,
                         ),
                       ),
