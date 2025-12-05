@@ -5,6 +5,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 
 // Pin appearance constants
 const double PIN_SIZE = 14.0;
@@ -266,14 +267,19 @@ class NodeWidget extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    node.nodeTypeName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                  child: Tooltip(
+                    message: node.nodeTypeName,
+                    waitDuration: const Duration(milliseconds: 500),
+                    preferBelow: false,
+                    child: Text(
+                      getSimpleName(node.nodeTypeName),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 GestureDetector(
