@@ -3,6 +3,7 @@ use glam::f32::Vec3;
 use crate::renderer::line_mesh::LineMesh;
 use crate::crystolecule::atomic_constants;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
 
 // Constants for coordinate system visualization
@@ -14,6 +15,10 @@ pub const Z_AXIS_COLOR: [f32; 3] = [0.0, 0.0, 1.0]; // Blue for Z-axis
 pub const LATTICE_A_COLOR: [f32; 3] = [0.0, 1.0, 1.0]; // Cyan for a-vector
 pub const LATTICE_B_COLOR: [f32; 3] = [1.0, 0.0, 1.0]; // Magenta for b-vector
 pub const LATTICE_C_COLOR: [f32; 3] = [1.0, 1.0, 0.0]; // Yellow for c-vector
+
+// Secondary grid colors (for lattice grid when Cartesian grid is also displayed)
+const LATTICE_GRID_PRIMARY_COLOR: [f32; 3] = [0.4, 0.6, 0.6]; // Muted cyan
+const LATTICE_GRID_SECONDARY_COLOR: [f32; 3] = [0.3, 0.5, 0.5]; // Darker cyan
 
 // Dotted line parameters for lattice axes
 const DOT_LENGTH: f32 = 0.5; // Length of each dot in Angstroms
@@ -33,8 +38,9 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
         return;
     }
     
-    // Local variable to control lattice axes display (will be moved to preferences later)
+    // Local variables to control display (will be moved to preferences later)
     let show_lattice_axes = true;
+    let show_lattice_grid = true; // Secondary lattice grid when in dual-grid mode
     
     // Origin point
     let origin = DVec3::new(0.0, 0.0, 0.0);
@@ -54,8 +60,43 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
         add_lattice_axes_if_non_cartesian(output_mesh, unit_cell, cs_size);
     }
     
-    // Create grid based on unit cell lattice
-    tessellate_unit_cell_grid(output_mesh, unit_cell, background_preferences);
+    // Grid rendering: single lattice grid or dual grid system
+    if is_lattice_xy_aligned(unit_cell) {
+        // Single grid mode: lattice is aligned with Cartesian XY
+        // Display only the lattice grid with primary colors
+        tessellate_grid(
+            output_mesh,
+            &unit_cell.a,
+            &unit_cell.b,
+            background_preferences.grid_size,
+            &get_grid_primary_color(background_preferences),
+            &get_grid_secondary_color(background_preferences),
+        );
+    } else {
+        // Dual grid mode: lattice not aligned with Cartesian XY
+        // Display Cartesian grid with diamond spacing (primary colors)
+        let cartesian_spacing = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+        tessellate_grid(
+            output_mesh,
+            &(DVec3::new(cartesian_spacing, 0.0, 0.0)),
+            &(DVec3::new(0.0, cartesian_spacing, 0.0)),
+            background_preferences.grid_size,
+            &get_grid_primary_color(background_preferences),
+            &get_grid_secondary_color(background_preferences),
+        );
+        
+        // Optionally display lattice grid with secondary colors
+        if show_lattice_grid {
+            tessellate_grid(
+                output_mesh,
+                &unit_cell.a,
+                &unit_cell.b,
+                background_preferences.grid_size,
+                &LATTICE_GRID_PRIMARY_COLOR,
+                &LATTICE_GRID_SECONDARY_COLOR,
+            );
+        }
+    }
 }
 
 /// Adds a single solid axis line from start to end with the specified color
@@ -74,7 +115,7 @@ fn add_dotted_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, 
     output_mesh.add_dotted_line(&start_vec3, &end_vec3, color, DOT_LENGTH, GAP_LENGTH);
 }
 
-/// Checks if a vector is aligned with a Cartesian axis
+/// Checks if a vector is aligned with a Cartesian axis (X, Y, or Z)
 fn is_aligned_with_cartesian_axis(vec: &DVec3) -> bool {
     let normalized = vec.normalize();
     
@@ -94,6 +135,24 @@ fn is_aligned_with_cartesian_axis(vec: &DVec3) -> bool {
     }
     
     false
+}
+
+/// Checks if the lattice a,b vectors are aligned with Cartesian X,Y plane
+/// Returns true if: a is aligned with ±X AND b is aligned with ±Y
+fn is_lattice_xy_aligned(unit_cell: &UnitCellStruct) -> bool {
+    let a_norm = unit_cell.a.normalize();
+    let b_norm = unit_cell.b.normalize();
+    
+    let x_axis = DVec3::new(1.0, 0.0, 0.0);
+    let y_axis = DVec3::new(0.0, 1.0, 0.0);
+    
+    // Check if a is aligned with ±X
+    let a_aligned_with_x = a_norm.dot(x_axis).abs() > ALIGNMENT_THRESHOLD;
+    
+    // Check if b is aligned with ±Y
+    let b_aligned_with_y = b_norm.dot(y_axis).abs() > ALIGNMENT_THRESHOLD;
+    
+    a_aligned_with_x && b_aligned_with_y
 }
 
 /// Adds lattice axes as dotted lines, but only for vectors not aligned with Cartesian axes
@@ -119,64 +178,75 @@ fn add_lattice_axes_if_non_cartesian(output_mesh: &mut LineMesh, unit_cell: &Uni
     }
 }
 
-/// Creates a grid based on the unit cell lattice structure
-/// The grid follows the unit cell's a and b basis vectors (treating them as the "XY" plane equivalent)
-fn tessellate_unit_cell_grid(output_mesh: &mut LineMesh, unit_cell: &UnitCellStruct, background_preferences: &BackgroundPreferences) {
-    let origin = DVec3::new(0.0, 0.0, 0.0);
-    
-    // Calculate the number of lines needed in each direction
-    let grid_size = background_preferences.grid_size;
-    let grid_range = grid_size as i32;
-    
-    // Convert APIIVec3 colors to [f32; 3] arrays (normalize from 0-255 to 0.0-1.0)
-    let grid_primary_color = [
+/// Helper to convert preference grid color to [f32; 3]
+fn get_grid_primary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
+    [
         background_preferences.grid_color.x as f32 / 255.0,
         background_preferences.grid_color.y as f32 / 255.0,
         background_preferences.grid_color.z as f32 / 255.0,
-    ];
-    let grid_secondary_color = [
+    ]
+}
+
+/// Helper to convert preference strong grid color to [f32; 3]
+fn get_grid_secondary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
+    [
         background_preferences.grid_strong_color.x as f32 / 255.0,
         background_preferences.grid_strong_color.y as f32 / 255.0,
         background_preferences.grid_strong_color.z as f32 / 255.0,
-    ];
-    
-    // Create grid lines parallel to the 'a' basis vector (varying along 'b' direction)
+    ]
+}
+
+/// Generic grid tessellation function
+/// Creates a grid based on two basis vectors (u and v)
+/// The grid follows these vectors to create a parallelogram grid pattern
+fn tessellate_grid(
+    output_mesh: &mut LineMesh,
+    u_vector: &DVec3,
+    v_vector: &DVec3,
+    grid_size: i32,
+    primary_color: &[f32; 3],
+    secondary_color: &[f32; 3],
+) {
+    let origin = DVec3::new(0.0, 0.0, 0.0);
+    let grid_range = grid_size as i32;
+
+    // Create grid lines parallel to the u vector (varying along v direction)
     for i in -grid_range..=grid_range {
         let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized { grid_secondary_color } else { grid_primary_color };
+        let color = if is_emphasized { secondary_color } else { primary_color };
         
-        // Line runs from -grid_size*a to +grid_size*a, offset by i*b
-        let offset = unit_cell.b * (i as f64);
-        let start = origin + offset - unit_cell.a * (grid_range as f64);
-        let end = origin + offset + unit_cell.a * (grid_range as f64);
+        // Line runs from -grid_size*u to +grid_size*u, offset by i*v
+        let offset = v_vector * (i as f64);
+        let start = origin + offset - u_vector * (grid_range as f64);
+        let end = origin + offset + u_vector * (grid_range as f64);
         
-        // Special case: don't draw over the 'a' axis when i=0
+        // Special case: don't draw over the u-axis when i=0
         if i == 0 {
             // Only draw the negative part
             let mid = origin + offset;
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), &color);
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
         } else {
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), &color);
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
         }
     }
     
-    // Create grid lines parallel to the 'b' basis vector (varying along 'a' direction)
+    // Create grid lines parallel to the v vector (varying along u direction)
     for i in -grid_range..=grid_range {
         let is_emphasized = i % 10 == 0;
-        let color = if is_emphasized { grid_secondary_color } else { grid_primary_color };
+        let color = if is_emphasized { secondary_color } else { primary_color };
         
-        // Line runs from -grid_size*b to +grid_size*b, offset by i*a
-        let offset = unit_cell.a * (i as f64);
-        let start = origin + offset - unit_cell.b * (grid_range as f64);
-        let end = origin + offset + unit_cell.b * (grid_range as f64);
+        // Line runs from -grid_size*v to +grid_size*v, offset by i*u
+        let offset = u_vector * (i as f64);
+        let start = origin + offset - v_vector * (grid_range as f64);
+        let end = origin + offset + v_vector * (grid_range as f64);
         
-        // Special case: don't draw over the 'b' axis when i=0
+        // Special case: don't draw over the v-axis when i=0
         if i == 0 {
             // Only draw the negative part
             let mid = origin + offset;
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), &color);
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
         } else {
-            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), &color);
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
         }
     }
 }
