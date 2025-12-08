@@ -46,8 +46,12 @@ impl NodeData for MockNodeData {
 
 // Helper function to create a test NodeType
 fn create_test_node_type(name: &str) -> NodeType {
+    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+    
     NodeType {
         name: name.to_string(),
+        description: "Test node type".to_string(),
+        category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
         output_type: DataType::None,
         public: true,
