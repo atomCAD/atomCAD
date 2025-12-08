@@ -246,64 +246,83 @@ class NodeNetworkPainter extends CustomPainter {
     return null;
   }
 
-  /// Draw a grid pattern that respects the pan offset
+  /// Draw a grid pattern that scales with zoom level
   void _drawGrid(Canvas canvas, Size size) {
-    // Calculate grid boundaries based on visible area
+    final scale = getZoomScale(zoomLevel);
     final Rect visibleRect = Offset.zero & size;
 
     // Apply clipping to prevent drawing outside the widget area
     canvas.clipRect(visibleRect);
 
-    // Calculate the grid lines starting points based on pan offset
-    // Ensure grid appears fixed to the world, not to the view
-    double startX =
-        ((visibleRect.left - panOffset.dx) / GRID_MINOR_SPACING).floor() *
-                GRID_MINOR_SPACING +
-            panOffset.dx;
-    double startY =
-        ((visibleRect.top - panOffset.dy) / GRID_MINOR_SPACING).floor() *
-                GRID_MINOR_SPACING +
-            panOffset.dy;
-    double endX = visibleRect.right;
-    double endY = visibleRect.bottom;
+    // At zoomed-out levels, only show major grid lines with minor color
+    final bool showMinorLines = (zoomLevel == ZoomLevel.normal);
 
-    // Create paints for major and minor grid lines
+    // Create paints for grid lines
     final minorPaint = Paint()
       ..color = GRID_MINOR_COLOR
       ..strokeWidth = GRID_MINOR_LINE_WIDTH
       ..style = PaintingStyle.stroke;
 
     final majorPaint = Paint()
-      ..color = GRID_MAJOR_COLOR
-      ..strokeWidth = GRID_MAJOR_LINE_WIDTH
+      ..color = showMinorLines ? GRID_MAJOR_COLOR : GRID_MINOR_COLOR
+      ..strokeWidth =
+          showMinorLines ? GRID_MAJOR_LINE_WIDTH : GRID_MINOR_LINE_WIDTH
       ..style = PaintingStyle.stroke;
 
-    // Draw vertical grid lines
-    for (double x = startX; x <= endX; x += GRID_MINOR_SPACING) {
-      // Determine if this is a major grid line
-      bool isMajor = (((x - panOffset.dx) / GRID_MAJOR_SPACING).round() *
-                      GRID_MAJOR_SPACING +
-                  panOffset.dx -
-                  x)
-              .abs() <
-          0.5;
+    // Convert visible screen rect to logical coordinates
+    final logicalTopLeft =
+        screenToLogical(visibleRect.topLeft, panOffset, scale);
+    final logicalBottomRight =
+        screenToLogical(visibleRect.bottomRight, panOffset, scale);
 
-      canvas.drawLine(Offset(x, visibleRect.top), Offset(x, visibleRect.bottom),
-          isMajor ? majorPaint : minorPaint);
+    // Calculate grid line positions in logical space
+    final gridSpacing =
+        showMinorLines ? GRID_MINOR_SPACING : GRID_MAJOR_SPACING;
+    final startX = (logicalTopLeft.dx / gridSpacing).floor() * gridSpacing;
+    final startY = (logicalTopLeft.dy / gridSpacing).floor() * gridSpacing;
+
+    // Draw vertical grid lines
+    for (double logicalX = startX;
+        logicalX <= logicalBottomRight.dx;
+        logicalX += gridSpacing) {
+      final screenX = logicalToScreen(Offset(logicalX, 0), panOffset, scale).dx;
+
+      // Check if this is a major grid line
+      final isMajor =
+          (logicalX / GRID_MAJOR_SPACING).round() * GRID_MAJOR_SPACING ==
+              logicalX;
+
+      // In normal mode, draw both minor and major. In zoomed-out mode, only major
+      final shouldDraw = showMinorLines || isMajor;
+
+      if (shouldDraw) {
+        canvas.drawLine(
+            Offset(screenX, visibleRect.top),
+            Offset(screenX, visibleRect.bottom),
+            isMajor ? majorPaint : minorPaint);
+      }
     }
 
     // Draw horizontal grid lines
-    for (double y = startY; y <= endY; y += GRID_MINOR_SPACING) {
-      // Determine if this is a major grid line
-      bool isMajor = (((y - panOffset.dy) / GRID_MAJOR_SPACING).round() *
-                      GRID_MAJOR_SPACING +
-                  panOffset.dy -
-                  y)
-              .abs() <
-          0.5;
+    for (double logicalY = startY;
+        logicalY <= logicalBottomRight.dy;
+        logicalY += gridSpacing) {
+      final screenY = logicalToScreen(Offset(0, logicalY), panOffset, scale).dy;
 
-      canvas.drawLine(Offset(visibleRect.left, y), Offset(visibleRect.right, y),
-          isMajor ? majorPaint : minorPaint);
+      // Check if this is a major grid line
+      final isMajor =
+          (logicalY / GRID_MAJOR_SPACING).round() * GRID_MAJOR_SPACING ==
+              logicalY;
+
+      // In normal mode, draw both minor and major. In zoomed-out mode, only major
+      final shouldDraw = showMinorLines || isMajor;
+
+      if (shouldDraw) {
+        canvas.drawLine(
+            Offset(visibleRect.left, screenY),
+            Offset(visibleRect.right, screenY),
+            isMajor ? majorPaint : minorPaint);
+      }
     }
   }
 
