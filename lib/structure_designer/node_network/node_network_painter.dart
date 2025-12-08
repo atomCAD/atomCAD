@@ -72,9 +72,18 @@ class NodeNetworkPainter extends CustomPainter {
 
   (Offset, String) _getPinPositionAndDataType(
       BigInt nodeId, PinType pinType, int pinIndex) {
-    // Now this is is a bit of a hacky solution.
-    // We should probably use the real positions of the pin widgets instead of this logic to
-    // approximate it independently.
+    if (zoomLevel == ZoomLevel.normal) {
+      return _getPinPositionNormal(nodeId, pinType, pinIndex);
+    } else {
+      return _getPinPositionZoomedOut(nodeId, pinType, pinIndex);
+    }
+  }
+
+  /// Calculate pin position for normal zoom level with detailed pins
+  (Offset, String) _getPinPositionNormal(
+      BigInt nodeId, PinType pinType, int pinIndex) {
+    final scale = getZoomScale(zoomLevel);
+
     if (pinType == PinType.output) {
       // output pin (source pin)
       final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId];
@@ -86,10 +95,11 @@ class NodeNetworkPainter extends CustomPainter {
                   sourceNode.inputPins.length *
                       NODE_VERT_WIRE_OFFSET_PER_PARAM *
                       0.5);
+      // Use central coordinate transformation
+      final logicalPos = APIVec2ToOffset(sourceNode!.position) +
+          Offset(NODE_WIDTH, sourceVertOffset);
       return (
-        APIVec2ToOffset(sourceNode!.position) +
-            Offset(NODE_WIDTH, sourceVertOffset) +
-            panOffset,
+        logicalToScreen(logicalPos, panOffset, scale),
         sourceNode.outputType
       );
     } else {
@@ -97,12 +107,43 @@ class NodeNetworkPainter extends CustomPainter {
       final destNode = graphModel.nodeNetworkView!.nodes[nodeId];
       final destVertOffset = NODE_VERT_WIRE_OFFSET +
           (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+      // Use central coordinate transformation
+      final logicalPos =
+          APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
       return (
-        APIVec2ToOffset(destNode!.position) +
-            Offset(0.0, destVertOffset) +
-            panOffset,
+        logicalToScreen(logicalPos, panOffset, scale),
         destNode.inputPins[pinIndex].dataType
       );
+    }
+  }
+
+  /// Calculate pin position for zoomed-out mode with edge-based connections
+  (Offset, String) _getPinPositionZoomedOut(
+      BigInt nodeId, PinType pinType, int pinIndex) {
+    final node = graphModel.nodeNetworkView!.nodes[nodeId]!;
+    final scale = getZoomScale(zoomLevel);
+    final nodeSize = getNodeSize(node, zoomLevel);
+    // Use central coordinate transformation
+    final nodePos =
+        logicalToScreen(APIVec2ToOffset(node.position), panOffset, scale);
+
+    if (pinType == PinType.output) {
+      // Output wires connect to right edge, centered vertically
+      final rightEdgeX = nodePos.dx + nodeSize.width;
+      final centerY = nodePos.dy + nodeSize.height / 2;
+      return (Offset(rightEdgeX, centerY), node.outputType);
+    } else {
+      // Input wires connect to left edge with small vertical offset per input
+      final leftEdgeX = nodePos.dx;
+      final numInputs = node.inputPins.length;
+
+      // Distribute input connections vertically with small spacing
+      final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
+      final totalHeight = (numInputs - 1) * spacing;
+      final startY = nodePos.dy + (nodeSize.height - totalHeight) / 2;
+      final inputY = startY + (pinIndex * spacing);
+
+      return (Offset(leftEdgeX, inputY), node.inputPins[pinIndex].dataType);
     }
   }
 

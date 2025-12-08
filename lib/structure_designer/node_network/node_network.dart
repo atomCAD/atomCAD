@@ -99,6 +99,24 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
+/// Converts a position from logical space to screen space.
+/// Logical space is the coordinate system where node positions are stored.
+/// Screen space is what's actually rendered on screen.
+///
+/// The transformation is: screen = (logical + panOffset) * scale
+/// where panOffset is stored in logical coordinates.
+Offset logicalToScreen(Offset logical, Offset panOffset, double scale) {
+  return (logical + panOffset) * scale;
+}
+
+/// Converts a position from screen space to logical space.
+/// This is the inverse of logicalToScreen.
+///
+/// The transformation is: logical = (screen / scale) - panOffset
+Offset screenToLogical(Offset screen, Offset panOffset, double scale) {
+  return (screen / scale) - panOffset;
+}
+
 /// Helper function to get node dimensions based on zoom level.
 /// Returns Size(width, height) for the given node at the specified zoom level.
 /// Uses scale factor for proportional sizing.
@@ -272,19 +290,23 @@ class NodeNetworkState extends State<NodeNetwork> {
   }
 
   /// Checks if the given position is on top of any node
-  /// Adjusts for panning by subtracting the pan offset from the position
+  /// Converts screen position to logical space for hit testing
   bool _isClickOnNode(StructureDesignerModel model, Offset position) {
     if (model.nodeNetworkView == null) return false;
 
-    // Adjust position for pan offset
-    final adjustedPosition = position - _panOffset;
+    // Convert screen position to logical coordinates
+    final scale = getZoomScale(_zoomLevel);
+    final logicalPosition = screenToLogical(position, _panOffset, scale);
 
     for (final node in model.nodeNetworkView!.nodes.values) {
+      final nodePos = Offset(node.position.x, node.position.y);
       final nodeSize = getNodeSize(node, _zoomLevel);
-      final nodeRect = Rect.fromLTWH(
-          node.position.x, node.position.y, nodeSize.width, nodeSize.height);
+      // Node size is already in screen space, convert to logical space
+      final logicalNodeSize =
+          Size(nodeSize.width / scale, nodeSize.height / scale);
+      final nodeRect = nodePos & logicalNodeSize;
 
-      if (nodeRect.contains(adjustedPosition)) {
+      if (nodeRect.contains(logicalPosition)) {
         return true;
       }
     }
@@ -292,19 +314,23 @@ class NodeNetworkState extends State<NodeNetwork> {
   }
 
   /// Gets the node at the given position, if any
-  /// Accounts for the current pan offset
+  /// Converts screen position to logical space for hit testing
   NodeView? getNodeAtPosition(StructureDesignerModel model, Offset position) {
     if (model.nodeNetworkView == null) return null;
 
-    // Adjust position for pan offset
-    final adjustedPosition = position - _panOffset;
+    // Convert screen position to logical coordinates
+    final scale = getZoomScale(_zoomLevel);
+    final logicalPosition = screenToLogical(position, _panOffset, scale);
 
     for (final node in model.nodeNetworkView!.nodes.values) {
+      final nodePos = Offset(node.position.x, node.position.y);
       final nodeSize = getNodeSize(node, _zoomLevel);
-      final nodeRect = Rect.fromLTWH(
-          node.position.x, node.position.y, nodeSize.width, nodeSize.height);
+      // Node size is already in screen space, convert to logical space
+      final logicalNodeSize =
+          Size(nodeSize.width / scale, nodeSize.height / scale);
+      final nodeRect = nodePos & logicalNodeSize;
 
-      if (nodeRect.contains(adjustedPosition)) {
+      if (nodeRect.contains(logicalPosition)) {
         return node;
       }
     }
@@ -329,9 +355,11 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (!_isClickOnNode(model, details.localPosition)) {
       String? selectedNode = await showAddNodePopup(context);
       if (selectedNode != null) {
-        // Adjust position for pan offset when creating node
-        final adjustedPosition = details.localPosition - _panOffset;
-        model.createNode(selectedNode, adjustedPosition);
+        // Convert screen position to logical coordinates for node creation
+        final scale = getZoomScale(_zoomLevel);
+        final logicalPosition =
+            screenToLogical(details.localPosition, _panOffset, scale);
+        model.createNode(selectedNode, logicalPosition);
       }
     }
     focusNode.requestFocus();
@@ -418,41 +446,57 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Clean up pan-zoom gesture if needed
   }
 
-  /// Handle mouse scroll for zooming
+  /// Handle mouse scroll for zooming with zoom-to-cursor behavior
   void _handlePointerScroll(PointerScrollEvent event) {
-    // Cycle through zoom levels on scroll
-    // Scroll down (positive delta) = zoom out, scroll up (negative delta) = zoom in
+    // Determine new zoom level
+    ZoomLevel newZoomLevel = _zoomLevel;
+
     if (event.scrollDelta.dy > 0) {
-      // Zoom out - progress to next level
-      setState(() {
-        switch (_zoomLevel) {
-          case ZoomLevel.normal:
-            _zoomLevel = ZoomLevel.zoomedOutMedium;
-            break;
-          case ZoomLevel.zoomedOutMedium:
-            _zoomLevel = ZoomLevel.zoomedOutFar;
-            break;
-          case ZoomLevel.zoomedOutFar:
-            // Already at max zoom out, stay there
-            break;
-        }
-      });
+      // Zoom out
+      switch (_zoomLevel) {
+        case ZoomLevel.normal:
+          newZoomLevel = ZoomLevel.zoomedOutMedium;
+          break;
+        case ZoomLevel.zoomedOutMedium:
+          newZoomLevel = ZoomLevel.zoomedOutFar;
+          break;
+        case ZoomLevel.zoomedOutFar:
+          return; // Already at max zoom out
+      }
     } else if (event.scrollDelta.dy < 0) {
-      // Zoom in - progress to previous level
-      setState(() {
-        switch (_zoomLevel) {
-          case ZoomLevel.normal:
-            // Already at max zoom in, stay there
-            break;
-          case ZoomLevel.zoomedOutMedium:
-            _zoomLevel = ZoomLevel.normal;
-            break;
-          case ZoomLevel.zoomedOutFar:
-            _zoomLevel = ZoomLevel.zoomedOutMedium;
-            break;
-        }
-      });
+      // Zoom in
+      switch (_zoomLevel) {
+        case ZoomLevel.normal:
+          return; // Already at max zoom in
+        case ZoomLevel.zoomedOutMedium:
+          newZoomLevel = ZoomLevel.normal;
+          break;
+        case ZoomLevel.zoomedOutFar:
+          newZoomLevel = ZoomLevel.zoomedOutMedium;
+          break;
+      }
+    } else {
+      return;
     }
+
+    // Calculate new pan offset to keep cursor position fixed
+    // The point under the cursor in logical space should remain under the cursor
+    final oldScale = getZoomScale(_zoomLevel);
+    final newScale = getZoomScale(newZoomLevel);
+
+    // Convert cursor position from screen to logical coordinates
+    final cursorScreen = event.localPosition;
+    final cursorLogical = screenToLogical(cursorScreen, _panOffset, oldScale);
+
+    // Calculate new pan offset so that cursorLogical maps back to cursorScreen
+    // cursorScreen = (cursorLogical + newPanOffset) * newScale
+    // newPanOffset = (cursorScreen / newScale) - cursorLogical
+    final newPanOffset = (cursorScreen / newScale) - cursorLogical;
+
+    setState(() {
+      _zoomLevel = newZoomLevel;
+      _panOffset = newPanOffset;
+    });
   }
 
   @override

@@ -166,8 +166,68 @@ class NodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Create the base node widget content
-    Widget nodeContent = Column(
+    // Choose rendering mode based on zoom level
+    final Widget nodeContent = zoomLevel == ZoomLevel.normal
+        ? _buildNormalNodeContent(context)
+        : _buildZoomedOutNodeContent(context);
+
+    // Get node size for current zoom level
+    final nodeSize = getNodeSize(node, zoomLevel);
+
+    // Create container with node appearance
+    Widget nodeWidget = Container(
+      width: nodeSize.width,
+      height: nodeSize.height,
+      decoration: _getNodeDecoration(),
+      child: nodeContent,
+    );
+
+    // Add tooltip for nodes with errors
+    if (node.error != null && node.error!.isNotEmpty) {
+      nodeWidget = _wrapWithErrorTooltip(nodeWidget);
+    }
+
+    // Position the node using central coordinate transformation
+    final scale = getZoomScale(zoomLevel);
+    final screenPos = logicalToScreen(
+        Offset(node.position.x, node.position.y), panOffset, scale);
+    return Positioned(
+      left: screenPos.dx,
+      top: screenPos.dy,
+      child: nodeWidget,
+    );
+  }
+
+  /// Builds the zoomed-out compact node showing only title
+  Widget _buildZoomedOutNodeContent(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (details) => _handleNodeTap(context),
+      onPanStart: (details) => _handleNodeTap(context),
+      onPanUpdate: (details) => _handleNodeDrag(context, details),
+      onPanEnd: (details) => _handleNodeDragEnd(context),
+      onSecondaryTapDown: (details) => _handleContextMenu(context, details),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Text(
+            getSimpleName(node.nodeTypeName),
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: getNodeTitleFontSize(zoomLevel),
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 3,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds the normal detailed node with all pins and controls
+  Widget _buildNormalNodeContent(BuildContext context) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Title Bar
@@ -359,67 +419,6 @@ class NodeWidget extends StatelessWidget {
           ),
       ],
     );
-
-    // Create container with node appearance
-    Widget nodeWidget = Container(
-      width: NODE_WIDTH,
-      decoration: BoxDecoration(
-        color: NODE_BACKGROUND_COLOR,
-        borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
-        border: Border.all(
-            color: node.error != null
-                ? NODE_BORDER_COLOR_ERROR
-                : (node.selected
-                    ? NODE_BORDER_COLOR_SELECTED
-                    : NODE_BORDER_COLOR_NORMAL),
-            width: node.selected
-                ? NODE_BORDER_WIDTH_SELECTED
-                : NODE_BORDER_WIDTH_NORMAL),
-        boxShadow: node.error != null
-            ? [
-                BoxShadow(
-                    color:
-                        NODE_BORDER_COLOR_ERROR.withOpacity(WIRE_GLOW_OPACITY),
-                    blurRadius: WIRE_GLOW_BLUR_RADIUS,
-                    spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-              ]
-            : (node.selected
-                ? [
-                    BoxShadow(
-                        color: NODE_BORDER_COLOR_SELECTED
-                            .withOpacity(WIRE_GLOW_OPACITY),
-                        blurRadius: WIRE_GLOW_BLUR_RADIUS,
-                        spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-                  ]
-                : null),
-      ),
-      child: nodeContent,
-    );
-
-    // Add tooltip for nodes with errors
-    if (node.error != null && node.error!.isNotEmpty) {
-      nodeWidget = Tooltip(
-        message: node.error!,
-        textStyle: const TextStyle(fontSize: 14, color: Colors.white),
-        decoration: BoxDecoration(
-          color: Colors.red.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        waitDuration: const Duration(milliseconds: 500),
-        showDuration: const Duration(seconds: 5),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        preferBelow: true,
-        verticalOffset: 35.0,
-        child: nodeWidget,
-      );
-    }
-
-    // Position the node, taking into account both the node's position and the pan offset
-    return Positioned(
-      left: node.position.x + panOffset.dx,
-      top: node.position.y + panOffset.dy,
-      child: nodeWidget,
-    );
   }
 
   /// Creates a labeled input pin.
@@ -437,5 +436,131 @@ class NodeWidget extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Returns the decoration for the node container
+  BoxDecoration _getNodeDecoration() {
+    return BoxDecoration(
+      color: NODE_BACKGROUND_COLOR,
+      borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
+      border: Border.all(
+          color: node.error != null
+              ? NODE_BORDER_COLOR_ERROR
+              : (node.selected
+                  ? NODE_BORDER_COLOR_SELECTED
+                  : NODE_BORDER_COLOR_NORMAL),
+          width: node.selected
+              ? NODE_BORDER_WIDTH_SELECTED
+              : NODE_BORDER_WIDTH_NORMAL),
+      boxShadow: node.error != null
+          ? [
+              BoxShadow(
+                  color: NODE_BORDER_COLOR_ERROR.withOpacity(WIRE_GLOW_OPACITY),
+                  blurRadius: WIRE_GLOW_BLUR_RADIUS,
+                  spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+            ]
+          : (node.selected
+              ? [
+                  BoxShadow(
+                      color: NODE_BORDER_COLOR_SELECTED
+                          .withOpacity(WIRE_GLOW_OPACITY),
+                      blurRadius: WIRE_GLOW_BLUR_RADIUS,
+                      spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+                ]
+              : null),
+    );
+  }
+
+  /// Wraps a widget with error tooltip
+  Widget _wrapWithErrorTooltip(Widget child) {
+    return Tooltip(
+      message: node.error!,
+      textStyle: const TextStyle(fontSize: 14, color: Colors.white),
+      decoration: BoxDecoration(
+        color: Colors.red.shade700,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      waitDuration: const Duration(milliseconds: 500),
+      showDuration: const Duration(seconds: 5),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      preferBelow: true,
+      verticalOffset: 35.0,
+      child: child,
+    );
+  }
+
+  /// Handles node tap for selection
+  void _handleNodeTap(BuildContext context) {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    model.setSelectedNode(node.id);
+  }
+
+  /// Handles node drag for positioning
+  void _handleNodeDrag(BuildContext context, DragUpdateDetails details) {
+    Provider.of<StructureDesignerModel>(context, listen: false)
+        .dragNodePosition(node.id, details.delta);
+  }
+
+  /// Handles end of node drag
+  void _handleNodeDragEnd(BuildContext context) {
+    Provider.of<StructureDesignerModel>(context, listen: false)
+        .updateNodePosition(node.id);
+  }
+
+  /// Handles context menu for node
+  void _handleContextMenu(BuildContext context, TapDownDetails details) {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    model.setSelectedNode(node.id);
+
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        details.globalPosition,
+        details.globalPosition,
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    final bool isCustomNode = isCustomNodeType(nodeTypeName: node.nodeTypeName);
+
+    showMenu(
+      context: context,
+      position: position,
+      items: [
+        if (isCustomNode)
+          PopupMenuItem(
+            value: 'go_to_definition',
+            child: Text('Go to Definition'),
+          ),
+        PopupMenuItem(
+          value: 'return',
+          child: Text(
+              node.returnNode ? 'Unset as return node' : 'Set as return node'),
+        ),
+        PopupMenuItem(
+          value: 'duplicate',
+          child: Text('Duplicate node'),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'go_to_definition') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.setActiveNodeNetwork(node.nodeTypeName);
+      } else if (value == 'return') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        if (node.returnNode) {
+          model.setReturnNodeId(null);
+        } else {
+          model.setReturnNodeId(node.id);
+        }
+      } else if (value == 'duplicate') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.duplicateNode(node.id);
+      }
+    });
   }
 }
