@@ -120,28 +120,37 @@ Offset screenToLogical(Offset screen, Offset panOffset, double scale) {
 /// Helper function to get node dimensions based on zoom level.
 /// Returns Size(width, height) for the given node at the specified zoom level.
 /// For normal zoom, estimates height including title, pins, and subtitle.
-/// For zoomed-out modes, uses fixed compact size.
+/// For zoomed-out modes, uses proportionally scaled height with minimum aspect ratio.
 Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   final scale = getZoomScale(zoomLevel);
 
-  if (zoomLevel == ZoomLevel.normal) {
-    // Normal zoom - calculate estimated height for hit testing
-    // Title bar: ~30px, each input pin: ~22px, output area: ~25px, subtitle: ~20px, padding: ~8px
-    final titleHeight = 30.0;
-    final inputPinsHeight =
-        node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
-    final outputHeight = 25.0;
-    final subtitleHeight =
-        (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
-    final padding = 8.0;
+  // Calculate estimated height at normal scale (for all zoom levels)
+  // Title bar: ~30px, main body: max(inputs, output), subtitle: ~20px, padding: ~8px
+  final titleHeight = 30.0;
+  final inputPinsHeight =
+      node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+  final outputHeight = 25.0; // Single output pin height
+  // Main body is a Row, so height = max(left inputs, right output)
+  final mainBodyHeight =
+      inputPinsHeight > outputHeight ? inputPinsHeight : outputHeight;
+  final subtitleHeight =
+      (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
+  final padding = 8.0;
 
-    final height =
-        titleHeight + inputPinsHeight + outputHeight + subtitleHeight + padding;
-    return Size(BASE_NODE_WIDTH * scale, height * scale);
+  final normalHeight = titleHeight + mainBodyHeight + subtitleHeight + padding;
+
+  if (zoomLevel == ZoomLevel.normal) {
+    // Normal zoom - use calculated height
+    return Size(BASE_NODE_WIDTH * scale, normalHeight * scale);
   } else {
-    // Zoomed out - fixed compact size
+    // Zoomed out - use proportionally scaled height with minimum aspect ratio
+    // Ensure minimum height for text readability (at least 0.375 aspect ratio = height/width)
     final width = BASE_NODE_WIDTH * scale;
-    final height = BASE_NODE_HEIGHT_MIN * scale;
+    final scaledHeight = normalHeight * scale;
+    final minHeight =
+        width * 0.375; // Minimum aspect ratio for at least one line of text
+
+    final height = scaledHeight > minHeight ? scaledHeight : minHeight;
     return Size(width, height);
   }
 }

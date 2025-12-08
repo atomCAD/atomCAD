@@ -24,6 +24,7 @@ const double NODE_BORDER_RADIUS = 8.0;
 const Color NODE_TITLE_COLOR_SELECTED = Color(0xFFD84315); // Colors.orange[800]
 const Color NODE_TITLE_COLOR_NORMAL = Color(0xFF37474F); // Colors.blueGrey[800]
 const Color NODE_TITLE_COLOR_RETURN = Color(0xFF0D47A1); // Dark blue
+const Color NODE_TITLE_COLOR_PARAMETER = Color(0xFF1B5E20); // Dark green
 
 const double WIRE_GLOW_BLUR_RADIUS = 8.0;
 const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
@@ -203,6 +204,7 @@ class NodeWidget extends StatelessWidget {
   /// Builds the zoomed-out compact node showing only title
   Widget _buildZoomedOutNodeContent(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque, // Make entire node area interactive
       onTapDown: (details) => _handleNodeTap(context),
       onPanStart: (details) => _handleNodeTap(context),
       onPanUpdate: (details) => _handleNodeDrag(context, details),
@@ -320,10 +322,9 @@ class NodeWidget extends StatelessWidget {
             padding:
                 const EdgeInsets.only(top: 4, bottom: 4, left: 8, right: 2),
             decoration: BoxDecoration(
-              color: node.selected
-                  ? NODE_TITLE_COLOR_SELECTED
-                  : (node.returnNode
-                      ? NODE_TITLE_COLOR_RETURN
+              color: _getSpecialNodeColor() ??
+                  (node.selected
+                      ? NODE_TITLE_COLOR_SELECTED
                       : NODE_TITLE_COLOR_NORMAL),
               borderRadius: BorderRadius.vertical(
                   top: Radius.circular(NODE_BORDER_RADIUS - 2)),
@@ -440,10 +441,25 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
+  /// Returns the special color for return/parameter nodes, or null for regular nodes
+  Color? _getSpecialNodeColor() {
+    if (node.returnNode) {
+      return NODE_TITLE_COLOR_RETURN;
+    } else if (node.nodeTypeName == "parameter") {
+      return NODE_TITLE_COLOR_PARAMETER;
+    }
+    return null;
+  }
+
   /// Returns the decoration for the node container
   BoxDecoration _getNodeDecoration() {
+    // Use colored background for special nodes in zoomed-out modes
+    final backgroundColor = (zoomLevel != ZoomLevel.normal)
+        ? (_getSpecialNodeColor() ?? NODE_BACKGROUND_COLOR)
+        : NODE_BACKGROUND_COLOR;
+
     return BoxDecoration(
-      color: NODE_BACKGROUND_COLOR,
+      color: backgroundColor,
       borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
       border: Border.all(
           color: node.error != null
