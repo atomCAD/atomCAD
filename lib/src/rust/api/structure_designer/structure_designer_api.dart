@@ -89,6 +89,22 @@ void setActiveNodeNetwork({required String nodeNetworkName}) => RustLib
     .crateApiStructureDesignerStructureDesignerApiSetActiveNodeNetwork(
         nodeNetworkName: nodeNetworkName);
 
+/// Navigates back in node network history
+bool navigateBack() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiNavigateBack();
+
+/// Navigates forward in node network history
+bool navigateForward() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiNavigateForward();
+
+/// Checks if we can navigate backward in node network history
+bool canNavigateBack() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCanNavigateBack();
+
+/// Checks if we can navigate forward in node network history
+bool canNavigateForward() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCanNavigateForward();
+
 bool renameNodeNetwork({required String oldName, required String newName}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiRenameNodeNetwork(

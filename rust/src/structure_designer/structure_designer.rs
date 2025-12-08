@@ -19,6 +19,7 @@ use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RA
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::network_validator::{validate_network, NetworkValidationResult};
+use super::navigation_history::NavigationHistory;
 use std::collections::{HashSet, HashMap};
 use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
@@ -44,6 +45,8 @@ pub struct StructureDesigner {
   pending_changes: StructureDesignerChanges,
   // Temporary storage for CLI parameters during evaluation (used in headless mode)
   pub cli_top_level_parameters: Option<HashMap<String, NetworkResult>>,
+  // Navigation history for back/forward functionality
+  navigation_history: NavigationHistory,
 }
 
 impl StructureDesigner {
@@ -67,6 +70,7 @@ impl StructureDesigner {
       file_path: None,
       pending_changes: StructureDesignerChanges::default(),
       cli_top_level_parameters: None,
+      navigation_history: NavigationHistory::new(),
     }
   }
 }
@@ -472,6 +476,9 @@ impl StructureDesigner {
       }
     }
 
+    // Update navigation history to reflect the rename
+    self.navigation_history.rename_network(old_name, new_name);
+
     // Update all nodes in all node networks that reference the old node type name
     // This is necessary because node networks can be used as custom nodes in other networks
     for (_network_name, network) in self.node_type_registry.node_networks.iter_mut() {
@@ -525,6 +532,9 @@ impl StructureDesigner {
         self.active_node_network_name = None;
       }
     }
+
+    // Remove the deleted network from navigation history
+    self.navigation_history.remove_network(network_name);
 
     // Mark design as dirty since we deleted a network
     self.set_dirty(true);
@@ -867,8 +877,9 @@ impl StructureDesigner {
     None
   }
 
-  // Sets the active node network name
+  // Sets the active node network name and records it in navigation history
   pub fn set_active_node_network_name(&mut self, node_network_name: Option<String>) {
+    self.navigation_history.navigate_to(node_network_name.clone());
     self.active_node_network_name = node_network_name;
     // Switching networks requires full refresh (everything changes)
     self.mark_full_refresh();
@@ -887,6 +898,40 @@ impl StructureDesigner {
   /// Returns the file path where the design was last saved/loaded, or None if never saved/loaded
   pub fn get_file_path(&self) -> Option<&String> {
     self.file_path.as_ref()
+  }
+
+  /// Navigates back in network history
+  /// Returns true if navigation was successful, false if can't go back
+  pub fn navigate_back(&mut self) -> bool {
+    if let Some(network_name) = self.navigation_history.navigate_back() {
+      self.active_node_network_name = network_name;
+      self.mark_full_refresh();
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Navigates forward in network history
+  /// Returns true if navigation was successful, false if can't go forward
+  pub fn navigate_forward(&mut self) -> bool {
+    if let Some(network_name) = self.navigation_history.navigate_forward() {
+      self.active_node_network_name = network_name;
+      self.mark_full_refresh();
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Checks if we can navigate backward in network history
+  pub fn can_navigate_back(&self) -> bool {
+    self.navigation_history.can_navigate_back()
+  }
+
+  /// Checks if we can navigate forward in network history
+  pub fn can_navigate_forward(&self) -> bool {
+    self.navigation_history.can_navigate_forward()
   }
 }
 
@@ -1361,6 +1406,9 @@ impl StructureDesigner {
         }
       }
     }
+
+    // Clear navigation history since we're loading a new design file
+    self.navigation_history.clear();
 
     // Set active node network to the first network if available, otherwise None
     if first_network_name.is_empty() {

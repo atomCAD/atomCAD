@@ -450,6 +450,66 @@ pub fn set_active_node_network(node_network_name: &str) {
   }
 }
 
+/// Navigates back in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn navigate_back() -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.navigate_back();
+        if result {
+          refresh_structure_designer_auto(instance);
+        }
+        result
+      },
+      false
+    )
+  }
+}
+
+/// Navigates forward in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn navigate_forward() -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.navigate_forward();
+        if result {
+          refresh_structure_designer_auto(instance);
+        }
+        result
+      },
+      false
+    )
+  }
+}
+
+/// Checks if we can navigate backward in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_navigate_back() -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.can_navigate_back()
+      },
+      false
+    )
+  }
+}
+
+/// Checks if we can navigate forward in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_navigate_forward() -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.can_navigate_forward()
+      },
+      false
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn rename_node_network(old_name: &str, new_name: &str) -> bool {
   unsafe {

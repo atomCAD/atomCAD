@@ -308,6 +308,34 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  /// Navigates back in node network history
+  bool navigateBack() {
+    final success = structure_designer_api.navigateBack();
+    if (success) {
+      refreshFromKernel();
+    }
+    return success;
+  }
+
+  /// Navigates forward in node network history
+  bool navigateForward() {
+    final success = structure_designer_api.navigateForward();
+    if (success) {
+      refreshFromKernel();
+    }
+    return success;
+  }
+
+  /// Checks if we can navigate backward in network history
+  bool canNavigateBack() {
+    return structure_designer_api.canNavigateBack();
+  }
+
+  /// Checks if we can navigate forward in network history
+  bool canNavigateForward() {
+    return structure_designer_api.canNavigateForward();
+  }
+
   void setSelectedWire(BigInt sourceNodeId, BigInt sourceOutputPinIndex,
       BigInt destNodeId, BigInt destParamIndex) {
     if (nodeNetworkView == null) return;

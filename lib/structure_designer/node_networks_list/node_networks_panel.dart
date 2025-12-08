@@ -43,50 +43,82 @@ class _NodeNetworksPanelState extends State<NodeNetworksPanel>
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Add and Delete network buttons
+              // Navigation and action buttons
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Row(
                   children: [
-                    // Add network button
+                    // Back button
+                    Tooltip(
+                      message: 'Go Back',
+                      child: IconButton(
+                        onPressed: model.canNavigateBack()
+                            ? () => model.navigateBack()
+                            : null,
+                        icon: Icon(
+                          Icons.arrow_back,
+                          size: 20,
+                          color: model.canNavigateBack()
+                              ? AppColors.primaryAccent
+                              : null,
+                        ),
+                        padding: const EdgeInsets.all(4.0),
+                      ),
+                    ),
+                    // Forward button
+                    Tooltip(
+                      message: 'Go Forward',
+                      child: IconButton(
+                        onPressed: model.canNavigateForward()
+                            ? () => model.navigateForward()
+                            : null,
+                        icon: Icon(
+                          Icons.arrow_forward,
+                          size: 20,
+                          color: model.canNavigateForward()
+                              ? AppColors.primaryAccent
+                              : null,
+                        ),
+                        padding: const EdgeInsets.all(4.0),
+                      ),
+                    ),
+                    const SizedBox(
+                        width:
+                            16.0), // Gap between navigation and action buttons
+                    // Add network button (icon only)
                     Expanded(
-                      child: SizedBox(
-                        height: AppSpacing.buttonHeight,
-                        child: Tooltip(
-                          message: 'Add network',
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              model.addNewNodeNetwork();
-                            },
-                            icon: Icon(Icons.add,
-                                size: 16, color: AppColors.textOnDark),
-                            label: const Text('Add'),
-                            style: AppButtonStyles.primary,
+                      child: Tooltip(
+                        message: 'Add network',
+                        child: IconButton(
+                          onPressed: () {
+                            model.addNewNodeNetwork();
+                          },
+                          icon: Icon(
+                            Icons.add,
+                            size: 20,
+                            color: AppColors.primaryAccent,
                           ),
+                          padding: const EdgeInsets.all(4.0),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8.0),
-                    // Delete network button
+                    // Delete network button (icon only)
                     Expanded(
-                      child: SizedBox(
-                        height: AppSpacing.buttonHeight,
-                        child: Tooltip(
-                          message: 'Delete network',
-                          child: ElevatedButton.icon(
-                            onPressed: model.nodeNetworkView != null
-                                ? () => _handleDeleteNetwork(context, model)
+                      child: Tooltip(
+                        message: 'Delete network',
+                        child: IconButton(
+                          onPressed: model.nodeNetworkView != null
+                              ? () => _handleDeleteNetwork(context, model)
+                              : null,
+                          icon: Icon(
+                            Icons.delete,
+                            size: 20,
+                            color: model.nodeNetworkView != null
+                                ? AppColors.primaryAccent
                                 : null,
-                            icon: Icon(
-                              Icons.delete,
-                              size: 16,
-                              color: model.nodeNetworkView != null
-                                  ? AppColors.textOnDark
-                                  : null,
-                            ),
-                            label: const Text('Delete'),
-                            style: AppButtonStyles.primary,
                           ),
+                          padding: const EdgeInsets.all(4.0),
                         ),
                       ),
                     ),
