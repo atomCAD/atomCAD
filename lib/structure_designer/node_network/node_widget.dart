@@ -243,11 +243,11 @@ class NodeWidget extends StatelessWidget {
             model.setSelectedNode(node.id);
           },
           onPanUpdate: (details) {
-            // The dragNodePosition updates the model's absolute position
-            // The UI applies panOffset separately during rendering
-            // So we just pass the raw delta to the model
+            // Convert screen-space delta to logical-space delta
+            final scale = getZoomScale(zoomLevel);
+            final logicalDelta = details.delta / scale;
             Provider.of<StructureDesignerModel>(context, listen: false)
-                .dragNodePosition(node.id, details.delta);
+                .dragNodePosition(node.id, logicalDelta);
           },
           onPanEnd: (details) {
             Provider.of<StructureDesignerModel>(context, listen: false)
@@ -497,8 +497,11 @@ class NodeWidget extends StatelessWidget {
 
   /// Handles node drag for positioning
   void _handleNodeDrag(BuildContext context, DragUpdateDetails details) {
+    // Convert screen-space delta to logical-space delta
+    final scale = getZoomScale(zoomLevel);
+    final logicalDelta = details.delta / scale;
     Provider.of<StructureDesignerModel>(context, listen: false)
-        .dragNodePosition(node.id, details.delta);
+        .dragNodePosition(node.id, logicalDelta);
   }
 
   /// Handles end of node drag
