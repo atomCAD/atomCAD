@@ -175,9 +175,11 @@ class NodeWidget extends StatelessWidget {
     final nodeSize = getNodeSize(node, zoomLevel);
 
     // Create container with node appearance
+    // For normal zoom, don't set explicit height - let content determine it (for subtitle)
+    // For zoomed-out, set explicit height for fixed compact size
     Widget nodeWidget = Container(
       width: nodeSize.width,
-      height: nodeSize.height,
+      height: zoomLevel == ZoomLevel.normal ? null : nodeSize.height,
       decoration: _getNodeDecoration(),
       child: nodeContent,
     );

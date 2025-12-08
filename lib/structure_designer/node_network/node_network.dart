@@ -119,14 +119,24 @@ Offset screenToLogical(Offset screen, Offset panOffset, double scale) {
 
 /// Helper function to get node dimensions based on zoom level.
 /// Returns Size(width, height) for the given node at the specified zoom level.
-/// Uses scale factor for proportional sizing.
+/// For normal zoom, estimates height including title, pins, and subtitle.
+/// For zoomed-out modes, uses fixed compact size.
 Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   final scale = getZoomScale(zoomLevel);
 
   if (zoomLevel == ZoomLevel.normal) {
-    // Normal zoom - height depends on number of input pins
-    final height = BASE_NODE_VERT_WIRE_OFFSET +
-        (node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM);
+    // Normal zoom - calculate estimated height for hit testing
+    // Title bar: ~30px, each input pin: ~22px, output area: ~25px, subtitle: ~20px, padding: ~8px
+    final titleHeight = 30.0;
+    final inputPinsHeight =
+        node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+    final outputHeight = 25.0;
+    final subtitleHeight =
+        (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
+    final padding = 8.0;
+
+    final height =
+        titleHeight + inputPinsHeight + outputHeight + subtitleHeight + padding;
     return Size(BASE_NODE_WIDTH * scale, height * scale);
   } else {
     // Zoomed out - fixed compact size
