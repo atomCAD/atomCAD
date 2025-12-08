@@ -408,7 +408,10 @@ class NodeNetworkState extends State<NodeNetwork> {
     if ((_isMiddleMousePanning || _isShiftRightMousePanning) &&
         _lastPanPosition != null) {
       setState(() {
-        _panOffset += event.position - _lastPanPosition!;
+        // Convert screen-space delta to logical-space delta
+        final scale = getZoomScale(_zoomLevel);
+        final screenDelta = event.position - _lastPanPosition!;
+        _panOffset += screenDelta / scale;
         _lastPanPosition = event.position;
       });
     }
@@ -436,7 +439,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (HardwareKeyboard.instance.isShiftPressed &&
         (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
       setState(() {
-        _panOffset += event.panDelta;
+        // Convert screen-space delta to logical-space delta
+        final scale = getZoomScale(_zoomLevel);
+        _panOffset += event.panDelta / scale;
       });
     }
   }
