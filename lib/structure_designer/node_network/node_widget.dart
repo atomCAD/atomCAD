@@ -158,8 +158,10 @@ class PinWidget extends StatelessWidget {
 class NodeWidget extends StatelessWidget {
   final NodeView node;
   final Offset panOffset;
+  final ZoomLevel zoomLevel;
 
-  NodeWidget({required this.node, required this.panOffset})
+  NodeWidget(
+      {required this.node, required this.panOffset, required this.zoomLevel})
       : super(key: ValueKey(node.id));
 
   @override

@@ -8,13 +8,59 @@ import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
-// Node dimensions and layout constants
-const double NODE_WIDTH = 160.0;
-const double NODE_VERT_WIRE_OFFSET = 33.0;
-const double NODE_VERT_WIRE_OFFSET_EMPTY = 42.0;
-const double NODE_VERT_WIRE_OFFSET_FUNCTION_PIN = 16.0;
-const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 22.0;
-const double CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
+// Zoom levels
+enum ZoomLevel {
+  normal,
+  zoomedOutMedium,
+  zoomedOutFar,
+}
+
+/// Returns the scale factor for a given zoom level
+/// This allows most layout constants to scale proportionally
+double getZoomScale(ZoomLevel zoomLevel) {
+  switch (zoomLevel) {
+    case ZoomLevel.normal:
+      return 1.0;
+    case ZoomLevel.zoomedOutMedium:
+      return 0.6;
+    case ZoomLevel.zoomedOutFar:
+      return 0.35;
+  }
+}
+
+// Base node dimensions and layout constants (for normal zoom level)
+// These scale proportionally with zoom level via getZoomScale()
+const double BASE_NODE_WIDTH = 160.0;
+const double BASE_NODE_HEIGHT_MIN = 60.0; // Minimum height for zoomed out nodes
+const double BASE_NODE_VERT_WIRE_OFFSET = 33.0;
+const double BASE_NODE_VERT_WIRE_OFFSET_EMPTY = 42.0;
+const double BASE_NODE_VERT_WIRE_OFFSET_FUNCTION_PIN = 16.0;
+const double BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM = 22.0;
+const double BASE_CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
+const double BASE_ZOOMED_OUT_PIN_SPACING =
+    10.0; // Vertical spacing between input wires in zoomed-out mode
+
+// Legacy constants for backward compatibility (normal zoom)
+const double NODE_WIDTH = BASE_NODE_WIDTH;
+const double NODE_VERT_WIRE_OFFSET = BASE_NODE_VERT_WIRE_OFFSET;
+const double NODE_VERT_WIRE_OFFSET_EMPTY = BASE_NODE_VERT_WIRE_OFFSET_EMPTY;
+const double NODE_VERT_WIRE_OFFSET_FUNCTION_PIN =
+    BASE_NODE_VERT_WIRE_OFFSET_FUNCTION_PIN;
+const double NODE_VERT_WIRE_OFFSET_PER_PARAM =
+    BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+const double CUBIC_SPLINE_HORIZ_OFFSET = BASE_CUBIC_SPLINE_HORIZ_OFFSET;
+
+// Hand-tuned font sizes per zoom level (don't scale linearly)
+double getNodeTitleFontSize(ZoomLevel zoomLevel) {
+  switch (zoomLevel) {
+    case ZoomLevel.normal:
+      return 14.0;
+    case ZoomLevel.zoomedOutMedium:
+      return 11.0;
+    case ZoomLevel.zoomedOutFar:
+      return 8.0;
+  }
+}
 
 // Wire appearance constants
 const double WIRE_WIDTH_SELECTED = 4.0;
@@ -53,6 +99,25 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
+/// Helper function to get node dimensions based on zoom level.
+/// Returns Size(width, height) for the given node at the specified zoom level.
+/// Uses scale factor for proportional sizing.
+Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
+  final scale = getZoomScale(zoomLevel);
+
+  if (zoomLevel == ZoomLevel.normal) {
+    // Normal zoom - height depends on number of input pins
+    final height = BASE_NODE_VERT_WIRE_OFFSET +
+        (node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM);
+    return Size(BASE_NODE_WIDTH * scale, height * scale);
+  } else {
+    // Zoomed out - fixed compact size
+    final width = BASE_NODE_WIDTH * scale;
+    final height = BASE_NODE_HEIGHT_MIN * scale;
+    return Size(width, height);
+  }
+}
+
 /// Gets the appropriate color for a data type based on its name.
 ///
 /// If the type name contains '->' it's treated as a function type.
@@ -79,13 +144,18 @@ Color getDataTypeColor(String typeName) {
 class NodeNetworkInteractionLayer extends StatelessWidget {
   final StructureDesignerModel model;
   final Offset panOffset;
+  final ZoomLevel zoomLevel;
 
   const NodeNetworkInteractionLayer(
-      {super.key, required this.model, required this.panOffset});
+      {super.key,
+      required this.model,
+      required this.panOffset,
+      required this.zoomLevel});
 
   /// Handles tap on wires for selection, or clears selection if clicking empty space
   void _handleWireTap(TapUpDetails details) {
-    final painter = NodeNetworkPainter(model, panOffset: panOffset);
+    final painter =
+        NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel);
     final hit = painter.findWireAtPosition(details.localPosition);
     if (hit != null) {
       model.setSelectedWire(
@@ -103,7 +173,8 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: NodeNetworkPainter(model, panOffset: panOffset),
+      painter:
+          NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTapUp: _handleWireTap,
@@ -129,6 +200,9 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Current pan offset for the network view
   Offset _panOffset = Offset.zero;
+
+  /// Current zoom level
+  ZoomLevel _zoomLevel = ZoomLevel.normal;
 
   /// Store the current network name to detect changes
   String? _currentNetworkName;
@@ -206,13 +280,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     final adjustedPosition = position - _panOffset;
 
     for (final node in model.nodeNetworkView!.nodes.values) {
+      final nodeSize = getNodeSize(node, _zoomLevel);
       final nodeRect = Rect.fromLTWH(
-          node.position.x,
-          node.position.y,
-          NODE_WIDTH,
-          // Approximate height calculation based on number of input pins
-          NODE_VERT_WIRE_OFFSET +
-              (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM));
+          node.position.x, node.position.y, nodeSize.width, nodeSize.height);
 
       if (nodeRect.contains(adjustedPosition)) {
         return true;
@@ -230,12 +300,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     final adjustedPosition = position - _panOffset;
 
     for (final node in model.nodeNetworkView!.nodes.values) {
+      final nodeSize = getNodeSize(node, _zoomLevel);
       final nodeRect = Rect.fromLTWH(
-          node.position.x,
-          node.position.y,
-          NODE_WIDTH,
-          NODE_VERT_WIRE_OFFSET +
-              (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM));
+          node.position.x, node.position.y, nodeSize.width, nodeSize.height);
 
       if (nodeRect.contains(adjustedPosition)) {
         return node;
@@ -281,10 +348,11 @@ class NodeNetworkState extends State<NodeNetwork> {
     // The Stack will handle all the nodes and wires with appropriate transformations
     return [
       // Wire layer at the bottom
-      NodeNetworkInteractionLayer(model: model, panOffset: _panOffset),
+      NodeNetworkInteractionLayer(
+          model: model, panOffset: _panOffset, zoomLevel: _zoomLevel),
       // Then all the nodes on top - NodeWidget now handles its own positioning with panOffset
-      ...model.nodeNetworkView!.nodes.entries
-          .map((entry) => NodeWidget(node: entry.value, panOffset: _panOffset))
+      ...model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(
+          node: entry.value, panOffset: _panOffset, zoomLevel: _zoomLevel))
     ];
   }
 
@@ -350,6 +418,43 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Clean up pan-zoom gesture if needed
   }
 
+  /// Handle mouse scroll for zooming
+  void _handlePointerScroll(PointerScrollEvent event) {
+    // Cycle through zoom levels on scroll
+    // Scroll down (positive delta) = zoom out, scroll up (negative delta) = zoom in
+    if (event.scrollDelta.dy > 0) {
+      // Zoom out - progress to next level
+      setState(() {
+        switch (_zoomLevel) {
+          case ZoomLevel.normal:
+            _zoomLevel = ZoomLevel.zoomedOutMedium;
+            break;
+          case ZoomLevel.zoomedOutMedium:
+            _zoomLevel = ZoomLevel.zoomedOutFar;
+            break;
+          case ZoomLevel.zoomedOutFar:
+            // Already at max zoom out, stay there
+            break;
+        }
+      });
+    } else if (event.scrollDelta.dy < 0) {
+      // Zoom in - progress to previous level
+      setState(() {
+        switch (_zoomLevel) {
+          case ZoomLevel.normal:
+            // Already at max zoom in, stay there
+            break;
+          case ZoomLevel.zoomedOutMedium:
+            _zoomLevel = ZoomLevel.normal;
+            break;
+          case ZoomLevel.zoomedOutFar:
+            _zoomLevel = ZoomLevel.zoomedOutMedium;
+            break;
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -391,6 +496,11 @@ class NodeNetworkState extends State<NodeNetwork> {
                 onPointerDown: _handlePointerDown,
                 onPointerMove: _handlePointerMove,
                 onPointerUp: _handlePointerUp,
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    _handlePointerScroll(event);
+                  }
+                },
                 onPointerPanZoomStart: _handlePointerPanZoomStart,
                 onPointerPanZoomUpdate: _handlePointerPanZoomUpdate,
                 onPointerPanZoomEnd: _handlePointerPanZoomEnd,

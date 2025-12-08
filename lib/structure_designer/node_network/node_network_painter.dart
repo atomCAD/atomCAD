@@ -25,8 +25,10 @@ const double GRID_MINOR_LINE_WIDTH = 1.0;
 class NodeNetworkPainter extends CustomPainter {
   final StructureDesignerModel graphModel;
   final Offset panOffset;
+  final ZoomLevel zoomLevel;
 
-  NodeNetworkPainter(this.graphModel, {this.panOffset = Offset.zero});
+  NodeNetworkPainter(this.graphModel,
+      {this.panOffset = Offset.zero, this.zoomLevel = ZoomLevel.normal});
 
   @override
   void paint(Canvas canvas, Size size) {
