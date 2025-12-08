@@ -22,6 +22,13 @@ impl NavigationHistory {
             return;
         }
 
+        // Special case: if history only contains the initial None entry, replace it
+        // This prevents users from navigating back to a state they never experienced
+        if self.history.len() == 1 && self.history[0].is_none() && self.current_index == 0 {
+            self.history[0] = network_name;
+            return;
+        }
+
         // Truncate forward history
         self.history.truncate(self.current_index + 1);
         
