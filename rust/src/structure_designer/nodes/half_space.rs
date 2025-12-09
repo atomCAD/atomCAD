@@ -123,7 +123,10 @@ impl NodeData for HalfSpaceData {
       }
 
       // Get crystallographically correct plane properties (normal and d-spacing)
-      let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index);
+      let plane_props = match unit_cell.ivec3_miller_index_to_plane_props(&miller_index) {
+        Ok(props) => props,
+        Err(error_msg) => return NetworkResult::Error(error_msg),
+      };
       let center_pos = unit_cell.ivec3_lattice_to_real(&center);
 
       // Calculate shift distance as multiples of d-spacing, divided by subdivision

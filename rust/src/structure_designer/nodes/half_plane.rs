@@ -114,7 +114,10 @@ impl NodeData for HalfPlaneData {
           };
 
           // Convert miller index to plane properties
-          let plane_props = unit_cell.ivec2_miller_index_to_plane_props(&miller_index);
+          let plane_props = match unit_cell.ivec2_miller_index_to_plane_props(&miller_index) {
+            Ok(props) => props,
+            Err(error_msg) => return NetworkResult::Error(error_msg),
+          };
           
           // Convert center from lattice to real coordinates
           let center_pos = unit_cell.ivec2_lattice_to_real(&center);

@@ -368,7 +368,8 @@ impl FacetShellData {
       
       for (cached_index, facet) in self.cached_facets.iter().enumerate() {
           // Get crystallographically correct plane properties (normal and d-spacing)
-          let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index);
+          let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index)
+              .expect("Miller index should be valid for gadget hit testing");
           
           // Calculate shift distance as multiples of d-spacing
           let shift_distance = facet.shift as f64 * plane_props.d_spacing;
@@ -502,16 +503,20 @@ impl NodeData for FacetShellData {
 
         let center_pos = unit_cell.ivec3_lattice_to_real(&center);
 
-        let shapes: Vec<GeoNode> = self.cached_facets.iter().map(|facet| {
+        let mut shapes: Vec<GeoNode> = Vec::new();
+        for facet in &self.cached_facets {
           // Get crystallographically correct plane properties (normal and d-spacing)
-          let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index);
+          let plane_props = match unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index) {
+            Ok(props) => props,
+            Err(error_msg) => return NetworkResult::Error(error_msg),
+          };
 
           // Calculate shift distance as multiples of d-spacing
           let shift_distance = facet.shift as f64 * plane_props.d_spacing;
           let shifted_center = center_pos + plane_props.normal * shift_distance;
 
-          GeoNode::half_space(plane_props.normal, shifted_center)
-        }).collect();
+          shapes.push(GeoNode::half_space(plane_props.normal, shifted_center));
+        }
 
         return NetworkResult::Geometry(GeometrySummary {
           unit_cell: unit_cell.clone(),

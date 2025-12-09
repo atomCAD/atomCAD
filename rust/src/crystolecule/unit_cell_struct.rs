@@ -296,19 +296,20 @@ impl UnitCellStruct {
   /// * `miller_indices` - Miller indices (h, k, l) as DVec3
   /// 
   /// # Returns
-  /// * CrystalPlaneProps containing normalized normal vector and d-spacing
+  /// * Ok(CrystalPlaneProps) containing normalized normal vector and d-spacing
+  /// * Err(String) with error message if the computation fails
   /// 
-  /// # Panics
-  /// * Panics if miller_indices is (0,0,0) - invalid Miller index
-  /// * Panics if the unit cell volume is zero (degenerate unit cell)
-  pub fn dvec3_miller_index_to_plane_props(&self, miller_indices: &DVec3) -> CrystalPlaneProps {
+  /// # Errors
+  /// * Returns error if miller_indices is (0,0,0) - invalid Miller index
+  /// * Returns error if the unit cell volume is zero (degenerate unit cell)
+  pub fn dvec3_miller_index_to_plane_props(&self, miller_indices: &DVec3) -> Result<CrystalPlaneProps, String> {
     let h = miller_indices.x;
     let k = miller_indices.y;
     let l = miller_indices.z;
     
     // Check for invalid (0,0,0) Miller index
     if h.abs() < 1e-12 && k.abs() < 1e-12 && l.abs() < 1e-12 {
-      panic!("Miller index (0,0,0) is invalid - cannot define a plane");
+      return Err("Miller index (0,0,0) is invalid - cannot define a plane".to_string());
     }
     
     // Calculate cross products for reciprocal lattice basis vectors
@@ -321,7 +322,7 @@ impl UnitCellStruct {
     
     // Check for degenerate unit cell
     if volume.abs() < 1e-12 {
-      panic!("Unit cell has zero volume - cannot compute Miller index properties");
+      return Err("Unit cell has zero volume - cannot compute Miller index properties".to_string());
     }
     
     // Calculate the reciprocal lattice vector (unnormalized)
@@ -333,10 +334,10 @@ impl UnitCellStruct {
     // Calculate normalized normal vector
     let normal = reciprocal_vector.normalize();
     
-    CrystalPlaneProps {
+    Ok(CrystalPlaneProps {
       normal,
       d_spacing,
-    }
+    })
   }
 
   /// Converts Miller indices to crystal plane properties (normal and d-spacing).
@@ -348,12 +349,13 @@ impl UnitCellStruct {
   /// * `miller_indices` - Miller indices (h, k, l) as IVec3
   /// 
   /// # Returns
-  /// * CrystalPlaneProps containing normalized normal vector and d-spacing
+  /// * Ok(CrystalPlaneProps) containing normalized normal vector and d-spacing
+  /// * Err(String) with error message if the computation fails
   /// 
-  /// # Panics
-  /// * Panics if miller_indices is (0,0,0) - invalid Miller index
-  /// * Panics if the unit cell volume is zero (degenerate unit cell)
-  pub fn ivec3_miller_index_to_plane_props(&self, miller_indices: &IVec3) -> CrystalPlaneProps {
+  /// # Errors
+  /// * Returns error if miller_indices is (0,0,0) - invalid Miller index
+  /// * Returns error if the unit cell volume is zero (degenerate unit cell)
+  pub fn ivec3_miller_index_to_plane_props(&self, miller_indices: &IVec3) -> Result<CrystalPlaneProps, String> {
     self.dvec3_miller_index_to_plane_props(&miller_indices.as_dvec3())
   }
 
@@ -365,12 +367,14 @@ impl UnitCellStruct {
   /// * `miller_indices` - Miller indices (h, k, l) as DVec3
   /// 
   /// # Returns
-  /// * Normalized normal vector of the crystal plane in real space coordinates
+  /// * Ok(DVec3) - Normalized normal vector of the crystal plane in real space coordinates
+  /// * Err(String) with error message if the computation fails
   /// 
-  /// # Panics
-  /// * Panics if the unit cell volume is zero (degenerate unit cell)
-  pub fn dvec3_miller_index_to_normal(&self, miller_indices: &DVec3) -> DVec3 {
-    self.dvec3_miller_index_to_plane_props(miller_indices).normal
+  /// # Errors
+  /// * Returns error if miller_indices is (0,0,0) - invalid Miller index
+  /// * Returns error if the unit cell volume is zero (degenerate unit cell)
+  pub fn dvec3_miller_index_to_normal(&self, miller_indices: &DVec3) -> Result<DVec3, String> {
+    Ok(self.dvec3_miller_index_to_plane_props(miller_indices)?.normal)
   }
 
   /// Converts Miller indices to the normal vector of the corresponding crystal plane.
@@ -381,12 +385,14 @@ impl UnitCellStruct {
   /// * `miller_indices` - Miller indices (h, k, l) as IVec3
   /// 
   /// # Returns
-  /// * Normalized normal vector of the crystal plane in real space coordinates
+  /// * Ok(DVec3) - Normalized normal vector of the crystal plane in real space coordinates
+  /// * Err(String) with error message if the computation fails
   /// 
-  /// # Panics
-  /// * Panics if the unit cell volume is zero (degenerate unit cell)
-  pub fn ivec3_miller_index_to_normal(&self, miller_indices: &IVec3) -> DVec3 {
-    self.ivec3_miller_index_to_plane_props(miller_indices).normal
+  /// # Errors
+  /// * Returns error if miller_indices is (0,0,0) - invalid Miller index
+  /// * Returns error if the unit cell volume is zero (degenerate unit cell)
+  pub fn ivec3_miller_index_to_normal(&self, miller_indices: &IVec3) -> Result<DVec3, String> {
+    Ok(self.ivec3_miller_index_to_plane_props(miller_indices)?.normal)
   }
 
   /// Converts 2D Miller indices to crystal line properties (normal and d-spacing).
@@ -399,18 +405,19 @@ impl UnitCellStruct {
   /// * `miller_indices` - Miller indices (h, k) as DVec2
   /// 
   /// # Returns
-  /// * CrystalPlaneProps2D containing normalized normal vector and d-spacing
+  /// * Ok(CrystalPlaneProps2D) containing normalized normal vector and d-spacing
+  /// * Err(String) with error message if the computation fails
   /// 
-  /// # Panics
-  /// * Panics if miller_indices is (0,0) - invalid Miller index
-  /// * Panics if the unit cell area is zero (degenerate unit cell)
-  pub fn dvec2_miller_index_to_plane_props(&self, miller_indices: &DVec2) -> CrystalPlaneProps2D {
+  /// # Errors
+  /// * Returns error if miller_indices is (0,0) - invalid Miller index
+  /// * Returns error if the unit cell area is zero (degenerate unit cell)
+  pub fn dvec2_miller_index_to_plane_props(&self, miller_indices: &DVec2) -> Result<CrystalPlaneProps2D, String> {
     let h = miller_indices.x;
     let k = miller_indices.y;
     
     // Check for invalid (0,0) Miller index
     if h.abs() < 1e-12 && k.abs() < 1e-12 {
-      panic!("Miller index (0,0) is invalid - cannot define a plane");
+      return Err("Miller index (0,0) is invalid - cannot define a plane".to_string());
     }
     
     // Extract 2D components of basis vectors
@@ -422,7 +429,7 @@ impl UnitCellStruct {
     
     // Check for degenerate unit cell
     if area.abs() < 1e-12 {
-      panic!("Unit cell has zero area - cannot compute Miller index properties");
+      return Err("Unit cell has zero area - cannot compute Miller index properties".to_string());
     }
     
     // For 2D, the reciprocal lattice vectors are:
@@ -440,10 +447,10 @@ impl UnitCellStruct {
     // Calculate normalized normal vector
     let normal = reciprocal_vector.normalize();
     
-    CrystalPlaneProps2D {
+    Ok(CrystalPlaneProps2D {
       normal,
       d_spacing,
-    }
+    })
   }
 
   /// Converts 2D Miller indices to crystal line properties (normal and d-spacing).
@@ -455,12 +462,13 @@ impl UnitCellStruct {
   /// * `miller_indices` - Miller indices (h, k) as IVec2
   /// 
   /// # Returns
-  /// * CrystalPlaneProps2D containing normalized normal vector and d-spacing
+  /// * Ok(CrystalPlaneProps2D) containing normalized normal vector and d-spacing
+  /// * Err(String) with error message if the computation fails
   /// 
-  /// # Panics
-  /// * Panics if miller_indices is (0,0) - invalid Miller index
-  /// * Panics if the unit cell area is zero (degenerate unit cell)
-  pub fn ivec2_miller_index_to_plane_props(&self, miller_indices: &IVec2) -> CrystalPlaneProps2D {
+  /// # Errors
+  /// * Returns error if miller_indices is (0,0) - invalid Miller index
+  /// * Returns error if the unit cell area is zero (degenerate unit cell)
+  pub fn ivec2_miller_index_to_plane_props(&self, miller_indices: &IVec2) -> Result<CrystalPlaneProps2D, String> {
     self.dvec2_miller_index_to_plane_props(&miller_indices.as_dvec2())
   }
 
