@@ -27,6 +27,15 @@ pub struct CrystalPlaneProps {
   pub d_spacing: f64,
 }
 
+/// Properties of a 2D crystal line defined by Miller indices
+#[derive(Debug, Clone)]
+pub struct CrystalPlaneProps2D {
+  /// Normalized normal vector of the crystal line in real 2D space coordinates
+  pub normal: DVec2,
+  /// d-spacing (inter-line spacing) for this Miller index in real space units
+  pub d_spacing: f64,
+}
+
 impl UnitCellStruct {
   /// Creates a UnitCellStruct from three basis vectors.
   /// 
@@ -290,11 +299,17 @@ impl UnitCellStruct {
   /// * CrystalPlaneProps containing normalized normal vector and d-spacing
   /// 
   /// # Panics
+  /// * Panics if miller_indices is (0,0,0) - invalid Miller index
   /// * Panics if the unit cell volume is zero (degenerate unit cell)
   pub fn dvec3_miller_index_to_plane_props(&self, miller_indices: &DVec3) -> CrystalPlaneProps {
     let h = miller_indices.x;
     let k = miller_indices.y;
     let l = miller_indices.z;
+    
+    // Check for invalid (0,0,0) Miller index
+    if h.abs() < 1e-12 && k.abs() < 1e-12 && l.abs() < 1e-12 {
+      panic!("Miller index (0,0,0) is invalid - cannot define a plane");
+    }
     
     // Calculate cross products for reciprocal lattice basis vectors
     let b_cross_c = self.b.cross(self.c);
@@ -336,6 +351,7 @@ impl UnitCellStruct {
   /// * CrystalPlaneProps containing normalized normal vector and d-spacing
   /// 
   /// # Panics
+  /// * Panics if miller_indices is (0,0,0) - invalid Miller index
   /// * Panics if the unit cell volume is zero (degenerate unit cell)
   pub fn ivec3_miller_index_to_plane_props(&self, miller_indices: &IVec3) -> CrystalPlaneProps {
     self.dvec3_miller_index_to_plane_props(&miller_indices.as_dvec3())
@@ -371,6 +387,81 @@ impl UnitCellStruct {
   /// * Panics if the unit cell volume is zero (degenerate unit cell)
   pub fn ivec3_miller_index_to_normal(&self, miller_indices: &IVec3) -> DVec3 {
     self.ivec3_miller_index_to_plane_props(miller_indices).normal
+  }
+
+  /// Converts 2D Miller indices to crystal line properties (normal and d-spacing).
+  /// 
+  /// In 2D, Miller indices (h, k) define a family of parallel lines. This method computes:
+  /// - The normal vector perpendicular to these lines
+  /// - The d-spacing (distance between parallel lines)
+  /// 
+  /// # Arguments
+  /// * `miller_indices` - Miller indices (h, k) as DVec2
+  /// 
+  /// # Returns
+  /// * CrystalPlaneProps2D containing normalized normal vector and d-spacing
+  /// 
+  /// # Panics
+  /// * Panics if miller_indices is (0,0) - invalid Miller index
+  /// * Panics if the unit cell area is zero (degenerate unit cell)
+  pub fn dvec2_miller_index_to_plane_props(&self, miller_indices: &DVec2) -> CrystalPlaneProps2D {
+    let h = miller_indices.x;
+    let k = miller_indices.y;
+    
+    // Check for invalid (0,0) Miller index
+    if h.abs() < 1e-12 && k.abs() < 1e-12 {
+      panic!("Miller index (0,0) is invalid - cannot define a plane");
+    }
+    
+    // Extract 2D components of basis vectors
+    let a2d = DVec2::new(self.a.x, self.a.y);
+    let b2d = DVec2::new(self.b.x, self.b.y);
+    
+    // Calculate 2D area (cross product magnitude in 2D is the z-component)
+    let area = a2d.x * b2d.y - a2d.y * b2d.x;
+    
+    // Check for degenerate unit cell
+    if area.abs() < 1e-12 {
+      panic!("Unit cell has zero area - cannot compute Miller index properties");
+    }
+    
+    // For 2D, the reciprocal lattice vectors are:
+    // a* = (b.y, -b.x) / area
+    // b* = (-a.y, a.x) / area
+    let a_star = DVec2::new(b2d.y, -b2d.x) / area;
+    let b_star = DVec2::new(-a2d.y, a2d.x) / area;
+    
+    // Calculate the reciprocal lattice vector (unnormalized)
+    let reciprocal_vector = h * a_star + k * b_star;
+    
+    // Calculate d-spacing as inverse of reciprocal vector magnitude
+    let d_spacing = 1.0 / reciprocal_vector.length();
+    
+    // Calculate normalized normal vector
+    let normal = reciprocal_vector.normalize();
+    
+    CrystalPlaneProps2D {
+      normal,
+      d_spacing,
+    }
+  }
+
+  /// Converts 2D Miller indices to crystal line properties (normal and d-spacing).
+  /// 
+  /// This is a convenience wrapper around `dvec2_miller_index_to_plane_props` that accepts
+  /// integer Miller indices and converts them to floating-point before computation.
+  /// 
+  /// # Arguments
+  /// * `miller_indices` - Miller indices (h, k) as IVec2
+  /// 
+  /// # Returns
+  /// * CrystalPlaneProps2D containing normalized normal vector and d-spacing
+  /// 
+  /// # Panics
+  /// * Panics if miller_indices is (0,0) - invalid Miller index
+  /// * Panics if the unit cell area is zero (degenerate unit cell)
+  pub fn ivec2_miller_index_to_plane_props(&self, miller_indices: &IVec2) -> CrystalPlaneProps2D {
+    self.dvec2_miller_index_to_plane_props(&miller_indices.as_dvec2())
   }
 
   /// Returns a basis vector by its index.

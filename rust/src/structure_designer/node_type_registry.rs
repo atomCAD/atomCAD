@@ -556,6 +556,22 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
           name: "unit_cell".to_string(),
           data_type: DataType::UnitCell,
         },
+        Parameter {
+          name: "m_index".to_string(),
+          data_type: DataType::IVec2,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec2,
+        },
+        Parameter {
+          name: "shift".to_string(),
+          data_type: DataType::Int,
+        },
+        Parameter {
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
       ],
       output_type: DataType::Geometry2D,
       public: true,

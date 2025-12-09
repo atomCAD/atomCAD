@@ -64,6 +64,11 @@ impl NodeData for HalfPlaneData {
         Err(error) => return error,
       };
 
+      // Evaluate optional miller_index input pin
+      let miller_index_result = network_evaluator.evaluate_arg(
+        network_stack, node_id, registry, context, 1
+      );
+
       // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
       // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
       if network_stack.len() == 1 {
@@ -73,8 +78,74 @@ impl NodeData for HalfPlaneData {
         context.selected_node_eval_cache = Some(Box::new(eval_cache));
       }
 
-      let point1 = unit_cell.ivec2_lattice_to_real(&self.point1);
-      let point2 = unit_cell.ivec2_lattice_to_real(&self.point2);
+      // Determine point1 and point2 based on whether miller_index is connected
+      let (point1, point2) = match miller_index_result {
+        NetworkResult::IVec2(miller_index) => {
+          // Miller index is connected - use it to determine the half plane
+          
+          // Evaluate center input pin (defaults to origin)
+          let center = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 2,
+            IVec2::new(0, 0),
+            NetworkResult::extract_ivec2
+          ) {
+            Ok(value) => value,
+            Err(error) => return error,
+          };
+
+          // Evaluate shift input pin
+          let shift = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 3,
+            0,
+            NetworkResult::extract_int
+          ) {
+            Ok(value) => value,
+            Err(error) => return error,
+          };
+
+          // Evaluate subdivision input pin
+          let subdivision = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 4,
+            1,
+            NetworkResult::extract_int
+          ) {
+            Ok(value) => value.max(1), // Ensure minimum value of 1
+            Err(error) => return error,
+          };
+
+          // Convert miller index to plane properties
+          let plane_props = unit_cell.ivec2_miller_index_to_plane_props(&miller_index);
+          
+          // Convert center from lattice to real coordinates
+          let center_pos = unit_cell.ivec2_lattice_to_real(&center);
+          
+          // Calculate shift distance as multiples of d-spacing, divided by subdivision
+          let shift_distance = (shift as f64 / subdivision as f64) * plane_props.d_spacing;
+          
+          // Calculate two points on the line perpendicular to the miller index
+          // The line passes through the shifted center
+          let shifted_center = center_pos + plane_props.normal * shift_distance;
+          
+          // Create a perpendicular direction (rotate normal by 90 degrees)
+          let perpendicular = DVec2::new(-plane_props.normal.y, plane_props.normal.x);
+          
+          // Generate two points on the line
+          let p1 = shifted_center + perpendicular;
+          let p2 = shifted_center - perpendicular;
+          
+          (p1, p2)
+        },
+        NetworkResult::Error(error) => {
+          // Error in miller_index evaluation
+          return NetworkResult::Error(error);
+        },
+        _ => {
+          // Miller index not connected - use point1 and point2 from node data
+          let p1 = unit_cell.ivec2_lattice_to_real(&self.point1);
+          let p2 = unit_cell.ivec2_lattice_to_real(&self.point2);
+          (p1, p2)
+        }
+      };
     
       // Calculate direction vector from point1 to point2
       let dir_vector = point2 - point1;
@@ -96,9 +167,45 @@ impl NodeData for HalfPlaneData {
         Box::new(self.clone())
     }
 
-    fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-        Some(format!("({},{}) ({},{})", 
-            self.point1.x, self.point1.y, self.point2.x, self.point2.y))
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let m_index_connected = connected_input_pins.contains("m_index");
+        
+        // If miller_index is connected, show unconnected miller params
+        // Otherwise show point1/point2
+        if m_index_connected {
+            // Miller index mode - show unconnected parameters
+            let center_connected = connected_input_pins.contains("center");
+            let shift_connected = connected_input_pins.contains("shift");
+            let subdivision_connected = connected_input_pins.contains("subdivision");
+            
+            if center_connected && shift_connected && subdivision_connected {
+                None // All relevant params connected
+            } else {
+                let mut parts = Vec::new();
+                
+                if !center_connected {
+                    parts.push(format!("c: (0,0)"));
+                }
+                
+                if !shift_connected {
+                    parts.push(format!("s: 0"));
+                }
+                
+                if !subdivision_connected {
+                    parts.push(format!("sub: 1"));
+                }
+                
+                if parts.is_empty() {
+                    None
+                } else {
+                    Some(parts.join(" "))
+                }
+            }
+        } else {
+            // Point mode - show point1 and point2
+            Some(format!("({},{}) ({},{})", 
+                self.point1.x, self.point1.y, self.point2.x, self.point2.y))
+        }
     }
 }
 
