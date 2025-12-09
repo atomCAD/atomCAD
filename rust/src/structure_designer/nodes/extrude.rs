@@ -14,7 +14,6 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
@@ -48,14 +47,8 @@ impl NodeData for ExtrudeData {
         0,
       );
     
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 1, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
-        ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
+      // NOTE: Input pin 1 (extrude pin) is deprecated but kept for backward compatibility with existing networks.
+      // We ignore it and use the unit cell from the shape instead.
 
       if let NetworkResult::Error(_) = shape_val {
         return shape_val;
@@ -71,6 +64,9 @@ impl NodeData for ExtrudeData {
       };
 
       if let NetworkResult::Geometry2D(shape) = shape_val {
+        // Use the unit cell from the shape (not from the deprecated extrude pin)
+        let unit_cell = shape.unit_cell.clone();
+        
         let frame_translation_2d = shape.frame_transform.translation;
     
         let frame_transform = Transform::new(
