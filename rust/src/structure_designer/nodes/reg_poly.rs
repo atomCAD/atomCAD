@@ -16,7 +16,7 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegPolyData {
@@ -44,10 +44,10 @@ impl NodeData for RegPolyData {
         let num_sides = max(3, self.num_sides);
         let radius = max(1, self.radius);
     
-        let unit_cell = match network_evaluator.evaluate_or_default(
-            network_stack, node_id, registry, context, 0, 
-            UnitCellStruct::cubic_diamond(), 
-            NetworkResult::extract_unit_cell,
+        let drawing_plane = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 0,
+            DrawingPlane::default(),
+            NetworkResult::extract_drawing_plane,
         ) {
             Ok(value) => value,
             Err(error) => return error,
@@ -63,15 +63,16 @@ impl NodeData for RegPolyData {
             vertices.push(find_lattice_point(angle, radius));
         }
     
+        // Convert lattice vertices to 2D real-space coordinates using effective unit cell
         let real_vertices = vertices.iter().map(|v| {
-            unit_cell.ivec2_lattice_to_real(v)
+            drawing_plane.effective_unit_cell.ivec2_lattice_to_real(v)
         }).collect();
 
         // Create a transform at the center of the polygon (origin)
         // No rotation is needed for this type of shape
         return NetworkResult::Geometry2D(
           GeometrySummary2D {
-            unit_cell: unit_cell,
+            drawing_plane,
             frame_transform: Transform2D::new(
               DVec2::new(0.0, 0.0),  // Center at origin
               0.0,                   // No rotation

@@ -451,8 +451,8 @@ Now that we have general polygon node this node is less used.".to_string(),
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
+          name: "d_plane".to_string(),
+          data_type: DataType::DrawingPlane,
         },
       ],
       output_type: DataType::Geometry2D,
