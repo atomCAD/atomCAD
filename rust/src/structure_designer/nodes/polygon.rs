@@ -22,7 +22,7 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -34,7 +34,7 @@ impl NodeData for PolygonData {
     fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       let eval_cache = structure_designer.get_selected_node_eval_cache()?;
       let polygon_cache = eval_cache.downcast_ref::<PolygonEvalCache>()?;
-      Some(Box::new(PolygonGadget::new(&self.vertices, &polygon_cache.unit_cell)))
+      Some(Box::new(PolygonGadget::new(&self.vertices, &polygon_cache.drawing_plane)))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -51,10 +51,10 @@ impl NodeData for PolygonData {
         context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
 
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 0, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
+      let drawing_plane = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0,
+        DrawingPlane::default(),
+        NetworkResult::extract_drawing_plane,
       ) {
         Ok(value) => value,
         Err(error) => return error,
@@ -64,18 +64,19 @@ impl NodeData for PolygonData {
       // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
       if network_stack.len() == 1 {
         let eval_cache = PolygonEvalCache {
-          unit_cell: unit_cell.clone(),
+          drawing_plane: drawing_plane.clone(),
         };
         context.selected_node_eval_cache = Some(Box::new(eval_cache));
       }
 
+      // Convert vertices using effective unit cell
       let real_vertices = self.vertices.iter().map(|v| {
-        unit_cell.ivec2_lattice_to_real(v)
+        drawing_plane.effective_unit_cell.ivec2_lattice_to_real(v)
       }).collect();
 
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell,
+          drawing_plane,
           frame_transform: Transform2D::new(
             DVec2::new(0.0, 0.0),
             0.0,
@@ -95,7 +96,7 @@ impl NodeData for PolygonData {
 }
 
 pub struct PolygonEvalCache {
-    pub unit_cell: UnitCellStruct,
+    pub drawing_plane: DrawingPlane,
 }
 
 #[derive(Clone)]
@@ -103,17 +104,34 @@ pub struct PolygonGadget {
     pub vertices: Vec<IVec2>,
     pub is_dragging: bool,
     pub dragged_handle: Option<usize>, // index of the dragged vertex
-    pub unit_cell: UnitCellStruct,
+    pub drawing_plane: DrawingPlane,
 }
 
 impl PolygonGadget {
-    pub fn new(vertices: &Vec<IVec2>, unit_cell: &UnitCellStruct) -> Self {
+    pub fn new(vertices: &Vec<IVec2>, drawing_plane: &DrawingPlane) -> Self {
         PolygonGadget {
             vertices: vertices.clone(),
             is_dragging: false,
             dragged_handle: None,
-            unit_cell: unit_cell.clone(),
+            drawing_plane: drawing_plane.clone(),
         }
+    }
+    
+    /// Maps a 2D lattice coordinate (in plane space) to 3D world position.
+    /// This places the vertex on the actual drawing plane in 3D space.
+    fn lattice_2d_to_world_3d(&self, lattice_2d: &IVec2) -> DVec3 {
+        // 1. Convert lattice → 2D real coordinates in plane space
+        let real_2d = self.drawing_plane.effective_unit_cell.ivec2_lattice_to_real(lattice_2d);
+        
+        // 2. Get plane basis vectors in 3D world space
+        let u_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.u_axis);
+        let v_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.v_axis);
+        
+        // 3. Get plane origin (center point in 3D)
+        let plane_origin = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.center);
+        
+        // 4. Construct 3D position: origin + real_2d.x * u + real_2d.y * v
+        plane_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
     }
     
     /// Removes any vertices that are at the same position as an adjacent vertex.
@@ -144,43 +162,58 @@ impl PolygonGadget {
         }
     }
     
-    /// Finds the nearest lattice point by intersecting a ray with the XY plane
-    /// Returns None if the ray doesn't intersect the plane in a forward direction
+    /// Finds the nearest lattice point by intersecting a ray with the drawing plane.
+    /// Returns None if the ray doesn't intersect the plane in a forward direction.
     fn find_lattice_point_by_ray(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<IVec2> {
-        // Project the ray onto the XY plane (z = 0)
-        let plane_normal = DVec3::new(0.0, 0.0, 1.0);
-        let plane_point = DVec3::new(0.0, 0.0, 0.0);
+        // Get plane basis vectors in 3D world space
+        let u_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.u_axis);
+        let v_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.v_axis);
+        let plane_origin = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.center);
         
-        // Find intersection of ray with XY plane
+        // Compute plane normal: u × v (cross product)
+        let plane_normal = u_real.cross(v_real).normalize();
+        
+        // Ray-plane intersection: t = (plane_point - ray_origin) · n / (ray_direction · n)
         let denominator = ray_direction.dot(plane_normal);
         
         // Avoid division by zero (ray parallel to plane)
-        if denominator.abs() < 1e-6 { 
+        if denominator.abs() < 1e-6 {
             return None;
         }
         
-        let t = (plane_point - ray_origin).dot(plane_normal) / denominator;
+        let t = (plane_origin - ray_origin).dot(plane_normal) / denominator;
         
-        if t <= 0.0 { 
+        if t <= 0.0 {
             // Ray doesn't hit the plane in the forward direction
             return None;
         }
         
-        let intersection_point = *ray_origin + *ray_direction * t;
+        let intersection_3d = *ray_origin + *ray_direction * t;
         
-        // Convert the 3D point to lattice coordinates
-        let lattice_pos = self.unit_cell.real_to_ivec3_lattice(&intersection_point);
-
-        Some(IVec2::new(lattice_pos.x, lattice_pos.y))
+        // Map 3D intersection → 2D plane coordinates
+        // Project onto u and v axes (simplified approach assuming near-orthogonal axes)
+        let relative_pos = intersection_3d - plane_origin;
+        let u_normalized = u_real.normalize();
+        let v_normalized = v_real.normalize();
+        
+        let alpha = relative_pos.dot(u_normalized);  // Component along u
+        let beta = relative_pos.dot(v_normalized);   // Component along v
+        
+        // We now have 2D real coordinates (alpha, beta) in plane space
+        // Convert to lattice coordinates using 3D conversion (with z=0)
+        let real_3d = DVec3::new(alpha, beta, 0.0);
+        let lattice_3d = self.drawing_plane.effective_unit_cell.real_to_ivec3_lattice(&real_3d);
+        
+        Some(IVec2::new(lattice_3d.x, lattice_3d.y))
     }
 }
 
 impl Tessellatable for PolygonGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
-    let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
-        let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
-        DVec3::new(real_vertex_2d.x, real_vertex_2d.y, 0.0)
-    }).collect();
+    // Map vertices to their 3D positions on the drawing plane
+    let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
+        .map(|v| self.lattice_2d_to_world_3d(v))
+        .collect();
 
     let roughness: f32 = 0.2;
     let metallic: f32 = 0.0;
@@ -231,11 +264,10 @@ impl Tessellatable for PolygonGadget {
 
 impl Gadget for PolygonGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
-
-        let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
-            let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
-            DVec3::new(real_vertex_2d.x, real_vertex_2d.y, 0.0)
-        }).collect();
+        // Map vertices to their 3D positions on the drawing plane
+        let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
+            .map(|v| self.lattice_2d_to_world_3d(v))
+            .collect();
 
         // First, check hits with vertex handles
         for i in 0..real_3d_vertices.len() {
