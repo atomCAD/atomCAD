@@ -25,6 +25,7 @@ pub enum APIDataTypeBase {
   IVec2,
   IVec3,
   UnitCell,
+  DrawingPlane,
   Geometry2D,
   Geometry,
   Atomic,

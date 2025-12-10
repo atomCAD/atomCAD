@@ -9,6 +9,7 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::motif::Motif;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -121,6 +122,7 @@ pub enum NetworkResult {
   IVec2(IVec2),
   IVec3(IVec3),
   UnitCell(UnitCellStruct),
+  DrawingPlane(DrawingPlane),
   Geometry2D(GeometrySummary2D),
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
@@ -160,12 +162,21 @@ impl NetworkResult {
     }
   }
 
+  /// Extracts a DrawingPlane value from the NetworkResult, returns None if not a DrawingPlane
+  pub fn extract_drawing_plane(self) -> Option<DrawingPlane> {
+    match self {
+      NetworkResult::DrawingPlane(dp) => Some(dp),
+      _ => None,
+    }
+  }
+
   /// Returns the UnitCellStruct associated with this NetworkResult.
-  /// For UnitCell, Geometry2D, and Geometry variants, returns their unit cell.
+  /// For UnitCell, DrawingPlane, Geometry2D, and Geometry variants, returns their unit cell.
   /// For all other variants, returns None.
   pub fn get_unit_cell(&self) -> Option<UnitCellStruct> {
     match self {
       NetworkResult::UnitCell(unit_cell) => Some(unit_cell.clone()),
+      NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
       NetworkResult::Geometry2D(geometry) => Some(geometry.unit_cell.clone()),
       NetworkResult::Geometry(geometry) => Some(geometry.unit_cell.clone()),
       _ => None,
@@ -407,6 +418,12 @@ impl NetworkResult {
           unit_cell.a.x, unit_cell.a.y, unit_cell.a.z,
           unit_cell.b.x, unit_cell.b.y, unit_cell.b.z,
           unit_cell.c.x, unit_cell.c.y, unit_cell.c.z)
+      },
+      NetworkResult::DrawingPlane(drawing_plane) => {
+        format!("DrawingPlane: miller_index=({}, {}, {}), center=({}, {}, {}), shift={}, subdivision={}", 
+          drawing_plane.miller_index.x, drawing_plane.miller_index.y, drawing_plane.miller_index.z,
+          drawing_plane.center.x, drawing_plane.center.y, drawing_plane.center.z,
+          drawing_plane.shift, drawing_plane.subdivision)
       },
       NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
       NetworkResult::Geometry(_) => "Geometry".to_string(),
