@@ -117,6 +117,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'IVec3';
       case APIDataTypeBase.unitCell:
         return 'UnitCell';
+      case APIDataTypeBase.drawingPlane:
+        return 'DrawingPlane';
       case APIDataTypeBase.geometry2D:
         return 'Geometry2D';
       case APIDataTypeBase.geometry:

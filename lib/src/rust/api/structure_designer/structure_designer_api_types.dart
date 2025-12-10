@@ -188,6 +188,7 @@ enum APIDataTypeBase {
   iVec2,
   iVec3,
   unitCell,
+  drawingPlane,
   geometry2D,
   geometry,
   atomic,
