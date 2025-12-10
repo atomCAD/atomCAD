@@ -13,7 +13,6 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,18 +59,9 @@ impl NodeData for RectData {
         Err(error) => return error,
       };
     
-      // Default: XY plane (001) on cubic diamond unit cell
-      let default_drawing_plane = DrawingPlane::new(
-        UnitCellStruct::cubic_diamond(),
-        glam::IVec3::new(0, 0, 1),
-        glam::IVec3::ZERO,
-        0,
-        1,
-      ).unwrap();
-      
       let drawing_plane = match network_evaluator.evaluate_or_default(
         network_stack, node_id, registry, context, 2,
-        default_drawing_plane,
+        DrawingPlane::default(),
         NetworkResult::extract_drawing_plane,
       ) {
         Ok(value) => value,

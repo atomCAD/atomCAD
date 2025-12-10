@@ -111,6 +111,37 @@ impl DrawingPlane {
         })
     }
     
+    /// Creates a drawing plane with default XY plane orientation (001 Miller index) at origin.
+    /// 
+    /// This is a convenience function for creating a standard horizontal plane with the given unit cell.
+    /// 
+    /// # Arguments
+    /// * `unit_cell` - The lattice unit cell
+    /// 
+    /// # Returns
+    /// * `Result<DrawingPlane, String>` - Drawing plane or error if construction fails
+    pub fn xy_plane(unit_cell: UnitCellStruct) -> Result<Self, String> {
+        Self::new(
+            unit_cell,
+            IVec3::new(0, 0, 1), // XY plane (001 Miller index)
+            IVec3::ZERO,         // Center at origin
+            0,                   // No shift
+            1,                   // Default subdivision
+        )
+    }
+    
+    /// Creates a default drawing plane with cubic diamond unit cell and XY orientation.
+    /// 
+    /// This is the most common default for 2D geometry nodes.
+    /// Equivalent to `DrawingPlane::xy_plane(UnitCellStruct::cubic_diamond())`.
+    /// 
+    /// # Returns
+    /// * `DrawingPlane` - Default drawing plane (unwrapped, as cubic diamond always succeeds)
+    pub fn default() -> Self {
+        Self::xy_plane(UnitCellStruct::cubic_diamond())
+            .expect("Default drawing plane construction should never fail")
+    }
+    
     /// Checks if two drawing planes are compatible for boolean operations.
     /// 
     /// Planes are compatible if they have the same unit cell, orientation,

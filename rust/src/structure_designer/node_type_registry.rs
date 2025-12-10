@@ -430,8 +430,8 @@ The expr node supports scalar arithmetic, vector operations, conditional express
           data_type: DataType::Int,
         },
         Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
+          name: "d_plane".to_string(),
+          data_type: DataType::DrawingPlane,
         },
       ],
       output_type: DataType::Geometry2D,
