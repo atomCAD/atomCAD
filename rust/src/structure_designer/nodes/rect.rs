@@ -2,7 +2,6 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
 use glam::i32::IVec2;
-use glam::f64::DVec2;
 use serde::{Serialize, Deserialize};
 use crate::util::serialization_utils::ivec2_serializer;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -15,6 +14,7 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RectData {
@@ -60,28 +60,37 @@ impl NodeData for RectData {
         Err(error) => return error,
       };
     
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 2, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
+      // Default: XY plane (001) on cubic diamond unit cell
+      let default_drawing_plane = DrawingPlane::new(
+        UnitCellStruct::cubic_diamond(),
+        glam::IVec3::new(0, 0, 1),
+        glam::IVec3::ZERO,
+        0,
+        1,
+      ).unwrap();
+      
+      let drawing_plane = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2,
+        default_drawing_plane,
+        NetworkResult::extract_drawing_plane,
       ) {
         Ok(value) => value,
         Err(error) => return error,
       };
 
-      let real_min_corner = unit_cell.ivec2_lattice_to_real(&min_corner);
-      let real_extent = unit_cell.ivec2_lattice_to_real(&extent);
-      let center = real_min_corner + real_extent / 2.0;
-    
-      let geo_tree_root = create_parallelogram_from_lattice(
-        &unit_cell,
-        min_corner.as_dvec2(),
-        extent.as_dvec2(),
+      let geo_tree_root = create_parallelogram_on_plane(
+        &drawing_plane,
+        min_corner,
+        extent,
       );
+      
+      // Calculate center in 2D lattice coordinates, then convert to 2D real space
+      let center_2d_lattice = min_corner.as_dvec2() + extent.as_dvec2() / 2.0;
+      let center = drawing_plane.effective_unit_cell.dvec2_lattice_to_real(&center_2d_lattice);
 
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell,
+          drawing_plane,
           frame_transform: Transform2D::new(
             center,
             0.0,
@@ -111,31 +120,34 @@ impl NodeData for RectData {
     }
 }
 
-/// Creates a parallelogram in real space from lattice coordinates and unit cell basis vectors.
+/// Creates a parallelogram on the drawing plane from 2D integer lattice coordinates.
 /// The parallelogram is represented as an intersection of 4 half-planes (2 pairs of opposing edges).
-/// Uses the XY plane for 2D operations (Z=0).
-fn create_parallelogram_from_lattice(
-  unit_cell: &UnitCellStruct,
-  min_corner_lattice: DVec2,
-  extent_lattice: DVec2
+/// Uses the drawing plane's effective_unit_cell to convert lattice → real 2D coordinates.
+fn create_parallelogram_on_plane(
+  drawing_plane: &DrawingPlane,
+  min_corner: IVec2,
+  extent: IVec2
 ) -> GeoNode {
-  // Convert lattice coordinates to real space coordinates using the proper UnitCellStruct method
-  let min_corner_real = unit_cell.dvec2_lattice_to_real(&min_corner_lattice);
+  // Calculate the four corners in 2D integer lattice space
+  let corner_00 = min_corner; // min_corner
+  let corner_10 = min_corner + IVec2::new(extent.x, 0);
+  let corner_01 = min_corner + IVec2::new(0, extent.y);
+  let corner_11 = min_corner + extent; // max_corner
   
-  // Calculate the four corners of the parallelogram in real space
-  let corner_00 = min_corner_real; // min_corner
-  let corner_10 = unit_cell.dvec2_lattice_to_real(&(min_corner_lattice + DVec2::new(extent_lattice.x, 0.0)));
-  let corner_01 = unit_cell.dvec2_lattice_to_real(&(min_corner_lattice + DVec2::new(0.0, extent_lattice.y)));
-  let corner_11 = unit_cell.dvec2_lattice_to_real(&(min_corner_lattice + extent_lattice)); // max_corner
+  // Convert to 2D real-space coordinates using the effective unit cell
+  let corner_00_real = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&corner_00);
+  let corner_10_real = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&corner_10);
+  let corner_01_real = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&corner_01);
+  let corner_11_real = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&corner_11);
   
   // Create 4 half-planes defining the parallelogram edges
   let mut half_planes = Vec::new();
   
-  half_planes.push(GeoNode::half_plane(corner_10, corner_00));
-  half_planes.push(GeoNode::half_plane(corner_01, corner_11));
+  half_planes.push(GeoNode::half_plane(corner_10_real, corner_00_real));
+  half_planes.push(GeoNode::half_plane(corner_01_real, corner_11_real));
   
-  half_planes.push(GeoNode::half_plane(corner_00, corner_01));
-  half_planes.push(GeoNode::half_plane(corner_11, corner_10));
+  half_planes.push(GeoNode::half_plane(corner_00_real, corner_01_real));
+  half_planes.push(GeoNode::half_plane(corner_11_real, corner_10_real));
   
   // Return the intersection of all half-planes
   GeoNode::intersection_2d(half_planes)

@@ -38,6 +38,13 @@ pub struct DrawingPlane {
     /// Computed from Miller index, guaranteed to be in the plane and primitive
     /// Forms right-handed system: (u_axis × v_axis) · normal > 0
     pub v_axis: IVec3,
+    
+    /// Effective unit cell for 2D operations within the plane.
+    /// Maps 2D lattice coordinates to 2D real-space coordinates in the plane's coordinate system.
+    /// - `a` basis = real-space vector corresponding to u_axis
+    /// - `b` basis = real-space vector corresponding to v_axis  
+    /// - `c` basis = perpendicular vector (for potential extrusion)
+    pub effective_unit_cell: UnitCellStruct,
 }
 
 impl DrawingPlane {
@@ -78,6 +85,20 @@ impl DrawingPlane {
             v_axis = -v_axis;
         }
         
+        // Compute effective unit cell for 2D operations
+        // Convert u_axis and v_axis from lattice coordinates to real-space vectors
+        let a_real = unit_cell.ivec3_lattice_to_real(&u_axis);
+        let b_real = unit_cell.ivec3_lattice_to_real(&v_axis);
+        
+        // c_real is perpendicular to the plane (for potential extrusion)
+        // Use the actual normal vector from plane properties, scaled by d-spacing
+        let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index)
+            .map_err(|e| format!("Failed to compute plane properties: {}", e))?;
+        let c_real = normal_dir * plane_props.d_spacing;
+        
+        // Create effective unit cell from these real-space basis vectors
+        let effective_unit_cell = UnitCellStruct::new(a_real, b_real, c_real);
+        
         Ok(Self {
             unit_cell,
             miller_index,
@@ -86,6 +107,7 @@ impl DrawingPlane {
             subdivision: subdivision.max(1), // Ensure minimum value of 1
             u_axis,
             v_axis,
+            effective_unit_cell,
         })
     }
     

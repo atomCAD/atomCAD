@@ -13,46 +13,46 @@ use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
-  pub unit_cell: UnitCellStruct,
+  pub drawing_plane: DrawingPlane,
   pub frame_transform: Transform2D,
   pub geo_tree_root: GeoNode,
 }
 
 impl GeometrySummary2D {
-  /// Checks if this geometry's unit cell is compatible with another geometry's unit cell.
+  /// Checks if this geometry's drawing plane is compatible with another geometry's drawing plane.
   /// 
-  /// This is useful for CSG operations where geometries must have compatible unit cells.
+  /// This is useful for CSG operations where geometries must have compatible drawing planes.
   /// Uses approximate equality with tolerance for small calculation errors.
   /// 
   /// # Arguments
-  /// * `other` - The other GeometrySummary2D to compare unit cells with
+  /// * `other` - The other GeometrySummary2D to compare drawing planes with
   /// 
   /// # Returns
-  /// * `true` if the unit cells are approximately equal within tolerance
+  /// * `true` if the drawing planes are compatible (same unit cell and plane orientation)
   /// * `false` if they differ significantly
-  pub fn has_compatible_unit_cell(&self, other: &GeometrySummary2D) -> bool {
-    self.unit_cell.is_approximately_equal(&other.unit_cell)
+  pub fn has_compatible_drawing_plane(&self, other: &GeometrySummary2D) -> bool {
+    self.drawing_plane.is_compatible(&other.drawing_plane)
   }
 
-  /// Checks if all geometries in a vector have approximately the same unit cells.
+  /// Checks if all geometries in a vector have compatible drawing planes.
   /// 
-  /// Compares each geometry's unit cell to the first geometry's unit cell.
+  /// Compares each geometry's drawing plane to the first geometry's drawing plane.
   /// Returns true if the vector is empty or has only one element.
   /// 
   /// # Arguments
   /// * `geometries` - Vector of GeometrySummary2D objects to check
   /// 
   /// # Returns
-  /// * `true` if all unit cells are approximately equal or vector has ≤1 elements
-  /// * `false` if any unit cell differs significantly from the first
-  pub fn all_have_compatible_unit_cells(geometries: &Vec<GeometrySummary2D>) -> bool {
+  /// * `true` if all drawing planes are compatible or vector has ≤1 elements
+  /// * `false` if any drawing plane is incompatible with the first
+  pub fn all_have_compatible_drawing_planes(geometries: &Vec<GeometrySummary2D>) -> bool {
     if geometries.len() <= 1 {
       return true;
     }
     
-    let first_unit_cell = &geometries[0].unit_cell;
+    let first_drawing_plane = &geometries[0].drawing_plane;
     geometries.iter().skip(1).all(|geometry| {
-      first_unit_cell.is_approximately_equal(&geometry.unit_cell)
+      first_drawing_plane.is_compatible(&geometry.drawing_plane)
     })
   }
 }
@@ -177,7 +177,7 @@ impl NetworkResult {
     match self {
       NetworkResult::UnitCell(unit_cell) => Some(unit_cell.clone()),
       NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
-      NetworkResult::Geometry2D(geometry) => Some(geometry.unit_cell.clone()),
+      NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
       NetworkResult::Geometry(geometry) => Some(geometry.unit_cell.clone()),
       _ => None,
     }
