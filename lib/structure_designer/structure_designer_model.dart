@@ -515,6 +515,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setDrawingPlaneData(BigInt nodeId, APIDrawingPlaneData data) {
+    structure_designer_api.setDrawingPlaneData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setRectData(BigInt nodeId, APIRectData data) {
     structure_designer_api.setRectData(nodeId: nodeId, data: data);
     refreshFromKernel();
