@@ -4,6 +4,7 @@ pub mod parameter;
 pub mod cuboid;
 pub mod sphere;
 pub mod half_space;
+pub mod drawing_plane;
 pub mod edit_atom;
 pub mod union;
 pub mod intersect;

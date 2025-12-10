@@ -197,6 +197,41 @@ enum APIDataTypeBase {
   ;
 }
 
+class APIDrawingPlaneData {
+  final int maxMillerIndex;
+  final APIIVec3 millerIndex;
+  final APIIVec3 center;
+  final int shift;
+  final int subdivision;
+
+  const APIDrawingPlaneData({
+    required this.maxMillerIndex,
+    required this.millerIndex,
+    required this.center,
+    required this.shift,
+    required this.subdivision,
+  });
+
+  @override
+  int get hashCode =>
+      maxMillerIndex.hashCode ^
+      millerIndex.hashCode ^
+      center.hashCode ^
+      shift.hashCode ^
+      subdivision.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDrawingPlaneData &&
+          runtimeType == other.runtimeType &&
+          maxMillerIndex == other.maxMillerIndex &&
+          millerIndex == other.millerIndex &&
+          center == other.center &&
+          shift == other.shift &&
+          subdivision == other.subdivision;
+}
+
 class APIEditAtomData {
   final APIEditAtomTool activeTool;
   final bool canUndo;

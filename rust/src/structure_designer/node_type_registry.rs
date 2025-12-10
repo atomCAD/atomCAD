@@ -36,6 +36,7 @@ use super::nodes::circle::CircleData;
 use super::nodes::rect::RectData;
 use super::nodes::half_plane::HalfPlaneData;
 use super::nodes::half_space::HalfSpaceData;
+use super::nodes::drawing_plane::DrawingPlaneData;
 use super::nodes::union::UnionData;
 use super::nodes::union_2d::Union2DData;
 use super::nodes::intersect::IntersectData;
@@ -703,6 +704,45 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
       }),
       node_data_saver: generic_node_data_saver::<HalfSpaceData>,
       node_data_loader: generic_node_data_loader::<HalfSpaceData>,
+    });
+
+    ret.add_node_type(NodeType {
+      name: "drawing_plane".to_string(),
+      description: "Defines a 2D drawing plane on a crystallographic plane with Miller indices. Use this to specify where 2D shapes are placed before extrusion.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+        Parameter {
+          name: "m_index".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "shift".to_string(),
+          data_type: DataType::Int,
+        },
+        Parameter {
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
+      ],
+      output_type: DataType::DrawingPlane,
+      public: true,
+      node_data_creator: || Box::new(DrawingPlaneData {
+        max_miller_index: 1,
+        miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis (001 plane)
+        center: IVec3::new(0, 0, 0),
+        shift: 0,
+        subdivision: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<DrawingPlaneData>,
+      node_data_loader: generic_node_data_loader::<DrawingPlaneData>,
     });
 
     ret.add_node_type(NodeType {

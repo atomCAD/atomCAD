@@ -42,6 +42,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
+use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
@@ -52,6 +53,7 @@ use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::unit_cell::UnitCellData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
+use crate::structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::lattice_move::{LatticeMoveData, LatticeMoveEvalCache};
@@ -1055,6 +1057,32 @@ pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_drawing_plane_data(node_id: u64) -> Option<APIDrawingPlaneData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let drawing_plane_data = match node_data.as_any_ref().downcast_ref::<DrawingPlaneData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIDrawingPlaneData {
+          max_miller_index: drawing_plane_data.max_miller_index,
+          miller_index: to_api_ivec3(&drawing_plane_data.miller_index),
+          center: to_api_ivec3(&drawing_plane_data.center),
+          shift: drawing_plane_data.shift,
+          subdivision: drawing_plane_data.subdivision,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_geo_trans_data(node_id: u64) -> Option<APIGeoTransData> {
   unsafe {
     with_cad_instance_or(
@@ -1648,6 +1676,23 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
         subdivision: data.subdivision,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, half_space_data);
+      refresh_structure_designer_auto(cad_instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_drawing_plane_data(node_id: u64, data: APIDrawingPlaneData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let drawing_plane_data = Box::new(DrawingPlaneData {
+        max_miller_index: data.max_miller_index,
+        miller_index: from_api_ivec3(&data.miller_index),
+        center: from_api_ivec3(&data.center),
+        shift: data.shift,
+        subdivision: data.subdivision,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, drawing_plane_data);
       refresh_structure_designer_auto(cad_instance);
     });
   }

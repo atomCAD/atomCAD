@@ -209,6 +209,11 @@ APIHalfSpaceData? getHalfSpaceData({required BigInt nodeId}) => RustLib
     .crateApiStructureDesignerStructureDesignerApiGetHalfSpaceData(
         nodeId: nodeId);
 
+APIDrawingPlaneData? getDrawingPlaneData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetDrawingPlaneData(
+            nodeId: nodeId);
+
 APIGeoTransData? getGeoTransData({required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiGetGeoTransData(
@@ -338,6 +343,12 @@ void setHalfSpaceData(
         {required BigInt nodeId, required APIHalfSpaceData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetHalfSpaceData(
+            nodeId: nodeId, data: data);
+
+void setDrawingPlaneData(
+        {required BigInt nodeId, required APIDrawingPlaneData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetDrawingPlaneData(
             nodeId: nodeId, data: data);
 
 void setGeoTransData({required BigInt nodeId, required APIGeoTransData data}) =>

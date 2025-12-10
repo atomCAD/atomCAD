@@ -151,6 +151,14 @@ pub struct InputPinView {
     pub subdivision: i32,
   }
 
+  pub struct APIDrawingPlaneData {
+    pub max_miller_index: i32,
+    pub miller_index: APIIVec3,
+    pub center: APIIVec3,
+    pub shift: i32,
+    pub subdivision: i32,
+  }
+
   pub struct APIFacet {
     pub miller_index: APIIVec3,
     pub shift: i32,
