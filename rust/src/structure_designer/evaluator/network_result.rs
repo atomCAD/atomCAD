@@ -374,6 +374,21 @@ impl NetworkResult {
       (NetworkResult::Vec3(vec), DataType::IVec3) => {
         NetworkResult::IVec3(IVec3::new(vec.x.round() as i32, vec.y.round() as i32, vec.z.round() as i32))
       }
+      
+      // UnitCell -> DrawingPlane (backward compatibility for old .cnnd files)
+      // Creates a standard XY plane (001 Miller index) at the origin
+      (NetworkResult::UnitCell(unit_cell), DataType::DrawingPlane) => {
+        match DrawingPlane::new(
+          unit_cell,
+          IVec3::new(0, 0, 1), // XY plane (001 Miller index)
+          IVec3::new(0, 0, 0), // Center at origin
+          0,                   // No shift
+          1,                   // Subdivision = 1
+        ) {
+          Ok(drawing_plane) => NetworkResult::DrawingPlane(drawing_plane),
+          Err(err_msg) => NetworkResult::Error(format!("Failed to convert UnitCell to DrawingPlane: {}", err_msg)),
+        }
+      }
     
       (original, _target) => {
         /*

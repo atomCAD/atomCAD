@@ -137,6 +137,9 @@ impl DataType {
       (DataType::IVec3, DataType::Vec3) => true,
       (DataType::Vec3, DataType::IVec3) => true,
       
+      // UnitCell -> DrawingPlane conversion (backward compatibility for old .cnnd files)
+      (DataType::UnitCell, DataType::DrawingPlane) => true,
+      
       // All other combinations are not compatible
       _ => false,
     }
