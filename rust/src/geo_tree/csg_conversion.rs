@@ -91,8 +91,8 @@ impl GeoNode {
       GeoNodeKind::Sphere { center, radius } => {
         Some(Self::sphere_to_csg(*center, *radius))
       }
-      GeoNodeKind::Extrude { height, direction, shape } => {
-        Self::extrude_to_csg(*height, *direction, shape, cache.as_deref_mut())
+      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform } => {
+        Self::extrude_to_csg(*height, *direction, shape, plane_to_world_transform, cache.as_deref_mut())
       }
       GeoNodeKind::Transform { transform, shape } => {
         Self::transform_to_csg(transform, shape, cache.as_deref_mut())
@@ -185,30 +185,45 @@ impl GeoNode {
     CSGSketch::polygon(&points, None)
   }
 
-  fn extrude_to_csg(height: f64, direction: DVec3, shape: &Box<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
-      // Calculate the extrusion vector by multiplying height with normalized direction
+  fn extrude_to_csg(
+      height: f64, 
+      direction: DVec3, 
+      shape: &Box<GeoNode>, 
+      plane_to_world_transform: &Transform,
+      mut cache: Option<&mut CsgConversionCache>
+  ) -> Option<CSGMesh> {
+      // 1. Get 2D sketch (already in plane-local XY coordinates)
+      let sketch = shape.to_csg_sketch_cached(cache.as_deref_mut())?;
+      
+      // 2. Extrude in plane-local space (direction is in plane-local coordinates)
       let scaled_height = scale_to_csg(height);
       let extrusion_vector = dvec3_to_vector3(direction * scaled_height);
-      
-      // Since atomCAD now uses Z-up coordinate system (same as csgrs), 
-      // we can directly use the extrusion vector without any coordinate transformations
-      let sketch = shape.to_csg_sketch_cached(cache.as_deref_mut())?;
       let extruded = sketch.extrude_vector(extrusion_vector);
+      
+      // 3. Transform the extruded mesh from plane-local to world space
+      let transformed = Self::apply_transform_to_csg(&extruded, plane_to_world_transform);
 
-      Some(extruded)
+      Some(transformed)
   }
 
-  fn transform_to_csg(transform: &Transform, shape: &Box<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
-    // TODO: Implement transform to CSG conversion
+  fn apply_transform_to_csg(mesh: &CSGMesh, transform: &Transform) -> CSGMesh {
     let euler_extrinsic_zyx = transform.rotation.to_euler(glam::EulerRot::ZYX);
-    let mesh = shape.internal_to_csg_mesh(false, cache.as_deref_mut())?;
-    Some(mesh
+    mesh
       .rotate(
         euler_extrinsic_zyx.2.to_degrees(), 
         euler_extrinsic_zyx.1.to_degrees(), 
         euler_extrinsic_zyx.0.to_degrees()
       )
-      .translate(scale_to_csg(transform.translation.x), scale_to_csg(transform.translation.y), scale_to_csg(transform.translation.z)))
+      .translate(
+        scale_to_csg(transform.translation.x), 
+        scale_to_csg(transform.translation.y), 
+        scale_to_csg(transform.translation.z)
+      )
+  }
+
+  fn transform_to_csg(transform: &Transform, shape: &Box<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
+    let mesh = shape.internal_to_csg_mesh(false, cache.as_deref_mut())?;
+    Some(Self::apply_transform_to_csg(&mesh, transform))
   }
 
   fn union_2d_to_csg(shapes: &Vec<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {

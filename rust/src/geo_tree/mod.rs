@@ -42,6 +42,7 @@ enum GeoNodeKind {
     height: f64,
     direction: DVec3,
     shape: Box<GeoNode>,
+    plane_to_world_transform: Transform,
   },
   Transform {
     transform: Transform,
@@ -112,9 +113,10 @@ impl GeoNode {
                 }
                 result
             }
-            GeoNodeKind::Extrude { height, direction, shape } => {
-                format!("{}Extrude(height: {}, direction: {})\n{}", 
+            GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform } => {
+                format!("{}Extrude(height: {}, direction: {}, transform: {})\n{}", 
                     prefix, format_f64(height), format_vec3(direction),
+                    format_transform(plane_to_world_transform),
                     shape.display_with_indent(indent + 1))
             }
             GeoNodeKind::Transform { transform, shape } => {
@@ -243,7 +245,7 @@ impl GeoNode {
         }
     }
 
-    pub fn extrude(height: f64, direction: DVec3, shape: Box<GeoNode>) -> Self {
+    pub fn extrude(height: f64, direction: DVec3, shape: Box<GeoNode>, plane_to_world_transform: Transform) -> Self {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&[0x06]); // variant tag
         hasher.update(&height.to_le_bytes());
@@ -251,9 +253,17 @@ impl GeoNode {
         hasher.update(&direction.y.to_le_bytes());
         hasher.update(&direction.z.to_le_bytes());
         hasher.update(shape.hash.as_bytes());
+        // Hash plane_to_world_transform
+        hasher.update(&plane_to_world_transform.translation.x.to_le_bytes());
+        hasher.update(&plane_to_world_transform.translation.y.to_le_bytes());
+        hasher.update(&plane_to_world_transform.translation.z.to_le_bytes());
+        hasher.update(&plane_to_world_transform.rotation.x.to_le_bytes());
+        hasher.update(&plane_to_world_transform.rotation.y.to_le_bytes());
+        hasher.update(&plane_to_world_transform.rotation.z.to_le_bytes());
+        hasher.update(&plane_to_world_transform.rotation.w.to_le_bytes());
         
         Self {
-            kind: GeoNodeKind::Extrude { height, direction, shape },
+            kind: GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform },
             hash: hasher.finalize(),
         }
     }

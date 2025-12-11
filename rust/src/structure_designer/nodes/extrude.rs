@@ -16,7 +16,6 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
   pub height: i32,
@@ -71,14 +70,21 @@ impl NodeData for ExtrudeData {
         // Extract unit cell from the drawing plane
         let unit_cell = shape.drawing_plane.unit_cell.clone();
         
-        // Validate extrusion direction for this plane
-        let (direction, dir_length) = match shape.drawing_plane.validate_extrude_direction(&self.extrude_direction) {
+        // Validate extrusion direction for this plane (in world space)
+        let (world_direction, dir_length) = match shape.drawing_plane.validate_extrude_direction(&self.extrude_direction) {
             Ok(result) => result,
             Err(error_msg) => return NetworkResult::Error(error_msg),
         };
         
         // Calculate actual extrusion height based on direction length and height multiplier
         let height_real = dir_length * (height as f64);
+        
+        // Compute plane_to_world transform from DrawingPlane
+        let plane_to_world_transform = shape.drawing_plane.to_world_transform();
+        
+        // Transform world extrusion direction to plane-local coordinates
+        let world_to_plane_rotation = plane_to_world_transform.rotation.inverse();
+        let local_direction = world_to_plane_rotation * world_direction;
         
         let frame_translation_2d = shape.frame_transform.translation;
     
@@ -91,7 +97,7 @@ impl NodeData for ExtrudeData {
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,
           frame_transform,
-          geo_tree_root: GeoNode::extrude(height_real, direction, Box::new(s))
+          geo_tree_root: GeoNode::extrude(height_real, local_direction, Box::new(s), plane_to_world_transform)
         });
       } else {
         return runtime_type_error_in_input(0);

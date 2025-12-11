@@ -1,6 +1,8 @@
 use glam::i32::{IVec2, IVec3};
 use glam::f64::{DVec2, DVec3};
+use glam::DQuat;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::util::transform::Transform;
 
 /// Defines a 2D drawing plane in 3D lattice space.
 /// 
@@ -308,6 +310,42 @@ impl DrawingPlane {
         }
         
         Ok((dir_real.normalize(), dir_length))
+    }
+    
+    /// Computes the transformation from plane-local coordinates to world coordinates.
+    /// 
+    /// This creates a Transform that maps:
+    /// - Plane-local X axis → world space u_axis direction
+    /// - Plane-local Y axis → world space v_axis direction
+    /// - Plane-local Z axis → world space plane normal
+    /// - Origin → plane center with shift applied
+    /// 
+    /// This is used by extrusion to place plane-local geometry in world space.
+    /// 
+    /// # Returns
+    /// * Transform that maps plane-local coordinates to world coordinates
+    pub fn to_world_transform(&self) -> Transform {
+        // 1. Get plane basis vectors in world space
+        let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
+        let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
+        let normal = u_real.cross(v_real).normalize();
+        
+        // 2. Normalize to create orthonormal basis
+        let u_unit = u_real.normalize();
+        let v_unit = v_real.normalize();
+        
+        // 3. Create rotation matrix from basis vectors
+        // Columns: [u_unit, v_unit, normal] maps local (x,y,z) → world
+        let rotation = DQuat::from_mat3(&glam::f64::DMat3::from_cols(u_unit, v_unit, normal));
+        
+        // 4. Get translation (plane origin with shift applied)
+        let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
+        let plane_props = self.unit_cell.ivec3_miller_index_to_plane_props(&self.miller_index)
+            .expect("Miller index should be valid for DrawingPlane");
+        let shift_distance = (self.shift as f64 / self.subdivision as f64) * plane_props.d_spacing;
+        let translation = plane_origin + plane_props.normal * shift_distance;
+        
+        Transform::new(translation, rotation)
     }
 }
 
