@@ -134,6 +134,29 @@ impl PolygonGadget {
         plane_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
     }
     
+    /// Solves for scalars (u, v) such that p = u*a + v*b.
+    /// 
+    /// Uses the Gram matrix formula to handle non-orthogonal basis vectors correctly.
+    /// Returns None if a and b are nearly linearly dependent.
+    fn coords_in_plane(a: DVec3, b: DVec3, p: DVec3) -> Option<(f64, f64)> {
+        let aa = a.dot(a);
+        let bb = b.dot(b);
+        let ab = a.dot(b);
+
+        let ap = a.dot(p);
+        let bp = b.dot(p);
+
+        let det = aa * bb - ab * ab;
+        if det.abs() <= 1e-12 {
+            return None; // Basis vectors are linearly dependent
+        }
+
+        let u = (bb * ap - ab * bp) / det;
+        let v = (aa * bp - ab * ap) / det;
+
+        Some((u, v))
+    }
+    
     /// Removes any vertices that are at the same position as an adjacent vertex.
     /// This allows the user to delete a vertex by dragging it onto one of its neighbors.
     /// The polygon must maintain at least 3 vertices.
@@ -191,13 +214,9 @@ impl PolygonGadget {
         let intersection_3d = *ray_origin + *ray_direction * t;
         
         // Map 3D intersection → 2D plane coordinates
-        // Project onto u and v axes (simplified approach assuming near-orthogonal axes)
+        // Use Gram matrix solution to correctly handle non-orthogonal basis vectors
         let relative_pos = intersection_3d - plane_origin;
-        let u_normalized = u_real.normalize();
-        let v_normalized = v_real.normalize();
-        
-        let alpha = relative_pos.dot(u_normalized);  // Component along u
-        let beta = relative_pos.dot(v_normalized);   // Component along v
+        let (alpha, beta) = Self::coords_in_plane(u_real, v_real, relative_pos)?;
         
         // We now have 2D real coordinates (alpha, beta) in plane space
         // Convert to lattice coordinates using 3D conversion (with z=0)
