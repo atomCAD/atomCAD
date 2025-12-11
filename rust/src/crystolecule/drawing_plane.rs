@@ -1,5 +1,5 @@
 use glam::i32::{IVec2, IVec3};
-use glam::f64::DVec3;
+use glam::f64::{DVec2, DVec3};
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 /// Defines a 2D drawing plane in 3D lattice space.
@@ -155,6 +155,29 @@ impl DrawingPlane {
         // u_axis and v_axis should be deterministically same if above match
     }
     
+    /// Maps a 2D real coordinate (in plane space) to 3D world position.
+    /// 
+    /// This places a point on the actual drawing plane in 3D space by:
+    /// 1. Using the plane's u_axis and v_axis to position in 3D world space
+    /// 2. Starting from the plane's center point
+    /// 
+    /// # Arguments
+    /// * `real_2d` - 2D real coordinate in plane space (in length units)
+    /// 
+    /// # Returns
+    /// * 3D position in world space on this plane
+    pub fn real_2d_to_world_3d(&self, real_2d: &DVec2) -> DVec3 {
+        // 1. Get plane basis vectors in 3D world space
+        let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
+        let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
+        
+        // 2. Get plane origin (center point in 3D)
+        let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
+        
+        // 3. Construct 3D position: origin + real_2d.x * u_unit + real_2d.y * v_unit
+        plane_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
+    }
+    
     /// Maps a 2D lattice coordinate (in plane space) to 3D world position.
     /// 
     /// This places vertices on the actual drawing plane in 3D space by:
@@ -167,18 +190,9 @@ impl DrawingPlane {
     /// # Returns
     /// * 3D position in world space on this plane
     pub fn lattice_2d_to_world_3d(&self, lattice_2d: &IVec2) -> DVec3 {
-        // 1. Convert lattice → 2D real coordinates in plane space
+        // Convert lattice → 2D real coordinates, then map to 3D
         let real_2d = self.effective_unit_cell.ivec2_lattice_to_real(lattice_2d);
-        
-        // 2. Get plane basis vectors in 3D world space
-        let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
-        let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
-        
-        // 3. Get plane origin (center point in 3D)
-        let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
-        
-        // 4. Construct 3D position: origin + real_2d.x * u + real_2d.y * v
-        plane_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
+        self.real_2d_to_world_3d(&real_2d)
     }
     
     /// Finds the nearest lattice point by intersecting a ray with this drawing plane.

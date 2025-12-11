@@ -231,6 +231,7 @@ impl NetworkEvaluator {
             let mut poly_mesh = convert_csg_sketch_to_poly_mesh(
               csg_sketch, 
               !geometry_visualization_preferences.wireframe_geometry,
+              &geometry_summary_2d.drawing_plane,
             );
             poly_mesh.detect_sharp_edges(
               geometry_visualization_preferences.sharpness_angle_threshold_degree,
