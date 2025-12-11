@@ -554,8 +554,8 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
+          name: "d_plane".to_string(),
+          data_type: DataType::DrawingPlane,
         },
         Parameter {
           name: "m_index".to_string(),

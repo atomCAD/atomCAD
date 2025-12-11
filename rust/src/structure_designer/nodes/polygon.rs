@@ -117,46 +117,6 @@ impl PolygonGadget {
         }
     }
     
-    /// Maps a 2D lattice coordinate (in plane space) to 3D world position.
-    /// This places the vertex on the actual drawing plane in 3D space.
-    fn lattice_2d_to_world_3d(&self, lattice_2d: &IVec2) -> DVec3 {
-        // 1. Convert lattice → 2D real coordinates in plane space
-        let real_2d = self.drawing_plane.effective_unit_cell.ivec2_lattice_to_real(lattice_2d);
-        
-        // 2. Get plane basis vectors in 3D world space
-        let u_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.u_axis);
-        let v_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.v_axis);
-        
-        // 3. Get plane origin (center point in 3D)
-        let plane_origin = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.center);
-        
-        // 4. Construct 3D position: origin + real_2d.x * u + real_2d.y * v
-        plane_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
-    }
-    
-    /// Solves for scalars (u, v) such that p = u*a + v*b.
-    /// 
-    /// Uses the Gram matrix formula to handle non-orthogonal basis vectors correctly.
-    /// Returns None if a and b are nearly linearly dependent.
-    fn coords_in_plane(a: DVec3, b: DVec3, p: DVec3) -> Option<(f64, f64)> {
-        let aa = a.dot(a);
-        let bb = b.dot(b);
-        let ab = a.dot(b);
-
-        let ap = a.dot(p);
-        let bp = b.dot(p);
-
-        let det = aa * bb - ab * ab;
-        if det.abs() <= 1e-12 {
-            return None; // Basis vectors are linearly dependent
-        }
-
-        let u = (bb * ap - ab * bp) / det;
-        let v = (aa * bp - ab * ap) / det;
-
-        Some((u, v))
-    }
-    
     /// Removes any vertices that are at the same position as an adjacent vertex.
     /// This allows the user to delete a vertex by dragging it onto one of its neighbors.
     /// The polygon must maintain at least 3 vertices.
@@ -188,42 +148,7 @@ impl PolygonGadget {
     /// Finds the nearest lattice point by intersecting a ray with the drawing plane.
     /// Returns None if the ray doesn't intersect the plane in a forward direction.
     fn find_lattice_point_by_ray(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<IVec2> {
-        // Get plane basis vectors in 3D world space
-        let u_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.u_axis);
-        let v_real = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.v_axis);
-        let plane_origin = self.drawing_plane.unit_cell.ivec3_lattice_to_real(&self.drawing_plane.center);
-        
-        // Compute plane normal: u × v (cross product)
-        let plane_normal = u_real.cross(v_real).normalize();
-        
-        // Ray-plane intersection: t = (plane_point - ray_origin) · n / (ray_direction · n)
-        let denominator = ray_direction.dot(plane_normal);
-        
-        // Avoid division by zero (ray parallel to plane)
-        if denominator.abs() < 1e-6 {
-            return None;
-        }
-        
-        let t = (plane_origin - ray_origin).dot(plane_normal) / denominator;
-        
-        if t <= 0.0 {
-            // Ray doesn't hit the plane in the forward direction
-            return None;
-        }
-        
-        let intersection_3d = *ray_origin + *ray_direction * t;
-        
-        // Map 3D intersection → 2D plane coordinates
-        // Use Gram matrix solution to correctly handle non-orthogonal basis vectors
-        let relative_pos = intersection_3d - plane_origin;
-        let (alpha, beta) = Self::coords_in_plane(u_real, v_real, relative_pos)?;
-        
-        // We now have 2D real coordinates (alpha, beta) in plane space
-        // Convert to lattice coordinates using 3D conversion (with z=0)
-        let real_3d = DVec3::new(alpha, beta, 0.0);
-        let lattice_3d = self.drawing_plane.effective_unit_cell.real_to_ivec3_lattice(&real_3d);
-        
-        Some(IVec2::new(lattice_3d.x, lattice_3d.y))
+        self.drawing_plane.find_lattice_point_by_ray(ray_origin, ray_direction)
     }
 }
 
@@ -231,7 +156,7 @@ impl Tessellatable for PolygonGadget {
   fn tessellate(&self, output_mesh: &mut Mesh) {
     // Map vertices to their 3D positions on the drawing plane
     let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
-        .map(|v| self.lattice_2d_to_world_3d(v))
+        .map(|v| self.drawing_plane.lattice_2d_to_world_3d(v))
         .collect();
 
     let roughness: f32 = 0.2;
@@ -285,7 +210,7 @@ impl Gadget for PolygonGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         // Map vertices to their 3D positions on the drawing plane
         let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
-            .map(|v| self.lattice_2d_to_world_3d(v))
+            .map(|v| self.drawing_plane.lattice_2d_to_world_3d(v))
             .collect();
 
         // First, check hits with vertex handles

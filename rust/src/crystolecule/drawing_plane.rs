@@ -1,4 +1,4 @@
-use glam::i32::IVec3;
+use glam::i32::{IVec2, IVec3};
 use glam::f64::DVec3;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
@@ -154,6 +154,85 @@ impl DrawingPlane {
         self.subdivision == other.subdivision
         // u_axis and v_axis should be deterministically same if above match
     }
+    
+    /// Maps a 2D lattice coordinate (in plane space) to 3D world position.
+    /// 
+    /// This places vertices on the actual drawing plane in 3D space by:
+    /// 1. Converting lattice coordinates to 2D real space in the plane
+    /// 2. Using the plane's u_axis and v_axis to position in 3D world space
+    /// 
+    /// # Arguments
+    /// * `lattice_2d` - 2D lattice coordinate in plane space
+    /// 
+    /// # Returns
+    /// * 3D position in world space on this plane
+    pub fn lattice_2d_to_world_3d(&self, lattice_2d: &IVec2) -> DVec3 {
+        // 1. Convert lattice → 2D real coordinates in plane space
+        let real_2d = self.effective_unit_cell.ivec2_lattice_to_real(lattice_2d);
+        
+        // 2. Get plane basis vectors in 3D world space
+        let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
+        let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
+        
+        // 3. Get plane origin (center point in 3D)
+        let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
+        
+        // 4. Construct 3D position: origin + real_2d.x * u + real_2d.y * v
+        plane_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
+    }
+    
+    /// Finds the nearest lattice point by intersecting a ray with this drawing plane.
+    /// 
+    /// This method:
+    /// 1. Computes the ray-plane intersection point in 3D
+    /// 2. Projects the intersection onto the plane's 2D coordinate system
+    /// 3. Converts to lattice coordinates
+    /// 
+    /// # Arguments
+    /// * `ray_origin` - Origin of the ray in 3D world space
+    /// * `ray_direction` - Direction of the ray (need not be normalized)
+    /// 
+    /// # Returns
+    /// * `Some(IVec2)` - Lattice coordinates where ray intersects plane
+    /// * `None` - If ray doesn't intersect plane in forward direction or is parallel
+    pub fn find_lattice_point_by_ray(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<IVec2> {
+        // Get plane basis vectors in 3D world space
+        let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
+        let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
+        let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
+        
+        // Compute plane normal: u × v (cross product)
+        let plane_normal = u_real.cross(v_real).normalize();
+        
+        // Ray-plane intersection: t = (plane_point - ray_origin) · n / (ray_direction · n)
+        let denominator = ray_direction.dot(plane_normal);
+        
+        // Avoid division by zero (ray parallel to plane)
+        if denominator.abs() < 1e-6 {
+            return None;
+        }
+        
+        let t = (plane_origin - ray_origin).dot(plane_normal) / denominator;
+        
+        if t <= 0.0 {
+            // Ray doesn't hit the plane in the forward direction
+            return None;
+        }
+        
+        let intersection_3d = *ray_origin + *ray_direction * t;
+        
+        // Map 3D intersection → 2D plane coordinates
+        // Use Gram matrix solution to correctly handle non-orthogonal basis vectors
+        let relative_pos = intersection_3d - plane_origin;
+        let (alpha, beta) = coords_in_plane(u_real, v_real, relative_pos)?;
+        
+        // We now have 2D real coordinates (alpha, beta) in plane space
+        // Convert to lattice coordinates using 3D conversion (with z=0)
+        let real_3d = DVec3::new(alpha, beta, 0.0);
+        let lattice_3d = self.effective_unit_cell.real_to_ivec3_lattice(&real_3d);
+        
+        Some(IVec2::new(lattice_3d.x, lattice_3d.y))
+    }
 }
 
 /// Computes two primitive in-plane lattice basis vectors from a Miller index.
@@ -237,4 +316,43 @@ pub fn gcd(mut a: i32, mut b: i32) -> i32 {
         a = temp;
     }
     a
+}
+
+/// Solves for scalars (u, v) such that p = u*a + v*b.
+/// 
+/// This function uses the Gram matrix formula to handle non-orthogonal basis vectors correctly.
+/// It solves the 2x2 linear system:
+/// ```text
+/// [aa  ab] [u] = [a·p]
+/// [ab  bb] [v]   [b·p]
+/// ```
+/// where aa = a·a, ab = a·b, bb = b·b.
+/// 
+/// The solution is: u = (bb*ap - ab*bp)/det, v = (aa*bp - ab*ap)/det
+/// 
+/// # Arguments
+/// * `a` - First basis vector
+/// * `b` - Second basis vector  
+/// * `p` - Point to express in the basis {a, b}
+/// 
+/// # Returns
+/// * `Some((u, v))` - Coefficients such that p = u*a + v*b
+/// * `None` - If a and b are nearly linearly dependent (det ≈ 0)
+pub fn coords_in_plane(a: DVec3, b: DVec3, p: DVec3) -> Option<(f64, f64)> {
+    let aa = a.dot(a);
+    let bb = b.dot(b);
+    let ab = a.dot(b);
+
+    let ap = a.dot(p);
+    let bp = b.dot(p);
+
+    let det = aa * bb - ab * ab;
+    if det.abs() <= 1e-12 {
+        return None; // Basis vectors are linearly dependent
+    }
+
+    let u = (bb * ap - ab * bp) / det;
+    let v = (aa * bp - ab * ap) / det;
+
+    Some((u, v))
 }
