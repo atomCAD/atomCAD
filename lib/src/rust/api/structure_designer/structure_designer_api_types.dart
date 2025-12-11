@@ -362,20 +362,23 @@ class APIExprParameter {
 
 class APIExtrudeData {
   final int height;
+  final APIIVec3 extrudeDirection;
 
   const APIExtrudeData({
     required this.height,
+    required this.extrudeDirection,
   });
 
   @override
-  int get hashCode => height.hashCode;
+  int get hashCode => height.hashCode ^ extrudeDirection.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIExtrudeData &&
           runtimeType == other.runtimeType &&
-          height == other.height;
+          height == other.height &&
+          extrudeDirection == other.extrudeDirection;
 }
 
 class APIFacet {

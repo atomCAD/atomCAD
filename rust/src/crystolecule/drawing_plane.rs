@@ -233,6 +233,60 @@ impl DrawingPlane {
         
         Some(IVec2::new(lattice_3d.x, lattice_3d.y))
     }
+    
+    /// Validates an extrusion direction for this drawing plane.
+    /// 
+    /// An extrusion direction is valid if it points away from the plane (has positive
+    /// projection onto the plane normal). This ensures extrusion creates geometry
+    /// extending outward from the plane rather than into it.
+    /// 
+    /// # Arguments
+    /// * `extrude_direction` - Miller index direction in the unit cell (lattice coordinates)
+    /// 
+    /// # Returns
+    /// * `Ok((normalized_direction, length))` - Normalized direction vector and length in real space
+    /// * `Err(String)` - Error message if direction is invalid
+    /// 
+    /// # Errors
+    /// * If direction is zero vector
+    /// * If direction is parallel or nearly parallel to plane (zero projection)
+    /// * If direction points into the plane (negative projection)
+    pub fn validate_extrude_direction(&self, extrude_direction: &IVec3) -> Result<(DVec3, f64), String> {
+        // Check for zero vector
+        if *extrude_direction == IVec3::ZERO {
+            return Err("Extrusion direction cannot be zero vector [0,0,0]".to_string());
+        }
+        
+        // Convert miller direction to real 3D vector
+        let dir_real = self.unit_cell.ivec3_lattice_to_real(extrude_direction);
+        let dir_length = dir_real.length();
+        
+        // Get plane basis vectors in 3D world space
+        let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
+        let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
+        
+        // Compute plane normal: u × v
+        let plane_normal = u_real.cross(v_real);
+        
+        // Check projection onto plane normal
+        let projection = dir_real.dot(plane_normal);
+        
+        if projection.abs() < 1e-10 {
+            return Err(format!(
+                "Invalid extrusion direction [{},{},{}]: parallel or nearly parallel to plane (no outward component)",
+                extrude_direction.x, extrude_direction.y, extrude_direction.z
+            ));
+        }
+        
+        if projection < 0.0 {
+            return Err(format!(
+                "Invalid extrusion direction [{},{},{}]: points into plane (negative projection). Try negating the direction.",
+                extrude_direction.x, extrude_direction.y, extrude_direction.z
+            ));
+        }
+        
+        Ok((dir_real.normalize(), dir_length))
+    }
 }
 
 /// Computes two primitive in-plane lattice basis vectors from a Miller index.

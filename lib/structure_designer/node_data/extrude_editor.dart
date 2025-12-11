@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
+import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
@@ -49,6 +50,21 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                 widget.nodeId,
                 APIExtrudeData(
                   height: newValue,
+                  extrudeDirection: widget.data!.extrudeDirection,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Extrude Direction',
+            value: widget.data!.extrudeDirection,
+            onChanged: (newValue) {
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: widget.data!.height,
+                  extrudeDirection: newValue,
                 ),
               );
             },

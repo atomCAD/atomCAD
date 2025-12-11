@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
+use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use crate::util::serialization_utils::ivec3_serializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::DQuat;
@@ -18,6 +20,8 @@ use crate::structure_designer::node_type::NodeType;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
   pub height: i32,
+  #[serde(with = "ivec3_serializer")]
+  pub extrude_direction: IVec3,
 }
 
 impl NodeData for ExtrudeData {
@@ -64,8 +68,17 @@ impl NodeData for ExtrudeData {
       };
 
       if let NetworkResult::Geometry2D(shape) = shape_val {
-        // Use the unit cell from the shape (not from the deprecated extrude pin)
-        let unit_cell = shape.unit_cell.clone();
+        // Extract unit cell from the drawing plane
+        let unit_cell = shape.drawing_plane.unit_cell.clone();
+        
+        // Validate extrusion direction for this plane
+        let (direction, dir_length) = match shape.drawing_plane.validate_extrude_direction(&self.extrude_direction) {
+            Ok(result) => result,
+            Err(error_msg) => return NetworkResult::Error(error_msg),
+        };
+        
+        // Calculate actual extrusion height based on direction length and height multiplier
+        let height_real = dir_length * (height as f64);
         
         let frame_translation_2d = shape.frame_transform.translation;
     
@@ -74,13 +87,11 @@ impl NodeData for ExtrudeData {
           DQuat::from_rotation_z(shape.frame_transform.rotation),
         );
     
-        let direction = unit_cell.c.normalize();
-        let height = unit_cell.c.length() * (height as f64);
         let s = shape.geo_tree_root;
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,
           frame_transform,
-          geo_tree_root: GeoNode::extrude(height, direction, Box::new(s))
+          geo_tree_root: GeoNode::extrude(height_real, direction, Box::new(s))
         });
       } else {
         return runtime_type_error_in_input(0);
@@ -92,7 +103,12 @@ impl NodeData for ExtrudeData {
     }
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-        Some(format!("h: {}", self.height))
+        Some(format!("h: {} dir: [{},{},{}]", 
+            self.height,
+            self.extrude_direction.x,
+            self.extrude_direction.y,
+            self.extrude_direction.z
+        ))
     }
 }
 

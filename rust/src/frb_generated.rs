@@ -4800,8 +4800,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_height = <i32>::sse_decode(deserializer);
+        let mut var_extrudeDirection =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIExtrudeData {
             height: var_height,
+            extrude_direction: var_extrudeDirection,
         };
     }
 }
@@ -7121,7 +7124,11 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIExtrudeData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.height.into_into_dart().into_dart()].into_dart()
+        [
+            self.height.into_into_dart().into_dart(),
+            self.extrude_direction.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -8745,6 +8752,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.height, serializer);
+        <crate::api::common_api_types::APIIVec3>::sse_encode(self.extrude_direction, serializer);
     }
 }
 

@@ -606,6 +606,7 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
       public: true,
       node_data_creator: || Box::new(ExtrudeData {
         height: 1,
+        extrude_direction: IVec3::new(0, 0, 1),
       }),
       node_data_saver: generic_node_data_saver::<ExtrudeData>,
       node_data_loader: generic_node_data_loader::<ExtrudeData>,
