@@ -160,6 +160,7 @@ impl DrawingPlane {
     /// This places a point on the actual drawing plane in 3D space by:
     /// 1. Using the plane's u_axis and v_axis to position in 3D world space
     /// 2. Starting from the plane's center point
+    /// 3. Applying the shift offset along the plane normal
     /// 
     /// # Arguments
     /// * `real_2d` - 2D real coordinate in plane space (in length units)
@@ -174,8 +175,15 @@ impl DrawingPlane {
         // 2. Get plane origin (center point in 3D)
         let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
         
-        // 3. Construct 3D position: origin + real_2d.x * u_unit + real_2d.y * v_unit
-        plane_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
+        // 3. Calculate shift offset along plane normal
+        // Get plane properties to obtain d_spacing
+        let plane_props = self.unit_cell.ivec3_miller_index_to_plane_props(&self.miller_index)
+            .expect("Miller index should be valid for DrawingPlane");
+        let shift_distance = (self.shift as f64 / self.subdivision as f64) * plane_props.d_spacing;
+        let shifted_origin = plane_origin + plane_props.normal * shift_distance;
+        
+        // 4. Construct 3D position: shifted_origin + real_2d.x * u_unit + real_2d.y * v_unit
+        shifted_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
     }
     
     /// Maps a 2D lattice coordinate (in plane space) to 3D world position.
