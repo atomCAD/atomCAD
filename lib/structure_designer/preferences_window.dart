@@ -700,6 +700,42 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             maximumValue:
                                 const APIIVec3(x: 255, y: 255, z: 255),
                           ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Drawing plane grid color
+                          IVec3Input(
+                            label: 'Drawing plane grid color (RGB)',
+                            value: _preferences
+                                .backgroundPreferences.drawingPlaneGridColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences
+                                    .drawingPlaneGridColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Drawing plane grid strong color
+                          IVec3Input(
+                            label: 'Drawing plane grid strong color (RGB)',
+                            value: _preferences.backgroundPreferences
+                                .drawingPlaneGridStrongColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences
+                                    .drawingPlaneGridStrongColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
                         ],
                       ),
                     ),

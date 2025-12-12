@@ -12,6 +12,9 @@ pub const X_AXIS_COLOR: [f32; 3] = [1.0, 0.0, 0.0]; // Red for X-axis
 pub const Y_AXIS_COLOR: [f32; 3] = [0.0, 1.0, 0.0]; // Green for Y-axis
 pub const Z_AXIS_COLOR: [f32; 3] = [0.0, 0.0, 1.0]; // Blue for Z-axis
 
+pub const DRAWING_PLANE_X_AXIS_COLOR: [f32; 3] = [1.0, 0.3, 0.3];
+pub const DRAWING_PLANE_Y_AXIS_COLOR: [f32; 3] = [0.5, 1.0, 0.0];
+
 // Lattice basis vector colors (for non-Cartesian aligned lattices)
 pub const LATTICE_A_COLOR: [f32; 3] = [0.0, 1.0, 1.0]; // Cyan for a-vector
 pub const LATTICE_B_COLOR: [f32; 3] = [1.0, 0.0, 1.0]; // Magenta for b-vector
@@ -100,23 +103,19 @@ pub fn tessellate_drawing_plane_grid_and_axes(
     drawing_plane: &DrawingPlane,
     background_preferences: &BackgroundPreferences,
 ) {
-    if !background_preferences.show_grid {
-        return;
-    }
-
     let origin = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::ZERO);
     let u_vector = drawing_plane.effective_unit_cell.a;
     let v_vector = drawing_plane.effective_unit_cell.b;
 
     let grid_primary_color: [f32; 3] = [
-        background_preferences.lattice_grid_color.x as f32 / 255.0,
-        background_preferences.lattice_grid_color.y as f32 / 255.0,
-        background_preferences.lattice_grid_color.z as f32 / 255.0,
+        background_preferences.drawing_plane_grid_color.x as f32 / 255.0,
+        background_preferences.drawing_plane_grid_color.y as f32 / 255.0,
+        background_preferences.drawing_plane_grid_color.z as f32 / 255.0,
     ];
     let grid_secondary_color: [f32; 3] = [
-        background_preferences.lattice_grid_strong_color.x as f32 / 255.0,
-        background_preferences.lattice_grid_strong_color.y as f32 / 255.0,
-        background_preferences.lattice_grid_strong_color.z as f32 / 255.0,
+        background_preferences.drawing_plane_grid_strong_color.x as f32 / 255.0,
+        background_preferences.drawing_plane_grid_strong_color.y as f32 / 255.0,
+        background_preferences.drawing_plane_grid_strong_color.z as f32 / 255.0,
     ];
 
     tessellate_grid_with_origin(
@@ -134,13 +133,13 @@ pub fn tessellate_drawing_plane_grid_and_axes(
         output_mesh,
         &origin,
         &(origin + u_vector.normalize() * axis_length),
-        &X_AXIS_COLOR,
+        &DRAWING_PLANE_X_AXIS_COLOR,
     );
     add_axis_line(
         output_mesh,
         &origin,
         &(origin + v_vector.normalize() * axis_length),
-        &Y_AXIS_COLOR,
+        &DRAWING_PLANE_Y_AXIS_COLOR,
     );
 }
 

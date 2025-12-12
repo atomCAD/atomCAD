@@ -62,6 +62,8 @@ class BackgroundPreferences {
   bool showLatticeGrid;
   APIIVec3 latticeGridColor;
   APIIVec3 latticeGridStrongColor;
+  APIIVec3 drawingPlaneGridColor;
+  APIIVec3 drawingPlaneGridStrongColor;
 
   BackgroundPreferences({
     required this.backgroundColor,
@@ -73,6 +75,8 @@ class BackgroundPreferences {
     required this.showLatticeGrid,
     required this.latticeGridColor,
     required this.latticeGridStrongColor,
+    required this.drawingPlaneGridColor,
+    required this.drawingPlaneGridStrongColor,
   });
 
   @override
@@ -85,7 +89,9 @@ class BackgroundPreferences {
       showLatticeAxes.hashCode ^
       showLatticeGrid.hashCode ^
       latticeGridColor.hashCode ^
-      latticeGridStrongColor.hashCode;
+      latticeGridStrongColor.hashCode ^
+      drawingPlaneGridColor.hashCode ^
+      drawingPlaneGridStrongColor.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -100,7 +106,9 @@ class BackgroundPreferences {
           showLatticeAxes == other.showLatticeAxes &&
           showLatticeGrid == other.showLatticeGrid &&
           latticeGridColor == other.latticeGridColor &&
-          latticeGridStrongColor == other.latticeGridStrongColor;
+          latticeGridStrongColor == other.latticeGridStrongColor &&
+          drawingPlaneGridColor == other.drawingPlaneGridColor &&
+          drawingPlaneGridStrongColor == other.drawingPlaneGridStrongColor;
 }
 
 enum GeometryVisualization {

@@ -101,6 +101,10 @@ pub struct BackgroundPreferences {
   pub lattice_grid_color: APIIVec3,
   #[frb(non_final)]
   pub lattice_grid_strong_color: APIIVec3,
+  #[frb(non_final)]
+  pub drawing_plane_grid_color: APIIVec3,
+  #[frb(non_final)]
+  pub drawing_plane_grid_strong_color: APIIVec3,
 }
 
 #[frb]
@@ -143,6 +147,8 @@ impl StructureDesignerPreferences {
         show_lattice_grid: false,
         lattice_grid_color: APIIVec3 { x: 102, y: 153, z: 153 },
         lattice_grid_strong_color: APIIVec3 { x: 76, y: 127, z: 127 },
+        drawing_plane_grid_color: APIIVec3 { x: 60, y: 60, z: 60 },
+        drawing_plane_grid_strong_color: APIIVec3 { x: 0, y: 0, z: 0 },
       },
     }
   }

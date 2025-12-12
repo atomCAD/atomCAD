@@ -5333,7 +5333,11 @@ impl SseDecode
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_latticeGridStrongColor =
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences{background_color: var_backgroundColor, show_grid: var_showGrid, grid_size: var_gridSize, grid_color: var_gridColor, grid_strong_color: var_gridStrongColor, show_lattice_axes: var_showLatticeAxes, show_lattice_grid: var_showLatticeGrid, lattice_grid_color: var_latticeGridColor, lattice_grid_strong_color: var_latticeGridStrongColor};
+        let mut var_drawingPlaneGridColor =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_drawingPlaneGridStrongColor =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences{background_color: var_backgroundColor, show_grid: var_showGrid, grid_size: var_gridSize, grid_color: var_gridColor, grid_strong_color: var_gridStrongColor, show_lattice_axes: var_showLatticeAxes, show_lattice_grid: var_showLatticeGrid, lattice_grid_color: var_latticeGridColor, lattice_grid_strong_color: var_latticeGridStrongColor, drawing_plane_grid_color: var_drawingPlaneGridColor, drawing_plane_grid_strong_color: var_drawingPlaneGridStrongColor};
     }
 }
 
@@ -8098,6 +8102,10 @@ impl flutter_rust_bridge::IntoDart
             self.show_lattice_grid.into_into_dart().into_dart(),
             self.lattice_grid_color.into_into_dart().into_dart(),
             self.lattice_grid_strong_color.into_into_dart().into_dart(),
+            self.drawing_plane_grid_color.into_into_dart().into_dart(),
+            self.drawing_plane_grid_strong_color
+                .into_into_dart()
+                .into_dart(),
         ]
         .into_dart()
     }
@@ -9115,6 +9123,14 @@ impl SseEncode
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.lattice_grid_color, serializer);
         <crate::api::common_api_types::APIIVec3>::sse_encode(
             self.lattice_grid_strong_color,
+            serializer,
+        );
+        <crate::api::common_api_types::APIIVec3>::sse_encode(
+            self.drawing_plane_grid_color,
+            serializer,
+        );
+        <crate::api::common_api_types::APIIVec3>::sse_encode(
+            self.drawing_plane_grid_strong_color,
             serializer,
         );
     }

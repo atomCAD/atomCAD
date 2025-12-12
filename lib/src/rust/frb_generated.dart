@@ -5639,8 +5639,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BackgroundPreferences dco_decode_background_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return BackgroundPreferences(
       backgroundColor: dco_decode_apii_vec_3(arr[0]),
       showGrid: dco_decode_bool(arr[1]),
@@ -5651,6 +5651,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       showLatticeGrid: dco_decode_bool(arr[6]),
       latticeGridColor: dco_decode_apii_vec_3(arr[7]),
       latticeGridStrongColor: dco_decode_apii_vec_3(arr[8]),
+      drawingPlaneGridColor: dco_decode_apii_vec_3(arr[9]),
+      drawingPlaneGridStrongColor: dco_decode_apii_vec_3(arr[10]),
     );
   }
 
@@ -7278,6 +7280,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_showLatticeGrid = sse_decode_bool(deserializer);
     var var_latticeGridColor = sse_decode_apii_vec_3(deserializer);
     var var_latticeGridStrongColor = sse_decode_apii_vec_3(deserializer);
+    var var_drawingPlaneGridColor = sse_decode_apii_vec_3(deserializer);
+    var var_drawingPlaneGridStrongColor = sse_decode_apii_vec_3(deserializer);
     return BackgroundPreferences(
         backgroundColor: var_backgroundColor,
         showGrid: var_showGrid,
@@ -7287,7 +7291,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         showLatticeAxes: var_showLatticeAxes,
         showLatticeGrid: var_showLatticeGrid,
         latticeGridColor: var_latticeGridColor,
-        latticeGridStrongColor: var_latticeGridStrongColor);
+        latticeGridStrongColor: var_latticeGridStrongColor,
+        drawingPlaneGridColor: var_drawingPlaneGridColor,
+        drawingPlaneGridStrongColor: var_drawingPlaneGridStrongColor);
   }
 
   @protected
@@ -9156,6 +9162,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.showLatticeGrid, serializer);
     sse_encode_apii_vec_3(self.latticeGridColor, serializer);
     sse_encode_apii_vec_3(self.latticeGridStrongColor, serializer);
+    sse_encode_apii_vec_3(self.drawingPlaneGridColor, serializer);
+    sse_encode_apii_vec_3(self.drawingPlaneGridStrongColor, serializer);
   }
 
   @protected
