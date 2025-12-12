@@ -21,10 +21,10 @@ pub fn tessellate_scene_content(
     camera: &Camera,
     lightweight: bool,
     preferences: &StructureDesignerPreferences
-) -> (Mesh, Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
+) -> (Mesh, LineMesh, Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
     
     // ===== 1. TESSELLATE LIGHTWEIGHT CONTENT (always) =====
-    let lightweight_mesh = tessellate_lightweight_content(scene, camera, preferences);
+    let (lightweight_mesh, gadget_line_mesh) = tessellate_lightweight_content(scene, camera, preferences);
 
     // ===== 2. TESSELLATE NON-LIGHTWEIGHT CONTENT (when !lightweight) =====
     let (main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
@@ -35,7 +35,7 @@ pub fn tessellate_scene_content(
             (Mesh::new(), LineMesh::new(), AtomImpostorMesh::new(), BondImpostorMesh::new())
         };
     
-    (lightweight_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh)
+    (lightweight_mesh, gadget_line_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh)
 }
 
 /// Tessellates lightweight content (gadget, camera pivot)
@@ -43,7 +43,7 @@ fn tessellate_lightweight_content(
     scene: &StructureDesignerScene,
     camera: &Camera,
     preferences: &StructureDesignerPreferences
-) -> Mesh {
+) -> (Mesh, LineMesh) {
     let mut output = TessellationOutput::new();
     
     // Tessellate gadget (tessellatable)
@@ -51,8 +51,8 @@ fn tessellate_lightweight_content(
         tessellatable.tessellate(&mut output);
     }
 
-    // Phase 1: ignore gadget line mesh (will be rendered in Phase 2)
     let mut lightweight_mesh = output.mesh;
+    let gadget_line_mesh = output.line_mesh;
     
     // Tessellate camera pivot point cube if enabled
     if preferences.geometry_visualization_preferences.display_camera_target {
@@ -72,7 +72,7 @@ fn tessellate_lightweight_content(
         );
     }
 
-    lightweight_mesh
+    (lightweight_mesh, gadget_line_mesh)
 }
 
 /// Tessellates non-lightweight content by iterating over node_data HashMap

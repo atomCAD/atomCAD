@@ -88,6 +88,7 @@ pub struct Renderer  {
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
+    gadget_line_mesh: GPUMesh,
     background_mesh: GPUMesh,
     atom_impostor_mesh: GPUMesh,
     bond_impostor_mesh: GPUMesh,
@@ -175,6 +176,7 @@ impl Renderer {
         let wireframe_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
         
         let lightweight_mesh = GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
+        let gadget_line_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
         let background_mesh = GPUMesh::new_empty_line_mesh(&device, &model_bind_group_layout);
         
         // Initialize impostor meshes
@@ -332,6 +334,7 @@ impl Renderer {
           main_mesh,
           wireframe_mesh,
           lightweight_mesh,
+          gadget_line_mesh,
           background_mesh,
           atom_impostor_mesh,
           bond_impostor_mesh,
@@ -355,13 +358,12 @@ impl Renderer {
         pipeline_layout: &wgpu::PipelineLayout,
         depth_bias_state: wgpu::DepthBiasState,
     ) -> RenderPipeline {
-        // Line shader module
         let line_shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Line Shader"),
             source: ShaderSource::Wgsl(include_str!("line_mesh.wgsl").into()),
         });
 
-        return device.create_render_pipeline(&RenderPipelineDescriptor {
+        device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Line Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: VertexState {
@@ -405,7 +407,7 @@ impl Renderer {
             },
             multiview: None,
             cache: None,
-        });
+        })
     }
 
     fn create_triangle_pipeline(
@@ -415,7 +417,6 @@ impl Renderer {
         always_on_top: bool,
     ) -> RenderPipeline {
         let depth_stencil = if always_on_top {
-            // For gadgets: disable depth testing so they're always visible
             Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
                 depth_write_enabled: false, // Don't write to depth buffer
@@ -428,7 +429,6 @@ impl Renderer {
                 },
             })
         } else {
-            // Normal depth testing for regular geometry
             Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
                 depth_write_enabled: true,
@@ -609,31 +609,24 @@ impl Renderer {
       self.update_camera_buffer();
     }
 
-    // Method to resize the viewport
     pub fn set_viewport_size(&mut self, width: u32, height: u32) {
-        // Skip if dimensions haven't changed
         if self.texture_size.width == width && self.texture_size.height == height {
             return;
         }
 
-        // Update camera aspect ratio
         self.camera.aspect = width as f64 / height as f64;
         self.update_camera_buffer();
 
-        // Acquire lock for texture recreation only
         let _lock = self.render_mutex.lock().unwrap();
 
-        // Ensure all previous GPU work is complete before changing resources
         self.device.poll(Maintain::Wait);
 
-        // Update texture size
         self.texture_size = Extent3d {
             width,
             height,
             depth_or_array_layers: 1,
         };
 
-        // Recreate all GPU resources
         let texture = Self::create_texture(&self.device, &self.texture_size);
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
         let depth_texture = Self::create_depth_texture(&self.device, &self.texture_size);
@@ -646,7 +639,6 @@ impl Renderer {
         self.depth_texture_view = depth_texture_view;
         self.output_buffer = output_buffer;
 
-        // Ensure all resource creation is complete
         self.device.poll(Maintain::Wait);
     }
 
@@ -656,8 +648,7 @@ impl Renderer {
         lightweight: bool,
         preferences: &StructureDesignerPreferences
     ) {
-        // Tessellate using the new node_data HashMap structure
-        let (lightweight_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
+        let (lightweight_mesh, gadget_line_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
             crate::display::scene_tessellator::tessellate_scene_content(
                 scene, 
                 &self.camera, 
@@ -665,9 +656,9 @@ impl Renderer {
                 preferences
             );
 
-        // Update all GPU meshes
         self.update_all_gpu_meshes(
             &lightweight_mesh,
+            &gadget_line_mesh,
             &main_mesh,
             &wireframe_mesh,
             &atom_impostor_mesh,
@@ -675,41 +666,37 @@ impl Renderer {
             !lightweight
         );
 
-        // Refresh the background coordinate system (only when not lightweight)
         if !lightweight {
             self.refresh_background(scene.unit_cell.as_ref(), &preferences.background_preferences);
         }
     }
 
-    // Helper method to update all GPU meshes consistently
     fn update_all_gpu_meshes(
         &mut self,
         lightweight_mesh: &Mesh,
+        gadget_line_mesh: &LineMesh,
         main_mesh: &Mesh,
         wireframe_mesh: &LineMesh,
         atom_impostor_mesh: &AtomImpostorMesh,
         bond_impostor_mesh: &BondImpostorMesh,
         update_non_lightweight: bool
     ) {
-        // Always update lightweight mesh
         self.lightweight_mesh.update_from_mesh(&self.device, lightweight_mesh, "Lightweight");
         self.lightweight_mesh.set_identity_transform(&self.queue);
 
-        // Update non-lightweight meshes only when needed
+        self.gadget_line_mesh.update_from_line_mesh(&self.device, gadget_line_mesh, "Gadget Lines");
+        self.gadget_line_mesh.set_identity_transform(&self.queue);
+
         if update_non_lightweight {
-            // Update triangle meshes
             self.main_mesh.update_from_mesh(&self.device, main_mesh, "Main");
             self.wireframe_mesh.update_from_line_mesh(&self.device, wireframe_mesh, "Wireframe");
             
-            // Update impostor meshes (always update both - empty ones will clear previous data)
             self.atom_impostor_mesh.update_from_atom_impostor_mesh(&self.device, atom_impostor_mesh, "Atom Impostors");
             self.bond_impostor_mesh.update_from_bond_impostor_mesh(&self.device, bond_impostor_mesh, "Bond Impostors");
             
-            // Set transforms for triangle meshes
             self.main_mesh.set_identity_transform(&self.queue);
             self.wireframe_mesh.set_identity_transform(&self.queue);
             
-            // Set transforms for impostor meshes
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
         }
@@ -718,25 +705,19 @@ impl Renderer {
     pub fn refresh_background(&mut self, unit_cell: Option<&UnitCellStruct>, background_preferences: &BackgroundPreferences) {
         let _lock = self.render_mutex.lock().unwrap();
         
-        // Create a new LineMesh for the coordinate system
         let mut line_mesh = LineMesh::new();
         
-        // Use the coordinate system tessellator to populate it
         let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
         crate::display::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
         
-        // Update the background mesh with the line mesh
         self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "Background");
         
-        // Set identity transform for the background mesh
         self.background_mesh.set_identity_transform(&self.queue);
     }
 
     pub fn render(&mut self, background_preferences: &BackgroundPreferences) -> Vec<u8> {
-        // Acquire lock before rendering
         let _lock = self.render_mutex.lock().unwrap();
 
-        // Create a new command encoder
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -833,7 +814,12 @@ impl Renderer {
             // Set camera bind group for gadget render pass
             gadget_render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             
-            // Render gadgets with normal depth testing (they respect Z-order among themselves)
+            // Render gadget lines first
+            self.gadget_line_mesh.set_identity_transform(&self.queue);
+            gadget_render_pass.set_pipeline(&self.line_pipeline);
+            self.render_mesh(&mut gadget_render_pass, &self.gadget_line_mesh);
+
+            // Render gadget triangles
             self.lightweight_mesh.set_identity_transform(&self.queue);
             gadget_render_pass.set_pipeline(&self.triangle_pipeline);
             self.render_mesh(&mut gadget_render_pass, &self.lightweight_mesh);
