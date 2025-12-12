@@ -201,7 +201,6 @@ pub struct DrawingPlaneGadget {
 impl Tessellatable for DrawingPlaneGadget {
     fn tessellate(&self, output: &mut TessellationOutput) {
         let output_mesh: &mut Mesh = &mut output.mesh;
-        let output_line_mesh = &mut output.line_mesh;
         let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
 
         half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);
@@ -213,26 +212,6 @@ impl Tessellatable for DrawingPlaneGadget {
             self.dragged_shift,
             &self.unit_cell,
             self.subdivision);
-
-        // Draw a plane-local grid and local axes only while dragging.
-        if self.dragged_handle_index.is_some() {
-            let drawing_plane = match DrawingPlane::new(
-                self.unit_cell.clone(),
-                self.miller_index,
-                self.center,
-                self.shift,
-                self.subdivision,
-            ) {
-                Ok(plane) => plane,
-                Err(_) => return,
-            };
-
-            coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
-                output_line_mesh,
-                &drawing_plane,
-                &self.background_preferences,
-            );
-        }
 
         // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
         if self.dragged_handle_index == Some(0) {
