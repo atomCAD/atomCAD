@@ -55,8 +55,9 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
     if is_lattice_xy_aligned(unit_cell) {
         // Single grid mode: lattice is aligned with Cartesian XY
         // Display only the lattice grid with primary colors
-        tessellate_grid(
+        tessellate_grid_with_origin(
             output_mesh,
+            &origin,
             &unit_cell.a,
             &unit_cell.b,
             background_preferences.grid_size,
@@ -67,8 +68,9 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
         // Dual grid mode: lattice not aligned with Cartesian XY
         // Display Cartesian grid with diamond spacing (primary colors)
         let cartesian_spacing = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-        tessellate_grid(
+        tessellate_grid_with_origin(
             output_mesh,
+            &origin,
             &(DVec3::new(cartesian_spacing, 0.0, 0.0)),
             &(DVec3::new(0.0, cartesian_spacing, 0.0)),
             background_preferences.grid_size,
@@ -78,8 +80,9 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
         
         // Optionally display lattice grid with secondary colors
         if background_preferences.show_lattice_grid {
-            tessellate_grid(
+            tessellate_grid_with_origin(
                 output_mesh,
+                &origin,
                 &unit_cell.a,
                 &unit_cell.b,
                 background_preferences.grid_size,
@@ -91,7 +94,7 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
 }
 
 /// Adds a single solid axis line from start to end with the specified color
-fn add_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: &[f32; 3]) {
+pub fn add_axis_line(output_mesh: &mut LineMesh, start: &DVec3, end: &DVec3, color: &[f32; 3]) {
     let start_vec3 = Vec3::new(start.x as f32, start.y as f32, start.z as f32);
     let end_vec3 = Vec3::new(end.x as f32, end.y as f32, end.z as f32);
     
@@ -208,15 +211,15 @@ fn get_lattice_grid_secondary_color(background_preferences: &BackgroundPreferenc
 /// Generic grid tessellation function
 /// Creates a grid based on two basis vectors (u and v)
 /// The grid follows these vectors to create a parallelogram grid pattern
-fn tessellate_grid(
+pub fn tessellate_grid_with_origin(
     output_mesh: &mut LineMesh,
+    origin: &DVec3,
     u_vector: &DVec3,
     v_vector: &DVec3,
     grid_size: i32,
     primary_color: &[f32; 3],
     secondary_color: &[f32; 3],
 ) {
-    let origin = DVec3::new(0.0, 0.0, 0.0);
     let grid_range = grid_size as i32;
 
     // Create grid lines parallel to the u vector (varying along v direction)
@@ -226,13 +229,13 @@ fn tessellate_grid(
         
         // Line runs from -grid_size*u to +grid_size*u, offset by i*v
         let offset = v_vector * (i as f64);
-        let start = origin + offset - u_vector * (grid_range as f64);
-        let end = origin + offset + u_vector * (grid_range as f64);
+        let start = *origin + offset - u_vector * (grid_range as f64);
+        let end = *origin + offset + u_vector * (grid_range as f64);
         
         // Special case: don't draw over the u-axis when i=0
         if i == 0 {
             // Only draw the negative part
-            let mid = origin + offset;
+            let mid = *origin + offset;
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
         } else {
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
@@ -246,13 +249,13 @@ fn tessellate_grid(
         
         // Line runs from -grid_size*v to +grid_size*v, offset by i*u
         let offset = u_vector * (i as f64);
-        let start = origin + offset - v_vector * (grid_range as f64);
-        let end = origin + offset + v_vector * (grid_range as f64);
+        let start = *origin + offset - v_vector * (grid_range as f64);
+        let end = *origin + offset + v_vector * (grid_range as f64);
         
         // Special case: don't draw over the v-axis when i=0
         if i == 0 {
             // Only draw the negative part
-            let mid = origin + offset;
+            let mid = *origin + offset;
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
         } else {
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);

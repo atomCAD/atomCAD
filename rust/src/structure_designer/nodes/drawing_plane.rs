@@ -19,6 +19,8 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use glam::f64::DVec3;
+use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
+use crate::display::coordinate_system_tessellator;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingPlaneData {
@@ -48,7 +50,8 @@ impl NodeData for DrawingPlaneData {
         self.center,
         self.shift,
         self.subdivision,
-        &drawing_plane_cache.unit_cell)));
+        &drawing_plane_cache.unit_cell,
+        &structure_designer.preferences.background_preferences)));
     }
   
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -192,11 +195,13 @@ pub struct DrawingPlaneGadget {
     pub dragged_handle_index: Option<i32>,
     pub possible_miller_indices: HashSet<IVec3>,
     pub unit_cell: UnitCellStruct,
+    pub background_preferences: BackgroundPreferences,
 }
 
 impl Tessellatable for DrawingPlaneGadget {
     fn tessellate(&self, output: &mut TessellationOutput) {
         let output_mesh: &mut Mesh = &mut output.mesh;
+        let output_line_mesh = &mut output.line_mesh;
         let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
 
         half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);
@@ -208,16 +213,58 @@ impl Tessellatable for DrawingPlaneGadget {
             self.dragged_shift,
             &self.unit_cell,
             self.subdivision);
-        
-        // If we are dragging any handle, show the plane grid for visual reference
-        if self.dragged_handle_index.is_some() {
-            half_space_utils::tessellate_plane_grid(
-                output_mesh,
-                &self.center,
-                &self.miller_index,
+
+        // Draw a plane-local grid and local axes for visual reference (always visible)
+        if self.background_preferences.show_grid {
+            let drawing_plane = match DrawingPlane::new(
+                self.unit_cell.clone(),
+                self.miller_index,
+                self.center,
                 self.shift,
-                &self.unit_cell,
-                self.subdivision);
+                self.subdivision,
+            ) {
+                Ok(plane) => plane,
+                Err(_) => return,
+            };
+
+            let origin = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::ZERO);
+            let u_vector = drawing_plane.effective_unit_cell.a;
+            let v_vector = drawing_plane.effective_unit_cell.b;
+
+            let grid_primary_color: [f32; 3] = [
+                self.background_preferences.lattice_grid_color.x as f32 / 255.0,
+                self.background_preferences.lattice_grid_color.y as f32 / 255.0,
+                self.background_preferences.lattice_grid_color.z as f32 / 255.0,
+            ];
+            let grid_secondary_color: [f32; 3] = [
+                self.background_preferences.lattice_grid_strong_color.x as f32 / 255.0,
+                self.background_preferences.lattice_grid_strong_color.y as f32 / 255.0,
+                self.background_preferences.lattice_grid_strong_color.z as f32 / 255.0,
+            ];
+
+            coordinate_system_tessellator::tessellate_grid_with_origin(
+                output_line_mesh,
+                &origin,
+                &u_vector,
+                &v_vector,
+                self.background_preferences.grid_size,
+                &grid_primary_color,
+                &grid_secondary_color,
+            );
+
+            let axis_length = self.background_preferences.grid_size as f64;
+            coordinate_system_tessellator::add_axis_line(
+                output_line_mesh,
+                &origin,
+                &(origin + u_vector.normalize() * axis_length),
+                &coordinate_system_tessellator::X_AXIS_COLOR,
+            );
+            coordinate_system_tessellator::add_axis_line(
+                output_line_mesh,
+                &origin,
+                &(origin + v_vector.normalize() * axis_length),
+                &coordinate_system_tessellator::Y_AXIS_COLOR,
+            );
         }
 
         // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
@@ -328,7 +375,15 @@ impl NodeNetworkGadget for DrawingPlaneGadget {
 
 impl DrawingPlaneGadget {
 
-    pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32, subdivision: i32, unit_cell: &UnitCellStruct) -> Self {        
+    pub fn new(
+      max_miller_index: i32,
+      miller_index: &IVec3,
+      center: IVec3,
+      shift: i32,
+      subdivision: i32,
+      unit_cell: &UnitCellStruct,
+      background_preferences: &BackgroundPreferences,
+    ) -> Self {        
         return Self {
             max_miller_index,
             miller_index: *miller_index,
@@ -339,6 +394,7 @@ impl DrawingPlaneGadget {
             dragged_handle_index: None,
             possible_miller_indices: half_space_utils::generate_possible_miller_indices(max_miller_index),
             unit_cell: unit_cell.clone(),
+            background_preferences: background_preferences.clone(),
         };
     }
 }
