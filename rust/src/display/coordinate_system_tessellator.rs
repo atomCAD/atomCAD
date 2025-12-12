@@ -1,8 +1,10 @@
 use glam::f64::DVec3;
 use glam::f32::Vec3;
-use crate::renderer::line_mesh::LineMesh;
+
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use crate::renderer::line_mesh::LineMesh;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
 
 // Constants for coordinate system visualization
@@ -32,11 +34,11 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
     if !background_preferences.show_grid {
         return;
     }
-    
+
     // Origin point
     let origin = DVec3::new(0.0, 0.0, 0.0);
     let cs_size = background_preferences.grid_size as f64;
-    
+
     // Cartesian coordinate axes (always displayed)
     let x_axis_end = origin + DVec3::new(cs_size, 0.0, 0.0);
     let y_axis_end = origin + DVec3::new(0.0, cs_size, 0.0);
@@ -91,6 +93,55 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
             );
         }
     }
+}
+
+pub fn tessellate_drawing_plane_grid_and_axes(
+    output_mesh: &mut LineMesh,
+    drawing_plane: &DrawingPlane,
+    background_preferences: &BackgroundPreferences,
+) {
+    if !background_preferences.show_grid {
+        return;
+    }
+
+    let origin = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::ZERO);
+    let u_vector = drawing_plane.effective_unit_cell.a;
+    let v_vector = drawing_plane.effective_unit_cell.b;
+
+    let grid_primary_color: [f32; 3] = [
+        background_preferences.lattice_grid_color.x as f32 / 255.0,
+        background_preferences.lattice_grid_color.y as f32 / 255.0,
+        background_preferences.lattice_grid_color.z as f32 / 255.0,
+    ];
+    let grid_secondary_color: [f32; 3] = [
+        background_preferences.lattice_grid_strong_color.x as f32 / 255.0,
+        background_preferences.lattice_grid_strong_color.y as f32 / 255.0,
+        background_preferences.lattice_grid_strong_color.z as f32 / 255.0,
+    ];
+
+    tessellate_grid_with_origin(
+        output_mesh,
+        &origin,
+        &u_vector,
+        &v_vector,
+        background_preferences.grid_size,
+        &grid_primary_color,
+        &grid_secondary_color,
+    );
+
+    let axis_length = background_preferences.grid_size as f64;
+    add_axis_line(
+        output_mesh,
+        &origin,
+        &(origin + u_vector.normalize() * axis_length),
+        &X_AXIS_COLOR,
+    );
+    add_axis_line(
+        output_mesh,
+        &origin,
+        &(origin + v_vector.normalize() * axis_length),
+        &Y_AXIS_COLOR,
+    );
 }
 
 /// Adds a single solid axis line from start to end with the specified color

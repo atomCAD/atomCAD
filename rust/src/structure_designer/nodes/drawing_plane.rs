@@ -214,8 +214,8 @@ impl Tessellatable for DrawingPlaneGadget {
             &self.unit_cell,
             self.subdivision);
 
-        // Draw a plane-local grid and local axes for visual reference (always visible)
-        if self.background_preferences.show_grid {
+        // Draw a plane-local grid and local axes only while dragging.
+        if self.dragged_handle_index.is_some() {
             let drawing_plane = match DrawingPlane::new(
                 self.unit_cell.clone(),
                 self.miller_index,
@@ -227,43 +227,10 @@ impl Tessellatable for DrawingPlaneGadget {
                 Err(_) => return,
             };
 
-            let origin = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::ZERO);
-            let u_vector = drawing_plane.effective_unit_cell.a;
-            let v_vector = drawing_plane.effective_unit_cell.b;
-
-            let grid_primary_color: [f32; 3] = [
-                self.background_preferences.lattice_grid_color.x as f32 / 255.0,
-                self.background_preferences.lattice_grid_color.y as f32 / 255.0,
-                self.background_preferences.lattice_grid_color.z as f32 / 255.0,
-            ];
-            let grid_secondary_color: [f32; 3] = [
-                self.background_preferences.lattice_grid_strong_color.x as f32 / 255.0,
-                self.background_preferences.lattice_grid_strong_color.y as f32 / 255.0,
-                self.background_preferences.lattice_grid_strong_color.z as f32 / 255.0,
-            ];
-
-            coordinate_system_tessellator::tessellate_grid_with_origin(
+            coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
                 output_line_mesh,
-                &origin,
-                &u_vector,
-                &v_vector,
-                self.background_preferences.grid_size,
-                &grid_primary_color,
-                &grid_secondary_color,
-            );
-
-            let axis_length = self.background_preferences.grid_size as f64;
-            coordinate_system_tessellator::add_axis_line(
-                output_line_mesh,
-                &origin,
-                &(origin + u_vector.normalize() * axis_length),
-                &coordinate_system_tessellator::X_AXIS_COLOR,
-            );
-            coordinate_system_tessellator::add_axis_line(
-                output_line_mesh,
-                &origin,
-                &(origin + v_vector.normalize() * axis_length),
-                &coordinate_system_tessellator::Y_AXIS_COLOR,
+                &drawing_plane,
+                &self.background_preferences,
             );
         }
 

@@ -9,6 +9,7 @@ use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::display::atomic_tessellator;
 use crate::display::surface_point_tessellator;
 use crate::display::poly_mesh_tessellator::{tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh};
+use crate::display::coordinate_system_tessellator;
 use crate::renderer::tessellator::tessellator::{tessellate_cuboid, TessellationOutput};
 use crate::renderer::camera::Camera;
 use glam::f32::Vec3;
@@ -157,6 +158,14 @@ fn tessellate_non_lightweight_content(
                         )),
                     );
                 }
+            },
+
+            NodeOutput::DrawingPlane(drawing_plane) => {
+                coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
+                    &mut wireframe_mesh,
+                    drawing_plane,
+                    &preferences.background_preferences,
+                );
             },
             
             NodeOutput::None => {

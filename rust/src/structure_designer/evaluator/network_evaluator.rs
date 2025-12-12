@@ -136,7 +136,14 @@ impl NetworkEvaluator {
 
     // Determine output and geo_tree based on node type and visualization preferences
     let (output, geo_tree) = 
-    if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D {
+    if registry.get_node_type_for_node(node).unwrap().output_type == DataType::DrawingPlane {
+      if let NetworkResult::DrawingPlane(drawing_plane) = result {
+        (NodeOutput::DrawingPlane(drawing_plane), None)
+      } else {
+        (NodeOutput::None, None)
+      }
+    }
+    else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D {
       if geometry_visualization_preferences.geometry_visualization == GeometryVisualization::SurfaceSplatting  {
         if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
           let point_cloud = generate_2d_point_cloud(&geometry_summary_2d.geo_tree_root, &mut context, geometry_visualization_preferences);
