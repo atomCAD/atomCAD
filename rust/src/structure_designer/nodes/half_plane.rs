@@ -15,7 +15,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::display::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -227,7 +227,8 @@ pub struct HalfPlaneGadget {
 }
 
 impl Tessellatable for HalfPlaneGadget {
-    fn tessellate(&self, output_mesh: &mut Mesh) {
+    fn tessellate(&self, output: &mut TessellationOutput) {
+        let output_mesh: &mut Mesh = &mut output.mesh;
         // Map points to their 3D positions on the drawing plane
         let p1_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point1);
         let p2_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point2);

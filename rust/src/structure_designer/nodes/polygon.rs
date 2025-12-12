@@ -1,7 +1,7 @@
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
 use crate::util::serialization_utils::vec_ivec2_serializer;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -153,7 +153,8 @@ impl PolygonGadget {
 }
 
 impl Tessellatable for PolygonGadget {
-  fn tessellate(&self, output_mesh: &mut Mesh) {
+  fn tessellate(&self, output: &mut TessellationOutput) {
+    let output_mesh: &mut Mesh = &mut output.mesh;
     // Map vertices to their 3D positions on the drawing plane
     let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
         .map(|v| self.drawing_plane.lattice_2d_to_world_3d(v))

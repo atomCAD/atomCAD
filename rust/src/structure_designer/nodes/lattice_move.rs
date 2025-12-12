@@ -21,7 +21,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::NodeType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::util::mat_utils::unit_ivec3;
 
 #[derive(Debug, Clone)]
@@ -145,7 +145,8 @@ pub struct LatticeMoveGadget {
 }
 
 impl Tessellatable for LatticeMoveGadget {
-  fn tessellate(&self, output_mesh: &mut Mesh) {
+  fn tessellate(&self, output: &mut TessellationOutput) {
+    let output_mesh: &mut Mesh = &mut output.mesh;
     xyz_gadget_utils::tessellate_xyz_gadget(
       output_mesh,
       &self.unit_cell,

@@ -17,7 +17,7 @@ use glam::DQuat;
 use std::f64::consts::PI;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::display::gadget::Gadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::renderer::mesh::Mesh;
@@ -173,7 +173,8 @@ pub struct GeoTransGadget {
 }
 
 impl Tessellatable for GeoTransGadget {
-  fn tessellate(&self, output_mesh: &mut Mesh) {
+  fn tessellate(&self, output: &mut TessellationOutput) {
+    let output_mesh: &mut Mesh = &mut output.mesh;
     xyz_gadget_utils::tessellate_xyz_gadget(
       output_mesh,
       &self.unit_cell,

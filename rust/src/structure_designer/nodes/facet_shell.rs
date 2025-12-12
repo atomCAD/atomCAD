@@ -17,7 +17,7 @@ use crate::util::transform::Transform;
 use crate::display::poly_mesh::PolyMesh;
 use crate::structure_designer::utils::half_space_utils;
 use crate::geo_tree::GeoNode;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use glam::f64::DQuat;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -565,7 +565,8 @@ pub struct FacetShellEvalCache {
 }
 
 impl Tessellatable for FacetShellGadget {
-  fn tessellate(&self, output_mesh: &mut Mesh) {
+  fn tessellate(&self, output: &mut TessellationOutput) {
+      let output_mesh: &mut Mesh = &mut output.mesh;
       let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
 
       // Tessellate center sphere

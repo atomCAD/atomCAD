@@ -6,7 +6,7 @@ use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
 use crate::util::serialization_utils::ivec3_serializer;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use std::collections::HashSet;
 use crate::display::gadget::Gadget;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -195,7 +195,8 @@ pub struct DrawingPlaneGadget {
 }
 
 impl Tessellatable for DrawingPlaneGadget {
-    fn tessellate(&self, output_mesh: &mut Mesh) {
+    fn tessellate(&self, output: &mut TessellationOutput) {
+        let output_mesh: &mut Mesh = &mut output.mesh;
         let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
 
         half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);

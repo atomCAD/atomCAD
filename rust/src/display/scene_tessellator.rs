@@ -9,7 +9,7 @@ use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::display::atomic_tessellator;
 use crate::display::surface_point_tessellator;
 use crate::display::poly_mesh_tessellator::{tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh};
-use crate::renderer::tessellator::tessellator::tessellate_cuboid;
+use crate::renderer::tessellator::tessellator::{tessellate_cuboid, TessellationOutput};
 use crate::renderer::camera::Camera;
 use glam::f32::Vec3;
 use glam::f64::{DVec3, DQuat};
@@ -44,12 +44,15 @@ fn tessellate_lightweight_content(
     camera: &Camera,
     preferences: &StructureDesignerPreferences
 ) -> Mesh {
-    let mut lightweight_mesh = Mesh::new();
+    let mut output = TessellationOutput::new();
     
     // Tessellate gadget (tessellatable)
     if let Some(tessellatable) = &scene.tessellatable {
-        tessellatable.tessellate(&mut lightweight_mesh);
+        tessellatable.tessellate(&mut output);
     }
+
+    // Phase 1: ignore gadget line mesh (will be rendered in Phase 2)
+    let mut lightweight_mesh = output.mesh;
     
     // Tessellate camera pivot point cube if enabled
     if preferences.geometry_visualization_preferences.display_camera_target {
