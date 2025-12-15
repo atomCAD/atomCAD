@@ -3,6 +3,7 @@ use rust_lib_flutter_cad::crystolecule::drawing_plane::{
 };
 use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
+use glam::f64::DVec3;
 use glam::i32::IVec3;
 
 #[test]
@@ -24,6 +25,74 @@ fn test_compute_plane_axes_001() {
     assert_ne!(v, IVec3::ZERO);
     let cross = u.as_dvec3().cross(v.as_dvec3());
     assert!(cross.length() > 0.1);
+}
+
+fn expected_in_plane_reference_directions(normal: DVec3) -> (DVec3, DVec3) {
+    let x_world = DVec3::new(1.0, 0.0, 0.0);
+    let y_world = DVec3::new(0.0, 1.0, 0.0);
+
+    let x_proj = x_world - normal * x_world.dot(normal);
+    let y_proj = y_world - normal * y_world.dot(normal);
+
+    let ref_u = if x_proj.length_squared() > 1e-12 {
+        x_proj.normalize()
+    } else if y_proj.length_squared() > 1e-12 {
+        y_proj.normalize()
+    } else {
+        x_world
+    };
+
+    let mut ref_v = if y_proj.length_squared() > 1e-12 {
+        y_proj.normalize()
+    } else {
+        normal.cross(ref_u)
+    };
+
+    if ref_v.length_squared() > 1e-12 {
+        ref_v = ref_v.normalize();
+    } else {
+        ref_v = y_world;
+    }
+
+    let ref_v_ortho = ref_v - ref_u * ref_v.dot(ref_u);
+    let ref_v_final = if ref_v_ortho.length_squared() > 1e-12 {
+        ref_v_ortho.normalize()
+    } else {
+        ref_v
+    };
+
+    (ref_u, ref_v_final)
+}
+
+fn assert_axes_match_expected_direction(m: IVec3) {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let plane = DrawingPlane::new(unit_cell, m, IVec3::ZERO, 0, 1).unwrap();
+
+    assert_eq!(plane.u_axis.dot(m), 0);
+    assert_eq!(plane.v_axis.dot(m), 0);
+
+    let plane_props = plane
+        .unit_cell
+        .ivec3_miller_index_to_plane_props(&plane.miller_index)
+        .unwrap();
+    let n = plane_props.normal;
+
+    let u_real = plane.unit_cell.ivec3_lattice_to_real(&plane.u_axis);
+    let v_real = plane.unit_cell.ivec3_lattice_to_real(&plane.v_axis);
+
+    let u_dir = u_real.normalize();
+    let v_ortho = v_real - u_dir * v_real.dot(u_dir);
+    let v_dir = v_ortho.normalize();
+
+    // Right-handedness: (u×v)·n > 0
+    assert!(u_dir.cross(v_dir).dot(n) > 0.0);
+
+    let (ref_u, ref_v) = expected_in_plane_reference_directions(n);
+
+    // The chosen axes are discrete (integer lattice vectors), so alignment is approximate.
+    // We require a strong positive alignment with the expected reference directions.
+    assert!(u_dir.dot(ref_u) > 0.90);
+    assert!(v_dir.dot(ref_v) > 0.90);
 }
 
 #[test]
@@ -110,4 +179,27 @@ fn test_plane_local_mapping_consistency() {
     assert_plane_mapping_consistent(IVec3::new(0, 0, 1));
     assert_plane_mapping_consistent(IVec3::new(0, 1, 1));
     assert_plane_mapping_consistent(IVec3::new(0, 1, 0));
+}
+
+#[test]
+fn test_preferred_plane_axes_expected_directions() {
+    let cases = [
+        IVec3::new(0, 0, 1),
+        IVec3::new(0, 0, -1),
+        IVec3::new(0, 1, 1),
+        IVec3::new(0, 1, -1),
+        IVec3::new(0, -1, 1),
+        IVec3::new(0, -1, -1),
+        IVec3::new(0, 1, 0),
+        IVec3::new(0, -1, 0),
+        IVec3::new(1, 1, 1),
+        IVec3::new(1, 1, -1),
+        IVec3::new(1, -1, 1),
+        IVec3::new(-1, 1, 1),
+        IVec3::new(-1, -1, 1),
+    ];
+
+    for m in cases {
+        assert_axes_match_expected_direction(m);
+    }
 }

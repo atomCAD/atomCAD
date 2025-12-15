@@ -459,13 +459,29 @@ fn compute_preferred_plane_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result
     let x_proj = x_world - n * x_world.dot(n);
     let y_proj = y_world - n * y_world.dot(n);
 
-    let (ref_u, ref_v) = if x_proj.length_squared() > 1e-12 {
-        (x_proj.normalize(), if y_proj.length_squared() > 1e-12 { y_proj.normalize() } else { x_world })
+    // Pick a stable preferred in-plane frame derived from projecting global X/Y onto the plane.
+    // If one axis is parallel to the plane normal (projection becomes ~0), we still want a
+    // well-defined in-plane perpendicular to avoid discrete basis flips.
+    let ref_u = if x_proj.length_squared() > 1e-12 {
+        x_proj.normalize()
     } else if y_proj.length_squared() > 1e-12 {
-        (y_proj.normalize(), x_world)
+        y_proj.normalize()
     } else {
-        (x_world, y_world)
+        x_world
     };
+
+    // Preferred second direction: use projected Y if available; otherwise use a stable
+    // in-plane perpendicular derived from the normal.
+    let mut ref_v = if y_proj.length_squared() > 1e-12 {
+        y_proj.normalize()
+    } else {
+        n.cross(ref_u)
+    };
+    if ref_v.length_squared() > 1e-12 {
+        ref_v = ref_v.normalize();
+    } else {
+        ref_v = y_world;
+    }
 
     // Canonical in-plane integer solutions to m·t=0 (same as compute_plane_axes)
     let t1 = reduce_to_primitive(IVec3::new(0, m.z, -m.y));
