@@ -103,9 +103,20 @@ pub fn tessellate_drawing_plane_grid_and_axes(
     drawing_plane: &DrawingPlane,
     background_preferences: &BackgroundPreferences,
 ) {
-    let origin = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::ZERO);
-    let u_vector = drawing_plane.effective_unit_cell.a;
-    let v_vector = drawing_plane.effective_unit_cell.b;
+    let origin_2d = glam::f64::DVec2::ZERO;
+    let origin = drawing_plane.real_2d_to_world_3d(&origin_2d);
+
+    // DrawingPlane::effective_unit_cell is expressed in plane-local XY coordinates.
+    // Use its (a,b) vectors as 2D steps, then map plane-local positions into
+    // world space via drawing_plane.real_2d_to_world_3d.
+    let u_step_2d = glam::f64::DVec2::new(
+        drawing_plane.effective_unit_cell.a.x,
+        drawing_plane.effective_unit_cell.a.y,
+    );
+    let v_step_2d = glam::f64::DVec2::new(
+        drawing_plane.effective_unit_cell.b.x,
+        drawing_plane.effective_unit_cell.b.y,
+    );
 
     let grid_primary_color: [f32; 3] = [
         background_preferences.drawing_plane_grid_color.x as f32 / 255.0,
@@ -118,29 +129,55 @@ pub fn tessellate_drawing_plane_grid_and_axes(
         background_preferences.drawing_plane_grid_strong_color.z as f32 / 255.0,
     ];
 
-    tessellate_grid_with_origin(
-        output_mesh,
-        &origin,
-        &u_vector,
-        &v_vector,
-        background_preferences.grid_size,
-        &grid_primary_color,
-        &grid_secondary_color,
-    );
+    let grid_range = background_preferences.grid_size as i32;
 
+    // Lines parallel to the u direction (vary along v)
+    for i in -grid_range..=grid_range {
+        let is_emphasized = i % 10 == 0;
+        let color = if is_emphasized { &grid_secondary_color } else { &grid_primary_color };
+
+        let offset_2d = v_step_2d * (i as f64);
+        let start_2d = origin_2d + offset_2d - u_step_2d * (grid_range as f64);
+        let end_2d = origin_2d + offset_2d + u_step_2d * (grid_range as f64);
+
+        let start = drawing_plane.real_2d_to_world_3d(&start_2d);
+        let end = drawing_plane.real_2d_to_world_3d(&end_2d);
+
+        if i == 0 {
+            let mid = drawing_plane.real_2d_to_world_3d(&(origin_2d + offset_2d));
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+        } else {
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
+        }
+    }
+
+    // Lines parallel to the v direction (vary along u)
+    for i in -grid_range..=grid_range {
+        let is_emphasized = i % 10 == 0;
+        let color = if is_emphasized { &grid_secondary_color } else { &grid_primary_color };
+
+        let offset_2d = u_step_2d * (i as f64);
+        let start_2d = origin_2d + offset_2d - v_step_2d * (grid_range as f64);
+        let end_2d = origin_2d + offset_2d + v_step_2d * (grid_range as f64);
+
+        let start = drawing_plane.real_2d_to_world_3d(&start_2d);
+        let end = drawing_plane.real_2d_to_world_3d(&end_2d);
+
+        if i == 0 {
+            let mid = drawing_plane.real_2d_to_world_3d(&(origin_2d + offset_2d));
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+        } else {
+            output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
+        }
+    }
+
+    // Axes: one unit is one effective unit-cell step in plane-local real units
     let axis_length = background_preferences.grid_size as f64;
-    add_axis_line(
-        output_mesh,
-        &origin,
-        &(origin + u_vector.normalize() * axis_length),
-        &DRAWING_PLANE_X_AXIS_COLOR,
-    );
-    add_axis_line(
-        output_mesh,
-        &origin,
-        &(origin + v_vector.normalize() * axis_length),
-        &DRAWING_PLANE_Y_AXIS_COLOR,
-    );
+    let u_axis_end = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::new(axis_length, 0.0));
+    let v_axis_end = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::new(0.0, axis_length));
+
+    add_axis_line(output_mesh, &origin, &u_axis_end, &DRAWING_PLANE_X_AXIS_COLOR);
+    add_axis_line(output_mesh, &origin, &v_axis_end, &DRAWING_PLANE_Y_AXIS_COLOR);
 }
 
 /// Adds a single solid axis line from start to end with the specified color

@@ -42,10 +42,11 @@ pub struct DrawingPlane {
     pub v_axis: IVec3,
     
     /// Effective unit cell for 2D operations within the plane.
-    /// Maps 2D lattice coordinates to 2D real-space coordinates in the plane's coordinate system.
-    /// - `a` basis = real-space vector corresponding to u_axis
-    /// - `b` basis = real-space vector corresponding to v_axis  
-    /// - `c` basis = perpendicular vector (for potential extrusion)
+    ///
+    /// This unit cell lives in a plane-local orthogonal coordinate system:
+    /// - the drawing plane is the local XY plane
+    /// - `a` and `b` are 2D basis vectors expressed in that local XY
+    /// - `c` is local Z (scaled by d-spacing)
     pub effective_unit_cell: UnitCellStruct,
 }
 
@@ -86,20 +87,31 @@ impl DrawingPlane {
             // Flip v-axis to make right-handed
             v_axis = -v_axis;
         }
-        
-        // Compute effective unit cell for 2D operations
-        // Convert u_axis and v_axis from lattice coordinates to real-space vectors
-        let a_real = unit_cell.ivec3_lattice_to_real(&u_axis);
-        let b_real = unit_cell.ivec3_lattice_to_real(&v_axis);
-        
-        // c_real is perpendicular to the plane (for potential extrusion)
-        // Use the actual normal vector from plane properties, scaled by d-spacing
-        let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index)
+
+        // 2D geometry nodes operate in plane-local coordinates. We therefore store
+        // the effective unit cell in a local orthogonal XY system, not in world XYZ.
+        let u_real = unit_cell.ivec3_lattice_to_real(&u_axis);
+        let v_real = unit_cell.ivec3_lattice_to_real(&v_axis);
+
+        let u_dir = u_real.normalize();
+        let v_ortho = v_real - u_dir * v_real.dot(u_dir);
+        if v_ortho.length_squared() < 1e-12 {
+            return Err(
+                "Failed to construct drawing plane basis: in-plane axes are nearly collinear".to_string(),
+            );
+        }
+        let v_dir = v_ortho.normalize();
+
+        let plane_props = unit_cell
+            .ivec3_miller_index_to_plane_props(&miller_index)
             .map_err(|e| format!("Failed to compute plane properties: {}", e))?;
-        let c_real = normal_dir * plane_props.d_spacing;
-        
-        // Create effective unit cell from these real-space basis vectors
-        let effective_unit_cell = UnitCellStruct::new(a_real, b_real, c_real);
+
+        // Express the lattice basis vectors (u_axis, v_axis) in plane-local XY.
+        let a_local = DVec3::new(u_real.length(), 0.0, 0.0);
+        let b_local = DVec3::new(v_real.dot(u_dir), v_real.dot(v_dir), 0.0);
+        let c_local = DVec3::new(0.0, 0.0, plane_props.d_spacing);
+
+        let effective_unit_cell = UnitCellStruct::new(a_local, b_local, c_local);
         
         Ok(Self {
             unit_cell,
@@ -173,6 +185,16 @@ impl DrawingPlane {
         // 1. Get plane basis vectors in 3D world space
         let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
         let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
+
+        // Use an orthonormal in-plane basis so plane-local XY distances map correctly
+        // for arbitrary Miller indices.
+        let u_dir = u_real.normalize();
+        let v_ortho = v_real - u_dir * v_real.dot(u_dir);
+        let v_dir = if v_ortho.length_squared() < 1e-12 {
+            v_real.normalize()
+        } else {
+            v_ortho.normalize()
+        };
         
         // 2. Get plane origin (center point in 3D)
         let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
@@ -184,8 +206,8 @@ impl DrawingPlane {
         let shift_distance = (self.shift as f64 / self.subdivision as f64) * plane_props.d_spacing;
         let shifted_origin = plane_origin + plane_props.normal * shift_distance;
         
-        // 4. Construct 3D position: shifted_origin + real_2d.x * u_unit + real_2d.y * v_unit
-        shifted_origin + u_real.normalize() * real_2d.x + v_real.normalize() * real_2d.y
+        // 4. Construct 3D position: shifted_origin + x*u_dir + y*v_dir
+        shifted_origin + u_dir * real_2d.x + v_dir * real_2d.y
     }
     
     /// Maps a 2D lattice coordinate (in plane space) to 3D world position.
@@ -224,6 +246,13 @@ impl DrawingPlane {
         let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
         let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
         let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
+
+        let plane_props = self
+            .unit_cell
+            .ivec3_miller_index_to_plane_props(&self.miller_index)
+            .expect("Miller index should be valid for DrawingPlane");
+        let shift_distance = (self.shift as f64 / self.subdivision as f64) * plane_props.d_spacing;
+        let shifted_origin = plane_origin + plane_props.normal * shift_distance;
         
         // Compute plane normal: u × v (cross product)
         let plane_normal = u_real.cross(v_real).normalize();
@@ -236,7 +265,7 @@ impl DrawingPlane {
             return None;
         }
         
-        let t = (plane_origin - ray_origin).dot(plane_normal) / denominator;
+        let t = (shifted_origin - ray_origin).dot(plane_normal) / denominator;
         
         if t <= 0.0 {
             // Ray doesn't hit the plane in the forward direction
@@ -244,16 +273,21 @@ impl DrawingPlane {
         }
         
         let intersection_3d = *ray_origin + *ray_direction * t;
-        
-        // Map 3D intersection → 2D plane coordinates
-        // Use Gram matrix solution to correctly handle non-orthogonal basis vectors
-        let relative_pos = intersection_3d - plane_origin;
-        let (alpha, beta) = coords_in_plane(u_real, v_real, relative_pos)?;
-        
-        // We now have 2D real coordinates (alpha, beta) in plane space
-        // Convert to lattice coordinates using 3D conversion (with z=0)
-        let real_3d = DVec3::new(alpha, beta, 0.0);
-        let lattice_3d = self.effective_unit_cell.real_to_ivec3_lattice(&real_3d);
+
+        // Map intersection into plane-local XY by projecting onto the orthonormal basis.
+        let relative_pos = intersection_3d - shifted_origin;
+        let u_dir = u_real.normalize();
+        let v_ortho = v_real - u_dir * v_real.dot(u_dir);
+        if v_ortho.length_squared() < 1e-12 {
+            return None;
+        }
+        let v_dir = v_ortho.normalize();
+
+        let x = relative_pos.dot(u_dir);
+        let y = relative_pos.dot(v_dir);
+
+        let local_real_3d = DVec3::new(x, y, 0.0);
+        let lattice_3d = self.effective_unit_cell.real_to_ivec3_lattice(&local_real_3d);
         
         Some(IVec2::new(lattice_3d.x, lattice_3d.y))
     }
@@ -328,11 +362,11 @@ impl DrawingPlane {
         // 1. Get plane basis vectors in world space
         let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
         let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
-        let normal = u_real.cross(v_real).normalize();
-        
-        // 2. Normalize to create orthonormal basis
+
         let u_unit = u_real.normalize();
-        let v_unit = v_real.normalize();
+        let v_ortho = v_real - u_unit * v_real.dot(u_unit);
+        let v_unit = v_ortho.normalize();
+        let normal = u_unit.cross(v_unit).normalize();
         
         // 3. Create rotation matrix from basis vectors
         // Columns: [u_unit, v_unit, normal] maps local (x,y,z) → world
@@ -340,7 +374,9 @@ impl DrawingPlane {
         
         // 4. Get translation (plane origin with shift applied)
         let plane_origin = self.unit_cell.ivec3_lattice_to_real(&self.center);
-        let plane_props = self.unit_cell.ivec3_miller_index_to_plane_props(&self.miller_index)
+        let plane_props = self
+            .unit_cell
+            .ivec3_miller_index_to_plane_props(&self.miller_index)
             .expect("Miller index should be valid for DrawingPlane");
         let shift_distance = (self.shift as f64 / self.subdivision as f64) * plane_props.d_spacing;
         let translation = plane_origin + plane_props.normal * shift_distance;
