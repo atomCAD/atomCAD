@@ -3,7 +3,6 @@ use rust_lib_flutter_cad::crystolecule::drawing_plane::{
 };
 use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
-use glam::f64::DVec3;
 use glam::i32::IVec3;
 
 #[test]

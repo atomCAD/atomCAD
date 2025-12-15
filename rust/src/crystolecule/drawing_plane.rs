@@ -74,8 +74,12 @@ impl DrawingPlane {
         shift: i32,
         subdivision: i32,
     ) -> Result<Self, String> {
-        // Compute in-plane axes from Miller index
-        let (u_axis, mut v_axis) = compute_plane_axes(&miller_index)?;
+        // Compute in-plane axes from Miller index.
+        //
+        // Note: A plane normal does not uniquely define the in-plane orientation.
+        // We therefore choose a deterministic in-plane basis that best matches
+        // the global Cartesian axes projected onto the plane.
+        let (u_axis, mut v_axis) = compute_preferred_plane_axes(&unit_cell, &miller_index)?;
         
         // Ensure right-handed coordinate system: (u × v) · n > 0
         let normal_dir = unit_cell.ivec3_miller_index_to_plane_props(&miller_index)
@@ -437,6 +441,95 @@ pub fn compute_plane_axes(m: &IVec3) -> Result<(IVec3, IVec3), String> {
         "Could not find two non-collinear in-plane vectors for Miller index ({}, {}, {})",
         m.x, m.y, m.z
     ))
+}
+
+fn compute_preferred_plane_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result<(IVec3, IVec3), String> {
+    if *m == IVec3::ZERO {
+        return Err("Miller index cannot be zero vector".to_string());
+    }
+
+    let plane_props = unit_cell
+        .ivec3_miller_index_to_plane_props(m)
+        .map_err(|e| format!("Failed to compute plane properties: {}", e))?;
+    let n = plane_props.normal;
+
+    let x_world = DVec3::new(1.0, 0.0, 0.0);
+    let y_world = DVec3::new(0.0, 1.0, 0.0);
+
+    let x_proj = x_world - n * x_world.dot(n);
+    let y_proj = y_world - n * y_world.dot(n);
+
+    let (ref_u, ref_v) = if x_proj.length_squared() > 1e-12 {
+        (x_proj.normalize(), if y_proj.length_squared() > 1e-12 { y_proj.normalize() } else { x_world })
+    } else if y_proj.length_squared() > 1e-12 {
+        (y_proj.normalize(), x_world)
+    } else {
+        (x_world, y_world)
+    };
+
+    // Canonical in-plane integer solutions to m·t=0 (same as compute_plane_axes)
+    let t1 = reduce_to_primitive(IVec3::new(0, m.z, -m.y));
+    let t2 = reduce_to_primitive(IVec3::new(-m.z, 0, m.x));
+    let t3 = reduce_to_primitive(IVec3::new(m.y, -m.x, 0));
+
+    let mut candidates = Vec::new();
+    for v in [t1, t2, t3] {
+        if v == IVec3::ZERO {
+            continue;
+        }
+        candidates.push(v);
+        candidates.push(-v);
+    }
+
+    let mut best_score = f64::NEG_INFINITY;
+    let mut best_pair: Option<(IVec3, IVec3)> = None;
+
+    for &u in &candidates {
+        let u_real = unit_cell.ivec3_lattice_to_real(&u);
+        if u_real.length_squared() < 1e-12 {
+            continue;
+        }
+        let u_dir = u_real.normalize();
+        let u_score = u_dir.dot(ref_u);
+
+        for &v in &candidates {
+            if v == u {
+                continue;
+            }
+
+            let cross = u.as_dvec3().cross(v.as_dvec3());
+            if cross.length_squared() < 1e-12 {
+                continue;
+            }
+
+            let v_real = unit_cell.ivec3_lattice_to_real(&v);
+            if v_real.length_squared() < 1e-12 {
+                continue;
+            }
+
+            // Prefer v aligned with projected global Y after removing the u component.
+            let v_ref_ortho = ref_v - u_dir * ref_v.dot(u_dir);
+            if v_ref_ortho.length_squared() < 1e-12 {
+                continue;
+            }
+            let v_ref_dir = v_ref_ortho.normalize();
+            let v_dir = v_real.normalize();
+            let v_score = v_dir.dot(v_ref_dir);
+
+            let score = u_score + v_score;
+            if score > best_score {
+                best_score = score;
+                best_pair = Some((u, v));
+            }
+        }
+    }
+
+    best_pair.ok_or_else(|| {
+        format!(
+            "Could not find preferred in-plane vectors for Miller index ({}, {}, {})",
+            m.x, m.y, m.z
+        )
+    })
 }
 
 /// Reduces a lattice vector to primitive form by dividing by GCD of components.
