@@ -130,6 +130,9 @@ pub fn tessellate_drawing_plane_grid_and_axes(
     ];
 
     let grid_range = background_preferences.grid_size as i32;
+    let axis_length_steps = background_preferences.grid_size as f64;
+    let u_axis_end_2d = u_step_2d * axis_length_steps;
+    let v_axis_end_2d = v_step_2d * axis_length_steps;
 
     // Lines parallel to the u direction (vary along v)
     for i in -grid_range..=grid_range {
@@ -143,9 +146,19 @@ pub fn tessellate_drawing_plane_grid_and_axes(
         let start = drawing_plane.real_2d_to_world_3d(&start_2d);
         let end = drawing_plane.real_2d_to_world_3d(&end_2d);
 
+        // Avoid z-fighting with the drawing-plane u-axis.
+        // Only skip the portion that is actually covered by the axis.
         if i == 0 {
-            let mid = drawing_plane.real_2d_to_world_3d(&(origin_2d + offset_2d));
+            let mid_2d = origin_2d;
+            let mid = drawing_plane.real_2d_to_world_3d(&mid_2d);
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+
+            let axis_end = drawing_plane.real_2d_to_world_3d(&u_axis_end_2d);
+            let t_axis_end = axis_length_steps;
+            let t_line_end = grid_range as f64;
+            if t_axis_end < t_line_end {
+                output_mesh.add_line_with_uniform_color(&axis_end.as_vec3(), &end.as_vec3(), color);
+            }
         } else {
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
         }
@@ -163,18 +176,27 @@ pub fn tessellate_drawing_plane_grid_and_axes(
         let start = drawing_plane.real_2d_to_world_3d(&start_2d);
         let end = drawing_plane.real_2d_to_world_3d(&end_2d);
 
+        // Avoid z-fighting with the drawing-plane v-axis.
+        // Only skip the portion that is actually covered by the axis.
         if i == 0 {
-            let mid = drawing_plane.real_2d_to_world_3d(&(origin_2d + offset_2d));
+            let mid_2d = origin_2d;
+            let mid = drawing_plane.real_2d_to_world_3d(&mid_2d);
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &mid.as_vec3(), color);
+
+            let axis_end = drawing_plane.real_2d_to_world_3d(&v_axis_end_2d);
+            let t_axis_end = axis_length_steps;
+            let t_line_end = grid_range as f64;
+            if t_axis_end < t_line_end {
+                output_mesh.add_line_with_uniform_color(&axis_end.as_vec3(), &end.as_vec3(), color);
+            }
         } else {
             output_mesh.add_line_with_uniform_color(&start.as_vec3(), &end.as_vec3(), color);
         }
     }
 
-    // Axes: one unit is one effective unit-cell step in plane-local real units
-    let axis_length = background_preferences.grid_size as f64;
-    let u_axis_end = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::new(axis_length, 0.0));
-    let v_axis_end = drawing_plane.real_2d_to_world_3d(&glam::f64::DVec2::new(0.0, axis_length));
+    // Axes: follow the effective unit-cell directions (u_step_2d, v_step_2d)
+    let u_axis_end = drawing_plane.real_2d_to_world_3d(&u_axis_end_2d);
+    let v_axis_end = drawing_plane.real_2d_to_world_3d(&v_axis_end_2d);
 
     add_axis_line(output_mesh, &origin, &u_axis_end, &DRAWING_PLANE_X_AXIS_COLOR);
     add_axis_line(output_mesh, &origin, &v_axis_end, &DRAWING_PLANE_Y_AXIS_COLOR);
