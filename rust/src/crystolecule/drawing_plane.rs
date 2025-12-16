@@ -452,6 +452,10 @@ fn compute_preferred_plane_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result
         return Err("Miller index cannot be zero vector".to_string());
     }
 
+    let abs_m = m.abs();
+    let prefer_111_obtuse = abs_m.x != 0 && abs_m.x == abs_m.y && abs_m.y == abs_m.z;
+    let tie_eps = 1e-6;
+
     let plane_props = unit_cell
         .ivec3_miller_index_to_plane_props(m)
         .map_err(|e| format!("Failed to compute plane properties: {}", e))?;
@@ -502,6 +506,7 @@ fn compute_preferred_plane_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result
     }
 
     let mut best_score = f64::NEG_INFINITY;
+    let mut best_angle_score = f64::NEG_INFINITY;
     let mut best_pair: Option<(IVec3, IVec3)> = None;
 
     for &u in &candidates {
@@ -527,19 +532,44 @@ fn compute_preferred_plane_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result
                 continue;
             }
 
+            // Match DrawingPlane::new convention: keep (u×v)·n > 0 by possibly flipping v.
+            // We must apply this *before* scoring so that the score corresponds to the final
+            // basis actually used by the drawing plane.
+            let mut v_corrected = v;
+            let mut v_real_corrected = v_real;
+            if u_real.cross(v_real).dot(n) < 0.0 {
+                v_corrected = -v_corrected;
+                v_real_corrected = -v_real_corrected;
+            }
+
             // Prefer v aligned with projected global Y after removing the u component.
             let v_ref_ortho = ref_v - u_dir * ref_v.dot(u_dir);
             if v_ref_ortho.length_squared() < 1e-12 {
                 continue;
             }
             let v_ref_dir = v_ref_ortho.normalize();
-            let v_dir = v_real.normalize();
+            let v_dir = v_real_corrected.normalize();
             let v_score = v_dir.dot(v_ref_dir);
 
             let score = u_score + v_score;
-            if score > best_score {
+
+            let angle_score = if prefer_111_obtuse {
+                let uv_cos = u_dir.dot(v_dir);
+                -(uv_cos + 0.5).abs()
+            } else {
+                0.0
+            };
+
+            if score > best_score + tie_eps {
                 best_score = score;
-                best_pair = Some((u, v));
+                best_angle_score = angle_score;
+                best_pair = Some((u, v_corrected));
+            } else if prefer_111_obtuse && (score - best_score).abs() <= tie_eps {
+                if angle_score > best_angle_score + tie_eps {
+                    best_score = score;
+                    best_angle_score = angle_score;
+                    best_pair = Some((u, v_corrected));
+                }
             }
         }
     }

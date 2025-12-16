@@ -94,6 +94,12 @@ fn assert_axes_match_expected_direction(m: IVec3) {
     // Right-handedness: (u×v)·n > 0
     assert!(u_dir.cross(v_dir).dot(n) > 0.0);
 
+    let abs_m = m.abs();
+    let is_111_family = abs_m.x != 0 && abs_m.x == abs_m.y && abs_m.y == abs_m.z;
+    if is_111_family {
+        return;
+    }
+
     let (ref_u, ref_v) = expected_in_plane_reference_directions(n);
 
     // Mirror the production scoring logic: v is compared against the component of ref_v
@@ -197,12 +203,48 @@ fn assert_plane_mapping_consistent(m: IVec3) {
     assert!((plane.effective_unit_cell.b.z).abs() < 1e-12);
 }
 
+fn assert_preferred_basis_angle_cos(m: IVec3, expected_cos: f64, tol: f64) {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let plane = DrawingPlane::new(unit_cell, m, IVec3::ZERO, 0, 1).unwrap();
+
+    assert_eq!(plane.u_axis.dot(m), 0);
+    assert_eq!(plane.v_axis.dot(m), 0);
+
+    let plane_props = plane
+        .unit_cell
+        .ivec3_miller_index_to_plane_props(&plane.miller_index)
+        .unwrap();
+    let n = plane_props.normal;
+
+    let u_real = plane.unit_cell.ivec3_lattice_to_real(&plane.u_axis);
+    let v_real = plane.unit_cell.ivec3_lattice_to_real(&plane.v_axis);
+
+    let u_dir = u_real.normalize();
+    let v_dir = v_real.normalize();
+
+    assert!(u_dir.cross(v_dir).dot(n) > 0.0);
+
+    let cos = u_dir.dot(v_dir);
+    assert!(
+        (cos - expected_cos).abs() <= tol,
+        "unexpected basis angle for miller={:?}: cos={}, expected≈{}",
+        m,
+        cos,
+        expected_cos
+    );
+}
+
 #[test]
 fn test_plane_local_mapping_consistency() {
     // Covers the bug: rect(0,0,1,1) must align with the grid cell for arbitrary Miller indices.
     assert_plane_mapping_consistent(IVec3::new(0, 0, 1));
     assert_plane_mapping_consistent(IVec3::new(0, 1, 1));
     assert_plane_mapping_consistent(IVec3::new(0, 1, 0));
+    assert_plane_mapping_consistent(IVec3::new(1, 0, 0));
+    assert_plane_mapping_consistent(IVec3::new(1, 1, 0));
+    assert_plane_mapping_consistent(IVec3::new(1, 0, 1));
+    assert_plane_mapping_consistent(IVec3::new(1, 2, 3));
+    assert_plane_mapping_consistent(IVec3::new(2, 1, 0));
 }
 
 #[test]
@@ -225,5 +267,44 @@ fn test_preferred_plane_axes_expected_directions() {
 
     for m in cases {
         assert_axes_match_expected_direction(m);
+    }
+}
+
+#[test]
+fn test_preferred_plane_axes_111_family_prefers_120_degrees() {
+    // For cubic lattices, {111} planes have 3-fold symmetry in-plane.
+    // Prefer the conventional obtuse (120°) basis rather than the acute (60°) one.
+    // cos(120°) = -0.5
+    let cases = [
+        IVec3::new(1, 1, 1),
+        IVec3::new(1, 1, -1),
+        IVec3::new(1, -1, 1),
+        IVec3::new(-1, 1, 1),
+        IVec3::new(-1, -1, 1),
+        IVec3::new(-1, 1, -1),
+        IVec3::new(1, -1, -1),
+        IVec3::new(-1, -1, -1),
+    ];
+
+    for m in cases {
+        assert_preferred_basis_angle_cos(m, -0.5, 1e-6);
+    }
+}
+
+#[test]
+fn test_preferred_plane_axes_common_planes_prefer_90_degrees() {
+    // For common non-{111} planes in a cubic cell, the preferred basis should be close to orthogonal.
+    // cos(90°) = 0
+    let cases = [
+        IVec3::new(0, 0, 1),
+        IVec3::new(1, 0, 0),
+        IVec3::new(0, 1, 0),
+        IVec3::new(1, 1, 0),
+        IVec3::new(1, 0, 1),
+        IVec3::new(0, 1, 1),
+    ];
+
+    for m in cases {
+        assert_preferred_basis_angle_cos(m, 0.0, 1e-6);
     }
 }
