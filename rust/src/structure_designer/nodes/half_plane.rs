@@ -114,7 +114,9 @@ impl NodeData for HalfPlaneData {
           };
 
           // Convert miller index to plane properties
-          let plane_props = match drawing_plane.unit_cell.ivec2_miller_index_to_plane_props(&miller_index) {
+          let plane_props = match drawing_plane
+            .effective_unit_cell
+            .ivec2_miller_index_to_plane_props(&miller_index) {
             Ok(props) => props,
             Err(error_msg) => return NetworkResult::Error(error_msg),
           };
@@ -264,7 +266,7 @@ impl Tessellatable for HalfPlaneGadget {
         let line_center = (p1_3d + p2_3d) * 0.5;
         
         // Calculate the desired total line length
-        let half_length = self.drawing_plane.unit_cell.float_lattice_to_real(DEFAULT_GRID_SIZE as f64);
+        let half_length = self.drawing_plane.effective_unit_cell.float_lattice_to_real(DEFAULT_GRID_SIZE as f64);
 
         // Extend the line symmetrically from the center
         let extended_line_start = line_center - line_direction * half_length;
