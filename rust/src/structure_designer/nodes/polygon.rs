@@ -155,6 +155,10 @@ impl PolygonGadget {
 impl Tessellatable for PolygonGadget {
   fn tessellate(&self, output: &mut TessellationOutput) {
     let output_mesh: &mut Mesh = &mut output.mesh;
+
+    let plane_to_world = self.drawing_plane.to_world_transform();
+    let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
+
     // Map vertices to their 3D positions on the drawing plane
     let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
         .map(|v| self.drawing_plane.lattice_2d_to_world_3d(v))
@@ -173,8 +177,8 @@ impl Tessellatable for PolygonGadget {
 
         // handle for the point
         let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
-        let handle_start = DVec3::new(p1_3d.x, p1_3d.y, -handle_half_height);
-        let handle_end = DVec3::new(p1_3d.x, p1_3d.y, handle_half_height);
+        let handle_start = p1_3d - plane_normal * handle_half_height;
+        let handle_end = p1_3d + plane_normal * handle_half_height;
         tessellator::tessellate_cylinder(
             output_mesh,
             &handle_end,
@@ -209,6 +213,9 @@ impl Tessellatable for PolygonGadget {
 
 impl Gadget for PolygonGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+        let plane_to_world = self.drawing_plane.to_world_transform();
+        let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
+
         // Map vertices to their 3D positions on the drawing plane
         let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
             .map(|v| self.drawing_plane.lattice_2d_to_world_3d(v))
@@ -220,8 +227,8 @@ impl Gadget for PolygonGadget {
             
             // Handle for the vertex - test cylinder along Z axis
             let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
-            let handle_start = DVec3::new(p1_3d.x, p1_3d.y, -handle_half_height);
-            let handle_end = DVec3::new(p1_3d.x, p1_3d.y, handle_half_height);
+            let handle_start = p1_3d - plane_normal * handle_half_height;
+            let handle_end = p1_3d + plane_normal * handle_half_height;
             
             if cylinder_hit_test(&handle_end, &handle_start, common_constants::HANDLE_RADIUS * common_constants::HANDLE_RADIUS_HIT_TEST_FACTOR, &ray_origin, &ray_direction).is_some() {
                 return Some(i as i32); // Return the vertex index if hit
