@@ -229,22 +229,13 @@ pub struct HalfPlaneGadget {
 impl Tessellatable for HalfPlaneGadget {
     fn tessellate(&self, output: &mut TessellationOutput) {
         let output_mesh: &mut Mesh = &mut output.mesh;
+
+        let plane_to_world = self.drawing_plane.to_world_transform();
+        let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
+
         // Map points to their 3D positions on the drawing plane
         let p1_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point1);
         let p2_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point2);
-
-        // Calculate inward normal direction for triangle orientation
-        let dir_vec_3d = (p2_3d - p1_3d).normalize();
-        let dir_vec_2d = DVec2::new(dir_vec_3d.x, dir_vec_3d.y);
-        // The normal in implicit_eval_half_plane DVec2::new(-dir_vec_2d.y, dir_vec_2d.x) points OUTWARD.
-        // For the gadget to point INWARD, we need the opposite normal.
-        let inward_normal_2d = DVec2::new(dir_vec_2d.y, -dir_vec_2d.x);
-        // Angle for prism rotation. The prism's default pointing vertex (local +Y) is (0,1) in its local XY plane.
-        // A rotation by angle A around Z transforms this local +Y to (sin A, cos A) in the global XY plane.
-        // We want this rotated direction to align with inward_normal_2d = (nx, ny).
-        // So, (sin A, cos A) = (inward_normal_2d.x, inward_normal_2d.y).
-        // Thus, A = atan2(sin A, cos A) = atan2(inward_normal_2d.x, inward_normal_2d.y).
-        let triangle_rotation_angle = -inward_normal_2d.x.atan2(inward_normal_2d.y);
         
         // Create materials
         let roughness: f32 = 0.2;
@@ -291,26 +282,36 @@ impl Tessellatable for HalfPlaneGadget {
             None,
             None
         );
-        
-        // Draw the handles as triangular prisms oriented along Z axis
-        // Handle for point1
-        tessellator::tessellate_equilateral_triangle_prism(
+
+        // Draw the handles oriented along the drawing plane normal
+        let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
+
+        let p1_start = p1_3d - plane_normal * handle_half_height;
+        let p1_end = p1_3d + plane_normal * handle_half_height;
+        tessellator::tessellate_cylinder(
             output_mesh,
-            DVec2::new(p1_3d.x, p1_3d.y), // Centroid of bottom triangle in XY plane
-            common_constants::HANDLE_HEIGHT,
-            common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
-            triangle_rotation_angle,
+            &p1_end,
+            &p1_start,
+            common_constants::HANDLE_RADIUS,
+            common_constants::HANDLE_DIVISIONS,
             &handle1_material,
+            true,
+            None,
+            None,
         );
-        
-        // Handle for point2
-        tessellator::tessellate_equilateral_triangle_prism(
+
+        let p2_start = p2_3d - plane_normal * handle_half_height;
+        let p2_end = p2_3d + plane_normal * handle_half_height;
+        tessellator::tessellate_cylinder(
             output_mesh,
-            DVec2::new(p2_3d.x, p2_3d.y), // Centroid of bottom triangle in XY plane
-            common_constants::HANDLE_HEIGHT,
-            common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
-            triangle_rotation_angle,
+            &p2_end,
+            &p2_start,
+            common_constants::HANDLE_RADIUS,
+            common_constants::HANDLE_DIVISIONS,
             &handle2_material,
+            true,
+            None,
+            None,
         );
     }
 
@@ -321,24 +322,27 @@ impl Tessellatable for HalfPlaneGadget {
 
 impl Gadget for HalfPlaneGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+        let plane_to_world = self.drawing_plane.to_world_transform();
+        let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
+
         // Map points to their 3D positions on the drawing plane
         let p1_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point1);
         let p2_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point2);
-        
-        // Effective radius for hit testing (distance from centroid to vertex of the triangle)
-        let hit_test_radius = common_constants::HANDLE_TRIANGLE_SIDE_LENGTH / 3.0_f64.sqrt();
 
-        // Handle for point1 - test cylinder along Z axis
-        let p1_top = DVec3::new(p1_3d.x, p1_3d.y, common_constants::HANDLE_HEIGHT / 2.0);
-        let p1_bottom = DVec3::new(p1_3d.x, p1_3d.y, -common_constants::HANDLE_HEIGHT / 2.0);
-        if cylinder_hit_test(&p1_top, &p1_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
+        let hit_test_radius = common_constants::HANDLE_RADIUS * common_constants::HANDLE_RADIUS_HIT_TEST_FACTOR;
+        let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
+
+        // Handle for point1
+        let p1_start = p1_3d - plane_normal * handle_half_height;
+        let p1_end = p1_3d + plane_normal * handle_half_height;
+        if cylinder_hit_test(&p1_end, &p1_start, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(0); // Handle 0 hit
         }
-        
-        // Handle for point2 - test cylinder along Z axis
-        let p2_top = DVec3::new(p2_3d.x, p2_3d.y, common_constants::HANDLE_HEIGHT / 2.0);
-        let p2_bottom = DVec3::new(p2_3d.x, p2_3d.y, -common_constants::HANDLE_HEIGHT / 2.0);
-        if cylinder_hit_test(&p2_top, &p2_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
+
+        // Handle for point2
+        let p2_start = p2_3d - plane_normal * handle_half_height;
+        let p2_end = p2_3d + plane_normal * handle_half_height;
+        if cylinder_hit_test(&p2_end, &p2_start, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(1); // Handle 1 hit
         }
         
