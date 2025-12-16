@@ -601,6 +601,10 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
             name: "height".to_string(),
             data_type: DataType::Int,
           },  
+          Parameter {
+            name: "dir".to_string(),
+            data_type: DataType::IVec3,
+          },
       ],
       output_type: DataType::Geometry,
       public: true,

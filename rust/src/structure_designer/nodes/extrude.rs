@@ -71,12 +71,21 @@ impl NodeData for ExtrudeData {
         Err(error) => return error,
       };
 
+      let extrude_direction = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 3,
+        self.extrude_direction,
+        NetworkResult::extract_ivec3
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       if let NetworkResult::Geometry2D(shape) = shape_val {
         // Extract unit cell from the drawing plane
         let unit_cell = shape.drawing_plane.unit_cell.clone();
         
         // Validate extrusion direction for this plane (in world space)
-        let (world_direction, dir_length) = match shape.drawing_plane.validate_extrude_direction(&self.extrude_direction) {
+        let (world_direction, dir_length) = match shape.drawing_plane.validate_extrude_direction(&extrude_direction) {
             Ok(result) => result,
             Err(error_msg) => return NetworkResult::Error(error_msg),
         };
