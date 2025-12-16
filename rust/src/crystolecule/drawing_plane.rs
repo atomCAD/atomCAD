@@ -443,6 +443,10 @@ pub fn compute_plane_axes(m: &IVec3) -> Result<(IVec3, IVec3), String> {
     ))
 }
 
+/// Picks a deterministic pair of in-plane lattice axes for a Miller plane.
+///
+/// The chosen axes are scored to best match global X/Y projected onto the plane,
+/// producing a stable, predictable in-plane orientation.
 fn compute_preferred_plane_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result<(IVec3, IVec3), String> {
     if *m == IVec3::ZERO {
         return Err("Miller index cannot be zero vector".to_string());
