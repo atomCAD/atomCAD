@@ -16,10 +16,15 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
+
+fn default_extrude_direction() -> IVec3 {
+  IVec3::new(0, 0, 1)
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
   pub height: i32,
   #[serde(with = "ivec3_serializer")]
+  #[serde(default = "default_extrude_direction")]
   pub extrude_direction: IVec3,
 }
 
