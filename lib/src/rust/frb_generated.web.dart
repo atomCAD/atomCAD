@@ -581,6 +581,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIVec2Data? dco_decode_opt_box_autoadd_apii_vec_2_data(dynamic raw);
 
   @protected
+  APIIVec3? dco_decode_opt_box_autoadd_apii_vec_3(dynamic raw);
+
+  @protected
   APIIVec3Data? dco_decode_opt_box_autoadd_apii_vec_3_data(dynamic raw);
 
   @protected
@@ -1293,6 +1296,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIIVec2Data? sse_decode_opt_box_autoadd_apii_vec_2_data(
       SseDeserializer deserializer);
+
+  @protected
+  APIIVec3? sse_decode_opt_box_autoadd_apii_vec_3(SseDeserializer deserializer);
 
   @protected
   APIIVec3Data? sse_decode_opt_box_autoadd_apii_vec_3_data(
@@ -2038,6 +2044,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_apii_vec_2_data(
       APIIVec2Data? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_apii_vec_3(
+      APIIVec3? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_apii_vec_3_data(

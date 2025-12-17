@@ -142,6 +142,11 @@ APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetExtrudeData(
         nodeId: nodeId);
 
+APIIVec3? getExtrudeDrawingPlaneMillerDirection({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetExtrudeDrawingPlaneMillerDirection(
+            nodeId: nodeId);
+
 APIIntData? getIntData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetIntData(nodeId: nodeId);
 

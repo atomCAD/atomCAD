@@ -22,6 +22,7 @@ use crate::structure_designer::nodes::ivec3::IVec3Data;
 use crate::structure_designer::nodes::range::RangeData;
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
+use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::rect::RectData;
@@ -621,6 +622,29 @@ pub fn get_extrude_data(node_id: u64) -> Option<APIExtrudeData> {
           extrude_direction: to_api_ivec3(&extrude_data.extrude_direction),
           infinite: extrude_data.infinite,
         })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_extrude_drawing_plane_miller_direction(node_id: u64) -> Option<crate::api::common_api_types::APIIVec3> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let selected_node_id = match cad_instance.structure_designer.get_selected_node_id_with_type("extrude") {
+          Some(id) => id,
+          None => return None,
+        };
+
+        if selected_node_id != node_id {
+          return None;
+        }
+
+        let eval_cache = cad_instance.structure_designer.get_selected_node_eval_cache()?;
+        let extrude_cache = eval_cache.downcast_ref::<ExtrudeEvalCache>()?;
+        Some(to_api_ivec3(&extrude_cache.drawing_plane_miller_direction))
       },
       None
     )

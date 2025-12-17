@@ -34,6 +34,11 @@ pub struct ExtrudeData {
   pub infinite: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct ExtrudeEvalCache {
+  pub drawing_plane_miller_direction: IVec3,
+}
+
 impl NodeData for ExtrudeData {
     fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       None
@@ -102,6 +107,13 @@ impl NodeData for ExtrudeData {
       if let NetworkResult::Geometry2D(shape) = shape_val {
         // Extract unit cell from the drawing plane
         let unit_cell = shape.drawing_plane.unit_cell.clone();
+
+        if network_stack.len() == 1 {
+          let eval_cache = ExtrudeEvalCache {
+            drawing_plane_miller_direction: shape.drawing_plane.miller_index,
+          };
+          context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
         
         // Validate extrusion direction for this plane (in world space)
         let (world_direction, dir_length) = match shape.drawing_plane.validate_extrude_direction(&extrude_direction) {

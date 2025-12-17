@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as structure_designer_api;
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -87,6 +89,39 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                 ),
               );
             },
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () {
+                final millerDir = structure_designer_api
+                    .getExtrudeDrawingPlaneMillerDirection(
+                  nodeId: widget.nodeId,
+                );
+
+                if (millerDir == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Drawing plane direction is not available (select the node and ensure it evaluates).'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  return;
+                }
+
+                widget.model.setExtrudeData(
+                  widget.nodeId,
+                  APIExtrudeData(
+                    height: widget.data!.height,
+                    extrudeDirection: millerDir,
+                    infinite: widget.data!.infinite,
+                  ),
+                );
+              },
+              child: const Text('Set dir from plane'),
+            ),
           ),
         ],
       ),
