@@ -71,6 +71,10 @@ impl NodeData for ExtrudeData {
         Err(error) => return error,
       };
 
+      if height < 0 {
+        return NetworkResult::Error("Extrusion height cannot be negative".to_string());
+      }
+
       let extrude_direction = match network_evaluator.evaluate_or_default(
         network_stack, node_id, registry, context, 3,
         self.extrude_direction,
