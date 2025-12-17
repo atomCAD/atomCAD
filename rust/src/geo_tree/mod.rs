@@ -43,6 +43,7 @@ enum GeoNodeKind {
     direction: DVec3,
     shape: Box<GeoNode>,
     plane_to_world_transform: Transform,
+    infinite: bool,
   },
   Transform {
     transform: Transform,
@@ -113,10 +114,11 @@ impl GeoNode {
                 }
                 result
             }
-            GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform } => {
-                format!("{}Extrude(height: {}, direction: {}, transform: {})\n{}", 
+            GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite } => {
+                format!("{}Extrude(height: {}, direction: {}, transform: {}, infinite: {})\n{}", 
                     prefix, format_f64(height), format_vec3(direction),
                     format_transform(plane_to_world_transform),
+                    infinite,
                     shape.display_with_indent(indent + 1))
             }
             GeoNodeKind::Transform { transform, shape } => {
@@ -245,10 +247,11 @@ impl GeoNode {
         }
     }
 
-    pub fn extrude(height: f64, direction: DVec3, shape: Box<GeoNode>, plane_to_world_transform: Transform) -> Self {
+    pub fn extrude(height: f64, direction: DVec3, shape: Box<GeoNode>, plane_to_world_transform: Transform, infinite: bool) -> Self {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&[0x06]); // variant tag
         hasher.update(&height.to_le_bytes());
+        hasher.update(&[infinite as u8]);
         hasher.update(&direction.x.to_le_bytes());
         hasher.update(&direction.y.to_le_bytes());
         hasher.update(&direction.z.to_le_bytes());
@@ -263,7 +266,7 @@ impl GeoNode {
         hasher.update(&plane_to_world_transform.rotation.w.to_le_bytes());
         
         Self {
-            kind: GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform },
+            kind: GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite },
             hash: hasher.finalize(),
         }
     }

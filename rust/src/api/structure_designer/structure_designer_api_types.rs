@@ -127,6 +127,7 @@ pub struct InputPinView {
   pub struct APIExtrudeData {
     pub height: i32,
     pub extrude_direction: APIIVec3,
+    pub infinite: bool,
   }
 
   pub struct APICuboidData {

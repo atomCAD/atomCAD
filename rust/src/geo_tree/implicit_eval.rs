@@ -110,7 +110,7 @@ impl ImplicitGeometry3D for GeoNode {
       GeoNodeKind::Sphere { center, radius } => {
         Self::sphere_implicit_eval(*center, *radius, sample_point)
       }
-      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform } => {
+      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite: _ } => {
         Self::extrude_implicit_eval(*height, *direction, shape, plane_to_world_transform, sample_point)
       }
       GeoNodeKind::Transform { transform, shape } => {
@@ -138,7 +138,7 @@ impl ImplicitGeometry3D for GeoNode {
       GeoNodeKind::Sphere { center, radius } => {
         Self::sphere_implicit_eval_batch(*center, *radius, sample_points, results)
       }
-      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform } => {
+      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite: _ } => {
         Self::extrude_implicit_eval_batch(*height, *direction, shape, plane_to_world_transform, sample_points, results)
       }
       GeoNodeKind::Transform { transform, shape } => {

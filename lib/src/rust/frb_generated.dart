@@ -5170,11 +5170,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIExtrudeData dco_decode_api_extrude_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIExtrudeData(
       height: dco_decode_i_32(arr[0]),
       extrudeDirection: dco_decode_apii_vec_3(arr[1]),
+      infinite: dco_decode_bool(arr[2]),
     );
   }
 
@@ -6880,8 +6881,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_height = sse_decode_i_32(deserializer);
     var var_extrudeDirection = sse_decode_apii_vec_3(deserializer);
+    var var_infinite = sse_decode_bool(deserializer);
     return APIExtrudeData(
-        height: var_height, extrudeDirection: var_extrudeDirection);
+        height: var_height,
+        extrudeDirection: var_extrudeDirection,
+        infinite: var_infinite);
   }
 
   @protected
@@ -8846,6 +8850,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.height, serializer);
     sse_encode_apii_vec_3(self.extrudeDirection, serializer);
+    sse_encode_bool(self.infinite, serializer);
   }
 
   @protected

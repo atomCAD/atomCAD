@@ -20,12 +20,18 @@ use crate::structure_designer::node_type::NodeType;
 fn default_extrude_direction() -> IVec3 {
   IVec3::new(0, 0, 1)
 }
+
+fn default_infinite() -> bool {
+  false
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
   pub height: i32,
   #[serde(with = "ivec3_serializer")]
   #[serde(default = "default_extrude_direction")]
   pub extrude_direction: IVec3,
+  #[serde(default = "default_infinite")]
+  pub infinite: bool,
 }
 
 impl NodeData for ExtrudeData {
@@ -71,10 +77,6 @@ impl NodeData for ExtrudeData {
         Err(error) => return error,
       };
 
-      if height < 0 {
-        return NetworkResult::Error("Extrusion height cannot be negative".to_string());
-      }
-
       let extrude_direction = match network_evaluator.evaluate_or_default(
         network_stack, node_id, registry, context, 3,
         self.extrude_direction,
@@ -83,6 +85,19 @@ impl NodeData for ExtrudeData {
         Ok(value) => value,
         Err(error) => return error,
       };
+
+      let infinite = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 4,
+        self.infinite,
+        NetworkResult::extract_bool
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      if !infinite && height < 0 {
+        return NetworkResult::Error("Extrusion height cannot be negative".to_string());
+      }
 
       if let NetworkResult::Geometry2D(shape) = shape_val {
         // Extract unit cell from the drawing plane
@@ -93,9 +108,12 @@ impl NodeData for ExtrudeData {
             Ok(result) => result,
             Err(error_msg) => return NetworkResult::Error(error_msg),
         };
-        
-        // Calculate actual extrusion height based on direction length and height multiplier
-        let height_real = dir_length * (height as f64);
+
+        let height_real = if infinite {
+          0.0
+        } else {
+          dir_length * (height as f64)
+        };
         
         // Compute plane_to_world transform from DrawingPlane
         let plane_to_world_transform = shape.drawing_plane.to_world_transform();
@@ -115,7 +133,7 @@ impl NodeData for ExtrudeData {
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,
           frame_transform,
-          geo_tree_root: GeoNode::extrude(height_real, local_direction, Box::new(s), plane_to_world_transform)
+          geo_tree_root: GeoNode::extrude(height_real, local_direction, Box::new(s), plane_to_world_transform, infinite)
         });
       } else {
         return runtime_type_error_in_input(0);

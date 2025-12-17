@@ -91,7 +91,7 @@ impl GeoNode {
       GeoNodeKind::Sphere { center, radius } => {
         Some(Self::sphere_to_csg(*center, *radius))
       }
-      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform } => {
+      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite: _ } => {
         Self::extrude_to_csg(*height, *direction, shape, plane_to_world_transform, cache.as_deref_mut())
       }
       GeoNodeKind::Transform { transform, shape } => {

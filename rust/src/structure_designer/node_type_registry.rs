@@ -605,12 +605,17 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
             name: "dir".to_string(),
             data_type: DataType::IVec3,
           },
+          Parameter {
+            name: "inf".to_string(),
+            data_type: DataType::Bool,
+          },
       ],
       output_type: DataType::Geometry,
       public: true,
       node_data_creator: || Box::new(ExtrudeData {
         height: 1,
         extrude_direction: IVec3::new(0, 0, 1),
+        infinite: false,
       }),
       node_data_saver: generic_node_data_saver::<ExtrudeData>,
       node_data_loader: generic_node_data_loader::<ExtrudeData>,

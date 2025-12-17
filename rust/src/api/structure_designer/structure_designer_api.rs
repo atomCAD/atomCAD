@@ -619,6 +619,7 @@ pub fn get_extrude_data(node_id: u64) -> Option<APIExtrudeData> {
         Some(APIExtrudeData {
           height: extrude_data.height,
           extrude_direction: to_api_ivec3(&extrude_data.extrude_direction),
+          infinite: extrude_data.infinite,
         })
       },
       None
@@ -1631,6 +1632,7 @@ pub fn set_extrude_data(node_id: u64, data: APIExtrudeData) {
       let extrude_data = Box::new(ExtrudeData {
         height: data.height,
         extrude_direction: from_api_ivec3(&data.extrude_direction),
+        infinite: data.infinite,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, extrude_data);
       refresh_structure_designer_auto(cad_instance);
