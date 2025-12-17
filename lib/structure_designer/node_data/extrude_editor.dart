@@ -41,6 +41,23 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
             nodeTypeName: 'extrude',
           ),
           const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Infinite'),
+            value: widget.data!.infinite,
+            onChanged: (newValue) {
+              if (newValue == null) return;
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: widget.data!.height,
+                  extrudeDirection: widget.data!.extrudeDirection,
+                  infinite: newValue,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
           IntInput(
             label: 'Height',
             value: widget.data!.height,
@@ -51,6 +68,7 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                 APIExtrudeData(
                   height: newValue,
                   extrudeDirection: widget.data!.extrudeDirection,
+                  infinite: widget.data!.infinite,
                 ),
               );
             },
@@ -65,6 +83,7 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                 APIExtrudeData(
                   height: widget.data!.height,
                   extrudeDirection: newValue,
+                  infinite: widget.data!.infinite,
                 ),
               );
             },

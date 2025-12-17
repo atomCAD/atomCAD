@@ -91,8 +91,8 @@ impl GeoNode {
       GeoNodeKind::Sphere { center, radius } => {
         Some(Self::sphere_to_csg(*center, *radius))
       }
-      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite: _ } => {
-        Self::extrude_to_csg(*height, *direction, shape, plane_to_world_transform, cache.as_deref_mut())
+      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite } => {
+        Self::extrude_to_csg(*height, *direction, shape, plane_to_world_transform, *infinite, cache.as_deref_mut())
       }
       GeoNodeKind::Transform { transform, shape } => {
         Self::transform_to_csg(transform, shape, cache.as_deref_mut())
@@ -190,15 +190,33 @@ impl GeoNode {
       direction: DVec3, 
       shape: &Box<GeoNode>, 
       plane_to_world_transform: &Transform,
+      infinite: bool,
       mut cache: Option<&mut CsgConversionCache>
   ) -> Option<CSGMesh> {
       // 1. Get 2D sketch (already in plane-local XY coordinates)
       let sketch = shape.to_csg_sketch_cached(cache.as_deref_mut())?;
       
       // 2. Extrude in plane-local space (direction is in plane-local coordinates)
-      let scaled_height = scale_to_csg(height);
-      let extrusion_vector = dvec3_to_vector3(direction * scaled_height);
-      let extruded = sketch.extrude_vector(extrusion_vector);
+      let extruded = if infinite {
+        let direction_length = direction.length();
+        if direction_length == 0.0 {
+          return None;
+        }
+
+        let dir_unit = direction / direction_length;
+        let proxy_height = 1200.0;
+        let scaled_proxy_height = scale_to_csg(proxy_height);
+        let extrusion_vector = dvec3_to_vector3(dir_unit * scaled_proxy_height);
+
+        let offset = dir_unit * (-scaled_proxy_height * 0.5);
+        sketch
+          .extrude_vector(extrusion_vector)
+          .translate(offset.x, offset.y, offset.z)
+      } else {
+        let scaled_height = scale_to_csg(height);
+        let extrusion_vector = dvec3_to_vector3(direction * scaled_height);
+        sketch.extrude_vector(extrusion_vector)
+      };
       
       // 3. Transform the extruded mesh from plane-local to world space
       let transformed = Self::apply_transform_to_csg(&extruded, plane_to_world_transform);
