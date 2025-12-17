@@ -364,16 +364,21 @@ class APIExtrudeData {
   final int height;
   final APIIVec3 extrudeDirection;
   final bool infinite;
+  final int subdivision;
 
   const APIExtrudeData({
     required this.height,
     required this.extrudeDirection,
     required this.infinite,
+    required this.subdivision,
   });
 
   @override
   int get hashCode =>
-      height.hashCode ^ extrudeDirection.hashCode ^ infinite.hashCode;
+      height.hashCode ^
+      extrudeDirection.hashCode ^
+      infinite.hashCode ^
+      subdivision.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -382,7 +387,8 @@ class APIExtrudeData {
           runtimeType == other.runtimeType &&
           height == other.height &&
           extrudeDirection == other.extrudeDirection &&
-          infinite == other.infinite;
+          infinite == other.infinite &&
+          subdivision == other.subdivision;
 }
 
 class APIFacet {

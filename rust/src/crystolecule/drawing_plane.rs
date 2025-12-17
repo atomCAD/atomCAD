@@ -306,7 +306,7 @@ impl DrawingPlane {
     /// * `extrude_direction` - Miller index direction in the unit cell (lattice coordinates)
     /// 
     /// # Returns
-    /// * `Ok((normalized_direction, length))` - Normalized direction vector and length in real space
+    /// * `Ok((normalized_direction, d_spacing))` - Normalized direction vector and d-spacing in real space
     /// * `Err(String)` - Error message if direction is invalid
     /// 
     /// # Errors
@@ -318,20 +318,16 @@ impl DrawingPlane {
         if *extrude_direction == IVec3::ZERO {
             return Err("Extrusion direction cannot be zero vector [0,0,0]".to_string());
         }
-        
-        // Convert miller direction to real 3D vector
-        let dir_real = self.unit_cell.ivec3_lattice_to_real(extrude_direction);
-        let dir_length = dir_real.length();
-        
-        // Get plane basis vectors in 3D world space
-        let u_real = self.unit_cell.ivec3_lattice_to_real(&self.u_axis);
-        let v_real = self.unit_cell.ivec3_lattice_to_real(&self.v_axis);
-        
-        // Compute plane normal: u × v
-        let plane_normal = u_real.cross(v_real);
-        
-        // Check projection onto plane normal
-        let projection = dir_real.dot(plane_normal);
+
+        let extrude_plane_props = self.unit_cell
+            .ivec3_miller_index_to_plane_props(extrude_direction)
+            .map_err(|e| format!("Failed to compute extrusion direction properties: {}", e))?;
+
+        let drawing_plane_props = self.unit_cell
+            .ivec3_miller_index_to_plane_props(&self.miller_index)
+            .map_err(|e| format!("Failed to compute drawing plane properties: {}", e))?;
+
+        let projection = extrude_plane_props.normal.dot(drawing_plane_props.normal);
         
         if projection.abs() < 1e-10 {
             return Err(format!(
@@ -346,8 +342,8 @@ impl DrawingPlane {
                 extrude_direction.x, extrude_direction.y, extrude_direction.z
             ));
         }
-        
-        Ok((dir_real.normalize(), dir_length))
+
+        Ok((extrude_plane_props.normal, extrude_plane_props.d_spacing))
     }
     
     /// Computes the transformation from plane-local coordinates to world coordinates.

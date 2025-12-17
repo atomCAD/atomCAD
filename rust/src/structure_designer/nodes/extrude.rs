@@ -24,6 +24,10 @@ fn default_extrude_direction() -> IVec3 {
 fn default_infinite() -> bool {
   false
 }
+
+fn default_subdivision() -> i32 {
+  1
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
   pub height: i32,
@@ -32,6 +36,8 @@ pub struct ExtrudeData {
   pub extrude_direction: IVec3,
   #[serde(default = "default_infinite")]
   pub infinite: bool,
+  #[serde(default = "default_subdivision")]
+  pub subdivision: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -100,6 +106,15 @@ impl NodeData for ExtrudeData {
         Err(error) => return error,
       };
 
+      let subdivision = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 5,
+        self.subdivision,
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value.max(1),
+        Err(error) => return error,
+      };
+
       if !infinite && height <= 0 {
         return NetworkResult::Error("Extrusion height must be positive".to_string());
       }
@@ -116,7 +131,7 @@ impl NodeData for ExtrudeData {
         }
         
         // Validate extrusion direction for this plane (in world space)
-        let (world_direction, dir_length) = match shape.drawing_plane.validate_extrude_direction(&extrude_direction) {
+        let (world_direction, d_spacing) = match shape.drawing_plane.validate_extrude_direction(&extrude_direction) {
             Ok(result) => result,
             Err(error_msg) => return NetworkResult::Error(error_msg),
         };
@@ -124,7 +139,7 @@ impl NodeData for ExtrudeData {
         let height_real = if infinite {
           0.0
         } else {
-          dir_length * (height as f64)
+          (height as f64 / subdivision as f64) * d_spacing
         };
         
         // Compute plane_to_world transform from DrawingPlane

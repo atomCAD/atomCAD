@@ -609,6 +609,10 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
             name: "inf".to_string(),
             data_type: DataType::Bool,
           },
+          Parameter {
+            name: "subdivision".to_string(),
+            data_type: DataType::Int,
+          },
       ],
       output_type: DataType::Geometry,
       public: true,
@@ -616,6 +620,7 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
         height: 1,
         extrude_direction: IVec3::new(0, 0, 1),
         infinite: false,
+        subdivision: 1,
       }),
       node_data_saver: generic_node_data_saver::<ExtrudeData>,
       node_data_loader: generic_node_data_loader::<ExtrudeData>,

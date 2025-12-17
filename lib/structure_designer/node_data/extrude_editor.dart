@@ -55,6 +55,7 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                   height: widget.data!.height,
                   extrudeDirection: widget.data!.extrudeDirection,
                   infinite: newValue,
+                  subdivision: widget.data!.subdivision,
                 ),
               );
             },
@@ -71,6 +72,7 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                   height: newValue,
                   extrudeDirection: widget.data!.extrudeDirection,
                   infinite: widget.data!.infinite,
+                  subdivision: widget.data!.subdivision,
                 ),
               );
             },
@@ -86,6 +88,7 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                   height: widget.data!.height,
                   extrudeDirection: newValue,
                   infinite: widget.data!.infinite,
+                  subdivision: widget.data!.subdivision,
                 ),
               );
             },
@@ -117,11 +120,29 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                     height: widget.data!.height,
                     extrudeDirection: millerDir,
                     infinite: widget.data!.infinite,
+                    subdivision: widget.data!.subdivision,
                   ),
                 );
               },
               child: const Text('Set dir from plane'),
             ),
+          ),
+          const SizedBox(height: 8),
+          IntInput(
+            label: 'Subdivision',
+            value: widget.data!.subdivision,
+            minimumValue: 1,
+            onChanged: (newValue) {
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: widget.data!.height,
+                  extrudeDirection: widget.data!.extrudeDirection,
+                  infinite: widget.data!.infinite,
+                  subdivision: newValue,
+                ),
+              );
+            },
           ),
         ],
       ),
