@@ -100,8 +100,8 @@ impl NodeData for ExtrudeData {
         Err(error) => return error,
       };
 
-      if !infinite && height < 0 {
-        return NetworkResult::Error("Extrusion height cannot be negative".to_string());
+      if !infinite && height <= 0 {
+        return NetworkResult::Error("Extrusion height must be positive".to_string());
       }
 
       if let NetworkResult::Geometry2D(shape) = shape_val {
