@@ -214,8 +214,20 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   bool canConnectPins(PinReference pin1, PinReference pin2) {
+    if (pin1.pinType == pin2.pinType) {
+      return false;
+    }
+
     final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
     final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
+
+    if (outPin.pinType != PinType.output || inPin.pinType != PinType.input) {
+      return false;
+    }
+
+    if (inPin.pinIndex < 0) {
+      return false;
+    }
 
     return structure_designer_api.canConnectNodes(
       sourceNodeId: outPin.nodeId,
@@ -226,8 +238,20 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void connectPins(PinReference pin1, PinReference pin2) {
+    if (pin1.pinType == pin2.pinType) {
+      return;
+    }
+
     final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
     final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
+
+    if (outPin.pinType != PinType.output || inPin.pinType != PinType.input) {
+      return;
+    }
+
+    if (inPin.pinIndex < 0) {
+      return;
+    }
 
     structure_designer_api.connectNodes(
       sourceNodeId: outPin.nodeId,

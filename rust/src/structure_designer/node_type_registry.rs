@@ -1393,6 +1393,8 @@ It converts file paths to relative paths whenever possible (if the file is in th
   /// # Parameters
   /// * `network` - A mutable reference to the node network to repair
   pub fn repair_node_network(&self, network: &mut NodeNetwork) {
+    let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
+
     // Iterate through all nodes in the network
     for node in network.nodes.values_mut() {
       // Get the node type for this node
@@ -1407,6 +1409,17 @@ It converts file paths to relative paths whenever possible (if the file is in th
             node.arguments.push(Argument::new());
           }
         }
+      }
+
+      // Remove obviously invalid wire entries to avoid loading dangerous state.
+      // - Drop connections referencing non-existent source nodes
+      // - Drop connections with unsupported output pin indices
+      //   (currently only -1=function pin and 0=regular output pin are valid)
+      for argument in node.arguments.iter_mut() {
+        argument.argument_output_pins.retain(|source_node_id, output_pin_index| {
+          node_ids.contains(source_node_id)
+            && (*output_pin_index == -1 || *output_pin_index == 0)
+        });
       }
     }
   }

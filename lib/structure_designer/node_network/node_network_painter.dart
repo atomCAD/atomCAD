@@ -30,6 +30,27 @@ class NodeNetworkPainter extends CustomPainter {
   NodeNetworkPainter(this.graphModel,
       {this.panOffset = Offset.zero, this.zoomLevel = ZoomLevel.normal});
 
+  (Offset, String)? _tryGetPinPositionAndDataType(
+      BigInt nodeId, PinType pinType, int pinIndex) {
+    final view = graphModel.nodeNetworkView;
+    if (view == null) {
+      return null;
+    }
+
+    final node = view.nodes[nodeId];
+    if (node == null) {
+      return null;
+    }
+
+    if (pinType == PinType.input) {
+      if (pinIndex < 0 || pinIndex >= node.inputPins.length) {
+        return null;
+      }
+    }
+
+    return _getPinPositionAndDataType(nodeId, pinType, pinIndex);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (graphModel.nodeNetworkView == null) {
@@ -46,19 +67,27 @@ class NodeNetworkPainter extends CustomPainter {
 
     // Draw regular wires first
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final source = _getPinPositionAndDataType(
+      final source = _tryGetPinPositionAndDataType(
           wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
-      final dest = _getPinPositionAndDataType(
+      final dest = _tryGetPinPositionAndDataType(
           wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
+
+      if (source == null || dest == null) {
+        continue;
+      }
+
       _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected);
     }
 
     // Draw dragged wire on top
     if (graphModel.draggedWire != null) {
-      final wireStart = _getPinPositionAndDataType(
+      final wireStart = _tryGetPinPositionAndDataType(
           graphModel.draggedWire!.startPin.nodeId,
           graphModel.draggedWire!.startPin.pinType,
           graphModel.draggedWire!.startPin.pinIndex);
+      if (wireStart == null) {
+        return;
+      }
       final wireEndPos = graphModel.draggedWire!.wireEndPosition;
       if (graphModel.draggedWire!.startPin.pinType == PinType.output) {
         // start is source
@@ -229,10 +258,17 @@ class NodeNetworkPainter extends CustomPainter {
     // We don't need to adjust the position here because _getPinPositionAndDataType
     // already adds the panOffset to the returned positions
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final (sourcePos, _) = _getPinPositionAndDataType(
+      final source = _tryGetPinPositionAndDataType(
           wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
-      final (destPos, _) = _getPinPositionAndDataType(
+      final dest = _tryGetPinPositionAndDataType(
           wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
+
+      if (source == null || dest == null) {
+        continue;
+      }
+
+      final (sourcePos, _) = source;
+      final (destPos, _) = dest;
 
       final hitTestPath = _getBand(sourcePos, destPos, HIT_TEST_WIRE_WIDTH);
       if (hitTestPath.contains(position)) {

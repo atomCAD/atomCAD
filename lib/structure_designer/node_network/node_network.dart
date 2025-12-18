@@ -541,12 +541,23 @@ class NodeNetworkState extends State<NodeNetwork> {
             focusNode: focusNode,
             autofocus: true,
             onKeyEvent: (node, event) {
+              // Only handle node-network shortcuts when this focus node is the primary focus.
+              // This prevents interfering with text input fields in sibling panels.
+              if (FocusManager.instance.primaryFocus != focusNode) {
+                return KeyEventResult.ignored;
+              }
+
+              // Only act on key down to avoid double-triggering on key up and to reduce
+              // the risk of triggering platform-specific HardwareKeyboard inconsistencies.
+              if (event is! KeyDownEvent) {
+                return KeyEventResult.ignored;
+              }
+
               //print("node_network.dart event.logicalKey: " +
               //    event.logicalKey.toString() +
               //    " event.physicalKey: " +
               //    event.physicalKey.toString());
-              if (event is KeyDownEvent &&
-                  HardwareKeyboard.instance.isControlPressed &&
+              if (HardwareKeyboard.instance.isControlPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyD) {
                 if (model.nodeNetworkView == null) {
                   return KeyEventResult.ignored;
