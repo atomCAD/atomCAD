@@ -547,7 +547,6 @@ class NodeNetworkState extends State<NodeNetwork> {
               //    event.physicalKey.toString());
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
-                  event.logicalKey == LogicalKeyboardKey.keyD ||
                   event.physicalKey == PhysicalKeyboardKey.delete) {
                 model.removeSelected();
                 return KeyEventResult.handled;
