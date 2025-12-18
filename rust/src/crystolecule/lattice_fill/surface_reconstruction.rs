@@ -23,7 +23,7 @@ use glam::IVec3;
 /// - Unknown: Surface atoms that don't fit standard (100) reconstruction pattern
 /// - Surface variants: Atoms on {100} facets with specific surface normals
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SurfaceOrientation {
+enum SurfaceOrientation {
     Bulk,
     Unknown,
     Surface100,      // (100)
@@ -47,6 +47,16 @@ const AXIS_ALIGNMENT_THRESHOLD: f64 = 0.5;
 /// - Highlights reconstructed dimer bonds by selecting them
 /// Set to false for normal reconstruction operation.
 const SURFACE_RECONSTRUCTION_VISUAL_DEBUG: bool = false;
+
+#[derive(Clone, Copy)]
+struct SurfaceReconstructionParams {
+  dimer_bond_length_clean: f64,
+  dimer_bond_length_passivated: f64,
+  vertical_displacement_clean: f64,
+  vertical_displacement_passivated: f64,
+  h_bond_length: f64,
+  h_angle_from_normal_degrees: f64,
+}
 
 // ============================================================================
 // Diamond (100) 2×1 Dimer Reconstruction Geometric Constants
@@ -77,6 +87,105 @@ const C_H_BOND_LENGTH: f64 = 1.09;
 /// Angle (in degrees) of C-H bond from surface normal.
 /// Hydrogen points away from the dimer partner.
 const C_H_ANGLE_FROM_NORMAL_DEGREES: f64 = 24.0;
+
+// ============================================================================
+// Silicon (100) 2×1 Dimer Reconstruction Geometric Constants
+// ============================================================================
+
+/// Silicon diamond-cubic lattice parameter in Ångströms.
+const SILICON_UNIT_CELL_SIZE_ANGSTROM: f64 = 5.431;
+
+/// Target dimer bond length for clean (unpassivated) silicon (100) surface in Ångströms.
+/// Best-effort value for now.
+const SI_DIMER_BOND_LENGTH_CLEAN: f64 = 2.25;
+
+/// Target dimer bond length for hydrogen-passivated silicon (100) monohydride surface in Ångströms.
+/// Best-effort value for now.
+const SI_DIMER_BOND_LENGTH_PASSIVATED: f64 = 2.34;
+
+/// Vertical displacement (downward) for clean Si(100) reconstruction in Ångströms.
+const SI_VERTICAL_DISPLACEMENT_CLEAN: f64 = -0.10; // TODO: research
+
+/// Vertical displacement (downward) for H-passivated Si(100) reconstruction in Ångströms.
+const SI_VERTICAL_DISPLACEMENT_PASSIVATED: f64 = -0.03; // TODO: research
+
+/// Si-H bond length for hydrogen passivation in Ångströms.
+const SI_H_BOND_LENGTH: f64 = 1.50;
+
+/// Angle (in degrees) of Si-H bond from surface normal.
+const SI_H_ANGLE_FROM_NORMAL_DEGREES: f64 = 24.0;
+
+const UNIT_CELL_SIZE_TOLERANCE_ANGSTROM: f64 = 0.05;
+
+#[inline]
+fn approximately_equal(a: f64, b: f64, tolerance: f64) -> bool {
+  (a - b).abs() <= tolerance
+}
+
+#[inline]
+fn diamond_reconstruction_params() -> SurfaceReconstructionParams {
+  SurfaceReconstructionParams {
+    dimer_bond_length_clean: DIMER_BOND_LENGTH_CLEAN,
+    dimer_bond_length_passivated: DIMER_BOND_LENGTH_PASSIVATED,
+    vertical_displacement_clean: VERTICAL_DISPLACEMENT_CLEAN,
+    vertical_displacement_passivated: VERTICAL_DISPLACEMENT_PASSIVATED,
+    h_bond_length: C_H_BOND_LENGTH,
+    h_angle_from_normal_degrees: C_H_ANGLE_FROM_NORMAL_DEGREES,
+  }
+}
+
+#[inline]
+fn silicon_reconstruction_params() -> SurfaceReconstructionParams {
+  SurfaceReconstructionParams {
+    dimer_bond_length_clean: SI_DIMER_BOND_LENGTH_CLEAN,
+    dimer_bond_length_passivated: SI_DIMER_BOND_LENGTH_PASSIVATED,
+    vertical_displacement_clean: SI_VERTICAL_DISPLACEMENT_CLEAN,
+    vertical_displacement_passivated: SI_VERTICAL_DISPLACEMENT_PASSIVATED,
+    h_bond_length: SI_H_BOND_LENGTH,
+    h_angle_from_normal_degrees: SI_H_ANGLE_FROM_NORMAL_DEGREES,
+  }
+}
+
+fn get_reconstruction_params(
+  motif: &Motif,
+  unit_cell: &UnitCellStruct,
+  parameter_element_values: &HashMap<String, i16>
+) -> Option<SurfaceReconstructionParams> {
+  if !motif.is_structurally_equal(&DEFAULT_ZINCBLENDE_MOTIF) {
+    return None;
+  }
+
+  if !unit_cell.is_approximately_cubic() {
+    return None;
+  }
+
+  let effective_params = motif.get_effective_parameter_element_values(parameter_element_values);
+
+  let primary = match effective_params.get("PRIMARY") {
+    Some(v) => *v,
+    None => return None,
+  };
+  let secondary = match effective_params.get("SECONDARY") {
+    Some(v) => *v,
+    None => return None,
+  };
+
+  let cell_size = unit_cell.a.length();
+
+  const CARBON_ATOMIC_NUMBER: i16 = 6;
+  if primary == CARBON_ATOMIC_NUMBER && secondary == CARBON_ATOMIC_NUMBER
+    && approximately_equal(cell_size, DIAMOND_UNIT_CELL_SIZE_ANGSTROM, UNIT_CELL_SIZE_TOLERANCE_ANGSTROM) {
+    return Some(diamond_reconstruction_params());
+  }
+
+  const SILICON_ATOMIC_NUMBER: i16 = 14;
+  if primary == SILICON_ATOMIC_NUMBER && secondary == SILICON_ATOMIC_NUMBER
+    && approximately_equal(cell_size, SILICON_UNIT_CELL_SIZE_ANGSTROM, UNIT_CELL_SIZE_TOLERANCE_ANGSTROM) {
+    return Some(silicon_reconstruction_params());
+  }
+
+  None
+}
 
 /// Maps each surface orientation to an atomic number for visual debugging.
 /// Uses custom debug carbon elements with carbon radii but distinct colors.
@@ -628,19 +737,20 @@ fn process_atoms(
 fn apply_dimer_reconstruction(
   structure: &mut AtomicStructure,
   dimer_pair: &DimerPair,
-  hydrogen_passivation: bool
+  hydrogen_passivation: bool,
+  params: SurfaceReconstructionParams
 ) {
   // Select geometry parameters based on passivation setting
   let target_bond_length = if hydrogen_passivation {
-    DIMER_BOND_LENGTH_PASSIVATED
+    params.dimer_bond_length_passivated
   } else {
-    DIMER_BOND_LENGTH_CLEAN
+    params.dimer_bond_length_clean
   };
   
   let vertical_displacement = if hydrogen_passivation {
-    VERTICAL_DISPLACEMENT_PASSIVATED
+    params.vertical_displacement_passivated
   } else {
-    VERTICAL_DISPLACEMENT_CLEAN
+    params.vertical_displacement_clean
   };
   
   // Get the two atoms
@@ -700,7 +810,7 @@ fn apply_dimer_reconstruction(
   
   // Add hydrogen passivation if enabled
   if hydrogen_passivation {
-    add_hydrogen_passivation(structure, dimer_pair, &new_pos1, &new_pos2, &in_plane_direction, &surface_normal);
+    add_hydrogen_passivation(structure, dimer_pair, &new_pos1, &new_pos2, &in_plane_direction, &surface_normal, params);
   }
 }
 
@@ -744,24 +854,25 @@ fn add_hydrogen_passivation(
   pos1: &glam::DVec3,
   pos2: &glam::DVec3,
   in_plane_direction: &glam::DVec3,
-  surface_normal: &glam::DVec3
+  surface_normal: &glam::DVec3,
+  params: SurfaceReconstructionParams
 ) {
   use glam::DVec3;
   use std::f64::consts::PI;
   
-  let angle_rad = C_H_ANGLE_FROM_NORMAL_DEGREES * PI / 180.0;
+  let angle_rad = params.h_angle_from_normal_degrees * PI / 180.0;
   let cos_angle = angle_rad.cos();
   let sin_angle = angle_rad.sin();
   
   // For atom 1: hydrogen points away from atom 2
   // Direction: tilt from surface normal toward -in_plane_direction
   let h1_direction = (*surface_normal * cos_angle - *in_plane_direction * sin_angle).normalize();
-  let h1_pos = pos1 + h1_direction * C_H_BOND_LENGTH;
+  let h1_pos = pos1 + h1_direction * params.h_bond_length;
   
   // For atom 2: hydrogen points away from atom 1
   // Direction: tilt from surface normal toward +in_plane_direction
   let h2_direction = (*surface_normal * cos_angle + *in_plane_direction * sin_angle).normalize();
-  let h2_pos = pos2 + h2_direction * C_H_BOND_LENGTH;
+  let h2_pos = pos2 + h2_direction * params.h_bond_length;
   
   // Add hydrogen atoms (atomic number 1) using add_atom to update internal data structures
   let h1_id = structure.add_atom(1, h1_pos);
@@ -776,80 +887,13 @@ fn add_hydrogen_passivation(
   structure.set_atom_hydrogen_passivation(dimer_pair.partner_atom_id, true);
 }
 
-/// Determines if the current structure is cubic diamond suitable for (100) reconstruction.
-/// 
-/// This function checks three conditions:
-/// 1. The motif matches the built-in zincblende motif structure
-/// 2. The unit cell is approximately cubic
-/// 3. The unit cell size matches the diamond lattice parameter
-/// 4. Both PRIMARY and SECONDARY element parameters are set to carbon (atomic number 6)
-/// 
-/// # Arguments
-/// * `motif` - The motif to check
-/// * `unit_cell` - The unit cell to check
-/// * `parameter_element_values` - The parameter element values (PRIMARY, SECONDARY, etc.)
-/// 
-/// # Returns
-/// * `true` if all conditions are met for cubic diamond
-/// * `false` otherwise
-pub fn is_cubic_diamond(
-  motif: &Motif,
-  unit_cell: &UnitCellStruct,
-  parameter_element_values: &HashMap<String, i16>
-) -> bool {
-  // Check if motif matches the built-in zincblende motif
-  if !motif.is_structurally_equal(&DEFAULT_ZINCBLENDE_MOTIF) {
-    return false;
-  }
-
-  // Check if unit cell is approximately cubic
-  if !unit_cell.is_approximately_cubic() {
-    return false;
-  }
-
-  // Check if the unit cell size matches diamond lattice parameter
-  const EPSILON: f64 = 1e-5;
-  let cell_size = unit_cell.a.length();
-  if (cell_size - DIAMOND_UNIT_CELL_SIZE_ANGSTROM).abs() > EPSILON {
-    return false;
-  }
-
-  // Get effective parameter values (with defaults filled in)
-  let effective_params = motif.get_effective_parameter_element_values(parameter_element_values);
-
-  // Check if both PRIMARY and SECONDARY are set to carbon (atomic number 6)
-  const CARBON_ATOMIC_NUMBER: i16 = 6;
-  let primary_is_carbon = effective_params.get("PRIMARY") == Some(&CARBON_ATOMIC_NUMBER);
-  let secondary_is_carbon = effective_params.get("SECONDARY") == Some(&CARBON_ATOMIC_NUMBER);
-
-  primary_is_carbon && secondary_is_carbon
-}
-
-/// Performs (100) 2×1 dimer reconstruction for cubic diamond.
-/// 
-/// This function implements the surface reconstruction algorithm described in
-/// surface_reconstructions.md for (100) surfaces of cubic diamond.
-/// 
-/// # Arguments
-/// * `structure` - The atomic structure to apply reconstruction to
-/// * `atom_tracker` - Tracker with lattice coordinate mappings for all placed atoms
-/// * `_motif` - The motif defining the crystal structure
-/// * `_unit_cell` - The unit cell defining the lattice
-/// * `_parameter_element_values` - Map of parameter element names to atomic numbers
-/// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
-/// * `hydrogen_passivation` - Whether to add hydrogen passivation to reconstructed dimers
-/// 
-/// # Returns
-/// * The number of dimers reconstructed
-pub fn reconstruct_surface_100_diamond(
+fn reconstruct_surface_100_diamond_cubic(
   structure: &mut AtomicStructure,
   atom_tracker: &PlacedAtomTracker,
-  _motif: &Motif,
-  _unit_cell: &UnitCellStruct,
-  _parameter_element_values: &HashMap<String, i16>,
   single_bond_atoms_already_removed: bool,
   hydrogen_passivation: bool,
-  invert_phase: bool
+  invert_phase: bool,
+  params: SurfaceReconstructionParams
 ) -> usize {
   // Remove single-bond atoms if they haven't been removed yet
   // This is necessary for proper surface reconstruction
@@ -868,7 +912,7 @@ pub fn reconstruct_surface_100_diamond(
     if let Some(&partner_orientation) = candidate_data.partner_orientations.get(&dimer_pair.partner_atom_id) {
       // Only reconstruct if both atoms have the same surface orientation
       if partner_orientation == dimer_pair.primary_orientation {
-        apply_dimer_reconstruction(structure, dimer_pair, hydrogen_passivation);
+        apply_dimer_reconstruction(structure, dimer_pair, hydrogen_passivation, params);
         dimer_count += 1;
       }
     }
@@ -903,27 +947,17 @@ pub fn reconstruct_surface(
   hydrogen_passivation: bool,
   invert_phase: bool
 ) -> usize {
-  // Check if we're dealing with cubic diamond - if not, do nothing for now
-  if !is_cubic_diamond(motif, unit_cell, parameter_element_values) {
-    return 0;
-  }
+  let params = match get_reconstruction_params(motif, unit_cell, parameter_element_values) {
+    Some(p) => p,
+    None => return 0,
+  };
 
-  // Perform (100) 2×1 dimer reconstruction for cubic diamond
-  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation, invert_phase)
+  reconstruct_surface_100_diamond_cubic(
+    structure,
+    atom_tracker,
+    single_bond_atoms_already_removed,
+    hydrogen_passivation,
+    invert_phase,
+    params,
+  )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
