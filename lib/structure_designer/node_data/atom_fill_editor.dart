@@ -32,24 +32,47 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
   late bool _invertPhase;
+  bool _definitionDirty = false;
 
-  void _commitChanges({String? parameterElementValueDefinitionOverride}) {
+  bool _hasPendingChanges() {
+    if (widget.data == null) {
+      return false;
+    }
+
+    if (_definitionDirty) {
+      return true;
+    }
+
+    final data = widget.data!;
+    if (_motifOffset != data.motifOffset) {
+      return true;
+    }
+    if (_hydrogenPassivation != data.hydrogenPassivation) {
+      return true;
+    }
+    if (_removeSingleBondAtomsBeforePassivation !=
+        data.removeSingleBondAtomsBeforePassivation) {
+      return true;
+    }
+    if (_surfaceReconstruction != data.surfaceReconstruction) {
+      return true;
+    }
+    if (_invertPhase != data.invertPhase) {
+      return true;
+    }
+
+    return false;
+  }
+
+  void _commitChanges() {
     if (widget.data == null) {
       return;
     }
 
-    final committedDefinition =
-        widget.data?.parameterElementValueDefinition ?? '';
-    final parameterElementValueDefinition =
-        parameterElementValueDefinitionOverride ??
-            (_definitionFocusNode.hasFocus
-                ? committedDefinition
-                : _definitionController.text);
-
     widget.model.setAtomFillData(
       widget.nodeId,
       APIAtomFillData(
-        parameterElementValueDefinition: parameterElementValueDefinition,
+        parameterElementValueDefinition: _definitionController.text,
         motifOffset: _motifOffset,
         hydrogenPassivation: _hydrogenPassivation,
         removeSingleBondAtomsBeforePassivation:
@@ -68,19 +91,33 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       text: widget.data?.parameterElementValueDefinition ?? '',
       // No language specified - will use plain text by default
     );
+    _definitionController.addListener(() {
+      final committed = widget.data?.parameterElementValueDefinition ?? '';
+      final dirty = _definitionController.text != committed;
+      if (dirty == _definitionDirty) {
+        return;
+      }
+      setState(() {
+        _definitionDirty = dirty;
+      });
+    });
     _definitionFocusNode = FocusNode();
     _definitionFocusNode.addListener(() {
       if (_definitionFocusNode.hasFocus) {
         return;
       }
 
-      final oldValue = widget.data?.parameterElementValueDefinition ?? '';
-      if (_definitionController.text == oldValue) {
+      if (!_definitionDirty) {
         return;
       }
 
-      _commitChanges(
-          parameterElementValueDefinitionOverride: _definitionController.text);
+      _commitChanges();
+
+      if (_definitionDirty) {
+        setState(() {
+          _definitionDirty = false;
+        });
+      }
     });
     _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
@@ -98,6 +135,14 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       if (!_definitionFocusNode.hasFocus) {
         _definitionController.text =
             widget.data?.parameterElementValueDefinition ?? '';
+      }
+
+      final dirty = _definitionController.text !=
+          (widget.data?.parameterElementValueDefinition ?? '');
+      if (dirty != _definitionDirty) {
+        setState(() {
+          _definitionDirty = dirty;
+        });
       }
     }
     if (oldWidget.data?.motifOffset != widget.data?.motifOffset) {
@@ -124,9 +169,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
 
   @override
   void dispose() {
-    if (_definitionFocusNode.hasFocus) {
-      _commitChanges(
-          parameterElementValueDefinitionOverride: _definitionController.text);
+    if (_hasPendingChanges()) {
+      _commitChanges();
     }
     _definitionController.dispose();
     _definitionFocusNode.dispose();
@@ -171,11 +215,36 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                       topRight: Radius.circular(4.0),
                     ),
                   ),
-                  child: Text(
-                    'Parameter Element Value Definition',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Parameter Element Value Definition',
+                          style:
+                              Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: 'Apply definition',
+                        child: TextButton.icon(
+                          onPressed: _definitionDirty
+                              ? () {
+                                  _commitChanges();
+                                  setState(() {
+                                    _definitionDirty = false;
+                                  });
+                                }
+                              : null,
+                          icon: const Icon(Icons.check, size: 16),
+                          label: const Text('Apply'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 // Code field
