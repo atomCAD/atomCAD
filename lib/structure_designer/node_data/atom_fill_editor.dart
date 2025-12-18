@@ -33,6 +33,34 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   late bool _surfaceReconstruction;
   late bool _invertPhase;
 
+  void _commitChanges({String? parameterElementValueDefinitionOverride}) {
+    if (widget.data == null) {
+      return;
+    }
+
+    final committedDefinition =
+        widget.data?.parameterElementValueDefinition ?? '';
+    final parameterElementValueDefinition =
+        parameterElementValueDefinitionOverride ??
+            (_definitionFocusNode.hasFocus
+                ? committedDefinition
+                : _definitionController.text);
+
+    widget.model.setAtomFillData(
+      widget.nodeId,
+      APIAtomFillData(
+        parameterElementValueDefinition: parameterElementValueDefinition,
+        motifOffset: _motifOffset,
+        hydrogenPassivation: _hydrogenPassivation,
+        removeSingleBondAtomsBeforePassivation:
+            _removeSingleBondAtomsBeforePassivation,
+        surfaceReconstruction: _surfaceReconstruction,
+        invertPhase: _invertPhase,
+        error: null, // This will be set by the backend after parsing
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +69,19 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       // No language specified - will use plain text by default
     );
     _definitionFocusNode = FocusNode();
+    _definitionFocusNode.addListener(() {
+      if (_definitionFocusNode.hasFocus) {
+        return;
+      }
+
+      final oldValue = widget.data?.parameterElementValueDefinition ?? '';
+      if (_definitionController.text == oldValue) {
+        return;
+      }
+
+      _commitChanges(
+          parameterElementValueDefinitionOverride: _definitionController.text);
+    });
     _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
     _removeSingleBondAtomsBeforePassivation =
@@ -54,8 +95,10 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data?.parameterElementValueDefinition !=
         widget.data?.parameterElementValueDefinition) {
-      _definitionController.text =
-          widget.data?.parameterElementValueDefinition ?? '';
+      if (!_definitionFocusNode.hasFocus) {
+        _definitionController.text =
+            widget.data?.parameterElementValueDefinition ?? '';
+      }
     }
     if (oldWidget.data?.motifOffset != widget.data?.motifOffset) {
       _motifOffset =
@@ -81,25 +124,13 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
 
   @override
   void dispose() {
+    if (_definitionFocusNode.hasFocus) {
+      _commitChanges(
+          parameterElementValueDefinitionOverride: _definitionController.text);
+    }
     _definitionController.dispose();
     _definitionFocusNode.dispose();
     super.dispose();
-  }
-
-  void _applyChanges() {
-    widget.model.setAtomFillData(
-      widget.nodeId,
-      APIAtomFillData(
-        parameterElementValueDefinition: _definitionController.text,
-        motifOffset: _motifOffset,
-        hydrogenPassivation: _hydrogenPassivation,
-        removeSingleBondAtomsBeforePassivation:
-            _removeSingleBondAtomsBeforePassivation,
-        surfaceReconstruction: _surfaceReconstruction,
-        invertPhase: _invertPhase,
-        error: null, // This will be set by the backend after parsing
-      ),
-    );
   }
 
   @override
@@ -186,6 +217,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
               setState(() {
                 _motifOffset = value;
               });
+
+              _commitChanges();
             },
           ),
 
@@ -196,9 +229,12 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
             title: const Text('Remove single-bond atoms'),
             value: _removeSingleBondAtomsBeforePassivation,
             onChanged: (value) {
+              final newValue = value ?? false;
               setState(() {
-                _removeSingleBondAtomsBeforePassivation = value ?? false;
+                _removeSingleBondAtomsBeforePassivation = newValue;
               });
+
+              _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
           ),
@@ -211,9 +247,12 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
             subtitle: const Text('Apply (100) 2×1 dimer reconstruction'),
             value: _surfaceReconstruction,
             onChanged: (value) {
+              final newValue = value ?? false;
               setState(() {
-                _surfaceReconstruction = value ?? false;
+                _surfaceReconstruction = newValue;
               });
+
+              _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
           ),
@@ -225,9 +264,12 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
             subtitle: const Text('Swap the surface reconstruction phase (A/B)'),
             value: _invertPhase,
             onChanged: (value) {
+              final newValue = value ?? false;
               setState(() {
-                _invertPhase = value ?? false;
+                _invertPhase = newValue;
               });
+
+              _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
           ),
@@ -241,23 +283,17 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                 const Text('Add hydrogen atoms to passivate dangling bonds'),
             value: _hydrogenPassivation,
             onChanged: (value) {
+              final newValue = value ?? true;
               setState(() {
-                _hydrogenPassivation = value ?? true;
+                _hydrogenPassivation = newValue;
               });
+
+              _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
           ),
 
           const SizedBox(height: 8),
-
-          // Apply button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _applyChanges,
-              child: const Text('Apply'),
-            ),
-          ),
 
           // Error message display
           if (widget.data?.error != null)
