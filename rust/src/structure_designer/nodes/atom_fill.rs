@@ -34,6 +34,8 @@ pub struct AtomFillData {
   pub remove_single_bond_atoms_before_passivation: bool,
   #[serde(default)]
   pub surface_reconstruction: bool,
+  #[serde(default)]
+  pub invert_phase: bool,
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
@@ -149,6 +151,15 @@ impl NodeData for AtomFillData {
         Err(error) => return error,
       };
 
+      let invert_phase = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 6,
+        self.invert_phase,
+        NetworkResult::extract_bool
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       // Calculate effective parameter element values (fill in defaults for missing values)
       let effective_parameter_values = motif.get_effective_parameter_element_values(&self.parameter_element_values);
 
@@ -165,6 +176,7 @@ impl NodeData for AtomFillData {
         hydrogen_passivation,
         remove_single_bond_atoms,
         reconstruct_surface: surface_reconstruction,
+        invert_phase,
       };
 
       // Define fill region

@@ -346,6 +346,7 @@ pub struct APIAtomFillData {
   pub hydrogen_passivation: bool, // Whether to apply hydrogen passivation
   pub remove_single_bond_atoms_before_passivation: bool, // Whether to remove atoms with exactly one bond before passivation
   pub surface_reconstruction: bool, // Whether to apply surface reconstruction
+  pub invert_phase: bool,
   pub error: Option<String>, // Optional error message from parsing
 }
 

@@ -36,6 +36,7 @@ class APIAtomFillData {
   final bool hydrogenPassivation;
   final bool removeSingleBondAtomsBeforePassivation;
   final bool surfaceReconstruction;
+  final bool invertPhase;
   final String? error;
 
   const APIAtomFillData({
@@ -44,6 +45,7 @@ class APIAtomFillData {
     required this.hydrogenPassivation,
     required this.removeSingleBondAtomsBeforePassivation,
     required this.surfaceReconstruction,
+    required this.invertPhase,
     this.error,
   });
 
@@ -54,6 +56,7 @@ class APIAtomFillData {
       hydrogenPassivation.hashCode ^
       removeSingleBondAtomsBeforePassivation.hashCode ^
       surfaceReconstruction.hashCode ^
+      invertPhase.hashCode ^
       error.hashCode;
 
   @override
@@ -68,6 +71,7 @@ class APIAtomFillData {
           removeSingleBondAtomsBeforePassivation ==
               other.removeSingleBondAtomsBeforePassivation &&
           surfaceReconstruction == other.surfaceReconstruction &&
+          invertPhase == other.invertPhase &&
           error == other.error;
 }
 

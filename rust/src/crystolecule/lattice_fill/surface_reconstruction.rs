@@ -459,7 +459,8 @@ fn surface_orientation_to_index(orientation: SurfaceOrientation) -> Option<usize
 /// * `true` if this is a primary dimer atom for the current phase, `false` otherwise
 fn is_primary_dimer_atom(
   address: &CrystallographicAddress,
-  orientation: SurfaceOrientation
+  orientation: SurfaceOrientation,
+  invert_phase: bool
 ) -> bool {
   // Map orientation to index for lookup tables
   let surf_idx = match surface_orientation_to_index(orientation) {
@@ -497,7 +498,7 @@ fn is_primary_dimer_atom(
   
   // Apply per-layer phase flip (reuse table_idx since it's the same calculation)
   let phase_flip = PHASE_FLIP[table_idx];
-  let final_parity = parity ^ (phase_flip as usize);
+  let final_parity = parity ^ (phase_flip as usize) ^ (invert_phase as usize);
   
   // Primary atoms have parity 0
   final_parity == 0
@@ -556,7 +557,8 @@ fn get_dimer_partner(
 /// * `DimerCandidateData` containing partner orientations and dimer pair candidates
 fn process_atoms(
   structure: &mut AtomicStructure,
-  atom_tracker: &PlacedAtomTracker
+  atom_tracker: &PlacedAtomTracker,
+  invert_phase: bool
 ) -> DimerCandidateData {
   let mut partner_orientations: FxHashMap<u32, SurfaceOrientation> = FxHashMap::default();
   let mut dimer_pairs: Vec<DimerPair> = Vec::new();
@@ -583,7 +585,7 @@ fn process_atoms(
     }
 
     // Check if this is a primary dimer atom
-    if is_primary_dimer_atom(&address, orientation) {
+    if is_primary_dimer_atom(&address, orientation, invert_phase) {
       // Get the dimer partner crystallographic address
       if let Some(partner_address) = get_dimer_partner(&address, orientation) {
         // Look up the partner atom ID
@@ -846,7 +848,8 @@ pub fn reconstruct_surface_100_diamond(
   _unit_cell: &UnitCellStruct,
   _parameter_element_values: &HashMap<String, i16>,
   single_bond_atoms_already_removed: bool,
-  hydrogen_passivation: bool
+  hydrogen_passivation: bool,
+  invert_phase: bool
 ) -> usize {
   // Remove single-bond atoms if they haven't been removed yet
   // This is necessary for proper surface reconstruction
@@ -856,7 +859,7 @@ pub fn reconstruct_surface_100_diamond(
   
   // Step 1: Process atoms - classify orientations and identify dimer candidates
   // Debug visualization is applied during processing if SURFACE_RECONSTRUCTION_VISUAL_DEBUG is true
-  let candidate_data = process_atoms(structure, atom_tracker);
+  let candidate_data = process_atoms(structure, atom_tracker, invert_phase);
 
   // Step 2: Process dimer candidates - validate and apply reconstruction
   let mut dimer_count = 0;
@@ -897,7 +900,8 @@ pub fn reconstruct_surface(
   unit_cell: &UnitCellStruct,
   parameter_element_values: &HashMap<String, i16>,
   single_bond_atoms_already_removed: bool,
-  hydrogen_passivation: bool
+  hydrogen_passivation: bool,
+  invert_phase: bool
 ) -> usize {
   // Check if we're dealing with cubic diamond - if not, do nothing for now
   if !is_cubic_diamond(motif, unit_cell, parameter_element_values) {
@@ -905,7 +909,7 @@ pub fn reconstruct_surface(
   }
 
   // Perform (100) 2×1 dimer reconstruction for cubic diamond
-  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation)
+  reconstruct_surface_100_diamond(structure, atom_tracker, motif, unit_cell, parameter_element_values, single_bond_atoms_already_removed, hydrogen_passivation, invert_phase)
 }
 
 

@@ -1991,6 +1991,7 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
           hydrogen_passivation: atom_fill_data.hydrogen_passivation,
           remove_single_bond_atoms_before_passivation: atom_fill_data.remove_single_bond_atoms_before_passivation,
           surface_reconstruction: atom_fill_data.surface_reconstruction,
+          invert_phase: atom_fill_data.invert_phase,
           error: atom_fill_data.error.clone(),
         })
       },
@@ -2010,6 +2011,7 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                     hydrogen_passivation: data.hydrogen_passivation,
                     remove_single_bond_atoms_before_passivation: data.remove_single_bond_atoms_before_passivation,
                     surface_reconstruction: data.surface_reconstruction,
+                    invert_phase: data.invert_phase,
                     error: None,
                     parameter_element_values: HashMap::new(),
                 });

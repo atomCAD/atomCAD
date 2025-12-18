@@ -4560,6 +4560,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_hydrogenPassivation = <bool>::sse_decode(deserializer);
         let mut var_removeSingleBondAtomsBeforePassivation = <bool>::sse_decode(deserializer);
         let mut var_surfaceReconstruction = <bool>::sse_decode(deserializer);
+        let mut var_invertPhase = <bool>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIAtomFillData {
             parameter_element_value_definition: var_parameterElementValueDefinition,
@@ -4567,6 +4568,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             hydrogen_passivation: var_hydrogenPassivation,
             remove_single_bond_atoms_before_passivation: var_removeSingleBondAtomsBeforePassivation,
             surface_reconstruction: var_surfaceReconstruction,
+            invert_phase: var_invertPhase,
             error: var_error,
         };
     }
@@ -6733,6 +6735,7 @@ impl flutter_rust_bridge::IntoDart
                 .into_into_dart()
                 .into_dart(),
             self.surface_reconstruction.into_into_dart().into_dart(),
+            self.invert_phase.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -8610,6 +8613,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.hydrogen_passivation, serializer);
         <bool>::sse_encode(self.remove_single_bond_atoms_before_passivation, serializer);
         <bool>::sse_encode(self.surface_reconstruction, serializer);
+        <bool>::sse_encode(self.invert_phase, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
     }
 }

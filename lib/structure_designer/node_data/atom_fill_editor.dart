@@ -31,6 +31,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   late bool _hydrogenPassivation;
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
+  late bool _invertPhase;
 
   @override
   void initState() {
@@ -45,6 +46,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     _removeSingleBondAtomsBeforePassivation =
         widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
     _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
+    _invertPhase = widget.data?.invertPhase ?? false;
   }
 
   @override
@@ -72,6 +74,9 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
         widget.data?.surfaceReconstruction) {
       _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
     }
+    if (oldWidget.data?.invertPhase != widget.data?.invertPhase) {
+      _invertPhase = widget.data?.invertPhase ?? false;
+    }
   }
 
   @override
@@ -91,6 +96,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
         removeSingleBondAtomsBeforePassivation:
             _removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: _surfaceReconstruction,
+        invertPhase: _invertPhase,
         error: null, // This will be set by the backend after parsing
       ),
     );
@@ -207,6 +213,20 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
             onChanged: (value) {
               setState(() {
                 _surfaceReconstruction = value ?? false;
+              });
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+
+          const SizedBox(height: 8),
+
+          CheckboxListTile(
+            title: const Text('Invert Phase'),
+            subtitle: const Text('Swap the surface reconstruction phase (A/B)'),
+            value: _invertPhase,
+            onChanged: (value) {
+              setState(() {
+                _invertPhase = value ?? false;
               });
             },
             controlAffinity: ListTileControlAffinity.leading,

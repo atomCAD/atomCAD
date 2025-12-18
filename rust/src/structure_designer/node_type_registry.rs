@@ -1018,6 +1018,10 @@ See the atomCAD reference guide for details on the motif definition language.".t
               name: "surf_recon".to_string(),
               data_type: DataType::Bool,
           },
+          Parameter {
+              name: "invert_phase".to_string(),
+              data_type: DataType::Bool,
+          },
       ],
       output_type: DataType::Atomic,
       public: true,
@@ -1027,6 +1031,7 @@ See the atomCAD reference guide for details on the motif definition language.".t
         hydrogen_passivation: true,
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
+        invert_phase: false,
         error: None,
         parameter_element_values: HashMap::new(),
       }),

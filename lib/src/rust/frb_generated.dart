@@ -5017,15 +5017,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIAtomFillData dco_decode_api_atom_fill_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return APIAtomFillData(
       parameterElementValueDefinition: dco_decode_String(arr[0]),
       motifOffset: dco_decode_api_vec_3(arr[1]),
       hydrogenPassivation: dco_decode_bool(arr[2]),
       removeSingleBondAtomsBeforePassivation: dco_decode_bool(arr[3]),
       surfaceReconstruction: dco_decode_bool(arr[4]),
-      error: dco_decode_opt_String(arr[5]),
+      invertPhase: dco_decode_bool(arr[5]),
+      error: dco_decode_opt_String(arr[6]),
     );
   }
 
@@ -6737,6 +6738,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_removeSingleBondAtomsBeforePassivation =
         sse_decode_bool(deserializer);
     var var_surfaceReconstruction = sse_decode_bool(deserializer);
+    var var_invertPhase = sse_decode_bool(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
     return APIAtomFillData(
         parameterElementValueDefinition: var_parameterElementValueDefinition,
@@ -6745,6 +6747,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         removeSingleBondAtomsBeforePassivation:
             var_removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: var_surfaceReconstruction,
+        invertPhase: var_invertPhase,
         error: var_error);
   }
 
@@ -8769,6 +8772,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.hydrogenPassivation, serializer);
     sse_encode_bool(self.removeSingleBondAtomsBeforePassivation, serializer);
     sse_encode_bool(self.surfaceReconstruction, serializer);
+    sse_encode_bool(self.invertPhase, serializer);
     sse_encode_opt_String(self.error, serializer);
   }
 
