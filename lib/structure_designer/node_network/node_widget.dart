@@ -293,7 +293,7 @@ class NodeWidget extends StatelessWidget {
                 ),
                 PopupMenuItem(
                   value: 'duplicate',
-                  child: Text('Duplicate node'),
+                  child: Text('Duplicate node (Ctrl+D)'),
                 ),
               ],
             ).then((value) {
@@ -561,7 +561,7 @@ class NodeWidget extends StatelessWidget {
         ),
         PopupMenuItem(
           value: 'duplicate',
-          child: Text('Duplicate node'),
+          child: Text('Duplicate node (Ctrl+D)'),
         ),
       ],
     ).then((value) {

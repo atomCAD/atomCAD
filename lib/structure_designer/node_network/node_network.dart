@@ -545,6 +545,21 @@ class NodeNetworkState extends State<NodeNetwork> {
               //    event.logicalKey.toString() +
               //    " event.physicalKey: " +
               //    event.physicalKey.toString());
+              if (event is KeyDownEvent &&
+                  HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyD) {
+                if (model.nodeNetworkView == null) {
+                  return KeyEventResult.ignored;
+                }
+
+                final selectedNodeId = model.getSelectedNodeId();
+                if (selectedNodeId == null) {
+                  return KeyEventResult.ignored;
+                }
+
+                model.duplicateNode(selectedNodeId);
+                return KeyEventResult.handled;
+              }
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
                   event.physicalKey == PhysicalKeyboardKey.delete) {

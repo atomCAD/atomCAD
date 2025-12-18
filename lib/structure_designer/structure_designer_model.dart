@@ -252,6 +252,16 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  BigInt? getSelectedNodeId() {
+    if (nodeNetworkView == null) return null;
+    for (final node in nodeNetworkView!.nodes.values) {
+      if (node.selected) {
+        return node.id;
+      }
+    }
+    return null;
+  }
+
   void renameNodeNetwork(String oldName, String newName) {
     final success = structure_designer_api.renameNodeNetwork(
       oldName: oldName,
@@ -446,6 +456,9 @@ class StructureDesignerModel extends ChangeNotifier {
   BigInt duplicateNode(BigInt nodeId) {
     if (nodeNetworkView == null) return BigInt.zero;
     final newNodeId = structure_designer_api.duplicateNode(nodeId: nodeId);
+    if (newNodeId != BigInt.zero) {
+      structure_designer_api.selectNode(nodeId: newNodeId);
+    }
     refreshFromKernel();
     return newNodeId;
   }
