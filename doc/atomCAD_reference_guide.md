@@ -73,6 +73,14 @@ A structure design consists of node networks. The list of node networks in the c
 
 ![](./atomCAD_images/node_networks_list_panel.png)
 
+Node networks in a design can be browsed in the **List** tab or in the **Tree** tab. Especially in larger designs or in reusable part libraries it is beneficial to organize your node networks in a namespace hierarchy. The hierarchy can be created by simply naming your node networks using the '.' character as a separator.
+
+![](./atomCAD_images/node_networks_tree_panel.png)
+
+> Terminology: a name like `dl.lib.basepoly.cube_centered` is the qualified name of the given node network, while the name `cube_centered` is the simple name of that same node network.
+
+In the node network editor panel: Node titles show only the simple name, with the full qualified name available on hover.
+
 ### Node network editor panel
 
 ![](./atomCAD_images/node_network_editor_panel.png)
@@ -89,10 +97,14 @@ The node network editor canvas can be panned the following way:
 
 If you get lost you can use the *View > Reset node network view* menu item.
 
+The node network can be zoomed using the mouse scroll wheel.
+
 #### Manipulating nodes and wires
 
 **Add nodes**
-Right-click in the node editor to open the **Add Node** menu and add a new node.
+Right-click in the node editor to open the **Add Node** window and add a new node.
+
+![](./atomCAD_images/add_node.png)
 
 **Move nodes**
 Left-click a node and drag to move it.
@@ -120,6 +132,12 @@ This is different for each node, we will discuss this in depth at the specific n
 
 - When dragging the mouse on integer number editor fields the number can be
 incremented or decremented using the moue wheel. Shift + mouse wheel works in 10 increments.
+
+In case no node is selected the description of the active node network can be edited in the node properties panel:
+
+![](./atomCAD_images/network_description.png)
+
+This description will be displayed beside the custom node in the *Add Node* window. 
 
 ### Display Preferences Panel
 
@@ -478,8 +496,15 @@ You can see that the `pattern` custom node in this case has an additional input 
 ### 2D Geometry nodes
 
 These nodes output a 2D geometry which can be used later as an input to an extrude node to create 3d geometry.
-2D geometry nodes are on the XY plane.
 Similarly to the 3D geometry nodes, positions and sizes are usually discrete integer numbers meant in crystal lattice coordinates.
+
+#### drawing_plane
+
+2D geometry nodes are on the XY plane by default. However you can draw on any arbitrary plane by using a `drawing_plane` node and plugging its output into a 2D geometry node's `d_plane` input pin.
+
+![](./atomCAD_images/drawing_plane.png)
+
+2D binary operations can be executed only on 2D shapes on the same drawing plane.
 
 #### rect
 
@@ -576,11 +601,13 @@ Positions and sizes are usually discrete integer numbers meant in crystal lattic
 
 Extrudes a 2D geometry to a 3D geometry.
 
-![](./atomCAD_images/extrude_node.png)
+![](./atomCAD_images/extrude.png)
 
-![](./atomCAD_images/extrude_props.png)
 
-![](./atomCAD_images/extrude_viewport.png)
+
+You can create a finite or infinite extrusion. Infinite extrusion is unbounded both in the positive and negative extrusion direction. Finite extrusions start from the plane and is also finite in the (positive) extrusion direction.
+
+The extrusion direction can be specified as miller indices. The *'Set dir from plane'* button makes the extrusion direction the miller direction of the drawing plane.
 
 
 #### cuboid
@@ -770,9 +797,10 @@ If the geometry cut is done such a way that an atom has no bonds that is removed
 You can switch on or off the following checkboxes:
 
 - *Remove single-bond atoms:* If turned on, atoms which only have one bond after the cut are removed. This is done recursively until there is no such atom in the atomic structure.
-- *Surface reconstruction:* Real crystalline surfaces are rarely ideal bulk terminations; instead, they typically undergo *surface reconstructions* that lower their surface energy. atomCAD will support several reconstruction types depending on the crystal structure. At present, reconstruction is implemented only for **cubic diamond** crystals and only for the most important one: the **(100) 2×1 dimer reconstruction**.
+- *Surface reconstruction:* Real crystalline surfaces are rarely ideal bulk terminations; instead, they typically undergo *surface reconstructions* that lower their surface energy. atomCAD will support several reconstruction types depending on the crystal structure. At present, reconstruction is implemented only for **cubic diamond** crystals (carbon and silicon) and only for the most important one: the **(100) 2×1 dimer reconstruction**.
   If reconstruction is enabled for any other crystal type, the setting has no effect.
   The (100) 2×1 reconstruction automatically removes single-bond (dangling) atoms even if the *Remove single-bond atoms* option is not enabled. Surface reconstruction can be used together with hydrogen passivation or on its own.
+- *Invert phase*: Determines whether the phase of the dimer pattern should be inverted. 
 - *Hydrogen passivation:* Hydrogen atoms are added to passivate dangling bonds created by the cut.
 
 #### atom_trans
