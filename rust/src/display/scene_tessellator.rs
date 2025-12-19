@@ -9,7 +9,8 @@ use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::display::atomic_tessellator;
 use crate::display::surface_point_tessellator;
 use crate::display::poly_mesh_tessellator::{tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh};
-use crate::renderer::tessellator::tessellator::tessellate_cuboid;
+use crate::display::coordinate_system_tessellator;
+use crate::renderer::tessellator::tessellator::{tessellate_cuboid, TessellationOutput};
 use crate::renderer::camera::Camera;
 use glam::f32::Vec3;
 use glam::f64::{DVec3, DQuat};
@@ -21,10 +22,10 @@ pub fn tessellate_scene_content(
     camera: &Camera,
     lightweight: bool,
     preferences: &StructureDesignerPreferences
-) -> (Mesh, Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
+) -> (Mesh, LineMesh, Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
     
     // ===== 1. TESSELLATE LIGHTWEIGHT CONTENT (always) =====
-    let lightweight_mesh = tessellate_lightweight_content(scene, camera, preferences);
+    let (lightweight_mesh, gadget_line_mesh) = tessellate_lightweight_content(scene, camera, preferences);
 
     // ===== 2. TESSELLATE NON-LIGHTWEIGHT CONTENT (when !lightweight) =====
     let (main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
@@ -35,7 +36,7 @@ pub fn tessellate_scene_content(
             (Mesh::new(), LineMesh::new(), AtomImpostorMesh::new(), BondImpostorMesh::new())
         };
     
-    (lightweight_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh)
+    (lightweight_mesh, gadget_line_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh)
 }
 
 /// Tessellates lightweight content (gadget, camera pivot)
@@ -43,13 +44,16 @@ fn tessellate_lightweight_content(
     scene: &StructureDesignerScene,
     camera: &Camera,
     preferences: &StructureDesignerPreferences
-) -> Mesh {
-    let mut lightweight_mesh = Mesh::new();
+) -> (Mesh, LineMesh) {
+    let mut output = TessellationOutput::new();
     
     // Tessellate gadget (tessellatable)
     if let Some(tessellatable) = &scene.tessellatable {
-        tessellatable.tessellate(&mut lightweight_mesh);
+        tessellatable.tessellate(&mut output);
     }
+
+    let mut lightweight_mesh = output.mesh;
+    let gadget_line_mesh = output.line_mesh;
     
     // Tessellate camera pivot point cube if enabled
     if preferences.geometry_visualization_preferences.display_camera_target {
@@ -69,7 +73,7 @@ fn tessellate_lightweight_content(
         );
     }
 
-    lightweight_mesh
+    (lightweight_mesh, gadget_line_mesh)
 }
 
 /// Tessellates non-lightweight content by iterating over node_data HashMap
@@ -154,6 +158,14 @@ fn tessellate_non_lightweight_content(
                         )),
                     );
                 }
+            },
+
+            NodeOutput::DrawingPlane(drawing_plane) => {
+                coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
+                    &mut wireframe_mesh,
+                    drawing_plane,
+                    &preferences.background_preferences,
+                );
             },
             
             NodeOutput::None => {

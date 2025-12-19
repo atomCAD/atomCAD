@@ -8,13 +8,59 @@ import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
-// Node dimensions and layout constants
-const double NODE_WIDTH = 160.0;
-const double NODE_VERT_WIRE_OFFSET = 33.0;
-const double NODE_VERT_WIRE_OFFSET_EMPTY = 42.0;
-const double NODE_VERT_WIRE_OFFSET_FUNCTION_PIN = 16.0;
-const double NODE_VERT_WIRE_OFFSET_PER_PARAM = 22.0;
-const double CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
+// Zoom levels
+enum ZoomLevel {
+  normal,
+  zoomedOutMedium,
+  zoomedOutFar,
+}
+
+/// Returns the scale factor for a given zoom level
+/// This allows most layout constants to scale proportionally
+double getZoomScale(ZoomLevel zoomLevel) {
+  switch (zoomLevel) {
+    case ZoomLevel.normal:
+      return 1.0;
+    case ZoomLevel.zoomedOutMedium:
+      return 0.6;
+    case ZoomLevel.zoomedOutFar:
+      return 0.35;
+  }
+}
+
+// Base node dimensions and layout constants (for normal zoom level)
+// These scale proportionally with zoom level via getZoomScale()
+const double BASE_NODE_WIDTH = 160.0;
+const double BASE_NODE_HEIGHT_MIN = 60.0; // Minimum height for zoomed out nodes
+const double BASE_NODE_VERT_WIRE_OFFSET = 33.0;
+const double BASE_NODE_VERT_WIRE_OFFSET_EMPTY = 42.0;
+const double BASE_NODE_VERT_WIRE_OFFSET_FUNCTION_PIN = 16.0;
+const double BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM = 22.0;
+const double BASE_CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
+const double BASE_ZOOMED_OUT_PIN_SPACING =
+    10.0; // Vertical spacing between input wires in zoomed-out mode
+
+// Legacy constants for backward compatibility (normal zoom)
+const double NODE_WIDTH = BASE_NODE_WIDTH;
+const double NODE_VERT_WIRE_OFFSET = BASE_NODE_VERT_WIRE_OFFSET;
+const double NODE_VERT_WIRE_OFFSET_EMPTY = BASE_NODE_VERT_WIRE_OFFSET_EMPTY;
+const double NODE_VERT_WIRE_OFFSET_FUNCTION_PIN =
+    BASE_NODE_VERT_WIRE_OFFSET_FUNCTION_PIN;
+const double NODE_VERT_WIRE_OFFSET_PER_PARAM =
+    BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+const double CUBIC_SPLINE_HORIZ_OFFSET = BASE_CUBIC_SPLINE_HORIZ_OFFSET;
+
+// Hand-tuned font sizes per zoom level (don't scale linearly)
+double getNodeTitleFontSize(ZoomLevel zoomLevel) {
+  switch (zoomLevel) {
+    case ZoomLevel.normal:
+      return 14.0;
+    case ZoomLevel.zoomedOutMedium:
+      return 11.0;
+    case ZoomLevel.zoomedOutFar:
+      return 8.0;
+  }
+}
 
 // Wire appearance constants
 const double WIRE_WIDTH_SELECTED = 4.0;
@@ -53,6 +99,62 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 };
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
+/// Converts a position from logical space to screen space.
+/// Logical space is the coordinate system where node positions are stored.
+/// Screen space is what's actually rendered on screen.
+///
+/// The transformation is: screen = (logical + panOffset) * scale
+/// where panOffset is stored in logical coordinates.
+Offset logicalToScreen(Offset logical, Offset panOffset, double scale) {
+  return (logical + panOffset) * scale;
+}
+
+/// Converts a position from screen space to logical space.
+/// This is the inverse of logicalToScreen.
+///
+/// The transformation is: logical = (screen / scale) - panOffset
+Offset screenToLogical(Offset screen, Offset panOffset, double scale) {
+  return (screen / scale) - panOffset;
+}
+
+/// Helper function to get node dimensions based on zoom level.
+/// Returns Size(width, height) for the given node at the specified zoom level.
+/// For normal zoom, estimates height including title, pins, and subtitle.
+/// For zoomed-out modes, uses proportionally scaled height with minimum aspect ratio.
+Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
+  final scale = getZoomScale(zoomLevel);
+
+  // Calculate estimated height at normal scale (for all zoom levels)
+  // Title bar: ~30px, main body: max(inputs, output), subtitle: ~20px, padding: ~8px
+  final titleHeight = 30.0;
+  final inputPinsHeight =
+      node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+  final outputHeight = 25.0; // Single output pin height
+  // Main body is a Row, so height = max(left inputs, right output)
+  final mainBodyHeight =
+      inputPinsHeight > outputHeight ? inputPinsHeight : outputHeight;
+  final subtitleHeight =
+      (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
+  final padding = 8.0;
+
+  final normalHeight = titleHeight + mainBodyHeight + subtitleHeight + padding;
+
+  if (zoomLevel == ZoomLevel.normal) {
+    // Normal zoom - use calculated height
+    return Size(BASE_NODE_WIDTH * scale, normalHeight * scale);
+  } else {
+    // Zoomed out - use proportionally scaled height with minimum aspect ratio
+    // Ensure minimum height for text readability (at least 0.375 aspect ratio = height/width)
+    final width = BASE_NODE_WIDTH * scale;
+    final scaledHeight = normalHeight * scale;
+    final minHeight =
+        width * 0.375; // Minimum aspect ratio for at least one line of text
+
+    final height = scaledHeight > minHeight ? scaledHeight : minHeight;
+    return Size(width, height);
+  }
+}
+
 /// Gets the appropriate color for a data type based on its name.
 ///
 /// If the type name contains '->' it's treated as a function type.
@@ -79,13 +181,18 @@ Color getDataTypeColor(String typeName) {
 class NodeNetworkInteractionLayer extends StatelessWidget {
   final StructureDesignerModel model;
   final Offset panOffset;
+  final ZoomLevel zoomLevel;
 
   const NodeNetworkInteractionLayer(
-      {super.key, required this.model, required this.panOffset});
+      {super.key,
+      required this.model,
+      required this.panOffset,
+      required this.zoomLevel});
 
-  /// Handles tap on wires for selection
-  void _handleWireTapDown(TapDownDetails details) {
-    final painter = NodeNetworkPainter(model, panOffset: panOffset);
+  /// Handles tap on wires for selection, or clears selection if clicking empty space
+  void _handleWireTap(TapUpDetails details) {
+    final painter =
+        NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel);
     final hit = painter.findWireAtPosition(details.localPosition);
     if (hit != null) {
       model.setSelectedWire(
@@ -94,16 +201,20 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
         hit.destNodeId,
         hit.destParamIndex,
       );
+    } else {
+      // Clicked on empty space - clear selection
+      model.clearSelection();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: NodeNetworkPainter(model, panOffset: panOffset),
+      painter:
+          NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTapDown: _handleWireTapDown,
+        onTapUp: _handleWireTap,
         child: Container(),
       ),
     );
@@ -126,6 +237,9 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Current pan offset for the network view
   Offset _panOffset = Offset.zero;
+
+  /// Current zoom level
+  ZoomLevel _zoomLevel = ZoomLevel.normal;
 
   /// Store the current network name to detect changes
   String? _currentNetworkName;
@@ -195,23 +309,23 @@ class NodeNetworkState extends State<NodeNetwork> {
   }
 
   /// Checks if the given position is on top of any node
-  /// Adjusts for panning by subtracting the pan offset from the position
+  /// Converts screen position to logical space for hit testing
   bool _isClickOnNode(StructureDesignerModel model, Offset position) {
     if (model.nodeNetworkView == null) return false;
 
-    // Adjust position for pan offset
-    final adjustedPosition = position - _panOffset;
+    // Convert screen position to logical coordinates
+    final scale = getZoomScale(_zoomLevel);
+    final logicalPosition = screenToLogical(position, _panOffset, scale);
 
     for (final node in model.nodeNetworkView!.nodes.values) {
-      final nodeRect = Rect.fromLTWH(
-          node.position.x,
-          node.position.y,
-          NODE_WIDTH,
-          // Approximate height calculation based on number of input pins
-          NODE_VERT_WIRE_OFFSET +
-              (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM));
+      final nodePos = Offset(node.position.x, node.position.y);
+      final nodeSize = getNodeSize(node, _zoomLevel);
+      // Node size is already in screen space, convert to logical space
+      final logicalNodeSize =
+          Size(nodeSize.width / scale, nodeSize.height / scale);
+      final nodeRect = nodePos & logicalNodeSize;
 
-      if (nodeRect.contains(adjustedPosition)) {
+      if (nodeRect.contains(logicalPosition)) {
         return true;
       }
     }
@@ -219,22 +333,23 @@ class NodeNetworkState extends State<NodeNetwork> {
   }
 
   /// Gets the node at the given position, if any
-  /// Accounts for the current pan offset
+  /// Converts screen position to logical space for hit testing
   NodeView? getNodeAtPosition(StructureDesignerModel model, Offset position) {
     if (model.nodeNetworkView == null) return null;
 
-    // Adjust position for pan offset
-    final adjustedPosition = position - _panOffset;
+    // Convert screen position to logical coordinates
+    final scale = getZoomScale(_zoomLevel);
+    final logicalPosition = screenToLogical(position, _panOffset, scale);
 
     for (final node in model.nodeNetworkView!.nodes.values) {
-      final nodeRect = Rect.fromLTWH(
-          node.position.x,
-          node.position.y,
-          NODE_WIDTH,
-          NODE_VERT_WIRE_OFFSET +
-              (node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM));
+      final nodePos = Offset(node.position.x, node.position.y);
+      final nodeSize = getNodeSize(node, _zoomLevel);
+      // Node size is already in screen space, convert to logical space
+      final logicalNodeSize =
+          Size(nodeSize.width / scale, nodeSize.height / scale);
+      final nodeRect = nodePos & logicalNodeSize;
 
-      if (nodeRect.contains(adjustedPosition)) {
+      if (nodeRect.contains(logicalPosition)) {
         return node;
       }
     }
@@ -253,15 +368,17 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (HardwareKeyboard.instance.isShiftPressed) {
       return;
     }
-    
+
     // Only show add node popup if clicked on empty space (not on a node)
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
       String? selectedNode = await showAddNodePopup(context);
       if (selectedNode != null) {
-        // Adjust position for pan offset when creating node
-        final adjustedPosition = details.localPosition - _panOffset;
-        model.createNode(selectedNode, adjustedPosition);
+        // Convert screen position to logical coordinates for node creation
+        final scale = getZoomScale(_zoomLevel);
+        final logicalPosition =
+            screenToLogical(details.localPosition, _panOffset, scale);
+        model.createNode(selectedNode, logicalPosition);
       }
     }
     focusNode.requestFocus();
@@ -278,10 +395,11 @@ class NodeNetworkState extends State<NodeNetwork> {
     // The Stack will handle all the nodes and wires with appropriate transformations
     return [
       // Wire layer at the bottom
-      NodeNetworkInteractionLayer(model: model, panOffset: _panOffset),
+      NodeNetworkInteractionLayer(
+          model: model, panOffset: _panOffset, zoomLevel: _zoomLevel),
       // Then all the nodes on top - NodeWidget now handles its own positioning with panOffset
-      ...model.nodeNetworkView!.nodes.entries
-          .map((entry) => NodeWidget(node: entry.value, panOffset: _panOffset))
+      ...model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(
+          node: entry.value, panOffset: _panOffset, zoomLevel: _zoomLevel))
     ];
   }
 
@@ -295,8 +413,8 @@ class NodeNetworkState extends State<NodeNetwork> {
       });
     }
     // Check for Shift + right mouse button
-    else if (event.buttons == kSecondaryMouseButton && 
-             HardwareKeyboard.instance.isShiftPressed) {
+    else if (event.buttons == kSecondaryMouseButton &&
+        HardwareKeyboard.instance.isShiftPressed) {
       setState(() {
         _isShiftRightMousePanning = true;
         _lastPanPosition = event.position;
@@ -306,9 +424,13 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle pointer move event for panning (middle mouse or Shift + right mouse)
   void _handlePointerMove(PointerMoveEvent event) {
-    if ((_isMiddleMousePanning || _isShiftRightMousePanning) && _lastPanPosition != null) {
+    if ((_isMiddleMousePanning || _isShiftRightMousePanning) &&
+        _lastPanPosition != null) {
       setState(() {
-        _panOffset += event.position - _lastPanPosition!;
+        // Convert screen-space delta to logical-space delta
+        final scale = getZoomScale(_zoomLevel);
+        final screenDelta = event.position - _lastPanPosition!;
+        _panOffset += screenDelta / scale;
         _lastPanPosition = event.position;
       });
     }
@@ -333,10 +455,12 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Handle trackpad/Magic Mouse pan-zoom updates for panning
   void _handlePointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
     // Only handle panning when Shift is pressed
-    if (HardwareKeyboard.instance.isShiftPressed && 
+    if (HardwareKeyboard.instance.isShiftPressed &&
         (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
       setState(() {
-        _panOffset += event.panDelta;
+        // Convert screen-space delta to logical-space delta
+        final scale = getZoomScale(_zoomLevel);
+        _panOffset += event.panDelta / scale;
       });
     }
   }
@@ -344,6 +468,59 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Handle trackpad/Magic Mouse pan-zoom end
   void _handlePointerPanZoomEnd(PointerPanZoomEndEvent event) {
     // Clean up pan-zoom gesture if needed
+  }
+
+  /// Handle mouse scroll for zooming with zoom-to-cursor behavior
+  void _handlePointerScroll(PointerScrollEvent event) {
+    // Determine new zoom level
+    ZoomLevel newZoomLevel = _zoomLevel;
+
+    if (event.scrollDelta.dy > 0) {
+      // Zoom out
+      switch (_zoomLevel) {
+        case ZoomLevel.normal:
+          newZoomLevel = ZoomLevel.zoomedOutMedium;
+          break;
+        case ZoomLevel.zoomedOutMedium:
+          newZoomLevel = ZoomLevel.zoomedOutFar;
+          break;
+        case ZoomLevel.zoomedOutFar:
+          return; // Already at max zoom out
+      }
+    } else if (event.scrollDelta.dy < 0) {
+      // Zoom in
+      switch (_zoomLevel) {
+        case ZoomLevel.normal:
+          return; // Already at max zoom in
+        case ZoomLevel.zoomedOutMedium:
+          newZoomLevel = ZoomLevel.normal;
+          break;
+        case ZoomLevel.zoomedOutFar:
+          newZoomLevel = ZoomLevel.zoomedOutMedium;
+          break;
+      }
+    } else {
+      return;
+    }
+
+    // Calculate new pan offset to keep cursor position fixed
+    // The point under the cursor in logical space should remain under the cursor
+    final oldScale = getZoomScale(_zoomLevel);
+    final newScale = getZoomScale(newZoomLevel);
+
+    // Convert cursor position from screen to logical coordinates
+    final cursorScreen = event.localPosition;
+    final cursorLogical = screenToLogical(cursorScreen, _panOffset, oldScale);
+
+    // Calculate new pan offset so that cursorLogical maps back to cursorScreen
+    // cursorScreen = (cursorLogical + newPanOffset) * newScale
+    // newPanOffset = (cursorScreen / newScale) - cursorLogical
+    final newPanOffset = (cursorScreen / newScale) - cursorLogical;
+
+    setState(() {
+      _zoomLevel = newZoomLevel;
+      _panOffset = newPanOffset;
+    });
   }
 
   @override
@@ -364,13 +541,38 @@ class NodeNetworkState extends State<NodeNetwork> {
             focusNode: focusNode,
             autofocus: true,
             onKeyEvent: (node, event) {
+              // Only handle node-network shortcuts when this focus node is the primary focus.
+              // This prevents interfering with text input fields in sibling panels.
+              if (FocusManager.instance.primaryFocus != focusNode) {
+                return KeyEventResult.ignored;
+              }
+
+              // Only act on key down to avoid double-triggering on key up and to reduce
+              // the risk of triggering platform-specific HardwareKeyboard inconsistencies.
+              if (event is! KeyDownEvent) {
+                return KeyEventResult.ignored;
+              }
+
               //print("node_network.dart event.logicalKey: " +
               //    event.logicalKey.toString() +
               //    " event.physicalKey: " +
               //    event.physicalKey.toString());
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyD) {
+                if (model.nodeNetworkView == null) {
+                  return KeyEventResult.ignored;
+                }
+
+                final selectedNodeId = model.getSelectedNodeId();
+                if (selectedNodeId == null) {
+                  return KeyEventResult.ignored;
+                }
+
+                model.duplicateNode(selectedNodeId);
+                return KeyEventResult.handled;
+              }
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
-                  event.logicalKey == LogicalKeyboardKey.keyD ||
                   event.physicalKey == PhysicalKeyboardKey.delete) {
                 model.removeSelected();
                 return KeyEventResult.handled;
@@ -387,6 +589,11 @@ class NodeNetworkState extends State<NodeNetwork> {
                 onPointerDown: _handlePointerDown,
                 onPointerMove: _handlePointerMove,
                 onPointerUp: _handlePointerUp,
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    _handlePointerScroll(event);
+                  }
+                },
                 onPointerPanZoomStart: _handlePointerPanZoomStart,
                 onPointerPanZoomUpdate: _handlePointerPanZoomUpdate,
                 onPointerPanZoomEnd: _handlePointerPanZoomEnd,

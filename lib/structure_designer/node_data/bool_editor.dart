@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for bool nodes
 class BoolEditor extends StatefulWidget {
@@ -33,8 +34,10 @@ class BoolEditorState extends State<BoolEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Bool Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Bool Properties',
+            nodeTypeName: 'bool',
+          ),
           const SizedBox(height: 8),
           CheckboxListTile(
             title: const Text('Value'),

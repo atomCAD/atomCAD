@@ -110,8 +110,8 @@ impl ImplicitGeometry3D for GeoNode {
       GeoNodeKind::Sphere { center, radius } => {
         Self::sphere_implicit_eval(*center, *radius, sample_point)
       }
-      GeoNodeKind::Extrude { height, direction, shape } => {
-        Self::extrude_implicit_eval(*height, *direction, shape, sample_point)
+      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite } => {
+        Self::extrude_implicit_eval(*height, *direction, shape, plane_to_world_transform, *infinite, sample_point)
       }
       GeoNodeKind::Transform { transform, shape } => {
         Self::transform_implicit_eval(transform, shape, sample_point)
@@ -138,8 +138,8 @@ impl ImplicitGeometry3D for GeoNode {
       GeoNodeKind::Sphere { center, radius } => {
         Self::sphere_implicit_eval_batch(*center, *radius, sample_points, results)
       }
-      GeoNodeKind::Extrude { height, direction, shape } => {
-        Self::extrude_implicit_eval_batch(*height, *direction, shape, sample_points, results)
+      GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite } => {
+        Self::extrude_implicit_eval_batch(*height, *direction, shape, plane_to_world_transform, *infinite, sample_points, results)
       }
       GeoNodeKind::Transform { transform, shape } => {
         Self::transform_implicit_eval_batch(transform, shape, sample_points, results)
@@ -367,18 +367,31 @@ impl GeoNode {
     false
   }
 
-  fn extrude_implicit_eval(height: f64, direction: DVec3, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
-    // Calculate Z bounds constraint (extrusion is along Z axis from 0 to height)
-    let height_z = direction.z * height;
-    let z_val = f64::max(-sample_point.z, sample_point.z - height_z);
-    
-    // Evaluate the 2D shape in the XY plane
+  fn extrude_implicit_eval(
+      height: f64, 
+      direction: DVec3, 
+      shape: &Box<GeoNode>, 
+      plane_to_world_transform: &Transform,
+      infinite: bool,
+      sample_point: &DVec3
+  ) -> f64 {
+    // Transform sample point from world space to plane-local space
+    let world_to_plane = plane_to_world_transform.inverse();
+    let local_point = world_to_plane.apply_to_position(sample_point);
 
-    let sample_horizontal_displacement = DVec2::new(direction.x, direction.y) * sample_point.z / direction.z;
-
-    let sample_point_2d = DVec2::new(sample_point.x, sample_point.y) - sample_horizontal_displacement;
+    // Evaluate the 2D shape in the XY plane (plane-local coordinates)
+    let sample_horizontal_displacement = DVec2::new(direction.x, direction.y) * local_point.z / direction.z;
+    let sample_point_2d = DVec2::new(local_point.x, local_point.y) - sample_horizontal_displacement;
     let input_val = shape.implicit_eval_2d(&sample_point_2d);
-    
+
+    if infinite {
+      return input_val;
+    }
+
+    // Calculate Z bounds constraint (extrusion is along local Z axis from 0 to height)
+    let height_z = direction.z * height;
+    let z_val = f64::max(-local_point.z, local_point.z - height_z);
+
     // Return the maximum of Z constraint and 2D shape evaluation
     f64::max(z_val, input_val)
   }
@@ -387,34 +400,47 @@ impl GeoNode {
     height: f64, 
     direction: DVec3, 
     shape: &Box<GeoNode>, 
+    plane_to_world_transform: &Transform,
+    infinite: bool,
     sample_points: &[DVec3; BATCH_SIZE], 
     results: &mut [f64; BATCH_SIZE]
   ) {
+    // Transform sample points from world space to plane-local space
+    let world_to_plane = plane_to_world_transform.inverse();
+    let mut local_points = [DVec3::ZERO; BATCH_SIZE];
+    for i in 0..BATCH_SIZE {
+      local_points[i] = world_to_plane.apply_to_position(&sample_points[i]);
+    }
+    
     // Pre-calculate constants
-    let height_z = direction.z * height;
     let horizontal_direction = DVec2::new(direction.x, direction.y);
     let inv_direction_z = 1.0 / direction.z;
     
     // Prepare 2D sample points for batch evaluation
     let mut sample_points_2d = [DVec2::ZERO; BATCH_SIZE];
-    let mut z_constraints = [0.0; BATCH_SIZE];
     
     for i in 0..BATCH_SIZE {
-      // Calculate Z bounds constraint
-      z_constraints[i] = f64::max(-sample_points[i].z, sample_points[i].z - height_z);
-      
-      // Project 3D point to 2D for shape evaluation
-      let sample_horizontal_displacement = horizontal_direction * sample_points[i].z * inv_direction_z;
-      sample_points_2d[i] = DVec2::new(sample_points[i].x, sample_points[i].y) - sample_horizontal_displacement;
+      // Project 3D point to 2D for shape evaluation in plane-local coordinates
+      let sample_horizontal_displacement = horizontal_direction * local_points[i].z * inv_direction_z;
+      sample_points_2d[i] = DVec2::new(local_points[i].x, local_points[i].y) - sample_horizontal_displacement;
     }
     
     // Evaluate 2D shape in batch
     let mut shape_results = [0.0; BATCH_SIZE];
     shape.implicit_eval_2d_batch(&sample_points_2d, &mut shape_results);
-    
+
+    if infinite {
+      for i in 0..BATCH_SIZE {
+        results[i] = shape_results[i];
+      }
+      return;
+    }
+
     // Combine Z constraint and 2D shape evaluation
+    let height_z = direction.z * height;
     for i in 0..BATCH_SIZE {
-      results[i] = f64::max(z_constraints[i], shape_results[i]);
+      let z_constraint = f64::max(-local_points[i].z, local_points[i].z - height_z);
+      results[i] = f64::max(z_constraint, shape_results[i]);
     }
   }
 

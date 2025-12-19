@@ -63,7 +63,8 @@ pub fn calculate_half_space_geometry(
     let center_pos = unit_cell.ivec3_lattice_to_real(center);
     
     // Get crystallographically correct plane properties (normal and d-spacing)
-    let plane_props = unit_cell.ivec3_miller_index_to_plane_props(miller_index);
+    let plane_props = unit_cell.ivec3_miller_index_to_plane_props(miller_index)
+        .expect("Miller index should be valid for gadget rendering");
     
     // Calculate shift distance as multiples of d-spacing, divided by subdivision
     // When subdivision=1, this is identical to the original: (shift / 1) * d_spacing = shift * d_spacing
@@ -87,7 +88,8 @@ pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, cente
     let center_pos = unit_cell.ivec3_lattice_to_real(center);
     
     // Get crystallographically correct plane properties (normal and d-spacing)
-    let plane_props = unit_cell.ivec3_miller_index_to_plane_props(miller_index);
+    let plane_props = unit_cell.ivec3_miller_index_to_plane_props(miller_index)
+        .expect("Miller index should be valid for drag operations");
 
     // Find where on the 'normal ray' the mouse ray is closest (in real space)
     let distance_along_normal = get_closest_point_on_first_ray(
@@ -219,7 +221,8 @@ pub fn tessellate_miller_indices_discs(
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
         // Get the crystallographically correct plane normal for this miller index
-        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index);
+        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index)
+            .expect("Miller index should be valid for gadget tessellation");
 
         // Calculate the position for the disc
         let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;
@@ -354,7 +357,8 @@ pub fn hit_test_miller_indices_discs(
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
         // Get the crystallographically correct plane normal for this miller index
-        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index);
+        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index)
+            .expect("Miller index should be valid for gadget hit testing");
             
         // Calculate the position for the disc
         let disc_center = *center_pos + direction * MILLER_INDEX_DISC_DISTANCE;

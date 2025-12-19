@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/crystal_system_display.dart';
 
 /// Editor widget for lattice_symop nodes
@@ -115,8 +116,10 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Lattice Symmetry Operation Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Lattice Symmetry Operation Properties',
+            nodeTypeName: 'lattice_symop',
+          ),
           const SizedBox(height: 16),
           
           // Crystal system display

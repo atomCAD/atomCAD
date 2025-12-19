@@ -146,7 +146,8 @@ pub fn fill_lattice(
         &config.unit_cell, 
         &config.parameter_element_values,
         options.remove_single_bond_atoms,
-        options.hydrogen_passivation
+        options.hydrogen_passivation,
+        options.invert_phase
       );
       statistics.surface_reconstructions = reconstruction_count as i32;
     }

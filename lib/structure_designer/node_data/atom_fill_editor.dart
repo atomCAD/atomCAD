@@ -3,6 +3,7 @@ import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:code_text_field/code_text_field.dart';
 import 'package:flutter_highlight/themes/github.dart';
 
@@ -30,6 +31,58 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   late bool _hydrogenPassivation;
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
+  late bool _invertPhase;
+  bool _definitionDirty = false;
+
+  bool _hasPendingChanges() {
+    if (widget.data == null) {
+      return false;
+    }
+
+    if (_definitionDirty) {
+      return true;
+    }
+
+    final data = widget.data!;
+    if (_motifOffset != data.motifOffset) {
+      return true;
+    }
+    if (_hydrogenPassivation != data.hydrogenPassivation) {
+      return true;
+    }
+    if (_removeSingleBondAtomsBeforePassivation !=
+        data.removeSingleBondAtomsBeforePassivation) {
+      return true;
+    }
+    if (_surfaceReconstruction != data.surfaceReconstruction) {
+      return true;
+    }
+    if (_invertPhase != data.invertPhase) {
+      return true;
+    }
+
+    return false;
+  }
+
+  void _commitChanges() {
+    if (widget.data == null) {
+      return;
+    }
+
+    widget.model.setAtomFillData(
+      widget.nodeId,
+      APIAtomFillData(
+        parameterElementValueDefinition: _definitionController.text,
+        motifOffset: _motifOffset,
+        hydrogenPassivation: _hydrogenPassivation,
+        removeSingleBondAtomsBeforePassivation:
+            _removeSingleBondAtomsBeforePassivation,
+        surfaceReconstruction: _surfaceReconstruction,
+        invertPhase: _invertPhase,
+        error: null, // This will be set by the backend after parsing
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -38,12 +91,40 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       text: widget.data?.parameterElementValueDefinition ?? '',
       // No language specified - will use plain text by default
     );
+    _definitionController.addListener(() {
+      final committed = widget.data?.parameterElementValueDefinition ?? '';
+      final dirty = _definitionController.text != committed;
+      if (dirty == _definitionDirty) {
+        return;
+      }
+      setState(() {
+        _definitionDirty = dirty;
+      });
+    });
     _definitionFocusNode = FocusNode();
+    _definitionFocusNode.addListener(() {
+      if (_definitionFocusNode.hasFocus) {
+        return;
+      }
+
+      if (!_definitionDirty) {
+        return;
+      }
+
+      _commitChanges();
+
+      if (_definitionDirty) {
+        setState(() {
+          _definitionDirty = false;
+        });
+      }
+    });
     _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
     _removeSingleBondAtomsBeforePassivation =
         widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
     _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
+    _invertPhase = widget.data?.invertPhase ?? false;
   }
 
   @override
@@ -51,8 +132,18 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data?.parameterElementValueDefinition !=
         widget.data?.parameterElementValueDefinition) {
-      _definitionController.text =
-          widget.data?.parameterElementValueDefinition ?? '';
+      if (!_definitionFocusNode.hasFocus) {
+        _definitionController.text =
+            widget.data?.parameterElementValueDefinition ?? '';
+      }
+
+      final dirty = _definitionController.text !=
+          (widget.data?.parameterElementValueDefinition ?? '');
+      if (dirty != _definitionDirty) {
+        setState(() {
+          _definitionDirty = dirty;
+        });
+      }
     }
     if (oldWidget.data?.motifOffset != widget.data?.motifOffset) {
       _motifOffset =
@@ -71,28 +162,19 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
         widget.data?.surfaceReconstruction) {
       _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
     }
+    if (oldWidget.data?.invertPhase != widget.data?.invertPhase) {
+      _invertPhase = widget.data?.invertPhase ?? false;
+    }
   }
 
   @override
   void dispose() {
+    if (_hasPendingChanges()) {
+      _commitChanges();
+    }
     _definitionController.dispose();
     _definitionFocusNode.dispose();
     super.dispose();
-  }
-
-  void _applyChanges() {
-    widget.model.setAtomFillData(
-      widget.nodeId,
-      APIAtomFillData(
-        parameterElementValueDefinition: _definitionController.text,
-        motifOffset: _motifOffset,
-        hydrogenPassivation: _hydrogenPassivation,
-        removeSingleBondAtomsBeforePassivation:
-            _removeSingleBondAtomsBeforePassivation,
-        surfaceReconstruction: _surfaceReconstruction,
-        error: null, // This will be set by the backend after parsing
-      ),
-    );
   }
 
   @override
@@ -106,8 +188,10 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('AtomFill Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Atom Fill Properties',
+            nodeTypeName: 'atom_fill',
+          ),
           const SizedBox(height: 8),
 
           // Parameter Element Value Definition text area with line numbers
@@ -131,11 +215,36 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                       topRight: Radius.circular(4.0),
                     ),
                   ),
-                  child: Text(
-                    'Parameter Element Value Definition',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Parameter Element Value Definition',
+                          style:
+                              Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: 'Apply definition',
+                        child: TextButton.icon(
+                          onPressed: _definitionDirty
+                              ? () {
+                                  _commitChanges();
+                                  setState(() {
+                                    _definitionDirty = false;
+                                  });
+                                }
+                              : null,
+                          icon: const Icon(Icons.check, size: 16),
+                          label: const Text('Apply'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 // Code field
@@ -177,6 +286,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
               setState(() {
                 _motifOffset = value;
               });
+
+              _commitChanges();
             },
           ),
 
@@ -187,9 +298,12 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
             title: const Text('Remove single-bond atoms'),
             value: _removeSingleBondAtomsBeforePassivation,
             onChanged: (value) {
+              final newValue = value ?? false;
               setState(() {
-                _removeSingleBondAtomsBeforePassivation = value ?? false;
+                _removeSingleBondAtomsBeforePassivation = newValue;
               });
+
+              _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
           ),
@@ -202,9 +316,29 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
             subtitle: const Text('Apply (100) 2×1 dimer reconstruction'),
             value: _surfaceReconstruction,
             onChanged: (value) {
+              final newValue = value ?? false;
               setState(() {
-                _surfaceReconstruction = value ?? false;
+                _surfaceReconstruction = newValue;
               });
+
+              _commitChanges();
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+
+          const SizedBox(height: 8),
+
+          CheckboxListTile(
+            title: const Text('Invert Phase'),
+            subtitle: const Text('Swap the surface reconstruction phase (A/B)'),
+            value: _invertPhase,
+            onChanged: (value) {
+              final newValue = value ?? false;
+              setState(() {
+                _invertPhase = newValue;
+              });
+
+              _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
           ),
@@ -218,23 +352,17 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
                 const Text('Add hydrogen atoms to passivate dangling bonds'),
             value: _hydrogenPassivation,
             onChanged: (value) {
+              final newValue = value ?? true;
               setState(() {
-                _hydrogenPassivation = value ?? true;
+                _hydrogenPassivation = newValue;
               });
+
+              _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
           ),
 
           const SizedBox(height: 8),
-
-          // Apply button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _applyChanges,
-              child: const Text('Apply'),
-            ),
-          ),
 
           // Error message display
           if (widget.data?.error != null)

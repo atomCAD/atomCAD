@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::expr::expr::*;
+use rust_lib_flutter_cad::expr::expr::{Expr, BinOp};
 use rust_lib_flutter_cad::expr::validation::{get_function_signatures, get_function_implementations};
 use std::collections::HashMap;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;

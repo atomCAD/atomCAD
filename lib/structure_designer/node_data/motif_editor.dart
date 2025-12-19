@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:code_text_field/code_text_field.dart';
 import 'package:flutter_highlight/themes/github.dart';
 
@@ -83,8 +84,10 @@ class _MotifEditorState extends State<MotifEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Motif Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Motif Properties',
+            nodeTypeName: 'motif',
+          ),
           const SizedBox(height: 8),
 
           // Name input

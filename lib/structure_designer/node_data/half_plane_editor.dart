@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/inputs/ivec2_input.dart';
 import 'dart:math' show gcd;
 
@@ -63,8 +64,10 @@ class HalfPlaneEditorState extends State<HalfPlaneEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Half Plane Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Half Plane Properties',
+            nodeTypeName: 'half_plane',
+          ),
           const SizedBox(height: 16),
           IVec2Input(
             label: 'Point 1',

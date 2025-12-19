@@ -70,6 +70,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDataTypeBase dco_decode_api_data_type_base(dynamic raw);
 
   @protected
+  APIDrawingPlaneData dco_decode_api_drawing_plane_data(dynamic raw);
+
+  @protected
   APIEditAtomData dco_decode_api_edit_atom_data(dynamic raw);
 
   @protected
@@ -129,6 +132,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APINetworkWithValidationErrors dco_decode_api_network_with_validation_errors(
       dynamic raw);
+
+  @protected
+  APINodeCategoryView dco_decode_api_node_category_view(dynamic raw);
 
   @protected
   APINodeTypeView dco_decode_api_node_type_view(dynamic raw);
@@ -230,6 +236,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType dco_decode_box_autoadd_api_data_type(dynamic raw);
+
+  @protected
+  APIDrawingPlaneData dco_decode_box_autoadd_api_drawing_plane_data(
+      dynamic raw);
 
   @protected
   APIEditAtomData dco_decode_box_autoadd_api_edit_atom_data(dynamic raw);
@@ -401,6 +411,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_list_api_network_with_validation_errors(dynamic raw);
 
   @protected
+  List<APINodeCategoryView> dco_decode_list_api_node_category_view(dynamic raw);
+
+  @protected
   List<APINodeTypeView> dco_decode_list_api_node_type_view(dynamic raw);
 
   @protected
@@ -438,6 +451,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView dco_decode_node_network_view(dynamic raw);
 
   @protected
+  NodeTypeCategory dco_decode_node_type_category(dynamic raw);
+
+  @protected
   NodeView dco_decode_node_view(dynamic raw);
 
   @protected
@@ -466,6 +482,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType? dco_decode_opt_box_autoadd_api_data_type(dynamic raw);
+
+  @protected
+  APIDrawingPlaneData? dco_decode_opt_box_autoadd_api_drawing_plane_data(
+      dynamic raw);
 
   @protected
   APIEditAtomData? dco_decode_opt_box_autoadd_api_edit_atom_data(dynamic raw);
@@ -559,6 +579,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIVec2Data? dco_decode_opt_box_autoadd_apii_vec_2_data(dynamic raw);
 
   @protected
+  APIIVec3? dco_decode_opt_box_autoadd_apii_vec_3(dynamic raw);
+
+  @protected
   APIIVec3Data? dco_decode_opt_box_autoadd_apii_vec_3_data(dynamic raw);
 
   @protected
@@ -594,7 +617,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_opt_list_api_network_with_validation_errors(dynamic raw);
 
   @protected
-  List<APINodeTypeView>? dco_decode_opt_list_api_node_type_view(dynamic raw);
+  List<APINodeCategoryView>? dco_decode_opt_list_api_node_category_view(
+      dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -673,6 +697,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDataTypeBase sse_decode_api_data_type_base(SseDeserializer deserializer);
 
   @protected
+  APIDrawingPlaneData sse_decode_api_drawing_plane_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIEditAtomData sse_decode_api_edit_atom_data(SseDeserializer deserializer);
 
   @protected
@@ -735,6 +763,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
+      SseDeserializer deserializer);
+
+  @protected
+  APINodeCategoryView sse_decode_api_node_category_view(
       SseDeserializer deserializer);
 
   @protected
@@ -847,6 +879,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType sse_decode_box_autoadd_api_data_type(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDrawingPlaneData sse_decode_box_autoadd_api_drawing_plane_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1052,6 +1088,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  List<APINodeCategoryView> sse_decode_list_api_node_category_view(
+      SseDeserializer deserializer);
+
+  @protected
   List<APINodeTypeView> sse_decode_list_api_node_type_view(
       SseDeserializer deserializer);
 
@@ -1096,6 +1136,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView sse_decode_node_network_view(SseDeserializer deserializer);
 
   @protected
+  NodeTypeCategory sse_decode_node_type_category(SseDeserializer deserializer);
+
+  @protected
   NodeView sse_decode_node_view(SseDeserializer deserializer);
 
   @protected
@@ -1131,6 +1174,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType? sse_decode_opt_box_autoadd_api_data_type(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDrawingPlaneData? sse_decode_opt_box_autoadd_api_drawing_plane_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1249,6 +1296,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIIVec3? sse_decode_opt_box_autoadd_apii_vec_3(SseDeserializer deserializer);
+
+  @protected
   APIIVec3Data? sse_decode_opt_box_autoadd_apii_vec_3_data(
       SseDeserializer deserializer);
 
@@ -1288,7 +1338,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
-  List<APINodeTypeView>? sse_decode_opt_list_api_node_type_view(
+  List<APINodeCategoryView>? sse_decode_opt_list_api_node_category_view(
       SseDeserializer deserializer);
 
   @protected
@@ -1374,6 +1424,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIDataTypeBase self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_drawing_plane_data(
+      APIDrawingPlaneData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_edit_atom_data(
       APIEditAtomData self, SseSerializer serializer);
 
@@ -1446,6 +1500,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_network_with_validation_errors(
       APINetworkWithValidationErrors self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_category_view(
+      APINodeCategoryView self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_node_type_view(
@@ -1563,6 +1621,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_data_type(
       APIDataType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_drawing_plane_data(
+      APIDrawingPlaneData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_edit_atom_data(
@@ -1770,6 +1832,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINetworkWithValidationErrors> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_node_category_view(
+      List<APINodeCategoryView> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_node_type_view(
       List<APINodeTypeView> self, SseSerializer serializer);
 
@@ -1816,6 +1882,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView self, SseSerializer serializer);
 
   @protected
+  void sse_encode_node_type_category(
+      NodeTypeCategory self, SseSerializer serializer);
+
+  @protected
   void sse_encode_node_view(NodeView self, SseSerializer serializer);
 
   @protected
@@ -1852,6 +1922,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_data_type(
       APIDataType? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_drawing_plane_data(
+      APIDrawingPlaneData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_edit_atom_data(
@@ -1970,6 +2044,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIIVec2Data? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_apii_vec_3(
+      APIIVec3? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_apii_vec_3_data(
       APIIVec3Data? self, SseSerializer serializer);
 
@@ -2007,8 +2085,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINetworkWithValidationErrors>? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_list_api_node_type_view(
-      List<APINodeTypeView>? self, SseSerializer serializer);
+  void sse_encode_opt_list_api_node_category_view(
+      List<APINodeCategoryView>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

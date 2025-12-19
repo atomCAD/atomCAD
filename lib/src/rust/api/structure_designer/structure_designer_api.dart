@@ -49,11 +49,33 @@ void connectNodes(
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
-List<APINodeTypeView>? getNodeTypeViews() => RustLib.instance.api
+List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews();
 
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
+
+/// Checks if a node type name corresponds to a custom node (i.e., a user-defined node network).
+/// Returns false if the CAD instance is not available.
+bool isCustomNodeType({required String nodeTypeName}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiIsCustomNodeType(
+        nodeTypeName: nodeTypeName);
+
+/// Gets the description of the active node network
+String? getActiveNetworkDescription() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetActiveNetworkDescription();
+
+/// Sets the description of the active node network
+void setActiveNetworkDescription({required String description}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiSetActiveNetworkDescription(
+        description: description);
+
+/// Gets the description of a specific node network
+String? getNetworkDescription({required String networkName}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetNetworkDescription(
+        networkName: networkName);
 
 List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
     .instance.api
@@ -66,6 +88,22 @@ void setActiveNodeNetwork({required String nodeNetworkName}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiSetActiveNodeNetwork(
         nodeNetworkName: nodeNetworkName);
+
+/// Navigates back in node network history
+bool navigateBack() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiNavigateBack();
+
+/// Navigates forward in node network history
+bool navigateForward() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiNavigateForward();
+
+/// Checks if we can navigate backward in node network history
+bool canNavigateBack() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCanNavigateBack();
+
+/// Checks if we can navigate forward in node network history
+bool canNavigateForward() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCanNavigateForward();
 
 bool renameNodeNetwork({required String oldName, required String newName}) =>
     RustLib.instance.api
@@ -103,6 +141,11 @@ void clearSelection() => RustLib.instance.api
 APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetExtrudeData(
         nodeId: nodeId);
+
+APIIVec3? getExtrudeDrawingPlaneMillerDirection({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetExtrudeDrawingPlaneMillerDirection(
+            nodeId: nodeId);
 
 APIIntData? getIntData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetIntData(nodeId: nodeId);
@@ -170,6 +213,11 @@ APIHalfSpaceData? getHalfSpaceData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetHalfSpaceData(
         nodeId: nodeId);
+
+APIDrawingPlaneData? getDrawingPlaneData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetDrawingPlaneData(
+            nodeId: nodeId);
 
 APIGeoTransData? getGeoTransData({required BigInt nodeId}) =>
     RustLib.instance.api
@@ -300,6 +348,12 @@ void setHalfSpaceData(
         {required BigInt nodeId, required APIHalfSpaceData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetHalfSpaceData(
+            nodeId: nodeId, data: data);
+
+void setDrawingPlaneData(
+        {required BigInt nodeId, required APIDrawingPlaneData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetDrawingPlaneData(
             nodeId: nodeId, data: data);
 
 void setGeoTransData({required BigInt nodeId, required APIGeoTransData data}) =>

@@ -7,6 +7,7 @@ use std::any::Any;
 use crate::display::poly_mesh::PolyMesh;
 use crate::geo_tree::GeoNode;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 
@@ -24,6 +25,9 @@ pub enum NodeOutput {
     
     /// Explicit polygon mesh (from geometry conversion)
     PolyMesh(PolyMesh),
+
+    /// Drawing plane (from drawing plane nodes)
+    DrawingPlane(DrawingPlane),
     
     /// No explicit output (for nodes that don't produce displayable results)
     None,
@@ -186,6 +190,7 @@ impl MemorySizeEstimator for NodeOutput {
             NodeOutput::SurfacePointCloud(point_cloud) => point_cloud.estimate_memory_bytes(),
             NodeOutput::SurfacePointCloud2D(point_cloud_2d) => point_cloud_2d.estimate_memory_bytes(),
             NodeOutput::PolyMesh(poly_mesh) => poly_mesh.estimate_memory_bytes(),
+            NodeOutput::DrawingPlane(_drawing_plane) => std::mem::size_of::<DrawingPlane>(),
             NodeOutput::None => 0,
         };
         

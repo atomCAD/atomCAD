@@ -5,7 +5,7 @@ use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
 use crate::util::serialization_utils::dvec3_serializer;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::display::gadget::Gadget;
 use glam::f64::DQuat;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -135,7 +135,8 @@ pub struct AtomTransGadget {
 }
 
 impl Tessellatable for AtomTransGadget {
-    fn tessellate(&self, output_mesh: &mut Mesh) {
+    fn tessellate(&self, output: &mut TessellationOutput) {
+        let output_mesh: &mut Mesh = &mut output.mesh;
         xyz_gadget_utils::tessellate_xyz_gadget(
             output_mesh,
             &UnitCellStruct::cubic_diamond(),

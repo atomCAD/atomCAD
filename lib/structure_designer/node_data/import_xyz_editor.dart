@@ -4,6 +4,7 @@ import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for import_xyz nodes
 class ImportXyzEditor extends StatefulWidget {
@@ -44,7 +45,7 @@ class _ImportXyzEditorState extends State<ImportXyzEditor> {
       if (result != null && result.files.single.path != null) {
         final filePath = result.files.single.path!;
         _updateFileName(filePath);
-        
+
         // Automatically try to load the file after browsing
         await _loadFileWithPath(filePath);
       }
@@ -74,7 +75,7 @@ class _ImportXyzEditorState extends State<ImportXyzEditor> {
 
     try {
       final result = widget.model.importXyz(widget.nodeId);
-      
+
       setState(() {
         _isLoading = false;
         if (!result.success) {
@@ -102,10 +103,12 @@ class _ImportXyzEditorState extends State<ImportXyzEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Import XYZ File',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Import XYZ File',
+            nodeTypeName: 'import_xyz',
+          ),
           const SizedBox(height: 16),
-          
+
           // File path input
           SizedBox(
             width: double.infinity,
@@ -116,7 +119,7 @@ class _ImportXyzEditorState extends State<ImportXyzEditor> {
             ),
           ),
           const SizedBox(height: 12),
-          
+
           // Buttons row
           Row(
             children: [
@@ -125,13 +128,14 @@ class _ImportXyzEditorState extends State<ImportXyzEditor> {
                 icon: const Icon(Icons.folder_open),
                 label: const Text('Browse'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
               const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : _loadFile,
-                icon: _isLoading 
+                icon: _isLoading
                     ? const SizedBox(
                         width: 16,
                         height: 16,
@@ -140,12 +144,13 @@ class _ImportXyzEditorState extends State<ImportXyzEditor> {
                     : const Icon(Icons.upload_file),
                 label: Text(_isLoading ? 'Loading...' : 'Load'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ],
           ),
-          
+
           // Error message display
           if (_errorMessage != null)
             Padding(
@@ -183,7 +188,6 @@ class _ImportXyzEditorState extends State<ImportXyzEditor> {
                 ),
               ),
             ),
-          
         ],
       ),
     );

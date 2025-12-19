@@ -13,7 +13,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::node_type::NodeType;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CircleData {
@@ -58,21 +58,22 @@ impl NodeData for CircleData {
         Err(error) => return error,
       };
     
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 2, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
+      let drawing_plane = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 2,
+        DrawingPlane::default(),
+        NetworkResult::extract_drawing_plane,
       ) {
         Ok(value) => value,
         Err(error) => return error,
       };
 
-      let real_center = unit_cell.ivec2_lattice_to_real(&center);
-      let real_radius = unit_cell.int_lattice_to_real(radius);
+      // Convert to 2D real-space coordinates using effective unit cell
+      let real_center = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&center);
+      let real_radius = drawing_plane.effective_unit_cell.int_lattice_to_real(radius);
 
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell,
+          drawing_plane,
           frame_transform: Transform2D::new(
             real_center,
             0.0,

@@ -21,7 +21,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 
 #[derive(Debug, Clone)]
 pub struct LatticeRotEvalCache {
@@ -199,7 +199,8 @@ pub struct LatticeRotGadget {
 }
 
 impl Tessellatable for LatticeRotGadget {
-  fn tessellate(&self, output_mesh: &mut Mesh) {
+  fn tessellate(&self, output: &mut TessellationOutput) {
+    let output_mesh: &mut Mesh = &mut output.mesh;
     // Visualize rotation axis if present
     if let Some(axis_idx) = self.axis_index {
       let symmetry_axes = analyze_unit_cell_symmetries(&self.unit_cell);

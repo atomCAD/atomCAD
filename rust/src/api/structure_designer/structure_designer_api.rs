@@ -10,7 +10,7 @@ use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::common_api_types::APIResult;
-use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APINodeTypeView, APIDataTypeBase};
+use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APINodeTypeView, APINodeCategoryView, APIDataTypeBase};
 use crate::structure_designer::nodes::string::StringData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::int::IntData;
@@ -22,6 +22,7 @@ use crate::structure_designer::nodes::ivec3::IVec3Data;
 use crate::structure_designer::nodes::range::RangeData;
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
+use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::rect::RectData;
@@ -42,6 +43,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
+use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
@@ -52,6 +54,7 @@ use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::unit_cell::UnitCellData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
+use crate::structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::lattice_move::{LatticeMoveData, LatticeMoveEvalCache};
@@ -103,6 +106,7 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
         APIDataTypeBase::IVec2 => DataType::IVec2,
         APIDataTypeBase::IVec3 => DataType::IVec3,
         APIDataTypeBase::UnitCell => DataType::UnitCell,
+        APIDataTypeBase::DrawingPlane => DataType::DrawingPlane,
         APIDataTypeBase::Geometry2D => DataType::Geometry2D,
         APIDataTypeBase::Geometry => DataType::Geometry,
         APIDataTypeBase::Atomic => DataType::Atomic,
@@ -141,6 +145,7 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::IVec2 => APIDataTypeBase::IVec2,
         DataType::IVec3 => APIDataTypeBase::IVec3,
         DataType::UnitCell => APIDataTypeBase::UnitCell,
+        DataType::DrawingPlane => APIDataTypeBase::DrawingPlane,
         DataType::Geometry2D => APIDataTypeBase::Geometry2D,
         DataType::Geometry => APIDataTypeBase::Geometry,
         DataType::Atomic => APIDataTypeBase::Atomic,
@@ -341,7 +346,7 @@ pub fn connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_nod
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_node_type_views() -> Option<Vec<APINodeTypeView>> {
+pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
   unsafe {
     with_cad_instance_or(
       |cad_instance| {
@@ -358,6 +363,61 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
     with_cad_instance_or(
       |cad_instance| {
         Some(cad_instance.structure_designer.node_type_registry.get_node_network_names())
+      },
+      None
+    )
+  }
+}
+
+/// Checks if a node type name corresponds to a custom node (i.e., a user-defined node network).
+/// Returns false if the CAD instance is not available.
+#[flutter_rust_bridge::frb(sync)]
+pub fn is_custom_node_type(node_type_name: String) -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.node_type_registry.is_custom_node_type(&node_type_name)
+      },
+      false
+    )
+  }
+}
+
+/// Gets the description of the active node network
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_active_network_description() -> Option<String> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.get_active_network_description()
+      },
+      None
+    )
+  }
+}
+
+/// Sets the description of the active node network
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_network_description(description: String) -> Result<(), String> {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.set_active_network_description(description)
+      },
+      Err("CAD instance not available".to_string())
+    )
+  }
+}
+
+/// Gets the description of a specific node network
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_network_description(network_name: String) -> Option<String> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer
+          .get_network_description(&network_name)
+          .map(|(_name, description)| description)
       },
       None
     )
@@ -392,6 +452,66 @@ pub fn set_active_node_network(node_network_name: &str) {
       instance.structure_designer.set_active_node_network_name(Some(node_network_name.to_string()));
       refresh_structure_designer_auto(instance);
     });
+  }
+}
+
+/// Navigates back in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn navigate_back() -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.navigate_back();
+        if result {
+          refresh_structure_designer_auto(instance);
+        }
+        result
+      },
+      false
+    )
+  }
+}
+
+/// Navigates forward in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn navigate_forward() -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.navigate_forward();
+        if result {
+          refresh_structure_designer_auto(instance);
+        }
+        result
+      },
+      false
+    )
+  }
+}
+
+/// Checks if we can navigate backward in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_navigate_back() -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.can_navigate_back()
+      },
+      false
+    )
+  }
+}
+
+/// Checks if we can navigate forward in node network history
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_navigate_forward() -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.can_navigate_forward()
+      },
+      false
+    )
   }
 }
 
@@ -499,7 +619,33 @@ pub fn get_extrude_data(node_id: u64) -> Option<APIExtrudeData> {
         };
         Some(APIExtrudeData {
           height: extrude_data.height,
+          extrude_direction: to_api_ivec3(&extrude_data.extrude_direction),
+          infinite: extrude_data.infinite,
+          subdivision: extrude_data.subdivision,
         })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_extrude_drawing_plane_miller_direction(node_id: u64) -> Option<crate::api::common_api_types::APIIVec3> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let selected_node_id = match cad_instance.structure_designer.get_selected_node_id_with_type("extrude") {
+          Some(id) => id,
+          None => return None,
+        };
+
+        if selected_node_id != node_id {
+          return None;
+        }
+
+        let eval_cache = cad_instance.structure_designer.get_selected_node_eval_cache()?;
+        let extrude_cache = eval_cache.downcast_ref::<ExtrudeEvalCache>()?;
+        Some(to_api_ivec3(&extrude_cache.drawing_plane_miller_direction))
       },
       None
     )
@@ -930,6 +1076,32 @@ pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
           center: to_api_ivec3(&half_space_data.center),
           shift: half_space_data.shift,
           subdivision: half_space_data.subdivision,
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_drawing_plane_data(node_id: u64) -> Option<APIDrawingPlaneData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let drawing_plane_data = match node_data.as_any_ref().downcast_ref::<DrawingPlaneData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIDrawingPlaneData {
+          max_miller_index: drawing_plane_data.max_miller_index,
+          miller_index: to_api_ivec3(&drawing_plane_data.miller_index),
+          center: to_api_ivec3(&drawing_plane_data.center),
+          shift: drawing_plane_data.shift,
+          subdivision: drawing_plane_data.subdivision,
         })
       },
       None
@@ -1484,6 +1656,9 @@ pub fn set_extrude_data(node_id: u64, data: APIExtrudeData) {
     with_mut_cad_instance(|cad_instance| {
       let extrude_data = Box::new(ExtrudeData {
         height: data.height,
+        extrude_direction: from_api_ivec3(&data.extrude_direction),
+        infinite: data.infinite,
+        subdivision: data.subdivision,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, extrude_data);
       refresh_structure_designer_auto(cad_instance);
@@ -1531,6 +1706,23 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
         subdivision: data.subdivision,
       });
       cad_instance.structure_designer.set_node_network_data(node_id, half_space_data);
+      refresh_structure_designer_auto(cad_instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_drawing_plane_data(node_id: u64, data: APIDrawingPlaneData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let drawing_plane_data = Box::new(DrawingPlaneData {
+        max_miller_index: data.max_miller_index,
+        miller_index: from_api_ivec3(&data.miller_index),
+        center: from_api_ivec3(&data.center),
+        shift: data.shift,
+        subdivision: data.subdivision,
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, drawing_plane_data);
       refresh_structure_designer_auto(cad_instance);
     });
   }
@@ -1799,6 +1991,7 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
           hydrogen_passivation: atom_fill_data.hydrogen_passivation,
           remove_single_bond_atoms_before_passivation: atom_fill_data.remove_single_bond_atoms_before_passivation,
           surface_reconstruction: atom_fill_data.surface_reconstruction,
+          invert_phase: atom_fill_data.invert_phase,
           error: atom_fill_data.error.clone(),
         })
       },
@@ -1818,6 +2011,7 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                     hydrogen_passivation: data.hydrogen_passivation,
                     remove_single_bond_atoms_before_passivation: data.remove_single_bond_atoms_before_passivation,
                     surface_reconstruction: data.surface_reconstruction,
+                    invert_phase: data.invert_phase,
                     error: None,
                     parameter_element_values: HashMap::new(),
                 });

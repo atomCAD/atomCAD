@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::crystolecule::unit_cell_struct::{UnitCellStruct, CrystalPlaneProps};
+use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 
@@ -193,7 +193,7 @@ fn test_miller_index_plane_properties() {
     ];
     
     for miller_index in test_indices {
-        let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index);
+        let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index).unwrap();
         
         // Normal should be normalized
         let normal_length = plane_props.normal.length();
@@ -231,8 +231,8 @@ fn test_miller_index_method_consistency() {
     
     for miller_index in test_indices {
         // Compare old method (normal only) with new method (plane properties)
-        let old_normal = unit_cell.ivec3_miller_index_to_normal(&miller_index);
-        let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index);
+        let old_normal = unit_cell.ivec3_miller_index_to_normal(&miller_index).unwrap();
+        let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index).unwrap();
         
         // Normals should be identical
         let diff = (old_normal - plane_props.normal).length();

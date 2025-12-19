@@ -18,6 +18,7 @@ pub enum DataType {
   IVec2,
   IVec3,
   UnitCell,
+  DrawingPlane,
   Geometry2D,
   Geometry,
   Atomic,
@@ -46,6 +47,7 @@ impl DataType {
       DataType::IVec2 => "IVec2".to_string(),
       DataType::IVec3 => "IVec3".to_string(),
       DataType::UnitCell => "UnitCell".to_string(),
+      DataType::DrawingPlane => "DrawingPlane".to_string(),
       DataType::Geometry2D => "Geometry2D".to_string(),
       DataType::Geometry => "Geometry".to_string(),
       DataType::Atomic => "Atomic".to_string(),
@@ -134,6 +136,9 @@ impl DataType {
       // IVec3 <-> Vec3 conversions
       (DataType::IVec3, DataType::Vec3) => true,
       (DataType::Vec3, DataType::IVec3) => true,
+      
+      // UnitCell -> DrawingPlane conversion (backward compatibility for old .cnnd files)
+      (DataType::UnitCell, DataType::DrawingPlane) => true,
       
       // All other combinations are not compatible
       _ => false,
@@ -241,6 +246,7 @@ impl DataTypeParser {
           "IVec2" => Ok(DataType::IVec2),
           "IVec3" => Ok(DataType::IVec3),
           "UnitCell" => Ok(DataType::UnitCell),
+          "DrawingPlane" => Ok(DataType::DrawingPlane),
           "Geometry2D" => Ok(DataType::Geometry2D),
           "Geometry" => Ok(DataType::Geometry),
           "Atomic" => Ok(DataType::Atomic),

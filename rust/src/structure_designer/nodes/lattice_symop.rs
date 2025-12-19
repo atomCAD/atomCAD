@@ -22,7 +22,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 
 #[derive(Debug, Clone)]
 pub struct LatticeSymopEvalCache {
@@ -269,7 +269,8 @@ pub struct LatticeSymopGadget {
 }
 
 impl Tessellatable for LatticeSymopGadget {
-  fn tessellate(&self, output_mesh: &mut Mesh) {
+  fn tessellate(&self, output: &mut TessellationOutput) {
+    let output_mesh: &mut Mesh = &mut output.mesh;
     xyz_gadget_utils::tessellate_xyz_gadget(
       output_mesh,
       &self.unit_cell,

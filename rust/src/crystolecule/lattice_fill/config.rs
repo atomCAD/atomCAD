@@ -37,6 +37,8 @@ pub struct LatticeFillOptions {
   
   /// Whether to perform surface reconstruction (e.g., diamond (100) 2×1 dimers)
   pub reconstruct_surface: bool,
+
+  pub invert_phase: bool,
 }
 
 /// Results from lattice filling operation

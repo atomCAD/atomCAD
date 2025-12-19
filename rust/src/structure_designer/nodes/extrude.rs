@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
+use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use crate::util::serialization_utils::ivec3_serializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::DQuat;
@@ -14,11 +16,33 @@ use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
+fn default_extrude_direction() -> IVec3 {
+  IVec3::new(0, 0, 1)
+}
+
+fn default_infinite() -> bool {
+  false
+}
+
+fn default_subdivision() -> i32 {
+  1
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
   pub height: i32,
+  #[serde(with = "ivec3_serializer")]
+  #[serde(default = "default_extrude_direction")]
+  pub extrude_direction: IVec3,
+  #[serde(default = "default_infinite")]
+  pub infinite: bool,
+  #[serde(default = "default_subdivision")]
+  pub subdivision: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExtrudeEvalCache {
+  pub drawing_plane_miller_direction: IVec3,
 }
 
 impl NodeData for ExtrudeData {
@@ -48,14 +72,8 @@ impl NodeData for ExtrudeData {
         0,
       );
     
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 1, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
-        ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
+      // NOTE: Input pin 1 (extrude pin) is deprecated but kept for backward compatibility with existing networks.
+      // We ignore it and use the unit cell from the shape instead.
 
       if let NetworkResult::Error(_) = shape_val {
         return shape_val;
@@ -70,7 +88,67 @@ impl NodeData for ExtrudeData {
         Err(error) => return error,
       };
 
+      let extrude_direction = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 3,
+        self.extrude_direction,
+        NetworkResult::extract_ivec3
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let infinite = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 4,
+        self.infinite,
+        NetworkResult::extract_bool
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
+      let subdivision = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 5,
+        self.subdivision,
+        NetworkResult::extract_int
+      ) {
+        Ok(value) => value.max(1),
+        Err(error) => return error,
+      };
+
+      if !infinite && height <= 0 {
+        return NetworkResult::Error("Extrusion height must be positive".to_string());
+      }
+
       if let NetworkResult::Geometry2D(shape) = shape_val {
+        // Extract unit cell from the drawing plane
+        let unit_cell = shape.drawing_plane.unit_cell.clone();
+
+        if network_stack.len() == 1 {
+          let eval_cache = ExtrudeEvalCache {
+            drawing_plane_miller_direction: shape.drawing_plane.miller_index,
+          };
+          context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+        
+        // Validate extrusion direction for this plane (in world space)
+        let (world_direction, d_spacing) = match shape.drawing_plane.validate_extrude_direction(&extrude_direction) {
+            Ok(result) => result,
+            Err(error_msg) => return NetworkResult::Error(error_msg),
+        };
+
+        let height_real = if infinite {
+          0.0
+        } else {
+          (height as f64 / subdivision as f64) * d_spacing
+        };
+        
+        // Compute plane_to_world transform from DrawingPlane
+        let plane_to_world_transform = shape.drawing_plane.to_world_transform();
+        
+        // Transform world extrusion direction to plane-local coordinates
+        let world_to_plane_rotation = plane_to_world_transform.rotation.inverse();
+        let local_direction = world_to_plane_rotation * world_direction;
+        
         let frame_translation_2d = shape.frame_transform.translation;
     
         let frame_transform = Transform::new(
@@ -78,13 +156,11 @@ impl NodeData for ExtrudeData {
           DQuat::from_rotation_z(shape.frame_transform.rotation),
         );
     
-        let direction = unit_cell.c.normalize();
-        let height = unit_cell.c.length() * (height as f64);
         let s = shape.geo_tree_root;
         return NetworkResult::Geometry(GeometrySummary { 
           unit_cell,
           frame_transform,
-          geo_tree_root: GeoNode::extrude(height, direction, Box::new(s))
+          geo_tree_root: GeoNode::extrude(height_real, local_direction, Box::new(s), plane_to_world_transform, infinite)
         });
       } else {
         return runtime_type_error_in_input(0);
@@ -96,7 +172,12 @@ impl NodeData for ExtrudeData {
     }
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-        Some(format!("h: {}", self.height))
+        Some(format!("h: {} dir: [{},{},{}]", 
+            self.height,
+            self.extrude_direction.x,
+            self.extrude_direction.y,
+            self.extrude_direction.z
+        ))
     }
 }
 

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as structure_designer_api;
 import 'package:flutter_cad/inputs/int_input.dart';
+import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for extrude nodes
 class ExtrudeEditor extends StatefulWidget {
@@ -34,8 +38,28 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Extrude Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Extrude Properties',
+            nodeTypeName: 'extrude',
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Infinite'),
+            value: widget.data!.infinite,
+            onChanged: (newValue) {
+              if (newValue == null) return;
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: widget.data!.height,
+                  extrudeDirection: widget.data!.extrudeDirection,
+                  infinite: newValue,
+                  subdivision: widget.data!.subdivision,
+                ),
+              );
+            },
+          ),
           const SizedBox(height: 8),
           IntInput(
             label: 'Height',
@@ -46,6 +70,76 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
                 widget.nodeId,
                 APIExtrudeData(
                   height: newValue,
+                  extrudeDirection: widget.data!.extrudeDirection,
+                  infinite: widget.data!.infinite,
+                  subdivision: widget.data!.subdivision,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Extrude Direction',
+            value: widget.data!.extrudeDirection,
+            onChanged: (newValue) {
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: widget.data!.height,
+                  extrudeDirection: newValue,
+                  infinite: widget.data!.infinite,
+                  subdivision: widget.data!.subdivision,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () {
+                final millerDir = structure_designer_api
+                    .getExtrudeDrawingPlaneMillerDirection(
+                  nodeId: widget.nodeId,
+                );
+
+                if (millerDir == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Drawing plane direction is not available (select the node and ensure it evaluates).'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  return;
+                }
+
+                widget.model.setExtrudeData(
+                  widget.nodeId,
+                  APIExtrudeData(
+                    height: widget.data!.height,
+                    extrudeDirection: millerDir,
+                    infinite: widget.data!.infinite,
+                    subdivision: widget.data!.subdivision,
+                  ),
+                );
+              },
+              child: const Text('Set dir from plane'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          IntInput(
+            label: 'Subdivision',
+            value: widget.data!.subdivision,
+            minimumValue: 1,
+            onChanged: (newValue) {
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: widget.data!.height,
+                  extrudeDirection: widget.data!.extrudeDirection,
+                  infinite: widget.data!.infinite,
+                  subdivision: newValue,
                 ),
               );
             },

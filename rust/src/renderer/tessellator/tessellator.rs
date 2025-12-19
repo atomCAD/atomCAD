@@ -1,10 +1,25 @@
 use super::super::mesh::Mesh;
 use super::super::mesh::Vertex;
 use super::super::mesh::Material;
+use super::super::line_mesh::LineMesh;
 pub use super::occludable_mesh::{OccludableMesh, OccludableVertex};
 use glam::f64::{DQuat, DVec2, DVec3};
 use glam::Vec3;
 use bytemuck;
+
+pub struct TessellationOutput {
+  pub mesh: Mesh,
+  pub line_mesh: LineMesh,
+}
+
+impl TessellationOutput {
+  pub fn new() -> Self {
+    Self {
+      mesh: Mesh::new(),
+      line_mesh: LineMesh::new(),
+    }
+  }
+}
 
 #[derive(Clone, Copy)]
 pub struct OccluderSphere {
@@ -13,7 +28,7 @@ pub struct OccluderSphere {
 }
 
 pub trait Tessellatable {
-  fn tessellate(&self, output_mesh: &mut Mesh);
+  fn tessellate(&self, output: &mut TessellationOutput);
 
   // Explicit conversion to Box<dyn Tessellatable
   fn as_tessellatable(&self) -> Box<dyn Tessellatable>;

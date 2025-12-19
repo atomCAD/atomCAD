@@ -2,6 +2,7 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use serde::de::Deserializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::crystolecule::atomic_structure::AtomicStructure;
@@ -24,7 +25,7 @@ use crate::crystolecule::lattice_fill::{fill_lattice, LatticeFillConfig, Lattice
 
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AtomFillData {
   pub parameter_element_value_definition: String,
   #[serde(with = "dvec3_serializer")]
@@ -34,10 +35,59 @@ pub struct AtomFillData {
   pub remove_single_bond_atoms_before_passivation: bool,
   #[serde(default)]
   pub surface_reconstruction: bool,
+  #[serde(default)]
+  pub invert_phase: bool,
   #[serde(skip)]
   pub error: Option<String>,
   #[serde(skip)]
   pub parameter_element_values: HashMap<String, i16>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AtomFillDataDeserialized {
+  pub parameter_element_value_definition: String,
+  #[serde(with = "dvec3_serializer")]
+  pub motif_offset: DVec3,
+  pub hydrogen_passivation: bool,
+  #[serde(default)]
+  pub remove_single_bond_atoms_before_passivation: bool,
+  #[serde(default)]
+  pub surface_reconstruction: bool,
+  #[serde(default)]
+  pub invert_phase: bool,
+}
+
+impl<'de> Deserialize<'de> for AtomFillData {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    let de = AtomFillDataDeserialized::deserialize(deserializer)?;
+
+    let mut data = AtomFillData {
+      parameter_element_value_definition: de.parameter_element_value_definition,
+      motif_offset: de.motif_offset,
+      hydrogen_passivation: de.hydrogen_passivation,
+      remove_single_bond_atoms_before_passivation: de.remove_single_bond_atoms_before_passivation,
+      surface_reconstruction: de.surface_reconstruction,
+      invert_phase: de.invert_phase,
+      error: None,
+      parameter_element_values: HashMap::new(),
+    };
+
+    if !data.parameter_element_value_definition.trim().is_empty() {
+      match parse_parameter_element_values(&data.parameter_element_value_definition) {
+        Ok(values) => {
+          data.parameter_element_values = values;
+        }
+        Err(parse_error) => {
+          data.error = Some(format!("Parameter element parse error: {}", parse_error));
+        }
+      }
+    }
+
+    Ok(data)
+  }
 }
 
 impl AtomFillData {
@@ -149,6 +199,15 @@ impl NodeData for AtomFillData {
         Err(error) => return error,
       };
 
+      let invert_phase = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 6,
+        self.invert_phase,
+        NetworkResult::extract_bool
+      ) {
+        Ok(value) => value,
+        Err(error) => return error,
+      };
+
       // Calculate effective parameter element values (fill in defaults for missing values)
       let effective_parameter_values = motif.get_effective_parameter_element_values(&self.parameter_element_values);
 
@@ -165,6 +224,7 @@ impl NodeData for AtomFillData {
         hydrogen_passivation,
         remove_single_bond_atoms,
         reconstruct_surface: surface_reconstruction,
+        invert_phase,
       };
 
       // Define fill region

@@ -16,6 +16,7 @@ use crate::structure_designer::node_type::NodeType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diff2DData {
@@ -48,7 +49,7 @@ impl NodeData for Diff2DData {
       return input_missing_error(&base_input_name);
     }
   
-    let (mut geometry, mut frame_translation, base_unit_cell) = helper_union(
+    let (mut geometry, mut frame_translation, base_drawing_plane) = helper_union(
       network_evaluator,
       network_stack,
       node_id,
@@ -61,14 +62,14 @@ impl NodeData for Diff2DData {
       return error_in_input(&base_input_name);
     }
     
-    if base_unit_cell.is_none() {
+    if base_drawing_plane.is_none() {
       return unit_cell_mismatch_error();
     }
     
-    let mut result_unit_cell = base_unit_cell.unwrap();
+    let mut result_drawing_plane = base_drawing_plane.unwrap();
   
     if !node.arguments[1].is_empty() {
-      let (sub_geometry, sub_frame_translation, sub_unit_cell) = helper_union(
+      let (sub_geometry, sub_frame_translation, sub_drawing_plane) = helper_union(
         network_evaluator,
         network_stack,
         node_id,
@@ -81,12 +82,12 @@ impl NodeData for Diff2DData {
         return error_in_input(&sub_input_name);
       }
       
-      if sub_unit_cell.is_none() {
+      if sub_drawing_plane.is_none() {
         return unit_cell_mismatch_error();
       }
       
-      // Check unit cell compatibility between base and sub
-      if !result_unit_cell.is_approximately_equal(&sub_unit_cell.unwrap()) {
+      // Check drawing plane compatibility between base and sub
+      if !result_drawing_plane.is_compatible(&sub_drawing_plane.unwrap()) {
         return unit_cell_mismatch_error();
       }
   
@@ -97,7 +98,7 @@ impl NodeData for Diff2DData {
     }
   
     return NetworkResult::Geometry2D(GeometrySummary2D { 
-      unit_cell: result_unit_cell,
+      drawing_plane: result_drawing_plane,
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,
@@ -121,7 +122,7 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   parameter_index: usize,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> (Option<GeoNode>, DVec2, Option<UnitCellStruct>) {
+) -> (Option<GeoNode>, DVec2, Option<DrawingPlane>) {
   let mut shapes: Vec<GeoNode> = Vec::new();
   let mut frame_translation = DVec2::ZERO;
 
@@ -160,20 +161,20 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
     }
   }
   
-  // Check unit cell compatibility - compare all to the first geometry
-  if !GeometrySummary2D::all_have_compatible_unit_cells(&geometries) {
+  // Check drawing plane compatibility - compare all to the first geometry
+  if !GeometrySummary2D::all_have_compatible_drawing_planes(&geometries) {
     return (None, DVec2::ZERO, None);
   }
   
-  // All unit cells are compatible, proceed with union
-  let first_unit_cell = geometries[0].unit_cell.clone();
+  // All drawing planes are compatible, proceed with union
+  let first_drawing_plane = geometries[0].drawing_plane.clone();
   for geometry in geometries.into_iter() {
     shapes.push(geometry.geo_tree_root);
     frame_translation += geometry.frame_transform.translation;
   }
 
   frame_translation /= shape_count as f64;
-  return (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_unit_cell));
+  return (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_drawing_plane));
 }
 
 

@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for export_xyz nodes
 class ExportXyzEditor extends StatefulWidget {
@@ -58,10 +59,12 @@ class _ExportXyzEditorState extends State<ExportXyzEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Export XYZ File',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Export XYZ File',
+            nodeTypeName: 'export_xyz',
+          ),
           const SizedBox(height: 16),
-          
+
           // File path input
           SizedBox(
             width: double.infinity,
@@ -72,7 +75,7 @@ class _ExportXyzEditorState extends State<ExportXyzEditor> {
             ),
           ),
           const SizedBox(height: 12),
-          
+
           // Browse button
           ElevatedButton.icon(
             onPressed: _browseFile,
@@ -82,9 +85,9 @@ class _ExportXyzEditorState extends State<ExportXyzEditor> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Info text
           Container(
             width: double.infinity,

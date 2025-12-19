@@ -9,49 +9,50 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::motif::Motif;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
-  pub unit_cell: UnitCellStruct,
+  pub drawing_plane: DrawingPlane,
   pub frame_transform: Transform2D,
   pub geo_tree_root: GeoNode,
 }
 
 impl GeometrySummary2D {
-  /// Checks if this geometry's unit cell is compatible with another geometry's unit cell.
+  /// Checks if this geometry's drawing plane is compatible with another geometry's drawing plane.
   /// 
-  /// This is useful for CSG operations where geometries must have compatible unit cells.
+  /// This is useful for CSG operations where geometries must have compatible drawing planes.
   /// Uses approximate equality with tolerance for small calculation errors.
   /// 
   /// # Arguments
-  /// * `other` - The other GeometrySummary2D to compare unit cells with
+  /// * `other` - The other GeometrySummary2D to compare drawing planes with
   /// 
   /// # Returns
-  /// * `true` if the unit cells are approximately equal within tolerance
+  /// * `true` if the drawing planes are compatible (same unit cell and plane orientation)
   /// * `false` if they differ significantly
-  pub fn has_compatible_unit_cell(&self, other: &GeometrySummary2D) -> bool {
-    self.unit_cell.is_approximately_equal(&other.unit_cell)
+  pub fn has_compatible_drawing_plane(&self, other: &GeometrySummary2D) -> bool {
+    self.drawing_plane.is_compatible(&other.drawing_plane)
   }
 
-  /// Checks if all geometries in a vector have approximately the same unit cells.
+  /// Checks if all geometries in a vector have compatible drawing planes.
   /// 
-  /// Compares each geometry's unit cell to the first geometry's unit cell.
+  /// Compares each geometry's drawing plane to the first geometry's drawing plane.
   /// Returns true if the vector is empty or has only one element.
   /// 
   /// # Arguments
   /// * `geometries` - Vector of GeometrySummary2D objects to check
   /// 
   /// # Returns
-  /// * `true` if all unit cells are approximately equal or vector has ≤1 elements
-  /// * `false` if any unit cell differs significantly from the first
-  pub fn all_have_compatible_unit_cells(geometries: &Vec<GeometrySummary2D>) -> bool {
+  /// * `true` if all drawing planes are compatible or vector has ≤1 elements
+  /// * `false` if any drawing plane is incompatible with the first
+  pub fn all_have_compatible_drawing_planes(geometries: &Vec<GeometrySummary2D>) -> bool {
     if geometries.len() <= 1 {
       return true;
     }
     
-    let first_unit_cell = &geometries[0].unit_cell;
+    let first_drawing_plane = &geometries[0].drawing_plane;
     geometries.iter().skip(1).all(|geometry| {
-      first_unit_cell.is_approximately_equal(&geometry.unit_cell)
+      first_drawing_plane.is_compatible(&geometry.drawing_plane)
     })
   }
 }
@@ -121,6 +122,7 @@ pub enum NetworkResult {
   IVec2(IVec2),
   IVec3(IVec3),
   UnitCell(UnitCellStruct),
+  DrawingPlane(DrawingPlane),
   Geometry2D(GeometrySummary2D),
   Geometry(GeometrySummary),
   Atomic(AtomicStructure),
@@ -160,13 +162,22 @@ impl NetworkResult {
     }
   }
 
+  /// Extracts a DrawingPlane value from the NetworkResult, returns None if not a DrawingPlane
+  pub fn extract_drawing_plane(self) -> Option<DrawingPlane> {
+    match self {
+      NetworkResult::DrawingPlane(dp) => Some(dp),
+      _ => None,
+    }
+  }
+
   /// Returns the UnitCellStruct associated with this NetworkResult.
-  /// For UnitCell, Geometry2D, and Geometry variants, returns their unit cell.
+  /// For UnitCell, DrawingPlane, Geometry2D, and Geometry variants, returns their unit cell.
   /// For all other variants, returns None.
   pub fn get_unit_cell(&self) -> Option<UnitCellStruct> {
     match self {
       NetworkResult::UnitCell(unit_cell) => Some(unit_cell.clone()),
-      NetworkResult::Geometry2D(geometry) => Some(geometry.unit_cell.clone()),
+      NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
+      NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
       NetworkResult::Geometry(geometry) => Some(geometry.unit_cell.clone()),
       _ => None,
     }
@@ -363,6 +374,21 @@ impl NetworkResult {
       (NetworkResult::Vec3(vec), DataType::IVec3) => {
         NetworkResult::IVec3(IVec3::new(vec.x.round() as i32, vec.y.round() as i32, vec.z.round() as i32))
       }
+      
+      // UnitCell -> DrawingPlane (backward compatibility for old .cnnd files)
+      // Creates a standard XY plane (001 Miller index) at the origin
+      (NetworkResult::UnitCell(unit_cell), DataType::DrawingPlane) => {
+        match DrawingPlane::new(
+          unit_cell,
+          IVec3::new(0, 0, 1), // XY plane (001 Miller index)
+          IVec3::new(0, 0, 0), // Center at origin
+          0,                   // No shift
+          1,                   // Subdivision = 1
+        ) {
+          Ok(drawing_plane) => NetworkResult::DrawingPlane(drawing_plane),
+          Err(err_msg) => NetworkResult::Error(format!("Failed to convert UnitCell to DrawingPlane: {}", err_msg)),
+        }
+      }
     
       (original, _target) => {
         /*
@@ -407,6 +433,12 @@ impl NetworkResult {
           unit_cell.a.x, unit_cell.a.y, unit_cell.a.z,
           unit_cell.b.x, unit_cell.b.y, unit_cell.b.z,
           unit_cell.c.x, unit_cell.c.y, unit_cell.c.z)
+      },
+      NetworkResult::DrawingPlane(drawing_plane) => {
+        format!("DrawingPlane: miller_index=({}, {}, {}), center=({}, {}, {}), shift={}, subdivision={}", 
+          drawing_plane.miller_index.x, drawing_plane.miller_index.y, drawing_plane.miller_index.z,
+          drawing_plane.center.x, drawing_plane.center.y, drawing_plane.center.z,
+          drawing_plane.shift, drawing_plane.subdivision)
       },
       NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
       NetworkResult::Geometry(_) => "Geometry".to_string(),

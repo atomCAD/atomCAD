@@ -131,7 +131,7 @@ fn create_parallelepiped_from_lattice(
                        min_corner_lattice.z * basis_c;
   
   let max_corner_lattice = min_corner_lattice + extent_lattice;
-  let max_corner_real = max_corner_lattice.x * basis_a + 
+  let _max_corner_real = max_corner_lattice.x * basis_a + 
                        max_corner_lattice.y * basis_b + 
                        max_corner_lattice.z * basis_c;
   

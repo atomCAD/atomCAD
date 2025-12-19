@@ -15,14 +15,14 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::mesh::Material;
 use crate::renderer::tessellator::tessellator;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::display::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HalfPlaneData {
@@ -38,7 +38,7 @@ impl NodeData for HalfPlaneData {
       let eval_cache = structure_designer.get_selected_node_eval_cache()?;
       let half_plane_cache = eval_cache.downcast_ref::<HalfPlaneEvalCache>()?;
   
-      Some(Box::new(HalfPlaneGadget::new(&self.point1, &self.point2, &half_plane_cache.unit_cell)))
+      Some(Box::new(HalfPlaneGadget::new(&self.point1, &self.point2, &half_plane_cache.drawing_plane)))
     }
   
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -55,26 +55,102 @@ impl NodeData for HalfPlaneData {
         context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
 
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 0, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
-        ) {
+      let drawing_plane = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0,
+        DrawingPlane::default(),
+        NetworkResult::extract_drawing_plane,
+      ) {
         Ok(value) => value,
         Err(error) => return error,
       };
+
+      // Evaluate optional miller_index input pin
+      let miller_index_result = network_evaluator.evaluate_arg(
+        network_stack, node_id, registry, context, 1
+      );
 
       // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
       // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
       if network_stack.len() == 1 {
         let eval_cache = HalfPlaneEvalCache {
-          unit_cell: unit_cell.clone(),
+          drawing_plane: drawing_plane.clone(),
         };
         context.selected_node_eval_cache = Some(Box::new(eval_cache));
       }
 
-      let point1 = unit_cell.ivec2_lattice_to_real(&self.point1);
-      let point2 = unit_cell.ivec2_lattice_to_real(&self.point2);
+      // Determine point1 and point2 based on whether miller_index is connected
+      let (point1, point2) = match miller_index_result {
+        NetworkResult::IVec2(miller_index) => {
+          // Miller index is connected - use it to determine the half plane
+          
+          // Evaluate center input pin (defaults to origin)
+          let center = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 2,
+            IVec2::new(0, 0),
+            NetworkResult::extract_ivec2
+          ) {
+            Ok(value) => value,
+            Err(error) => return error,
+          };
+
+          // Evaluate shift input pin
+          let shift = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 3,
+            0,
+            NetworkResult::extract_int
+          ) {
+            Ok(value) => value,
+            Err(error) => return error,
+          };
+
+          // Evaluate subdivision input pin
+          let subdivision = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 4,
+            1,
+            NetworkResult::extract_int
+          ) {
+            Ok(value) => value.max(1), // Ensure minimum value of 1
+            Err(error) => return error,
+          };
+
+          // Convert miller index to plane properties
+          let plane_props = match drawing_plane
+            .effective_unit_cell
+            .ivec2_miller_index_to_plane_props(&miller_index) {
+            Ok(props) => props,
+            Err(error_msg) => return NetworkResult::Error(error_msg),
+          };
+          
+          // Convert center from lattice to real coordinates using effective unit cell
+          let center_pos = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&center);
+          
+          // Calculate shift distance as multiples of d-spacing, divided by subdivision
+          let shift_distance = (shift as f64 / subdivision as f64) * plane_props.d_spacing;
+          
+          // Calculate two points on the line perpendicular to the miller index
+          // The line passes through the shifted center
+          let shifted_center = center_pos + plane_props.normal * shift_distance;
+          
+          // Create a perpendicular direction (rotate normal by 90 degrees)
+          let perpendicular = DVec2::new(-plane_props.normal.y, plane_props.normal.x);
+          
+          // Generate two points on the line
+          let p1 = shifted_center + perpendicular;
+          let p2 = shifted_center - perpendicular;
+          
+          (p1, p2)
+        },
+        NetworkResult::Error(error) => {
+          // Error in miller_index evaluation
+          return NetworkResult::Error(error);
+        },
+        _ => {
+          // Miller index not connected - use point1 and point2 from node data
+          let p1 = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&self.point1);
+          let p2 = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&self.point2);
+          (p1, p2)
+        }
+      };
     
       // Calculate direction vector from point1 to point2
       let dir_vector = point2 - point1;
@@ -83,7 +159,7 @@ impl NodeData for HalfPlaneData {
       // Use point1 as the position and calculate the angle for the transform
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell,
+          drawing_plane,
           frame_transform: Transform2D::new(
             point1,
             normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
@@ -96,15 +172,51 @@ impl NodeData for HalfPlaneData {
         Box::new(self.clone())
     }
 
-    fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-        Some(format!("({},{}) ({},{})", 
-            self.point1.x, self.point1.y, self.point2.x, self.point2.y))
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let m_index_connected = connected_input_pins.contains("m_index");
+        
+        // If miller_index is connected, show unconnected miller params
+        // Otherwise show point1/point2
+        if m_index_connected {
+            // Miller index mode - show unconnected parameters
+            let center_connected = connected_input_pins.contains("center");
+            let shift_connected = connected_input_pins.contains("shift");
+            let subdivision_connected = connected_input_pins.contains("subdivision");
+            
+            if center_connected && shift_connected && subdivision_connected {
+                None // All relevant params connected
+            } else {
+                let mut parts = Vec::new();
+                
+                if !center_connected {
+                    parts.push(format!("c: (0,0)"));
+                }
+                
+                if !shift_connected {
+                    parts.push(format!("s: 0"));
+                }
+                
+                if !subdivision_connected {
+                    parts.push(format!("sub: 1"));
+                }
+                
+                if parts.is_empty() {
+                    None
+                } else {
+                    Some(parts.join(" "))
+                }
+            }
+        } else {
+            // Point mode - show point1 and point2
+            Some(format!("({},{}) ({},{})", 
+                self.point1.x, self.point1.y, self.point2.x, self.point2.y))
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct HalfPlaneEvalCache {
-  pub unit_cell: UnitCellStruct,
+  pub drawing_plane: DrawingPlane,
 }
 
 #[derive(Clone)]
@@ -113,29 +225,19 @@ pub struct HalfPlaneGadget {
     pub point2: IVec2,
     pub is_dragging: bool,
     pub dragged_handle: Option<i32>, // 0 for point1, 1 for point2
-    pub unit_cell: UnitCellStruct,
+    pub drawing_plane: DrawingPlane,
 }
 
 impl Tessellatable for HalfPlaneGadget {
-    fn tessellate(&self, output_mesh: &mut Mesh) {
-        let point1 = self.unit_cell.ivec2_lattice_to_real(&self.point1);
-        let point2 = self.unit_cell.ivec2_lattice_to_real(&self.point2);  
-        
-        // Convert 2D points to 3D space (on XY plane)
-        let p1_3d = DVec3::new(point1.x, point1.y, 0.0);
-        let p2_3d = DVec3::new(point2.x, point2.y, 0.0);
+    fn tessellate(&self, output: &mut TessellationOutput) {
+        let output_mesh: &mut Mesh = &mut output.mesh;
 
-        // Calculate inward normal direction for triangle orientation
-        let dir_vec_2d = (point2 - point1).normalize();
-        // The normal in implicit_eval_half_plane DVec2::new(-dir_vec_2d.y, dir_vec_2d.x) points OUTWARD.
-        // For the gadget to point INWARD, we need the opposite normal.
-        let inward_normal_2d = DVec2::new(dir_vec_2d.y, -dir_vec_2d.x);
-        // Angle for prism rotation. The prism's default pointing vertex (local +Y) is (0,1) in its local XY plane.
-        // A rotation by angle A around Z transforms this local +Y to (sin A, cos A) in the global XY plane.
-        // We want this rotated direction to align with inward_normal_2d = (nx, ny).
-        // So, (sin A, cos A) = (inward_normal_2d.x, inward_normal_2d.y).
-        // Thus, A = atan2(sin A, cos A) = atan2(inward_normal_2d.x, inward_normal_2d.y).
-        let triangle_rotation_angle = -inward_normal_2d.x.atan2(inward_normal_2d.y);
+        let plane_to_world = self.drawing_plane.to_world_transform();
+        let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
+
+        // Map points to their 3D positions on the drawing plane
+        let p1_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point1);
+        let p2_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point2);
         
         // Create materials
         let roughness: f32 = 0.2;
@@ -164,7 +266,7 @@ impl Tessellatable for HalfPlaneGadget {
         let line_center = (p1_3d + p2_3d) * 0.5;
         
         // Calculate the desired total line length
-        let half_length = self.unit_cell.float_lattice_to_real(DEFAULT_GRID_SIZE as f64);
+        let half_length = self.drawing_plane.effective_unit_cell.float_lattice_to_real(DEFAULT_GRID_SIZE as f64);
 
         // Extend the line symmetrically from the center
         let extended_line_start = line_center - line_direction * half_length;
@@ -182,26 +284,36 @@ impl Tessellatable for HalfPlaneGadget {
             None,
             None
         );
-        
-        // Draw the handles as triangular prisms oriented along Z axis
-        // Handle for point1
-        tessellator::tessellate_equilateral_triangle_prism(
+
+        // Draw the handles oriented along the drawing plane normal
+        let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
+
+        let p1_start = p1_3d - plane_normal * handle_half_height;
+        let p1_end = p1_3d + plane_normal * handle_half_height;
+        tessellator::tessellate_cylinder(
             output_mesh,
-            DVec2::new(p1_3d.x, p1_3d.y), // Centroid of bottom triangle in XY plane
-            common_constants::HANDLE_HEIGHT,
-            common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
-            triangle_rotation_angle,
+            &p1_end,
+            &p1_start,
+            common_constants::HANDLE_RADIUS,
+            common_constants::HANDLE_DIVISIONS,
             &handle1_material,
+            true,
+            None,
+            None,
         );
-        
-        // Handle for point2
-        tessellator::tessellate_equilateral_triangle_prism(
+
+        let p2_start = p2_3d - plane_normal * handle_half_height;
+        let p2_end = p2_3d + plane_normal * handle_half_height;
+        tessellator::tessellate_cylinder(
             output_mesh,
-            DVec2::new(p2_3d.x, p2_3d.y), // Centroid of bottom triangle in XY plane
-            common_constants::HANDLE_HEIGHT,
-            common_constants::HANDLE_TRIANGLE_SIDE_LENGTH,
-            triangle_rotation_angle,
+            &p2_end,
+            &p2_start,
+            common_constants::HANDLE_RADIUS,
+            common_constants::HANDLE_DIVISIONS,
             &handle2_material,
+            true,
+            None,
+            None,
         );
     }
 
@@ -212,27 +324,27 @@ impl Tessellatable for HalfPlaneGadget {
 
 impl Gadget for HalfPlaneGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
-        let point1 = self.unit_cell.ivec2_lattice_to_real(&self.point1);
-        let point2 = self.unit_cell.ivec2_lattice_to_real(&self.point2);  
-        
-        // Convert 2D points to 3D space (on XY plane)
-        let p1_3d = DVec3::new(point1.x, point1.y, 0.0);
-        let p2_3d = DVec3::new(point2.x, point2.y, 0.0);
-        
-        // Effective radius for hit testing (distance from centroid to vertex of the triangle)
-        let hit_test_radius = common_constants::HANDLE_TRIANGLE_SIDE_LENGTH / 3.0_f64.sqrt();
+        let plane_to_world = self.drawing_plane.to_world_transform();
+        let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
 
-        // Handle for point1 - test cylinder along Z axis
-        let p1_top = DVec3::new(p1_3d.x, p1_3d.y, common_constants::HANDLE_HEIGHT / 2.0);
-        let p1_bottom = DVec3::new(p1_3d.x, p1_3d.y, -common_constants::HANDLE_HEIGHT / 2.0);
-        if cylinder_hit_test(&p1_top, &p1_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
+        // Map points to their 3D positions on the drawing plane
+        let p1_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point1);
+        let p2_3d = self.drawing_plane.lattice_2d_to_world_3d(&self.point2);
+
+        let hit_test_radius = common_constants::HANDLE_RADIUS * common_constants::HANDLE_RADIUS_HIT_TEST_FACTOR;
+        let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
+
+        // Handle for point1
+        let p1_start = p1_3d - plane_normal * handle_half_height;
+        let p1_end = p1_3d + plane_normal * handle_half_height;
+        if cylinder_hit_test(&p1_end, &p1_start, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(0); // Handle 0 hit
         }
-        
-        // Handle for point2 - test cylinder along Z axis
-        let p2_top = DVec3::new(p2_3d.x, p2_3d.y, common_constants::HANDLE_HEIGHT / 2.0);
-        let p2_bottom = DVec3::new(p2_3d.x, p2_3d.y, -common_constants::HANDLE_HEIGHT / 2.0);
-        if cylinder_hit_test(&p2_top, &p2_bottom, hit_test_radius, &ray_origin, &ray_direction).is_some() {
+
+        // Handle for point2
+        let p2_start = p2_3d - plane_normal * handle_half_height;
+        let p2_end = p2_3d + plane_normal * handle_half_height;
+        if cylinder_hit_test(&p2_end, &p2_start, hit_test_radius, &ray_origin, &ray_direction).is_some() {
             return Some(1); // Handle 1 hit
         }
         
@@ -250,28 +362,14 @@ impl Gadget for HalfPlaneGadget {
             return;
         }
         
-        // Project the ray onto the XY plane (z = 0)
-        let plane_normal = DVec3::new(0.0, 0.0, 1.0);
-        let plane_point = DVec3::new(0.0, 0.0, 0.0);
-        
-        // Find intersection of ray with XY plane
-        let t = (plane_point - ray_origin).dot(plane_normal) / ray_direction.dot(plane_normal);
-        
-        if t <= 0.0 { 
-            // Ray doesn't hit the plane in the forward direction
-            return;
-        }
-        
-        let intersection_point = ray_origin + ray_direction * t;
-        
-        // Convert the 3D point to lattice coordinates
-        let lattice_pos = self.unit_cell.real_to_ivec3_lattice(&intersection_point);
-        
-        // Update the appropriate point
-        if handle_index == 0 {
-            self.point1 = IVec2::new(lattice_pos.x, lattice_pos.y);
-        } else if handle_index == 1 {
-            self.point2 = IVec2::new(lattice_pos.x, lattice_pos.y);
+        // Find lattice point where ray intersects the drawing plane
+        if let Some(lattice_point) = self.drawing_plane.find_lattice_point_by_ray(&ray_origin, &ray_direction) {
+            // Update the appropriate point
+            if handle_index == 0 {
+                self.point1 = lattice_point;
+            } else if handle_index == 1 {
+                self.point2 = lattice_point;
+            }
         }
     }
 
@@ -295,13 +393,13 @@ impl NodeNetworkGadget for HalfPlaneGadget {
 }
 
 impl HalfPlaneGadget {
-    pub fn new(point1: &IVec2, point2: &IVec2, unit_cell: &UnitCellStruct) -> Self {
+    pub fn new(point1: &IVec2, point2: &IVec2, drawing_plane: &DrawingPlane) -> Self {
         HalfPlaneGadget {
             point1: *point1,
             point2: *point2,
             is_dragging: false,
             dragged_handle: None,
-            unit_cell: unit_cell.clone(),
+            drawing_plane: drawing_plane.clone(),
         }
     }
 }

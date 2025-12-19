@@ -4,6 +4,7 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
 /// Editor widget for lattice_move nodes
 class LatticeMoveEditor extends StatefulWidget {
@@ -34,8 +35,10 @@ class _LatticeMoveEditorState extends State<LatticeMoveEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Lattice Move Properties',
-              style: Theme.of(context).textTheme.titleMedium),
+          const NodeEditorHeader(
+            title: 'Lattice Move Properties',
+            nodeTypeName: 'lattice_move',
+          ),
           const SizedBox(height: 16),
 
           // Translation input

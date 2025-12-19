@@ -76,14 +76,14 @@ impl NodeData for Intersect2DData {
       }
     }
     
-    // Check unit cell compatibility - compare all to the first geometry
-    if !GeometrySummary2D::all_have_compatible_unit_cells(&geometries) {
+    // Check drawing plane compatibility - compare all to the first geometry
+    if !GeometrySummary2D::all_have_compatible_drawing_planes(&geometries) {
       return unit_cell_mismatch_error();
     }
     
-    // All unit cells are compatible, proceed with intersection
-    // Take the first unit cell by value before consuming the geometries vector
-    let first_unit_cell = geometries[0].unit_cell.clone();
+    // All drawing planes are compatible, proceed with intersection
+    // Take the first drawing plane by value before consuming the geometries vector
+    let first_drawing_plane = geometries[0].drawing_plane.clone();
     for geometry in geometries.into_iter() {
       shapes.push(geometry.geo_tree_root);
       frame_translation += geometry.frame_transform.translation;
@@ -92,7 +92,7 @@ impl NodeData for Intersect2DData {
     frame_translation /= shape_count as f64;
   
     return NetworkResult::Geometry2D(GeometrySummary2D { 
-      unit_cell: first_unit_cell,
+      drawing_plane: first_drawing_plane,
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,

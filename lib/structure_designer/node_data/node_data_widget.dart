@@ -9,6 +9,7 @@ import 'package:flutter_cad/structure_designer/node_data/extrude_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sphere_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_plane_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/drawing_plane_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_symop_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_move_editor.dart';
@@ -37,6 +38,7 @@ import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// A widget that displays and allows editing of node-specific data
@@ -66,8 +68,13 @@ class NodeDataWidget extends StatelessWidget {
               .firstOrNull;
 
           if (selectedNode == null) {
-            return const Center(
-              child: Text('No node selected'),
+            return Padding(
+              padding: const EdgeInsets.all(2.0),
+              child: BlockingAwareSingleChildScrollView(
+                child: NetworkDescriptionEditor(
+                  key: ValueKey(nodeNetworkView.name),
+                ),
+              ),
             );
           }
 
@@ -117,6 +124,17 @@ class NodeDataWidget extends StatelessWidget {
         return HalfSpaceEditor(
           nodeId: selectedNode.id,
           data: halfSpaceData,
+          model: model,
+        );
+      case 'drawing_plane':
+        // Fetch the drawing plane data here in the parent widget
+        final drawingPlaneData = getDrawingPlaneData(
+          nodeId: selectedNode.id,
+        );
+
+        return DrawingPlaneEditor(
+          nodeId: selectedNode.id,
+          data: drawingPlaneData,
           model: model,
         );
       case 'geo_trans':

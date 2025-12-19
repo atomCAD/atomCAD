@@ -8,7 +8,7 @@ import 'node_network/node_network.dart';
 import 'atomic_structure_visualization_widget.dart';
 import 'geometry_visualization_widget.dart';
 import 'import_cnnd_library_dialog.dart';
-import 'node_networks_list_panel.dart';
+import 'node_networks_list/node_networks_panel.dart';
 import 'node_display_widget.dart';
 import 'camera_control_widget.dart';
 import 'preferences_window.dart';
@@ -196,7 +196,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                         flex: 5,
                         child: Section(
                           title: 'Node networks',
-                          content: NodeNetworksListPanel(model: graphModel),
+                          content: NodeNetworksPanel(model: graphModel),
                           expand: true,
                         ),
                       ),
@@ -256,6 +256,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   Future<void> _saveDesignAs() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     // Open file picker for saving CNND files
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Save Design As',
@@ -275,6 +277,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   void _saveDesign() {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     final success = graphModel.saveNodeNetworks();
     if (!success) {
       // This shouldn't happen if canSave is working correctly, but just in case

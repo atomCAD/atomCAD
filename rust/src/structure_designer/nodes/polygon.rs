@@ -1,7 +1,7 @@
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
 use crate::util::serialization_utils::vec_ivec2_serializer;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -22,7 +22,7 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolygonData {
@@ -34,7 +34,7 @@ impl NodeData for PolygonData {
     fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
       let eval_cache = structure_designer.get_selected_node_eval_cache()?;
       let polygon_cache = eval_cache.downcast_ref::<PolygonEvalCache>()?;
-      Some(Box::new(PolygonGadget::new(&self.vertices, &polygon_cache.unit_cell)))
+      Some(Box::new(PolygonGadget::new(&self.vertices, &polygon_cache.drawing_plane)))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -51,10 +51,10 @@ impl NodeData for PolygonData {
         context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
 
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 0, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
+      let drawing_plane = match network_evaluator.evaluate_or_default(
+        network_stack, node_id, registry, context, 0,
+        DrawingPlane::default(),
+        NetworkResult::extract_drawing_plane,
       ) {
         Ok(value) => value,
         Err(error) => return error,
@@ -64,18 +64,19 @@ impl NodeData for PolygonData {
       // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
       if network_stack.len() == 1 {
         let eval_cache = PolygonEvalCache {
-          unit_cell: unit_cell.clone(),
+          drawing_plane: drawing_plane.clone(),
         };
         context.selected_node_eval_cache = Some(Box::new(eval_cache));
       }
 
+      // Convert vertices using effective unit cell
       let real_vertices = self.vertices.iter().map(|v| {
-        unit_cell.ivec2_lattice_to_real(v)
+        drawing_plane.effective_unit_cell.ivec2_lattice_to_real(v)
       }).collect();
 
       return NetworkResult::Geometry2D(
         GeometrySummary2D {
-          unit_cell,
+          drawing_plane,
           frame_transform: Transform2D::new(
             DVec2::new(0.0, 0.0),
             0.0,
@@ -95,7 +96,7 @@ impl NodeData for PolygonData {
 }
 
 pub struct PolygonEvalCache {
-    pub unit_cell: UnitCellStruct,
+    pub drawing_plane: DrawingPlane,
 }
 
 #[derive(Clone)]
@@ -103,16 +104,16 @@ pub struct PolygonGadget {
     pub vertices: Vec<IVec2>,
     pub is_dragging: bool,
     pub dragged_handle: Option<usize>, // index of the dragged vertex
-    pub unit_cell: UnitCellStruct,
+    pub drawing_plane: DrawingPlane,
 }
 
 impl PolygonGadget {
-    pub fn new(vertices: &Vec<IVec2>, unit_cell: &UnitCellStruct) -> Self {
+    pub fn new(vertices: &Vec<IVec2>, drawing_plane: &DrawingPlane) -> Self {
         PolygonGadget {
             vertices: vertices.clone(),
             is_dragging: false,
             dragged_handle: None,
-            unit_cell: unit_cell.clone(),
+            drawing_plane: drawing_plane.clone(),
         }
     }
     
@@ -144,43 +145,24 @@ impl PolygonGadget {
         }
     }
     
-    /// Finds the nearest lattice point by intersecting a ray with the XY plane
-    /// Returns None if the ray doesn't intersect the plane in a forward direction
+    /// Finds the nearest lattice point by intersecting a ray with the drawing plane.
+    /// Returns None if the ray doesn't intersect the plane in a forward direction.
     fn find_lattice_point_by_ray(&self, ray_origin: &DVec3, ray_direction: &DVec3) -> Option<IVec2> {
-        // Project the ray onto the XY plane (z = 0)
-        let plane_normal = DVec3::new(0.0, 0.0, 1.0);
-        let plane_point = DVec3::new(0.0, 0.0, 0.0);
-        
-        // Find intersection of ray with XY plane
-        let denominator = ray_direction.dot(plane_normal);
-        
-        // Avoid division by zero (ray parallel to plane)
-        if denominator.abs() < 1e-6 { 
-            return None;
-        }
-        
-        let t = (plane_point - ray_origin).dot(plane_normal) / denominator;
-        
-        if t <= 0.0 { 
-            // Ray doesn't hit the plane in the forward direction
-            return None;
-        }
-        
-        let intersection_point = *ray_origin + *ray_direction * t;
-        
-        // Convert the 3D point to lattice coordinates
-        let lattice_pos = self.unit_cell.real_to_ivec3_lattice(&intersection_point);
-
-        Some(IVec2::new(lattice_pos.x, lattice_pos.y))
+        self.drawing_plane.find_lattice_point_by_ray(ray_origin, ray_direction)
     }
 }
 
 impl Tessellatable for PolygonGadget {
-  fn tessellate(&self, output_mesh: &mut Mesh) {
-    let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
-        let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
-        DVec3::new(real_vertex_2d.x, real_vertex_2d.y, 0.0)
-    }).collect();
+  fn tessellate(&self, output: &mut TessellationOutput) {
+    let output_mesh: &mut Mesh = &mut output.mesh;
+
+    let plane_to_world = self.drawing_plane.to_world_transform();
+    let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
+
+    // Map vertices to their 3D positions on the drawing plane
+    let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
+        .map(|v| self.drawing_plane.lattice_2d_to_world_3d(v))
+        .collect();
 
     let roughness: f32 = 0.2;
     let metallic: f32 = 0.0;
@@ -195,8 +177,8 @@ impl Tessellatable for PolygonGadget {
 
         // handle for the point
         let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
-        let handle_start = DVec3::new(p1_3d.x, p1_3d.y, -handle_half_height);
-        let handle_end = DVec3::new(p1_3d.x, p1_3d.y, handle_half_height);
+        let handle_start = p1_3d - plane_normal * handle_half_height;
+        let handle_end = p1_3d + plane_normal * handle_half_height;
         tessellator::tessellate_cylinder(
             output_mesh,
             &handle_end,
@@ -231,11 +213,13 @@ impl Tessellatable for PolygonGadget {
 
 impl Gadget for PolygonGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+        let plane_to_world = self.drawing_plane.to_world_transform();
+        let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
 
-        let real_3d_vertices: Vec<DVec3> = self.vertices.iter().map(|v| {
-            let real_vertex_2d = &self.unit_cell.ivec2_lattice_to_real(v);
-            DVec3::new(real_vertex_2d.x, real_vertex_2d.y, 0.0)
-        }).collect();
+        // Map vertices to their 3D positions on the drawing plane
+        let real_3d_vertices: Vec<DVec3> = self.vertices.iter()
+            .map(|v| self.drawing_plane.lattice_2d_to_world_3d(v))
+            .collect();
 
         // First, check hits with vertex handles
         for i in 0..real_3d_vertices.len() {
@@ -243,8 +227,8 @@ impl Gadget for PolygonGadget {
             
             // Handle for the vertex - test cylinder along Z axis
             let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
-            let handle_start = DVec3::new(p1_3d.x, p1_3d.y, -handle_half_height);
-            let handle_end = DVec3::new(p1_3d.x, p1_3d.y, handle_half_height);
+            let handle_start = p1_3d - plane_normal * handle_half_height;
+            let handle_end = p1_3d + plane_normal * handle_half_height;
             
             if cylinder_hit_test(&handle_end, &handle_start, common_constants::HANDLE_RADIUS * common_constants::HANDLE_RADIUS_HIT_TEST_FACTOR, &ray_origin, &ray_direction).is_some() {
                 return Some(i as i32); // Return the vertex index if hit

@@ -126,17 +126,20 @@ impl NodeData for UnitCellData {
         Err(error) => return error,
       };
 
-      NetworkResult::UnitCell(UnitCellStruct {
-        a, 
-        b, 
-        c,
-        cell_length_a: self.cell_length_a,
-        cell_length_b: self.cell_length_b,
-        cell_length_c: self.cell_length_c,
-        cell_angle_alpha: self.cell_angle_alpha,
-        cell_angle_beta: self.cell_angle_beta,
-        cell_angle_gamma: self.cell_angle_gamma,
-      })
+      // Check if any basis vectors were overridden by comparing to defaults
+      // Use a small epsilon for floating-point comparison
+      const EPSILON: f64 = 1e-10;
+      let a_is_default = (a - default_unit_cell_struct.a).length() < EPSILON;
+      let b_is_default = (b - default_unit_cell_struct.b).length() < EPSILON;
+      let c_is_default = (c - default_unit_cell_struct.c).length() < EPSILON;
+
+      // If none were overridden, return the default to preserve exact crystallographic parameters
+      if a_is_default && b_is_default && c_is_default {
+        NetworkResult::UnitCell(default_unit_cell_struct)
+      } else {
+        // At least one was overridden, calculate crystallographic parameters from basis vectors
+        NetworkResult::UnitCell(UnitCellStruct::new(a, b, c))
+      }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

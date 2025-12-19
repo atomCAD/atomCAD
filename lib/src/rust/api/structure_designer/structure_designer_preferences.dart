@@ -58,6 +58,12 @@ class BackgroundPreferences {
   int gridSize;
   APIIVec3 gridColor;
   APIIVec3 gridStrongColor;
+  bool showLatticeAxes;
+  bool showLatticeGrid;
+  APIIVec3 latticeGridColor;
+  APIIVec3 latticeGridStrongColor;
+  APIIVec3 drawingPlaneGridColor;
+  APIIVec3 drawingPlaneGridStrongColor;
 
   BackgroundPreferences({
     required this.backgroundColor,
@@ -65,6 +71,12 @@ class BackgroundPreferences {
     required this.gridSize,
     required this.gridColor,
     required this.gridStrongColor,
+    required this.showLatticeAxes,
+    required this.showLatticeGrid,
+    required this.latticeGridColor,
+    required this.latticeGridStrongColor,
+    required this.drawingPlaneGridColor,
+    required this.drawingPlaneGridStrongColor,
   });
 
   @override
@@ -73,7 +85,13 @@ class BackgroundPreferences {
       showGrid.hashCode ^
       gridSize.hashCode ^
       gridColor.hashCode ^
-      gridStrongColor.hashCode;
+      gridStrongColor.hashCode ^
+      showLatticeAxes.hashCode ^
+      showLatticeGrid.hashCode ^
+      latticeGridColor.hashCode ^
+      latticeGridStrongColor.hashCode ^
+      drawingPlaneGridColor.hashCode ^
+      drawingPlaneGridStrongColor.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -84,7 +102,13 @@ class BackgroundPreferences {
           showGrid == other.showGrid &&
           gridSize == other.gridSize &&
           gridColor == other.gridColor &&
-          gridStrongColor == other.gridStrongColor;
+          gridStrongColor == other.gridStrongColor &&
+          showLatticeAxes == other.showLatticeAxes &&
+          showLatticeGrid == other.showLatticeGrid &&
+          latticeGridColor == other.latticeGridColor &&
+          latticeGridStrongColor == other.latticeGridStrongColor &&
+          drawingPlaneGridColor == other.drawingPlaneGridColor &&
+          drawingPlaneGridStrongColor == other.drawingPlaneGridStrongColor;
 }
 
 enum GeometryVisualization {

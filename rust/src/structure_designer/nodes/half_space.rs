@@ -9,7 +9,7 @@ use crate::util::serialization_utils::ivec3_serializer;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use std::collections::HashSet;
 use crate::display::gadget::Gadget;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -123,7 +123,10 @@ impl NodeData for HalfSpaceData {
       }
 
       // Get crystallographically correct plane properties (normal and d-spacing)
-      let plane_props = unit_cell.ivec3_miller_index_to_plane_props(&miller_index);
+      let plane_props = match unit_cell.ivec3_miller_index_to_plane_props(&miller_index) {
+        Ok(props) => props,
+        Err(error_msg) => return NetworkResult::Error(error_msg),
+      };
       let center_pos = unit_cell.ivec3_lattice_to_real(&center);
 
       // Calculate shift distance as multiples of d-spacing, divided by subdivision
@@ -202,7 +205,8 @@ pub struct HalfSpaceGadget {
 }
 
 impl Tessellatable for HalfSpaceGadget {
-    fn tessellate(&self, output_mesh: &mut Mesh) {
+    fn tessellate(&self, output: &mut TessellationOutput) {
+        let output_mesh: &mut Mesh = &mut output.mesh;
         let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
 
         half_space_utils::tessellate_center_sphere(output_mesh, &center_pos);

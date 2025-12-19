@@ -83,6 +83,43 @@ impl LineMesh {
                                      color: &[f32; 3]) {
         self.add_line_with_positions(start_pos, color, end_pos, color);
     }
+    
+    /// Add a dotted line by creating multiple small line segments
+    pub fn add_dotted_line(&mut self,
+                          start_pos: &Vec3,
+                          end_pos: &Vec3,
+                          color: &[f32; 3],
+                          dot_length: f32,
+                          gap_length: f32) {
+        let direction = *end_pos - *start_pos;
+        let total_length = direction.length();
+        let direction_normalized = direction.normalize();
+        
+        let segment_length = dot_length + gap_length;
+        let num_segments = (total_length / segment_length).floor() as u32;
+        
+        for i in 0..num_segments {
+            let start_offset = i as f32 * segment_length;
+            let end_offset = start_offset + dot_length;
+            
+            let dot_start = *start_pos + direction_normalized * start_offset;
+            let dot_end = *start_pos + direction_normalized * end_offset;
+            
+            self.add_line_with_uniform_color(&dot_start, &dot_end, color);
+        }
+        
+        // Add final partial dot if there's remaining length
+        let remaining = total_length - (num_segments as f32 * segment_length);
+        if remaining > 0.0 {
+            let start_offset = num_segments as f32 * segment_length;
+            let end_offset = (start_offset + dot_length.min(remaining)).min(total_length);
+            
+            let dot_start = *start_pos + direction_normalized * start_offset;
+            let dot_end = *start_pos + direction_normalized * end_offset;
+            
+            self.add_line_with_uniform_color(&dot_start, &dot_end, color);
+        }
+    }
 }
 
 

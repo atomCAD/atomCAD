@@ -214,8 +214,20 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   bool canConnectPins(PinReference pin1, PinReference pin2) {
+    if (pin1.pinType == pin2.pinType) {
+      return false;
+    }
+
     final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
     final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
+
+    if (outPin.pinType != PinType.output || inPin.pinType != PinType.input) {
+      return false;
+    }
+
+    if (inPin.pinIndex < 0) {
+      return false;
+    }
 
     return structure_designer_api.canConnectNodes(
       sourceNodeId: outPin.nodeId,
@@ -226,8 +238,20 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void connectPins(PinReference pin1, PinReference pin2) {
+    if (pin1.pinType == pin2.pinType) {
+      return;
+    }
+
     final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
     final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
+
+    if (outPin.pinType != PinType.output || inPin.pinType != PinType.input) {
+      return;
+    }
+
+    if (inPin.pinIndex < 0) {
+      return;
+    }
 
     structure_designer_api.connectNodes(
       sourceNodeId: outPin.nodeId,
@@ -250,6 +274,16 @@ class StructureDesignerModel extends ChangeNotifier {
       }
       refreshFromKernel();
     }
+  }
+
+  BigInt? getSelectedNodeId() {
+    if (nodeNetworkView == null) return null;
+    for (final node in nodeNetworkView!.nodes.values) {
+      if (node.selected) {
+        return node.id;
+      }
+    }
+    return null;
   }
 
   void renameNodeNetwork(String oldName, String newName) {
@@ -306,6 +340,34 @@ class StructureDesignerModel extends ChangeNotifier {
       final newNetworkName = nodeNetworkNames.last.name;
       setActiveNodeNetwork(newNetworkName);
     }
+  }
+
+  /// Navigates back in node network history
+  bool navigateBack() {
+    final success = structure_designer_api.navigateBack();
+    if (success) {
+      refreshFromKernel();
+    }
+    return success;
+  }
+
+  /// Navigates forward in node network history
+  bool navigateForward() {
+    final success = structure_designer_api.navigateForward();
+    if (success) {
+      refreshFromKernel();
+    }
+    return success;
+  }
+
+  /// Checks if we can navigate backward in network history
+  bool canNavigateBack() {
+    return structure_designer_api.canNavigateBack();
+  }
+
+  /// Checks if we can navigate forward in network history
+  bool canNavigateForward() {
+    return structure_designer_api.canNavigateForward();
   }
 
   void setSelectedWire(BigInt sourceNodeId, BigInt sourceOutputPinIndex,
@@ -418,6 +480,9 @@ class StructureDesignerModel extends ChangeNotifier {
   BigInt duplicateNode(BigInt nodeId) {
     if (nodeNetworkView == null) return BigInt.zero;
     final newNodeId = structure_designer_api.duplicateNode(nodeId: nodeId);
+    if (newNodeId != BigInt.zero) {
+      structure_designer_api.selectNode(nodeId: newNodeId);
+    }
     refreshFromKernel();
     return newNodeId;
   }
@@ -484,6 +549,11 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setHalfSpaceData(BigInt nodeId, APIHalfSpaceData data) {
     structure_designer_api.setHalfSpaceData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setDrawingPlaneData(BigInt nodeId, APIDrawingPlaneData data) {
+    structure_designer_api.setDrawingPlaneData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

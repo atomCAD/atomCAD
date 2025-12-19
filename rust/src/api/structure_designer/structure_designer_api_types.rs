@@ -25,6 +25,7 @@ pub enum APIDataTypeBase {
   IVec2,
   IVec3,
   UnitCell,
+  DrawingPlane,
   Geometry2D,
   Geometry,
   Atomic,
@@ -125,6 +126,9 @@ pub struct InputPinView {
 
   pub struct APIExtrudeData {
     pub height: i32,
+    pub extrude_direction: APIIVec3,
+    pub infinite: bool,
+    pub subdivision: i32,
   }
 
   pub struct APICuboidData {
@@ -143,6 +147,14 @@ pub struct InputPinView {
   }
 
   pub struct APIHalfSpaceData {
+    pub max_miller_index: i32,
+    pub miller_index: APIIVec3,
+    pub center: APIIVec3,
+    pub shift: i32,
+    pub subdivision: i32,
+  }
+
+  pub struct APIDrawingPlaneData {
     pub max_miller_index: i32,
     pub miller_index: APIIVec3,
     pub center: APIIVec3,
@@ -233,9 +245,52 @@ pub struct InputPinView {
     pub validation_errors: Option<String>,
   }
 
+  #[frb]
+  #[derive(PartialEq, Eq, Hash, Clone, Debug)]
+  pub enum NodeTypeCategory {
+    MathAndProgramming,
+    Geometry2D,
+    Geometry3D,
+    AtomicStructure,
+    OtherBuiltin,
+    Custom,
+  }
+
+  impl NodeTypeCategory {
+    pub fn order(&self) -> u8 {
+      match self {
+        Self::MathAndProgramming => 0,
+        Self::Geometry2D => 1,
+        Self::Geometry3D => 2,
+        Self::AtomicStructure => 3,
+        Self::OtherBuiltin => 4,
+        Self::Custom => 5,
+      }
+    }
+
+    pub fn display_name(&self) -> &str {
+      match self {
+        Self::MathAndProgramming => "Math and Programming",
+        Self::Geometry2D => "2D Geometry",
+        Self::Geometry3D => "3D Geometry",
+        Self::AtomicStructure => "Atomic Structure",
+        Self::OtherBuiltin => "Other",
+        Self::Custom => "Custom",
+      }
+    }
+  }
+
+  #[derive(Clone)]
   pub struct APINodeTypeView {
     pub name: String,
     pub description: String,
+    pub category: NodeTypeCategory,
+  }
+
+  #[derive(Clone)]
+  pub struct APINodeCategoryView {
+    pub category: NodeTypeCategory,
+    pub nodes: Vec<APINodeTypeView>,
   }
 
 pub struct APIExprParameter {
@@ -291,6 +346,7 @@ pub struct APIAtomFillData {
   pub hydrogen_passivation: bool, // Whether to apply hydrogen passivation
   pub remove_single_bond_atoms_before_passivation: bool, // Whether to remove atoms with exactly one bond before passivation
   pub surface_reconstruction: bool, // Whether to apply surface reconstruction
+  pub invert_phase: bool,
   pub error: Option<String>, // Optional error message from parsing
 }
 

@@ -29,8 +29,42 @@ pub struct SerializableNodeType {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    #[serde(default = "default_category")]
+    pub category: String,
     pub parameters: Vec<SerializableParameter>,
     pub output_type: String,
+}
+
+fn default_category() -> String {
+    "Custom".to_string()
+}
+
+/// Converts NodeTypeCategory enum to string for serialization
+fn category_to_string(category: &crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory) -> String {
+    use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+    match category {
+        NodeTypeCategory::MathAndProgramming => "MathAndProgramming".to_string(),
+        NodeTypeCategory::Geometry2D => "Geometry2D".to_string(),
+        NodeTypeCategory::Geometry3D => "Geometry3D".to_string(),
+        NodeTypeCategory::AtomicStructure => "AtomicStructure".to_string(),
+        NodeTypeCategory::OtherBuiltin => "OtherBuiltin".to_string(),
+        NodeTypeCategory::Custom => "Custom".to_string(),
+    }
+}
+
+/// Converts string to NodeTypeCategory enum for deserialization
+/// Defaults to Custom if the string is not recognized for backward compatibility
+fn category_from_string(category_str: &str) -> crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory {
+    use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+    match category_str {
+        "MathAndProgramming" => NodeTypeCategory::MathAndProgramming,
+        "Geometry2D" => NodeTypeCategory::Geometry2D,
+        "Geometry3D" => NodeTypeCategory::Geometry3D,
+        "AtomicStructure" => NodeTypeCategory::AtomicStructure,
+        "OtherBuiltin" => NodeTypeCategory::OtherBuiltin,
+        "Custom" => NodeTypeCategory::Custom,
+        _ => NodeTypeCategory::Custom, // Default for unknown/old files
+    }
 }
 
 /// Serializable version of Node without trait objects for JSON serialization
@@ -76,6 +110,7 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
     SerializableNodeType {
         name: node_type.name.clone(),
         description: node_type.description.clone(),
+        category: category_to_string(&node_type.category),
         parameters: serializable_parameters,
         output_type: node_type.output_type.to_string(),
     }
@@ -105,10 +140,14 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         })
         .collect::<io::Result<Vec<Parameter>>>()?;
     
+    // Parse category from string
+    let category = category_from_string(&serializable.category);
+    
     // Create the NodeType with a default node_data_creator
     Ok(NodeType {
         name: serializable.name.clone(),
         description: serializable.description.clone(),
+        category,
         parameters,
         output_type,
         node_data_creator: || Box::new(NoData {}), // Default, will be replaced with actual data

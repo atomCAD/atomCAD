@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `eq`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -36,6 +36,7 @@ class APIAtomFillData {
   final bool hydrogenPassivation;
   final bool removeSingleBondAtomsBeforePassivation;
   final bool surfaceReconstruction;
+  final bool invertPhase;
   final String? error;
 
   const APIAtomFillData({
@@ -44,6 +45,7 @@ class APIAtomFillData {
     required this.hydrogenPassivation,
     required this.removeSingleBondAtomsBeforePassivation,
     required this.surfaceReconstruction,
+    required this.invertPhase,
     this.error,
   });
 
@@ -54,6 +56,7 @@ class APIAtomFillData {
       hydrogenPassivation.hashCode ^
       removeSingleBondAtomsBeforePassivation.hashCode ^
       surfaceReconstruction.hashCode ^
+      invertPhase.hashCode ^
       error.hashCode;
 
   @override
@@ -68,6 +71,7 @@ class APIAtomFillData {
           removeSingleBondAtomsBeforePassivation ==
               other.removeSingleBondAtomsBeforePassivation &&
           surfaceReconstruction == other.surfaceReconstruction &&
+          invertPhase == other.invertPhase &&
           error == other.error;
 }
 
@@ -188,12 +192,48 @@ enum APIDataTypeBase {
   iVec2,
   iVec3,
   unitCell,
+  drawingPlane,
   geometry2D,
   geometry,
   atomic,
   motif,
   custom,
   ;
+}
+
+class APIDrawingPlaneData {
+  final int maxMillerIndex;
+  final APIIVec3 millerIndex;
+  final APIIVec3 center;
+  final int shift;
+  final int subdivision;
+
+  const APIDrawingPlaneData({
+    required this.maxMillerIndex,
+    required this.millerIndex,
+    required this.center,
+    required this.shift,
+    required this.subdivision,
+  });
+
+  @override
+  int get hashCode =>
+      maxMillerIndex.hashCode ^
+      millerIndex.hashCode ^
+      center.hashCode ^
+      shift.hashCode ^
+      subdivision.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDrawingPlaneData &&
+          runtimeType == other.runtimeType &&
+          maxMillerIndex == other.maxMillerIndex &&
+          millerIndex == other.millerIndex &&
+          center == other.center &&
+          shift == other.shift &&
+          subdivision == other.subdivision;
 }
 
 class APIEditAtomData {
@@ -326,20 +366,33 @@ class APIExprParameter {
 
 class APIExtrudeData {
   final int height;
+  final APIIVec3 extrudeDirection;
+  final bool infinite;
+  final int subdivision;
 
   const APIExtrudeData({
     required this.height,
+    required this.extrudeDirection,
+    required this.infinite,
+    required this.subdivision,
   });
 
   @override
-  int get hashCode => height.hashCode;
+  int get hashCode =>
+      height.hashCode ^
+      extrudeDirection.hashCode ^
+      infinite.hashCode ^
+      subdivision.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIExtrudeData &&
           runtimeType == other.runtimeType &&
-          height == other.height;
+          height == other.height &&
+          extrudeDirection == other.extrudeDirection &&
+          infinite == other.infinite &&
+          subdivision == other.subdivision;
 }
 
 class APIFacet {
@@ -700,17 +753,40 @@ class APINetworkWithValidationErrors {
           validationErrors == other.validationErrors;
 }
 
+class APINodeCategoryView {
+  final NodeTypeCategory category;
+  final List<APINodeTypeView> nodes;
+
+  const APINodeCategoryView({
+    required this.category,
+    required this.nodes,
+  });
+
+  @override
+  int get hashCode => category.hashCode ^ nodes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeCategoryView &&
+          runtimeType == other.runtimeType &&
+          category == other.category &&
+          nodes == other.nodes;
+}
+
 class APINodeTypeView {
   final String name;
   final String description;
+  final NodeTypeCategory category;
 
   const APINodeTypeView({
     required this.name,
     required this.description,
+    required this.category,
   });
 
   @override
-  int get hashCode => name.hashCode ^ description.hashCode;
+  int get hashCode => name.hashCode ^ description.hashCode ^ category.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -718,7 +794,8 @@ class APINodeTypeView {
       other is APINodeTypeView &&
           runtimeType == other.runtimeType &&
           name == other.name &&
-          description == other.description;
+          description == other.description &&
+          category == other.category;
 }
 
 class APIParameterData {
@@ -1099,6 +1176,26 @@ class NodeNetworkView {
           name == other.name &&
           nodes == other.nodes &&
           wires == other.wires;
+}
+
+enum NodeTypeCategory {
+  mathAndProgramming,
+  geometry2D,
+  geometry3D,
+  atomicStructure,
+  otherBuiltin,
+  custom,
+  ;
+
+  Future<void> displayName() => RustLib.instance.api
+          .crateApiStructureDesignerStructureDesignerApiTypesNodeTypeCategoryDisplayName(
+        that: this,
+      );
+
+  Future<int> order() => RustLib.instance.api
+          .crateApiStructureDesignerStructureDesignerApiTypesNodeTypeCategoryOrder(
+        that: this,
+      );
 }
 
 class NodeView {

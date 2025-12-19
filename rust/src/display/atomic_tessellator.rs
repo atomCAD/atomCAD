@@ -104,11 +104,21 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
     // Iterate inline bonds - each bond only once using atom ID ordering
     for atom in atomic_structure.atoms_values() {
+      // Skip bonds if this atom is culled
+      if should_cull_atom(atom, atomic_viz_prefs) {
+        continue;
+      }
+      
       for bond in &atom.bonds {
         let other_atom_id = bond.other_atom_id();
         // Only tessellate each bond once
         if atom.id < other_atom_id {
           if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
+            // Skip bond if the other atom is culled
+            if should_cull_atom(other_atom, atomic_viz_prefs) {
+              continue;
+            }
+            
             tessellate_bond_inline(output_mesh, atomic_structure, atom, other_atom, bond.bond_order(), params);
           }
         }
@@ -382,11 +392,21 @@ pub fn tessellate_atomic_structure_impostors(
   if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
     // Iterate inline bonds - each bond only once using atom ID ordering
     for atom in atomic_structure.atoms_values() {
+      // Skip bonds if this atom is culled
+      if should_cull_atom(atom, atomic_viz_prefs) {
+        continue;
+      }
+      
       for bond in &atom.bonds {
         let other_atom_id = bond.other_atom_id();
         // Only tessellate each bond once
         if atom.id < other_atom_id {
           if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
+            // Skip bond if the other atom is culled
+            if should_cull_atom(other_atom, atomic_viz_prefs) {
+              continue;
+            }
+            
             tessellate_bond_impostor_inline(bond_impostor_mesh, atom, other_atom, bond.bond_order());
           }
         }

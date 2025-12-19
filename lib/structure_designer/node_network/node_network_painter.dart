@@ -25,8 +25,31 @@ const double GRID_MINOR_LINE_WIDTH = 1.0;
 class NodeNetworkPainter extends CustomPainter {
   final StructureDesignerModel graphModel;
   final Offset panOffset;
+  final ZoomLevel zoomLevel;
 
-  NodeNetworkPainter(this.graphModel, {this.panOffset = Offset.zero});
+  NodeNetworkPainter(this.graphModel,
+      {this.panOffset = Offset.zero, this.zoomLevel = ZoomLevel.normal});
+
+  (Offset, String)? _tryGetPinPositionAndDataType(
+      BigInt nodeId, PinType pinType, int pinIndex) {
+    final view = graphModel.nodeNetworkView;
+    if (view == null) {
+      return null;
+    }
+
+    final node = view.nodes[nodeId];
+    if (node == null) {
+      return null;
+    }
+
+    if (pinType == PinType.input) {
+      if (pinIndex < 0 || pinIndex >= node.inputPins.length) {
+        return null;
+      }
+    }
+
+    return _getPinPositionAndDataType(nodeId, pinType, pinIndex);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -44,19 +67,27 @@ class NodeNetworkPainter extends CustomPainter {
 
     // Draw regular wires first
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final source = _getPinPositionAndDataType(
+      final source = _tryGetPinPositionAndDataType(
           wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
-      final dest = _getPinPositionAndDataType(
+      final dest = _tryGetPinPositionAndDataType(
           wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
+
+      if (source == null || dest == null) {
+        continue;
+      }
+
       _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected);
     }
 
     // Draw dragged wire on top
     if (graphModel.draggedWire != null) {
-      final wireStart = _getPinPositionAndDataType(
+      final wireStart = _tryGetPinPositionAndDataType(
           graphModel.draggedWire!.startPin.nodeId,
           graphModel.draggedWire!.startPin.pinType,
           graphModel.draggedWire!.startPin.pinIndex);
+      if (wireStart == null) {
+        return;
+      }
       final wireEndPos = graphModel.draggedWire!.wireEndPosition;
       if (graphModel.draggedWire!.startPin.pinType == PinType.output) {
         // start is source
@@ -70,9 +101,18 @@ class NodeNetworkPainter extends CustomPainter {
 
   (Offset, String) _getPinPositionAndDataType(
       BigInt nodeId, PinType pinType, int pinIndex) {
-    // Now this is is a bit of a hacky solution.
-    // We should probably use the real positions of the pin widgets instead of this logic to
-    // approximate it independently.
+    if (zoomLevel == ZoomLevel.normal) {
+      return _getPinPositionNormal(nodeId, pinType, pinIndex);
+    } else {
+      return _getPinPositionZoomedOut(nodeId, pinType, pinIndex);
+    }
+  }
+
+  /// Calculate pin position for normal zoom level with detailed pins
+  (Offset, String) _getPinPositionNormal(
+      BigInt nodeId, PinType pinType, int pinIndex) {
+    final scale = getZoomScale(zoomLevel);
+
     if (pinType == PinType.output) {
       // output pin (source pin)
       final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId];
@@ -84,10 +124,11 @@ class NodeNetworkPainter extends CustomPainter {
                   sourceNode.inputPins.length *
                       NODE_VERT_WIRE_OFFSET_PER_PARAM *
                       0.5);
+      // Use central coordinate transformation
+      final logicalPos = APIVec2ToOffset(sourceNode!.position) +
+          Offset(NODE_WIDTH, sourceVertOffset);
       return (
-        APIVec2ToOffset(sourceNode!.position) +
-            Offset(NODE_WIDTH, sourceVertOffset) +
-            panOffset,
+        logicalToScreen(logicalPos, panOffset, scale),
         sourceNode.outputType
       );
     } else {
@@ -95,12 +136,43 @@ class NodeNetworkPainter extends CustomPainter {
       final destNode = graphModel.nodeNetworkView!.nodes[nodeId];
       final destVertOffset = NODE_VERT_WIRE_OFFSET +
           (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+      // Use central coordinate transformation
+      final logicalPos =
+          APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
       return (
-        APIVec2ToOffset(destNode!.position) +
-            Offset(0.0, destVertOffset) +
-            panOffset,
+        logicalToScreen(logicalPos, panOffset, scale),
         destNode.inputPins[pinIndex].dataType
       );
+    }
+  }
+
+  /// Calculate pin position for zoomed-out mode with edge-based connections
+  (Offset, String) _getPinPositionZoomedOut(
+      BigInt nodeId, PinType pinType, int pinIndex) {
+    final node = graphModel.nodeNetworkView!.nodes[nodeId]!;
+    final scale = getZoomScale(zoomLevel);
+    final nodeSize = getNodeSize(node, zoomLevel);
+    // Use central coordinate transformation
+    final nodePos =
+        logicalToScreen(APIVec2ToOffset(node.position), panOffset, scale);
+
+    if (pinType == PinType.output) {
+      // Output wires connect to right edge, centered vertically
+      final rightEdgeX = nodePos.dx + nodeSize.width;
+      final centerY = nodePos.dy + nodeSize.height / 2;
+      return (Offset(rightEdgeX, centerY), node.outputType);
+    } else {
+      // Input wires connect to left edge with small vertical offset per input
+      final leftEdgeX = nodePos.dx;
+      final numInputs = node.inputPins.length;
+
+      // Distribute input connections vertically with small spacing
+      final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
+      final totalHeight = (numInputs - 1) * spacing;
+      final startY = nodePos.dy + (nodeSize.height - totalHeight) / 2;
+      final inputY = startY + (pinIndex * spacing);
+
+      return (Offset(leftEdgeX, inputY), node.inputPins[pinIndex].dataType);
     }
   }
 
@@ -186,10 +258,17 @@ class NodeNetworkPainter extends CustomPainter {
     // We don't need to adjust the position here because _getPinPositionAndDataType
     // already adds the panOffset to the returned positions
     for (var wire in graphModel.nodeNetworkView!.wires) {
-      final (sourcePos, _) = _getPinPositionAndDataType(
+      final source = _tryGetPinPositionAndDataType(
           wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
-      final (destPos, _) = _getPinPositionAndDataType(
+      final dest = _tryGetPinPositionAndDataType(
           wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
+
+      if (source == null || dest == null) {
+        continue;
+      }
+
+      final (sourcePos, _) = source;
+      final (destPos, _) = dest;
 
       final hitTestPath = _getBand(sourcePos, destPos, HIT_TEST_WIRE_WIDTH);
       if (hitTestPath.contains(position)) {
@@ -203,64 +282,83 @@ class NodeNetworkPainter extends CustomPainter {
     return null;
   }
 
-  /// Draw a grid pattern that respects the pan offset
+  /// Draw a grid pattern that scales with zoom level
   void _drawGrid(Canvas canvas, Size size) {
-    // Calculate grid boundaries based on visible area
+    final scale = getZoomScale(zoomLevel);
     final Rect visibleRect = Offset.zero & size;
 
     // Apply clipping to prevent drawing outside the widget area
     canvas.clipRect(visibleRect);
 
-    // Calculate the grid lines starting points based on pan offset
-    // Ensure grid appears fixed to the world, not to the view
-    double startX =
-        ((visibleRect.left - panOffset.dx) / GRID_MINOR_SPACING).floor() *
-                GRID_MINOR_SPACING +
-            panOffset.dx;
-    double startY =
-        ((visibleRect.top - panOffset.dy) / GRID_MINOR_SPACING).floor() *
-                GRID_MINOR_SPACING +
-            panOffset.dy;
-    double endX = visibleRect.right;
-    double endY = visibleRect.bottom;
+    // At zoomed-out levels, only show major grid lines with minor color
+    final bool showMinorLines = (zoomLevel == ZoomLevel.normal);
 
-    // Create paints for major and minor grid lines
+    // Create paints for grid lines
     final minorPaint = Paint()
       ..color = GRID_MINOR_COLOR
       ..strokeWidth = GRID_MINOR_LINE_WIDTH
       ..style = PaintingStyle.stroke;
 
     final majorPaint = Paint()
-      ..color = GRID_MAJOR_COLOR
-      ..strokeWidth = GRID_MAJOR_LINE_WIDTH
+      ..color = showMinorLines ? GRID_MAJOR_COLOR : GRID_MINOR_COLOR
+      ..strokeWidth =
+          showMinorLines ? GRID_MAJOR_LINE_WIDTH : GRID_MINOR_LINE_WIDTH
       ..style = PaintingStyle.stroke;
 
-    // Draw vertical grid lines
-    for (double x = startX; x <= endX; x += GRID_MINOR_SPACING) {
-      // Determine if this is a major grid line
-      bool isMajor = (((x - panOffset.dx) / GRID_MAJOR_SPACING).round() *
-                      GRID_MAJOR_SPACING +
-                  panOffset.dx -
-                  x)
-              .abs() <
-          0.5;
+    // Convert visible screen rect to logical coordinates
+    final logicalTopLeft =
+        screenToLogical(visibleRect.topLeft, panOffset, scale);
+    final logicalBottomRight =
+        screenToLogical(visibleRect.bottomRight, panOffset, scale);
 
-      canvas.drawLine(Offset(x, visibleRect.top), Offset(x, visibleRect.bottom),
-          isMajor ? majorPaint : minorPaint);
+    // Calculate grid line positions in logical space
+    final gridSpacing =
+        showMinorLines ? GRID_MINOR_SPACING : GRID_MAJOR_SPACING;
+    final startX = (logicalTopLeft.dx / gridSpacing).floor() * gridSpacing;
+    final startY = (logicalTopLeft.dy / gridSpacing).floor() * gridSpacing;
+
+    // Draw vertical grid lines
+    for (double logicalX = startX;
+        logicalX <= logicalBottomRight.dx;
+        logicalX += gridSpacing) {
+      final screenX = logicalToScreen(Offset(logicalX, 0), panOffset, scale).dx;
+
+      // Check if this is a major grid line
+      final isMajor =
+          (logicalX / GRID_MAJOR_SPACING).round() * GRID_MAJOR_SPACING ==
+              logicalX;
+
+      // In normal mode, draw both minor and major. In zoomed-out mode, only major
+      final shouldDraw = showMinorLines || isMajor;
+
+      if (shouldDraw) {
+        canvas.drawLine(
+            Offset(screenX, visibleRect.top),
+            Offset(screenX, visibleRect.bottom),
+            isMajor ? majorPaint : minorPaint);
+      }
     }
 
     // Draw horizontal grid lines
-    for (double y = startY; y <= endY; y += GRID_MINOR_SPACING) {
-      // Determine if this is a major grid line
-      bool isMajor = (((y - panOffset.dy) / GRID_MAJOR_SPACING).round() *
-                      GRID_MAJOR_SPACING +
-                  panOffset.dy -
-                  y)
-              .abs() <
-          0.5;
+    for (double logicalY = startY;
+        logicalY <= logicalBottomRight.dy;
+        logicalY += gridSpacing) {
+      final screenY = logicalToScreen(Offset(0, logicalY), panOffset, scale).dy;
 
-      canvas.drawLine(Offset(visibleRect.left, y), Offset(visibleRect.right, y),
-          isMajor ? majorPaint : minorPaint);
+      // Check if this is a major grid line
+      final isMajor =
+          (logicalY / GRID_MAJOR_SPACING).round() * GRID_MAJOR_SPACING ==
+              logicalY;
+
+      // In normal mode, draw both minor and major. In zoomed-out mode, only major
+      final shouldDraw = showMinorLines || isMajor;
+
+      if (shouldDraw) {
+        canvas.drawLine(
+            Offset(visibleRect.left, screenY),
+            Offset(visibleRect.right, screenY),
+            isMajor ? majorPaint : minorPaint);
+      }
     }
   }
 
