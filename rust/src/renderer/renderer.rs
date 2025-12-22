@@ -16,9 +16,6 @@ use glam::f64::DVec3;
 use glam::f64::DVec4;
 use glam::f64::DQuat;
 use std::sync::Mutex;
-use crate::api::common_api_types::APICameraCanonicalView;
-use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, BackgroundPreferences};
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -642,36 +639,7 @@ impl Renderer {
         self.device.poll(Maintain::Wait);
     }
 
-    pub fn refresh(
-        &mut self,
-        scene: &crate::structure_designer::structure_designer_scene::StructureDesignerScene,
-        lightweight: bool,
-        preferences: &StructureDesignerPreferences
-    ) {
-        let (lightweight_mesh, gadget_line_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = 
-            crate::display::scene_tessellator::tessellate_scene_content(
-                scene, 
-                &self.camera, 
-                lightweight, 
-                preferences
-            );
-
-        self.update_all_gpu_meshes(
-            &lightweight_mesh,
-            &gadget_line_mesh,
-            &main_mesh,
-            &wireframe_mesh,
-            &atom_impostor_mesh,
-            &bond_impostor_mesh,
-            !lightweight
-        );
-
-        if !lightweight {
-            self.refresh_background(scene.unit_cell.as_ref(), &preferences.background_preferences);
-        }
-    }
-
-    fn update_all_gpu_meshes(
+    pub fn update_all_gpu_meshes(
         &mut self,
         lightweight_mesh: &Mesh,
         gadget_line_mesh: &LineMesh,
@@ -702,20 +670,14 @@ impl Renderer {
         }
     }
 
-    pub fn refresh_background(&mut self, unit_cell: Option<&UnitCellStruct>, background_preferences: &BackgroundPreferences) {
+    pub fn update_background_mesh(&mut self, background_line_mesh: &LineMesh) {
         let _lock = self.render_mutex.lock().unwrap();
-        
-        let mut line_mesh = LineMesh::new();
-        
-        let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
-        crate::display::coordinate_system_tessellator::tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
-        
-        self.background_mesh.update_from_line_mesh(&self.device, &line_mesh, "Background");
-        
+
+        self.background_mesh.update_from_line_mesh(&self.device, background_line_mesh, "Background");
         self.background_mesh.set_identity_transform(&self.queue);
     }
 
-    pub fn render(&mut self, background_preferences: &BackgroundPreferences) -> Vec<u8> {
+    pub fn render(&mut self, background_color_rgb: [u8; 3]) -> Vec<u8> {
         let _lock = self.render_mutex.lock().unwrap();
 
         let mut encoder = self
@@ -726,9 +688,9 @@ impl Renderer {
 
         // Convert background color from 0-255 RGB to 0.0-1.0 range
         let bg_color = Color {
-            r: background_preferences.background_color.x as f64 / 255.0,
-            g: background_preferences.background_color.y as f64 / 255.0,
-            b: background_preferences.background_color.z as f64 / 255.0,
+            r: background_color_rgb[0] as f64 / 255.0,
+            g: background_color_rgb[1] as f64 / 255.0,
+            b: background_color_rgb[2] as f64 / 255.0,
             a: 1.0,
         };
 
@@ -922,7 +884,7 @@ impl Renderer {
     }
     
     /// Sets the camera to a canonical view
-    pub fn set_camera_canonical_view(&mut self, view: APICameraCanonicalView) {
+    pub fn set_camera_canonical_view(&mut self, view: crate::renderer::camera::CameraCanonicalView) {
         self.camera.set_canonical_view(view);
         self.update_camera_buffer();
     }

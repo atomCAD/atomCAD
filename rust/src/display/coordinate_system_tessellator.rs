@@ -98,6 +98,15 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
     }
 }
 
+pub fn tessellate_background_coordinate_system(unit_cell: Option<&UnitCellStruct>, background_preferences: &BackgroundPreferences) -> LineMesh {
+    let mut line_mesh = LineMesh::new();
+
+    let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
+    tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
+
+    line_mesh
+}
+
 pub fn tessellate_drawing_plane_grid_and_axes(
     output_mesh: &mut LineMesh,
     drawing_plane: &DrawingPlane,

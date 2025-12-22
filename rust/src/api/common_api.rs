@@ -24,6 +24,30 @@ use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::api_common::with_mut_cad_instance_or;
 
+fn to_renderer_camera_canonical_view(view: APICameraCanonicalView) -> crate::renderer::camera::CameraCanonicalView {
+  match view {
+    APICameraCanonicalView::Custom => crate::renderer::camera::CameraCanonicalView::Custom,
+    APICameraCanonicalView::Top => crate::renderer::camera::CameraCanonicalView::Top,
+    APICameraCanonicalView::Bottom => crate::renderer::camera::CameraCanonicalView::Bottom,
+    APICameraCanonicalView::Front => crate::renderer::camera::CameraCanonicalView::Front,
+    APICameraCanonicalView::Back => crate::renderer::camera::CameraCanonicalView::Back,
+    APICameraCanonicalView::Left => crate::renderer::camera::CameraCanonicalView::Left,
+    APICameraCanonicalView::Right => crate::renderer::camera::CameraCanonicalView::Right,
+  }
+}
+
+fn to_api_camera_canonical_view(view: crate::renderer::camera::CameraCanonicalView) -> APICameraCanonicalView {
+  match view {
+    crate::renderer::camera::CameraCanonicalView::Custom => APICameraCanonicalView::Custom,
+    crate::renderer::camera::CameraCanonicalView::Top => APICameraCanonicalView::Top,
+    crate::renderer::camera::CameraCanonicalView::Bottom => APICameraCanonicalView::Bottom,
+    crate::renderer::camera::CameraCanonicalView::Front => APICameraCanonicalView::Front,
+    crate::renderer::camera::CameraCanonicalView::Back => APICameraCanonicalView::Back,
+    crate::renderer::camera::CameraCanonicalView::Left => APICameraCanonicalView::Left,
+    crate::renderer::camera::CameraCanonicalView::Right => APICameraCanonicalView::Right,
+  }
+}
+
 const INITIAL_VIEWPORT_WIDTH : u32 = 1280;
 const INITIAL_VIEWPORT_HEIGHT : u32 = 544;
 
@@ -84,7 +108,11 @@ async fn initialize_cad_instance_async() {
     );
 
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
-      cad_instance.renderer.refresh_background(None, &cad_instance.structure_designer.preferences.background_preferences);
+      let background_line_mesh = crate::display::coordinate_system_tessellator::tessellate_background_coordinate_system(
+        None,
+        &cad_instance.structure_designer.preferences.background_preferences
+      );
+      cad_instance.renderer.update_background_mesh(&background_line_mesh);
       add_sample_network(&mut cad_instance.structure_designer);
       cad_instance.structure_designer.apply_node_display_policy(None);
       cad_instance.structure_designer.mark_full_refresh();
@@ -126,7 +154,12 @@ pub fn provide_texture(texture_ptr: u64) -> f64 {
   unsafe {
     // Use regular with_mut_cad_instance which returns Option<()>
     if with_mut_cad_instance(|cad_instance| {
-      let v = cad_instance.renderer.render(&cad_instance.structure_designer.preferences.background_preferences);
+      let background_color = &cad_instance.structure_designer.preferences.background_preferences.background_color;
+      let v = cad_instance.renderer.render([
+        background_color.x as u8,
+        background_color.y as u8,
+        background_color.z as u8,
+      ]);
       send_texture(texture_ptr, cad_instance.renderer.texture_size.width, cad_instance.renderer.texture_size.height, v);
     }).is_none() {
       // Handle the None case
@@ -359,7 +392,7 @@ pub fn get_ortho_half_height() -> f64 {
 pub fn get_camera_canonical_view() -> APICameraCanonicalView {
   unsafe {
     with_cad_instance_or(
-      |cad_instance| cad_instance.renderer.camera.get_canonical_view(),
+      |cad_instance| to_api_camera_canonical_view(cad_instance.renderer.camera.get_canonical_view()),
       // Default to Custom if no CAD instance exists
       APICameraCanonicalView::Custom
     )
@@ -373,7 +406,7 @@ pub fn get_camera_canonical_view() -> APICameraCanonicalView {
 pub fn set_camera_canonical_view(view: APICameraCanonicalView) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
-      cad_instance.renderer.set_camera_canonical_view(view);
+      cad_instance.renderer.set_camera_canonical_view(to_renderer_camera_canonical_view(view));
       refresh_structure_designer_auto(cad_instance);
     });
   }

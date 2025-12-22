@@ -247,11 +247,32 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
     
     // Get lightweight flag from the changes for renderer
     let renderer_lightweight = changes.is_lightweight();
-    cad_instance.renderer.refresh(
-      &cad_instance.structure_designer.last_generated_structure_designer_scene,
-      renderer_lightweight,
-      &cad_instance.structure_designer.preferences
+
+    let (lightweight_mesh, gadget_line_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) =
+      crate::display::scene_tessellator::tessellate_scene_content(
+        &cad_instance.structure_designer.last_generated_structure_designer_scene,
+        &cad_instance.renderer.camera,
+        renderer_lightweight,
+        &cad_instance.structure_designer.preferences
+      );
+
+    cad_instance.renderer.update_all_gpu_meshes(
+      &lightweight_mesh,
+      &gadget_line_mesh,
+      &main_mesh,
+      &wireframe_mesh,
+      &atom_impostor_mesh,
+      &bond_impostor_mesh,
+      !renderer_lightweight
     );
+
+    if !renderer_lightweight {
+      let background_line_mesh = crate::display::coordinate_system_tessellator::tessellate_background_coordinate_system(
+        cad_instance.structure_designer.last_generated_structure_designer_scene.unit_cell.as_ref(),
+        &cad_instance.structure_designer.preferences.background_preferences
+      );
+      cad_instance.renderer.update_background_mesh(&background_line_mesh);
+    }
   }
 
   /// Convenience wrapper that gets pending changes and refreshes both StructureDesigner and Renderer
