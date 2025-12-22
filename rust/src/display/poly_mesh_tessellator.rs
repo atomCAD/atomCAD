@@ -3,7 +3,7 @@ use crate::renderer::line_mesh::LineMesh;
 use glam::Vec3;
 use glam::DVec3;
 use crate::display::poly_mesh::PolyMesh;
-use crate::api::structure_designer::structure_designer_preferences::MeshSmoothing;
+use crate::display::preferences::MeshSmoothing;
 use crate::crystolecule::crystolecule_constants;
 
 /// Adds a triangle to the mesh, respecting the tessellation direction

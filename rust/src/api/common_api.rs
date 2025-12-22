@@ -108,9 +108,10 @@ async fn initialize_cad_instance_async() {
     );
 
     if let Some(ref mut cad_instance) = CAD_INSTANCE {
+      let display_preferences = crate::api::api_common::to_display_preferences(&cad_instance.structure_designer.preferences);
       let background_line_mesh = crate::display::coordinate_system_tessellator::tessellate_background_coordinate_system(
         None,
-        &cad_instance.structure_designer.preferences.background_preferences
+        &display_preferences.background
       );
       cad_instance.renderer.update_background_mesh(&background_line_mesh);
       add_sample_network(&mut cad_instance.structure_designer);

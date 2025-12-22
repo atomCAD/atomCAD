@@ -5,7 +5,7 @@ use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use crate::renderer::mesh::{Mesh, Material};
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
-use crate::api::structure_designer::structure_designer_preferences::{AtomicStructureVisualizationPreferences, AtomicStructureVisualization};
+use crate::display::preferences::{AtomicStructureVisualizationPreferences, AtomicStructureVisualization};
 use glam::f64::DVec3;
 use glam::f32::Vec3;
 use crate::util::timer::Timer;

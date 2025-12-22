@@ -1,7 +1,7 @@
 // Direct tessellation from StructureDesignerScene (no Scene trait needed)
 
 use crate::structure_designer::structure_designer_scene::{StructureDesignerScene, NodeOutput};
-use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicRenderingMethod};
+use crate::display::preferences::{DisplayPreferences, AtomicRenderingMethod};
 use crate::renderer::mesh::{Mesh, Material};
 use crate::renderer::line_mesh::LineMesh;
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
@@ -21,7 +21,7 @@ pub fn tessellate_scene_content(
     scene: &StructureDesignerScene,
     camera: &Camera,
     lightweight: bool,
-    preferences: &StructureDesignerPreferences
+    preferences: &DisplayPreferences
 ) -> (Mesh, LineMesh, Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
     
     // ===== 1. TESSELLATE LIGHTWEIGHT CONTENT (always) =====
@@ -43,7 +43,7 @@ pub fn tessellate_scene_content(
 fn tessellate_lightweight_content(
     scene: &StructureDesignerScene,
     camera: &Camera,
-    preferences: &StructureDesignerPreferences
+    preferences: &DisplayPreferences
 ) -> (Mesh, LineMesh) {
     let mut output = TessellationOutput::new();
     
@@ -56,7 +56,7 @@ fn tessellate_lightweight_content(
     let gadget_line_mesh = output.line_mesh;
     
     // Tessellate camera pivot point cube if enabled
-    if preferences.geometry_visualization_preferences.display_camera_target {
+    if preferences.geometry_visualization.display_camera_target {
         let red_material = Material::new(
             &Vec3::new(1.0, 0.0, 0.0), // Red color
             0.5, // roughness
@@ -79,7 +79,7 @@ fn tessellate_lightweight_content(
 /// Tessellates non-lightweight content by iterating over node_data HashMap
 fn tessellate_non_lightweight_content(
     scene: &StructureDesignerScene,
-    preferences: &StructureDesignerPreferences
+    preferences: &DisplayPreferences
 ) -> (Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
     let mut main_mesh = Mesh::new();
     let mut wireframe_mesh = LineMesh::new();
@@ -99,13 +99,13 @@ fn tessellate_non_lightweight_content(
         match &node_data.output {
             NodeOutput::Atomic(atomic_structure) => {
                 // Tessellate atomic structures based on rendering method
-                match preferences.atomic_structure_visualization_preferences.rendering_method {
+                match preferences.atomic_structure_visualization.rendering_method {
                     AtomicRenderingMethod::TriangleMesh => {
                         atomic_tessellator::tessellate_atomic_structure(
                             &mut main_mesh,
                             atomic_structure,
                             &atomic_tessellation_params,
-                            &preferences.atomic_structure_visualization_preferences
+                            &preferences.atomic_structure_visualization
                         );
                     },
                     AtomicRenderingMethod::Impostors => {
@@ -113,7 +113,7 @@ fn tessellate_non_lightweight_content(
                             &mut atom_impostor_mesh,
                             &mut bond_impostor_mesh,
                             atomic_structure,
-                            &preferences.atomic_structure_visualization_preferences
+                            &preferences.atomic_structure_visualization
                         );
                     }
                 }
@@ -128,11 +128,11 @@ fn tessellate_non_lightweight_content(
             },
             
             NodeOutput::PolyMesh(poly_mesh) => {
-                if preferences.geometry_visualization_preferences.wireframe_geometry {
+                if preferences.geometry_visualization.wireframe_geometry {
                     tessellate_poly_mesh_to_line_mesh(
                         poly_mesh,
                         &mut wireframe_mesh,
-                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(),
+                        preferences.geometry_visualization.mesh_smoothing.clone(),
                         Vec3::new(0.0, 0.0, 0.0).to_array(),
                         Vec3::new(0.0, 0.0, 0.0).to_array()
                     );
@@ -140,7 +140,7 @@ fn tessellate_non_lightweight_content(
                     tessellate_poly_mesh(
                         poly_mesh,
                         &mut main_mesh,
-                        preferences.geometry_visualization_preferences.mesh_smoothing.clone(),
+                        preferences.geometry_visualization.mesh_smoothing.clone(),
                         &Material::new(
                             &Vec3::new(0.0, 1.0, 0.0),
                             1.0,
@@ -164,7 +164,7 @@ fn tessellate_non_lightweight_content(
                 coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
                     &mut wireframe_mesh,
                     drawing_plane,
-                    &preferences.background_preferences,
+                    &preferences.background,
                 );
             },
             

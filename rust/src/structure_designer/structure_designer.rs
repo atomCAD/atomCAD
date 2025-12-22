@@ -1146,13 +1146,17 @@ impl StructureDesigner {
   /// The distance to the closest intersection, or None if no intersection was found
   pub fn raytrace(&self, ray_origin: &DVec3, ray_direction: &DVec3, visualization: &AtomicStructureVisualization) -> Option<f64> {
     let mut min_distance: Option<f64> = None;
+    let display_visualization = match visualization {
+      AtomicStructureVisualization::BallAndStick => crate::display::preferences::AtomicStructureVisualization::BallAndStick,
+      AtomicStructureVisualization::SpaceFilling => crate::display::preferences::AtomicStructureVisualization::SpaceFilling,
+    };
     
     use crate::structure_designer::structure_designer_scene::NodeOutput;
     // First, check all atomic structures in the scene
     for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
         match atomic_structure.hit_test(ray_origin, ray_direction, visualization, 
-          |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
+          |atom| get_displayed_atom_radius(atom, &display_visualization), BAS_STICK_RADIUS) {
           crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance) | 
           crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) => {
           // Update minimum distance if this hit is closer
