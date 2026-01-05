@@ -41,8 +41,11 @@ atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enab
 ## Commands
 
 ```powershell
-# Run the application
+# Run the application (debug)
 flutter run
+
+# Run in release mode
+flutter run --release
 
 # Rust backend
 cd rust && cargo build && cargo test && cargo clippy
