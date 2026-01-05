@@ -353,3 +353,43 @@ impl HalfSpaceGadget {
     }
 }
 
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "half_space".to_string(),
+      description: "Outputs a half-space (the region on one side of an infinite plane).".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+        Parameter {
+          name: "m_index".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "shift".to_string(),
+          data_type: DataType::Int,
+        },
+        Parameter {
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(HalfSpaceData {
+        max_miller_index: 1,
+        miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis
+        center: IVec3::new(0, 0, 0),
+        shift: 0,
+        subdivision: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<HalfSpaceData>,
+      node_data_loader: generic_node_data_loader::<HalfSpaceData>,
+    }
+}

@@ -112,18 +112,24 @@ impl NodeData for UnionData {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "union".to_string(),
+      description: "Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shapes".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry)),
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(UnionData {}),
+      node_data_saver: generic_node_data_saver::<UnionData>,
+      node_data_loader: generic_node_data_loader::<UnionData>,
+    }
+}
 
 
 

@@ -278,3 +278,33 @@ impl AtomTransGadget {
     }
 }
 
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "atom_trans".to_string(),
+      description: "The atom_trans node transforms atomic structures. The transformation happens not in integer lattice space but in continuous space (real-space) where one unit is one angstrom.
+  By dragging the gadget axes you can move the structure. By dragging the thicker end of the gadget axes you can rotate the structure.  ".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+          },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: DataType::Vec3,
+          },
+          Parameter {
+            name: "rotation".to_string(),
+            data_type: DataType::Vec3,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(AtomTransData {
+        translation: DVec3::new(0.0, 0.0, 0.0),
+        rotation: DVec3::new(0.0, 0.0, 0.0),
+      }),
+      node_data_saver: generic_node_data_saver::<AtomTransData>,
+      node_data_loader: generic_node_data_loader::<AtomTransData>,
+    }
+}

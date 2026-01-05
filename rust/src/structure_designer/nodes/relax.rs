@@ -76,3 +76,21 @@ impl NodeData for RelaxData {
   }
 }
 
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "relax".to_string(),
+      description: "".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: false,
+      node_data_creator: || Box::new(RelaxData {}),
+      node_data_saver: generic_node_data_saver::<RelaxData>,
+      node_data_loader: generic_node_data_loader::<RelaxData>,
+    }
+}

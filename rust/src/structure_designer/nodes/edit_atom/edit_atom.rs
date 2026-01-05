@@ -571,3 +571,34 @@ fn edit_atom_tool_refresh(structure_designer: &mut StructureDesigner) {
     }
   }
 }
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "edit_atom".to_string(),
+      description: "Note: The `edit_atom` node will be more usable when we will support atomic structure relaxations.
+This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom_nodes at their will.".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(EditAtomData::new()),
+      node_data_saver: |node_data, _design_dir| {
+        if let Some(data) = node_data.as_any_mut().downcast_ref::<EditAtomData>() {
+          let serializable_data = edit_atom_data_to_serializable(data)?;
+          serde_json::to_value(serializable_data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        } else {
+          Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"))
+        }
+      },
+      node_data_loader: |value, _design_dir| {
+        let serializable_data: SerializableEditAtomData = serde_json::from_value(value.clone())
+          .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        Ok(Box::new(serializable_to_edit_atom_data(&serializable_data)?))
+      },
+  }
+}

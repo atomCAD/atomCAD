@@ -101,3 +101,32 @@ impl NodeData for SphereData {
     
 }
 
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "sphere".to_string(),
+      description: "Outputs a sphere with integer center coordinates and integer radius.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+        Parameter {
+            name: "center".to_string(),
+            data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "radius".to_string(),
+          data_type: DataType::Int,
+        },
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(SphereData {
+        center: IVec3::new(0, 0, 0),
+        radius: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<SphereData>,
+      node_data_loader: generic_node_data_loader::<SphereData>,
+    }
+}

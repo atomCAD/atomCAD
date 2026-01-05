@@ -111,7 +111,24 @@ impl NodeData for IntersectData {
   }
 }
 
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "intersect".to_string(),
+      description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values. Use this to cut geometries with a half-space.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shapes".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry)),
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(IntersectData {}),
+      node_data_saver: generic_node_data_saver::<IntersectData>,
+      node_data_loader: generic_node_data_loader::<IntersectData>,
+    }
+}
 
 
 

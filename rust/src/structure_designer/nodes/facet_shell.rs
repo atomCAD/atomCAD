@@ -730,3 +730,27 @@ impl FacetShellGadget {
         }
     }
 }
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "facet_shell".to_string(),
+      description: "Builds a finite polyhedral shell by clipping an infinite lattice with a user‑supplied set of half‑spaces.
+See the atomCAD reference guide for more details.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec3,
+        },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(FacetShellData::default()),
+      node_data_saver: generic_node_data_saver::<FacetShellData>,
+      node_data_loader: generic_node_data_loader::<FacetShellData>,
+    }
+}

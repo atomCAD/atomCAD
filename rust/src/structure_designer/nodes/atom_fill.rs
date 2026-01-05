@@ -248,4 +248,54 @@ impl NodeData for AtomFillData {
     }
 }
 
-// All implementation logic has moved to crystolecule::lattice_fill::fill_algorithm
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "atom_fill".to_string(),
+      description: "Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its `shape` input.".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+              name: "motif".to_string(),
+              data_type: DataType::Motif,
+          },
+          Parameter {
+              name: "m_offset".to_string(),
+              data_type: DataType::Vec3,
+          },
+          Parameter {
+              name: "passivate".to_string(),
+              data_type: DataType::Bool,
+          },
+          Parameter {
+              name: "rm_single".to_string(),
+              data_type: DataType::Bool,
+          },
+          Parameter {
+              name: "surf_recon".to_string(),
+              data_type: DataType::Bool,
+          },
+          Parameter {
+              name: "invert_phase".to_string(),
+              data_type: DataType::Bool,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(AtomFillData {
+        parameter_element_value_definition: String::new(),
+        motif_offset: DVec3::ZERO,
+        hydrogen_passivation: true,
+        remove_single_bond_atoms_before_passivation: false,
+        surface_reconstruction: false,
+        invert_phase: false,
+        error: None,
+        parameter_element_values: HashMap::new(),
+      }),
+      node_data_saver: generic_node_data_saver::<AtomFillData>,
+      node_data_loader: generic_node_data_loader::<AtomFillData>,
+    }
+}

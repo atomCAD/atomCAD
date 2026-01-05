@@ -181,11 +181,49 @@ impl NodeData for ExtrudeData {
     }
 }
 
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "extrude".to_string(),
+      description: "Extrudes a 2D geometry to a 3D geometry.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry2D,
+          },
+          Parameter {
+            name: "unit_cell".to_string(),
+            data_type: DataType::UnitCell,
+          },
+          Parameter {
+            name: "height".to_string(),
+            data_type: DataType::Int,
+          },  
+          Parameter {
+            name: "dir".to_string(),
+            data_type: DataType::IVec3,
+          },
+          Parameter {
+            name: "inf".to_string(),
+            data_type: DataType::Bool,
+          },
+          Parameter {
+            name: "subdivision".to_string(),
+            data_type: DataType::Int,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(ExtrudeData {
+        height: 1,
+        extrude_direction: IVec3::new(0, 0, 1),
+        infinite: false,
+        subdivision: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<ExtrudeData>,
+      node_data_loader: generic_node_data_loader::<ExtrudeData>,
+  }
+}
 
 
 

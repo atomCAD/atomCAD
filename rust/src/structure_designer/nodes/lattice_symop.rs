@@ -423,3 +423,43 @@ impl LatticeSymopGadget {
     self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
   }
 }
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "lattice_symop".to_string(),
+      description: "".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: DataType::IVec3,
+          },
+          Parameter {
+            name: "rot_axis".to_string(),
+            data_type: DataType::Vec3,
+          },
+          Parameter {
+            name: "rot_angle".to_string(),
+            data_type: DataType::Float,
+          },
+          Parameter {
+            name: "keep_geo".to_string(),
+            data_type: DataType::Float,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: false,
+      node_data_creator: || Box::new(LatticeSymopData {
+        translation: IVec3::new(0, 0, 0),
+        rotation_axis: None,
+        rotation_angle_degrees: 0.0,
+        transform_only_frame: false,
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeSymopData>,
+      node_data_loader: generic_node_data_loader::<LatticeSymopData>,
+    }
+}

@@ -254,3 +254,35 @@ impl LatticeMoveGadget {
     return true;
   }
 }
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "lattice_move".to_string(),
+      description: "Moves the geometry in the discrete lattice space with a relative vector.
+Continuous transformation in the lattice space is not allowed (for continuous transformations use the `atom_trans` node which is only available for atomic structures).
+You can directly enter the translation vector or drag the axes of the gadget.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: DataType::IVec3,
+          },
+          Parameter {
+            name: "subdivision".to_string(),
+            data_type: DataType::Int,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(LatticeMoveData {
+        translation: IVec3::new(0, 0, 0),
+        lattice_subdivision: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeMoveData>,
+      node_data_loader: generic_node_data_loader::<LatticeMoveData>,
+    }
+}

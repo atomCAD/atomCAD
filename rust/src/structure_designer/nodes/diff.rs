@@ -180,10 +180,28 @@ fn helper_union<'a>(
   return (Some(GeoNode::union_3d(shapes)), frame_translation, Some(first_unit_cell));
 }
 
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "diff".to_string(),
+      description: "Computes the Boolean difference of two 3D geometries.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "base".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry)), // If multiple shapes are given, they are unioned.
+          },
+          Parameter {
+              name: "sub".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry)), // A set of shapes to subtract from base
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(DiffData {}),
+      node_data_saver: generic_node_data_saver::<DiffData>,
+      node_data_loader: generic_node_data_loader::<DiffData>,
+    }
+}
 
 
 

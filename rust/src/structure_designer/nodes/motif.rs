@@ -104,11 +104,27 @@ pub fn motif_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result
     Ok(Box::new(data))
 }
 
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "motif".to_string(),
+      description: "The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.
+The motif is defined textually using atomCAD's motif definition language.
+The features of the language are basically parameterized fractional atom sites, explicit & periodic bond definitions.
+See the atomCAD reference guide for details on the motif definition language.".to_string(),
+      category: NodeTypeCategory::OtherBuiltin,
+      parameters: vec![],
+      output_type: DataType::Motif,
+      public: true,
+      node_data_creator: || Box::new(MotifData {
+        definition: "".to_string(),
+        name: None,
+        motif: None,
+        error: None,
+      }),
+      node_data_saver: generic_node_data_saver::<MotifData>,
+      node_data_loader: motif_data_loader,
+    }
+}
 
 
 

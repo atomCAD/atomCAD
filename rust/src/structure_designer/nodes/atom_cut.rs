@@ -134,3 +134,25 @@ fn cut_atomic_structure(atomic_structure: &mut AtomicStructure, cutter_geo_tree_
     atomic_structure.delete_atom(atom_id);
   }
 }
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "atom_cut".to_string(),
+      description: "Cuts an atomic structure using cutter geometries.".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+          },
+          Parameter {
+            name: "cutters".to_string(),
+            data_type: DataType::Array(Box::new(DataType::Geometry)),
+        },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(AtomCutData::new()),
+      node_data_saver: generic_node_data_saver::<AtomCutData>,
+      node_data_loader: generic_node_data_loader::<AtomCutData>,
+    }
