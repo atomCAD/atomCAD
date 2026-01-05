@@ -21,8 +21,11 @@ use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::Add
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
 use crate::crystolecule::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
-use crate::structure_designer::node_type::NodeType;
+use crate::api::structure_designer::structure_designer_api_types::{APIEditAtomTool, NodeTypeCategory};
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::serialization::edit_atom_data_serialization::{SerializableEditAtomData, edit_atom_data_to_serializable, serializable_to_edit_atom_data};
+use std::io;
 
 #[derive(Debug)]
 pub struct DefaultToolState {

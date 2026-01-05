@@ -1,64 +1,55 @@
 use std::collections::{HashMap, HashSet};
-use std::io;
-use glam::DVec2;
 use super::node_type::NodeType;
-use super::node_type::Parameter;
-use super::nodes::string::{StringData, get_node_type as string_get_node_type};
-use super::nodes::bool::{BoolData, get_node_type as bool_get_node_type};
-use super::nodes::int::{IntData, get_node_type as int_get_node_type};
-use super::nodes::float::{FloatData, get_node_type as float_get_node_type};
-use super::nodes::ivec2::{IVec2Data, get_node_type as ivec2_get_node_type};
-use super::nodes::ivec3::{IVec3Data, get_node_type as ivec3_get_node_type};
-use super::nodes::range::{RangeData, get_node_type as range_get_node_type};
-use super::nodes::vec2::{Vec2Data, get_node_type as vec2_get_node_type};
-use super::nodes::vec3::{Vec3Data, get_node_type as vec3_get_node_type};
-use super::nodes::expr::{ExprData, expr_data_loader, get_node_type as expr_get_node_type};
-use super::nodes::expr::ExprParameter;
-use super::nodes::value::{ValueData, get_node_type as value_get_node_type};
-use super::nodes::map::{MapData, get_node_type as map_get_node_type};
-use super::nodes::motif::{MotifData, motif_data_loader};
+use super::nodes::string::get_node_type as string_get_node_type;
+use super::nodes::bool::get_node_type as bool_get_node_type;
+use super::nodes::int::get_node_type as int_get_node_type;
+use super::nodes::float::get_node_type as float_get_node_type;
+use super::nodes::ivec2::get_node_type as ivec2_get_node_type;
+use super::nodes::ivec3::get_node_type as ivec3_get_node_type;
+use super::nodes::range::get_node_type as range_get_node_type;
+use super::nodes::vec2::get_node_type as vec2_get_node_type;
+use super::nodes::vec3::get_node_type as vec3_get_node_type;
+use super::nodes::expr::get_node_type as expr_get_node_type;
+use super::nodes::value::get_node_type as value_get_node_type;
+use super::nodes::map::get_node_type as map_get_node_type;
+use super::nodes::motif::get_node_type as motif_get_node_type;
 use crate::structure_designer::node_network::NodeNetwork;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
-use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
+use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::node_network::Node;
-use super::nodes::extrude::ExtrudeData;
-use super::nodes::facet_shell::FacetShellData;
-use super::nodes::parameter::{ParameterData, get_node_type as parameter_get_node_type};
-use super::nodes::unit_cell::{UnitCellData, get_node_type as unit_cell_get_node_type};
-use super::nodes::cuboid::CuboidData;
-use super::nodes::polygon::{PolygonData, get_node_type as polygon_get_node_type};
-use super::nodes::reg_poly::{RegPolyData, get_node_type as reg_poly_get_node_type};
-use super::nodes::sphere::SphereData;
-use super::nodes::circle::{CircleData, get_node_type as circle_get_node_type};
-use super::nodes::rect::{RectData, get_node_type as rect_get_node_type};
-use super::nodes::half_plane::{HalfPlaneData, get_node_type as half_plane_get_node_type};
-use super::nodes::half_space::HalfSpaceData;
-use super::nodes::drawing_plane::DrawingPlaneData;
-use super::nodes::union::UnionData;
-use super::nodes::union_2d::{Union2DData, get_node_type as union_2d_get_node_type};
-use super::nodes::intersect::IntersectData;
-use super::nodes::intersect_2d::{Intersect2DData, get_node_type as intersect_2d_get_node_type};
-use super::nodes::diff::DiffData;
-use super::nodes::diff_2d::{Diff2DData, get_node_type as diff_2d_get_node_type};
-use super::nodes::geo_trans::GeoTransData;
-use super::nodes::lattice_symop::LatticeSymopData;
-use super::nodes::lattice_move::LatticeMoveData;
-use super::nodes::lattice_rot::LatticeRotData;
-use super::nodes::atom_cut::AtomCutData;
-use super::nodes::relax::RelaxData;
-use super::nodes::atom_trans::AtomTransData;
-use super::nodes::edit_atom::edit_atom::EditAtomData;
-use super::nodes::atom_fill::AtomFillData;
-use super::nodes::import_xyz::{ImportXYZData, import_xyz_data_loader, import_xyz_data_saver};
-use super::nodes::export_xyz::{ExportXYZData, export_xyz_data_loader, export_xyz_data_saver};
-use super::node_type::{generic_node_data_saver, generic_node_data_loader};
-use crate::structure_designer::serialization::edit_atom_data_serialization::{edit_atom_data_to_serializable, serializable_to_edit_atom_data, SerializableEditAtomData};
-use glam::{IVec3, DVec3, IVec2};
-use crate::structure_designer::data_type::{DataType, FunctionType};
-use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use super::nodes::extrude::get_node_type as extrude_get_node_type;
+use super::nodes::facet_shell::get_node_type as facet_shell_get_node_type;
+use super::nodes::parameter::get_node_type as parameter_get_node_type;
+use super::nodes::unit_cell::get_node_type as unit_cell_get_node_type;
+use super::nodes::cuboid::get_node_type as cuboid_get_node_type;
+use super::nodes::polygon::get_node_type as polygon_get_node_type;
+use super::nodes::reg_poly::get_node_type as reg_poly_get_node_type;
+use super::nodes::sphere::get_node_type as sphere_get_node_type;
+use super::nodes::circle::get_node_type as circle_get_node_type;
+use super::nodes::rect::get_node_type as rect_get_node_type;
+use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
+use super::nodes::half_space::get_node_type as half_space_get_node_type;
+use super::nodes::drawing_plane::get_node_type as drawing_plane_get_node_type;
+use super::nodes::union::get_node_type as union_get_node_type;
+use super::nodes::union_2d::get_node_type as union_2d_get_node_type;
+use super::nodes::intersect::get_node_type as intersect_get_node_type;
+use super::nodes::intersect_2d::get_node_type as intersect_2d_get_node_type;
+use super::nodes::diff::get_node_type as diff_get_node_type;
+use super::nodes::diff_2d::get_node_type as diff_2d_get_node_type;
+use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
+use super::nodes::lattice_symop::get_node_type as lattice_symop_get_node_type;
+use super::nodes::lattice_move::get_node_type as lattice_move_get_node_type;
+use super::nodes::lattice_rot::get_node_type as lattice_rot_get_node_type;
+use super::nodes::atom_cut::get_node_type as atom_cut_get_node_type;
+use super::nodes::relax::get_node_type as relax_get_node_type;
+use super::nodes::atom_trans::get_node_type as atom_trans_get_node_type;
+use super::nodes::edit_atom::edit_atom::get_node_type as edit_atom_get_node_type;
+use super::nodes::atom_fill::get_node_type as atom_fill_get_node_type;
+use super::nodes::import_xyz::get_node_type as import_xyz_get_node_type;
+use super::nodes::export_xyz::get_node_type as export_xyz_get_node_type;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_network::Argument;
 
 
@@ -104,595 +95,27 @@ impl NodeTypeRegistry {
     ret.add_node_type(diff_2d_get_node_type());
     ret.add_node_type(half_plane_get_node_type());
 
-    ret.add_node_type(NodeType {
-      name: "extrude".to_string(),
-      description: "Extrudes a 2D geometry to a 3D geometry.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "shape".to_string(),
-              data_type: DataType::Geometry2D,
-          },
-          Parameter {
-            name: "unit_cell".to_string(),
-            data_type: DataType::UnitCell,
-          },
-          Parameter {
-            name: "height".to_string(),
-            data_type: DataType::Int,
-          },  
-          Parameter {
-            name: "dir".to_string(),
-            data_type: DataType::IVec3,
-          },
-          Parameter {
-            name: "inf".to_string(),
-            data_type: DataType::Bool,
-          },
-          Parameter {
-            name: "subdivision".to_string(),
-            data_type: DataType::Int,
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(ExtrudeData {
-        height: 1,
-        extrude_direction: IVec3::new(0, 0, 1),
-        infinite: false,
-        subdivision: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<ExtrudeData>,
-      node_data_loader: generic_node_data_loader::<ExtrudeData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "cuboid".to_string(),
-      description: "Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. If the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-        Parameter {
-            name: "min_corner".to_string(),
-            data_type: DataType::IVec3,
-        },
-        Parameter {
-          name: "extent".to_string(),
-          data_type: DataType::IVec3,
-        },
-        Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
-        },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(CuboidData {
-        min_corner: IVec3::new(0, 0, 0),
-        extent: IVec3::new(1, 1, 1),
-      }),
-      node_data_saver: generic_node_data_saver::<CuboidData>,
-      node_data_loader: generic_node_data_loader::<CuboidData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "sphere".to_string(),
-      description: "Outputs a sphere with integer center coordinates and integer radius.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-        Parameter {
-            name: "center".to_string(),
-            data_type: DataType::IVec3,
-        },
-        Parameter {
-          name: "radius".to_string(),
-          data_type: DataType::Int,
-        },
-        Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
-        },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(SphereData {
-        center: IVec3::new(0, 0, 0),
-        radius: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<SphereData>,
-      node_data_loader: generic_node_data_loader::<SphereData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "half_space".to_string(),
-      description: "Outputs a half-space (the region on one side of an infinite plane).".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-        Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
-        },
-        Parameter {
-          name: "m_index".to_string(),
-          data_type: DataType::IVec3,
-        },
-        Parameter {
-          name: "center".to_string(),
-          data_type: DataType::IVec3,
-        },
-        Parameter {
-          name: "shift".to_string(),
-          data_type: DataType::Int,
-        },
-        Parameter {
-          name: "subdivision".to_string(),
-          data_type: DataType::Int,
-        },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(HalfSpaceData {
-        max_miller_index: 1,
-        miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis
-        center: IVec3::new(0, 0, 0),
-        shift: 0,
-        subdivision: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<HalfSpaceData>,
-      node_data_loader: generic_node_data_loader::<HalfSpaceData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "drawing_plane".to_string(),
-      description: "Defines a 2D drawing plane on a crystallographic plane with Miller indices. Use this to specify where 2D shapes are placed before extrusion.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-        Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
-        },
-        Parameter {
-          name: "m_index".to_string(),
-          data_type: DataType::IVec3,
-        },
-        Parameter {
-          name: "center".to_string(),
-          data_type: DataType::IVec3,
-        },
-        Parameter {
-          name: "shift".to_string(),
-          data_type: DataType::Int,
-        },
-        Parameter {
-          name: "subdivision".to_string(),
-          data_type: DataType::Int,
-        },
-      ],
-      output_type: DataType::DrawingPlane,
-      public: true,
-      node_data_creator: || Box::new(DrawingPlaneData {
-        max_miller_index: 1,
-        miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis (001 plane)
-        center: IVec3::new(0, 0, 0),
-        shift: 0,
-        subdivision: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<DrawingPlaneData>,
-      node_data_loader: generic_node_data_loader::<DrawingPlaneData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "facet_shell".to_string(),
-      description: "Builds a finite polyhedral shell by clipping an infinite lattice with a user‑supplied set of half‑spaces.
-See the atomCAD reference guide for more details.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-        Parameter {
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
-        },
-        Parameter {
-          name: "center".to_string(),
-          data_type: DataType::IVec3,
-        },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(FacetShellData::default()),
-      node_data_saver: generic_node_data_saver::<FacetShellData>,
-      node_data_loader: generic_node_data_loader::<FacetShellData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "union".to_string(),
-      description: "Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "shapes".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry)),
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(UnionData {}),
-      node_data_saver: generic_node_data_saver::<UnionData>,
-      node_data_loader: generic_node_data_loader::<UnionData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "intersect".to_string(),
-      description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values. Use this to cut geometries with a half-space.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "shapes".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry)),
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(IntersectData {}),
-      node_data_saver: generic_node_data_saver::<IntersectData>,
-      node_data_loader: generic_node_data_loader::<IntersectData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "diff".to_string(),
-      description: "Computes the Boolean difference of two 3D geometries.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "base".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry)), // If multiple shapes are given, they are unioned.
-          },
-          Parameter {
-              name: "sub".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry)), // A set of shapes to subtract from base
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(DiffData {}),
-      node_data_saver: generic_node_data_saver::<DiffData>,
-      node_data_loader: generic_node_data_loader::<DiffData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "geo_trans".to_string(),
-      description: "".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "shape".to_string(),
-              data_type: DataType::Geometry,
-          },
-          Parameter {
-            name: "translation".to_string(),
-            data_type: DataType::IVec3,
-          },
-          Parameter {
-            name: "rotation".to_string(),
-            data_type: DataType::IVec3,
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: false,
-      node_data_creator: || Box::new(GeoTransData {
-        translation: IVec3::new(0, 0, 0),
-        rotation: IVec3::new(0, 0, 0),
-        transform_only_frame: false,
-      }),
-      node_data_saver: generic_node_data_saver::<GeoTransData>,
-      node_data_loader: generic_node_data_loader::<GeoTransData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "lattice_symop".to_string(),
-      description: "".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "shape".to_string(),
-              data_type: DataType::Geometry,
-          },
-          Parameter {
-            name: "translation".to_string(),
-            data_type: DataType::IVec3,
-          },
-          Parameter {
-            name: "rot_axis".to_string(),
-            data_type: DataType::Vec3,
-          },
-          Parameter {
-            name: "rot_angle".to_string(),
-            data_type: DataType::Float,
-          },
-          Parameter {
-            name: "keep_geo".to_string(),
-            data_type: DataType::Float,
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: false,
-      node_data_creator: || Box::new(LatticeSymopData {
-        translation: IVec3::new(0, 0, 0),
-        rotation_axis: None,
-        rotation_angle_degrees: 0.0,
-        transform_only_frame: false,
-      }),
-      node_data_saver: generic_node_data_saver::<LatticeSymopData>,
-      node_data_loader: generic_node_data_loader::<LatticeSymopData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "lattice_move".to_string(),
-      description: "Moves the geometry in the discrete lattice space with a relative vector.
-Continuous transformation in the lattice space is not allowed (for continuous transformations use the `atom_trans` node which is only available for atomic structures).
-You can directly enter the translation vector or drag the axes of the gadget.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "shape".to_string(),
-              data_type: DataType::Geometry,
-          },
-          Parameter {
-            name: "translation".to_string(),
-            data_type: DataType::IVec3,
-          },
-          Parameter {
-            name: "subdivision".to_string(),
-            data_type: DataType::Int,
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(LatticeMoveData {
-        translation: IVec3::new(0, 0, 0),
-        lattice_subdivision: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<LatticeMoveData>,
-      node_data_loader: generic_node_data_loader::<LatticeMoveData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "lattice_rot".to_string(),
-      description: "Rotates geometry in lattice space.
-Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
-You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.".to_string(),
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-          Parameter {
-              name: "shape".to_string(),
-              data_type: DataType::Geometry,
-          },
-          Parameter {
-            name: "axis_index".to_string(),
-            data_type: DataType::Int,
-          },
-          Parameter {
-            name: "step".to_string(),
-            data_type: DataType::Int,
-          },
-          Parameter {
-            name: "pivot_point".to_string(),
-            data_type: DataType::IVec3,
-          },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(LatticeRotData {
-        axis_index: None,
-        step: 0,
-        pivot_point: IVec3::new(0, 0, 0),
-      }),
-      node_data_saver: generic_node_data_saver::<LatticeRotData>,
-      node_data_loader: generic_node_data_loader::<LatticeRotData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "motif".to_string(),
-      description: "The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.
-The motif is defined textually using atomCAD's motif definition language.
-The features of the language are basically parameterized fractional atom sites, explicit & periodic bond definitions.
-See the atomCAD reference guide for details on the motif definition language.".to_string(),
-      category: NodeTypeCategory::OtherBuiltin,
-      parameters: vec![],
-      output_type: DataType::Motif,
-      public: true,
-      node_data_creator: || Box::new(MotifData {
-        definition: "".to_string(),
-        name: None,
-        motif: None,
-        error: None,
-      }),
-      node_data_saver: generic_node_data_saver::<MotifData>,
-      node_data_loader: motif_data_loader,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "atom_fill".to_string(),
-      description: "Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its `shape` input.".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-          Parameter {
-              name: "shape".to_string(),
-              data_type: DataType::Geometry,
-          },
-          Parameter {
-              name: "motif".to_string(),
-              data_type: DataType::Motif,
-          },
-          Parameter {
-              name: "m_offset".to_string(),
-              data_type: DataType::Vec3,
-          },
-          Parameter {
-              name: "passivate".to_string(),
-              data_type: DataType::Bool,
-          },
-          Parameter {
-              name: "rm_single".to_string(),
-              data_type: DataType::Bool,
-          },
-          Parameter {
-              name: "surf_recon".to_string(),
-              data_type: DataType::Bool,
-          },
-          Parameter {
-              name: "invert_phase".to_string(),
-              data_type: DataType::Bool,
-          },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(AtomFillData {
-        parameter_element_value_definition: String::new(),
-        motif_offset: DVec3::ZERO,
-        hydrogen_passivation: true,
-        remove_single_bond_atoms_before_passivation: false,
-        surface_reconstruction: false,
-        invert_phase: false,
-        error: None,
-        parameter_element_values: HashMap::new(),
-      }),
-      node_data_saver: generic_node_data_saver::<AtomFillData>,
-      node_data_loader: generic_node_data_loader::<AtomFillData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "edit_atom".to_string(),
-      description: "Note: The `edit_atom` node will be more usable when we will support atomic structure relaxations.
-This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom_nodes at their will.".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-          Parameter {
-              name: "molecule".to_string(),
-              data_type: DataType::Atomic,
-          },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(EditAtomData::new()),
-      node_data_saver: |node_data, _design_dir| {
-        if let Some(data) = node_data.as_any_mut().downcast_ref::<EditAtomData>() {
-          let serializable_data = edit_atom_data_to_serializable(data)?;
-          serde_json::to_value(serializable_data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-        } else {
-          Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"))
-        }
-      },
-      node_data_loader: |value, _design_dir| {
-        let serializable_data: SerializableEditAtomData = serde_json::from_value(value.clone())
-          .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        Ok(Box::new(serializable_to_edit_atom_data(&serializable_data)?))
-      },
-    });
-
-    ret.add_node_type(NodeType {
-      name: "atom_trans".to_string(),
-      description: "The atom_trans node transforms atomic structures. The transformation happens not in integer lattice space but in continuous space (real-space) where one unit is one angstrom.
-  By dragging the gadget axes you can move the structure. By dragging the thicker end of the gadget axes you can rotate the structure.  ".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-          Parameter {
-              name: "molecule".to_string(),
-              data_type: DataType::Atomic,
-          },
-          Parameter {
-            name: "translation".to_string(),
-            data_type: DataType::Vec3,
-          },
-          Parameter {
-            name: "rotation".to_string(),
-            data_type: DataType::Vec3,
-          },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(AtomTransData {
-        translation: DVec3::new(0.0, 0.0, 0.0),
-        rotation: DVec3::new(0.0, 0.0, 0.0),
-      }),
-      node_data_saver: generic_node_data_saver::<AtomTransData>,
-      node_data_loader: generic_node_data_loader::<AtomTransData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "import_xyz".to_string(),
-      description: "Imports an atomic structure from an xyz file.
-It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-        Parameter {
-          name: "file_name".to_string(),
-          data_type: DataType::String,
-        },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(ImportXYZData::new()),
-      node_data_saver: import_xyz_data_saver,
-      node_data_loader: import_xyz_data_loader,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "export_xyz".to_string(),
-      description: "Exports atomic structure on its `molecule` input into an XYZ file.".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-        Parameter {
-          name: "molecule".to_string(),
-          data_type: DataType::Atomic,
-        },
-        Parameter {
-          name: "file_name".to_string(),
-          data_type: DataType::String,
-        },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(ExportXYZData::new()),
-      node_data_saver: export_xyz_data_saver,
-      node_data_loader: export_xyz_data_loader,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "atom_cut".to_string(),
-      description: "Cuts an atomic structure using cutter geometries.".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-          Parameter {
-              name: "molecule".to_string(),
-              data_type: DataType::Atomic,
-          },
-          Parameter {
-            name: "cutters".to_string(),
-            data_type: DataType::Array(Box::new(DataType::Geometry)),
-        },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(AtomCutData::new()),
-      node_data_saver: generic_node_data_saver::<AtomCutData>,
-      node_data_loader: generic_node_data_loader::<AtomCutData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "relax".to_string(),
-      description: "".to_string(),
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-          Parameter {
-              name: "molecule".to_string(),
-              data_type: DataType::Atomic,
-          },
-      ],
-      output_type: DataType::Atomic,
-      public: false,
-      node_data_creator: || Box::new(RelaxData {}),
-      node_data_saver: generic_node_data_saver::<RelaxData>,
-      node_data_loader: generic_node_data_loader::<RelaxData>,
-    });
+    ret.add_node_type(extrude_get_node_type());
+    ret.add_node_type(cuboid_get_node_type());
+    ret.add_node_type(sphere_get_node_type());
+    ret.add_node_type(half_space_get_node_type());
+    ret.add_node_type(drawing_plane_get_node_type());
+    ret.add_node_type(facet_shell_get_node_type());
+    ret.add_node_type(union_get_node_type());
+    ret.add_node_type(intersect_get_node_type());
+    ret.add_node_type(diff_get_node_type());
+    ret.add_node_type(geo_trans_get_node_type());
+    ret.add_node_type(lattice_symop_get_node_type());
+    ret.add_node_type(lattice_move_get_node_type());
+    ret.add_node_type(lattice_rot_get_node_type());
+    ret.add_node_type(motif_get_node_type());
+    ret.add_node_type(atom_fill_get_node_type());
+    ret.add_node_type(edit_atom_get_node_type());
+    ret.add_node_type(atom_trans_get_node_type());
+    ret.add_node_type(import_xyz_get_node_type());
+    ret.add_node_type(export_xyz_get_node_type());
+    ret.add_node_type(atom_cut_get_node_type());
+    ret.add_node_type(relax_get_node_type());
 
     return ret;
   }

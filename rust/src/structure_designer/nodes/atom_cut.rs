@@ -11,7 +11,9 @@ use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomCutData {
@@ -156,3 +158,4 @@ pub fn get_node_type() -> NodeType {
       node_data_saver: generic_node_data_saver::<AtomCutData>,
       node_data_loader: generic_node_data_loader::<AtomCutData>,
     }
+}

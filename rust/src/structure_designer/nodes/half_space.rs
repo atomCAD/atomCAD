@@ -19,7 +19,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 

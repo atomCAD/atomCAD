@@ -21,7 +21,9 @@ use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutpu
 use crate::display::gadget::Gadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::renderer::mesh::Mesh;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone)]

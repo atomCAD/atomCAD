@@ -15,7 +15,9 @@ use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 
 fn default_extrude_direction() -> IVec3 {
   IVec3::new(0, 0, 1)

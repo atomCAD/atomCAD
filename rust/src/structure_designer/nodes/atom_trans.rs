@@ -15,7 +15,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::util::transform::Transform;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 
 #[derive(Debug, Clone)]
 pub struct AtomTransEvalCache {

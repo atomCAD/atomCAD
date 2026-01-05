@@ -7,7 +7,9 @@ use crate::crystolecule::simulation::minimize_energy;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 
