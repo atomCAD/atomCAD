@@ -13,7 +13,9 @@ use std::cmp::max;
 use crate::util::mat_utils::consistent_round;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::crystolecule::drawing_plane::DrawingPlane;
@@ -113,7 +115,7 @@ fn kth_angle(k: i32, num_sides: i32) -> f64 {
     return 2.0 * PI * (k as f64) / (num_sides as f64);
 }
 
-pub fn reg_poly_node_type() -> NodeType {
+pub fn get_node_type() -> NodeType {
     NodeType {
       name: "reg_poly".to_string(),
       description: "Outputs a regular polygon with integer radius. The number of sides is a property too.

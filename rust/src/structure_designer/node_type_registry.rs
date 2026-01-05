@@ -3,19 +3,19 @@ use std::io;
 use glam::DVec2;
 use super::node_type::NodeType;
 use super::node_type::Parameter;
-use super::nodes::string::StringData;
-use super::nodes::bool::BoolData;
-use super::nodes::int::IntData;
-use super::nodes::float::FloatData;
-use super::nodes::ivec2::IVec2Data;
-use super::nodes::ivec3::IVec3Data;
-use super::nodes::range::RangeData;
-use super::nodes::vec2::Vec2Data;
-use super::nodes::vec3::Vec3Data;
-use super::nodes::expr::{ExprData, expr_data_loader};
+use super::nodes::string::{StringData, get_node_type as string_get_node_type};
+use super::nodes::bool::{BoolData, get_node_type as bool_get_node_type};
+use super::nodes::int::{IntData, get_node_type as int_get_node_type};
+use super::nodes::float::{FloatData, get_node_type as float_get_node_type};
+use super::nodes::ivec2::{IVec2Data, get_node_type as ivec2_get_node_type};
+use super::nodes::ivec3::{IVec3Data, get_node_type as ivec3_get_node_type};
+use super::nodes::range::{RangeData, get_node_type as range_get_node_type};
+use super::nodes::vec2::{Vec2Data, get_node_type as vec2_get_node_type};
+use super::nodes::vec3::{Vec3Data, get_node_type as vec3_get_node_type};
+use super::nodes::expr::{ExprData, expr_data_loader, get_node_type as expr_get_node_type};
 use super::nodes::expr::ExprParameter;
-use super::nodes::value::ValueData;
-use super::nodes::map::MapData;
+use super::nodes::value::{ValueData, get_node_type as value_get_node_type};
+use super::nodes::map::{MapData, get_node_type as map_get_node_type};
 use super::nodes::motif::{MotifData, motif_data_loader};
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -27,22 +27,22 @@ use crate::structure_designer::node_network::Node;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::facet_shell::FacetShellData;
 use super::nodes::parameter::{ParameterData, get_node_type as parameter_get_node_type};
-use super::nodes::unit_cell::UnitCellData;
+use super::nodes::unit_cell::{UnitCellData, get_node_type as unit_cell_get_node_type};
 use super::nodes::cuboid::CuboidData;
-use super::nodes::polygon::PolygonData;
-use super::nodes::reg_poly::RegPolyData;
+use super::nodes::polygon::{PolygonData, get_node_type as polygon_get_node_type};
+use super::nodes::reg_poly::{RegPolyData, get_node_type as reg_poly_get_node_type};
 use super::nodes::sphere::SphereData;
-use super::nodes::circle::CircleData;
-use super::nodes::rect::RectData;
-use super::nodes::half_plane::HalfPlaneData;
+use super::nodes::circle::{CircleData, get_node_type as circle_get_node_type};
+use super::nodes::rect::{RectData, get_node_type as rect_get_node_type};
+use super::nodes::half_plane::{HalfPlaneData, get_node_type as half_plane_get_node_type};
 use super::nodes::half_space::HalfSpaceData;
 use super::nodes::drawing_plane::DrawingPlaneData;
 use super::nodes::union::UnionData;
-use super::nodes::union_2d::Union2DData;
+use super::nodes::union_2d::{Union2DData, get_node_type as union_2d_get_node_type};
 use super::nodes::intersect::IntersectData;
-use super::nodes::intersect_2d::Intersect2DData;
+use super::nodes::intersect_2d::{Intersect2DData, get_node_type as intersect_2d_get_node_type};
 use super::nodes::diff::DiffData;
-use super::nodes::diff_2d::Diff2DData;
+use super::nodes::diff_2d::{Diff2DData, get_node_type as diff_2d_get_node_type};
 use super::nodes::geo_trans::GeoTransData;
 use super::nodes::lattice_symop::LatticeSymopData;
 use super::nodes::lattice_move::LatticeMoveData;
@@ -80,486 +80,29 @@ impl NodeTypeRegistry {
 
     ret.add_node_type(parameter_get_node_type());
 
-    ret.add_node_type(NodeType {
-      name: "expr".to_string(),
-      description: "You can type in a mathematical expression and it will be evaluated on its output pin.
-The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
+    ret.add_node_type(expr_get_node_type());
+    ret.add_node_type(value_get_node_type());
+    ret.add_node_type(map_get_node_type());
+    ret.add_node_type(string_get_node_type());
+    ret.add_node_type(bool_get_node_type());
 
-The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions. See the atomCAD reference guide for more details.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![],
-      output_type: DataType::None, // will change based on the expression
-      public: true,
-      node_data_creator: || Box::new(ExprData {
-        parameters: vec![
-          ExprParameter {
-            name: "x".to_string(),
-            data_type: DataType::Int,
-            data_type_str: None,
-          },
-        ],
-        expression: "x".to_string(),
-        expr: None,
-        error: None,
-        output_type: Some(DataType::Int),
-      }),
-      node_data_saver: generic_node_data_saver::<ExprData>,
-      node_data_loader: expr_data_loader,
-    });
+    ret.add_node_type(int_get_node_type());
+    ret.add_node_type(float_get_node_type());
+    ret.add_node_type(ivec2_get_node_type());
+    ret.add_node_type(ivec3_get_node_type());
+    ret.add_node_type(vec2_get_node_type());
+    ret.add_node_type(vec3_get_node_type());
+    ret.add_node_type(range_get_node_type());
+    ret.add_node_type(unit_cell_get_node_type());
 
-    ret.add_node_type(NodeType {
-      name: "value".to_string(),
-      description: "".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![],
-      output_type: DataType::None,
-      public: false,
-      node_data_creator: || Box::new(ValueData {
-        value: NetworkResult::None,
-      }),
-      node_data_saver: generic_node_data_saver::<ValueData>,
-      node_data_loader: generic_node_data_loader::<ValueData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "map".to_string(),
-      description: "Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![
-        Parameter {
-          name: "xs".to_string(),
-          data_type: DataType::Array(Box::new(DataType::Float)), // will change based on  ParameterData::data_type.
-        },
-        Parameter {
-          name: "f".to_string(),
-          data_type: DataType::Function(FunctionType {
-            parameter_types: vec![DataType::Float],
-            output_type: Box::new(DataType::Float),
-          }), // will change based on  ParameterData::data_type.
-        },
-      ],
-      output_type: DataType::Array(Box::new(DataType::Float)), // will change based on the output type
-      public: true,
-      node_data_creator: || Box::new(MapData {
-        input_type: DataType::Float,
-        output_type: DataType::Float,
-      }),
-      node_data_saver: generic_node_data_saver::<MapData>,
-      node_data_loader: generic_node_data_loader::<MapData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "string".to_string(),
-      description: "Outputs a string value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![],
-      output_type: DataType::String,
-      public: true,
-      node_data_creator: || Box::new(StringData {
-        value: "".to_string(),
-      }),
-      node_data_saver: generic_node_data_saver::<StringData>,
-      node_data_loader: generic_node_data_loader::<StringData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "bool".to_string(),
-      description: "Outputs a bool value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![],
-      output_type: DataType::Bool,
-      public: true,
-      node_data_creator: || Box::new(BoolData {
-        value: false
-      }),
-      node_data_saver: generic_node_data_saver::<BoolData>,
-      node_data_loader: generic_node_data_loader::<BoolData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "int".to_string(),
-      description: "Outputs an integer value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![],
-      output_type: DataType::Int,
-      public: true,
-      node_data_creator: || Box::new(IntData {
-        value: 0
-      }),
-      node_data_saver: generic_node_data_saver::<IntData>,
-      node_data_loader: generic_node_data_loader::<IntData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "float".to_string(),
-      description: "Outputs a float value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![],
-      output_type: DataType::Float,
-      public: true,
-      node_data_creator: || Box::new(FloatData {
-        value: 0.0
-      }),
-      node_data_saver: generic_node_data_saver::<FloatData>,
-      node_data_loader: generic_node_data_loader::<FloatData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "ivec2".to_string(),
-      description: "Outputs an IVec2 value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![
-        Parameter {
-            name: "x".to_string(),
-            data_type: DataType::Int,
-        },
-        Parameter {
-            name: "y".to_string(),
-            data_type: DataType::Int,
-        },        
-      ],
-      output_type: DataType::IVec2,
-      public: true,
-      node_data_creator: || Box::new(IVec2Data {
-        value: IVec2::new(0, 0)
-      }),
-      node_data_saver: generic_node_data_saver::<IVec2Data>,
-      node_data_loader: generic_node_data_loader::<IVec2Data>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "ivec3".to_string(),
-      description: "Outputs an IVec3 value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![
-        Parameter {
-            name: "x".to_string(),
-            data_type: DataType::Int,
-        },
-        Parameter {
-            name: "y".to_string(),
-            data_type: DataType::Int,
-        },
-        Parameter {
-            name: "z".to_string(),
-            data_type: DataType::Int,
-        },        
-      ],
-      output_type: DataType::IVec3,
-      public: true,
-      node_data_creator: || Box::new(IVec3Data {
-        value: IVec3::new(0, 0, 0)
-      }),
-      node_data_saver: generic_node_data_saver::<IVec3Data>,
-      node_data_loader: generic_node_data_loader::<IVec3Data>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "vec2".to_string(),
-      description: "Outputs an Vec2 value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![
-        Parameter {
-            name: "x".to_string(),
-            data_type: DataType::Float,
-        },
-        Parameter {
-            name: "y".to_string(),
-            data_type: DataType::Float,
-        },        
-      ],
-      output_type: DataType::Vec2,
-      public: true,
-      node_data_creator: || Box::new(Vec2Data {
-        value: DVec2::new(0.0, 0.0)
-      }),
-      node_data_saver: generic_node_data_saver::<Vec2Data>,
-      node_data_loader: generic_node_data_loader::<Vec2Data>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "vec3".to_string(),
-      description: "Outputs an Vec3 value.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![
-        Parameter {
-            name: "x".to_string(),
-            data_type: DataType::Float,
-        },
-        Parameter {
-            name: "y".to_string(),
-            data_type: DataType::Float,
-        },
-        Parameter {
-            name: "z".to_string(),
-            data_type: DataType::Float,
-        },        
-      ],
-      output_type: DataType::Vec3,
-      public: true,
-      node_data_creator: || Box::new(Vec3Data {
-        value: DVec3::new(0.0, 0.0, 0.0)
-      }),
-      node_data_saver: generic_node_data_saver::<Vec3Data>,
-      node_data_loader: generic_node_data_loader::<Vec3Data>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "range".to_string(),
-      description: "Creates an array of integers starting from an integer value and having a specified step between them. The number of integers in the array can also be specified (count).".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![
-        Parameter {
-            name: "start".to_string(),
-            data_type: DataType::Int,
-        },
-        Parameter {
-            name: "step".to_string(),
-            data_type: DataType::Int,
-        },
-        Parameter {
-            name: "count".to_string(),
-            data_type: DataType::Int,
-        },        
-      ],
-      output_type: DataType::Array(Box::new(DataType::Int)),
-      public: true,
-      node_data_creator: || Box::new(RangeData {
-        start: 0,
-        step: 1,
-        count: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<RangeData>,
-      node_data_loader: generic_node_data_loader::<RangeData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "unit_cell".to_string(),
-      description: "Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.".to_string(),
-      category: NodeTypeCategory::OtherBuiltin,
-      parameters: vec![
-        Parameter {
-            name: "a".to_string(),
-            data_type: DataType::Vec3,
-        },
-        Parameter {
-          name: "b".to_string(),
-          data_type: DataType::Vec3,
-        },
-        Parameter {
-          name: "c".to_string(),
-          data_type: DataType::Vec3,
-        },
-      ],
-      output_type: DataType::UnitCell,
-      public: true,
-      node_data_creator: || Box::new(UnitCellData {
-        cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
-        cell_length_b: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
-        cell_length_c: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
-        cell_angle_alpha: 90.0,
-        cell_angle_beta: 90.0,
-        cell_angle_gamma: 90.0,
-      }),
-      node_data_saver: generic_node_data_saver::<UnitCellData>,
-      node_data_loader: generic_node_data_loader::<UnitCellData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "rect".to_string(),
-      description: "Outputs a rectangle with integer minimum corner coordinates and integer width and height.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-        Parameter {
-            name: "min_corner".to_string(),
-            data_type: DataType::IVec2,
-        },
-        Parameter {
-          name: "extent".to_string(),
-          data_type: DataType::IVec2,
-        },
-        Parameter {
-          name: "d_plane".to_string(),
-          data_type: DataType::DrawingPlane,
-        },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(RectData {
-        min_corner: IVec2::new(-1, -1),
-        extent: IVec2::new(2, 2),
-      }),
-      node_data_saver: generic_node_data_saver::<RectData>,
-      node_data_loader: generic_node_data_loader::<RectData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "circle".to_string(),
-      description: "Outputs a circle with integer center coordinates and integer radius.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-        Parameter {
-            name: "center".to_string(),
-            data_type: DataType::IVec2,
-        },
-        Parameter {
-          name: "radius".to_string(),
-          data_type: DataType::Int,
-        },
-        Parameter {
-          name: "d_plane".to_string(),
-          data_type: DataType::DrawingPlane,
-        },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(CircleData {
-        center: IVec2::new(0, 0),
-        radius: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<CircleData>,
-      node_data_loader: generic_node_data_loader::<CircleData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "reg_poly".to_string(),
-      description: "Outputs a regular polygon with integer radius. The number of sides is a property too.
-Now that we have general polygon node this node is less used.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-        Parameter {
-          name: "d_plane".to_string(),
-          data_type: DataType::DrawingPlane,
-        },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(RegPolyData {
-        num_sides: 3,
-        radius: 3,
-      }),
-      node_data_saver: generic_node_data_saver::<RegPolyData>,
-      node_data_loader: generic_node_data_loader::<RegPolyData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "polygon".to_string(),
-      description: "Outputs a general polygon with integer coordinate vertices. Both convex and concave polygons can be created with this node.
-The vertices can be freely dragged.
-You can create a new vertex by dragging an edge.
-Delete a vertex by dragging it onto one of its neighbour.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-        Parameter {
-          name: "d_plane".to_string(),
-          data_type: DataType::DrawingPlane,
-        },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(PolygonData {
-        vertices: vec![
-          IVec2::new(-1, -1),
-          IVec2::new(1, -1),
-          IVec2::new(0, 1),
-        ],
-      }),
-      node_data_saver: generic_node_data_saver::<PolygonData>,
-      node_data_loader: generic_node_data_loader::<PolygonData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "union_2d".to_string(),
-      description: "Computes the Boolean union of any number of 2D geometries. The `shapes` input accepts an array of `Geometry2D` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-          Parameter {
-              name: "shapes".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry2D)),
-          },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(Union2DData {}),
-      node_data_saver: generic_node_data_saver::<Union2DData>,
-      node_data_loader: generic_node_data_loader::<Union2DData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "intersect_2d".to_string(),
-      description: "Computes the Boolean intersection of any number of 2D geometries. The `shapes` input pin accepts an array of `Geometry2D` values.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-          Parameter {
-              name: "shapes".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry2D)),
-          },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(Intersect2DData {}),
-      node_data_saver: generic_node_data_saver::<Intersect2DData>,
-      node_data_loader: generic_node_data_loader::<Intersect2DData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "diff_2d".to_string(),
-      description: "Computes the Boolean difference of two 2D geometries.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-          Parameter {
-              name: "base".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from
-          },
-          Parameter {
-              name: "sub".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from base
-          },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(Diff2DData {}),
-      node_data_saver: generic_node_data_saver::<Diff2DData>,
-      node_data_loader: generic_node_data_loader::<Diff2DData>,
-    });
-
-    ret.add_node_type(NodeType {
-      name: "half_plane".to_string(),
-      description: "Outputs a half plane.
-You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
-Both vertices are displayed as a triangle-based prism. The direction of the half plane is indicated by the direction of the triangle.".to_string(),
-      category: NodeTypeCategory::Geometry2D,
-      parameters: vec![
-        Parameter {
-          name: "d_plane".to_string(),
-          data_type: DataType::DrawingPlane,
-        },
-        Parameter {
-          name: "m_index".to_string(),
-          data_type: DataType::IVec2,
-        },
-        Parameter {
-          name: "center".to_string(),
-          data_type: DataType::IVec2,
-        },
-        Parameter {
-          name: "shift".to_string(),
-          data_type: DataType::Int,
-        },
-        Parameter {
-          name: "subdivision".to_string(),
-          data_type: DataType::Int,
-        },
-      ],
-      output_type: DataType::Geometry2D,
-      public: true,
-      node_data_creator: || Box::new(HalfPlaneData {
-        point1: IVec2::new(0, 0),
-        point2: IVec2::new(1, 0),
-      }),
-      node_data_saver: generic_node_data_saver::<HalfPlaneData>,
-      node_data_loader: generic_node_data_loader::<HalfPlaneData>,
-    });
+    ret.add_node_type(rect_get_node_type());
+    ret.add_node_type(circle_get_node_type());
+    ret.add_node_type(reg_poly_get_node_type());
+    ret.add_node_type(polygon_get_node_type());
+    ret.add_node_type(union_2d_get_node_type());
+    ret.add_node_type(intersect_2d_get_node_type());
+    ret.add_node_type(diff_2d_get_node_type());
+    ret.add_node_type(half_plane_get_node_type());
 
     ret.add_node_type(NodeType {
       name: "extrude".to_string(),

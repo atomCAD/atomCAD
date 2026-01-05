@@ -10,7 +10,8 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapData {

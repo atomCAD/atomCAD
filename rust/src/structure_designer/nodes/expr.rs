@@ -13,8 +13,8 @@ use crate::expr::parser::parse;
 use crate::structure_designer::node_network::ValidationError;
 use crate::expr::expr::Expr;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::node_type::Parameter;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use serde_json::Value;
 use std::io;
 
