@@ -45,10 +45,21 @@ impl NodeData for FloatData {
     }
 }
 
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "float".to_string(),
+      description: "Outputs a float value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::Float,
+      public: true,
+      node_data_creator: || Box::new(FloatData {
+        value: 0.0
+      }),
+      node_data_saver: generic_node_data_saver::<FloatData>,
+      node_data_loader: generic_node_data_loader::<FloatData>,
+    }
+}
 
 
 

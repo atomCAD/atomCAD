@@ -44,8 +44,21 @@ impl NodeData for StringData {
     }    
 }
 
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "string".to_string(),
+      description: "Outputs a string value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::String,
+      public: true,
+      node_data_creator: || Box::new(StringData {
+        value: "".to_string(),
+      }),
+      node_data_saver: generic_node_data_saver::<StringData>,
+      node_data_loader: generic_node_data_loader::<StringData>,
+  }
+}
 
 
 

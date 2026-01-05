@@ -44,9 +44,21 @@ impl NodeData for IntData {
     }
 }
 
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "int".to_string(),
+      description: "Outputs an integer value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::Int,
+      public: true,
+      node_data_creator: || Box::new(IntData {
+        value: 0
+      }),
+      node_data_saver: generic_node_data_saver::<IntData>,
+      node_data_loader: generic_node_data_loader::<IntData>,
+    }
+}
 
 
 

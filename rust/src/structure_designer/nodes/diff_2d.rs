@@ -177,8 +177,28 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   return (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_drawing_plane));
 }
 
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "diff_2d".to_string(),
+      description: "Computes the Boolean difference of two 2D geometries.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+          Parameter {
+              name: "base".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from
+          },
+          Parameter {
+              name: "sub".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from base
+          },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(Diff2DData {}),
+      node_data_saver: generic_node_data_saver::<Diff2DData>,
+      node_data_loader: generic_node_data_loader::<Diff2DData>,
+  }
+}
 
 
 

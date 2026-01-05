@@ -26,7 +26,7 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::structure_designer::node_network::Node;
 use super::nodes::extrude::ExtrudeData;
 use super::nodes::facet_shell::FacetShellData;
-use super::nodes::parameter::ParameterData;
+use super::nodes::parameter::{ParameterData, get_node_type as parameter_get_node_type};
 use super::nodes::unit_cell::UnitCellData;
 use super::nodes::cuboid::CuboidData;
 use super::nodes::polygon::PolygonData;
@@ -78,30 +78,7 @@ impl NodeTypeRegistry {
       design_file_name: None,
     };
 
-    ret.add_node_type(NodeType {
-      name: "parameter".to_string(),
-      description: "To set up an input pin (parameter) of your custom node you need to use a parameter node in your subnetwork.
-The sort order property of a parameter determines the order of the parameters in the resulting custom node.".to_string(),
-      category: NodeTypeCategory::MathAndProgramming,
-      parameters: vec![
-          Parameter {
-              name: "default".to_string(),
-              data_type: DataType::Int, // will change based on  ParameterData::data_type.
-          },
-      ],
-      output_type: DataType::Int, // will change based on ParameterData::data_type.
-      public: true,
-      node_data_creator: || Box::new(ParameterData {
-        param_index: 0,
-        param_name: "param".to_string(),
-        data_type: DataType::Int,
-        sort_order: 0,
-        data_type_str: None,
-        error: None,
-      }),
-      node_data_saver: generic_node_data_saver::<ParameterData>,
-      node_data_loader: generic_node_data_loader::<ParameterData>,
-    });
+    ret.add_node_type(parameter_get_node_type());
 
     ret.add_node_type(NodeType {
       name: "expr".to_string(),

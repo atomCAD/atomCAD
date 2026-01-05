@@ -113,17 +113,25 @@ fn kth_angle(k: i32, num_sides: i32) -> f64 {
     return 2.0 * PI * (k as f64) / (num_sides as f64);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+pub fn reg_poly_node_type() -> NodeType {
+    NodeType {
+      name: "reg_poly".to_string(),
+      description: "Outputs a regular polygon with integer radius. The number of sides is a property too.
+Now that we have general polygon node this node is less used.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+        Parameter {
+          name: "d_plane".to_string(),
+          data_type: DataType::DrawingPlane,
+        },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(RegPolyData {
+        num_sides: 3,
+        radius: 3,
+      }),
+      node_data_saver: generic_node_data_saver::<RegPolyData>,
+      node_data_loader: generic_node_data_loader::<RegPolyData>,
+  }
+}

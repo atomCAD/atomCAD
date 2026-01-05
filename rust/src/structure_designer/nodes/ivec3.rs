@@ -86,3 +86,31 @@ impl NodeData for IVec3Data {
     }
 }
 
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "ivec3".to_string(),
+      description: "Outputs an IVec3 value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![
+        Parameter {
+            name: "x".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "y".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "z".to_string(),
+            data_type: DataType::Int,
+        },        
+      ],
+      output_type: DataType::IVec3,
+      public: true,
+      node_data_creator: || Box::new(IVec3Data {
+        value: IVec3::new(0, 0, 0)
+      }),
+      node_data_saver: generic_node_data_saver::<IVec3Data>,
+      node_data_loader: generic_node_data_loader::<IVec3Data>,
+    }
+}

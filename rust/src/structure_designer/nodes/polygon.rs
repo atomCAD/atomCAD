@@ -317,8 +317,33 @@ impl NodeNetworkGadget for PolygonGadget {
     }
 }
 
-
-
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "polygon".to_string(),
+      description: "Outputs a general polygon with integer coordinate vertices. Both convex and concave polygons can be created with this node.
+The vertices can be freely dragged.
+You can create a new vertex by dragging an edge.
+Delete a vertex by dragging it onto one of its neighbour.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+        Parameter {
+          name: "d_plane".to_string(),
+          data_type: DataType::DrawingPlane,
+        },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(PolygonData {
+        vertices: vec![
+          IVec2::new(-1, -1),
+          IVec2::new(1, -1),
+          IVec2::new(0, 1),
+        ],
+      }),
+      node_data_saver: generic_node_data_saver::<PolygonData>,
+      node_data_loader: generic_node_data_loader::<PolygonData>,
+    }
+}
 
 
 

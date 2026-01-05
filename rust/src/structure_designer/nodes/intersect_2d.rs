@@ -110,12 +110,24 @@ impl NodeData for Intersect2DData {
   }
 }
 
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "intersect_2d".to_string(),
+      description: "Computes the Boolean intersection of any number of 2D geometries. The `shapes` input pin accepts an array of `Geometry2D` values.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+          Parameter {
+              name: "shapes".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)),
+          },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(Intersect2DData {}),
+      node_data_saver: generic_node_data_saver::<Intersect2DData>,
+      node_data_loader: generic_node_data_loader::<Intersect2DData>,
+    }
+}
 
 
 

@@ -183,8 +183,34 @@ pub fn expr_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result<
     Ok(Box::new(data))
 }
 
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "expr".to_string(),
+      description: "You can type in a mathematical expression and it will be evaluated on its output pin.
+The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
 
-
+The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions. See the atomCAD reference guide for more details.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::None, // will change based on the expression
+      public: true,
+      node_data_creator: || Box::new(ExprData {
+        parameters: vec![
+          ExprParameter {
+            name: "x".to_string(),
+            data_type: DataType::Int,
+            data_type_str: None,
+          },
+        ],
+        expression: "x".to_string(),
+        expr: None,
+        error: None,
+        output_type: Some(DataType::Int),
+      }),
+      node_data_saver: generic_node_data_saver::<ExprData>,
+      node_data_loader: expr_data_loader,
+    }
+}
 
 
 

@@ -46,8 +46,21 @@ impl NodeData for BoolData {
 
 
 
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "bool".to_string(),
+      description: "Outputs a bool value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::Bool,
+      public: true,
+      node_data_creator: || Box::new(BoolData {
+        value: false
+      }),
+      node_data_saver: generic_node_data_saver::<BoolData>,
+      node_data_loader: generic_node_data_loader::<BoolData>,
+  }
+}
 
 
 

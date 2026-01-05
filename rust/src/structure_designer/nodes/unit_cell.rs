@@ -161,13 +161,39 @@ impl NodeData for UnitCellData {
     }
 }
 
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "unit_cell".to_string(),
+      description: "Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.".to_string(),
+      category: NodeTypeCategory::OtherBuiltin,
+      parameters: vec![
+        Parameter {
+            name: "a".to_string(),
+            data_type: DataType::Vec3,
+        },
+        Parameter {
+          name: "b".to_string(),
+          data_type: DataType::Vec3,
+        },
+        Parameter {
+          name: "c".to_string(),
+          data_type: DataType::Vec3,
+        },
+      ],
+      output_type: DataType::UnitCell,
+      public: true,
+      node_data_creator: || Box::new(UnitCellData {
+        cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+        cell_length_b: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+        cell_length_c: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
+        cell_angle_alpha: 90.0,
+        cell_angle_beta: 90.0,
+        cell_angle_gamma: 90.0,
+      }),
+      node_data_saver: generic_node_data_saver::<UnitCellData>,
+      node_data_loader: generic_node_data_loader::<UnitCellData>,
+  }
+}
 
 
 

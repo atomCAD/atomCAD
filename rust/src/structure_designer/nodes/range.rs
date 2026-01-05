@@ -97,19 +97,33 @@ impl NodeData for RangeData {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "range".to_string(),
+      description: "Creates an array of integers starting from an integer value and having a specified step between them. The number of integers in the array can also be specified (count).".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![
+        Parameter {
+            name: "start".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "step".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "count".to_string(),
+            data_type: DataType::Int,
+        },        
+      ],
+      output_type: DataType::Array(Box::new(DataType::Int)),
+      public: true,
+      node_data_creator: || Box::new(RangeData {
+        start: 0,
+        step: 1,
+        count: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<RangeData>,
+      node_data_loader: generic_node_data_loader::<RangeData>,
+    }
+}

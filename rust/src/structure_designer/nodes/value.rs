@@ -53,14 +53,21 @@ impl NodeData for ValueData {
     }
 }
 
-
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+    name: "value".to_string(),
+      description: "".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::None,
+      public: false,
+      node_data_creator: || Box::new(ValueData {
+        value: NetworkResult::None,
+      }),
+      node_data_saver: generic_node_data_saver::<ValueData>,
+      node_data_loader: generic_node_data_loader::<ValueData>,
+  }
+}
 
 
 
