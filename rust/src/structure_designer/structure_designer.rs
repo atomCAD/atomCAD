@@ -597,6 +597,11 @@ impl StructureDesigner {
       let mut dirty_nodes = HashSet::new();
       dirty_nodes.insert(node_id);
       
+      // Track visibility change for the new node (it was set to visible in add_node)
+      // This is needed because the node was made visible directly on node_network,
+      // bypassing StructureDesigner.set_node_display which normally tracks this
+      self.pending_changes.visibility_changed.insert(node_id);
+      
       // Apply display policy considering only this node as dirty
       self.apply_node_display_policy(Some(&dirty_nodes));
       
