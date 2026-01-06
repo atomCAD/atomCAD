@@ -1,0 +1,6 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+expression: result.to_detailed_string()
+---
+Geometry:
+Sphere(center: (0, 0, 0), radius: 7.13)

@@ -380,7 +380,12 @@ impl NetworkEvaluator {
 
       let mut merged_items = Vec::new();
 
-      for (&input_node_id, &input_node_output_pin_index) in input_output_pins {
+      // Sort by node ID to ensure deterministic evaluation order
+      // (HashMap iteration order is non-deterministic)
+      let mut sorted_pins: Vec<_> = input_output_pins.iter().collect();
+      sorted_pins.sort_by_key(|&(&node_id, _)| node_id);
+
+      for (&input_node_id, &input_node_output_pin_index) in sorted_pins {
         let result = self.evaluate(
           network_stack,
           input_node_id,

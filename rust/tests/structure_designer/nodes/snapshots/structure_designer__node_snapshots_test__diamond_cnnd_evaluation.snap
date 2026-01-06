@@ -1,0 +1,21 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+expression: snapshot
+---
+{
+  "network_name": "sample",
+  "node_count": 24,
+  "return_node_id": 25,
+  "displayed_node_outputs": [
+    {
+      "node_id": 12,
+      "node_type": "atom_fill",
+      "output": "Atomic: 2899 atoms, 4496 bonds"
+    },
+    {
+      "node_id": 25,
+      "node_type": "lattice_move",
+      "output": "Geometry:\nTransform(translation: (0, 0, 17.84))\n  Intersection3D\n    Intersection3D\n      HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n      Transform(translation: (0, 0, 0))\n        HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n      Transform(translation: (0, 0, 0))\n        HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n      Transform(translation: (0, 0, 0))\n        HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n    Transform(translation: (0, 0, 0))\n      Intersection3D\n        HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n        Transform(translation: (0, 0, 0))\n          HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n        Transform(translation: (0, 0, 0))\n          HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n        Transform(translation: (0, 0, 0))\n          HalfSpace(normal: (0.58, 0.58, 0.58), center: (8.32, 8.32, 8.32))\n    HalfSpace(normal: (0, 0, 1), center: (0, 0, 3.57))\n    HalfSpace(normal: (1, 0, 0), center: (17.83, 0, 0))\n    HalfSpace(normal: (-1, 0, 0), center: (-17.83, 0, 0))\n    HalfSpace(normal: (0, 1, 0), center: (0, 17.83, 0))\n    HalfSpace(normal: (0, -1, 0), center: (0, -17.83, 0))\n    Intersection3D\n      HalfSpace(normal: (0.71, 0, 0.71), center: (17.84, 0, 0))\n      HalfSpace(normal: (0.71, 0, -0.71), center: (17.84, 0, 0))\n    Transform(translation: (0, 0, 0))\n      Intersection3D\n        HalfSpace(normal: (0.71, 0, 0.71), center: (17.84, 0, 0))\n        HalfSpace(normal: (0.71, 0, -0.71), center: (17.84, 0, 0))\n    Transform(translation: (0, 0, 0))\n      Intersection3D\n        HalfSpace(normal: (0.71, 0, 0.71), center: (17.84, 0, 0))\n        HalfSpace(normal: (0.71, 0, -0.71), center: (17.84, 0, 0))\n    Transform(translation: (0, 0, 0))\n      Intersection3D\n        HalfSpace(normal: (0.71, 0, 0.71), center: (17.84, 0, 0))\n        HalfSpace(normal: (0.71, 0, -0.71), center: (17.84, 0, 0))"
+    }
+  ]
+}

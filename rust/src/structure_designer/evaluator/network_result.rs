@@ -448,6 +448,30 @@ impl NetworkResult {
     }
   }
 
+  /// Returns a detailed string representation including full contents for complex types.
+  /// For Geometry/Geometry2D, shows the complete geo tree structure.
+  /// For other variants, delegates to to_display_string().
+  pub fn to_detailed_string(&self) -> String {
+    match self {
+      NetworkResult::Geometry(geometry) => {
+        format!("Geometry:\n{}", geometry.geo_tree_root)
+      },
+      NetworkResult::Geometry2D(geometry) => {
+        format!("Geometry2D:\n{}", geometry.geo_tree_root)
+      },
+      NetworkResult::Atomic(atomic) => {
+        format!("Atomic: {} atoms, {} bonds", atomic.get_num_of_atoms(), atomic.get_num_of_bonds())
+      },
+      NetworkResult::Motif(motif) => {
+        format!("Motif: {} sites, {} bonds", motif.sites.len(), motif.bonds.len())
+      },
+      NetworkResult::Error(msg) => {
+        format!("Error: {}", msg)
+      },
+      _ => self.to_display_string(),
+    }
+  }
+
   /// Parse a NetworkResult from a string value based on expected DataType.
   /// Used for CLI parameter parsing.
   pub fn from_string(value_str: &str, data_type: &DataType) -> Result<Self, String> {

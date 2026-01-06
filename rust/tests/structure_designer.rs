@@ -9,3 +9,6 @@ mod navigation_history_test;
 
 #[path = "structure_designer/kernel_test.rs"]
 mod kernel_test;
+
+#[path = "structure_designer/nodes/node_snapshots_test.rs"]
+mod node_snapshots_test;
