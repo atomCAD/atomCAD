@@ -20,6 +20,7 @@ The ideal way to provide AI assitance into atomCAD would be to create a textual 
 This approach has two main disadvantages though:
 
 - AI models are not proficient with understanding custom languages. This can be mitigated to some extent by making the node network textual representation as close to a known programming language as possible. Such a language can be Elm.
+- Developing the node network and its textual projection to a sufficient level requires significant effort.
 
 Another way to add AI support to atomCAD is to just use a mainstraim language and its ecosystem as executable programs that generate cystolecule outputs. In this case we would just provide a low-level API for these programs to interact with atomCAD. This low level API would be just a thin layer upon the geo-tree and crystolecule modules. So basically these ai-created programs would be able to create geometry trees directly (without nodes) and calling the atom fill fnction to create crystolecules.
 
