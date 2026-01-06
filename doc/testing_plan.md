@@ -81,6 +81,47 @@ fn test_sphere_node_output() {
 
 Use [`insta`](https://crates.io/crates/insta) crate for snapshot management. One test can cover an entire node type's correctness.
 
+#### Snapshot Testing Workflow
+
+**Running snapshot tests:**
+```bash
+cd rust
+cargo test node_snapshots_test
+```
+
+**When snapshots change (intentionally):**
+```bash
+# Review all pending snapshots interactively
+cargo insta review
+
+# Or accept all pending snapshots
+cargo insta accept
+```
+
+**When tests fail unexpectedly:**
+1. Run `cargo insta review` to see the diff
+2. If the change is correct, accept it
+3. If the change is a bug, fix the code and re-run tests
+
+**Adding new snapshot tests:**
+1. Add a test function in `rust/tests/structure_designer/nodes/node_snapshots_test.rs`
+2. Use `evaluate_cnnd_file("../samples/your_file.cnnd")` to evaluate a CNND file
+3. Use `insta::assert_json_snapshot!(snapshot)` to create the snapshot
+4. Run tests—new snapshots will be created as `.snap.new` files
+5. Run `cargo insta accept` to accept the new snapshots
+
+**Current snapshot tests (10 total):**
+- `test_diamond_cnnd_evaluation` - Diamond crystal (Atomic output)
+- `test_sphere_node_basic` - Basic sphere node (Geometry output)
+- `test_hexagem_cnnd_evaluation` - Hexagonal gem pattern
+- `test_extrude_demo_evaluation` - 2D→3D extrusion
+- `test_mof5_motif_evaluation` - MOF-5 metal-organic framework
+- `test_rutile_motif_evaluation` - Rutile crystal motif
+- `test_halfspace_demo_evaluation` - CSG half-space operations
+- `test_rotation_demo_evaluation` - Polar pattern transforms
+- `test_pattern_evaluation` - Pattern node with parameters
+- `test_nut_bolt_evaluation` - Complex CSG (sphere cut)
+
 ### 3. Integration Tests (NEW)
 **Test multi-component workflows.**
 

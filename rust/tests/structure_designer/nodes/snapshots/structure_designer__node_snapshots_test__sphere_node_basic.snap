@@ -3,4 +3,12 @@ source: tests/structure_designer/nodes/node_snapshots_test.rs
 expression: result.to_detailed_string()
 ---
 Geometry:
+unit_cell:
+  a: (3.567000, 0.000000, 0.000000)
+  b: (0.000000, 3.567000, 0.000000)
+  c: (0.000000, 0.000000, 3.567000)
+frame_transform:
+  translation: (0.000000, 0.000000, 0.000000)
+  rotation: (0.000000, 0.000000, 0.000000, 1.000000)
+geo_tree:
 Sphere(center: (0, 0, 0), radius: 7.13)

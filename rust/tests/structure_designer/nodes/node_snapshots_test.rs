@@ -68,6 +68,54 @@ fn test_diamond_cnnd_evaluation() {
 }
 
 #[test]
+fn test_hexagem_cnnd_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/hexagem.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
+fn test_extrude_demo_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/extrude-demo.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
+fn test_mof5_motif_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/MOF5-motif.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
+fn test_rutile_motif_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/rutile-motif.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
+fn test_halfspace_demo_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/half-space-and-miller-index-demo.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
+fn test_rotation_demo_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/rotation-demo.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
+fn test_pattern_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/pattern.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
+fn test_nut_bolt_evaluation() {
+    let snapshot = evaluate_cnnd_file("../samples/nut-bolt.cnnd");
+    insta::assert_json_snapshot!(snapshot);
+}
+
+#[test]
 fn test_sphere_node_basic() {
     let registry = NodeTypeRegistry::new();
     
