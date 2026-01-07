@@ -25,8 +25,8 @@ try {
         cargo install cargo-llvm-cov
     }
 
-    # Common args: run all tests (not just lib), ignore external csgrs dependency
-    $commonArgs = @("--ignore-filename-regex", "csgrs")
+    # Common args: ignore external csgrs dependency and generated FFI code
+    $commonArgs = @("--ignore-filename-regex", "(csgrs|frb_generated)")
 
     if ($Summary) {
         Write-Host "Generating coverage summary..." -ForegroundColor Cyan

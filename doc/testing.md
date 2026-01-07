@@ -68,7 +68,7 @@ cargo install cargo-llvm-cov
 
 # Or run directly from rust/
 cd rust
-cargo llvm-cov --ignore-filename-regex csgrs --html
+cargo llvm-cov --ignore-filename-regex "(csgrs|frb_generated)" --html
 start target/llvm-cov/html/index.html
 ```
 
