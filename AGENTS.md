@@ -68,7 +68,12 @@ cargo test crystolecule        # Crystolecule module
 
 # Update snapshots after intentional changes
 cargo insta review
+
+# Flutter smoke test
+flutter test integration_test/
 ```
+
+See `doc/testing.md` for test coverage details.
 
 ## Code Conventions
 
