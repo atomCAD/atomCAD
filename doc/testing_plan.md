@@ -224,10 +224,11 @@ testWidgets('Can load and modify project', (tester) async {
 3. Write snapshot tests for each node type category
 4. Document snapshot update workflow
 
-### Phase 3: Integration Tests (4-6 hours)
-1. CNND roundtrip test
-2. Evaluation pipeline test
-3. Update Flutter integration test
+### Phase 3: Integration Tests (2-3 hours)
+1. CNND roundtrip test (load → modify → save → reload → verify)
+2. Export format tests (XYZ/MOL file generation)
+
+*Note: Evaluation pipeline is already covered by snapshot tests. Flutter integration tests belong in Phase 4.*
 
 ### Phase 4: Flutter Tests (2-4 hours)
 1. `StructureDesignerModel` unit tests

@@ -57,6 +57,17 @@ flutter_rust_bridge_codegen generate
 dart format lib/
 cd rust && cargo fmt && cargo clippy && cargo test
 flutter analyze
+
+# Run all Rust tests
+cd rust && cargo test
+
+# Run specific test categories
+cargo test cnnd_roundtrip      # Integration/roundtrip tests
+cargo test node_snapshots      # Snapshot tests
+cargo test crystolecule        # Crystolecule module
+
+# Update snapshots after intentional changes
+cargo insta review
 ```
 
 ## Code Conventions
@@ -86,7 +97,7 @@ flutter analyze
 
 ## File Formats
 
-- `.cnnd` - atomCAD project files (TOML-based)
+- `.cnnd` - atomCAD project files (JSON-based)
 - `.mol` - V3000 molecular format (export)
 - `.xyz` - XYZ format (import/export)
 

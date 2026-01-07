@@ -2957,6 +2957,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "smallvec",
+ "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "toml 0.8.23",
