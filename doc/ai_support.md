@@ -219,3 +219,9 @@ Python is well-supported by the Claude Agent SDK and AI models excel at Python.
 | Python | ✅ Good | ✅ Excellent | ⚠️ Requires Python |
 
 TypeScript + Bun provides the best balance of rapid iteration, AI code quality, and distribution simplicity.
+
+## Smart Editor Integration
+
+A key disadvantage of the TypeScript approach is that AI-generated programs cannot be manually edited in the atomCAD editor like node networks can. We can bridge this gap using **editable bindings**—explicit `editable*()` helper functions that mark values as gadget-controllable. When the user drags a viewport handle, the TypeScript source is patched and the script re-executes automatically.
+
+See [Smart Editor Integration](./smart_editor_integration.md) for the full design.
