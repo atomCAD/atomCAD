@@ -97,6 +97,27 @@ flowchart TB
 3. **Agent Loop** - Claude Agent SDK orchestrating code generation and execution
 4. **Process Management** - Flutter spawns Bun subprocess for AI sessions
 
+### Performance Considerations
+
+#### IPC Latency
+
+The communication between the TypeScript process and Rust backend uses JSON-RPC over stdio (pipes). This is a well-understood IPC mechanism with excellent performance characteristics:
+
+- **Latency**: Pipe-based IPC achieves ~1-10 μs per message for typical payloads on the same machine
+- **Throughput**: Pipes can sustain ~3000 MB/s for larger data transfers
+
+Critically, the AI model's "thinking time" dominates the overall latency. A typical Claude API response takes 1-30+ seconds depending on complexity. The IPC overhead of microseconds is **completely negligible** in comparison. The bottleneck is always the AI inference, never the local communication.
+
+#### Hot Reload During Development
+
+Fast iteration is essential for agentic workflows. When the AI generates new TypeScript code, we need to execute it quickly. Bun provides excellent hot-reload capabilities:
+
+- **`bun --watch` mode**: Hard restarts the process when source files change. Uses native OS filesystem watchers (kqueue on macOS, inotify on Linux) for near-instant detection (~10-50ms).
+- **`bun --hot` mode**: Soft reloads code without restarting the process—updates the internal module cache with new code while preserving global state.
+- **No compilation step**: Bun executes TypeScript directly, eliminating the transpilation delay that Node.js + tsc would incur.
+
+This means the cycle of "AI generates code → execute → get feedback" is bottlenecked only by Claude API latency, not by local execution overhead.
+
 ### Distribution: Bun and the Claude Agent SDK
 
 **Key discovery:** Anthropic acquired Bun (the JavaScript/TypeScript runtime) in December 2025. This fundamentally changes the distribution story.
@@ -134,3 +155,67 @@ This simplifies integration significantly:
 
 - **Development:** AtomCAD Developers install Bun to iterate on the agent code (`bun run agent.ts`)
 - **Distribution:** The compiled single-file executable ships with atomCAD - **users need nothing installed**
+
+## Alternatives Considered
+
+Before settling on TypeScript + Bun, several alternative approaches were evaluated:
+
+### Direct Rust Code Generation
+
+The AI could generate Rust code that directly uses the geo_tree and crystolecule modules.
+
+**Pros:**
+- No IPC overhead—direct function calls
+- Full type safety at compile time
+- No additional runtime dependencies
+
+**Cons:**
+- **No hot reload**: Each iteration requires a full `cargo build` (~10-60 seconds). This makes agentic workflows impractical—the feedback loop becomes too slow.
+- Compilation errors are harder for AI to interpret than runtime errors
+- Requires Rust toolchain for execution
+
+**Verdict:** The compilation latency makes this approach unsuitable for iterative AI-driven development.
+
+### Rhai Embedded Scripting
+
+[Rhai](https://rhai.rs/) is a lightweight scripting language designed specifically for embedding in Rust applications.
+
+**Pros:**
+- Tight Rust integration with minimal overhead
+- No separate process or IPC needed
+- Instant script reload
+- Small footprint, easy to bundle
+
+**Cons:**
+- **Poor AI code quality**: Rhai is a niche language. AI models have limited training data for it, resulting in significantly worse code generation compared to mainstream languages.
+- **Slower execution**: Benchmarks show Rhai is approximately 2x slower than Python and ~30x slower than V8/Bun for typical workloads.
+- Limited ecosystem—no access to npm packages
+
+**Verdict:** The AI proficiency gap is a dealbreaker. The whole point of this integration is to leverage Claude's coding abilities, which are strongest in mainstream languages.
+
+### Python + Claude Agent SDK
+
+Python is well-supported by the Claude Agent SDK and AI models excel at Python.
+
+**Pros:**
+- Excellent AI code generation quality
+- First-class SDK support
+- Rich scientific computing ecosystem (NumPy, etc.)
+
+**Cons:**
+- **Distribution burden**: Requires users to have Python installed, or bundling a Python runtime (~100MB+)
+- Virtual environment complexity
+- Slower startup than Bun
+
+**Verdict:** A viable option, but TypeScript + Bun offers cleaner distribution without sacrificing AI code quality.
+
+### Summary Comparison
+
+| Approach | Hot Reload | AI Code Quality | Distribution |
+|----------|------------|-----------------|--------------|
+| TypeScript + Bun | ✅ Instant | ✅ Excellent | ✅ Self-contained binary |
+| Direct Rust | ❌ 10-60s compile | ✅ Good | ✅ Built-in |
+| Rhai | ✅ Instant | ❌ Poor | ✅ Built-in |
+| Python | ✅ Good | ✅ Excellent | ⚠️ Requires Python |
+
+TypeScript + Bun provides the best balance of rapid iteration, AI code quality, and distribution simplicity.
