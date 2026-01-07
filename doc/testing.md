@@ -7,6 +7,9 @@
 ```bash
 cd rust && cargo test          # All Rust tests
 flutter test integration_test/ # Flutter smoke test
+
+# Coverage report (requires cargo-llvm-cov)
+.\scripts\coverage.ps1 -Open   # Windows: generate and open HTML report
 ```
 
 ## Rust Tests (rust/tests/)
@@ -48,6 +51,31 @@ Single FFI smoke test only. Full workflow tests run in Rust.
 - `StructureDesignerModel` is a thin wrapper around Rust APIs
 - wgpu/GPU initialization fails in test environments
 - Rust tests already cover CNND roundtrip, node evaluation, exports
+
+## Test Coverage Reports
+
+Use `cargo-llvm-cov` to generate line-by-line coverage reports:
+
+```powershell
+# Install (one-time)
+cargo install cargo-llvm-cov
+
+# Generate HTML report and open in browser
+.\scripts\coverage.ps1 -Open
+
+# Show summary in terminal only
+.\scripts\coverage.ps1 -Summary
+
+# Or run directly from rust/
+cd rust
+cargo llvm-cov --ignore-filename-regex csgrs --html
+start target/llvm-cov/html/index.html
+```
+
+The HTML report shows:
+- Per-file coverage percentages
+- Line-by-line hit counts (green = covered, red = not covered)
+- Function/branch coverage statistics
 
 ## Not Tested (Manual Only)
 
