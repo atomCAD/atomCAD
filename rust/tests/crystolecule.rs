@@ -18,3 +18,6 @@ mod mol_exporter_test;
 
 #[path = "crystolecule/io/xyz_roundtrip_test.rs"]
 mod xyz_roundtrip_test;
+
+#[path = "crystolecule/lattice_fill_test.rs"]
+mod lattice_fill_test;
