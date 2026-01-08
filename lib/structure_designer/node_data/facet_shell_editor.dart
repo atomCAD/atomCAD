@@ -146,11 +146,13 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                                       const EdgeInsets.symmetric(vertical: 4.0),
                                   child: Row(
                                     children: [
-                                      // Miller index
+                                      // Miller index - use {hkl} for symmetrized, (h,k,l) for individual
                                       SizedBox(
                                         width: 120,
                                         child: Text(
-                                          '(${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z})',
+                                          facet.symmetrize
+                                              ? '{${facet.millerIndex.x} ${facet.millerIndex.y} ${facet.millerIndex.z}}'
+                                              : '(${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z})',
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
