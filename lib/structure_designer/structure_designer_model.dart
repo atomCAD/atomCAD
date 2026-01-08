@@ -238,6 +238,103 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  // ===== BATCH SELECTION METHODS (for rectangle selection) =====
+
+  /// Add multiple nodes to selection (for Shift+rectangle)
+  void addNodesToSelection(List<BigInt> nodeIds) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    structure_designer_api.addNodesToSelection(nodeIds: uint64Ids);
+    refreshFromKernel();
+  }
+
+  /// Toggle multiple wires in selection (for Ctrl+rectangle)
+  void toggleWiresSelection(List<WireView> wires) {
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.toggleWiresSelection(wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Add multiple wires to selection (for Shift+rectangle)
+  void addWiresToSelection(List<WireView> wires) {
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.addWiresToSelection(wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Select nodes and wires together (for rectangle selection - replaces current selection)
+  void selectNodesAndWires(List<BigInt> nodeIds, List<WireView> wires) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.selectNodesAndWires(
+        nodeIds: uint64Ids, wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Add nodes and wires to existing selection (for Shift+rectangle)
+  void addNodesAndWiresToSelection(List<BigInt> nodeIds, List<WireView> wires) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.addNodesAndWiresToSelection(
+        nodeIds: uint64Ids, wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Toggle nodes and wires in selection (for Ctrl+rectangle)
+  void toggleNodesAndWiresSelection(List<BigInt> nodeIds, List<WireView> wires) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.toggleNodesAndWiresSelection(
+        nodeIds: uint64Ids, wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
   /// Check if a node is the active node (for properties panel / gadget)
   BigInt? getActiveNodeId() {
     if (nodeNetworkView == null) return null;

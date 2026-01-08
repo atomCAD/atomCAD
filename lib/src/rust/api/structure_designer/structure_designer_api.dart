@@ -188,6 +188,41 @@ bool addWireToSelection(
 List<WireView> getSelectedWires() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetSelectedWires();
 
+void addNodesToSelection({required Uint64List nodeIds}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNodesToSelection(
+        nodeIds: nodeIds);
+
+void selectWires({required List<WireIdentifier> wires}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSelectWires(wires: wires);
+
+void addWiresToSelection({required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddWiresToSelection(
+            wires: wires);
+
+void toggleWiresSelection({required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleWiresSelection(
+            wires: wires);
+
+void selectNodesAndWires(
+        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSelectNodesAndWires(
+            nodeIds: nodeIds, wires: wires);
+
+void addNodesAndWiresToSelection(
+        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddNodesAndWiresToSelection(
+            nodeIds: nodeIds, wires: wires);
+
+void toggleNodesAndWiresSelection(
+        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleNodesAndWiresSelection(
+            nodeIds: nodeIds, wires: wires);
+
 APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetExtrudeData(
         nodeId: nodeId);

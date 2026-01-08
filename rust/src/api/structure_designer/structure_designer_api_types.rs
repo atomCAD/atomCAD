@@ -70,6 +70,14 @@ pub struct InputPinView {
     pub dest_param_index: usize,
     pub selected: bool,
   }
+
+  /// Wire identifier for batch selection operations
+  pub struct WireIdentifier {
+    pub source_node_id: u64,
+    pub source_output_pin_index: i32,
+    pub destination_node_id: u64,
+    pub destination_argument_index: usize,
+  }
   
   pub struct NodeNetworkView {
     pub name: String,

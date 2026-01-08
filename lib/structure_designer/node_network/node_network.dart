@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/common/api_utils.dart';
 
 // Zoom levels
 enum ZoomLevel {
@@ -273,6 +276,10 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Store the last pointer position for panning
   Offset? _lastPanPosition;
 
+  /// Rectangle selection state
+  Rect? _selectionRect; // Current rectangle being drawn (screen coords)
+  Offset? _selectionRectStart; // Start point of rectangle drag (screen coords)
+
   @override
   void initState() {
     super.initState();
@@ -377,6 +384,212 @@ class NodeNetworkState extends State<NodeNetwork> {
     return null;
   }
 
+  // ===== RECTANGLE SELECTION HELPERS =====
+
+  /// Start rectangle selection at the given screen position
+  void _handleSelectionRectStart(Offset position) {
+    setState(() {
+      _selectionRectStart = position;
+      _selectionRect = Rect.fromPoints(position, position);
+    });
+  }
+
+  /// Update the rectangle selection as the mouse moves
+  void _handleSelectionRectUpdate(Offset position) {
+    if (_selectionRectStart != null) {
+      setState(() {
+        _selectionRect = Rect.fromPoints(_selectionRectStart!, position);
+      });
+    }
+  }
+
+  /// Finish rectangle selection and apply to model
+  void _handleSelectionRectEnd(StructureDesignerModel model) {
+    if (_selectionRect == null || model.nodeNetworkView == null) {
+      _clearSelectionRect();
+      return;
+    }
+
+    final scale = getZoomScale(_zoomLevel);
+    final rect = _selectionRect!;
+
+    // Find all nodes overlapping the rectangle
+    List<BigInt> nodesInRect = [];
+    for (final entry in model.nodeNetworkView!.nodes.entries) {
+      final node = entry.value;
+      final nodeScreenPos = logicalToScreen(
+        apiVec2ToOffset(node.position),
+        _panOffset,
+        scale,
+      );
+      final nodeSize = getNodeSize(node, _zoomLevel);
+      final nodeRect = Rect.fromLTWH(
+        nodeScreenPos.dx,
+        nodeScreenPos.dy,
+        nodeSize.width,
+        nodeSize.height,
+      );
+
+      // Overlap check (any intersection counts)
+      if (rect.overlaps(nodeRect)) {
+        nodesInRect.add(node.id);
+      }
+    }
+
+    // Find all wires overlapping the rectangle
+    List<WireView> wiresInRect = [];
+    for (final wire in model.nodeNetworkView!.wires) {
+      if (_wireOverlapsRect(wire, rect, model, scale)) {
+        wiresInRect.add(wire);
+      }
+    }
+
+    // Apply selection based on modifier keys
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+
+    if (isCtrl) {
+      // Toggle: add unselected, remove selected
+      model.toggleNodesAndWiresSelection(nodesInRect, wiresInRect);
+    } else if (isShift) {
+      // Add to existing selection
+      model.addNodesAndWiresToSelection(nodesInRect, wiresInRect);
+    } else {
+      // Replace selection
+      model.selectNodesAndWires(nodesInRect, wiresInRect);
+    }
+
+    _clearSelectionRect();
+  }
+
+  /// Clear the selection rectangle state
+  void _clearSelectionRect() {
+    setState(() {
+      _selectionRect = null;
+      _selectionRectStart = null;
+    });
+  }
+
+  /// Check if a wire's Bezier curve overlaps the selection rectangle
+  bool _wireOverlapsRect(
+      WireView wire, Rect rect, StructureDesignerModel model, double scale) {
+    // Get source and destination pin positions
+    final sourceNode = model.nodeNetworkView!.nodes[wire.sourceNodeId];
+    final destNode = model.nodeNetworkView!.nodes[wire.destNodeId];
+    if (sourceNode == null || destNode == null) return false;
+
+    final sourcePos =
+        _getPinScreenPosition(sourceNode, wire.sourceOutputPinIndex, true);
+    final destPos =
+        _getPinScreenPosition(destNode, wire.destParamIndex.toInt(), false);
+
+    // Quick bounding box check first
+    final wireBounds = _getWireBoundingBox(sourcePos, destPos);
+    if (!rect.overlaps(wireBounds)) return false;
+
+    // Sample points along the Bezier curve and check if any are in rect
+    const samples = 20;
+    for (int i = 0; i <= samples; i++) {
+      final t = i / samples;
+      final point = _sampleBezierPoint(sourcePos, destPos, t);
+      if (rect.contains(point)) return true;
+    }
+
+    return false;
+  }
+
+  /// Get screen position of a pin on a node
+  Offset _getPinScreenPosition(NodeView node, int pinIndex, bool isOutput) {
+    final scale = getZoomScale(_zoomLevel);
+    final nodePos = apiVec2ToOffset(node.position);
+
+    if (_zoomLevel == ZoomLevel.normal) {
+      if (isOutput) {
+        final vertOffset = (pinIndex == -1)
+            ? NODE_VERT_WIRE_OFFSET_FUNCTION_PIN
+            : (node.inputPins.isEmpty
+                ? NODE_VERT_WIRE_OFFSET_EMPTY
+                : NODE_VERT_WIRE_OFFSET +
+                    node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM * 0.5);
+        return logicalToScreen(
+            nodePos + Offset(NODE_WIDTH, vertOffset), _panOffset, scale);
+      } else {
+        final vertOffset = NODE_VERT_WIRE_OFFSET +
+            (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+        return logicalToScreen(
+            nodePos + Offset(0.0, vertOffset), _panOffset, scale);
+      }
+    } else {
+      // Zoomed out mode
+      final nodeSize = getNodeSize(node, _zoomLevel);
+      final nodeScreenPos = logicalToScreen(nodePos, _panOffset, scale);
+
+      if (isOutput) {
+        return Offset(
+            nodeScreenPos.dx + nodeSize.width, nodeScreenPos.dy + nodeSize.height / 2);
+      } else {
+        final numInputs = node.inputPins.length;
+        final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
+        final totalHeight = (numInputs - 1) * spacing;
+        final startY = nodeScreenPos.dy + (nodeSize.height - totalHeight) / 2;
+        return Offset(nodeScreenPos.dx, startY + (pinIndex * spacing));
+      }
+    }
+  }
+
+  /// Get bounding box for a Bezier wire
+  Rect _getWireBoundingBox(Offset start, Offset end) {
+    // Use CUBIC_SPLINE_HORIZ_OFFSET as the control point offset
+    final cp1 = Offset(start.dx + CUBIC_SPLINE_HORIZ_OFFSET, start.dy);
+    final cp2 = Offset(end.dx - CUBIC_SPLINE_HORIZ_OFFSET, end.dy);
+
+    final minX =
+        [start.dx, end.dx, cp1.dx, cp2.dx].reduce((a, b) => math.min(a, b));
+    final maxX =
+        [start.dx, end.dx, cp1.dx, cp2.dx].reduce((a, b) => math.max(a, b));
+    final minY =
+        [start.dy, end.dy, cp1.dy, cp2.dy].reduce((a, b) => math.min(a, b));
+    final maxY =
+        [start.dy, end.dy, cp1.dy, cp2.dy].reduce((a, b) => math.max(a, b));
+
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  /// Sample a point on the Bezier curve at parameter t (0..1)
+  Offset _sampleBezierPoint(Offset start, Offset end, double t) {
+    final cp1 = Offset(start.dx + CUBIC_SPLINE_HORIZ_OFFSET, start.dy);
+    final cp2 = Offset(end.dx - CUBIC_SPLINE_HORIZ_OFFSET, end.dy);
+
+    // Cubic Bezier: B(t) = (1-t)³P0 + 3(1-t)²tP1 + 3(1-t)t²P2 + t³P3
+    final u = 1 - t;
+    final tt = t * t;
+    final uu = u * u;
+    final uuu = uu * u;
+    final ttt = tt * t;
+
+    return Offset(
+      uuu * start.dx + 3 * uu * t * cp1.dx + 3 * u * tt * cp2.dx + ttt * end.dx,
+      uuu * start.dy + 3 * uu * t * cp1.dy + 3 * u * tt * cp2.dy + ttt * end.dy,
+    );
+  }
+
+  /// Build the selection rectangle overlay widget
+  Widget _buildSelectionRectangle() {
+    if (_selectionRect == null) return const SizedBox.shrink();
+
+    return Positioned.fromRect(
+      rect: _selectionRect!,
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.blue, width: 1),
+            color: Colors.blue.withValues(alpha: 0.1),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Handles tap down in the main area
   void _handleTapDown(TapDownDetails details) {
     focusNode.requestFocus();
@@ -420,11 +633,13 @@ class NodeNetworkState extends State<NodeNetwork> {
           model: model, panOffset: _panOffset, zoomLevel: _zoomLevel),
       // Then all the nodes on top - NodeWidget now handles its own positioning with panOffset
       ...model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(
-          node: entry.value, panOffset: _panOffset, zoomLevel: _zoomLevel))
+          node: entry.value, panOffset: _panOffset, zoomLevel: _zoomLevel)),
+      // Selection rectangle on top of everything
+      _buildSelectionRectangle(),
     ];
   }
 
-  /// Handle pointer down event - check for middle mouse button or Shift + right mouse
+  /// Handle pointer down event - check for middle mouse button, Shift + right mouse, or left-click for rectangle selection
   void _handlePointerDown(PointerDownEvent event) {
     // Check if middle mouse button (button 2)
     if (event.buttons == kTertiaryButton) {
@@ -441,9 +656,15 @@ class NodeNetworkState extends State<NodeNetwork> {
         _lastPanPosition = event.position;
       });
     }
+    // Left-click on empty space starts rectangle selection
+    else if (event.buttons == kPrimaryButton) {
+      if (!_isClickOnNode(widget.graphModel, event.localPosition)) {
+        _handleSelectionRectStart(event.localPosition);
+      }
+    }
   }
 
-  /// Handle pointer move event for panning (middle mouse or Shift + right mouse)
+  /// Handle pointer move event for panning (middle mouse or Shift + right mouse) and rectangle selection
   void _handlePointerMove(PointerMoveEvent event) {
     if ((_isMiddleMousePanning || _isShiftRightMousePanning) &&
         _lastPanPosition != null) {
@@ -455,9 +676,13 @@ class NodeNetworkState extends State<NodeNetwork> {
         _lastPanPosition = event.position;
       });
     }
+    // Rectangle selection - just update the visual, no Rust calls during drag
+    else if (_selectionRectStart != null && event.buttons == kPrimaryButton) {
+      _handleSelectionRectUpdate(event.localPosition);
+    }
   }
 
-  /// Handle pointer up event to end panning
+  /// Handle pointer up event to end panning or rectangle selection
   void _handlePointerUp(PointerUpEvent event) {
     if (_isMiddleMousePanning || _isShiftRightMousePanning) {
       setState(() {
@@ -465,6 +690,10 @@ class NodeNetworkState extends State<NodeNetwork> {
         _isShiftRightMousePanning = false;
         _lastPanPosition = null;
       });
+    }
+    // Rectangle selection - compute and apply selection on release
+    else if (_selectionRectStart != null) {
+      _handleSelectionRectEnd(widget.graphModel);
     }
   }
 

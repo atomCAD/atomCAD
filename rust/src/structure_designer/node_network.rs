@@ -380,11 +380,11 @@ impl NodeNetwork {
 
   /// Toggle node in selection (for Ctrl+click)
   /// Returns true if the node exists, false otherwise.
+  /// Does not clear wire selection to allow mixed node+wire selections.
   pub fn toggle_node_selection(&mut self, node_id: u64) -> bool {
     if !self.nodes.contains_key(&node_id) {
       return false;
     }
-    self.selected_wires.clear();
     if self.selected_node_ids.contains(&node_id) {
       self.selected_node_ids.remove(&node_id);
       // Update active node if we removed it
@@ -400,11 +400,11 @@ impl NodeNetwork {
 
   /// Add node to selection (for Shift+click)
   /// Returns true if the node exists, false otherwise.
+  /// Does not clear wire selection to allow mixed node+wire selections.
   pub fn add_node_to_selection(&mut self, node_id: u64) -> bool {
     if !self.nodes.contains_key(&node_id) {
       return false;
     }
-    self.selected_wires.clear();
     self.selected_node_ids.insert(node_id);
     self.active_node_id = Some(node_id);
     true
@@ -447,6 +447,22 @@ impl NodeNetwork {
     }
   }
 
+  /// Add multiple nodes to selection (for Shift+rectangle)
+  pub fn add_nodes_to_selection(&mut self, node_ids: Vec<u64>) {
+    self.selected_wires.clear();
+    for id in &node_ids {
+      if self.nodes.contains_key(id) {
+        self.selected_node_ids.insert(*id);
+      }
+    }
+    // Set active to last node in list (if valid)
+    if let Some(last_id) = node_ids.last() {
+      if self.selected_node_ids.contains(last_id) {
+        self.active_node_id = Some(*last_id);
+      }
+    }
+  }
+
   /// Check if a node is selected
   pub fn is_node_selected(&self, node_id: u64) -> bool {
     self.selected_node_ids.contains(&node_id)
@@ -485,12 +501,11 @@ impl NodeNetwork {
 
   /// Toggle wire in selection (for Ctrl+click)
   /// Returns true if both nodes exist, false otherwise.
+  /// Does not clear node selection to allow mixed node+wire selections.
   pub fn toggle_wire_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
     if !self.nodes.contains_key(&source_node_id) || !self.nodes.contains_key(&destination_node_id) {
       return false;
     }
-    self.selected_node_ids.clear();
-    self.active_node_id = None;
     
     let wire = Wire {
       source_node_id,
@@ -510,12 +525,11 @@ impl NodeNetwork {
 
   /// Add wire to selection (for Shift+click)
   /// Returns true if both nodes exist, false otherwise.
+  /// Does not clear node selection to allow mixed node+wire selections.
   pub fn add_wire_to_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
     if !self.nodes.contains_key(&source_node_id) || !self.nodes.contains_key(&destination_node_id) {
       return false;
     }
-    self.selected_node_ids.clear();
-    self.active_node_id = None;
     
     let wire = Wire {
       source_node_id,
@@ -545,6 +559,135 @@ impl NodeNetwork {
   /// Get all selected wires
   pub fn get_selected_wires(&self) -> &Vec<Wire> {
     &self.selected_wires
+  }
+
+  /// Select multiple wires (replaces current selection)
+  pub fn select_wires(&mut self, wires: Vec<Wire>) {
+    self.selected_node_ids.clear();
+    self.active_node_id = None;
+    self.selected_wires.clear();
+    for wire in wires {
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
+        if !self.selected_wires.iter().any(|w| *w == wire) {
+          self.selected_wires.push(wire);
+        }
+      }
+    }
+  }
+
+  /// Add multiple wires to selection (for Shift+rectangle)
+  pub fn add_wires_to_selection(&mut self, wires: Vec<Wire>) {
+    self.selected_node_ids.clear();
+    self.active_node_id = None;
+    for wire in wires {
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
+        if !self.selected_wires.iter().any(|w| *w == wire) {
+          self.selected_wires.push(wire);
+        }
+      }
+    }
+  }
+
+  /// Toggle multiple wires in selection (for Ctrl+rectangle)
+  pub fn toggle_wires_selection(&mut self, wires: Vec<Wire>) {
+    self.selected_node_ids.clear();
+    self.active_node_id = None;
+    for wire in wires {
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
+        if let Some(idx) = self.selected_wires.iter().position(|w| *w == wire) {
+          self.selected_wires.remove(idx);
+        } else {
+          self.selected_wires.push(wire);
+        }
+      }
+    }
+  }
+
+  /// Select nodes and wires together (for rectangle selection)
+  /// Clears existing selection and adds both nodes and wires.
+  pub fn select_nodes_and_wires(&mut self, node_ids: Vec<u64>, wires: Vec<Wire>) {
+    self.selected_node_ids.clear();
+    self.selected_wires.clear();
+    self.active_node_id = None;
+
+    // Add nodes
+    for id in &node_ids {
+      if self.nodes.contains_key(id) {
+        self.selected_node_ids.insert(*id);
+      }
+    }
+    // Set active to last node in list (if valid)
+    if let Some(last_id) = node_ids.last() {
+      if self.selected_node_ids.contains(last_id) {
+        self.active_node_id = Some(*last_id);
+      }
+    }
+
+    // Add wires
+    for wire in wires {
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
+        if !self.selected_wires.iter().any(|w| *w == wire) {
+          self.selected_wires.push(wire);
+        }
+      }
+    }
+  }
+
+  /// Add nodes and wires to existing selection (for Shift+rectangle)
+  pub fn add_nodes_and_wires_to_selection(&mut self, node_ids: Vec<u64>, wires: Vec<Wire>) {
+    // Add nodes without clearing existing selection
+    for id in &node_ids {
+      if self.nodes.contains_key(id) {
+        self.selected_node_ids.insert(*id);
+      }
+    }
+    // Set active to last node in list (if valid)
+    if let Some(last_id) = node_ids.last() {
+      if self.selected_node_ids.contains(last_id) {
+        self.active_node_id = Some(*last_id);
+      }
+    }
+
+    // Add wires without clearing existing selection
+    for wire in wires {
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
+        if !self.selected_wires.iter().any(|w| *w == wire) {
+          self.selected_wires.push(wire);
+        }
+      }
+    }
+  }
+
+  /// Toggle nodes and wires in selection (for Ctrl+rectangle)
+  pub fn toggle_nodes_and_wires_selection(&mut self, node_ids: Vec<u64>, wires: Vec<Wire>) {
+    // Toggle nodes
+    for id in node_ids {
+      if self.nodes.contains_key(&id) {
+        if self.selected_node_ids.contains(&id) {
+          self.selected_node_ids.remove(&id);
+        } else {
+          self.selected_node_ids.insert(id);
+          self.active_node_id = Some(id);
+        }
+      }
+    }
+    // Update active node if removed
+    if let Some(active) = self.active_node_id {
+      if !self.selected_node_ids.contains(&active) {
+        self.active_node_id = self.selected_node_ids.iter().next().copied();
+      }
+    }
+
+    // Toggle wires
+    for wire in wires {
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
+        if let Some(idx) = self.selected_wires.iter().position(|w| *w == wire) {
+          self.selected_wires.remove(idx);
+        } else {
+          self.selected_wires.push(wire);
+        }
+      }
+    }
   }
 
   // ===== COMMON SELECTION =====

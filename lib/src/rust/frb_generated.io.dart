@@ -439,6 +439,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(BigInt, NodeView)> dco_decode_list_record_u_64_node_view(dynamic raw);
 
   @protected
+  List<WireIdentifier> dco_decode_list_wire_identifier(dynamic raw);
+
+  @protected
   List<WireView> dco_decode_list_wire_view(dynamic raw);
 
   @protected
@@ -650,6 +653,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  WireIdentifier dco_decode_wire_identifier(dynamic raw);
 
   @protected
   WireView dco_decode_wire_view(dynamic raw);
@@ -1125,6 +1131,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<WireIdentifier> sse_decode_list_wire_identifier(
+      SseDeserializer deserializer);
+
+  @protected
   List<WireView> sse_decode_list_wire_view(SseDeserializer deserializer);
 
   @protected
@@ -1376,6 +1386,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  WireIdentifier sse_decode_wire_identifier(SseDeserializer deserializer);
 
   @protected
   WireView sse_decode_wire_view(SseDeserializer deserializer);
@@ -1874,6 +1887,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<(BigInt, NodeView)> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_wire_identifier(
+      List<WireIdentifier> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_wire_view(List<WireView> self, SseSerializer serializer);
 
   @protected
@@ -2128,6 +2145,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_wire_identifier(
+      WireIdentifier self, SseSerializer serializer);
 
   @protected
   void sse_encode_wire_view(WireView self, SseSerializer serializer);

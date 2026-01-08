@@ -1265,6 +1265,38 @@ class NodeView {
           subtitle == other.subtitle;
 }
 
+/// Wire identifier for batch selection operations
+class WireIdentifier {
+  final BigInt sourceNodeId;
+  final int sourceOutputPinIndex;
+  final BigInt destinationNodeId;
+  final BigInt destinationArgumentIndex;
+
+  const WireIdentifier({
+    required this.sourceNodeId,
+    required this.sourceOutputPinIndex,
+    required this.destinationNodeId,
+    required this.destinationArgumentIndex,
+  });
+
+  @override
+  int get hashCode =>
+      sourceNodeId.hashCode ^
+      sourceOutputPinIndex.hashCode ^
+      destinationNodeId.hashCode ^
+      destinationArgumentIndex.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WireIdentifier &&
+          runtimeType == other.runtimeType &&
+          sourceNodeId == other.sourceNodeId &&
+          sourceOutputPinIndex == other.sourceOutputPinIndex &&
+          destinationNodeId == other.destinationNodeId &&
+          destinationArgumentIndex == other.destinationArgumentIndex;
+}
+
 class WireView {
   final BigInt sourceNodeId;
   final int sourceOutputPinIndex;
