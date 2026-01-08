@@ -6,7 +6,7 @@ import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 /// and will disable scrolling when the service indicates it should be blocked.
 ///
 /// This widget is a drop-in replacement for [SingleChildScrollView].
-class BlockingAwareSingleChildScrollView extends StatelessWidget {
+class BlockingAwareSingleChildScrollView extends StatefulWidget {
   /// The axis along which the scroll view scrolls.
   final Axis scrollDirection;
 
@@ -40,6 +40,21 @@ class BlockingAwareSingleChildScrollView extends StatelessWidget {
   });
 
   @override
+  State<BlockingAwareSingleChildScrollView> createState() =>
+      _BlockingAwareSingleChildScrollViewState();
+}
+
+class _BlockingAwareSingleChildScrollViewState
+    extends State<BlockingAwareSingleChildScrollView> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Watch the MouseWheelBlockService to rebuild when isBlocked changes
     final blockService = context.watch<MouseWheelBlockService>();
@@ -47,15 +62,25 @@ class BlockingAwareSingleChildScrollView extends StatelessWidget {
     // Use NeverScrollableScrollPhysics when blocked, otherwise use provided physics
     final ScrollPhysics effectivePhysics = blockService.isBlocked 
         ? const NeverScrollableScrollPhysics() 
-        : physics ?? const ClampingScrollPhysics();
+        : widget.physics ?? const ClampingScrollPhysics();
 
-    return SingleChildScrollView(
-      scrollDirection: scrollDirection,
-      reverse: reverse,
-      padding: padding,
-      primary: primary,
+    final scrollView = SingleChildScrollView(
+      controller: _scrollController,
+      scrollDirection: widget.scrollDirection,
+      reverse: widget.reverse,
+      padding: widget.padding,
+      primary: widget.primary,
       physics: effectivePhysics,
-      child: child,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 12.0),
+        child: widget.child,
+      ),
+    );
+
+    return Scrollbar(
+      controller: _scrollController,
+      thumbVisibility: true,
+      child: scrollView,
     );
   }
 }

@@ -27,6 +27,14 @@ class FacetShellEditor extends StatefulWidget {
 }
 
 class FacetShellEditorState extends State<FacetShellEditor> {
+  final ScrollController _facetListController = ScrollController();
+
+  @override
+  void dispose() {
+    _facetListController.dispose();
+    super.dispose();
+  }
+
   /// Calculates the default shift value for a new facet based on existing facets.
   /// Facets with symmetrize=true count as 6 facets in the average.
   /// Returns the rounded average, or 1 if there are no existing facets.
@@ -103,7 +111,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(4),
             ),
-            height: 120, // Slightly taller to accommodate headers
+            height: 180,
             child: widget.data!.facets.isEmpty
                 ? const Center(child: Text('No facets defined'))
                 : Column(
@@ -119,9 +127,13 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                               child: TableColumnHeader(title: '')), // Spacer
                         ],
                       ),
-                      // Table rows
+                      // Table rows with visible scrollbar
                       Expanded(
-                        child: ListView.builder(
+                        child: Scrollbar(
+                          controller: _facetListController,
+                          thumbVisibility: true,
+                          child: ListView.builder(
+                          controller: _facetListController,
                           itemCount: widget.data!.facets.length,
                           itemBuilder: (context, index) {
                             final facet = widget.data!.facets[index];
@@ -216,6 +228,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                               ),
                             );
                           },
+                        ),
                         ),
                       ),
                     ],
