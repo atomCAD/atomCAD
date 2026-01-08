@@ -25,7 +25,7 @@ class MillerIndexMap extends StatefulWidget {
   final Color selectedDotColor;
 
   const MillerIndexMap({
-    Key? key,
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -35,7 +35,7 @@ class MillerIndexMap extends StatefulWidget {
     this.dotSize = 2.0,
     this.dotColor = Colors.grey,
     this.selectedDotColor = Colors.blue,
-  }) : super(key: key);
+  });
 
   /// Converts a Miller index to a latitude/longitude pair.
   /// This is done by normalizing the vector and converting to spherical coordinates.
@@ -186,13 +186,6 @@ class MillerIndexMap extends StatefulWidget {
   State<MillerIndexMap> createState() => _MillerIndexMapState();
 }
 
-class _DotInfo {
-  final APIIVec3 miller;
-  final Offset position;
-
-  _DotInfo(this.miller, this.position);
-}
-
 class _MillerIndexMapState extends State<MillerIndexMap> {
   // List of unique Miller indices and their positions
   late List<APIIVec3> _uniqueIndices;
@@ -292,7 +285,6 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
   void _showTooltip(APIIVec3? miller) {
     if (miller == null) return;
     final overlay = Overlay.of(context);
-    if (overlay == null) return;
 
     // Get the position for the tooltip
     final position = _dotPositions[miller];
@@ -456,15 +448,8 @@ class _MillerIndexMapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint dotPaint = Paint()
-      ..color = dotColor
-      ..style = PaintingStyle.fill;
-
-    final Paint selectedDotPaint = Paint()
-      ..color = selectedDotColor
-      ..style = PaintingStyle.fill;
     final Paint gridPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.3)
+      ..color = Colors.grey.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
 
@@ -518,7 +503,7 @@ class _MillerIndexMapPainter extends CustomPainter {
       // Draw outline for the selected or hovered dot for better visibility
       if (isCurrentValue || isHovered) {
         final Paint outlinePaint = Paint()
-          ..color = Colors.amber.withOpacity(0.6)
+          ..color = Colors.amber.withValues(alpha: 0.6)
           ..style = PaintingStyle.stroke
           ..strokeWidth = isCurrentValue ? 1.5 : 1.0;
 

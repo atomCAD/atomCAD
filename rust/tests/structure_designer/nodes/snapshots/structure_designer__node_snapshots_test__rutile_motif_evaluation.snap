@@ -1,0 +1,21 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+expression: snapshot
+---
+{
+  "network_name": "motif_rutile",
+  "node_count": 4,
+  "return_node_id": 4,
+  "displayed_node_outputs": [
+    {
+      "node_id": 1,
+      "node_type": "cuboid",
+      "output": "Geometry:\nunit_cell:\n  a: (4.653272, 0.000000, 0.000000)\n  b: (0.000000, 4.653272, 0.000000)\n  c: (0.000000, 0.000000, 2.969203)\nframe_transform:\n  translation: (2.326636, 2.326636, 1.484601)\n  rotation: (0.000000, 0.000000, 0.000000, 1.000000)\ngeo_tree:\nIntersection3D\n  HalfSpace(normal: (-1, 0, 0), center: (0, 2.33, 1.48))\n  HalfSpace(normal: (1, -0, -0), center: (4.65, 2.33, 1.48))\n  HalfSpace(normal: (0, -1, 0), center: (2.33, 0, 1.48))\n  HalfSpace(normal: (0, 1, -0), center: (2.33, 4.65, 1.48))\n  HalfSpace(normal: (0, 0, -1), center: (2.33, 2.33, 0))\n  HalfSpace(normal: (0, 0, 1), center: (2.33, 2.33, 2.97))"
+    },
+    {
+      "node_id": 3,
+      "node_type": "atom_fill",
+      "output": "Atomic:\natoms: 15\nbonds: 14\nframe_transform:\n  translation: (0.000000, 0.000000, 0.000000)\n  rotation: (0.000000, 0.000000, 0.000000, 1.000000)\nfirst 10 atoms:\n  [1] Z=22 pos=(2.326636, 2.326636, 1.484601) depth=1.485 bonds=6\n  [2] Z=22 pos=(0.000000, 0.000000, 0.000000) depth=-0.000 bonds=1\n  [3] Z=8 pos=(0.909342, 3.743930, 1.484601) depth=0.909 bonds=3\n  [4] Z=8 pos=(3.743930, 0.909342, 1.484601) depth=0.909 bonds=3\n  [5] Z=8 pos=(1.417294, 1.417294, 0.000000) depth=-0.000 bonds=2\n  [6] Z=8 pos=(3.235978, 3.235978, 0.000000) depth=0.000 bonds=2\n  [7] Z=22 pos=(0.000000, 0.000000, 2.969203) depth=-0.000 bonds=1\n  [8] Z=8 pos=(1.417294, 1.417294, 2.969203) depth=-0.000 bonds=2\n  [9] Z=8 pos=(3.235978, 3.235978, 2.969203) depth=-0.000 bonds=2\n  [10] Z=22 pos=(0.000000, 4.653272, 0.000000) depth=-0.000 bonds=1\n  ... and 5 more atoms\nfirst 10 bonds:\n  1 -- 3 (order=1)\n  1 -- 4 (order=1)\n  1 -- 5 (order=1)\n  1 -- 6 (order=1)\n  1 -- 9 (order=1)\n  1 -- 8 (order=1)\n  2 -- 5 (order=1)\n  3 -- 10 (order=1)\n  3 -- 11 (order=1)\n  4 -- 12 (order=1)\n  ... and 4 more bonds"
+    }
+  ]
+}

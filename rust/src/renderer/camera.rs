@@ -1,7 +1,17 @@
 use glam::f64::DVec3;
 use glam::f64::DMat4;
 use glam::f64::DQuat;
-use crate::api::common_api_types::APICameraCanonicalView;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CameraCanonicalView {
+  Custom,
+  Top,
+  Bottom,
+  Front,
+  Back,
+  Left,
+  Right,
+}
 
 pub struct Camera {
   pub eye: DVec3,
@@ -53,7 +63,7 @@ impl Camera {
     return rotation * forward;
   }
 
-  pub fn get_canonical_view(&self) -> APICameraCanonicalView {
+  pub fn get_canonical_view(&self) -> CameraCanonicalView {
     // Calculate view direction (from eye to target)
     let view_dir = (self.target - self.eye).normalize();
     
@@ -65,26 +75,26 @@ impl Camera {
     // These direction checks must match the directions set in set_canonical_view
     // Z-up coordinate system: X=right, Y=forward, Z=up
     if (view_dir - DVec3::new(-1.0, 0.0, 0.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Right;
+      return CameraCanonicalView::Right;
     } else if (view_dir - DVec3::new(1.0, 0.0, 0.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Left;
+      return CameraCanonicalView::Left;
     } else if (view_dir - DVec3::new(0.0, 0.0, -1.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Top;
+      return CameraCanonicalView::Top;
     } else if (view_dir - DVec3::new(0.0, 0.0, 1.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Bottom;
+      return CameraCanonicalView::Bottom;
     } else if (view_dir - DVec3::new(0.0, -1.0, 0.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Back;
+      return CameraCanonicalView::Back;
     } else if (view_dir - DVec3::new(0.0, 1.0, 0.0)).length_squared() < EPSILON {
-      return APICameraCanonicalView::Front;
+      return CameraCanonicalView::Front;
     }
     
     // If not aligned with any cardinal direction, return Custom
-    APICameraCanonicalView::Custom
+    CameraCanonicalView::Custom
   }
   
-  pub fn set_canonical_view(&mut self, view: APICameraCanonicalView) {
+  pub fn set_canonical_view(&mut self, view: CameraCanonicalView) {
     // If view is Custom, do nothing
-    if matches!(view, APICameraCanonicalView::Custom) {
+    if matches!(view, CameraCanonicalView::Custom) {
       return;
     }
     
@@ -97,31 +107,31 @@ impl Camera {
     // Define the viewing direction and up vectors for each canonical view
     // Z-up coordinate system: X=right, Y=forward, Z=up
     let (view_dir, up) = match view {
-      APICameraCanonicalView::Top => (
+      CameraCanonicalView::Top => (
         DVec3::new(0.0, 0.0, -1.0),    // Looking down from +Z
         DVec3::new(0.0, -1.0, 0.0)     // Up is -Y (screen up when looking down)
       ),
-      APICameraCanonicalView::Bottom => (
+      CameraCanonicalView::Bottom => (
         DVec3::new(0.0, 0.0, 1.0),     // Looking up from -Z
         DVec3::new(0.0, 1.0, 0.0)      // Up is +Y (screen up when looking up)
       ),
-      APICameraCanonicalView::Front => (
+      CameraCanonicalView::Front => (
         DVec3::new(0.0, 1.0, 0.0),     // Looking from -Y (towards +Y)
         DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
-      APICameraCanonicalView::Back => (
+      CameraCanonicalView::Back => (
         DVec3::new(0.0, -1.0, 0.0),    // Looking from +Y (towards -Y)
         DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
-      APICameraCanonicalView::Left => (
+      CameraCanonicalView::Left => (
         DVec3::new(1.0, 0.0, 0.0),     // Looking from -X (towards +X)
         DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
-      APICameraCanonicalView::Right => (
+      CameraCanonicalView::Right => (
         DVec3::new(-1.0, 0.0, 0.0),    // Looking from +X (towards -X)
         DVec3::new(0.0, 0.0, 1.0)      // Up is +Z
       ),
-      APICameraCanonicalView::Custom => {
+      CameraCanonicalView::Custom => {
         // This shouldn't happen because of the check at the beginning
         // But we provide a default value for completeness
         (DVec3::new(0.0, 1.0, 0.0), DVec3::new(0.0, 0.0, 1.0))

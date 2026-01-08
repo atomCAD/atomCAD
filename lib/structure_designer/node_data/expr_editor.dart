@@ -282,7 +282,7 @@ class ExprEditorState extends State<ExprEditor> {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           
           // Output type display
           if (widget.data?.outputType != null)

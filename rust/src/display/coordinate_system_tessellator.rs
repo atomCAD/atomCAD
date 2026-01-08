@@ -5,7 +5,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use crate::renderer::line_mesh::LineMesh;
-use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
+use crate::display::preferences::BackgroundPreferences;
 
 // Constants for coordinate system visualization
 pub const X_AXIS_COLOR: [f32; 3] = [1.0, 0.0, 0.0]; // Red for X-axis
@@ -98,6 +98,15 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
     }
 }
 
+pub fn tessellate_background_coordinate_system(unit_cell: Option<&UnitCellStruct>, background_preferences: &BackgroundPreferences) -> LineMesh {
+    let mut line_mesh = LineMesh::new();
+
+    let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
+    tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
+
+    line_mesh
+}
+
 pub fn tessellate_drawing_plane_grid_and_axes(
     output_mesh: &mut LineMesh,
     drawing_plane: &DrawingPlane,
@@ -119,14 +128,14 @@ pub fn tessellate_drawing_plane_grid_and_axes(
     );
 
     let grid_primary_color: [f32; 3] = [
-        background_preferences.drawing_plane_grid_color.x as f32 / 255.0,
-        background_preferences.drawing_plane_grid_color.y as f32 / 255.0,
-        background_preferences.drawing_plane_grid_color.z as f32 / 255.0,
+        background_preferences.drawing_plane_grid_color[0] as f32 / 255.0,
+        background_preferences.drawing_plane_grid_color[1] as f32 / 255.0,
+        background_preferences.drawing_plane_grid_color[2] as f32 / 255.0,
     ];
     let grid_secondary_color: [f32; 3] = [
-        background_preferences.drawing_plane_grid_strong_color.x as f32 / 255.0,
-        background_preferences.drawing_plane_grid_strong_color.y as f32 / 255.0,
-        background_preferences.drawing_plane_grid_strong_color.z as f32 / 255.0,
+        background_preferences.drawing_plane_grid_strong_color[0] as f32 / 255.0,
+        background_preferences.drawing_plane_grid_strong_color[1] as f32 / 255.0,
+        background_preferences.drawing_plane_grid_strong_color[2] as f32 / 255.0,
     ];
 
     let grid_range = background_preferences.grid_size as i32;
@@ -284,36 +293,36 @@ fn add_lattice_axes_if_non_cartesian(output_mesh: &mut LineMesh, unit_cell: &Uni
 /// Helper to convert preference grid color to [f32; 3]
 fn get_grid_primary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
     [
-        background_preferences.grid_color.x as f32 / 255.0,
-        background_preferences.grid_color.y as f32 / 255.0,
-        background_preferences.grid_color.z as f32 / 255.0,
+        background_preferences.grid_color[0] as f32 / 255.0,
+        background_preferences.grid_color[1] as f32 / 255.0,
+        background_preferences.grid_color[2] as f32 / 255.0,
     ]
 }
 
 /// Helper to convert preference strong grid color to [f32; 3]
 fn get_grid_secondary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
     [
-        background_preferences.grid_strong_color.x as f32 / 255.0,
-        background_preferences.grid_strong_color.y as f32 / 255.0,
-        background_preferences.grid_strong_color.z as f32 / 255.0,
+        background_preferences.grid_strong_color[0] as f32 / 255.0,
+        background_preferences.grid_strong_color[1] as f32 / 255.0,
+        background_preferences.grid_strong_color[2] as f32 / 255.0,
     ]
 }
 
 /// Helper to convert lattice grid color to [f32; 3]
 fn get_lattice_grid_primary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
     [
-        background_preferences.lattice_grid_color.x as f32 / 255.0,
-        background_preferences.lattice_grid_color.y as f32 / 255.0,
-        background_preferences.lattice_grid_color.z as f32 / 255.0,
+        background_preferences.lattice_grid_color[0] as f32 / 255.0,
+        background_preferences.lattice_grid_color[1] as f32 / 255.0,
+        background_preferences.lattice_grid_color[2] as f32 / 255.0,
     ]
 }
 
 /// Helper to convert lattice strong grid color to [f32; 3]
 fn get_lattice_grid_secondary_color(background_preferences: &BackgroundPreferences) -> [f32; 3] {
     [
-        background_preferences.lattice_grid_strong_color.x as f32 / 255.0,
-        background_preferences.lattice_grid_strong_color.y as f32 / 255.0,
-        background_preferences.lattice_grid_strong_color.z as f32 / 255.0,
+        background_preferences.lattice_grid_strong_color[0] as f32 / 255.0,
+        background_preferences.lattice_grid_strong_color[1] as f32 / 255.0,
+        background_preferences.lattice_grid_strong_color[2] as f32 / 255.0,
     ]
 }
 

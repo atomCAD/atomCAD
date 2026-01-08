@@ -140,7 +140,6 @@ class _IntInputState extends State<IntInput> {
     }
   }
 
-  @override
   // Build a tooltip message based on constraints
   String _buildTooltipMessage() {
     List<String> tooltipLines = [
@@ -159,6 +158,7 @@ class _IntInputState extends State<IntInput> {
     return tooltipLines.join('\n');
   }
 
+  @override
   Widget build(BuildContext context) {
     final tooltipMessage = _buildTooltipMessage();
 
@@ -195,11 +195,8 @@ class _IntInputState extends State<IntInput> {
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) {
                     // Check if shift key is pressed for larger increments
-                    final useShiftIncrement = RawKeyboard.instance.keysPressed
-                        .any((key) =>
-                            key == LogicalKeyboardKey.shift ||
-                            key == LogicalKeyboardKey.shiftLeft ||
-                            key == LogicalKeyboardKey.shiftRight);
+                    final useShiftIncrement =
+                        HardwareKeyboard.instance.isShiftPressed;
 
                     // Scrolling down (positive delta) decreases the value
                     // Scrolling up (negative delta) increases the value

@@ -14,13 +14,14 @@ use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use glam::f64::DVec3;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
-use crate::display::coordinate_system_tessellator;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingPlaneData {
@@ -342,5 +343,46 @@ impl DrawingPlaneGadget {
             unit_cell: unit_cell.clone(),
             background_preferences: background_preferences.clone(),
         };
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "drawing_plane".to_string(),
+      description: "Defines a 2D drawing plane on a crystallographic plane with Miller indices. Use this to specify where 2D shapes are placed before extrusion.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+        Parameter {
+          name: "m_index".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "shift".to_string(),
+          data_type: DataType::Int,
+        },
+        Parameter {
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
+      ],
+      output_type: DataType::DrawingPlane,
+      public: true,
+      node_data_creator: || Box::new(DrawingPlaneData {
+        max_miller_index: 1,
+        miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis (001 plane)
+        center: IVec3::new(0, 0, 0),
+        shift: 0,
+        subdivision: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<DrawingPlaneData>,
+      node_data_loader: generic_node_data_loader::<DrawingPlaneData>,
     }
 }

@@ -3,7 +3,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use crate::crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::util::transform::Transform;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, input_missing_error, error_in_input};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -11,6 +11,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::api::common_api_types::SelectModifier;
 use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RADIUS};
+use crate::display::preferences as display_prefs;
 use glam::f64::DVec3;
 use crate::structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
 use crate::structure_designer::nodes::edit_atom::commands::delete_command::DeleteCommand;
@@ -20,8 +21,11 @@ use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::Add
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
 use crate::crystolecule::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
-use crate::structure_designer::node_type::NodeType;
+use crate::api::structure_designer::structure_designer_api_types::{APIEditAtomTool, NodeTypeCategory};
+use crate::structure_designer::node_type::{NodeType, Parameter};
+use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::serialization::edit_atom_data_serialization::{SerializableEditAtomData, edit_atom_data_to_serializable, serializable_to_edit_atom_data};
+use std::io;
 
 #[derive(Debug)]
 pub struct DefaultToolState {
@@ -246,8 +250,12 @@ pub fn select_atom_or_bond_by_ray(structure_designer: &mut StructureDesigner, ra
     
   // Use the unified hit_test function instead of separate atom and bond tests
   let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
+  let display_visualization = match visualization {
+    AtomicStructureVisualization::BallAndStick => display_prefs::AtomicStructureVisualization::BallAndStick,
+    AtomicStructureVisualization::SpaceFilling => display_prefs::AtomicStructureVisualization::SpaceFilling,
+  };
   match atomic_structure.hit_test(ray_start, ray_dir, visualization, 
-    |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
+    |atom| get_displayed_atom_radius(atom, &display_visualization), BAS_STICK_RADIUS) {
     HitTestResult::Atom(atom_id, _distance) => {
       select_atom_by_id(structure_designer, atom_id, select_modifier);
       true
@@ -322,8 +330,12 @@ pub fn draw_bond_by_ray(structure_designer: &mut StructureDesigner, ray_start: &
 
   // Find the atom along the ray, ignoring bond hits
   let visualization = &structure_designer.preferences.atomic_structure_visualization_preferences.visualization;
+  let display_visualization = match visualization {
+    AtomicStructureVisualization::BallAndStick => display_prefs::AtomicStructureVisualization::BallAndStick,
+    AtomicStructureVisualization::SpaceFilling => display_prefs::AtomicStructureVisualization::SpaceFilling,
+  };
   let atom_id = match atomic_structure.hit_test(ray_start, ray_dir, visualization, 
-    |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
+    |atom| get_displayed_atom_radius(atom, &display_visualization), BAS_STICK_RADIUS) {
     HitTestResult::Atom(id, _) => id,
     _ => return,
   };
@@ -560,5 +572,36 @@ fn edit_atom_tool_refresh(structure_designer: &mut StructureDesigner) {
         state.last_atom_id = None;
       }
     }
+  }
+}
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "edit_atom".to_string(),
+      description: "Note: The `edit_atom` node will be more usable when we will support atomic structure relaxations.
+This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom_nodes at their will.".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(EditAtomData::new()),
+      node_data_saver: |node_data, _design_dir| {
+        if let Some(data) = node_data.as_any_mut().downcast_ref::<EditAtomData>() {
+          let serializable_data = edit_atom_data_to_serializable(data)?;
+          serde_json::to_value(serializable_data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        } else {
+          Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for edit_atom"))
+        }
+      },
+      node_data_loader: |value, _design_dir| {
+        let serializable_data: SerializableEditAtomData = serde_json::from_value(value.clone())
+          .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        Ok(Box::new(serializable_to_edit_atom_data(&serializable_data)?))
+      },
   }
 }

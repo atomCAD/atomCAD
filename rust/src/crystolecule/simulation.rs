@@ -135,6 +135,7 @@ pub struct MinimizationResult {
 
 /// Atom data structure for Python interface
 #[derive(Debug)]
+#[allow(dead_code)]
 struct AtomData {
     atomic_number: i32,
     position: [f64; 3],
@@ -143,6 +144,7 @@ struct AtomData {
 
 /// Bond data structure for Python interface
 #[derive(Debug)]
+#[allow(dead_code)]
 struct BondData {
     atom1: usize,
     atom2: usize,
@@ -219,8 +221,8 @@ fn update_atom_positions(structure: &mut AtomicStructure, positions: &[Vec<f64>]
 
 /// Calls the minimize_energy function from Python simulation module with molecular data
 fn call_python_minimize_energy_with_data(
-    atoms_data: Vec<AtomData>, 
-    bonds_data: Vec<BondData>
+    _atoms_data: Vec<AtomData>, 
+    _bonds_data: Vec<BondData>
 ) -> Result<MinimizationResult, String> {
     /*
     let _timer = Timer::new("Python function call (total)");

@@ -9,7 +9,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::common_constants::CONNECTED_PIN_SYMBOL;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,3 +89,31 @@ impl NodeData for Vec3Data {
     
 }
 
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "vec3".to_string(),
+      description: "Outputs an Vec3 value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![
+        Parameter {
+            name: "x".to_string(),
+            data_type: DataType::Float,
+        },
+        Parameter {
+            name: "y".to_string(),
+            data_type: DataType::Float,
+        },
+        Parameter {
+            name: "z".to_string(),
+            data_type: DataType::Float,
+        },        
+      ],
+      output_type: DataType::Vec3,
+      public: true,
+      node_data_creator: || Box::new(Vec3Data {
+        value: DVec3::new(0.0, 0.0, 0.0)
+      }),
+      node_data_saver: generic_node_data_saver::<Vec3Data>,
+      node_data_loader: generic_node_data_loader::<Vec3Data>,
+  }
+}

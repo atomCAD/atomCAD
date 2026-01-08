@@ -21,7 +21,9 @@ use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutpu
 use crate::display::gadget::Gadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::renderer::mesh::Mesh;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone)]
@@ -299,4 +301,35 @@ impl GeoTransGadget {
 
     self.frame_transform = self.input_frame_transform.apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
   }
+}
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "geo_trans".to_string(),
+      description: "".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+            name: "translation".to_string(),
+            data_type: DataType::IVec3,
+          },
+          Parameter {
+            name: "rotation".to_string(),
+            data_type: DataType::IVec3,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: false,
+      node_data_creator: || Box::new(GeoTransData {
+        translation: IVec3::new(0, 0, 0),
+        rotation: IVec3::new(0, 0, 0),
+        transform_only_frame: false,
+      }),
+      node_data_saver: generic_node_data_saver::<GeoTransData>,
+      node_data_loader: generic_node_data_loader::<GeoTransData>,
+    }
 }

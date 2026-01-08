@@ -138,6 +138,91 @@ bool selectWire(
 void clearSelection() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiClearSelection();
 
+bool toggleNodeSelection({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiToggleNodeSelection(
+        nodeId: nodeId);
+
+bool addNodeToSelection({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNodeToSelection(
+        nodeId: nodeId);
+
+bool selectNodes({required Uint64List nodeIds}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSelectNodes(nodeIds: nodeIds);
+
+void toggleNodesSelection({required Uint64List nodeIds}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiToggleNodesSelection(
+        nodeIds: nodeIds);
+
+Uint64List getSelectedNodeIds() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetSelectedNodeIds();
+
+void moveSelectedNodes({required double deltaX, required double deltaY}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiMoveSelectedNodes(
+            deltaX: deltaX, deltaY: deltaY);
+
+bool toggleWireSelection(
+        {required BigInt sourceNodeId,
+        required int sourceOutputPinIndex,
+        required BigInt destinationNodeId,
+        required BigInt destinationArgumentIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleWireSelection(
+            sourceNodeId: sourceNodeId,
+            sourceOutputPinIndex: sourceOutputPinIndex,
+            destinationNodeId: destinationNodeId,
+            destinationArgumentIndex: destinationArgumentIndex);
+
+bool addWireToSelection(
+        {required BigInt sourceNodeId,
+        required int sourceOutputPinIndex,
+        required BigInt destinationNodeId,
+        required BigInt destinationArgumentIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddWireToSelection(
+            sourceNodeId: sourceNodeId,
+            sourceOutputPinIndex: sourceOutputPinIndex,
+            destinationNodeId: destinationNodeId,
+            destinationArgumentIndex: destinationArgumentIndex);
+
+List<WireView> getSelectedWires() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetSelectedWires();
+
+void addNodesToSelection({required Uint64List nodeIds}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNodesToSelection(
+        nodeIds: nodeIds);
+
+void selectWires({required List<WireIdentifier> wires}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSelectWires(wires: wires);
+
+void addWiresToSelection({required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddWiresToSelection(
+            wires: wires);
+
+void toggleWiresSelection({required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleWiresSelection(
+            wires: wires);
+
+void selectNodesAndWires(
+        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSelectNodesAndWires(
+            nodeIds: nodeIds, wires: wires);
+
+void addNodesAndWiresToSelection(
+        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddNodesAndWiresToSelection(
+            nodeIds: nodeIds, wires: wires);
+
+void toggleNodesAndWiresSelection(
+        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleNodesAndWiresSelection(
+            nodeIds: nodeIds, wires: wires);
+
 APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetExtrudeData(
         nodeId: nodeId);

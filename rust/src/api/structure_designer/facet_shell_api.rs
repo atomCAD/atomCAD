@@ -196,8 +196,9 @@ pub fn clear_facets(node_id: u64) -> bool {
           None => return false,
         };
         
-        // Clear all facets
+        // Clear all facets and reset selection
         facet_shell_data.facets.clear();
+        facet_shell_data.selected_facet_index = None;
         facet_shell_data.ensure_cached_facets();
 
         refresh_structure_designer_auto(cad_instance);

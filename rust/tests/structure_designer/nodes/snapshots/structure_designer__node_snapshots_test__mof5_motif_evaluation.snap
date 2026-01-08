@@ -1,0 +1,16 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+expression: snapshot
+---
+{
+  "network_name": "sample",
+  "node_count": 6,
+  "return_node_id": null,
+  "displayed_node_outputs": [
+    {
+      "node_id": 4,
+      "node_type": "atom_fill",
+      "output": "Atomic:\natoms: 2624\nbonds: 3232\nframe_transform:\n  translation: (0.000000, 0.000000, 0.000000)\n  rotation: (0.000000, 0.000000, 0.000000, 1.000000)\nfirst 10 atoms:\n  [1] Z=8 pos=(-18.459625, -20.062622, -22.221301) depth=3.447 bonds=2\n  [2] Z=8 pos=(-16.276082, -20.031307, -20.056205) depth=5.612 bonds=2\n  [3] Z=8 pos=(-18.449614, -22.220531, -20.062622) depth=3.447 bonds=2\n  [4] Z=6 pos=(-18.401102, -20.087777, -24.982408) depth=0.686 bonds=1\n  [5] Z=6 pos=(-18.413936, -24.998065, -20.110878) depth=0.670 bonds=1\n  [6] Z=6 pos=(-19.250700, -19.251000, -24.287062) depth=1.381 bonds=3\n  [7] Z=6 pos=(-14.209583, -19.251000, -19.251000) depth=6.417 bonds=3\n  [8] Z=6 pos=(-13.521692, -20.077510, -20.108311) depth=5.560 bonds=2\n  [9] Z=6 pos=(-19.250700, -24.297329, -19.251000) depth=1.371 bonds=3\n  [10] Z=6 pos=(-19.250700, -22.798318, -19.251000) depth=2.870 bonds=3\n  ... and 2614 more atoms\nfirst 10 bonds:\n  1 -- 11 (order=1)\n  1 -- 13 (order=1)\n  2 -- 13 (order=1)\n  2 -- 12 (order=1)\n  3 -- 13 (order=1)\n  3 -- 10 (order=1)\n  4 -- 6 (order=1)\n  5 -- 9 (order=1)\n  6 -- 11 (order=1)\n  6 -- 132 (order=1)\n  ... and 3222 more bonds"
+    }
+  ]
+}

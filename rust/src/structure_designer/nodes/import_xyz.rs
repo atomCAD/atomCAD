@@ -11,7 +11,9 @@ use crate::crystolecule::io::xyz_loader::load_xyz;
 use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
 use std::io;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,5 +151,25 @@ pub fn import_xyz_data_saver(node_data: &mut dyn NodeData, design_dir: Option<&s
         serde_json::to_value(data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     } else {
         Err(io::Error::new(io::ErrorKind::InvalidData, "Data type mismatch for import_xyz"))
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "import_xyz".to_string(),
+      description: "Imports an atomic structure from an xyz file.
+It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+        Parameter {
+          name: "file_name".to_string(),
+          data_type: DataType::String,
+        },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(ImportXYZData::new()),
+      node_data_saver: import_xyz_data_saver,
+      node_data_loader: import_xyz_data_loader,
     }
 }

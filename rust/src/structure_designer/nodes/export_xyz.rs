@@ -10,7 +10,9 @@ use crate::crystolecule::io::xyz_saver::save_xyz;
 use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
 use std::io;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportXYZData {
@@ -131,4 +133,27 @@ pub fn export_xyz_data_loader(value: &Value, _design_dir: Option<&str>) -> io::R
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     
     Ok(Box::new(data))
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "export_xyz".to_string(),
+      description: "Exports atomic structure on its `molecule` input into an XYZ file.".to_string(),
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+        Parameter {
+          name: "molecule".to_string(),
+          data_type: DataType::Atomic,
+        },
+        Parameter {
+          name: "file_name".to_string(),
+          data_type: DataType::String,
+        },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(ExportXYZData::new()),
+      node_data_saver: export_xyz_data_saver,
+      node_data_loader: export_xyz_data_loader,
+    }
 }

@@ -10,10 +10,11 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Intersect2DData {
@@ -110,12 +111,24 @@ impl NodeData for Intersect2DData {
   }
 }
 
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "intersect_2d".to_string(),
+      description: "Computes the Boolean intersection of any number of 2D geometries. The `shapes` input pin accepts an array of `Geometry2D` values.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+          Parameter {
+              name: "shapes".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)),
+          },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(Intersect2DData {}),
+      node_data_saver: generic_node_data_saver::<Intersect2DData>,
+      node_data_loader: generic_node_data_loader::<Intersect2DData>,
+    }
+}
 
 
 

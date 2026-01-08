@@ -1,0 +1,16 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+expression: snapshot
+---
+{
+  "network_name": "α_polonium_motif",
+  "node_count": 4,
+  "return_node_id": 1,
+  "displayed_node_outputs": [
+    {
+      "node_id": 2,
+      "node_type": "cuboid",
+      "output": "Geometry:\nunit_cell:\n  a: (3.352000, 0.000000, 0.000000)\n  b: (0.000000, 3.352000, 0.000000)\n  c: (0.000000, 0.000000, 3.352000)\nframe_transform:\n  translation: (6.704000, 6.704000, 5.028000)\n  rotation: (0.000000, 0.000000, 0.000000, 1.000000)\ngeo_tree:\nIntersection3D\n  HalfSpace(normal: (-1, 0, 0), center: (0, 6.7, 5.03))\n  HalfSpace(normal: (1, -0, -0), center: (13.41, 6.7, 5.03))\n  HalfSpace(normal: (0, -1, 0), center: (6.7, 0, 5.03))\n  HalfSpace(normal: (0, 1, -0), center: (6.7, 13.41, 5.03))\n  HalfSpace(normal: (0, 0, -1), center: (6.7, 6.7, 0))\n  HalfSpace(normal: (0, 0, 1), center: (6.7, 6.7, 10.06))"
+    }
+  ]
+}

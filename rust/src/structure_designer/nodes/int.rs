@@ -6,7 +6,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,9 +46,21 @@ impl NodeData for IntData {
     }
 }
 
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "int".to_string(),
+      description: "Outputs an integer value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::Int,
+      public: true,
+      node_data_creator: || Box::new(IntData {
+        value: 0
+      }),
+      node_data_saver: generic_node_data_saver::<IntData>,
+      node_data_loader: generic_node_data_loader::<IntData>,
+    }
+}
 
 
 

@@ -1,16 +1,14 @@
 use crate::api::api_common::from_api_ivec2;
 use crate::api::api_common::from_api_vec3;
-use crate::api::api_common::refresh_structure_designer;
 use crate::api::api_common::refresh_structure_designer_auto;
 use crate::api::api_common::to_api_ivec2;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::with_mut_cad_instance;
-use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
 use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::common_api_types::APIResult;
-use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APINodeTypeView, APINodeCategoryView, APIDataTypeBase};
+use crate::api::structure_designer::structure_designer_api_types::{NodeNetworkView, APINetworkWithValidationErrors, APINodeCategoryView, APIDataTypeBase};
 use crate::structure_designer::nodes::string::StringData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::int::IntData;
@@ -57,10 +55,9 @@ use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
-use crate::structure_designer::nodes::lattice_move::{LatticeMoveData, LatticeMoveEvalCache};
+use crate::structure_designer::nodes::lattice_move::LatticeMoveData;
 use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
 use crate::crystolecule::unit_cell_symmetries::{analyze_unit_cell_complete, CrystalSystem, classify_crystal_system};
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -252,7 +249,8 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             input_pins,
             output_type: output_type.to_string(),
             function_type: function_type.to_string(),
-            selected: node_network.selected_node_id == Some(node.id),
+            selected: node_network.is_node_selected(node.id),
+            active: node_network.is_node_active(node.id),
             displayed: node_network.is_node_displayed(node.id),
             return_node: node_network.return_node_id == Some(node.id),
             error,
@@ -269,11 +267,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                 source_output_pin_index: *output_pin_index,
                 dest_node_id: node.id,
                 dest_param_index: index,
-                selected: node_network.selected_wire.as_ref().map_or(false, |wire| 
-                  wire.source_node_id == *argument_node_id && 
-                  wire.destination_node_id == node.id && 
-                  wire.destination_argument_index == index
-                ),
+                selected: node_network.is_wire_selected(*argument_node_id, *output_pin_index, node.id, index),
               });
             }
           }
@@ -599,6 +593,252 @@ pub fn clear_selection() {
   unsafe {
     with_mut_cad_instance(|instance| {
       instance.structure_designer.clear_selection();
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_node_selection(node_id: u64) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.toggle_node_selection(node_id);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_node_to_selection(node_id: u64) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.add_node_to_selection(node_id);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_nodes(node_ids: Vec<u64>) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.select_nodes(node_ids);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_nodes_selection(node_ids: Vec<u64>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      instance.structure_designer.toggle_nodes_selection(node_ids);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_selected_node_ids() -> Vec<u64> {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.get_selected_node_ids()
+      },
+      Vec::new()
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn move_selected_nodes(delta_x: f64, delta_y: f64) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      instance.structure_designer.move_selected_nodes(glam::f64::DVec2::new(delta_x, delta_y));
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_wire_selection(source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.toggle_wire_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_wire_to_selection(source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.add_wire_to_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_selected_wires() -> Vec<WireView> {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.get_selected_wires()
+          .into_iter()
+          .map(|wire| WireView {
+            source_node_id: wire.source_node_id,
+            source_output_pin_index: wire.source_output_pin_index,
+            dest_node_id: wire.destination_node_id,
+            dest_param_index: wire.destination_argument_index,
+            selected: true,
+          })
+          .collect()
+      },
+      Vec::new()
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_nodes_to_selection(node_ids: Vec<u64>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      instance.structure_designer.add_nodes_to_selection(node_ids);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_wires(wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+        .into_iter()
+        .map(|w| crate::structure_designer::node_network::Wire {
+          source_node_id: w.source_node_id,
+          source_output_pin_index: w.source_output_pin_index,
+          destination_node_id: w.destination_node_id,
+          destination_argument_index: w.destination_argument_index,
+        })
+        .collect();
+      instance.structure_designer.select_wires(wire_structs);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_wires_to_selection(wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+        .into_iter()
+        .map(|w| crate::structure_designer::node_network::Wire {
+          source_node_id: w.source_node_id,
+          source_output_pin_index: w.source_output_pin_index,
+          destination_node_id: w.destination_node_id,
+          destination_argument_index: w.destination_argument_index,
+        })
+        .collect();
+      instance.structure_designer.add_wires_to_selection(wire_structs);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_wires_selection(wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+        .into_iter()
+        .map(|w| crate::structure_designer::node_network::Wire {
+          source_node_id: w.source_node_id,
+          source_output_pin_index: w.source_output_pin_index,
+          destination_node_id: w.destination_node_id,
+          destination_argument_index: w.destination_argument_index,
+        })
+        .collect();
+      instance.structure_designer.toggle_wires_selection(wire_structs);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_nodes_and_wires(node_ids: Vec<u64>, wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+        .into_iter()
+        .map(|w| crate::structure_designer::node_network::Wire {
+          source_node_id: w.source_node_id,
+          source_output_pin_index: w.source_output_pin_index,
+          destination_node_id: w.destination_node_id,
+          destination_argument_index: w.destination_argument_index,
+        })
+        .collect();
+      instance.structure_designer.select_nodes_and_wires(node_ids, wire_structs);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_nodes_and_wires_to_selection(node_ids: Vec<u64>, wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+        .into_iter()
+        .map(|w| crate::structure_designer::node_network::Wire {
+          source_node_id: w.source_node_id,
+          source_output_pin_index: w.source_output_pin_index,
+          destination_node_id: w.destination_node_id,
+          destination_argument_index: w.destination_argument_index,
+        })
+        .collect();
+      instance.structure_designer.add_nodes_and_wires_to_selection(node_ids, wire_structs);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_nodes_and_wires_selection(node_ids: Vec<u64>, wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+        .into_iter()
+        .map(|w| crate::structure_designer::node_network::Wire {
+          source_node_id: w.source_node_id,
+          source_output_pin_index: w.source_output_pin_index,
+          destination_node_id: w.destination_node_id,
+          destination_argument_index: w.destination_argument_index,
+        })
+        .collect();
+      instance.structure_designer.toggle_nodes_and_wires_selection(node_ids, wire_structs);
       refresh_structure_designer_auto(instance);
     });
   }

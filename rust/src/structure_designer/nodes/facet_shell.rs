@@ -19,7 +19,9 @@ use crate::structure_designer::utils::half_space_utils;
 use crate::geo_tree::GeoNode;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use glam::f64::DQuat;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
@@ -728,5 +730,29 @@ impl FacetShellGadget {
         } else {
           return self.miller_index;
         }
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "facet_shell".to_string(),
+      description: "Builds a finite polyhedral shell by clipping an infinite lattice with a user‑supplied set of half‑spaces.
+See the atomCAD reference guide for more details.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec3,
+        },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(FacetShellData::default()),
+      node_data_saver: generic_node_data_saver::<FacetShellData>,
+      node_data_loader: generic_node_data_loader::<FacetShellData>,
     }
 }

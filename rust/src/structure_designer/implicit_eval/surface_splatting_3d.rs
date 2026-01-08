@@ -5,13 +5,12 @@ use crate::structure_designer::common_constants;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::util::box_subdivision::subdivide_box;
 use crate::display::surface_point_cloud::SurfacePoint;
-use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 
 pub fn generate_point_cloud(
   geometry: &dyn ImplicitGeometry3D,
-  context: &mut NetworkEvaluationContext,
+  _context: &mut NetworkEvaluationContext,
   geometry_visualization_preferences: &GeometryVisualizationPreferences) -> SurfacePointCloud {
   let mut point_cloud = SurfacePointCloud::new();
   let cache_size = common_constants::MAX_EVAL_CACHE_SIZE;

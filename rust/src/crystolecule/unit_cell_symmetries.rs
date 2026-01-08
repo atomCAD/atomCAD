@@ -227,7 +227,6 @@ pub fn classify_crystal_system(unit_cell: &UnitCellStruct) -> CrystalSystem {
 /// Symmetry analysis functions for each crystal system
 mod symmetry_analysis {
     use super::{RotationalSymmetry, UnitCellStruct};
-    use super::classification::lengths_equal;
     use glam::f64::DVec3;
     
     /// Analyzes rotational symmetries for cubic crystal system

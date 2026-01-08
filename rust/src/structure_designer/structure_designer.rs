@@ -91,21 +91,21 @@ impl StructureDesigner {
     None
   }
 
-  /// Gets the eval cache for the currently selected node (used for gadget creation)
-  /// Returns None if no node is selected or the selected node has no eval cache
+  /// Gets the eval cache for the currently active node (used for gadget creation)
+  /// Returns None if no node is active or the active node has no eval cache
   pub fn get_selected_node_eval_cache(&self) -> Option<&Box<dyn std::any::Any>> {
     let network_name = self.active_node_network_name.as_ref()?;
     let network = self.node_type_registry.node_networks.get(network_name)?;
-    let selected_node_id = network.selected_node_id?;
-    self.last_generated_structure_designer_scene.get_node_eval_cache(selected_node_id)
+    let active_node_id = network.active_node_id?;
+    self.last_generated_structure_designer_scene.get_node_eval_cache(active_node_id)
   }
 
-  /// Helper method to get the selected node ID of a node of a specific type
+  /// Helper method to get the active node ID of a node of a specific type
   /// 
   /// Returns None if:
   /// - There is no active node network
-  /// - No node is selected in the active network
-  /// - The selected node has a different type name than the needed node type name
+  /// - No node is active in the active network
+  /// - The active node has a different type name than the needed node type name
   pub fn get_selected_node_id_with_type(&self,  needed_node_type_name: &str) -> Option<u64> {
     // Get active node network name
     let network_name = self.active_node_network_name.as_ref()?;
@@ -113,21 +113,21 @@ impl StructureDesigner {
     // Get the active node network
     let network = self.node_type_registry.node_networks.get(network_name)?;
     
-    // Get the selected node ID
-    let selected_node_id = network.selected_node_id?;
+    // Get the active node ID
+    let active_node_id = network.active_node_id?;
     
-    // Get the selected node's type name
-    let node_type_name = network.nodes.get(&selected_node_id)?.node_type_name.as_str();
+    // Get the active node's type name
+    let node_type_name = network.nodes.get(&active_node_id)?.node_type_name.as_str();
     
     // Check if the node is with the needed node type name
     if node_type_name != needed_node_type_name {
       return None;
     }
 
-    Some(selected_node_id)
+    Some(active_node_id)
   }
 
-  // Returns true if the selected node is displayed and has the needed node type name
+  // Returns true if the active node is displayed and has the needed node type name
   pub fn is_node_type_active(&self, needed_node_type_name: &str) -> bool {
     // Check if active_node_network_name exists
     let network_name = match &self.active_node_network_name {
@@ -141,19 +141,19 @@ impl StructureDesigner {
       None => return false,
     };
     
-    // Check if there's a selected node ID
-    let selected_node_id = match network.selected_node_id {
+    // Check if there's an active node ID
+    let active_node_id = match network.active_node_id {
       Some(id) => id,
       None => return false,
     };
     
-    // Check if the selected node is displayed
-    if !network.is_node_displayed(selected_node_id) {
+    // Check if the active node is displayed
+    if !network.is_node_displayed(active_node_id) {
       return false;
     }
     
-    // Get the selected node's type name
-    let node_type_name = match network.nodes.get(&selected_node_id) {
+    // Get the active node's type name
+    let node_type_name = match network.nodes.get(&active_node_id) {
       Some(node) => &node.node_type_name,
       None => return false,
     };
@@ -253,8 +253,8 @@ impl StructureDesigner {
         self.cli_top_level_parameters.clone(),
       );
       
-      // Capture the selected node's unit cell
-      if Some(node_id) == network.selected_node_id {
+      // Capture the active node's unit cell
+      if Some(node_id) == network.active_node_id {
         selected_node_unit_cell = node_data.unit_cell.clone();
       }
       
@@ -288,7 +288,7 @@ impl StructureDesigner {
     };
     
     // Clone necessary data before mutable borrows to avoid borrow checker issues
-    let selected_node_id = network.selected_node_id;
+    let active_node_id = network.active_node_id;
     
     // Step 1: Cache nodes that became invisible
     for &node_id in &changes.visibility_changed {
@@ -376,8 +376,8 @@ impl StructureDesigner {
           self.cli_top_level_parameters.clone(),
         );
         
-        // Capture the selected node's unit cell
-        if Some(node_id) == selected_node_id {
+        // Capture the active node's unit cell
+        if Some(node_id) == active_node_id {
           selected_node_unit_cell = node_data.unit_cell.clone();
         }
         
@@ -596,6 +596,11 @@ impl StructureDesigner {
       // Create a HashSet with just the new node ID
       let mut dirty_nodes = HashSet::new();
       dirty_nodes.insert(node_id);
+      
+      // Track visibility change for the new node (it was set to visible in add_node)
+      // This is needed because the node was made visible directly on node_network,
+      // bypassing StructureDesigner.set_node_display which normally tracks this
+      self.pending_changes.visibility_changed.insert(node_id);
       
       // Apply display policy considering only this node as dirty
       self.apply_node_display_policy(Some(&dirty_nodes));
@@ -956,7 +961,7 @@ impl StructureDesigner {
       None => return false,
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      if let Some(node_id) = &network.selected_node_id {
+      if let Some(node_id) = &network.active_node_id {
         let data = network.get_node_network_data_mut(*node_id);
         if let Some(node_data) = data {
           if let Some(g) = &self.gadget {
@@ -979,8 +984,8 @@ impl StructureDesigner {
       None => return false,
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      // Get the previously selected node ID before changing selection
-      let previously_selected_node_id = network.selected_node_id;
+      // Get the previously active node ID before changing selection
+      let previously_active_node_id = network.active_node_id;
       
       // Update the selection
       let ret = network.select_node(node_id);
@@ -989,14 +994,14 @@ impl StructureDesigner {
       if ret {
         // Track selection change
         let current_selection = Some(node_id);
-        self.mark_selection_changed(previously_selected_node_id, current_selection);
+        self.mark_selection_changed(previously_active_node_id, current_selection);
         
         // Create a HashSet with the previous and newly selected node IDs
         let mut dirty_nodes = HashSet::new();
         dirty_nodes.insert(node_id); // New selection
         
-        // Add previously selected node to dirty nodes if it existed
-        if let Some(prev_id) = previously_selected_node_id {
+        // Add previously active node to dirty nodes if it existed
+        if let Some(prev_id) = previously_active_node_id {
           dirty_nodes.insert(prev_id);
         }
         
@@ -1017,8 +1022,8 @@ impl StructureDesigner {
       None => return false,
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      // Get the previously selected node ID before changing selection
-      let previously_selected_node_id = network.selected_node_id;
+      // Get the previously active node ID before changing selection
+      let previously_active_node_id = network.active_node_id;
       
       // Update the selection
       let ret = network.select_wire(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
@@ -1026,15 +1031,15 @@ impl StructureDesigner {
       // If the selection was successful
       if ret {
         // Track selection change (wire selection clears node selection)
-        self.mark_selection_changed(previously_selected_node_id, None);
+        self.mark_selection_changed(previously_active_node_id, None);
         
-        // If there was a previously selected node, update display policy
-        if let Some(prev_id) = previously_selected_node_id {
-          // Create a HashSet with just the previously selected node ID
+        // If there was a previously active node, update display policy
+        if let Some(prev_id) = previously_active_node_id {
+          // Create a HashSet with just the previously active node ID
           let mut dirty_nodes = HashSet::new();
           dirty_nodes.insert(prev_id);
           
-          // Apply display policy considering only the previously selected node as dirty
+          // Apply display policy considering only the previously active node as dirty
           self.apply_node_display_policy(Some(&dirty_nodes));
         }
       }
@@ -1052,24 +1057,329 @@ impl StructureDesigner {
       None => return,
     };
     if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-      // Get the previously selected node ID before clearing selection
-      let previously_selected_node_id = network.selected_node_id;
+      // Get the previously active node ID before clearing selection
+      let previously_active_node_id = network.active_node_id;
       
       // Clear the selection
       network.clear_selection();
 
       // Track selection change
-      self.mark_selection_changed(previously_selected_node_id, None);
+      self.mark_selection_changed(previously_active_node_id, None);
 
-      // If there was a previously selected node
-      if let Some(prev_id) = previously_selected_node_id {
-        // Create a HashSet with just the previously selected node ID
+      // If there was a previously active node
+      if let Some(prev_id) = previously_active_node_id {
+        // Create a HashSet with just the previously active node ID
         let mut dirty_nodes = HashSet::new();
         dirty_nodes.insert(prev_id);
         
-        // Apply display policy considering only the previously selected node as dirty
+        // Apply display policy considering only the previously active node as dirty
         self.apply_node_display_policy(Some(&dirty_nodes));
       }
+    }
+  }
+
+  /// Toggle node in selection (for Ctrl+click)
+  pub fn toggle_node_selection(&mut self, node_id: u64) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.toggle_node_selection(node_id);
+      if ret {
+        let current_selection = network.active_node_id;
+        self.mark_selection_changed(previously_active_node_id, current_selection);
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(node_id);
+        if let Some(prev_id) = previously_active_node_id {
+          dirty_nodes.insert(prev_id);
+        }
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Add node to selection (for Shift+click)
+  pub fn add_node_to_selection(&mut self, node_id: u64) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.add_node_to_selection(node_id);
+      if ret {
+        self.mark_selection_changed(previously_active_node_id, Some(node_id));
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(node_id);
+        if let Some(prev_id) = previously_active_node_id {
+          dirty_nodes.insert(prev_id);
+        }
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Select multiple nodes (for rectangle selection)
+  pub fn select_nodes(&mut self, node_ids: Vec<u64>) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.select_nodes(node_ids.clone());
+      if ret {
+        let current_selection = network.active_node_id;
+        self.mark_selection_changed(previously_active_node_id, current_selection);
+        let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+        if let Some(prev_id) = previously_active_node_id {
+          dirty_nodes.insert(prev_id);
+        }
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Toggle multiple nodes in selection (for Ctrl+rectangle)
+  pub fn toggle_nodes_selection(&mut self, node_ids: Vec<u64>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.toggle_nodes_selection(node_ids.clone());
+      let current_selection = network.active_node_id;
+      self.mark_selection_changed(previously_active_node_id, current_selection);
+      let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+      if let Some(prev_id) = previously_active_node_id {
+        dirty_nodes.insert(prev_id);
+      }
+      self.apply_node_display_policy(Some(&dirty_nodes));
+    }
+  }
+
+  /// Add multiple nodes to selection (for Shift+rectangle)
+  pub fn add_nodes_to_selection(&mut self, node_ids: Vec<u64>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.add_nodes_to_selection(node_ids.clone());
+      let current_selection = network.active_node_id;
+      self.mark_selection_changed(previously_active_node_id, current_selection);
+      let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+      if let Some(prev_id) = previously_active_node_id {
+        dirty_nodes.insert(prev_id);
+      }
+      self.apply_node_display_policy(Some(&dirty_nodes));
+    }
+  }
+
+  /// Get all selected node IDs
+  pub fn get_selected_node_ids(&self) -> Vec<u64> {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return Vec::new(),
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+      network.get_selected_node_ids().iter().copied().collect()
+    } else {
+      Vec::new()
+    }
+  }
+
+  /// Move all selected nodes by delta
+  pub fn move_selected_nodes(&mut self, delta: glam::f64::DVec2) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      network.move_selected_nodes(delta);
+    }
+  }
+
+  /// Toggle wire in selection (for Ctrl+click)
+  pub fn toggle_wire_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.toggle_wire_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+      if ret {
+        self.mark_selection_changed(previously_active_node_id, None);
+        if let Some(prev_id) = previously_active_node_id {
+          let mut dirty_nodes = HashSet::new();
+          dirty_nodes.insert(prev_id);
+          self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Add wire to selection (for Shift+click)
+  pub fn add_wire_to_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.add_wire_to_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+      if ret {
+        self.mark_selection_changed(previously_active_node_id, None);
+        if let Some(prev_id) = previously_active_node_id {
+          let mut dirty_nodes = HashSet::new();
+          dirty_nodes.insert(prev_id);
+          self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Get all selected wires
+  pub fn get_selected_wires(&self) -> Vec<crate::structure_designer::node_network::Wire> {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return Vec::new(),
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+      network.get_selected_wires().clone()
+    } else {
+      Vec::new()
+    }
+  }
+
+  /// Select multiple wires (replaces current selection)
+  pub fn select_wires(&mut self, wires: Vec<crate::structure_designer::node_network::Wire>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.select_wires(wires);
+      self.mark_selection_changed(previously_active_node_id, None);
+      if let Some(prev_id) = previously_active_node_id {
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(prev_id);
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+    }
+  }
+
+  /// Add multiple wires to selection (for Shift+rectangle)
+  pub fn add_wires_to_selection(&mut self, wires: Vec<crate::structure_designer::node_network::Wire>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.add_wires_to_selection(wires);
+      self.mark_selection_changed(previously_active_node_id, None);
+      if let Some(prev_id) = previously_active_node_id {
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(prev_id);
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+    }
+  }
+
+  /// Toggle multiple wires in selection (for Ctrl+rectangle)
+  pub fn toggle_wires_selection(&mut self, wires: Vec<crate::structure_designer::node_network::Wire>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.toggle_wires_selection(wires);
+      self.mark_selection_changed(previously_active_node_id, None);
+      if let Some(prev_id) = previously_active_node_id {
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(prev_id);
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+    }
+  }
+
+  /// Select nodes and wires together (for rectangle selection)
+  pub fn select_nodes_and_wires(&mut self, node_ids: Vec<u64>, wires: Vec<crate::structure_designer::node_network::Wire>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.select_nodes_and_wires(node_ids.clone(), wires);
+      let current_selection = network.active_node_id;
+      self.mark_selection_changed(previously_active_node_id, current_selection);
+      let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+      if let Some(prev_id) = previously_active_node_id {
+        dirty_nodes.insert(prev_id);
+      }
+      self.apply_node_display_policy(Some(&dirty_nodes));
+    }
+  }
+
+  /// Add nodes and wires to existing selection (for Shift+rectangle)
+  pub fn add_nodes_and_wires_to_selection(&mut self, node_ids: Vec<u64>, wires: Vec<crate::structure_designer::node_network::Wire>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.add_nodes_and_wires_to_selection(node_ids.clone(), wires);
+      let current_selection = network.active_node_id;
+      self.mark_selection_changed(previously_active_node_id, current_selection);
+      let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+      if let Some(prev_id) = previously_active_node_id {
+        dirty_nodes.insert(prev_id);
+      }
+      self.apply_node_display_policy(Some(&dirty_nodes));
+    }
+  }
+
+  /// Toggle nodes and wires in selection (for Ctrl+rectangle)
+  pub fn toggle_nodes_and_wires_selection(&mut self, node_ids: Vec<u64>, wires: Vec<crate::structure_designer::node_network::Wire>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.toggle_nodes_and_wires_selection(node_ids.clone(), wires);
+      let current_selection = network.active_node_id;
+      self.mark_selection_changed(previously_active_node_id, current_selection);
+      let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+      if let Some(prev_id) = previously_active_node_id {
+        dirty_nodes.insert(prev_id);
+      }
+      self.apply_node_display_policy(Some(&dirty_nodes));
     }
   }
 
@@ -1085,25 +1395,31 @@ impl StructureDesigner {
     let mut should_validate = false;
     
     if let Some(node_network) = self.node_type_registry.node_networks.get(node_network_name) {
-      // If a node is selected, all connected nodes will be dirty
-      if let Some(selected_node_id) = node_network.selected_node_id {
-        // Get all nodes connected to the selected node
-        dirty_nodes = node_network.get_connected_node_ids(selected_node_id);
-        
-        // Check if the selected node requires validation
-        if let Some(node) = node_network.nodes.get(&selected_node_id) {
-          should_validate = node.node_type_name == "parameter" || {
-            // Check if this node references an invalid node network
-            self.node_type_registry.node_networks.get(&node.node_type_name)
-              .map(|network| !network.valid)
-              .unwrap_or(false)
-          };
+      // If nodes are selected, all connected nodes will be dirty
+      if !node_network.selected_node_ids.is_empty() {
+        for &selected_node_id in &node_network.selected_node_ids {
+          // Get all nodes connected to the selected node
+          dirty_nodes.extend(node_network.get_connected_node_ids(selected_node_id));
+          
+          // Check if the selected node requires validation
+          if let Some(node) = node_network.nodes.get(&selected_node_id) {
+            if node.node_type_name == "parameter" || {
+              // Check if this node references an invalid node network
+              self.node_type_registry.node_networks.get(&node.node_type_name)
+                .map(|network| !network.valid)
+                .unwrap_or(false)
+            } {
+              should_validate = true;
+            }
+          }
         }
       } 
-      // If a wire is selected, both source and destination nodes will be dirty
-      else if let Some(ref wire) = node_network.selected_wire {
-        dirty_nodes.insert(wire.source_node_id);
-        dirty_nodes.insert(wire.destination_node_id);
+      // If wires are selected, both source and destination nodes will be dirty
+      else if !node_network.selected_wires.is_empty() {
+        for wire in &node_network.selected_wires {
+          dirty_nodes.insert(wire.source_node_id);
+          dirty_nodes.insert(wire.destination_node_id);
+        }
       }
     }
     
@@ -1146,13 +1462,17 @@ impl StructureDesigner {
   /// The distance to the closest intersection, or None if no intersection was found
   pub fn raytrace(&self, ray_origin: &DVec3, ray_direction: &DVec3, visualization: &AtomicStructureVisualization) -> Option<f64> {
     let mut min_distance: Option<f64> = None;
+    let display_visualization = match visualization {
+      AtomicStructureVisualization::BallAndStick => crate::display::preferences::AtomicStructureVisualization::BallAndStick,
+      AtomicStructureVisualization::SpaceFilling => crate::display::preferences::AtomicStructureVisualization::SpaceFilling,
+    };
     
     use crate::structure_designer::structure_designer_scene::NodeOutput;
     // First, check all atomic structures in the scene
     for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
         match atomic_structure.hit_test(ray_origin, ray_direction, visualization, 
-          |atom| get_displayed_atom_radius(atom, visualization), BAS_STICK_RADIUS) {
+          |atom| get_displayed_atom_radius(atom, &display_visualization), BAS_STICK_RADIUS) {
           crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance) | 
           crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) => {
           // Update minimum distance if this hit is closer
@@ -1278,7 +1598,7 @@ impl StructureDesigner {
       // Ending drag syncs data back to the node
       if let Some(network_name) = &self.active_node_network_name.clone() {
         if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
-          if let Some(node_id) = network.selected_node_id {
+          if let Some(node_id) = network.active_node_id {
             self.mark_node_data_changed(node_id);
           }
         }

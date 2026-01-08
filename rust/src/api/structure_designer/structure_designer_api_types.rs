@@ -55,6 +55,7 @@ pub struct InputPinView {
     pub output_type: String,
     pub function_type: String,
     pub selected: bool,
+    pub active: bool,  // True if this is the active node (for properties panel/gadget)
     pub displayed: bool,
     pub return_node: bool,
     pub error: Option<String>,
@@ -68,6 +69,14 @@ pub struct InputPinView {
     pub dest_node_id: u64,
     pub dest_param_index: usize,
     pub selected: bool,
+  }
+
+  /// Wire identifier for batch selection operations
+  pub struct WireIdentifier {
+    pub source_node_id: u64,
+    pub source_output_pin_index: i32,
+    pub destination_node_id: u64,
+    pub destination_argument_index: usize,
   }
   
   pub struct NodeNetworkView {

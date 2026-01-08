@@ -13,7 +13,6 @@ use crate::util::box_subdivision::subdivide_daabox;
 use super::placed_atom_tracker::PlacedAtomTracker;
 
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
-use crate::crystolecule::motif::SiteSpecifier;
 use crate::crystolecule::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
 use super::surface_reconstruction::reconstruct_surface;
 use super::hydrogen_passivation::{hydrogen_passivate};

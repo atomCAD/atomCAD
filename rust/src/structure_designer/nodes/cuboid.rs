@@ -14,7 +14,9 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DQuat;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,7 +141,7 @@ fn create_parallelepiped_from_lattice(
   let mut half_spaces = Vec::new();
   
   // Calculate the center of the parallelepiped for reference
-  let parallelepiped_center = min_corner_real + 
+  let _parallelepiped_center = min_corner_real + 
     (extent_lattice.x * basis_a + extent_lattice.y * basis_b + extent_lattice.z * basis_c) / 2.0;
   
   // For a parallelepiped, the normal to each face is the cross product of the other two basis vectors
@@ -181,4 +183,34 @@ fn create_parallelepiped_from_lattice(
   
   // Return the intersection of all half-spaces
   GeoNode::intersection_3d(half_spaces)
+}
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "cuboid".to_string(),
+      description: "Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. If the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+        Parameter {
+            name: "min_corner".to_string(),
+            data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "extent".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          name: "unit_cell".to_string(),
+          data_type: DataType::UnitCell,
+        },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(CuboidData {
+        min_corner: IVec3::new(0, 0, 0),
+        extent: IVec3::new(1, 1, 1),
+      }),
+      node_data_saver: generic_node_data_saver::<CuboidData>,
+      node_data_loader: generic_node_data_loader::<CuboidData>,
+    }
 }

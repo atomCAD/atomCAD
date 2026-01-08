@@ -11,10 +11,11 @@ use glam::f64::DQuat;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnionData {
@@ -112,18 +113,24 @@ impl NodeData for UnionData {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "union".to_string(),
+      description: "Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shapes".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry)),
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(UnionData {}),
+      node_data_saver: generic_node_data_saver::<UnionData>,
+      node_data_loader: generic_node_data_loader::<UnionData>,
+    }
+}
 
 
 

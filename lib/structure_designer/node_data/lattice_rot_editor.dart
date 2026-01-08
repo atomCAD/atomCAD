@@ -131,7 +131,7 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
           if (!hasSymmetries) ...[
             // No symmetries available
             Card(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -211,7 +211,7 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
               
               // Show current angle
               Card(
-                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Row(

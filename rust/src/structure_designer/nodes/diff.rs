@@ -13,7 +13,9 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
@@ -66,7 +68,7 @@ impl NodeData for DiffData {
       return unit_cell_mismatch_error();
     }
     
-    let mut result_unit_cell = base_unit_cell.unwrap();
+    let result_unit_cell = base_unit_cell.unwrap();
   
     if !node.arguments[1].is_empty() {
       let (sub_geometry, sub_frame_translation, sub_unit_cell) = helper_union(
@@ -180,10 +182,28 @@ fn helper_union<'a>(
   return (Some(GeoNode::union_3d(shapes)), frame_translation, Some(first_unit_cell));
 }
 
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "diff".to_string(),
+      description: "Computes the Boolean difference of two 3D geometries.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "base".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry)), // If multiple shapes are given, they are unioned.
+          },
+          Parameter {
+              name: "sub".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry)), // A set of shapes to subtract from base
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(DiffData {}),
+      node_data_saver: generic_node_data_saver::<DiffData>,
+      node_data_loader: generic_node_data_loader::<DiffData>,
+    }
+}
 
 
 

@@ -114,6 +114,63 @@ impl Motif {
 
     true
   }
+
+  /// Returns a detailed string representation for snapshot testing.
+  pub fn to_detailed_string(&self) -> String {
+    let mut lines = Vec::new();
+    
+    lines.push(format!("sites: {}", self.sites.len()));
+    lines.push(format!("bonds: {}", self.bonds.len()));
+    lines.push(format!("parameters: {}", self.parameters.len()));
+    
+    // Parameter elements
+    if !self.parameters.is_empty() {
+      lines.push("parameter_elements:".to_string());
+      for param in &self.parameters {
+        lines.push(format!("  {} (default Z={})", param.name, param.default_atomic_number));
+      }
+    }
+    
+    // Sites (show first 10)
+    let sites_to_show = std::cmp::min(10, self.sites.len());
+    if sites_to_show > 0 {
+      lines.push(format!("first {} sites:", sites_to_show));
+      for (i, site) in self.sites.iter().take(10).enumerate() {
+        lines.push(format!("  [{}] Z={} pos=({:.6}, {:.6}, {:.6})",
+          i,
+          site.atomic_number,
+          site.position.x,
+          site.position.y,
+          site.position.z));
+      }
+      if self.sites.len() > 10 {
+        lines.push(format!("  ... and {} more sites", self.sites.len() - 10));
+      }
+    }
+    
+    // Bonds (show first 10)
+    let bonds_to_show = std::cmp::min(10, self.bonds.len());
+    if bonds_to_show > 0 {
+      lines.push(format!("first {} bonds:", bonds_to_show));
+      for bond in self.bonds.iter().take(10) {
+        lines.push(format!("  site[{}]@({},{},{}) -- site[{}]@({},{},{}) mult={}",
+          bond.site_1.site_index,
+          bond.site_1.relative_cell.x,
+          bond.site_1.relative_cell.y,
+          bond.site_1.relative_cell.z,
+          bond.site_2.site_index,
+          bond.site_2.relative_cell.x,
+          bond.site_2.relative_cell.y,
+          bond.site_2.relative_cell.z,
+          bond.multiplicity));
+      }
+      if self.bonds.len() > 10 {
+        lines.push(format!("  ... and {} more bonds", self.bonds.len() - 10));
+      }
+    }
+    
+    lines.join("\n")
+  }
 }
 
 

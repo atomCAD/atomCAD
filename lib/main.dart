@@ -2,10 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
-import 'package:flutter_cad/src/rust/api/common_api_types.dart';
-import 'package:flutter_cad/src/rust/api/common_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -210,14 +207,9 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
         builder: (context, child) {
-          // Debug: Print the current textScaleFactor
-          final textScaleFactor = MediaQuery.of(context).textScaleFactor;
-          print('Current textScaleFactor: $textScaleFactor');
-
           if (forceTextScaleFactor) {
-            print('Forcing textScaleFactor to 1.0');
             return MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+              data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
               child: child!,
             );
           }

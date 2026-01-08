@@ -10,7 +10,8 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapData {
@@ -117,18 +118,31 @@ impl NodeData for MapData {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "map".to_string(),
+      description: "Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![
+        Parameter {
+          name: "xs".to_string(),
+          data_type: DataType::Array(Box::new(DataType::Float)), // will change based on  ParameterData::data_type.
+        },
+        Parameter {
+          name: "f".to_string(),
+          data_type: DataType::Function(FunctionType {
+            parameter_types: vec![DataType::Float],
+            output_type: Box::new(DataType::Float),
+          }), // will change based on  ParameterData::data_type.
+        },
+      ],
+      output_type: DataType::Array(Box::new(DataType::Float)), // will change based on the output type
+      public: true,
+      node_data_creator: || Box::new(MapData {
+        input_type: DataType::Float,
+        output_type: DataType::Float,
+      }),
+      node_data_saver: generic_node_data_saver::<MapData>,
+      node_data_loader: generic_node_data_loader::<MapData>,
+    }
+}

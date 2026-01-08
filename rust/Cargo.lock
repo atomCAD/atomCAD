@@ -1875,6 +1875,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.46.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b66886d14d18d420ab5052cbff544fc5d34d0b2cdd35eb5976aaa10a4a472e5"
+dependencies = [
+ "console",
+ "once_cell",
+ "serde",
+ "similar",
+ "tempfile",
+]
+
+[[package]]
 name = "interpolate_name"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2933,6 +2946,7 @@ dependencies = [
  "geo",
  "glam",
  "indexmap 2.7.0",
+ "insta",
  "lazy_static",
  "lru",
  "nalgebra",
@@ -2943,6 +2957,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "smallvec",
+ "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "toml 0.8.23",
@@ -3187,6 +3202,12 @@ checksum = "95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6"
 dependencies = [
  "quote 1.0.38",
 ]
+
+[[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "slab"

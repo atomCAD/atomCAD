@@ -12,10 +12,11 @@ use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,7 +67,7 @@ impl NodeData for Diff2DData {
       return unit_cell_mismatch_error();
     }
     
-    let mut result_drawing_plane = base_drawing_plane.unwrap();
+    let result_drawing_plane = base_drawing_plane.unwrap();
   
     if !node.arguments[1].is_empty() {
       let (sub_geometry, sub_frame_translation, sub_drawing_plane) = helper_union(
@@ -177,8 +178,28 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   return (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_drawing_plane));
 }
 
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "diff_2d".to_string(),
+      description: "Computes the Boolean difference of two 2D geometries.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+          Parameter {
+              name: "base".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from
+          },
+          Parameter {
+              name: "sub".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from base
+          },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(Diff2DData {}),
+      node_data_saver: generic_node_data_saver::<Diff2DData>,
+      node_data_loader: generic_node_data_loader::<Diff2DData>,
+  }
+}
 
 
 

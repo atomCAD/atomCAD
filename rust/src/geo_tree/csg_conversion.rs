@@ -1,6 +1,5 @@
 use csgrs::traits::CSG;
 use glam::f64::{DVec2, DVec3, DQuat};
-use nalgebra::{Point3, Vector3};
 use crate::geo_tree::csg_types::CSGMesh;
 use crate::geo_tree::csg_types::CSGSketch;
 use super::{GeoNode, GeoNodeKind};
@@ -11,7 +10,6 @@ use crate::geo_tree::csg_utils::dvec3_to_vector3;
 use crate::geo_tree::csg_utils::scale_to_csg;
 use csgrs::mesh::polygon::Polygon;
 use csgrs::mesh::vertex::Vertex;
-use crate::util::timer::Timer;
 
 impl GeoNode {
   /// Convert to CSG mesh without caching

@@ -857,7 +857,6 @@ fn add_hydrogen_passivation(
   surface_normal: &glam::DVec3,
   params: SurfaceReconstructionParams
 ) {
-  use glam::DVec3;
   use std::f64::consts::PI;
   
   let angle_rad = params.h_angle_from_normal_degrees * PI / 180.0;

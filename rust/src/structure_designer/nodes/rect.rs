@@ -12,7 +12,9 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,4 +143,34 @@ fn create_parallelogram_on_plane(
   
   // Return the intersection of all half-planes
   GeoNode::intersection_2d(half_planes)
+}
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "rect".to_string(),
+      description: "Outputs a rectangle with integer minimum corner coordinates and integer width and height.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+        Parameter {
+            name: "min_corner".to_string(),
+            data_type: DataType::IVec2,
+        },
+        Parameter {
+          name: "extent".to_string(),
+          data_type: DataType::IVec2,
+        },
+        Parameter {
+          name: "d_plane".to_string(),
+          data_type: DataType::DrawingPlane,
+        },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(RectData {
+        min_corner: IVec2::new(-1, -1),
+        extent: IVec2::new(2, 2),
+      }),
+      node_data_saver: generic_node_data_saver::<RectData>,
+      node_data_loader: generic_node_data_loader::<RectData>,
+    }
 }

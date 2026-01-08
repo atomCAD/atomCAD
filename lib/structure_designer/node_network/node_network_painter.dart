@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
-import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
+
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 
 class WireHitResult {
@@ -125,7 +125,7 @@ class NodeNetworkPainter extends CustomPainter {
                       NODE_VERT_WIRE_OFFSET_PER_PARAM *
                       0.5);
       // Use central coordinate transformation
-      final logicalPos = APIVec2ToOffset(sourceNode!.position) +
+      final logicalPos = apiVec2ToOffset(sourceNode!.position) +
           Offset(NODE_WIDTH, sourceVertOffset);
       return (
         logicalToScreen(logicalPos, panOffset, scale),
@@ -138,7 +138,7 @@ class NodeNetworkPainter extends CustomPainter {
           (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
       // Use central coordinate transformation
       final logicalPos =
-          APIVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
+          apiVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
       return (
         logicalToScreen(logicalPos, panOffset, scale),
         destNode.inputPins[pinIndex].dataType
@@ -154,7 +154,7 @@ class NodeNetworkPainter extends CustomPainter {
     final nodeSize = getNodeSize(node, zoomLevel);
     // Use central coordinate transformation
     final nodePos =
-        logicalToScreen(APIVec2ToOffset(node.position), panOffset, scale);
+        logicalToScreen(apiVec2ToOffset(node.position), panOffset, scale);
 
     if (pinType == PinType.output) {
       // Output wires connect to right edge, centered vertically
@@ -186,7 +186,7 @@ class NodeNetworkPainter extends CustomPainter {
 
       // Draw glow effect for selected wire
       final glowPaint = Paint()
-        ..color = WIRE_COLOR_SELECTED.withOpacity(WIRE_GLOW_OPACITY)
+        ..color = WIRE_COLOR_SELECTED.withValues(alpha: WIRE_GLOW_OPACITY)
         ..strokeWidth = paint.strokeWidth * 2
         ..style = PaintingStyle.stroke;
 

@@ -19,6 +19,24 @@ pub struct GeometrySummary2D {
 }
 
 impl GeometrySummary2D {
+  /// Returns a detailed string representation for snapshot testing.
+  pub fn to_detailed_string(&self) -> String {
+    let dp = &self.drawing_plane;
+    let t = &self.frame_transform;
+    format!(
+      "drawing_plane:\n  miller_index: ({}, {}, {})\n  center: ({}, {}, {})\n  shift: {}\n  subdivision: {}\n  u_axis: ({}, {}, {})\n  v_axis: ({}, {}, {})\nframe_transform:\n  translation: ({:.6}, {:.6})\n  rotation: {:.6}\ngeo_tree:\n{}",
+      dp.miller_index.x, dp.miller_index.y, dp.miller_index.z,
+      dp.center.x, dp.center.y, dp.center.z,
+      dp.shift,
+      dp.subdivision,
+      dp.u_axis.x, dp.u_axis.y, dp.u_axis.z,
+      dp.v_axis.x, dp.v_axis.y, dp.v_axis.z,
+      t.translation.x, t.translation.y,
+      t.rotation,
+      self.geo_tree_root
+    )
+  }
+
   /// Checks if this geometry's drawing plane is compatible with another geometry's drawing plane.
   /// 
   /// This is useful for CSG operations where geometries must have compatible drawing planes.
@@ -65,6 +83,21 @@ pub struct GeometrySummary {
 }
 
 impl GeometrySummary {
+  /// Returns a detailed string representation for snapshot testing.
+  pub fn to_detailed_string(&self) -> String {
+    let uc = &self.unit_cell;
+    let t = &self.frame_transform;
+    format!(
+      "unit_cell:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})\nframe_transform:\n  translation: ({:.6}, {:.6}, {:.6})\n  rotation: ({:.6}, {:.6}, {:.6}, {:.6})\ngeo_tree:\n{}",
+      uc.a.x, uc.a.y, uc.a.z,
+      uc.b.x, uc.b.y, uc.b.z,
+      uc.c.x, uc.c.y, uc.c.z,
+      t.translation.x, t.translation.y, t.translation.z,
+      t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w,
+      self.geo_tree_root
+    )
+  }
+
   /// Checks if this geometry's unit cell is compatible with another geometry's unit cell.
   /// 
   /// This is useful for CSG operations where geometries must have compatible unit cells.
@@ -445,6 +478,31 @@ impl NetworkResult {
       NetworkResult::Atomic(_) => "Atomic".to_string(),
       NetworkResult::Motif(_) => "Motif".to_string(),
       NetworkResult::Error(_) => "Error".to_string(),
+    }
+  }
+
+  /// Returns a detailed string representation including full contents for complex types.
+  /// For Geometry/Geometry2D, shows unit cell/drawing plane, frame transform, and geo tree.
+  /// For Atomic/Motif, shows counts plus first 10 atoms/sites/bonds.
+  /// For other variants, delegates to to_display_string().
+  pub fn to_detailed_string(&self) -> String {
+    match self {
+      NetworkResult::Geometry(geometry) => {
+        format!("Geometry:\n{}", geometry.to_detailed_string())
+      },
+      NetworkResult::Geometry2D(geometry) => {
+        format!("Geometry2D:\n{}", geometry.to_detailed_string())
+      },
+      NetworkResult::Atomic(atomic) => {
+        format!("Atomic:\n{}", atomic.to_detailed_string())
+      },
+      NetworkResult::Motif(motif) => {
+        format!("Motif:\n{}", motif.to_detailed_string())
+      },
+      NetworkResult::Error(msg) => {
+        format!("Error: {}", msg)
+      },
+      _ => self.to_display_string(),
     }
   }
 

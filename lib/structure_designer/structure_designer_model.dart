@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Uint64List;
 import 'package:vector_math/vector_math.dart' as vector_math;
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
@@ -67,7 +69,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool isDirty = false;
   String? filePath;
 
-  StructureDesignerModel() {}
+  StructureDesignerModel();
 
   void init() {
     refreshFromKernel();
@@ -97,8 +99,8 @@ class StructureDesignerModel extends ChangeNotifier {
   void selectFacetShellFacetByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     facet_shell_api.selectFacetByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
     );
     refreshFromKernel();
   }
@@ -115,8 +117,8 @@ class StructureDesignerModel extends ChangeNotifier {
   void selectAtomOrBondByRay(vector_math.Vector3 rayStart,
       vector_math.Vector3 rayDir, SelectModifier selectModifier) {
     edit_atom_api.selectAtomOrBondByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
       selectModifier: selectModifier,
     );
     refreshFromKernel();
@@ -125,6 +127,223 @@ class StructureDesignerModel extends ChangeNotifier {
   void clearSelection() {
     structure_designer_api.clearSelection();
     refreshFromKernel();
+  }
+
+  // ===== MULTI-NODE SELECTION METHODS =====
+
+  /// Toggle node in selection (for Ctrl+click)
+  /// If selected, removes it; if not selected, adds it
+  bool toggleNodeSelection(BigInt nodeId) {
+    final result = structure_designer_api.toggleNodeSelection(nodeId: nodeId);
+    refreshFromKernel();
+    return result;
+  }
+
+  /// Add node to selection without clearing existing selection (for Shift+click)
+  bool addNodeToSelection(BigInt nodeId) {
+    final result = structure_designer_api.addNodeToSelection(nodeId: nodeId);
+    refreshFromKernel();
+    return result;
+  }
+
+  /// Select multiple nodes (for rectangle selection)
+  bool selectNodes(List<BigInt> nodeIds) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    final result = structure_designer_api.selectNodes(nodeIds: uint64Ids);
+    refreshFromKernel();
+    return result;
+  }
+
+  /// Toggle multiple nodes in selection (for Ctrl+rectangle)
+  void toggleNodesSelection(List<BigInt> nodeIds) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    structure_designer_api.toggleNodesSelection(nodeIds: uint64Ids);
+    refreshFromKernel();
+  }
+
+  /// Get all selected node IDs
+  List<BigInt> getSelectedNodeIds() {
+    final ids = structure_designer_api.getSelectedNodeIds();
+    // Uint64List already contains BigInt values
+    return ids.toList();
+  }
+
+  /// Move all selected nodes by delta (commits position to kernel)
+  void moveSelectedNodes(Offset delta) {
+    structure_designer_api.moveSelectedNodes(
+        deltaX: delta.dx, deltaY: delta.dy);
+    refreshFromKernel();
+  }
+
+  /// Drag all selected nodes by delta (UI-only, does not commit to kernel)
+  void dragSelectedNodes(Offset delta) {
+    if (nodeNetworkView == null) return;
+    final selectedIds = getSelectedNodeIds();
+    for (final nodeId in selectedIds) {
+      final node = nodeNetworkView!.nodes[nodeId];
+      if (node != null) {
+        node.position = APIVec2(
+            x: node.position.x + delta.dx, y: node.position.y + delta.dy);
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Commit positions of all selected nodes to the kernel
+  void updateSelectedNodesPosition() {
+    if (nodeNetworkView == null) return;
+    final selectedIds = getSelectedNodeIds();
+    for (final nodeId in selectedIds) {
+      final node = nodeNetworkView!.nodes[nodeId];
+      if (node != null) {
+        structure_designer_api.moveNode(
+            nodeId: nodeId,
+            position: APIVec2(x: node.position.x, y: node.position.y));
+      }
+    }
+    refreshFromKernel();
+  }
+
+  // ===== MULTI-WIRE SELECTION METHODS =====
+
+  /// Toggle wire in selection (for Ctrl+click)
+  bool toggleWireSelection(BigInt sourceNodeId, int sourceOutputPinIndex,
+      BigInt destNodeId, BigInt destParamIndex) {
+    final result = structure_designer_api.toggleWireSelection(
+      sourceNodeId: sourceNodeId,
+      sourceOutputPinIndex: sourceOutputPinIndex,
+      destinationNodeId: destNodeId,
+      destinationArgumentIndex: destParamIndex,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  /// Add wire to selection without clearing existing selection (for Shift+click)
+  bool addWireToSelection(BigInt sourceNodeId, int sourceOutputPinIndex,
+      BigInt destNodeId, BigInt destParamIndex) {
+    final result = structure_designer_api.addWireToSelection(
+      sourceNodeId: sourceNodeId,
+      sourceOutputPinIndex: sourceOutputPinIndex,
+      destinationNodeId: destNodeId,
+      destinationArgumentIndex: destParamIndex,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  // ===== BATCH SELECTION METHODS (for rectangle selection) =====
+
+  /// Add multiple nodes to selection (for Shift+rectangle)
+  void addNodesToSelection(List<BigInt> nodeIds) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    structure_designer_api.addNodesToSelection(nodeIds: uint64Ids);
+    refreshFromKernel();
+  }
+
+  /// Toggle multiple wires in selection (for Ctrl+rectangle)
+  void toggleWiresSelection(List<WireView> wires) {
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.toggleWiresSelection(wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Add multiple wires to selection (for Shift+rectangle)
+  void addWiresToSelection(List<WireView> wires) {
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.addWiresToSelection(wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Select nodes and wires together (for rectangle selection - replaces current selection)
+  void selectNodesAndWires(List<BigInt> nodeIds, List<WireView> wires) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.selectNodesAndWires(
+        nodeIds: uint64Ids, wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Add nodes and wires to existing selection (for Shift+rectangle)
+  void addNodesAndWiresToSelection(List<BigInt> nodeIds, List<WireView> wires) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.addNodesAndWiresToSelection(
+        nodeIds: uint64Ids, wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Toggle nodes and wires in selection (for Ctrl+rectangle)
+  void toggleNodesAndWiresSelection(List<BigInt> nodeIds, List<WireView> wires) {
+    final uint64Ids = Uint64List(nodeIds.length);
+    for (int i = 0; i < nodeIds.length; i++) {
+      uint64Ids[i] = nodeIds[i].toUnsigned(64);
+    }
+    final wireIdentifiers = wires
+        .map((w) => WireIdentifier(
+              sourceNodeId: w.sourceNodeId,
+              sourceOutputPinIndex: w.sourceOutputPinIndex,
+              destinationNodeId: w.destNodeId,
+              destinationArgumentIndex: w.destParamIndex,
+            ))
+        .toList();
+    structure_designer_api.toggleNodesAndWiresSelection(
+        nodeIds: uint64Ids, wires: wireIdentifiers);
+    refreshFromKernel();
+  }
+
+  /// Check if a node is the active node (for properties panel / gadget)
+  BigInt? getActiveNodeId() {
+    if (nodeNetworkView == null) return null;
+    for (final entry in nodeNetworkView!.nodes.entries) {
+      if (entry.value.active) {
+        return entry.key;
+      }
+    }
+    return null;
   }
 
   void saveNodeNetworksAs(String filePath) {
@@ -451,9 +670,9 @@ class StructureDesignerModel extends ChangeNotifier {
     if (nodeNetworkView == null) return;
     edit_atom_api.addAtomByRay(
       atomicNumber: atomicNumber,
-      planeNormal: Vector3ToAPIVec3(planeNormal),
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      planeNormal: vector3ToApiVec3(planeNormal),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
     );
     refreshFromKernel();
   }
@@ -461,8 +680,8 @@ class StructureDesignerModel extends ChangeNotifier {
   void drawBondByRay(vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;
     edit_atom_api.drawBondByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
     );
     refreshFromKernel();
   }

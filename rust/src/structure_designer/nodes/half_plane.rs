@@ -20,7 +20,9 @@ use crate::display::gadget::Gadget;
 use crate::util::hit_test_utils::cylinder_hit_test;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::geo_tree::GeoNode;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 
@@ -404,9 +406,45 @@ impl HalfPlaneGadget {
     }
 }
 
-
-
-
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "half_plane".to_string(),
+      description: "Outputs a half plane.
+You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
+Both vertices are displayed as a triangle-based prism. The direction of the half plane is indicated by the direction of the triangle.".to_string(),
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+        Parameter {
+          name: "d_plane".to_string(),
+          data_type: DataType::DrawingPlane,
+        },
+        Parameter {
+          name: "m_index".to_string(),
+          data_type: DataType::IVec2,
+        },
+        Parameter {
+          name: "center".to_string(),
+          data_type: DataType::IVec2,
+        },
+        Parameter {
+          name: "shift".to_string(),
+          data_type: DataType::Int,
+        },
+        Parameter {
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
+      ],
+      output_type: DataType::Geometry2D,
+      public: true,
+      node_data_creator: || Box::new(HalfPlaneData {
+        point1: IVec2::new(0, 0),
+        point2: IVec2::new(1, 0),
+      }),
+      node_data_saver: generic_node_data_saver::<HalfPlaneData>,
+      node_data_loader: generic_node_data_loader::<HalfPlaneData>,
+    }
+}
 
 
 

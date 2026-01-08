@@ -15,13 +15,14 @@ const double PIN_HIT_AREA_HEIGHT = 22.0;
 
 // Node appearance constants
 const Color NODE_BACKGROUND_COLOR = Color(0xFF212121); // Colors.grey[900]
-const Color NODE_BORDER_COLOR_SELECTED = Colors.orange;
+const Color NODE_COLOR_ACTIVE = Color(0xFFD84315); // Active node border & title
+const Color NODE_COLOR_SELECTED = Color(0xFFE08000); // Selected node border & title
 const Color NODE_BORDER_COLOR_NORMAL = Colors.blueAccent;
 const Color NODE_BORDER_COLOR_ERROR = Colors.red;
-const double NODE_BORDER_WIDTH_SELECTED = 3.0;
+const double NODE_BORDER_WIDTH_ACTIVE = 3.0;
+const double NODE_BORDER_WIDTH_SELECTED = 2.0;
 const double NODE_BORDER_WIDTH_NORMAL = 2.0;
 const double NODE_BORDER_RADIUS = 8.0;
-const Color NODE_TITLE_COLOR_SELECTED = Color(0xFFD84315); // Colors.orange[800]
 const Color NODE_TITLE_COLOR_NORMAL = Color(0xFF37474F); // Colors.blueGrey[800]
 const Color NODE_TITLE_COLOR_RETURN = Color(0xFF0D47A1); // Dark blue
 const Color NODE_TITLE_COLOR_PARAMETER = Color(0xFF1B5E20); // Dark green
@@ -98,7 +99,7 @@ class PinWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: PIN_HIT_AREA_WIDTH,
       height: PIN_HIT_AREA_HEIGHT,
       child: DragTarget<PinReference>(
@@ -106,7 +107,7 @@ class PinWidget extends StatelessWidget {
           return Draggable<PinReference>(
             data: pinReference,
             feedback: SizedBox.shrink(),
-            childWhenDragging: Container(
+            childWhenDragging: SizedBox(
               width: PIN_HIT_AREA_WIDTH,
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
@@ -116,7 +117,7 @@ class PinWidget extends StatelessWidget {
                     outputString: outputString),
               ),
             ),
-            child: Container(
+            child: SizedBox(
               width: PIN_HIT_AREA_WIDTH,
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
@@ -236,27 +237,10 @@ class NodeWidget extends StatelessWidget {
       children: [
         // Title Bar
         GestureDetector(
-          onTapDown: (details) {
-            final model =
-                Provider.of<StructureDesignerModel>(context, listen: false);
-            model.setSelectedNode(node.id);
-          },
-          onPanStart: (details) {
-            final model =
-                Provider.of<StructureDesignerModel>(context, listen: false);
-            model.setSelectedNode(node.id);
-          },
-          onPanUpdate: (details) {
-            // Convert screen-space delta to logical-space delta
-            final scale = getZoomScale(zoomLevel);
-            final logicalDelta = details.delta / scale;
-            Provider.of<StructureDesignerModel>(context, listen: false)
-                .dragNodePosition(node.id, logicalDelta);
-          },
-          onPanEnd: (details) {
-            Provider.of<StructureDesignerModel>(context, listen: false)
-                .updateNodePosition(node.id);
-          },
+          onTapDown: (details) => _handleNodeTap(context),
+          onPanStart: (details) => _handleNodeTap(context),
+          onPanUpdate: (details) => _handleNodeDrag(context, details),
+          onPanEnd: (details) => _handleNodeDragEnd(context),
           onSecondaryTapDown: (details) {
             final model =
                 Provider.of<StructureDesignerModel>(context, listen: false);
@@ -297,6 +281,7 @@ class NodeWidget extends StatelessWidget {
                 ),
               ],
             ).then((value) {
+              if (!context.mounted) return;
               if (value == 'go_to_definition') {
                 final model =
                     Provider.of<StructureDesignerModel>(context, listen: false);
@@ -305,10 +290,8 @@ class NodeWidget extends StatelessWidget {
                 final model =
                     Provider.of<StructureDesignerModel>(context, listen: false);
                 if (node.returnNode) {
-                  // Unset as return node (pass null to clear the return node)
                   model.setReturnNodeId(null);
                 } else {
-                  // Set as return node (pass the node ID)
                   model.setReturnNodeId(node.id);
                 }
               } else if (value == 'duplicate') {
@@ -322,10 +305,7 @@ class NodeWidget extends StatelessWidget {
             padding:
                 const EdgeInsets.only(top: 4, bottom: 4, left: 8, right: 2),
             decoration: BoxDecoration(
-              color: _getSpecialNodeColor() ??
-                  (node.selected
-                      ? NODE_TITLE_COLOR_SELECTED
-                      : NODE_TITLE_COLOR_NORMAL),
+              color: _getSpecialNodeColor() ?? _getTitleColor(),
               borderRadius: BorderRadius.vertical(
                   top: Radius.circular(NODE_BORDER_RADIUS - 2)),
             ),
@@ -451,6 +431,16 @@ class NodeWidget extends StatelessWidget {
     return null;
   }
 
+  /// Returns the title bar color based on selection state
+  Color _getTitleColor() {
+    if (node.active) {
+      return NODE_COLOR_ACTIVE;
+    } else if (node.selected) {
+      return NODE_COLOR_SELECTED;
+    }
+    return NODE_TITLE_COLOR_NORMAL;
+  }
+
   /// Returns the decoration for the node container
   BoxDecoration _getNodeDecoration() {
     // Use colored background for special nodes in zoomed-out modes
@@ -458,34 +448,53 @@ class NodeWidget extends StatelessWidget {
         ? (_getSpecialNodeColor() ?? NODE_BACKGROUND_COLOR)
         : NODE_BACKGROUND_COLOR;
 
+    // Determine border color and width based on state:
+    // Priority: error > active > selected > normal
+    Color borderColor;
+    double borderWidth;
+    List<BoxShadow>? boxShadow;
+
+    if (node.error != null) {
+      borderColor = NODE_BORDER_COLOR_ERROR;
+      borderWidth = NODE_BORDER_WIDTH_NORMAL;
+      boxShadow = [
+        BoxShadow(
+            color: NODE_BORDER_COLOR_ERROR.withValues(alpha: WIRE_GLOW_OPACITY),
+            blurRadius: WIRE_GLOW_BLUR_RADIUS,
+            spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+      ];
+    } else if (node.active) {
+      // Active node: thicker border, full glow
+      borderColor = NODE_COLOR_ACTIVE;
+      borderWidth = NODE_BORDER_WIDTH_ACTIVE;
+      boxShadow = [
+        BoxShadow(
+            color: NODE_COLOR_ACTIVE.withValues(alpha: WIRE_GLOW_OPACITY),
+            blurRadius: WIRE_GLOW_BLUR_RADIUS,
+            spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+      ];
+    } else if (node.selected) {
+      // Selected but not active
+      borderColor = NODE_COLOR_SELECTED;
+      borderWidth = NODE_BORDER_WIDTH_SELECTED;
+      boxShadow = [
+        BoxShadow(
+            color: NODE_COLOR_SELECTED.withValues(alpha: WIRE_GLOW_OPACITY * 0.5),
+            blurRadius: WIRE_GLOW_BLUR_RADIUS * 0.7,
+            spreadRadius: WIRE_GLOW_SPREAD_RADIUS * 0.5)
+      ];
+    } else {
+      // Normal (not selected)
+      borderColor = NODE_BORDER_COLOR_NORMAL;
+      borderWidth = NODE_BORDER_WIDTH_NORMAL;
+      boxShadow = null;
+    }
+
     return BoxDecoration(
       color: backgroundColor,
       borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
-      border: Border.all(
-          color: node.error != null
-              ? NODE_BORDER_COLOR_ERROR
-              : (node.selected
-                  ? NODE_BORDER_COLOR_SELECTED
-                  : NODE_BORDER_COLOR_NORMAL),
-          width: node.selected
-              ? NODE_BORDER_WIDTH_SELECTED
-              : NODE_BORDER_WIDTH_NORMAL),
-      boxShadow: node.error != null
-          ? [
-              BoxShadow(
-                  color: NODE_BORDER_COLOR_ERROR.withOpacity(WIRE_GLOW_OPACITY),
-                  blurRadius: WIRE_GLOW_BLUR_RADIUS,
-                  spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-            ]
-          : (node.selected
-              ? [
-                  BoxShadow(
-                      color: NODE_BORDER_COLOR_SELECTED
-                          .withOpacity(WIRE_GLOW_OPACITY),
-                      blurRadius: WIRE_GLOW_BLUR_RADIUS,
-                      spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-                ]
-              : null),
+      border: Border.all(color: borderColor, width: borderWidth),
+      boxShadow: boxShadow,
     );
   }
 
@@ -507,25 +516,52 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
-  /// Handles node tap for selection
+  /// Handles node tap for selection with modifier key support
   void _handleNodeTap(BuildContext context) {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
-    model.setSelectedNode(node.id);
+
+    if (HardwareKeyboard.instance.isControlPressed) {
+      // Ctrl+click: toggle selection
+      model.toggleNodeSelection(node.id);
+    } else if (HardwareKeyboard.instance.isShiftPressed) {
+      // Shift+click: add to selection
+      model.addNodeToSelection(node.id);
+    } else if (node.selected && !node.active) {
+      // Simple click on selected (but not active) node: make it active
+      model.addNodeToSelection(node.id);
+    } else {
+      // Normal click: select only this node
+      model.setSelectedNode(node.id);
+    }
   }
 
-  /// Handles node drag for positioning
+  /// Handles node drag for positioning - moves all selected nodes if this node is selected
   void _handleNodeDrag(BuildContext context, DragUpdateDetails details) {
     // Convert screen-space delta to logical-space delta
     final scale = getZoomScale(zoomLevel);
     final logicalDelta = details.delta / scale;
-    Provider.of<StructureDesignerModel>(context, listen: false)
-        .dragNodePosition(node.id, logicalDelta);
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+
+    if (node.selected) {
+      // This node is part of selection - drag all selected nodes
+      model.dragSelectedNodes(logicalDelta);
+    } else {
+      // Dragging an unselected node - just drag this one
+      model.dragNodePosition(node.id, logicalDelta);
+    }
   }
 
-  /// Handles end of node drag
+  /// Handles end of node drag - commits position of all moved nodes
   void _handleNodeDragEnd(BuildContext context) {
-    Provider.of<StructureDesignerModel>(context, listen: false)
-        .updateNodePosition(node.id);
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+
+    if (node.selected) {
+      // Commit positions of all selected nodes
+      model.updateSelectedNodesPosition();
+    } else {
+      // Only commit position of this single node
+      model.updateNodePosition(node.id);
+    }
   }
 
   /// Handles context menu for node
@@ -565,6 +601,7 @@ class NodeWidget extends StatelessWidget {
         ),
       ],
     ).then((value) {
+      if (!context.mounted) return;
       if (value == 'go_to_definition') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

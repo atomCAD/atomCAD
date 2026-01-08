@@ -6,7 +6,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -53,14 +55,21 @@ impl NodeData for ValueData {
     }
 }
 
-
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+    name: "value".to_string(),
+      description: "".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_type: DataType::None,
+      public: false,
+      node_data_creator: || Box::new(ValueData {
+        value: NetworkResult::None,
+      }),
+      node_data_saver: generic_node_data_saver::<ValueData>,
+      node_data_loader: generic_node_data_loader::<ValueData>,
+  }
+}
 
 
 

@@ -157,8 +157,6 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
         return _buildAddAtomToolUI();
       case APIEditAtomTool.addBond:
         return const SizedBox.shrink(); // No additional UI for Add Bond
-      default:
-        return const SizedBox.shrink();
     }
   }
 

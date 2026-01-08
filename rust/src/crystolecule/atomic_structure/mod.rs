@@ -680,6 +680,68 @@ impl MemorySizeEstimator for AtomicStructure {
   }
 }
 
+impl AtomicStructure {
+  /// Returns a detailed string representation for snapshot testing.
+  /// Includes frame transform, counts, and details of first 10 atoms and bonds.
+  pub fn to_detailed_string(&self) -> String {
+    let mut lines = Vec::new();
+    
+    lines.push(format!("atoms: {}", self.num_atoms));
+    lines.push(format!("bonds: {}", self.num_bonds));
+    lines.push(format!("frame_transform:"));
+    lines.push(format!("  translation: ({:.6}, {:.6}, {:.6})", 
+      self.frame_transform.translation.x,
+      self.frame_transform.translation.y,
+      self.frame_transform.translation.z));
+    lines.push(format!("  rotation: ({:.6}, {:.6}, {:.6}, {:.6})",
+      self.frame_transform.rotation.x,
+      self.frame_transform.rotation.y,
+      self.frame_transform.rotation.z,
+      self.frame_transform.rotation.w));
+    
+    // First 10 atoms
+    let atoms: Vec<&Atom> = self.atoms_values().take(10).collect();
+    if !atoms.is_empty() {
+      lines.push(format!("first {} atoms:", atoms.len()));
+      for atom in &atoms {
+        lines.push(format!("  [{}] Z={} pos=({:.6}, {:.6}, {:.6}) depth={:.3} bonds={}",
+          atom.id,
+          atom.atomic_number,
+          atom.position.x,
+          atom.position.y,
+          atom.position.z,
+          atom.in_crystal_depth,
+          atom.bonds.len()));
+      }
+      if self.num_atoms > 10 {
+        lines.push(format!("  ... and {} more atoms", self.num_atoms - 10));
+      }
+    }
+    
+    // First 10 bonds (iterate through atoms and collect unique bonds)
+    let mut bonds_shown = 0;
+    lines.push(format!("first {} bonds:", std::cmp::min(10, self.num_bonds)));
+    'outer: for atom in self.atoms_values() {
+      for inline_bond in &atom.bonds {
+        let other_id = inline_bond.other_atom_id();
+        // Only show each bond once (when atom.id < other_id)
+        if atom.id < other_id {
+          lines.push(format!("  {} -- {} (order={})", atom.id, other_id, inline_bond.bond_order()));
+          bonds_shown += 1;
+          if bonds_shown >= 10 {
+            break 'outer;
+          }
+        }
+      }
+    }
+    if self.num_bonds > 10 {
+      lines.push(format!("  ... and {} more bonds", self.num_bonds - 10));
+    }
+    
+    lines.join("\n")
+  }
+}
+
 
 
 

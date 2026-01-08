@@ -7,7 +7,7 @@ import 'package:flutter_cad/structure_designer/node_data/facet_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/table_column_header.dart';
-import 'package:provider/provider.dart';
+
 
 /// Editor widget for facet_shell nodes
 class FacetShellEditor extends StatefulWidget {
@@ -27,6 +27,14 @@ class FacetShellEditor extends StatefulWidget {
 }
 
 class FacetShellEditorState extends State<FacetShellEditor> {
+  final ScrollController _facetListController = ScrollController();
+
+  @override
+  void dispose() {
+    _facetListController.dispose();
+    super.dispose();
+  }
+
   /// Calculates the default shift value for a new facet based on existing facets.
   /// Facets with symmetrize=true count as 6 facets in the average.
   /// Returns the rounded average, or 1 if there are no existing facets.
@@ -103,7 +111,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(4),
             ),
-            height: 120, // Slightly taller to accommodate headers
+            height: 180,
             child: widget.data!.facets.isEmpty
                 ? const Center(child: Text('No facets defined'))
                 : Column(
@@ -119,9 +127,13 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                               child: TableColumnHeader(title: '')), // Spacer
                         ],
                       ),
-                      // Table rows
+                      // Table rows with visible scrollbar
                       Expanded(
-                        child: ListView.builder(
+                        child: Scrollbar(
+                          controller: _facetListController,
+                          thumbVisibility: true,
+                          child: ListView.builder(
+                          controller: _facetListController,
                           itemCount: widget.data!.facets.length,
                           itemBuilder: (context, index) {
                             final facet = widget.data!.facets[index];
@@ -139,18 +151,20 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                               },
                               child: Container(
                                 color: isSelected
-                                    ? Colors.lightBlue.withOpacity(0.1)
+                                    ? Colors.lightBlue.withValues(alpha: 0.1)
                                     : Colors.transparent,
                                 child: Padding(
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 4.0),
                                   child: Row(
                                     children: [
-                                      // Miller index
+                                      // Miller index - use {hkl} for symmetrized, (h,k,l) for individual
                                       SizedBox(
                                         width: 120,
                                         child: Text(
-                                          '(${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z})',
+                                          facet.symmetrize
+                                              ? '{${facet.millerIndex.x} ${facet.millerIndex.y} ${facet.millerIndex.z}}'
+                                              : '(${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z})',
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
@@ -172,7 +186,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                                           size: 18,
                                           color: facet.symmetrize
                                               ? Colors.green
-                                              : Colors.red.withOpacity(0.7),
+                                              : Colors.red.withValues(alpha: 0.7),
                                         ),
                                       ),
                                       // Visibility toggle
@@ -214,6 +228,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                               ),
                             );
                           },
+                        ),
                         ),
                       ),
                     ],

@@ -34,7 +34,7 @@ impl<'a> NetworkStackElement<'a> {
   }
 
   pub fn is_node_selected_in_root_network(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> bool {
-    return network_stack.first().unwrap().node_network.selected_node_id == Some(node_id);
+    return network_stack.first().unwrap().node_network.is_node_selected(node_id);
   }
 }
 
@@ -125,7 +125,7 @@ impl NetworkEvaluator {
       None => return NodeSceneData::new(NodeOutput::None),
     };
 
-    let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
+    let from_selected_node = network_stack.last().unwrap().node_network.is_node_selected(node_id);
     let result = {
       //let _timer = Timer::new("evaluate inside generate_scene");
       self.evaluate(&network_stack, node_id, 0, registry, from_selected_node, &mut context)
@@ -184,7 +184,7 @@ impl NetworkEvaluator {
     };
 
     // Build NodeSceneData
-    let mut node_data = NodeSceneData {
+    let node_data = NodeSceneData {
       output,
       geo_tree,
       node_errors: context.node_errors.clone(),
@@ -204,7 +204,7 @@ impl NetworkEvaluator {
     _context: &mut NetworkEvaluationContext,
     geometry_visualization_preferences: &GeometryVisualizationPreferences) -> (NodeOutput, Option<GeoNode>) {
       //let _timer = Timer::new("generate_explicit_mesh_output");
-      let from_selected_node = network_stack.last().unwrap().node_network.selected_node_id == Some(node_id);
+      let from_selected_node = network_stack.last().unwrap().node_network.is_node_selected(node_id);
       
       let poly_mesh = match &result {
         NetworkResult::Geometry(geometry_summary) => { 
@@ -380,7 +380,12 @@ impl NetworkEvaluator {
 
       let mut merged_items = Vec::new();
 
-      for (&input_node_id, &input_node_output_pin_index) in input_output_pins {
+      // Sort by node ID to ensure deterministic evaluation order
+      // (HashMap iteration order is non-deterministic)
+      let mut sorted_pins: Vec<_> = input_output_pins.iter().collect();
+      sorted_pins.sort_by_key(|&(&node_id, _)| node_id);
+
+      for (&input_node_id, &input_node_output_pin_index) in sorted_pins {
         let result = self.evaluate(
           network_stack,
           input_node_id,

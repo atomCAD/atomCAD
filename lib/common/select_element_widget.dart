@@ -26,13 +26,13 @@ class SelectElementWidget extends StatefulWidget {
   final bool required;
 
   const SelectElementWidget({
-    Key? key,
+    super.key,
     this.value,
     required this.onChanged,
     this.hint,
     this.label,
     this.required = false,
-  }) : super(key: key);
+  });
 
   @override
   State<SelectElementWidget> createState() => _SelectElementWidgetState();
@@ -58,7 +58,7 @@ class _SelectElementWidgetState extends State<SelectElementWidget> {
     });
     
     try {
-      final elements = await getAllElements();
+      final elements = getAllElements();
       setState(() {
         _elements = elements;
         _loading = false;

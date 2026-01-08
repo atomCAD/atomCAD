@@ -7,3 +7,4 @@ pub mod surface_point_cloud;
 pub mod poly_mesh;
 pub mod gadget;
 pub mod csg_to_poly_mesh;
+pub mod preferences;

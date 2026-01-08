@@ -8,12 +8,88 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
 use crate::renderer::renderer::Renderer;
 use crate::util::transform::Transform;
+use crate::api::structure_designer::structure_designer_preferences as api_prefs;
+use crate::display::preferences as display_prefs;
 
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
-    return APIVec3{
+    APIVec3{
       x: v.x,
       y: v.y,
       z: v.z
+    }
+  }
+
+  fn to_display_mesh_smoothing(smoothing: &api_prefs::MeshSmoothing) -> display_prefs::MeshSmoothing {
+    match smoothing {
+      api_prefs::MeshSmoothing::Smooth => display_prefs::MeshSmoothing::Smooth,
+      api_prefs::MeshSmoothing::Sharp => display_prefs::MeshSmoothing::Sharp,
+      api_prefs::MeshSmoothing::SmoothingGroupBased => display_prefs::MeshSmoothing::SmoothingGroupBased,
+    }
+  }
+
+  fn to_display_atomic_structure_visualization(v: &api_prefs::AtomicStructureVisualization) -> display_prefs::AtomicStructureVisualization {
+    match v {
+      api_prefs::AtomicStructureVisualization::BallAndStick => display_prefs::AtomicStructureVisualization::BallAndStick,
+      api_prefs::AtomicStructureVisualization::SpaceFilling => display_prefs::AtomicStructureVisualization::SpaceFilling,
+    }
+  }
+
+  fn to_display_atomic_rendering_method(m: &api_prefs::AtomicRenderingMethod) -> display_prefs::AtomicRenderingMethod {
+    match m {
+      api_prefs::AtomicRenderingMethod::TriangleMesh => display_prefs::AtomicRenderingMethod::TriangleMesh,
+      api_prefs::AtomicRenderingMethod::Impostors => display_prefs::AtomicRenderingMethod::Impostors,
+    }
+  }
+
+  pub fn to_display_preferences(preferences: &api_prefs::StructureDesignerPreferences) -> display_prefs::DisplayPreferences {
+    display_prefs::DisplayPreferences {
+      geometry_visualization: display_prefs::GeometryVisualizationPreferences {
+        wireframe_geometry: preferences.geometry_visualization_preferences.wireframe_geometry,
+        mesh_smoothing: to_display_mesh_smoothing(&preferences.geometry_visualization_preferences.mesh_smoothing),
+        display_camera_target: preferences.geometry_visualization_preferences.display_camera_target,
+      },
+      atomic_structure_visualization: display_prefs::AtomicStructureVisualizationPreferences {
+        visualization: to_display_atomic_structure_visualization(&preferences.atomic_structure_visualization_preferences.visualization),
+        rendering_method: to_display_atomic_rendering_method(&preferences.atomic_structure_visualization_preferences.rendering_method),
+        ball_and_stick_cull_depth: preferences.atomic_structure_visualization_preferences.ball_and_stick_cull_depth,
+        space_filling_cull_depth: preferences.atomic_structure_visualization_preferences.space_filling_cull_depth,
+      },
+      background: display_prefs::BackgroundPreferences {
+        show_grid: preferences.background_preferences.show_grid,
+        grid_size: preferences.background_preferences.grid_size,
+        grid_color: [
+          preferences.background_preferences.grid_color.x as u8,
+          preferences.background_preferences.grid_color.y as u8,
+          preferences.background_preferences.grid_color.z as u8,
+        ],
+        grid_strong_color: [
+          preferences.background_preferences.grid_strong_color.x as u8,
+          preferences.background_preferences.grid_strong_color.y as u8,
+          preferences.background_preferences.grid_strong_color.z as u8,
+        ],
+        show_lattice_axes: preferences.background_preferences.show_lattice_axes,
+        show_lattice_grid: preferences.background_preferences.show_lattice_grid,
+        lattice_grid_color: [
+          preferences.background_preferences.lattice_grid_color.x as u8,
+          preferences.background_preferences.lattice_grid_color.y as u8,
+          preferences.background_preferences.lattice_grid_color.z as u8,
+        ],
+        lattice_grid_strong_color: [
+          preferences.background_preferences.lattice_grid_strong_color.x as u8,
+          preferences.background_preferences.lattice_grid_strong_color.y as u8,
+          preferences.background_preferences.lattice_grid_strong_color.z as u8,
+        ],
+        drawing_plane_grid_color: [
+          preferences.background_preferences.drawing_plane_grid_color.x as u8,
+          preferences.background_preferences.drawing_plane_grid_color.y as u8,
+          preferences.background_preferences.drawing_plane_grid_color.z as u8,
+        ],
+        drawing_plane_grid_strong_color: [
+          preferences.background_preferences.drawing_plane_grid_strong_color.x as u8,
+          preferences.background_preferences.drawing_plane_grid_strong_color.y as u8,
+          preferences.background_preferences.drawing_plane_grid_strong_color.z as u8,
+        ],
+      },
     }
   }
   
@@ -247,11 +323,33 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
     
     // Get lightweight flag from the changes for renderer
     let renderer_lightweight = changes.is_lightweight();
-    cad_instance.renderer.refresh(
-      &cad_instance.structure_designer.last_generated_structure_designer_scene,
-      renderer_lightweight,
-      &cad_instance.structure_designer.preferences
+
+    let display_preferences = to_display_preferences(&cad_instance.structure_designer.preferences);
+    let (lightweight_mesh, gadget_line_mesh, main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) =
+      crate::display::scene_tessellator::tessellate_scene_content(
+        &cad_instance.structure_designer.last_generated_structure_designer_scene,
+        &cad_instance.renderer.camera,
+        renderer_lightweight,
+        &display_preferences
+      );
+
+    cad_instance.renderer.update_all_gpu_meshes(
+      &lightweight_mesh,
+      &gadget_line_mesh,
+      &main_mesh,
+      &wireframe_mesh,
+      &atom_impostor_mesh,
+      &bond_impostor_mesh,
+      !renderer_lightweight
     );
+
+    if !renderer_lightweight {
+      let background_line_mesh = crate::display::coordinate_system_tessellator::tessellate_background_coordinate_system(
+        cad_instance.structure_designer.last_generated_structure_designer_scene.unit_cell.as_ref(),
+        &display_preferences.background
+      );
+      cad_instance.renderer.update_background_mesh(&background_line_mesh);
+    }
   }
 
   /// Convenience wrapper that gets pending changes and refreshes both StructureDesigner and Renderer

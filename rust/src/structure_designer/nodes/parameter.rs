@@ -8,7 +8,8 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParameterData {
@@ -98,18 +99,29 @@ fn eval_default<'a>(
     0);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "parameter".to_string(),
+      description: "To set up an input pin (parameter) of your custom node you need to use a parameter node in your subnetwork.
+The sort order property of a parameter determines the order of the parameters in the resulting custom node.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![
+          Parameter {
+              name: "default".to_string(),
+              data_type: DataType::Int, // will change based on  ParameterData::data_type.
+          },
+      ],
+      output_type: DataType::Int, // will change based on ParameterData::data_type.
+      public: true,
+      node_data_creator: || Box::new(ParameterData {
+        param_index: 0,
+        param_name: "param".to_string(),
+        data_type: DataType::Int,
+        sort_order: 0,
+        data_type_str: None,
+        error: None,
+      }),
+      node_data_saver: generic_node_data_saver::<ParameterData>,
+      node_data_loader: generic_node_data_loader::<ParameterData>,
+    }
+}

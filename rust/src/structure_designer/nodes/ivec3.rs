@@ -9,7 +9,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::common_constants::CONNECTED_PIN_SYMBOL;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,3 +88,31 @@ impl NodeData for IVec3Data {
     }
 }
 
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "ivec3".to_string(),
+      description: "Outputs an IVec3 value.".to_string(),
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![
+        Parameter {
+            name: "x".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "y".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            name: "z".to_string(),
+            data_type: DataType::Int,
+        },        
+      ],
+      output_type: DataType::IVec3,
+      public: true,
+      node_data_creator: || Box::new(IVec3Data {
+        value: IVec3::new(0, 0, 0)
+      }),
+      node_data_saver: generic_node_data_saver::<IVec3Data>,
+      node_data_loader: generic_node_data_loader::<IVec3Data>,
+    }
+}

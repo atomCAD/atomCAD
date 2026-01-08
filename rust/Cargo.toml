@@ -43,5 +43,9 @@ geo = "^0.29.3"
 flutter_rust_bridge_codegen = "2.10.0"
 serde_with = "3.5.1"
 
+[dev-dependencies]
+insta = { version = "1.41", features = ["json"] }
+tempfile = "3.14"
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

@@ -6,7 +6,7 @@ import 'structure_designer_model.dart';
 class CameraControlWidget extends StatelessWidget {
   final StructureDesignerModel model;
 
-  const CameraControlWidget({Key? key, required this.model}) : super(key: key);
+  const CameraControlWidget({super.key, required this.model});
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +42,7 @@ class CameraControlWidget extends StatelessWidget {
               const SizedBox(width: 8),
               // Perspective view button
               IconButton(
-                icon: const Icon(Icons.view_in_ar),
+                icon: const Icon(Icons.panorama_horizontal),
                 tooltip: 'Perspective View',
                 color: model.isOrthographic ? Colors.grey : Theme.of(context).primaryColor,
                 onPressed: () {
@@ -53,7 +53,7 @@ class CameraControlWidget extends StatelessWidget {
               ),
               // Orthographic view button
               IconButton(
-                icon: const Icon(Icons.crop_square),
+                icon: const Icon(Icons.border_all_outlined),
                 tooltip: 'Orthographic View',
                 color: model.isOrthographic ? Theme.of(context).primaryColor : Colors.grey,
                 onPressed: () {
@@ -85,8 +85,6 @@ class CameraControlWidget extends StatelessWidget {
         return 'Left';
       case APICameraCanonicalView.right:
         return 'Right';
-      default:
-        return 'Unknown';
     }
   }
 }

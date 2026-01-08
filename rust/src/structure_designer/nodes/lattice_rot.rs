@@ -3,7 +3,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
   NetworkEvaluationContext, NetworkEvaluator
 };
 use crate::structure_designer::evaluator::network_result::{
-  runtime_type_error_in_input, GeometrySummary, NetworkResult, error_in_input
+  runtime_type_error_in_input, GeometrySummary, NetworkResult
 };
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
@@ -17,7 +17,9 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::DQuat;
 use crate::util::transform::Transform;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::mesh::Mesh;
@@ -302,5 +304,42 @@ impl LatticeRotGadget {
           pivot_point,
           unit_cell: unit_cell.clone(),
       }
+  }
+}
+
+pub fn get_node_type() -> NodeType {
+  NodeType {
+      name: "lattice_rot".to_string(),
+      description: "Rotates geometry in lattice space.
+Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
+You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.".to_string(),
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              name: "shape".to_string(),
+              data_type: DataType::Geometry,
+          },
+          Parameter {
+            name: "axis_index".to_string(),
+            data_type: DataType::Int,
+          },
+          Parameter {
+            name: "step".to_string(),
+            data_type: DataType::Int,
+          },
+          Parameter {
+            name: "pivot_point".to_string(),
+            data_type: DataType::IVec3,
+          },
+      ],
+      output_type: DataType::Geometry,
+      public: true,
+      node_data_creator: || Box::new(LatticeRotData {
+        axis_index: None,
+        step: 0,
+        pivot_point: IVec3::new(0, 0, 0),
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeRotData>,
+      node_data_loader: generic_node_data_loader::<LatticeRotData>,
   }
 }

@@ -17,8 +17,8 @@ class MainContentArea extends StatelessWidget {
     required this.graphModel,
     required this.nodeNetworkKey,
     this.verticalDivision = true,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -45,10 +45,10 @@ CameraTransform? getCameraTransform(APICamera? camera) {
   if (camera == null) {
     return null;
   }
-  final eye = APIVec3ToVector3(camera.eye);
-  final target = APIVec3ToVector3(camera.target);
+  final eye = apiVec3ToVector3(camera.eye);
+  final target = apiVec3ToVector3(camera.target);
   final forward = (target - eye).normalized();
-  final up = APIVec3ToVector3(camera.up);
+  final up = apiVec3ToVector3(camera.up);
   final right = forward.cross(up);
 
   return CameraTransform(
@@ -57,7 +57,7 @@ CameraTransform? getCameraTransform(APICamera? camera) {
     forward: forward,
     up: up,
     right: right,
-    pivotPoint: APIVec3ToVector3(camera.pivotPoint),
+    pivotPoint: apiVec3ToVector3(camera.pivotPoint),
   );
 }
 
@@ -74,17 +74,16 @@ abstract class CadViewport extends StatefulWidget {
 
 abstract class CadViewportState<T extends CadViewport> extends State<T> {
   static const double _clickThreshold = 4.0;
-  static const double _addAtomPlaneDistance = 20.0;
 
   // These initial values get overwritten
   double viewportWidth = 1280.0;
   double viewportHeight = 544.0;
 
   // Rotation per pixel in radian
-  static const double ROT_PER_PIXEL = 0.02;
+  static const double _rotPerPixel = 0.02;
 
   // amount of relative zoom to the zoom target per reported zoom delta.
-  static const double ZOOM_PER_ZOOM_DELTA = 0.002;
+  static const double _zoomPerZoomDelta = 0.002;
 
   TextureRgbaRenderer? _textureRenderer;
 
@@ -178,9 +177,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     var newTarget = cameraTransform.target + moveDelta;
 
     _moveCameraAndRender(
-        eye: Vector3ToAPIVec3(newEye),
-        target: Vector3ToAPIVec3(newTarget),
-        up: Vector3ToAPIVec3(cameraTransform.up));
+        eye: vector3ToApiVec3(newEye),
+        target: vector3ToApiVec3(newTarget),
+        up: vector3ToApiVec3(cameraTransform.up));
   }
 
   void onPointerDown(PointerDownEvent event) {
@@ -313,8 +312,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     // Adjust camera target based on what's under the cursor
     final ray = getRayFromPointerPos(pointerPos);
     adjustCameraTarget(
-        rayOrigin: Vector3ToAPIVec3(ray.start),
-        rayDirection: Vector3ToAPIVec3(ray.direction));
+        rayOrigin: vector3ToApiVec3(ray.start),
+        rayDirection: vector3ToApiVec3(ray.direction));
 
     dragState = ViewportDragState.move;
     _dragStartPointerPos = pointerPos;
@@ -350,17 +349,17 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     var newTarget = _dragStartCameraTransform!.target + moveDelta;
 
     _moveCameraAndRender(
-        eye: Vector3ToAPIVec3(newEye),
-        target: Vector3ToAPIVec3(newTarget),
-        up: Vector3ToAPIVec3(_dragStartCameraTransform!.up));
+        eye: vector3ToApiVec3(newEye),
+        target: vector3ToApiVec3(newTarget),
+        up: vector3ToApiVec3(_dragStartCameraTransform!.up));
   }
 
   void startRotateCamera(Offset pointerPos) {
     // Adjust camera target based on what's under the cursor
     final ray = getRayFromPointerPos(pointerPos);
     adjustCameraTarget(
-        rayOrigin: Vector3ToAPIVec3(ray.start),
-        rayDirection: Vector3ToAPIVec3(ray.direction));
+        rayOrigin: vector3ToApiVec3(ray.start),
+        rayDirection: vector3ToApiVec3(ray.direction));
 
     dragState = ViewportDragState.rotate;
     _dragStartPointerPos = pointerPos;
@@ -413,7 +412,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final cameraTransform = getCameraTransform(camera);
 
     // Horizontal component - rotate around global up vector (Z-up)
-    final horizAngle = relPointerPos.dx * ROT_PER_PIXEL;
+    final horizAngle = relPointerPos.dx * _rotPerPixel;
     final vertAxis = vector_math.Vector3(0.0, 0.0, 1.0);
     var newEye = rotatePointAroundAxis(
         cameraTransform!.pivotPoint, vertAxis, horizAngle, cameraTransform.eye);
@@ -423,7 +422,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final newRight = newForward.cross(cameraTransform.up).normalized();
 
     // Vertical component - rotate around right vector
-    final vertAngle = relPointerPos.dy * ROT_PER_PIXEL;
+    final vertAngle = relPointerPos.dy * _rotPerPixel;
     newEye = rotatePointAroundAxis(
         cameraTransform.pivotPoint, newRight, vertAngle, newEye);
 
@@ -448,9 +447,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     }
 
     _moveCameraAndRender(
-        eye: Vector3ToAPIVec3(newEye),
-        target: Vector3ToAPIVec3(newEye + newForward2),
-        up: Vector3ToAPIVec3(newUp));
+        eye: vector3ToApiVec3(newEye),
+        target: vector3ToApiVec3(newEye + newForward2),
+        up: vector3ToApiVec3(newUp));
 
     _dragStartPointerPos = pointerPos;
   }
@@ -465,8 +464,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final ray = getRayFromPointerPos(pointerPos);
     gadgetDrag(
         handleIndex: draggedGadgetHandle,
-        rayOrigin: Vector3ToAPIVec3(ray.start),
-        rayDirection: Vector3ToAPIVec3(ray.direction));
+        rayOrigin: vector3ToApiVec3(ray.start),
+        rayDirection: vector3ToApiVec3(ray.direction));
     syncGadgetData();
     renderingNeeded();
     refreshFromKernel(); // Refresh other widgets when dragging a gadget
@@ -481,16 +480,16 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final ray = getRayFromPointerPos(pointerPos);
 
     final hitResult = gadgetHitTest(
-        rayOrigin: Vector3ToAPIVec3(ray.start),
-        rayDirection: Vector3ToAPIVec3(ray.direction));
+        rayOrigin: vector3ToApiVec3(ray.start),
+        rayDirection: vector3ToApiVec3(ray.direction));
 
     if (hitResult != null) {
       isGadgetDragging = true;
       draggedGadgetHandle = transformDraggedGadgetHandle(hitResult);
       gadgetStartDrag(
           handleIndex: draggedGadgetHandle,
-          rayOrigin: Vector3ToAPIVec3(ray.start),
-          rayDirection: Vector3ToAPIVec3(ray.direction));
+          rayOrigin: vector3ToApiVec3(ray.start),
+          rayDirection: vector3ToApiVec3(ray.direction));
       renderingNeeded();
     }
   }
@@ -550,7 +549,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
         cameraTransform.right * (offsetPerPixel * centeredPointerPos.dx) +
         cameraTransform.up * (offsetPerPixel * (-centeredPointerPos.dy));
 
-    addAtom(atomicNumber: 6, position: Vector3ToAPIVec3(atomPos));
+    addAtom(atomicNumber: 6, position: vector3ToApiVec3(atomPos));
     renderingNeeded();
   }
 */
@@ -563,8 +562,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     // Adjust camera target based on what's under the cursor
     final ray = getRayFromPointerPos(pointerPos);
     adjustCameraTarget(
-        rayOrigin: Vector3ToAPIVec3(ray.start),
-        rayDirection: Vector3ToAPIVec3(ray.direction));
+        rayOrigin: vector3ToApiVec3(ray.start),
+        rayDirection: vector3ToApiVec3(ray.direction));
 
     final camera = getCamera();
 
@@ -577,7 +576,7 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       final currentHalfHeight = camera.orthoHalfHeight;
 
       // Calculate the zoom factor (scrolling down increases size, up decreases)
-      final zoomFactor = 1.0 + ZOOM_PER_ZOOM_DELTA * scrollDeltaY;
+      final zoomFactor = 1.0 + _zoomPerZoomDelta * scrollDeltaY;
 
       // Apply the zoom factor with limits to prevent extreme zoom in/out
       final newHalfHeight = currentHalfHeight * zoomFactor;
@@ -592,12 +591,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       final cameraTransform = getCameraTransform(camera);
 
       final moveVec = (cameraTransform!.pivotPoint - cameraTransform.eye) *
-          (ZOOM_PER_ZOOM_DELTA * (-scrollDeltaY));
+          (_zoomPerZoomDelta * (-scrollDeltaY));
 
       _moveCameraAndRender(
-          eye: Vector3ToAPIVec3(cameraTransform.eye + moveVec),
-          target: Vector3ToAPIVec3(cameraTransform.target + moveVec),
-          up: Vector3ToAPIVec3(cameraTransform.up));
+          eye: vector3ToApiVec3(cameraTransform.eye + moveVec),
+          target: vector3ToApiVec3(cameraTransform.target + moveVec),
+          up: vector3ToApiVec3(cameraTransform.up));
     }
   }
 

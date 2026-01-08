@@ -1,0 +1,21 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+expression: snapshot
+---
+{
+  "network_name": "M",
+  "node_count": 3,
+  "return_node_id": 2,
+  "displayed_node_outputs": [
+    {
+      "node_id": 2,
+      "node_type": "extrude",
+      "output": "Geometry:\nunit_cell:\n  a: (3.567000, 0.000000, 0.000000)\n  b: (0.000000, 3.567000, 0.000000)\n  c: (0.000000, 0.000000, 3.567000)\nframe_transform:\n  translation: (0.000000, 0.000000, 0.000000)\n  rotation: (0.000000, 0.000000, 0.000000, 1.000000)\ngeo_tree:\nExtrude(height: 10.7, direction: (0, 0, 1), transform: translation: (0, 0, 0), infinite: false)\n  Polygon(19 vertices)\n    [0]: (-35.67, 0)\n    [1]: (-35.67, 14.27)\n    [2]: (-35.67, 28.54)\n    [3]: (-35.67, 42.8)\n    [4]: (-35.67, 57.07)\n    [5]: (-35.67, 71.34)\n    [6]: (-28.54, 71.34)\n    [7]: (0, 42.8)\n    [8]: (28.54, 71.34)\n    [9]: (35.67, 71.34)\n    [10]: (35.67, 60.64)\n    [11]: (35.67, 0)\n    [12]: (21.4, 0)\n    [13]: (21.4, 46.37)\n    [14]: (0, 24.97)\n    [15]: (-21.4, 46.37)\n    [16]: (-21.4, 28.54)\n    [17]: (-21.4, 14.27)\n    [18]: (-21.4, 0)"
+    },
+    {
+      "node_id": 3,
+      "node_type": "atom_fill",
+      "output": "Atomic:\natoms: 9331\nbonds: 13790\nframe_transform:\n  translation: (0.000000, 0.000000, 0.000000)\n  rotation: (0.000000, 0.000000, 0.000000, 1.000000)\nfirst 10 atoms:\n  [1] Z=6 pos=(-35.670000, 0.000000, 0.000000) depth=0.000 bonds=4\n  [2] Z=6 pos=(-33.886500, 1.783500, 0.000000) depth=0.000 bonds=4\n  [3] Z=6 pos=(-33.886500, 0.000000, 1.783500) depth=-0.000 bonds=4\n  [4] Z=6 pos=(-35.670000, 1.783500, 1.783500) depth=-0.000 bonds=4\n  [5] Z=6 pos=(-34.778250, 0.891750, 0.891750) depth=0.892 bonds=4\n  [6] Z=6 pos=(-34.778250, 2.675250, 2.675250) depth=0.892 bonds=4\n  [7] Z=6 pos=(-32.994750, 0.891750, 2.675250) depth=0.892 bonds=4\n  [8] Z=6 pos=(-32.994750, 2.675250, 0.891750) depth=0.892 bonds=4\n  [9] Z=6 pos=(-32.103000, 0.000000, 0.000000) depth=0.000 bonds=4\n  [10] Z=6 pos=(-30.319500, 1.783500, 0.000000) depth=0.000 bonds=4\n  ... and 9321 more atoms\nfirst 10 bonds:\n  1 -- 5 (order=1)\n  1 -- 6090 (order=1)\n  1 -- 6091 (order=1)\n  1 -- 6092 (order=1)\n  2 -- 5 (order=1)\n  2 -- 8 (order=1)\n  2 -- 6093 (order=1)\n  2 -- 6094 (order=1)\n  3 -- 5 (order=1)\n  3 -- 7 (order=1)\n  ... and 13780 more bonds"
+    }
+  ]
+}
