@@ -42,7 +42,7 @@ class CameraControlWidget extends StatelessWidget {
               const SizedBox(width: 8),
               // Perspective view button
               IconButton(
-                icon: const Icon(Icons.view_in_ar),
+                icon: const Icon(Icons.panorama_horizontal),
                 tooltip: 'Perspective View',
                 color: model.isOrthographic ? Colors.grey : Theme.of(context).primaryColor,
                 onPressed: () {
@@ -53,7 +53,7 @@ class CameraControlWidget extends StatelessWidget {
               ),
               // Orthographic view button
               IconButton(
-                icon: const Icon(Icons.crop_square),
+                icon: const Icon(Icons.border_all_outlined),
                 tooltip: 'Orthographic View',
                 color: model.isOrthographic ? Theme.of(context).primaryColor : Colors.grey,
                 onPressed: () {
