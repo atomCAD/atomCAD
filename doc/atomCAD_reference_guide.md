@@ -1,4 +1,4 @@
-# atomCAD Reference Guide
+﻿# atomCAD Reference Guide
 
 *A comprehensive guide to atomCAD, including a complete reference for all built-in nodes.*
 
@@ -113,11 +113,25 @@ Left-click a node and drag to move it.
 Left-click and drag from an output pin to an input pin to create a wire. To disconnect a wire, select it and press `Del` (see Selection below).
 
 **Selection**
-Currently, only one node or one wire may be selected at a time by left-clicking it. Selection is used for:
+Multiple nodes and wires can be selected. Selection is used for:
 
-- Deleting the selected node or wire with the `Del` key.
-- Editing the selected node’s properties in the **Node Properties** panel.
-- Enabling viewport interactions for the selected node: many node types expose interactive *gadgets* in the viewport; the exact interactions depend on the node type (see the Nodes Reference section).
+- Deleting selected nodes or wires with the `Del` key.
+- Editing the *active* node’s properties in the **Node Properties** panel.
+- Enabling viewport interactions for the *active* node: many node types expose interactive *gadgets* in the viewport; the exact interactions depend on the node type (see the Nodes Reference section).
+
+*Single selection:*
+- Left-click a node or wire to select it (clears previous selection).
+
+*Multi-selection:*
+- **Ctrl+click** a node or wire to toggle it in/out of the current selection.
+- **Shift+click** a node or wire to add it to the current selection.
+- **Rectangle selection:** Left-click and drag on empty space to draw a selection rectangle. Any node or wire that overlaps the rectangle is selected. Modifier keys work with rectangle selection too: Ctrl toggles, Shift adds.
+
+*Active vs selected:*
+When multiple nodes are selected, the most recently selected/added node becomes the *active* node. The active node is shown with a different color and is the one whose properties appear in the Node Properties panel and whose gadget is shown in the viewport.
+
+*Moving multiple nodes:*
+When you drag any selected node, all selected nodes move together.
 
 **Visibility vs selection**
 Selecting a node does *not* make its output visible. Node visibility is controlled independently by the eye icon in the node’s upper-right corner. The **Geometry Visualization** preferences panel also contains node display policies that may automatically change node visibility when selections change (see **Geometry Visualization** preferences).
