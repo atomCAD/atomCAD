@@ -141,7 +141,7 @@ fn create_parallelepiped_from_lattice(
   let mut half_spaces = Vec::new();
   
   // Calculate the center of the parallelepiped for reference
-  let parallelepiped_center = min_corner_real + 
+  let _parallelepiped_center = min_corner_real + 
     (extent_lattice.x * basis_a + extent_lattice.y * basis_b + extent_lattice.z * basis_c) / 2.0;
   
   // For a parallelepiped, the normal to each face is the cross product of the other two basis vectors

@@ -32,6 +32,7 @@ pub enum Token {
 }
 
 pub struct Lexer<'a> {
+    #[allow(dead_code)]
     input: &'a str,
     i: usize,
     chars: Vec<char>,

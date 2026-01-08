@@ -1,6 +1,5 @@
 use crate::display::surface_point_cloud::SurfacePointCloud2D;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
-use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::common_constants;
 use lru::LruCache;
@@ -12,7 +11,7 @@ use crate::api::structure_designer::structure_designer_preferences::GeometryVisu
 
 pub fn generate_2d_point_cloud(
   geometry: &dyn ImplicitGeometry2D,
-  context: &mut NetworkEvaluationContext,
+  _context: &mut NetworkEvaluationContext,
   geometry_visualization_preferences: &GeometryVisualizationPreferences
 ) -> SurfacePointCloud2D {
   let mut point_cloud = SurfacePointCloud2D::new();

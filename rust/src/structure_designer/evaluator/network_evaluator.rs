@@ -184,7 +184,7 @@ impl NetworkEvaluator {
     };
 
     // Build NodeSceneData
-    let mut node_data = NodeSceneData {
+    let node_data = NodeSceneData {
       output,
       geo_tree,
       node_errors: context.node_errors.clone(),

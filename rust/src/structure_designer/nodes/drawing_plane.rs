@@ -22,7 +22,6 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use glam::f64::DVec3;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
-use crate::display::coordinate_system_tessellator;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingPlaneData {

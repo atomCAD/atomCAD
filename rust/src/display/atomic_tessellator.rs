@@ -179,7 +179,7 @@ fn get_atom_display_state(atom_id: u32, atomic_structure: &AtomicStructure) -> A
 const MAX_OCCLUDERS: usize = 32;
 
 /// Pre-allocated occluder sphere array to avoid allocations
-struct OccluderArray {
+pub(crate) struct OccluderArray {
     spheres: [OccluderSphere; MAX_OCCLUDERS],
     count: usize,
 }
@@ -233,8 +233,8 @@ fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, v
   }
 }
 
-pub fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization, reusable_occludable_mesh: &mut tessellator::OccludableMesh, reusable_occluder_array: &mut OccluderArray) {
-  let atom_info = ATOM_INFO.get(&(atom.atomic_number as i32))
+pub(crate) fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization, reusable_occludable_mesh: &mut tessellator::OccludableMesh, reusable_occluder_array: &mut OccluderArray) {
+  let _atom_info = ATOM_INFO.get(&(atom.atomic_number as i32))
     .unwrap_or(&DEFAULT_ATOM_INFO);
 
   //if atom.atomic_number == 1 {

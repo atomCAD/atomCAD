@@ -17,7 +17,6 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::structure_designer::data_type::DataType;
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,7 +67,7 @@ impl NodeData for Diff2DData {
       return unit_cell_mismatch_error();
     }
     
-    let mut result_drawing_plane = base_drawing_plane.unwrap();
+    let result_drawing_plane = base_drawing_plane.unwrap();
   
     if !node.arguments[1].is_empty() {
       let (sub_geometry, sub_frame_translation, sub_drawing_plane) = helper_union(

@@ -3,7 +3,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use crate::crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::util::transform::Transform;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, input_missing_error, error_in_input};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -22,7 +22,7 @@ use crate::structure_designer::nodes::edit_atom::commands::transform_command::Tr
 use crate::crystolecule::atomic_structure::BondReference;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::api::structure_designer::structure_designer_api_types::{APIEditAtomTool, NodeTypeCategory};
-use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
+use crate::structure_designer::node_type::{NodeType, Parameter};
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::serialization::edit_atom_data_serialization::{SerializableEditAtomData, edit_atom_data_to_serializable, serializable_to_edit_atom_data};
 use std::io;

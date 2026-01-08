@@ -1,9 +1,6 @@
 // TODO: these will not be constant, will be set by the user
-use glam::i32::IVec3;
 use glam::f32::Vec3;
 use glam::f64::DVec3;
-
-use std::collections::HashMap;
 
 pub const REAL_IMPLICIT_VOLUME_MIN: DVec3 = DVec3::new(-800.0, -800.0, -800.0);
 pub const REAL_IMPLICIT_VOLUME_MAX: DVec3 = DVec3::new(800.0, 800.0, 800.0);

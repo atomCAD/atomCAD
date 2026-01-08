@@ -68,7 +68,7 @@ impl NodeData for DiffData {
       return unit_cell_mismatch_error();
     }
     
-    let mut result_unit_cell = base_unit_cell.unwrap();
+    let result_unit_cell = base_unit_cell.unwrap();
   
     if !node.arguments[1].is_empty() {
       let (sub_geometry, sub_frame_translation, sub_unit_cell) = helper_union(

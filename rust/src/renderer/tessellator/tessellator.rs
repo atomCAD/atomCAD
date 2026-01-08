@@ -5,7 +5,6 @@ use super::super::line_mesh::LineMesh;
 pub use super::occludable_mesh::{OccludableMesh, OccludableVertex};
 use glam::f64::{DQuat, DVec2, DVec3};
 use glam::Vec3;
-use bytemuck;
 
 pub struct TessellationOutput {
   pub mesh: Mesh,

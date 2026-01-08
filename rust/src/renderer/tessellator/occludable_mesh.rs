@@ -135,7 +135,6 @@ impl OccludableMesh {
         let mut vertex_needed = [false; MAX_VERTICES];
         
         // Step 1: Mark which vertices are needed by scanning triangles
-        let mut kept_triangle_count = 0;
         for i in 0..self.triangle_count {
             let triangle = &self.triangles[i];
             
@@ -153,7 +152,6 @@ impl OccludableMesh {
                 vertex_needed[triangle.v0 as usize] = true;
                 vertex_needed[triangle.v1 as usize] = true;
                 vertex_needed[triangle.v2 as usize] = true;
-                kept_triangle_count += 1;
             }
         }
         
