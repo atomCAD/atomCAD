@@ -69,13 +69,24 @@ impl Argument {
   }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Wire {
     pub source_node_id: u64,
     pub source_output_pin_index: i32,
     pub destination_node_id: u64,
     pub destination_argument_index: usize,
 }
+
+impl PartialEq for Wire {
+  fn eq(&self, other: &Self) -> bool {
+    self.source_node_id == other.source_node_id
+      && self.source_output_pin_index == other.source_output_pin_index
+      && self.destination_node_id == other.destination_node_id
+      && self.destination_argument_index == other.destination_argument_index
+  }
+}
+
+impl Eq for Wire {}
 
 pub struct Node {
   pub id: u64,
@@ -143,8 +154,9 @@ pub struct NodeNetwork {
   pub nodes: HashMap<u64, Node>,
   pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
   pub displayed_node_ids: HashMap<u64, NodeDisplayType>, // Map of nodes that are currently displayed with their display type (Normal or Ghost)
-  pub selected_node_id: Option<u64>, // Currently selected node, if any
-  pub selected_wire: Option<Wire>, // Currently selected wire
+  pub selected_node_ids: HashSet<u64>, // All selected nodes (multi-selection)
+  pub active_node_id: Option<u64>, // Active node (for properties panel/gadget) - the last selected node
+  pub selected_wires: Vec<Wire>, // All selected wires (multi-selection)
   pub valid: bool, // Whether the node network is valid and can be evaluated
   pub validation_errors: Vec<ValidationError>, // List of validation errors if any
 }
@@ -226,8 +238,9 @@ impl NodeNetwork {
       nodes: HashMap::new(),
       return_node_id: None,
       displayed_node_ids: HashMap::new(),
-      selected_node_id: None,
-      selected_wire: None,
+      selected_node_ids: HashSet::new(),
+      active_node_id: None,
+      selected_wires: Vec::new(),
       valid: true,
       validation_errors: Vec::new(),
     };
@@ -349,24 +362,116 @@ impl NodeNetwork {
     self.displayed_node_ids.get(&node_id).copied()
   }
 
-  /// Selects a node and clears any existing wire selection.
+  // ===== NODE SELECTION =====
+
+  /// Select a single node (clears existing selection including wires)
   /// Returns true if the node exists and was selected, false otherwise.
   pub fn select_node(&mut self, node_id: u64) -> bool {
     if self.nodes.contains_key(&node_id) {
-      self.selected_wire = None;
-      self.selected_node_id = Some(node_id);
+      self.selected_wires.clear();
+      self.selected_node_ids.clear();
+      self.selected_node_ids.insert(node_id);
+      self.active_node_id = Some(node_id);
       true
     } else {
       false
     }
   }
 
-  /// Selects a wire and clears any existing node selection.
+  /// Toggle node in selection (for Ctrl+click)
+  /// Returns true if the node exists, false otherwise.
+  pub fn toggle_node_selection(&mut self, node_id: u64) -> bool {
+    if !self.nodes.contains_key(&node_id) {
+      return false;
+    }
+    self.selected_wires.clear();
+    if self.selected_node_ids.contains(&node_id) {
+      self.selected_node_ids.remove(&node_id);
+      // Update active node if we removed it
+      if self.active_node_id == Some(node_id) {
+        self.active_node_id = self.selected_node_ids.iter().next().copied();
+      }
+    } else {
+      self.selected_node_ids.insert(node_id);
+      self.active_node_id = Some(node_id);
+    }
+    true
+  }
+
+  /// Add node to selection (for Shift+click)
+  /// Returns true if the node exists, false otherwise.
+  pub fn add_node_to_selection(&mut self, node_id: u64) -> bool {
+    if !self.nodes.contains_key(&node_id) {
+      return false;
+    }
+    self.selected_wires.clear();
+    self.selected_node_ids.insert(node_id);
+    self.active_node_id = Some(node_id);
+    true
+  }
+
+  /// Select multiple nodes (for rectangle selection)
+  /// Returns true if at least one node was selected, false otherwise.
+  pub fn select_nodes(&mut self, node_ids: Vec<u64>) -> bool {
+    self.selected_wires.clear();
+    self.selected_node_ids.clear();
+    for id in &node_ids {
+      if self.nodes.contains_key(id) {
+        self.selected_node_ids.insert(*id);
+      }
+    }
+    // Set active to last node in list (or none if empty)
+    self.active_node_id = node_ids.last().copied()
+      .filter(|id| self.selected_node_ids.contains(id));
+    !self.selected_node_ids.is_empty()
+  }
+
+  /// Toggle multiple nodes in selection (for Ctrl+rectangle)
+  pub fn toggle_nodes_selection(&mut self, node_ids: Vec<u64>) {
+    self.selected_wires.clear();
+    for id in node_ids {
+      if self.nodes.contains_key(&id) {
+        if self.selected_node_ids.contains(&id) {
+          self.selected_node_ids.remove(&id);
+        } else {
+          self.selected_node_ids.insert(id);
+          self.active_node_id = Some(id);
+        }
+      }
+    }
+    // Update active node if removed
+    if let Some(active) = self.active_node_id {
+      if !self.selected_node_ids.contains(&active) {
+        self.active_node_id = self.selected_node_ids.iter().next().copied();
+      }
+    }
+  }
+
+  /// Check if a node is selected
+  pub fn is_node_selected(&self, node_id: u64) -> bool {
+    self.selected_node_ids.contains(&node_id)
+  }
+
+  /// Check if a node is the active node
+  pub fn is_node_active(&self, node_id: u64) -> bool {
+    self.active_node_id == Some(node_id)
+  }
+
+  /// Get all selected node IDs
+  pub fn get_selected_node_ids(&self) -> &HashSet<u64> {
+    &self.selected_node_ids
+  }
+
+  // ===== WIRE SELECTION =====
+
+  /// Select a single wire (clears existing selection including nodes)
   /// Returns true if both nodes exist and the wire was selected, false otherwise.
   pub fn select_wire(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
     if self.nodes.contains_key(&source_node_id) && self.nodes.contains_key(&destination_node_id) {
-      self.selected_node_id = None;
-      self.selected_wire = Some(Wire {
+      self.selected_node_ids.clear();
+      self.active_node_id = None;
+      self.selected_wires.clear();
+      self.selected_wires.push(Wire {
         source_node_id,
         source_output_pin_index,
         destination_node_id,
@@ -378,51 +483,139 @@ impl NodeNetwork {
     }
   }
 
-  /// Clears any existing selection (both node and wire).
-  pub fn clear_selection(&mut self) {
-    self.selected_node_id = None;
-    self.selected_wire = None;
+  /// Toggle wire in selection (for Ctrl+click)
+  /// Returns true if both nodes exist, false otherwise.
+  pub fn toggle_wire_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    if !self.nodes.contains_key(&source_node_id) || !self.nodes.contains_key(&destination_node_id) {
+      return false;
+    }
+    self.selected_node_ids.clear();
+    self.active_node_id = None;
+    
+    let wire = Wire {
+      source_node_id,
+      source_output_pin_index,
+      destination_node_id,
+      destination_argument_index,
+    };
+    
+    // Check if wire already selected
+    if let Some(idx) = self.selected_wires.iter().position(|w| *w == wire) {
+      self.selected_wires.remove(idx);
+    } else {
+      self.selected_wires.push(wire);
+    }
+    true
   }
 
+  /// Add wire to selection (for Shift+click)
+  /// Returns true if both nodes exist, false otherwise.
+  pub fn add_wire_to_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    if !self.nodes.contains_key(&source_node_id) || !self.nodes.contains_key(&destination_node_id) {
+      return false;
+    }
+    self.selected_node_ids.clear();
+    self.active_node_id = None;
+    
+    let wire = Wire {
+      source_node_id,
+      source_output_pin_index,
+      destination_node_id,
+      destination_argument_index,
+    };
+    
+    // Only add if not already selected
+    if !self.selected_wires.iter().any(|w| *w == wire) {
+      self.selected_wires.push(wire);
+    }
+    true
+  }
+
+  /// Check if a wire is selected
+  pub fn is_wire_selected(&self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    let wire = Wire {
+      source_node_id,
+      source_output_pin_index,
+      destination_node_id,
+      destination_argument_index,
+    };
+    self.selected_wires.iter().any(|w| *w == wire)
+  }
+
+  /// Get all selected wires
+  pub fn get_selected_wires(&self) -> &Vec<Wire> {
+    &self.selected_wires
+  }
+
+  // ===== COMMON SELECTION =====
+
+  /// Clears any existing selection (both nodes and wires).
+  pub fn clear_selection(&mut self) {
+    self.selected_node_ids.clear();
+    self.active_node_id = None;
+    self.selected_wires.clear();
+  }
+
+  /// Provides gadget for the active node (used for property panels)
   pub fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-    if let Some(node_id) = self.selected_node_id {
+    if let Some(node_id) = self.active_node_id {
       let node = self.nodes.get(&node_id).unwrap();
       return node.data.provide_gadget(structure_designer);
     }
     None
   }
 
+  /// Delete all selected nodes and wires
   pub fn delete_selected(&mut self) {
-    // Handle selected node
-    if let Some(node_id) = self.selected_node_id {
-      // First remove any references to this node from all other nodes' arguments
-      let nodes_to_process: Vec<u64> = self.nodes.keys().cloned().collect();
-      for other_node_id in nodes_to_process {
-        if let Some(node) = self.nodes.get_mut(&other_node_id) {
-          for argument in node.arguments.iter_mut() {
-            argument.argument_output_pins.remove(&node_id);
+    // Handle selected nodes (delete all selected)
+    if !self.selected_node_ids.is_empty() {
+      let selected_ids: Vec<u64> = self.selected_node_ids.iter().cloned().collect();
+      
+      for node_id in selected_ids {
+        // First remove any references to this node from all other nodes' arguments
+        let nodes_to_process: Vec<u64> = self.nodes.keys().cloned().collect();
+        for other_node_id in nodes_to_process {
+          if let Some(node) = self.nodes.get_mut(&other_node_id) {
+            for argument in node.arguments.iter_mut() {
+              argument.argument_output_pins.remove(&node_id);
+            }
+          }
+        }
+
+        // If this was the return node, clear that reference
+        if self.return_node_id == Some(node_id) {
+          self.return_node_id = None;
+        }
+
+        // Remove from displayed nodes if present
+        self.displayed_node_ids.remove(&node_id);
+
+        // Remove the node itself
+        self.nodes.remove(&node_id);
+      }
+      
+      self.selected_node_ids.clear();
+      self.active_node_id = None;
+    }
+    // Handle selected wires (delete all selected)
+    else if !self.selected_wires.is_empty() {
+      let wires_to_delete: Vec<Wire> = self.selected_wires.drain(..).collect();
+      
+      for wire in wires_to_delete {
+        if let Some(dest_node) = self.nodes.get_mut(&wire.destination_node_id) {
+          if let Some(argument) = dest_node.arguments.get_mut(wire.destination_argument_index) {
+            argument.argument_output_pins.remove(&wire.source_node_id);
           }
         }
       }
-
-      // If this was the return node, clear that reference
-      if self.return_node_id == Some(node_id) {
-        self.return_node_id = None;
-      }
-
-      // Remove from displayed nodes if present
-      self.displayed_node_ids.remove(&node_id);
-
-      // Remove the node itself
-      self.nodes.remove(&node_id);
-      self.selected_node_id = None;
     }
-    // Handle selected wire
-    else if let Some(wire) = self.selected_wire.take() {
-      if let Some(dest_node) = self.nodes.get_mut(&wire.destination_node_id) {
-        if let Some(argument) = dest_node.arguments.get_mut(wire.destination_argument_index) {
-          argument.argument_output_pins.remove(&wire.source_node_id);
-        }
+  }
+
+  /// Move all selected nodes by delta
+  pub fn move_selected_nodes(&mut self, delta: DVec2) {
+    for &node_id in &self.selected_node_ids.clone() {
+      if let Some(node) = self.nodes.get_mut(&node_id) {
+        node.position += delta;
       }
     }
   }

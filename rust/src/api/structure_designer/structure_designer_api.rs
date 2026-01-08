@@ -249,7 +249,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             input_pins,
             output_type: output_type.to_string(),
             function_type: function_type.to_string(),
-            selected: node_network.selected_node_id == Some(node.id),
+            selected: node_network.is_node_selected(node.id),
             displayed: node_network.is_node_displayed(node.id),
             return_node: node_network.return_node_id == Some(node.id),
             error,
@@ -266,11 +266,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                 source_output_pin_index: *output_pin_index,
                 dest_node_id: node.id,
                 dest_param_index: index,
-                selected: node_network.selected_wire.as_ref().map_or(false, |wire| 
-                  wire.source_node_id == *argument_node_id && 
-                  wire.destination_node_id == node.id && 
-                  wire.destination_argument_index == index
-                ),
+                selected: node_network.is_wire_selected(*argument_node_id, *output_pin_index, node.id, index),
               });
             }
           }

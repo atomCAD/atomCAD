@@ -79,8 +79,9 @@ fn test_select_node() {
     let network = designer.node_type_registry.node_networks.get_mut("test_network").unwrap();
     
     assert!(network.select_node(node_id));
-    assert_eq!(network.selected_node_id, Some(node_id));
-    assert!(network.selected_wire.is_none());
+    assert!(network.is_node_selected(node_id));
+    assert_eq!(network.active_node_id, Some(node_id));
+    assert!(network.selected_wires.is_empty());
 }
 
 #[test]
@@ -94,10 +95,10 @@ fn test_select_wire() {
     let network = designer.node_type_registry.node_networks.get_mut("test_network").unwrap();
     
     assert!(network.select_wire(float_id, 0, sphere_id, 0));
-    assert!(network.selected_wire.is_some());
-    assert!(network.selected_node_id.is_none());
+    assert!(!network.selected_wires.is_empty());
+    assert!(network.selected_node_ids.is_empty());
     
-    let wire = network.selected_wire.as_ref().unwrap();
+    let wire = &network.selected_wires[0];
     assert_eq!(wire.source_node_id, float_id);
     assert_eq!(wire.destination_node_id, sphere_id);
 }
@@ -111,12 +112,13 @@ fn test_clear_selection() {
     let network = designer.node_type_registry.node_networks.get_mut("test_network").unwrap();
     network.select_node(node_id);
     
-    assert!(network.selected_node_id.is_some());
+    assert!(!network.selected_node_ids.is_empty());
     
     network.clear_selection();
     
-    assert!(network.selected_node_id.is_none());
-    assert!(network.selected_wire.is_none());
+    assert!(network.selected_node_ids.is_empty());
+    assert!(network.active_node_id.is_none());
+    assert!(network.selected_wires.is_empty());
 }
 
 #[test]

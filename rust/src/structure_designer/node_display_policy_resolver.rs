@@ -184,10 +184,10 @@ impl NodeDisplayPolicyResolver {
           self.apply_frontier_policy(node_network, &island, &reverse_connections, &mut changes);
         },
         
-        // PreferSelected: Display selected node if in island, otherwise fallback to frontier nodes
+        // PreferSelected: Display active node if in island, otherwise fallback to frontier nodes
         NodeDisplayPolicy::PreferSelected => {
-          let selected_in_island = node_network.selected_node_id
-            .filter(|&selected_id| island.contains(&selected_id));
+          let selected_in_island = node_network.active_node_id
+            .filter(|&active_id| island.contains(&active_id));
           
           if let Some(selected_id) = selected_in_island {
             // Selected node is in this island: show only that node
