@@ -1078,6 +1078,181 @@ impl StructureDesigner {
     }
   }
 
+  /// Toggle node in selection (for Ctrl+click)
+  pub fn toggle_node_selection(&mut self, node_id: u64) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.toggle_node_selection(node_id);
+      if ret {
+        let current_selection = network.active_node_id;
+        self.mark_selection_changed(previously_active_node_id, current_selection);
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(node_id);
+        if let Some(prev_id) = previously_active_node_id {
+          dirty_nodes.insert(prev_id);
+        }
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Add node to selection (for Shift+click)
+  pub fn add_node_to_selection(&mut self, node_id: u64) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.add_node_to_selection(node_id);
+      if ret {
+        self.mark_selection_changed(previously_active_node_id, Some(node_id));
+        let mut dirty_nodes = HashSet::new();
+        dirty_nodes.insert(node_id);
+        if let Some(prev_id) = previously_active_node_id {
+          dirty_nodes.insert(prev_id);
+        }
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Select multiple nodes (for rectangle selection)
+  pub fn select_nodes(&mut self, node_ids: Vec<u64>) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.select_nodes(node_ids.clone());
+      if ret {
+        let current_selection = network.active_node_id;
+        self.mark_selection_changed(previously_active_node_id, current_selection);
+        let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+        if let Some(prev_id) = previously_active_node_id {
+          dirty_nodes.insert(prev_id);
+        }
+        self.apply_node_display_policy(Some(&dirty_nodes));
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Toggle multiple nodes in selection (for Ctrl+rectangle)
+  pub fn toggle_nodes_selection(&mut self, node_ids: Vec<u64>) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      network.toggle_nodes_selection(node_ids.clone());
+      let current_selection = network.active_node_id;
+      self.mark_selection_changed(previously_active_node_id, current_selection);
+      let mut dirty_nodes: HashSet<u64> = node_ids.into_iter().collect();
+      if let Some(prev_id) = previously_active_node_id {
+        dirty_nodes.insert(prev_id);
+      }
+      self.apply_node_display_policy(Some(&dirty_nodes));
+    }
+  }
+
+  /// Get all selected node IDs
+  pub fn get_selected_node_ids(&self) -> Vec<u64> {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return Vec::new(),
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+      network.get_selected_node_ids().iter().copied().collect()
+    } else {
+      Vec::new()
+    }
+  }
+
+  /// Move all selected nodes by delta
+  pub fn move_selected_nodes(&mut self, delta: glam::f64::DVec2) {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      network.move_selected_nodes(delta);
+    }
+  }
+
+  /// Toggle wire in selection (for Ctrl+click)
+  pub fn toggle_wire_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.toggle_wire_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+      if ret {
+        self.mark_selection_changed(previously_active_node_id, None);
+        if let Some(prev_id) = previously_active_node_id {
+          let mut dirty_nodes = HashSet::new();
+          dirty_nodes.insert(prev_id);
+          self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Add wire to selection (for Shift+click)
+  pub fn add_wire_to_selection(&mut self, source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return false,
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+      let previously_active_node_id = network.active_node_id;
+      let ret = network.add_wire_to_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+      if ret {
+        self.mark_selection_changed(previously_active_node_id, None);
+        if let Some(prev_id) = previously_active_node_id {
+          let mut dirty_nodes = HashSet::new();
+          dirty_nodes.insert(prev_id);
+          self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+      }
+      ret
+    } else {
+      false
+    }
+  }
+
+  /// Get all selected wires
+  pub fn get_selected_wires(&self) -> Vec<crate::structure_designer::node_network::Wire> {
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return Vec::new(),
+    };
+    if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+      network.get_selected_wires().clone()
+    } else {
+      Vec::new()
+    }
+  }
+
   pub fn delete_selected(&mut self) {
     // Early return if active_node_network_name is None
     let node_network_name = match &self.active_node_network_name {

@@ -250,6 +250,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             output_type: output_type.to_string(),
             function_type: function_type.to_string(),
             selected: node_network.is_node_selected(node.id),
+            active: node_network.is_node_active(node.id),
             displayed: node_network.is_node_displayed(node.id),
             return_node: node_network.return_node_id == Some(node.id),
             error,
@@ -594,6 +595,128 @@ pub fn clear_selection() {
       instance.structure_designer.clear_selection();
       refresh_structure_designer_auto(instance);
     });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_node_selection(node_id: u64) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.toggle_node_selection(node_id);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_node_to_selection(node_id: u64) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.add_node_to_selection(node_id);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_nodes(node_ids: Vec<u64>) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.select_nodes(node_ids);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_nodes_selection(node_ids: Vec<u64>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      instance.structure_designer.toggle_nodes_selection(node_ids);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_selected_node_ids() -> Vec<u64> {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.get_selected_node_ids()
+      },
+      Vec::new()
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn move_selected_nodes(delta_x: f64, delta_y: f64) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      instance.structure_designer.move_selected_nodes(glam::f64::DVec2::new(delta_x, delta_y));
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_wire_selection(source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.toggle_wire_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_wire_to_selection(source_node_id: u64, source_output_pin_index: i32, destination_node_id: u64, destination_argument_index: usize) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        let result = instance.structure_designer.add_wire_to_selection(source_node_id, source_output_pin_index, destination_node_id, destination_argument_index);
+        refresh_structure_designer_auto(instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_selected_wires() -> Vec<WireView> {
+  unsafe {
+    with_cad_instance_or(
+      |instance| {
+        instance.structure_designer.get_selected_wires()
+          .into_iter()
+          .map(|wire| WireView {
+            source_node_id: wire.source_node_id,
+            source_output_pin_index: wire.source_output_pin_index,
+            dest_node_id: wire.destination_node_id,
+            dest_param_index: wire.destination_argument_index,
+            selected: true,
+          })
+          .collect()
+      },
+      Vec::new()
+    )
   }
 }
 

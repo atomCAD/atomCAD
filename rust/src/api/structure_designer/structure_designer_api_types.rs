@@ -55,6 +55,7 @@ pub struct InputPinView {
     pub output_type: String,
     pub function_type: String,
     pub selected: bool,
+    pub active: bool,  // True if this is the active node (for properties panel/gadget)
     pub displayed: bool,
     pub return_node: bool,
     pub error: Option<String>,

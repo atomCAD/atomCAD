@@ -1206,6 +1206,7 @@ class NodeView {
   final String outputType;
   final String functionType;
   final bool selected;
+  final bool active;
   final bool displayed;
   final bool returnNode;
   final String? error;
@@ -1220,6 +1221,7 @@ class NodeView {
     required this.outputType,
     required this.functionType,
     required this.selected,
+    required this.active,
     required this.displayed,
     required this.returnNode,
     this.error,
@@ -1236,6 +1238,7 @@ class NodeView {
       outputType.hashCode ^
       functionType.hashCode ^
       selected.hashCode ^
+      active.hashCode ^
       displayed.hashCode ^
       returnNode.hashCode ^
       error.hashCode ^
@@ -1254,6 +1257,7 @@ class NodeView {
           outputType == other.outputType &&
           functionType == other.functionType &&
           selected == other.selected &&
+          active == other.active &&
           displayed == other.displayed &&
           returnNode == other.returnNode &&
           error == other.error &&

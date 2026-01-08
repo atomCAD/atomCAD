@@ -138,6 +138,56 @@ bool selectWire(
 void clearSelection() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiClearSelection();
 
+bool toggleNodeSelection({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiToggleNodeSelection(
+        nodeId: nodeId);
+
+bool addNodeToSelection({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNodeToSelection(
+        nodeId: nodeId);
+
+bool selectNodes({required Uint64List nodeIds}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSelectNodes(nodeIds: nodeIds);
+
+void toggleNodesSelection({required Uint64List nodeIds}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiToggleNodesSelection(
+        nodeIds: nodeIds);
+
+Uint64List getSelectedNodeIds() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetSelectedNodeIds();
+
+void moveSelectedNodes({required double deltaX, required double deltaY}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiMoveSelectedNodes(
+            deltaX: deltaX, deltaY: deltaY);
+
+bool toggleWireSelection(
+        {required BigInt sourceNodeId,
+        required int sourceOutputPinIndex,
+        required BigInt destinationNodeId,
+        required BigInt destinationArgumentIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleWireSelection(
+            sourceNodeId: sourceNodeId,
+            sourceOutputPinIndex: sourceOutputPinIndex,
+            destinationNodeId: destinationNodeId,
+            destinationArgumentIndex: destinationArgumentIndex);
+
+bool addWireToSelection(
+        {required BigInt sourceNodeId,
+        required int sourceOutputPinIndex,
+        required BigInt destinationNodeId,
+        required BigInt destinationArgumentIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddWireToSelection(
+            sourceNodeId: sourceNodeId,
+            sourceOutputPinIndex: sourceOutputPinIndex,
+            destinationNodeId: destinationNodeId,
+            destinationArgumentIndex: destinationArgumentIndex);
+
+List<WireView> getSelectedWires() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetSelectedWires();
+
 APIExtrudeData? getExtrudeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetExtrudeData(
         nodeId: nodeId);
