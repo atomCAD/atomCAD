@@ -78,8 +78,8 @@ void addNode() {
 ```dart
 import 'package:flutter_cad/common/api_utils.dart';
 
-final vec = APIVec3ToVector3(apiVec3);
-final apiVec = Vector3ToAPIVec3(vec);
+final vec = apiVec3ToVector3(apiVec3);
+final apiVec = vector3ToApiVec3(vec);
 ```
 
 ## Generated Code

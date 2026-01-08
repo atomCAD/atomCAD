@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
@@ -98,7 +97,7 @@ class PinWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: PIN_HIT_AREA_WIDTH,
       height: PIN_HIT_AREA_HEIGHT,
       child: DragTarget<PinReference>(
@@ -106,7 +105,7 @@ class PinWidget extends StatelessWidget {
           return Draggable<PinReference>(
             data: pinReference,
             feedback: SizedBox.shrink(),
-            childWhenDragging: Container(
+            childWhenDragging: SizedBox(
               width: PIN_HIT_AREA_WIDTH,
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
@@ -116,7 +115,7 @@ class PinWidget extends StatelessWidget {
                     outputString: outputString),
               ),
             ),
-            child: Container(
+            child: SizedBox(
               width: PIN_HIT_AREA_WIDTH,
               height: PIN_HIT_AREA_HEIGHT,
               child: Center(
@@ -297,6 +296,7 @@ class NodeWidget extends StatelessWidget {
                 ),
               ],
             ).then((value) {
+              if (!context.mounted) return;
               if (value == 'go_to_definition') {
                 final model =
                     Provider.of<StructureDesignerModel>(context, listen: false);
@@ -305,10 +305,8 @@ class NodeWidget extends StatelessWidget {
                 final model =
                     Provider.of<StructureDesignerModel>(context, listen: false);
                 if (node.returnNode) {
-                  // Unset as return node (pass null to clear the return node)
                   model.setReturnNodeId(null);
                 } else {
-                  // Set as return node (pass the node ID)
                   model.setReturnNodeId(node.id);
                 }
               } else if (value == 'duplicate') {
@@ -473,7 +471,7 @@ class NodeWidget extends StatelessWidget {
       boxShadow: node.error != null
           ? [
               BoxShadow(
-                  color: NODE_BORDER_COLOR_ERROR.withOpacity(WIRE_GLOW_OPACITY),
+                  color: NODE_BORDER_COLOR_ERROR.withValues(alpha: WIRE_GLOW_OPACITY),
                   blurRadius: WIRE_GLOW_BLUR_RADIUS,
                   spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
             ]
@@ -481,7 +479,7 @@ class NodeWidget extends StatelessWidget {
               ? [
                   BoxShadow(
                       color: NODE_BORDER_COLOR_SELECTED
-                          .withOpacity(WIRE_GLOW_OPACITY),
+                          .withValues(alpha: WIRE_GLOW_OPACITY),
                       blurRadius: WIRE_GLOW_BLUR_RADIUS,
                       spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
                 ]
@@ -565,6 +563,7 @@ class NodeWidget extends StatelessWidget {
         ),
       ],
     ).then((value) {
+      if (!context.mounted) return;
       if (value == 'go_to_definition') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

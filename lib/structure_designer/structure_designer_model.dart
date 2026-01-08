@@ -67,7 +67,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool isDirty = false;
   String? filePath;
 
-  StructureDesignerModel() {}
+  StructureDesignerModel();
 
   void init() {
     refreshFromKernel();
@@ -97,8 +97,8 @@ class StructureDesignerModel extends ChangeNotifier {
   void selectFacetShellFacetByRay(
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     facet_shell_api.selectFacetByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
     );
     refreshFromKernel();
   }
@@ -115,8 +115,8 @@ class StructureDesignerModel extends ChangeNotifier {
   void selectAtomOrBondByRay(vector_math.Vector3 rayStart,
       vector_math.Vector3 rayDir, SelectModifier selectModifier) {
     edit_atom_api.selectAtomOrBondByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
       selectModifier: selectModifier,
     );
     refreshFromKernel();
@@ -451,9 +451,9 @@ class StructureDesignerModel extends ChangeNotifier {
     if (nodeNetworkView == null) return;
     edit_atom_api.addAtomByRay(
       atomicNumber: atomicNumber,
-      planeNormal: Vector3ToAPIVec3(planeNormal),
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      planeNormal: vector3ToApiVec3(planeNormal),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
     );
     refreshFromKernel();
   }
@@ -461,8 +461,8 @@ class StructureDesignerModel extends ChangeNotifier {
   void drawBondByRay(vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;
     edit_atom_api.drawBondByRay(
-      rayStart: Vector3ToAPIVec3(rayStart),
-      rayDir: Vector3ToAPIVec3(rayDir),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
     );
     refreshFromKernel();
   }

@@ -6,7 +6,7 @@ import 'structure_designer_model.dart';
 class CameraControlWidget extends StatelessWidget {
   final StructureDesignerModel model;
 
-  const CameraControlWidget({Key? key, required this.model}) : super(key: key);
+  const CameraControlWidget({super.key, required this.model});
 
   @override
   Widget build(BuildContext context) {
@@ -85,8 +85,6 @@ class CameraControlWidget extends StatelessWidget {
         return 'Left';
       case APICameraCanonicalView.right:
         return 'Right';
-      default:
-        return 'Unknown';
     }
   }
 }

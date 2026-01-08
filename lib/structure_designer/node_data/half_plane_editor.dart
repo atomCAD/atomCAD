@@ -4,7 +4,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/inputs/ivec2_input.dart';
-import 'dart:math' show gcd;
+
 
 /// Editor widget for half_plane nodes
 class HalfPlaneEditor extends StatefulWidget {

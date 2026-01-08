@@ -37,10 +37,7 @@ class _IVec2InputState extends State<IVec2Input> {
   // Helper method to handle scroll events for any axis
   void _handleScrollEvent(PointerScrollEvent event, String axis) {
     // Check if shift key is pressed for larger increments
-    final useShiftIncrement = RawKeyboard.instance.keysPressed.any((key) =>
-        key == LogicalKeyboardKey.shift ||
-        key == LogicalKeyboardKey.shiftLeft ||
-        key == LogicalKeyboardKey.shiftRight);
+    final useShiftIncrement = HardwareKeyboard.instance.isShiftPressed;
 
     if (event.scrollDelta.dy > 0) {
       _decrementValue(axis, useShiftIncrement: useShiftIncrement);

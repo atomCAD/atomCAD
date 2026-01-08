@@ -112,15 +112,15 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                           ? BoxDecoration(
                               border: Border.all(
                                 color: isActive
-                                    ? Colors.white.withOpacity(0.5)
-                                    : Colors.blue.withOpacity(0.5),
+                                    ? Colors.white.withValues(alpha: 0.5)
+                                    : Colors.blue.withValues(alpha: 0.5),
                                 width: 1.5,
                               ),
                               borderRadius: BorderRadius.circular(4.0),
                               boxShadow: [
                                 BoxShadow(
                                   color: (isActive ? Colors.white : Colors.blue)
-                                      .withOpacity(0.2),
+                                      .withValues(alpha: 0.2),
                                   blurRadius: 4,
                                   spreadRadius: 1,
                                 ),
@@ -144,8 +144,8 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                                   cursorColor:
                                       isActive ? Colors.white : Colors.black,
                                   selectionColor: isActive
-                                      ? Colors.white.withOpacity(0.3)
-                                      : Colors.blue.withOpacity(0.3),
+                                      ? Colors.white.withValues(alpha: 0.3)
+                                                                             : Colors.blue.withValues(alpha: 0.3),
                                   selectionHandleColor:
                                       isActive ? Colors.white : Colors.blue,
                                 ),
@@ -183,14 +183,14 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                                   filled: true,
                                   fillColor: isActive
                                       ? AppColors.selectionBackground
-                                          ?.withOpacity(0.9)
+                                          ?.withValues(alpha: 0.9)
                                       : Colors.white,
                                   hintText:
                                       'Enter network name (Esc to cancel)',
                                   hintStyle: TextStyle(
                                     color: isActive
-                                        ? Colors.white.withOpacity(0.7)
-                                        : Colors.grey.withOpacity(0.7),
+                                        ? Colors.white.withValues(alpha: 0.7)
+                                        : Colors.grey.withValues(alpha: 0.7),
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),

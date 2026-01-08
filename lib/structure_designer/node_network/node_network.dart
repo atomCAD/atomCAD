@@ -278,8 +278,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     if (model.nodeNetworkView == null) return;
 
     // Skip if the network hasn't changed and we're not forcing an update
-    if (!forceUpdate && _currentNetworkName == model.nodeNetworkView!.name)
+    if (!forceUpdate && _currentNetworkName == model.nodeNetworkView!.name) {
       return;
+    }
 
     // Update the current network name
     _currentNetworkName = model.nodeNetworkView!.name;

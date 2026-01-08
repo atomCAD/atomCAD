@@ -7,7 +7,7 @@ import 'package:flutter_cad/structure_designer/node_data/facet_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/table_column_header.dart';
-import 'package:provider/provider.dart';
+
 
 /// Editor widget for facet_shell nodes
 class FacetShellEditor extends StatefulWidget {
@@ -151,7 +151,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                               },
                               child: Container(
                                 color: isSelected
-                                    ? Colors.lightBlue.withOpacity(0.1)
+                                    ? Colors.lightBlue.withValues(alpha: 0.1)
                                     : Colors.transparent,
                                 child: Padding(
                                   padding:
@@ -186,7 +186,7 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                                           size: 18,
                                           color: facet.symmetrize
                                               ? Colors.green
-                                              : Colors.red.withOpacity(0.7),
+                                              : Colors.red.withValues(alpha: 0.7),
                                         ),
                                       ),
                                       // Visibility toggle
